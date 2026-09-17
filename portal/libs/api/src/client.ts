@@ -53,6 +53,7 @@ import type {
   DocumentDBAccountsResource,
   MailDomainsData,
   MailDomainsResource,
+  ManagementGroupCreateContent,
   MessagingKafkaClustersData,
   MessagingKafkaClustersListKeysResult,
   MessagingKafkaClustersResource,
@@ -142,6 +143,22 @@ export class CyberCloudApi {
   // ⚠ There is no createTenant, and the absence is the contract. A request's tenant
   // is resolved from its token, so a call creating another tenant carries a token
   // that is not that tenant's and is refused before routing runs.
+
+  /** Reads one management group. */
+  getManagementGroup(tenantId: string, managementGroupName: string): Promise<ApiResponse<ScopeResource>> {
+    return this.transport.send<ScopeResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/managementGroups/${CyberCloudApi.segment(managementGroupName)}` });
+  }
+
+  /** One page of the management groups the caller may read. ⚠ A short page never means "that is all there is". */
+  listManagementGroups(tenantId: string, page: PageRequest = {}): Promise<ApiResponse<Page<ScopeResource>>> {
+    return this.transport.send<Page<ScopeResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/managementGroups`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** Creates one management group, or returns the existing one unchanged. */
+  /** ⚠ 201 the first time and 200 on a repeat, and no operation to poll. */
+  createManagementGroup(tenantId: string, managementGroupName: string, content: ManagementGroupCreateContent): Promise<ApiResponse<ScopeResource>> {
+    return this.transport.send<ScopeResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/managementGroups/${CyberCloudApi.segment(managementGroupName)}`, body: content });
+  }
 
   /** Reads one subscription. */
   getSubscription(tenantId: string, subscriptionId: string): Promise<ApiResponse<ScopeResource>> {

@@ -97,6 +97,7 @@ type OperationStatus struct {
 type ScopeType string
 
 const (
+	ScopeTypeCyberCloudResourcesManagementGroups            ScopeType = "CyberCloud.Resources/managementGroups"
 	ScopeTypeCyberCloudResourcesSubscriptionsResourceGroups ScopeType = "CyberCloud.Resources/subscriptions/resourceGroups"
 	ScopeTypeCyberCloudResourcesSubscriptions               ScopeType = "CyberCloud.Resources/subscriptions"
 	ScopeTypeCyberCloudResourcesTenants                     ScopeType = "CyberCloud.Resources/tenants"
@@ -108,16 +109,28 @@ type ScopeResource struct {
 	ID string `json:"id"`
 	// The region: a tenant's home region or a group's default. ⚠ Absent rather than empty where the scope has none, so a client tests for the property instead of comparing against "".
 	Location *string `json:"location,omitempty"`
+	// The management group this scope hangs off — a subscription's group, or a group's parent group. ⚠ Absent for a scope that hangs off the tenant directly, and for a tenant or a resource group. docs/plan/06 § The hierarchy.
+	ManagementGroup *string `json:"managementGroup,omitempty"`
 	// The name a human reads.
 	Name string `json:"name"`
 	// The Azure-shaped type string.
 	Type ScopeType `json:"type"`
 }
 
+// ManagementGroupCreateContent is the body of a PUT that creates a management group.
+type ManagementGroupCreateContent struct {
+	// The name a person reads. Optional; defaults to the group's name.
+	DisplayName *string `json:"displayName,omitempty"`
+	// The parent group, by name. Optional: absent or empty hangs the group off the tenant. ⚠ Set at creation and not movable — a later PUT naming a different parent is a 409. The tree is capped at six levels.
+	ManagementGroup *string `json:"managementGroup,omitempty"`
+}
+
 // SubscriptionCreateContent is the body of a PUT that creates a subscription.
 type SubscriptionCreateContent struct {
 	// The name on an invoice and in every scope picker. Required — a subscription identified only by its GUID is one nobody can pick out of a list.
 	DisplayName string `json:"displayName"`
+	// The management group to assign the subscription to, by name. Optional. ⚠ Absent leaves the assignment unchanged on a subscription that exists and means the tenant root on one that does not; the empty string moves the subscription to the tenant root. Assigning needs write on the group as well as on the tenant. docs/plan/06 § The hierarchy.
+	ManagementGroup *string `json:"managementGroup,omitempty"`
 }
 
 // ResourceGroupCreateContent is the body of a PUT that creates a resource group.

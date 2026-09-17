@@ -403,7 +403,9 @@ static class GatewayRouter {
         // ⚠ THE TWO GRAMMARS ARE DISJOINT AND THE ORDER IS THEREFORE FREE — which is worth stating,
         // because if it were not free this would be a precedence rule nobody wrote down. A scope
         // address is 2, 4 or 6 segments; a resource address is at least 10 and must contain
-        // `/providers/`. ScopeIdTests drives the whole overlap rather than asserting the claim.
+        // `/providers/`. ScopeIdTests drives the whole overlap rather than asserting the claim. The
+        // management group (issue #39) is a fourth scope shape at 4 segments and changes none of
+        // this: the segment counts are what keep the grammars apart, and it added no count.
         //
         // ⚠ IT IS BEFORE THE POST BRANCH, WHICH CHANGES WHAT A POST TO A SCOPE ANSWERS AND IMPROVES
         // IT. ResolveAction strips the last segment unconditionally, so `POST /tenants/{t}/
@@ -476,12 +478,19 @@ static class GatewayRouter {
     ///     that dropped the id from a <c>PUT</c> most needs to read back.
     /// </remarks>
     public static string ScopeCollectionWriteRefusal(ScopeCollectionId collection) =>
-        collection.MemberKind == ScopeKind.Subscription
-            ? "A subscription is created by PUT at its own address, /tenants/{t}/subscriptions/{s}. "
-            + "The collection is read with GET only — docs/plan/10 § Shape."
-            : "A resource group is created by PUT at its own address, "
-            + "/tenants/{t}/subscriptions/{s}/resourceGroups/{rg}. The collection is read with GET "
-            + "only — docs/plan/10 § Shape.";
+        collection.MemberKind switch {
+            ScopeKind.Subscription =>
+                "A subscription is created by PUT at its own address, /tenants/{t}/subscriptions/{s}. "
+                + "The collection is read with GET only — docs/plan/10 § Shape.",
+            ScopeKind.ManagementGroup =>
+                "A management group is created by PUT at its own address, "
+                + "/tenants/{t}/managementGroups/{name}. The collection is read with GET only — "
+                + "docs/plan/10 § Shape.",
+            _ =>
+                "A resource group is created by PUT at its own address, "
+                + "/tenants/{t}/subscriptions/{s}/resourceGroups/{rg}. The collection is read with GET "
+                + "only — docs/plan/10 § Shape."
+        };
 
     /// <summary>
     ///     A non-<c>POST</c> path is a resource or a collection, and the path alone says which.

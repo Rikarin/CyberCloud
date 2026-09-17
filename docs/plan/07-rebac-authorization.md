@@ -72,6 +72,7 @@ are a *view* over this. They are:
 | `Owner` on subscription `S` for user `U` | `subscription:S#owner@user:U` |
 | `Contributor` on resource group `R` for group `G` | `resourceGroup:R#contributor@group:G#member` |
 | Inheritance sub → rg → resource | The `From("parent", …)` rewrites; no *role* tuples written per resource — one `parent` edge is, by the resource manager, at step 8 of [08](08-resource-manager.md) |
+| Inheritance management group → sub (#39) | The same rewrites on a `managementGroup` type whose `parent` is a tenant or another group. ⚠ A subscription assigned to a group has the group as its *one* `parent` — the edge is relinked, never doubled, so the chain stays a chain for `CheckGrain.WalkAncestorsAsync` and the scoped `ListObjects` walk; [06 § The hierarchy](06-tenancy-and-resource-model.md) |
 | Deny assignment | `#suspended`, and the `& !Rel("suspended")` in the permission |
 
 The API can present `GET /roleAssignments` by listing tuples whose relation is a named role, which is

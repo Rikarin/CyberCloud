@@ -60,6 +60,7 @@ from .models import (
     ManagedKubernetesClusterData,
     ManagedKubernetesClusterListCredentialsResult,
     ManagedKubernetesClusterResource,
+    ManagementGroupCreateContent,
     MariaDBServerData,
     MariaDBServerListKeysResult,
     MariaDBServerResource,
@@ -158,6 +159,29 @@ class TenantsClient:
 
     # ⚠ There is no create, and the absence is the contract: a request's tenant is
     # resolved from its token, so a call creating another tenant is refused before routing.
+
+
+class ManagementGroupsClient:
+    """Management groups. The optional tree above the subscription, for role inheritance. docs/plan/06 § The hierarchy."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, management_group_name: str) -> ScopeResource:
+        """Reads one management group."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}"))
+        raise_for_status(response)
+        return ScopeResource.from_wire(wire_of(response))
+
+    def list(self, tenant_id: str, *, top: Optional[int] = None) -> Pager[ScopeResource]:
+        """Lists the management groups the caller may read, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/managementGroups", top, ScopeResource.from_wire)
+
+    def create(self, tenant_id: str, management_group_name: str, content: ManagementGroupCreateContent) -> ScopeResource:
+        """Creates one management group, or returns the existing one unchanged. ⚠ 201 the first time and 200 on a repeat, and no operation to poll."""
+        response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}", body=content.to_wire()))
+        raise_for_status(response)
+        return ScopeResource.from_wire(wire_of(response))
 
 
 class SubscriptionsClient:
@@ -1782,6 +1806,7 @@ class CyberCloudClient:
         self._transport = transport
         self.operations = OperationsClient(transport)
         self.tenants = TenantsClient(transport)
+        self.managementGroups = ManagementGroupsClient(transport)
         self.subscriptions = SubscriptionsClient(transport)
         self.resource_groups = ResourceGroupsClient(transport)
         self.analytics = AnalyticsProvider(transport)

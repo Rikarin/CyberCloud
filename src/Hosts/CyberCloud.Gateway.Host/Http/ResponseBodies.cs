@@ -341,6 +341,13 @@ static class ResponseBodies {
             writer.WriteString("location", scope.Location);
         }
 
+        // Absent rather than empty, as `location` is: a client tests for the property. Present on a
+        // subscription in a group and on a nested group; absent for the tenant root and for the two
+        // kinds that never hang off a group — issue #39.
+        if (scope.ManagementGroup.Length > 0) {
+            writer.WriteString(ScopeBodyProperties.ManagementGroup, scope.ManagementGroup);
+        }
+
         writer.WriteEndObject();
     }
 

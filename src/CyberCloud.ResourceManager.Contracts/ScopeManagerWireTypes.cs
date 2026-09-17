@@ -91,6 +91,19 @@ public sealed record TenantCreateRequest {
     /// <summary>The tenant's first owner. Required.</summary>
     [Id(5)]
     public string OwnerSubjectId { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     The durable shard to pin the tenant's state to, or empty to let the shard map place it —
+    ///     docs/plan/05 § The shard map, issue #39.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Honoured at creation only.</b> A re-driven create naming the shard the tenant is on
+    ///     is a no-op; one naming a different shard is refused as a move, and the move is M3 —
+    ///     <c>IShardMapGrain.PinAsync</c> says why the refusal is the safe half. Appended at 6;
+    ///     docs/plan/05 § Serialization.
+    /// </remarks>
+    [Id(6)]
+    public string DurableShard { get; init; } = string.Empty;
 }
 
 /// <summary>A scope as the API renders it — the response body of a scope <c>PUT</c> or <c>GET</c>.</summary>
@@ -142,6 +155,20 @@ public sealed record ScopeSnapshot {
     /// <summary>The concurrency stamp the owning grain reports.</summary>
     [Id(6)]
     public long Version { get; init; }
+
+    /// <summary>
+    ///     The management group this scope hangs off, by name — a subscription's group, or a group's
+    ///     parent group. Empty for a scope that hangs off the tenant directly, and for a tenant or a
+    ///     resource group, neither of which hangs off a group. docs/plan/06 § The hierarchy, issue #39.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ One property for both kinds rather than a <c>parent</c> for the group and a
+    ///     <c>managementGroup</c> for the subscription, because it is one fact: "the group above me".
+    ///     The tenant's group collection is flat, so this is also what a client reads the tree off.
+    ///     Appended at 7 — docs/plan/05 § Serialization.
+    /// </remarks>
+    [Id(7)]
+    public string ManagementGroup { get; init; } = string.Empty;
 }
 
 /// <summary>
@@ -177,16 +204,33 @@ public static class ScopeBodyProperties {
     ///     appears on an invoice and in every scope picker.
     /// </summary>
     public const string DisplayName = "displayName";
+
+    /// <summary>
+    ///     The property naming the management group a scope hangs off — on a subscription's body,
+    ///     the group it is assigned to; on a management group's body, its parent group. Optional:
+    ///     absent means "unchanged" on a scope that exists and "the tenant root" on one that does
+    ///     not, and the empty string means "the tenant root" either way. docs/plan/06 § The
+    ///     hierarchy, issue #39.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Absent is not empty, and the difference is what makes a repeated <c>PUT</c> safe.</b>
+    ///     A subscription's <c>PUT</c> body has carried only <c>displayName</c> since the scope path
+    ///     existed; if absence meant "the root", every client that never heard of groups would move
+    ///     its subscriptions out of theirs on the next idempotent re-PUT. So a body that does not
+    ///     mention the property leaves the assignment alone, and a client that wants to move a
+    ///     subscription to the root says so with <c>""</c>.
+    /// </remarks>
+    public const string ManagementGroup = "managementGroup";
 }
 
 /// <summary>
-///     The three <c>type</c> strings a scope renders as, in Azure's shape.
+///     The four <c>type</c> strings a scope renders as, in Azure's shape.
 /// </summary>
 /// <remarks>
 ///     ⚠
 ///     <b>
 ///         Constants because they appear in a response body and in the CLI's and portal's parsing of
-///         one, and a fourth spelling would be a silent client break.
+///         one, and a fifth spelling would be a silent client break.
 ///     </b> They are display strings and
 ///     <b>not</b> routing input: <c>GatewayRouter</c> resolves a scope from its path's shape, and
 ///     nothing anywhere matches on these. That is deliberate — the failure this repository has
@@ -203,6 +247,14 @@ public static class ScopeTypeNames {
     /// <summary>A resource group. Azure spells its own the same way, one namespace over.</summary>
     public const string ResourceGroup = "CyberCloud.Resources/subscriptions/resourceGroups";
 
+    /// <summary>
+    ///     A management group. ⚠ Under <c>CyberCloud.Resources</c> beside the other scopes and not
+    ///     under docs/plan/01's <c>CyberCloud.Management</c>: the catalogue row was written when a
+    ///     group was going to be a typed resource, and issue #39 made it a scope path like the
+    ///     scopes it sits between — docs/plan/24 § What the type list cannot say, the tenancy case.
+    /// </summary>
+    public const string ManagementGroup = "CyberCloud.Resources/managementGroups";
+
     /// <summary>The type string for a scope kind, or empty for <see cref="ScopeKind.Unknown" />.</summary>
     /// <param name="kind">The scope kind.</param>
     public static string Of(ScopeKind kind) =>
@@ -210,6 +262,7 @@ public static class ScopeTypeNames {
             ScopeKind.Tenant => Tenant,
             ScopeKind.Subscription => Subscription,
             ScopeKind.ResourceGroup => ResourceGroup,
+            ScopeKind.ManagementGroup => ManagementGroup,
             _ => ""
         };
 }
@@ -285,6 +338,20 @@ public sealed record ScopeListRequest {
     /// </remarks>
     [Id(3)]
     public string Continuation { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     Which of the parent's collections is asked for. <see cref="ScopeKind.Unknown" /> means the
+    ///     one the parent had before issue #39 — subscriptions under a tenant, resource groups under
+    ///     a subscription — and <see cref="ScopeKind.ManagementGroup" /> asks a tenant for its groups.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Appended at 4 rather than replacing <see cref="ParentPath" /> with the collection's own
+    ///     path: a request written against the older shape still lists what it listed, and a peer
+    ///     one version behind reads the default. <c>ScopeCollectionId.MemberKind</c> is where the
+    ///     gateway takes the value from.
+    /// </remarks>
+    [Id(4)]
+    public ScopeKind MemberKind { get; init; } = ScopeKind.Unknown;
 
     /// <summary>The page size this request actually gets.</summary>
     public int PageSize =>

@@ -3,10 +3,11 @@ using System.Globalization;
 namespace CyberCloud.Core.Resources;
 
 /// <summary>
-///     The address of a <b>collection</b> of scopes — a tenant's subscriptions, or a subscription's
-///     resource groups:
+///     The address of a <b>collection</b> of scopes — a tenant's subscriptions, a tenant's management
+///     groups, or a subscription's resource groups:
 ///     <code>
 ///     /tenants/{tenantId}/subscriptions
+///     /tenants/{tenantId}/managementGroups
 ///     /tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups
 ///     </code>
 ///     Each is its parent's <see cref="ScopeId.Path" /> plus the literal segment the children live
@@ -21,6 +22,19 @@ namespace CyberCloud.Core.Resources;
 ///         them, and the router can therefore try this grammar after the item grammar without a
 ///         precedence rule — <c>ScopeCollectionIdTests</c> sweeps the overlap rather than assuming
 ///         it, for the reason <c>ScopeIdTests</c> does.
+///     </para>
+///     <para>
+///         ⚠ <b>Since issue #39 the parent no longer determines the members, and
+///         <see cref="MemberKind" /> is a field rather than a derivation.</b> A tenant has two
+///         collections — its subscriptions and its management groups — and the address tells them
+///         apart by the last segment alone. The first version of this type computed the member kind
+///         from <c>Parent.Kind</c>, which was correct for as long as every parent had exactly one
+///         kind of child; a caller that still only keeps the parent (the manager's
+///         <c>ScopeListRequest.ParentPath</c>) has to carry the kind beside it now, and does. The
+///         management-group collection is <i>flat</i>: it lists every group in the tenant, nested or
+///         not, the way Azure's <c>GET /providers/Microsoft.Management/managementGroups</c> does,
+///         and a group's place in the tree is a property of the group rather than a segment of its
+///         address.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>It carries no id of its own and never will.</b> A collection is not an entity: it
@@ -40,47 +54,60 @@ namespace CyberCloud.Core.Resources;
 /// </remarks>
 /// <param name="Parent">
 ///     The scope whose children are listed: a <see cref="ScopeKind.Tenant" /> for the subscription
-///     collection, a <see cref="ScopeKind.Subscription" /> for the resource-group collection.
+///     and management-group collections, a <see cref="ScopeKind.Subscription" /> for the
+///     resource-group collection.
 /// </param>
-public readonly record struct ScopeCollectionId(ScopeId Parent) {
+/// <param name="MemberKind">
+///     What the members are. <see cref="ScopeKind.Unknown" /> means "the one kind this parent had
+///     before issue #39" — <see cref="ScopeKind.Subscription" /> under a tenant and
+///     <see cref="ScopeKind.ResourceGroup" /> under a subscription — kept so a caller written against
+///     the one-parameter shape still means what it meant.
+/// </param>
+public readonly record struct ScopeCollectionId(ScopeId Parent, ScopeKind MemberKind = ScopeKind.Unknown) {
     /// <summary>The scope whose children are listed. Only a tenant or a subscription can be one.</summary>
     public ScopeId Parent {
         get;
-        init => field = EnsureParent(value);
-    } = EnsureParent(Parent);
+        init => field = EnsureParent(value, MemberKind);
+    } = EnsureParent(Parent, MemberKind);
 
     /// <summary>
-    ///     What the members are — <see cref="ScopeKind.Subscription" /> under a tenant,
+    ///     What the members are — <see cref="ScopeKind.Subscription" /> or
+    ///     <see cref="ScopeKind.ManagementGroup" /> under a tenant,
     ///     <see cref="ScopeKind.ResourceGroup" /> under a subscription, <see cref="ScopeKind.Unknown" />
     ///     for a default instance.
     /// </summary>
-    public ScopeKind MemberKind =>
-        Parent.Kind switch {
-            ScopeKind.Tenant => ScopeKind.Subscription,
-            ScopeKind.Subscription => ScopeKind.ResourceGroup,
-            _ => ScopeKind.Unknown
-        };
+    public ScopeKind MemberKind {
+        get;
+        init => field = EnsureMembers(Parent, value);
+    } = EnsureMembers(Parent, MemberKind);
 
     /// <summary>The tenant every member belongs to — the parent's.</summary>
     public Guid TenantId => Parent.TenantId;
 
     /// <summary>The address: the parent's path plus the children's literal segment.</summary>
     public string Path =>
-        Parent.Kind switch {
-            ScopeKind.Tenant => Parent.Path + "/" + ResourceId.SubscriptionsSegment,
-            ScopeKind.Subscription => Parent.Path + "/" + ResourceId.ResourceGroupsSegment,
+        MemberKind switch {
+            ScopeKind.Subscription => Parent.Path + "/" + ResourceId.SubscriptionsSegment,
+            ScopeKind.ManagementGroup => Parent.Path + "/" + ResourceId.ManagementGroupsSegment,
+            ScopeKind.ResourceGroup => Parent.Path + "/" + ResourceId.ResourceGroupsSegment,
             _ => ""
         };
 
     /// <summary>The subscription collection of a tenant.</summary>
     /// <param name="tenantId">The tenant.</param>
-    public static ScopeCollectionId SubscriptionsOf(Guid tenantId) => new(ScopeId.Tenant(tenantId));
+    public static ScopeCollectionId SubscriptionsOf(Guid tenantId) =>
+        new(ScopeId.Tenant(tenantId), ScopeKind.Subscription);
+
+    /// <summary>The management-group collection of a tenant — every group in it, flat.</summary>
+    /// <param name="tenantId">The tenant.</param>
+    public static ScopeCollectionId ManagementGroupsOf(Guid tenantId) =>
+        new(ScopeId.Tenant(tenantId), ScopeKind.ManagementGroup);
 
     /// <summary>The resource-group collection of a subscription.</summary>
     /// <param name="tenantId">The owning tenant.</param>
     /// <param name="subscriptionId">The subscription.</param>
     public static ScopeCollectionId ResourceGroupsOf(Guid tenantId, Guid subscriptionId) =>
-        new(ScopeId.Subscription(tenantId, subscriptionId));
+        new(ScopeId.Subscription(tenantId, subscriptionId), ScopeKind.ResourceGroup);
 
     /// <summary>
     ///     Parses a scope collection path. Returns <see langword="false" /> for anything that is not
@@ -115,9 +142,9 @@ public readonly record struct ScopeCollectionId(ScopeId Parent) {
     ///         refuses.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The last segment must be the literal the parent's kind implies</b> —
-    ///         <c>subscriptions</c> under a tenant, <c>resourceGroups</c> under a subscription —
-    ///         matched case-insensitively like every other structural literal. Anything else after a
+    ///         ⚠ <b>The last segment must be a literal the parent's kind allows</b> —
+    ///         <c>subscriptions</c> or <c>managementGroups</c> under a tenant, <c>resourceGroups</c>
+    ///         under a subscription — matched case-insensitively like every other structural literal. Anything else after a
     ///         well-formed parent is not "a collection of something unknown"; it is not a scope
     ///         address at all.
     ///     </para>
@@ -125,8 +152,9 @@ public readonly record struct ScopeCollectionId(ScopeId Parent) {
     public static Result<ScopeCollectionId> ParsePath(string? path) {
         if (string.IsNullOrEmpty(path)) {
             return Invalid(
-                "A scope collection path is required. It looks like '/tenants/{tenantId}/subscriptions' "
-                + "or '/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups' — "
+                "A scope collection path is required. It looks like '/tenants/{tenantId}/subscriptions', "
+                + "'/tenants/{tenantId}/managementGroups' or "
+                + "'/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups' — "
                 + "docs/plan/06 § The hierarchy."
             );
         }
@@ -152,17 +180,26 @@ public readonly record struct ScopeCollectionId(ScopeId Parent) {
                 + path
                 + "' is not a scope collection path: it has "
                 + segments.Length.ToString(CultureInfo.InvariantCulture)
-                + " segments and a scope collection has 3 (a tenant's subscriptions) or 5 (a "
-                + "subscription's resource groups)."
+                + " segments and a scope collection has 3 (a tenant's subscriptions or management "
+                + "groups) or 5 (a subscription's resource groups)."
             );
         }
 
-        var expected = segments.Length == 3 ? ResourceId.SubscriptionsSegment : ResourceId.ResourceGroupsSegment;
+        var members = segments.Length == 3
+            ? Literal(segments[^1], ResourceId.SubscriptionsSegment) ? ScopeKind.Subscription
+            : Literal(segments[^1], ResourceId.ManagementGroupsSegment) ? ScopeKind.ManagementGroup
+            : ScopeKind.Unknown
+            : Literal(segments[^1], ResourceId.ResourceGroupsSegment) ? ScopeKind.ResourceGroup
+            : ScopeKind.Unknown;
 
-        if (!string.Equals(segments[^1], expected, StringComparison.OrdinalIgnoreCase)) {
+        if (members == ScopeKind.Unknown) {
+            var expected = segments.Length == 3
+                ? $"'{ResourceId.SubscriptionsSegment}' or '{ResourceId.ManagementGroupsSegment}'"
+                : $"'{ResourceId.ResourceGroupsSegment}'";
+
             return Invalid(
                 $"'{path}' is not a scope collection path: the last segment is '{segments[^1]}' and a "
-                + $"collection under this parent ends in '{expected}' (matched case-insensitively)."
+                + $"collection under this parent ends in {expected} (matched case-insensitively)."
             );
         }
 
@@ -170,21 +207,59 @@ public readonly record struct ScopeCollectionId(ScopeId Parent) {
 
         return parent.TryGetError(out var parentError)
             ? Result<ScopeCollectionId>.Failure(parentError)
-            : Result<ScopeCollectionId>.Success(new(parent.GetValueOrThrow()));
+            : Result<ScopeCollectionId>.Success(new(parent.GetValueOrThrow(), members));
     }
+
+    static bool Literal(string segment, string literal) =>
+        string.Equals(segment, literal, StringComparison.OrdinalIgnoreCase);
 
     /// <inheritdoc />
     public override string ToString() => Path;
 
-    static ScopeId EnsureParent(ScopeId parent) =>
-        parent.Kind is ScopeKind.Tenant or ScopeKind.Subscription or ScopeKind.Unknown
-            ? parent
-            : throw new ArgumentException(
+    static ScopeId EnsureParent(ScopeId parent, ScopeKind members) {
+        if (parent.Kind is not (ScopeKind.Tenant or ScopeKind.Subscription or ScopeKind.Unknown)) {
+            // ⚠ A management group is refused here too, and that is the flat-listing decision
+            // stated as a constructor rule: the tree is read off each group's own record, and a
+            // '/managementGroups/{name}/managementGroups' address would be a second path to the same
+            // members, which is the drift docs/plan/06 § Identifiers spends a paragraph refusing.
+            throw new ArgumentException(
                 $"'{parent.Path}' is a {parent.Kind} and a scope collection lives under a tenant or a "
                 + "subscription. A resource group has no scope children — what is inside it is "
-                + "resources, listed by ResourceCollectionId.",
+                + "resources, listed by ResourceCollectionId — and a management group's children are "
+                + "listed flat under the tenant, each carrying its parent as a property.",
                 nameof(parent)
             );
+        }
+
+        _ = EnsureMembers(parent, members);
+        return parent;
+    }
+
+    static ScopeKind EnsureMembers(ScopeId parent, ScopeKind members) {
+        var resolved = members == ScopeKind.Unknown
+            ? parent.Kind switch {
+                ScopeKind.Tenant => ScopeKind.Subscription,
+                ScopeKind.Subscription => ScopeKind.ResourceGroup,
+                _ => ScopeKind.Unknown
+            }
+            : members;
+
+        var legal = (parent.Kind, resolved) switch {
+            (ScopeKind.Unknown, ScopeKind.Unknown) => true,
+            (ScopeKind.Tenant, ScopeKind.Subscription or ScopeKind.ManagementGroup) => true,
+            (ScopeKind.Subscription, ScopeKind.ResourceGroup) => true,
+            _ => false
+        };
+
+        return legal
+            ? resolved
+            : throw new ArgumentException(
+                $"A {parent.Kind} has no {resolved} collection. A tenant lists its subscriptions and "
+                + "its management groups; a subscription lists its resource groups — docs/plan/06 "
+                + "§ The hierarchy.",
+                nameof(members)
+            );
+    }
 
     static Result<ScopeCollectionId> Invalid(string message) =>
         Result<ScopeCollectionId>.Failure(ErrorCode.InvalidResourceId, message);

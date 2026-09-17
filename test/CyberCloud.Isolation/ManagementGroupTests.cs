@@ -1,0 +1,283 @@
+using CyberCloud.Authorization.Contracts;
+using CyberCloud.ResourceManager;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace CyberCloud.Isolation;
+
+/// <summary>
+///     The management group's one promise — <i>a role assigned at a group is inherited by its
+///     subscriptions</i> (docs/plan/06 § The hierarchy, issue #39) — driven through the real
+///     <c>ScopeManagerService</c>, the real <c>RoleAssignmentService</c>, the real
+///     <c>ReBacScopeRelationWriter</c> and the real <c>CyberCloudSchema</c>.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>Written as grants and verbs, never as tuple reads</b>, for the reason
+///         <see cref="ScopeCreationTests" /> gives: a tuple read would confirm an edge exists, and
+///         what has to be true is that the evaluator <i>follows</i> it — resource group → subscription
+///         → management group → the grant, and on to the tenant for the tenant's owner.
+///     </para>
+///     <para>
+///         ⚠ <b>The move is the half that bites.</b> A subscription taken out of a group must stop
+///         being reachable through it in the same call, which is what
+///         <c>IScopeRelationWriter.RelinkParentAsync</c>'s delete-then-write exists for. A harness with
+///         a doubled writer proves the manager asked for the relink
+///         (<c>ManagementGroupScopeTests</c>); only this one proves the engine stopped answering.
+///     </para>
+/// </remarks>
+[Collection(IsolationSuite.Name)]
+public sealed class ManagementGroupTests(IsolationCluster cluster) {
+    /// <summary>A tenant the fixture does not touch, so these tests own its whole tree.</summary>
+    static Guid Tree { get; } = Guid.Parse("99999999-0000-4000-8000-000000000009");
+
+    /// <summary>The tenant's owner — granted at the tenant and nowhere else.</summary>
+    const string TenantOwner = "theo";
+
+    /// <summary>A user granted nothing anywhere.</summary>
+    const string Nobody = "nemo";
+
+    static readonly SemaphoreSlim Seeding = new(1, 1);
+    static bool seeded;
+
+    [Fact]
+    public async Task AnOwnerAtAGroupReachesAResourceGroupInASubscriptionAssignedToItAndNoOther() {
+        await SeedTenantAsync();
+        var owner = IsolationCluster.Caller(Tree, TenantOwner);
+        var group = ScopeId.ManagementGroupOf(Tree, "platform-a");
+        var inside = Guid.Parse("99999999-0000-4000-8000-0000000000a1");
+        var outside = Guid.Parse("99999999-0000-4000-8000-0000000000a2");
+
+        // ── The tenant owner builds the tree: a group, a subscription in it, one outside it ──────
+        (await Put(group.Path, """{"displayName":"Platform A"}""", owner)).IsSuccess.ShouldBeTrue();
+
+        var assigned = await Put(
+            ScopeId.Subscription(Tree, inside).Path,
+            """{"displayName":"Inside","managementGroup":"platform-a"}""",
+            owner
+        );
+
+        assigned.IsSuccess.ShouldBeTrue(
+            "a tenant owner could not assign a subscription to a group they created: " + assigned.Error?.Message
+        );
+
+        (await Put(ScopeId.Subscription(Tree, outside).Path, """{"displayName":"Outside"}""", owner)).IsSuccess.ShouldBeTrue();
+
+        // ── The grant: owner on the GROUP, through #70's assignment path at the new scope ────────
+        var gwen = await UserAsync("gwen");
+
+        var granted = await cluster.Roles.AssignAsync(
+            new() {
+                Path = RoleAssignmentId.OnScope(group, new(Relations.Owner, SubjectTypes.User, gwen)).Path,
+                Body = "{}",
+                Caller = owner
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        granted.IsSuccess.ShouldBeTrue(
+            "a tenant owner could not grant Owner on a management group in their own tenant — "
+            + "`assignRole` on the group resolves through managementGroup → parent → tenant: "
+            + granted.Error?.Message
+        );
+
+        // ── #86's collection at the new scope lists the grant ────────────────────────────────────
+        var listed = await cluster.Roles.ListAsync(
+            new() { Path = RoleAssignmentCollectionId.OnScope(group).Path, Caller = owner },
+            TestContext.Current.CancellationToken
+        );
+
+        listed.IsSuccess.ShouldBeTrue(listed.Error?.Message);
+        listed.GetValueOrThrow().Assignments.ShouldContain(x => x.PrincipalId == gwen && x.RoleDefinitionId == Relations.Owner);
+
+        // ── THE PROMISE. gwen holds one tuple, on the group, and creates a resource group inside ──
+        //
+        // `write` on the group's parent is checked on subscription:{inside}, whose only path to
+        // user:gwen is subscription --parent--> managementGroup:platform-a --owner--> gwen. Two hops
+        // the scope path wrote; delete either and this is a 404.
+        var madeInside = await Put(ScopeId.Group(Tree, inside, "gwen-rg").Path, """{"location":"eu-west-1"}""", Gwen(gwen));
+
+        madeInside.IsSuccess.ShouldBeTrue(
+            "an owner at a management group could not create a resource group in a subscription "
+            + "assigned to it — the subscription's parent edge does not reach the group: "
+            + madeInside.Error?.Message
+        );
+
+        // ── And nothing in the subscription that is NOT in the group — the canonical 404 ─────────
+        var refusedOutside = await Put(ScopeId.Group(Tree, outside, "gwen-rg").Path, """{"location":"eu-west-1"}""", Gwen(gwen));
+
+        refusedOutside.IsFailure.ShouldBeTrue("a group grant reached a subscription outside the group");
+        refusedOutside.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound, "404, never 403");
+
+        // ── The tenant owner still reaches the assigned subscription, one hop longer ─────────────
+        //
+        // ⚠ The subscription's parent is now the GROUP and not the tenant — the chain stayed a chain
+        // — so theo's path is subscription → group → tenant → owner. If assignment had ADDED an edge
+        // rather than replaced one, this would still pass; ParentsOfAsync below is what pins the
+        // replacement.
+        var ownerInside = await Put(ScopeId.Group(Tree, inside, "theo-rg").Path, """{"location":"eu-west-1"}""", owner);
+        ownerInside.IsSuccess.ShouldBeTrue("the tenant owner lost a subscription by assigning it to a group: " + ownerInside.Error?.Message);
+
+        var parents = await ParentsOfAsync(ObjectTypes.Subscription, inside.ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        parents.ShouldHaveSingleItem("the chain is not a chain: a subscription in a group carries two parent tuples");
+        parents[0].Object.Type.ShouldBe(ObjectTypes.ManagementGroup);
+        parents[0].Object.Id.ShouldBe("platform-a");
+
+        // ── Nobody is nobody, at every level ─────────────────────────────────────────────────────
+        var nobody = await Put(ScopeId.Group(Tree, inside, "nemo-rg").Path, """{"location":"eu-west-1"}""", IsolationCluster.Caller(Tree, Nobody));
+        nobody.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+    }
+
+    /// <summary>
+    ///     ⚠ Moving a subscription out of a group revokes the group's reach in the same call — the
+    ///     delete half of the relink — and the tenant owner's reach is unbroken across the move.
+    /// </summary>
+    [Fact]
+    public async Task MovingASubscriptionOutOfAGroupRevokesTheGroupOwnersReachAtOnce() {
+        await SeedTenantAsync();
+        var owner = IsolationCluster.Caller(Tree, TenantOwner);
+        var from = ScopeId.ManagementGroupOf(Tree, "move-from");
+        var to = ScopeId.ManagementGroupOf(Tree, "move-to");
+        var subscription = Guid.Parse("99999999-0000-4000-8000-0000000000b1");
+
+        (await Put(from.Path, "{}", owner)).IsSuccess.ShouldBeTrue();
+        (await Put(to.Path, "{}", owner)).IsSuccess.ShouldBeTrue();
+        (await Put(ScopeId.Subscription(Tree, subscription).Path, """{"displayName":"Mover","managementGroup":"move-from"}""", owner))
+            .IsSuccess.ShouldBeTrue();
+
+        var fran = await UserAsync("fran");
+        (await cluster.Roles.AssignAsync(
+                new() {
+                    Path = RoleAssignmentId.OnScope(from, new(Relations.Owner, SubjectTypes.User, fran)).Path,
+                    Body = "{}",
+                    Caller = owner
+                },
+                TestContext.Current.CancellationToken
+            )).IsSuccess.ShouldBeTrue();
+
+        // Before: fran reaches the subscription through move-from.
+        (await Put(ScopeId.Group(Tree, subscription, "before").Path, """{"location":"eu-west-1"}""", Gwen(fran)))
+            .IsSuccess.ShouldBeTrue("the fixture's grant did not reach");
+
+        // ── The move, by the tenant owner: one PUT naming the other group ────────────────────────
+        var moved = await Put(ScopeId.Subscription(Tree, subscription).Path, """{"displayName":"Mover","managementGroup":"move-to"}""", owner);
+        moved.IsSuccess.ShouldBeTrue(moved.Error?.Message);
+        moved.GetValueOrThrow().ManagementGroup.ShouldBe("move-to");
+
+        // After: fran's grant on move-from reaches nothing in the subscription — a fully consistent
+        // check, because docs/plan/07 § Consistency makes a revocation the half that is never late,
+        // and this assertion is about the tuple store rather than the cache.
+        var check = await cluster.For(Tree)
+            .GetGrain<ICheckGrain>(GrainKeys.CheckCache(ObjectTypes.Subscription, subscription.ToString("N", System.Globalization.CultureInfo.InvariantCulture)))
+            .CheckAsync(Permissions.Write, SubjectRef.Of(ObjectTypes.User, fran), Consistency.FullyConsistent);
+
+        check.GetValueOrThrow().Allowed.ShouldBeFalse("a grant on the old group still reaches a subscription moved out of it");
+
+        var refused = await Put(ScopeId.Group(Tree, subscription, "after").Path, """{"location":"eu-west-1"}""", Gwen(fran));
+        refused.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound, "404 after the move, never 403: " + refused.Error.Message);
+
+        // The tenant owner is unbroken across the move.
+        (await Put(ScopeId.Group(Tree, subscription, "still-mine").Path, """{"location":"eu-west-1"}""", owner))
+            .IsSuccess.ShouldBeTrue();
+
+        // And the chain is still a chain.
+        var parents = await ParentsOfAsync(ObjectTypes.Subscription, subscription.ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        parents.ShouldHaveSingleItem();
+        parents[0].Object.Id.ShouldBe("move-to");
+    }
+
+    /// <summary>
+    ///     ⚠ A grant at a nested group reaches through the levels above it to the tenant's owner and
+    ///     down to a subscription two groups deep — the tree, not just one edge.
+    /// </summary>
+    [Fact]
+    public async Task ANestedGroupIsReachedFromAboveAndReachesBelow() {
+        await SeedTenantAsync();
+        var owner = IsolationCluster.Caller(Tree, TenantOwner);
+        var subscription = Guid.Parse("99999999-0000-4000-8000-0000000000c1");
+
+        (await Put(ScopeId.ManagementGroupOf(Tree, "nest-1").Path, "{}", owner)).IsSuccess.ShouldBeTrue();
+        (await Put(ScopeId.ManagementGroupOf(Tree, "nest-2").Path, """{"managementGroup":"nest-1"}""", owner)).IsSuccess.ShouldBeTrue();
+
+        // ⚠ The nested group's parent is nest-1, so `write` for its create was checked on nest-1,
+        // which theo reaches only through nest-1 --parent--> tenant.
+        (await Put(ScopeId.Subscription(Tree, subscription).Path, """{"displayName":"Deep","managementGroup":"nest-2"}""", owner))
+            .IsSuccess.ShouldBeTrue();
+
+        var hal = await UserAsync("hal");
+        (await cluster.Roles.AssignAsync(
+                new() {
+                    Path = RoleAssignmentId.OnScope(ScopeId.ManagementGroupOf(Tree, "nest-1"), new(Relations.Contributor, SubjectTypes.User, hal)).Path,
+                    Body = "{}",
+                    Caller = owner
+                },
+                TestContext.Current.CancellationToken
+            )).IsSuccess.ShouldBeTrue();
+
+        // hal is a contributor at the TOP group and creates a resource group two levels down:
+        // resourceGroup → subscription → nest-2 → nest-1 → hal.
+        var made = await Put(ScopeId.Group(Tree, subscription, "hal-rg").Path, """{"location":"eu-west-1"}""", Gwen(hal));
+        made.IsSuccess.ShouldBeTrue("a contributor at a top-level group could not reach a subscription two groups down: " + made.Error?.Message);
+
+        // And a contributor cannot grant — `assignRole` is owner-only — which is the same rule the
+        // other scopes have and proves the group type carries the whole permission set, not a copy.
+        var refused = await cluster.Roles.AssignAsync(
+            new() {
+                Path = RoleAssignmentId.OnScope(ScopeId.ManagementGroupOf(Tree, "nest-2"), new(Relations.Reader, SubjectTypes.User, hal)).Path,
+                Body = "{}",
+                Caller = Gwen(hal)
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        refused.IsFailure.ShouldBeTrue("a contributor granted a role on a management group");
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────────────────────
+
+    static CallerContext Gwen(string user) => IsolationCluster.Caller(Tree, user);
+
+    Task<Result<ScopeSnapshot>> Put(string path, string body, CallerContext caller) =>
+        cluster.Scopes.CreateAsync(new() { Path = path, Body = body, Caller = caller }, TestContext.Current.CancellationToken);
+
+    async Task SeedTenantAsync() {
+        await Seeding.WaitAsync(TestContext.Current.CancellationToken);
+
+        try {
+            if (seeded) {
+                return;
+            }
+
+            var created = await cluster.For(Tree)
+                .GetGrain<ITenantGrain>(GrainKeys.Tenant(Tree))
+                .CreateAsync("tree-tenant", "Tree Tenant", "eu-west-1");
+
+            created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+            await cluster.GrantTenantOwnerAsync(Tree, TenantOwner);
+            seeded = true;
+        } finally {
+            Seeding.Release();
+        }
+    }
+
+    Task<string> UserAsync(string label) => cluster.CreateUserAsync(Tree, GuidFor("user:" + label));
+
+    static Guid GuidFor(string label) {
+        var digest = SHA256.HashData(Encoding.UTF8.GetBytes("tree:" + label));
+        var bytes = digest[..16];
+        bytes[7] = (byte)((bytes[7] & 0x0F) | 0x40);
+        bytes[8] = (byte)((bytes[8] & 0x3F) | 0x80);
+        return new(bytes);
+    }
+
+    async Task<IReadOnlyList<SubjectRef>> ParentsOfAsync(string type, string id) {
+        var snapshot = await cluster.For(Tree)
+            .GetGrain<IObjectRelationsGrain>(GrainKeys.ObjectRelations(type, id))
+            .ReadDurableAsync();
+
+        return snapshot.IsSuccess
+            && snapshot.GetValueOrThrow().ByRelation.TryGetValue(Relations.Parent, out var parents)
+                ? parents
+                : [];
+    }
+}

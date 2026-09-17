@@ -2,7 +2,7 @@ namespace CyberCloud.ResourceManager.Contracts;
 
 /// <summary>
 ///     The one place a tenant's intent to create a <i>scope</i> enters the platform —
-///     docs/plan/06 § The hierarchy's subscription and resource group.
+///     docs/plan/06 § The hierarchy's management group, subscription and resource group.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -56,7 +56,8 @@ namespace CyberCloud.ResourceManager.Contracts;
 /// </remarks>
 public interface IScopeManager {
     /// <summary>
-    ///     Creates a subscription or a resource group. <c>PUT</c> on a scope path. Idempotent.
+    ///     Creates a management group, a subscription or a resource group. <c>PUT</c> on a scope
+    ///     path. Idempotent.
     /// </summary>
     /// <param name="request">The request, as the gateway parsed it off the URL and the body.</param>
     /// <param name="cancellationToken">Cancels the request.</param>
@@ -73,11 +74,20 @@ public interface IScopeManager {
     ///         ⚠ <see cref="ScopeKind.Tenant" /> is refused here, and the refusal is a decision rather
     ///         than a gap — see <see cref="CreateTenantAsync" />.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A subscription's <c>PUT</c> is also how it is assigned to a management group</b>
+    ///         (issue #39): <see cref="ScopeBodyProperties.ManagementGroup" /> names the group, the
+    ///         parent edge is moved from the tenant to the group, and a later <c>PUT</c> naming a
+    ///         different group moves it again. The check is <c>write</c> on the tenant, as for any
+    ///         subscription create, <i>and</i> <c>write</c> on the group named — placing a
+    ///         subscription under a group hands the group's role holders every inherited right over
+    ///         it, so the caller has to be someone the group would let do that.
+    ///     </para>
     /// </returns>
     Task<Result<ScopeSnapshot>> CreateAsync(ScopeRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Deletes a resource group. <c>DELETE</c> on a scope path. Idempotent.
+    ///     Deletes a resource group or a management group. <c>DELETE</c> on a scope path. Idempotent.
     /// </summary>
     /// <param name="request">The request. <see cref="ScopeRequest.Body" /> is ignored.</param>
     /// <param name="cancellationToken">Cancels the delete.</param>
@@ -94,7 +104,8 @@ public interface IScopeManager {
     ///         operation with partial failure to report. A cascade that skipped any of those would be
     ///         a way to delete a locked resource by deleting its group.
     ///         <c>IResourceGroupGrain.BeginGroupDeleteAsync</c> carries the argument; the refusal
-    ///         names what is in the way.
+    ///         names what is in the way. A management group holding a child group or a subscription
+    ///         is refused on the same argument — <c>IManagementGroupGrain.DeleteAsync</c>.
     ///     </para>
     ///     <para>
     ///         ⚠
@@ -131,10 +142,13 @@ public interface IScopeManager {
     Task<Result<ScopeSnapshot>> ReadAsync(ScopeRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Lists the scopes under one parent — a tenant's subscriptions, or a subscription's resource
-    ///     groups. <c>GET</c> on a scope collection path.
+    ///     Lists the scopes under one parent — a tenant's subscriptions, a tenant's management
+    ///     groups, or a subscription's resource groups. <c>GET</c> on a scope collection path.
     /// </summary>
-    /// <param name="request">The request, carrying the <i>parent's</i> path.</param>
+    /// <param name="request">
+    ///     The request, carrying the <i>parent's</i> path and, since a tenant has two collections,
+    ///     <see cref="ScopeListRequest.MemberKind" />.
+    /// </param>
     /// <param name="cancellationToken">Cancels the listing.</param>
     /// <returns>
     ///     A page of the scopes the caller may read. ⚠ An empty page and a page short of
@@ -328,10 +342,11 @@ public interface IScopeAuthorizer {
     ///     <see cref="IResourceAuthorizer.ListReadableAsync" /> already uses for a resource
     ///     collection, asked about subscriptions or resource groups instead.
     /// </summary>
-    /// <param name="parent">
-    ///     The scope the members hang off — the tenant of a subscription collection, the
-    ///     subscription of a resource-group collection. It is what the engine scopes the walk to, so
-    ///     a wrong value here does not leak; it lists nothing.
+    /// <param name="collection">
+    ///     The collection — its parent is what the engine scopes the walk to, so a wrong value here
+    ///     does not leak; it lists nothing. Its <see cref="ScopeCollectionId.MemberKind" /> is what
+    ///     says whether a tenant's subscriptions or its management groups are being listed, which
+    ///     the parent alone stopped saying at issue #39.
     /// </param>
     /// <param name="candidates">The members on the page. The answer is a subset of these.</param>
     /// <param name="readPermission">The permission a read needs.</param>
@@ -345,7 +360,7 @@ public interface IScopeAuthorizer {
     ///     Never a refusal: a member the caller may not read is one that is not in the answer.
     /// </returns>
     Task<ScopeCollectionVisibility> ListReadableAsync(
-        ScopeId parent,
+        ScopeCollectionId collection,
         IReadOnlyList<ScopeId> candidates,
         string readPermission,
         CallerContext caller,
@@ -401,6 +416,56 @@ public interface IScopeRelationWriter {
     ///     next attempt writes the identical tuple.
     /// </remarks>
     Task<Result> LinkToParentAsync(ScopeId scope, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Records <c>{scope}#parent@{parent}</c> for a parent the address does not carry — a
+    ///     subscription's management group, or a management group's parent group. Idempotent.
+    /// </summary>
+    /// <param name="scope">
+    ///     The scope. ⚠ Only a <see cref="ScopeKind.Subscription" /> or a
+    ///     <see cref="ScopeKind.ManagementGroup" /> can hang off a management group, and only a
+    ///     <see cref="ScopeKind.ManagementGroup" /> can hang off a tenant by this method — everything
+    ///     else has a parent its address spells, which is <see cref="LinkToParentAsync(ScopeId, CancellationToken)" />'s.
+    /// </param>
+    /// <param name="parent">The parent: a tenant or a management group in the same tenant.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <remarks>
+    ///     ⚠ <b>The same ordering rule as the one-argument form</b> — before the scope's durable
+    ///     state — and one more: <b>it writes, it never replaces.</b> A subscription that already
+    ///     hangs off the tenant and is now assigned to a group would end up with two <c>parent</c>
+    ///     tuples, which <c>CheckGrain.WalkAncestorsAsync</c> reads as a data error and the scoped
+    ///     <c>ListObjects</c> walk places by whichever it meets first. Moving a scope is
+    ///     <see cref="RelinkParentAsync" />, which deletes before it writes.
+    /// </remarks>
+    Task<Result> LinkToParentAsync(ScopeId scope, ScopeId parent, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Moves a scope's <c>parent</c> edge: deletes <c>{scope}#parent@{currentParent}</c>, then writes
+    ///     <c>{scope}#parent@{newParent}</c>. Idempotent — a re-drive finds the first tuple gone and the
+    ///     second present, and both halves accept that.
+    /// </summary>
+    /// <param name="scope">The scope being moved. A subscription, in practice; see <see cref="LinkToParentAsync(ScopeId, ScopeId, CancellationToken)" />.</param>
+    /// <param name="currentParent">The parent it hangs off now.</param>
+    /// <param name="newParent">The parent it should hang off.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <remarks>
+    ///     ⚠ <b>Delete first, and the window that opens is the safe one.</b> Between the two writes
+    ///     the scope has no parent at all, so every inherited role is briefly absent — a caller
+    ///     checked in that window is refused with the canonical 404 and retries. The other order
+    ///     opens a window with <i>two</i> parents, in which a grant from the old group still reaches
+    ///     a subscription its owner has just moved away from it; docs/plan/07 § Consistency wants a
+    ///     revocation to be the half that is never late.
+    /// </remarks>
+    Task<Result> RelinkParentAsync(ScopeId scope, ScopeId currentParent, ScopeId newParent, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Deletes <c>{scope}#parent@{parent}</c>. Idempotent — a tuple already gone is a success.
+    ///     The last step of a management group's delete, after its record is gone.
+    /// </summary>
+    /// <param name="scope">The scope.</param>
+    /// <param name="parent">The parent the edge names.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    Task<Result> UnlinkFromParentAsync(ScopeId scope, ScopeId parent, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Records a direct <c>#owner</c> tuple on a scope. Idempotent.

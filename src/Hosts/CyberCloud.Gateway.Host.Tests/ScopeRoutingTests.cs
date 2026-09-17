@@ -75,6 +75,69 @@ public sealed class ScopeRoutingTests {
         gateway.Scopes.Paths.ShouldContain(GatewayHarness.SubscriptionPath(GatewayHarness.TenantA));
     }
 
+    /// <summary>
+    ///     ⚠ The fourth scope shape (issue #39): four segments like a subscription, and the router
+    ///     tells them apart by the literal — nothing here changed in the router, which is the point
+    ///     of a grammar-driven route. Bound to the scope manager, with the member kind carried for
+    ///     the tenant's second collection.
+    /// </summary>
+    [Fact]
+    public async Task AManagementGroupIsCreatedWithAPutAndItsCollectionCarriesTheMemberKind() {
+        var gateway = new GatewayHarness();
+
+        gateway.Scopes.OnCreate = request => Result<ScopeSnapshot>.Success(
+            new() {
+                Path = request.Path,
+                Kind = ScopeKind.ManagementGroup,
+                Name = "Platform",
+                Type = ScopeTypeNames.ManagementGroup,
+                Created = true
+            }
+        );
+
+        var response = await gateway.SendAsync(
+            "PUT",
+            GatewayHarness.ManagementGroupPath(GatewayHarness.TenantA),
+            gateway.Token(GatewayHarness.TenantA),
+            body: """{"displayName":"Platform"}"""
+        );
+
+        response.Status.ShouldBe(StatusCodes.Status201Created, response.Body);
+        gateway.Scopes.Paths.ShouldContain(GatewayHarness.ManagementGroupPath(GatewayHarness.TenantA));
+        gateway.Manager.Paths.ShouldBeEmpty();
+
+        ScopeListRequest? listed = null;
+        gateway.Scopes.OnList = request => {
+            listed = request;
+            return Result<ScopeListPage>.Success(new());
+        };
+
+        var collection = await gateway.SendAsync(
+            "GET",
+            $"/tenants/{GatewayHarness.TenantA:D}/managementGroups",
+            gateway.Token(GatewayHarness.TenantA)
+        );
+
+        collection.Status.ShouldBe(StatusCodes.Status200OK, collection.Body);
+        listed.ShouldNotBeNull();
+        listed.ParentPath.ShouldBe($"/tenants/{GatewayHarness.TenantA:D}");
+        listed.MemberKind.ShouldBe(
+            ScopeKind.ManagementGroup,
+            "the tenant's second collection was dispatched without saying which one it is"
+        );
+
+        // A write on the collection names the item address, as the other collections do.
+        var refused = await gateway.SendAsync(
+            "PUT",
+            $"/tenants/{GatewayHarness.TenantA:D}/managementGroups",
+            gateway.Token(GatewayHarness.TenantA),
+            body: "{}"
+        );
+
+        refused.Status.ShouldBe(StatusCodes.Status400BadRequest);
+        refused.Body.ShouldContain("/tenants/{t}/managementGroups/{name}");
+    }
+
     [Fact]
     public async Task AScopeIsReadableWithAGet() {
         var gateway = new GatewayHarness();

@@ -155,27 +155,47 @@ public interface IShardMapGrain : IGrainWithStringKey {
     Task<Result<ShardMapSnapshot>> SetAcceptingNewTenantsAsync(string shard, bool accepting);
 
     /// <summary>
-    ///     ⚠ <b>NOT IMPLEMENTED — throws <see cref="NotSupportedException" />.</b> The operator-run
-    ///     move of one outsized tenant, budgeted at 0.5 EM in M2 by docs/plan/05 § The shard map.
+    ///     Pins a tenant's durable state to a chosen shard <b>at creation</b>, and refuses to move a
+    ///     tenant that already has one — docs/plan/05 § The shard map, issue #39.
     /// </summary>
-    /// <param name="tenantId">The tenant to move.</param>
-    /// <param name="durableShard">The shard to move it to.</param>
-    /// <param name="hotOverride">The hash-tag override, or <see langword="null" />.</param>
+    /// <param name="tenantId">The tenant to place. Pinned before its record exists.</param>
+    /// <param name="durableShard">
+    ///     A shard <see cref="ConfigureShardsAsync" /> registered and that is in the placement
+    ///     rotation. ⚠ A drained shard is refused: a pin that bypassed the rotation would defeat the
+    ///     drain the flag exists for.
+    /// </param>
+    /// <param name="hotOverride">
+    ///     ⚠ <see langword="null" />, or the tenant's default tag. Anything else is refused: the map
+    ///     records a hash tag but <c>IShardMapCache.HotHashTagFor</c> reads
+    ///     <c>Hot:HashTagOverrides</c> at wiring time and never the map, so an override recorded here
+    ///     would be a fact nothing acts on.
+    /// </param>
+    /// <returns>
+    ///     Success once the assignment exists — or already existed on that shard, which is the
+    ///     re-driven create finding its own pin. <c>Conflict</c> when the tenant is on a different
+    ///     shard: that is the move, and the move is not built.
+    /// </returns>
     /// <remarks>
     ///     <para>
-    ///         The signature is here because docs/plan/05 § The shard map declares it and because a
-    ///         method that does not exist cannot be planned against. The <i>body</i> is not, because
-    ///         what makes <c>PinAsync</c> safe is not the map edit — it is the four steps around it:
-    ///         "It quiesces the tenant (rejects writes with <c>503 Retry-After</c>), copies the grain
-    ///         rows, flips the map, and un-quiesces." Shipping the map edit without the copy would
-    ///         repoint a live tenant at an empty database, which is worse than not having the method.
+    ///         ⚠ <b>Half of what docs/plan/05 § The shard map describes, and the half that is
+    ///         safe.</b> That section describes <c>PinAsync</c> as the operator-run move of one
+    ///         outsized tenant: "It quiesces the tenant (rejects writes with <c>503 Retry-After</c>),
+    ///         copies the grain rows, flips the map, and un-quiesces." Only the flip is a map edit,
+    ///         and flipping without the copy repoints a live tenant at an empty database. The copy is
+    ///         not built. What is built is the placement half — a tenant that has never been placed is
+    ///         placed where the operator says, which needs no quiesce and no copy because there is
+    ///         nothing yet to quiesce or copy — and the move half is <b>refused by name</b>, with the
+    ///         four steps in the message, so that the refusal is what an operator reads rather than a
+    ///         map that silently points somewhere empty. docs/plan/05 records the move as M3.
     ///     </para>
     ///     <para>
-    ///         The read-only half — an operator-configured pin honoured at wiring time — already
-    ///         works, through <c>DurableTierOptions.Pins</c>.
+    ///         The pin arrives through <c>TenantCreateRequest.DurableShard</c> and
+    ///         <c>IScopeManager.CreateTenantAsync</c> calls this before <see cref="AssignAsync" />;
+    ///         the assignment that comes back from <see cref="AssignAsync" /> is the pinned one, with
+    ///         the region filled in. The configured read-only pin — <c>DurableTierOptions.Pins</c>,
+    ///         honoured at wiring time — is unchanged and still beats the map.
     ///     </para>
     /// </remarks>
-    /// <exception cref="NotSupportedException">Always.</exception>
     Task<Result> PinAsync(Guid tenantId, string durableShard, string? hotOverride);
 
     /// <summary>Drops this activation — see <c>ITenantGrain.DeactivateAsync</c>.</summary>

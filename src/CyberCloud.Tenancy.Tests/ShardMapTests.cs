@@ -157,17 +157,101 @@ public sealed class ShardMapTests(TenancyCluster cluster) {
         refused.Error.Message.ShouldContain("SetAcceptingNewTenantsAsync");
     }
 
+    // ── Pinning — the placement half of docs/plan/05 § The shard map's PinAsync (issue #39) ────
+
+    /// <summary>
+    ///     ⚠ A pin placed before the tenant exists is the assignment <c>AssignAsync</c> then finds,
+    ///     whatever the hash would have said — and the assign fills in the region the pin could not
+    ///     carry.
+    /// </summary>
     [Fact]
-    public async Task PinAsyncIsNotImplementedAndSaysSoWithTheDocumentInTheMessage() {
-        // docs/plan/05 § The shard map budgets PinAsync at 0.5 EM in M2. The signature exists
-        // because the document declares it; the body does not, because the map edit without the
-        // quiesce/copy/flip/un-quiesce would repoint a live tenant at an empty database.
+    public async Task APinBeforeCreationIsTheAssignmentTheCreateFinds() {
+        var map = cluster.ShardMapGrain();
+        await AddShardsAsync("durable-02", "durable-03");
+
+        // Find a tenant the hash would NOT put on durable-03, so the pin is doing the placing.
+        var tenant = Tenant(500);
+        var hashed = (await map.AssignAsync(Tenant(501), "eu-central")).GetValueOrThrow().DurableShard;
+        var chosen = hashed == "durable-03" ? "durable-02" : "durable-03";
+
+        (await map.PinAsync(tenant, chosen, null)).IsSuccess.ShouldBeTrue();
+
+        var assigned = (await map.AssignAsync(tenant, "eu-central")).GetValueOrThrow();
+
+        assigned.DurableShard.ShouldBe(chosen, "the create placed the tenant somewhere other than its pin");
+        assigned.Region.ShouldBe("eu-central", "the assign did not complete the region the pin could not carry");
+        assigned.HotHashTag.ShouldBe(StaticShardMapCache.HotTagPrefix + TenancyCluster.Id(tenant).Replace("-", "", StringComparison.Ordinal));
+
+        // Idempotent: the re-driven create carries the same pin and finds it.
+        (await map.PinAsync(tenant, chosen, null)).IsSuccess.ShouldBeTrue();
+    }
+
+    /// <summary>
+    ///     ⚠ <b>THE REFUSAL THAT IS THE POINT.</b> A pin that would move an assigned tenant is the
+    ///     move docs/plan/05 § The shard map describes as quiesce, copy, flip, un-quiesce; only the
+    ///     flip is a map edit and flipping alone repoints a live tenant at an empty database. The
+    ///     move is M3 and the refusal names the four steps.
+    /// </summary>
+    [Fact]
+    public async Task APinThatWouldMoveAnAssignedTenantIsRefusedByName() {
+        var map = cluster.ShardMapGrain();
+        await AddShardsAsync("durable-02", "durable-03");
+
+        var tenant = Tenant(510);
+        var resident = (await map.AssignAsync(tenant, "eu-central")).GetValueOrThrow();
+        var elsewhere = resident.DurableShard == "durable-03" ? "durable-02" : "durable-03";
+
+        var refused = await map.PinAsync(tenant, elsewhere, null);
+
+        refused.IsFailure.ShouldBeTrue("a pin moved a tenant that already had durable state somewhere");
+        refused.Error!.Code.ShouldBe(ErrorCode.Conflict);
+        refused.Error.Message.ShouldContain("docs/plan/05");
+        refused.Error.Message.ShouldContain("quiesce");
+        refused.Error.Message.ShouldContain("M3");
+
+        (await map.GetAssignmentAsync(tenant)).GetValueOrThrow()
+            .DurableShard.ShouldBe(resident.DurableShard, "the refused pin moved the map anyway");
+    }
+
+    [Fact]
+    public async Task APinToAnUnknownOrDrainedShardIsRefused() {
+        var map = cluster.ShardMapGrain();
+        await AddShardsAsync("durable-02", "durable-03");
+
+        var unknown = await map.PinAsync(Tenant(520), "durable-nowhere", null);
+        unknown.IsFailure.ShouldBeTrue();
+        unknown.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+        (await map.SetAcceptingNewTenantsAsync("durable-03", false)).IsSuccess.ShouldBeTrue();
+
+        try {
+            var drained = await map.PinAsync(Tenant(521), "durable-03", null);
+            drained.IsFailure.ShouldBeTrue("a pin bypassed the placement rotation");
+            drained.Error!.Code.ShouldBe(ErrorCode.Conflict);
+            drained.Error.Message.ShouldContain("SetAcceptingNewTenantsAsync");
+        } finally {
+            (await map.SetAcceptingNewTenantsAsync("durable-03", true)).IsSuccess.ShouldBeTrue();
+        }
+
+        // Nothing was recorded for either.
+        (await map.GetAssignmentAsync(Tenant(520))).IsFailure.ShouldBeTrue();
+        (await map.GetAssignmentAsync(Tenant(521))).IsFailure.ShouldBeTrue();
+    }
+
+    /// <summary>
+    ///     ⚠ A hot hash-tag override is refused rather than recorded: the cache reads the configured
+    ///     overrides and never the map, so a recorded one would be a fact nothing acts on.
+    /// </summary>
+    [Fact]
+    public async Task AHotOverrideIsRefusedBecauseTheMapCannotDeliverIt() {
         var map = cluster.ShardMapGrain();
 
-        var thrown = await Should.ThrowAsync<Exception>(() => map.PinAsync(Tenant(500), TenancyCluster.ShardB, null));
+        var refused = await map.PinAsync(Tenant(530), TenancyCluster.ShardB, "cc:t:custom");
 
-        thrown.ToString().ShouldContain("docs/plan/05");
-        thrown.ToString().ShouldContain("quiesce");
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        refused.Error.Message.ShouldContain("HashTagOverrides");
+        (await map.GetAssignmentAsync(Tenant(530))).IsFailure.ShouldBeTrue("a refused pin left an assignment");
     }
 
     [Fact]

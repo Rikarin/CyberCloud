@@ -31,6 +31,8 @@ public sealed class ReBacScopeAuthorizerTests(ResourceManagerCluster cluster) {
 
     static readonly string[] GroupNames = ["dev", "prod"];
 
+    static readonly string[] ManagementGroupNames = ["platform", "platform-prod"];
+
     ReBacScopeAuthorizer Authorizer => new(cluster.Grains, NullLogger<ReBacScopeAuthorizer>.Instance);
 
     /// <summary>
@@ -53,7 +55,7 @@ public sealed class ReBacScopeAuthorizerTests(ResourceManagerCluster cluster) {
         ScriptedListObjectsGrain.Objects.Add(N(Guid.NewGuid()));
 
         var visibility = await Authorizer.ListReadableAsync(
-            ScopeId.Tenant(Tenant),
+            ScopeCollectionId.SubscriptionsOf(Tenant),
             subscriptions,
             Permissions.Read,
             ResourceManagerCluster.Caller(),
@@ -93,7 +95,7 @@ public sealed class ReBacScopeAuthorizerTests(ResourceManagerCluster cluster) {
         ScriptedListObjectsGrain.Objects.Add(ReBacScopeAuthorizer.ObjectOf(groups[1]).Id);
 
         var visibility = await Authorizer.ListReadableAsync(
-            subscription,
+            ScopeCollectionId.ResourceGroupsOf(Tenant, subscription.SubscriptionId),
             groups,
             Permissions.Read,
             ResourceManagerCluster.Caller(),
@@ -133,7 +135,7 @@ public sealed class ReBacScopeAuthorizerTests(ResourceManagerCluster cluster) {
         ScriptedListObjectsGrain.FailWith = failure;
 
         var visibility = await Authorizer.ListReadableAsync(
-            ScopeId.Tenant(Tenant),
+            ScopeCollectionId.SubscriptionsOf(Tenant),
             [subscription],
             Permissions.Read,
             ResourceManagerCluster.Caller(),
@@ -149,22 +151,83 @@ public sealed class ReBacScopeAuthorizerTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A parent that has no scope children is not answered either</b> — and no grain is asked.
+    ///     ⚠ <b>A parent that has no scope children cannot be asked about</b> — the collection type
+    ///     refuses to name one, so the seam never sees the question and no grain is asked.
     /// </summary>
+    /// <remarks>
+    ///     This used to be a call on the seam with a resource-group parent answering
+    ///     <c>Unanswered</c>; since issue #39 the parent travels inside a <see cref="ScopeCollectionId" />,
+    ///     whose constructor is where "a resource group has no scope children" is enforced, and the
+    ///     seam's own branch for it is unreachable from the manager.
+    /// </remarks>
     [Fact]
-    public async Task AResourceGroupParentIsUnansweredWithoutAWalk() {
+    public void AResourceGroupParentIsRefusedByTheCollectionTypeBeforeAnyWalk() {
         ResourceManagerCluster.ResetDoubles();
 
+        Should.Throw<ArgumentException>(() => new ScopeCollectionId(ScopeId.Group(Tenant, Guid.NewGuid(), "prod")));
+
+        ScriptedListObjectsGrain.Requests.ShouldBeEmpty();
+    }
+
+    /// <summary>
+    ///     ⚠ <b>The management-group collection is never walked</b>: its members sit at every depth
+    ///     of a tree the depth-1 walk cannot see, so the seam answers <c>Unanswered</c> without
+    ///     asking the engine and the manager checks per member — issue #39.
+    /// </summary>
+    [Fact]
+    public async Task TheManagementGroupCollectionIsAlwaysPerMember() {
+        ResourceManagerCluster.ResetDoubles();
+
+        var groups = ManagementGroupNames
+            .Select(x => ScopeId.ManagementGroupOf(Tenant, x))
+            .ToList();
+
+        // Scripted to answer — a walk that ran would answer, and answering is the failure.
+        ScriptedListObjectsGrain.Objects.Add("platform");
+
         var visibility = await Authorizer.ListReadableAsync(
-            ScopeId.Group(Tenant, Guid.NewGuid(), "prod"),
-            [],
+            ScopeCollectionId.ManagementGroupsOf(Tenant),
+            groups,
             Permissions.Read,
             ResourceManagerCluster.Caller(),
             TestContext.Current.CancellationToken
         );
 
-        visibility.IsAnswered.ShouldBeFalse();
-        ScriptedListObjectsGrain.Requests.ShouldBeEmpty();
+        visibility.ShouldBeSameAs(ScopeCollectionVisibility.Unanswered);
+        ScriptedListObjectsGrain.Requests.ShouldBeEmpty("the engine was asked about a flat listing of a tree");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A tenant with a management group loses the one-walk subscription listing</b>, because
+    ///     a subscription in a group is two hops below the tenant and the depth-1 walk would drop it
+    ///     from a page while claiming to have answered — issue #39.
+    /// </summary>
+    [Fact]
+    public async Task ASubscriptionCollectionFallsBackToPerMemberOnceTheTenantHasAGroup() {
+        ResourceManagerCluster.ResetDoubles();
+
+        var tenant = Guid.NewGuid();
+        var grouped = ScopeId.Subscription(tenant, Guid.NewGuid());
+
+        await cluster.For(tenant)
+            .GetGrain<ITenantGrain>(GrainKeys.Tenant(tenant))
+            .CreateAsync("grouped", "Grouped", "eu-west-1");
+
+        await cluster.For(tenant)
+            .GetGrain<ITenantGrain>(GrainKeys.Tenant(tenant))
+            .AddManagementGroupAsync("platform");
+
+        // Scripted to hide the subscription: a walk that ran and was believed would drop it.
+        var visibility = await Authorizer.ListReadableAsync(
+            ScopeCollectionId.SubscriptionsOf(tenant),
+            [grouped],
+            Permissions.Read,
+            ResourceManagerCluster.Caller() with { TenantId = tenant },
+            TestContext.Current.CancellationToken
+        );
+
+        visibility.ShouldBeSameAs(ScopeCollectionVisibility.Unanswered);
+        ScriptedListObjectsGrain.Requests.ShouldBeEmpty("the depth-1 walk was asked under a tenant with a group");
     }
 
     static string N(Guid id) => id.ToString("N", CultureInfo.InvariantCulture);

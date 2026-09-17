@@ -21,6 +21,56 @@ Two things Azure does that we copy exactly, because they are load-bearing and no
   subscriptions — production, staging, per-team — is the shape every real customer wants within a
   month, and retrofitting it later means renumbering every resource id.
 
+**The management group landed with #39, as a scope path and not as a typed resource.** It is
+`/tenants/{t}/managementGroups/{name}` — four segments like a subscription, told apart by the literal,
+the name a DNS-1123 label unique within the tenant — with a flat collection at
+`/tenants/{t}/managementGroups` that lists every group nested or not, each carrying the group it hangs
+off in a `managementGroup` property. [01](01-azure-parity-catalogue.md)'s row files it under
+`CyberCloud.Management/managementGroups`; it is a scope for the reason subscriptions and resource groups
+are ([24 § What the type list cannot say](24-roadmap.md), the tenancy case) and its `type` string is
+`CyberCloud.Resources/managementGroups`. Four decisions, each with the reason the code repeats:
+
+- **The tree is optional and the tenant is its implicit root.** A group with no parent and a
+  subscription with no group hang off the tenant exactly as they did before the kind existed. Azure
+  spells the root as a group whose id is the tenant id; here it is spelled by absence, because a root
+  group nothing could delete or rename is a record with one legal state and the tenant already is one.
+- **A subscription is assigned by `PUT` on the subscription with `managementGroup` set, and the
+  assignment *replaces* its `parent` edge rather than adding one.** The ReBAC chain has to stay a chain
+  — `CheckGrain.WalkAncestorsAsync` reads a second `parent` as a data error and the scoped
+  `ListObjects` walk places an object by its chain — so `subscription:S#parent@tenant:T` becomes
+  `subscription:S#parent@managementGroup:G`, and the tenant's roles reach `S` through `G`'s own parent
+  edge, one hop longer. `IScopeRelationWriter.RelinkParentAsync` makes the swap, delete first, so the
+  window that opens is the one with *no* parent rather than the one with two: a revocation is the half
+  that is never late ([07 § Consistency](07-rebac-authorization.md)). Assigning needs `write` on the
+  group as well as on the tenant, because it hands the group's role holders every inherited right
+  over the subscription. ⚠ Absent is not empty: a body that never mentions `managementGroup` leaves
+  the assignment alone — the subscription `PUT` carried only `displayName` for every client written
+  before #39 — and `""` moves it to the root.
+- **A role assigned at a group is inherited by its subscriptions through nothing new.**
+  `CyberCloudSchema` defines `managementGroup` with the same four roles and four permissions as the
+  other scopes and a `parent` that is a tenant or another group; the `From("parent", …)` rewrites do
+  the rest, and [07 § Azure RBAC](07-rebac-authorization.md)'s assignments and #86's collection work at
+  the new scope through `RoleAssignmentId.OnScope`. `test/CyberCloud.Isolation`'s
+  `ManagementGroupTests` drives a grant at a group down to a resource group two levels below, through
+  the real schema, and drives a move to prove the old group's reach ends in the same call.
+- **Depth is capped at six, and the cap is the evaluator's budget rather than Azure's number copied.**
+  A resource is resource → group → subscription → *n* groups → tenant, and
+  [07 § Check](07-rebac-authorization.md) caps the walk at twelve hops; six levels puts the deepest
+  resource at nine and leaves room for the userset hop a group grant adds. `IManagementGroupGrain`
+  refuses the seventh.
+
+⚠ **Owed, and recorded here rather than only in a commit message.** *Moving a group* — a `PUT` naming
+a different parent for an existing group is a `409`, because a safe move re-checks the depth of every
+node beneath it against the cap and refuses a cycle, with nothing holding the tree still between the
+calls; that is the seal-then-move choreography a resource group's delete uses, and it is M3. *A lock at
+a group* — see [§ Tags, locks](#tags-locks-and-the-small-stuff-that-is-not-small) below. *Policy* — the
+"for policy" half of the tree's purpose has no policy engine to attach to yet. And one thing that is a
+consequence rather than a debt: **a tenant that has any group loses the one-walk subscription listing**
+and falls back to a check per member, because a subscription in a group sits two or more hops below the
+tenant where the depth-1 walk cannot see it and a deeper walk would read every resource under every
+root-level subscription on the way — `ReBacScopeAuthorizer.ListReadableAsync` says why deeper is not
+the fix.
+
 One thing we add: **a Cluster is a first-class resource that other resources are placed into.**
 Azure hides the fabric; we cannot, because the brief's whole premise is that a tenant may bring their
 own. A managed Postgres therefore has a required `clusterId` property, and the portal's default is
@@ -126,6 +176,7 @@ tenant-qualified key. `GrainKeys` is the only type allowed to build the within-t
 | Grain | Key within tenant |
 |---|---|
 | `ITenantGrain` | `tenant/{tenantId:N}` |
+| `IManagementGroupGrain` | `mg/{name}` — keyed by name, unique within the tenant by construction; [§ The hierarchy](#the-hierarchy), #39 |
 | `ISubscriptionGrain` | `sub/{subscriptionId:N}` |
 | `IResourceGroupGrain` | `sub/{subscriptionId:N}/rg/{name}` |
 | `IResourceGrain` | `res/{resourceId:N}` |
@@ -309,10 +360,14 @@ incident.
 **"Inherited down the hierarchy" reaches three scopes and not four.** `ILockResolver` walks
 resource → resource group → subscription and takes the *strongest* lock found — `ReadOnly` outranks
 `CanNotDelete`, which is not the enum's numeric order and is the one trap in the walk. It does **not**
-walk the management group, because there is no management-group grain, no key for one and no parent
-pointer from a subscription to one: § The hierarchy makes that tree optional and
-[01](01-azure-parity-catalogue.md) puts it at M2. So a lock at that level is not merely unread — **it
-cannot be set at all**, and the day the tree lands, closing the gap is one more scope on the same walk.
+walk the management group. ⚠ The reason changed with #39 and the sentence has to say so: the grain,
+the key and the parent pointer from a subscription to a group all exist now
+([§ The hierarchy](#the-hierarchy)), and what is still missing is the *lock* — `ManagementGroupDescriptor`
+carries no `Lock` and `IManagementGroupGrain` no `SetLockAsync`, so a lock at that level still
+**cannot be set at all** and the walk still stops where it did. Closing it is one member on the record,
+one method on the grain and one more scope on the same walk, and it is owed rather than done because
+the walk reads `SubscriptionDescriptor.ManagementGroup` and then a second grain, which is the first
+time `ILockResolver` would cross from the subscription into a record the subscription does not own.
 A scope with no record contributes no lock rather than failing the walk, deliberately: the group and
 subscription records are created by an admin path the resource manager does not drive, and a walk that
 fail-closed on a missing record would be a platform in which nothing can be created. Whether the

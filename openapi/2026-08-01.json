@@ -122,6 +122,201 @@
       },
       "x-cybercloud-scope-read-only": true
     },
+    "/tenants/{tenantId}/managementGroups": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "Scopes_ListManagementGroups",
+        "summary": "List management groups.",
+        "description": "Lists every management group in the tenant the token names — flat, nested groups included, each carrying its parent in managementGroup — one page at a time, filtered to the groups the caller may read. No permission on the tenant itself is needed. Stop when nextLink is absent.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope": "managementGroup",
+      "x-cybercloud-scope-type": "CyberCloud.Resources/managementGroups",
+      "x-cybercloud-scope-collection": true
+    },
+    "/tenants/{tenantId}/managementGroups/{managementGroupName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/ManagementGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "Scopes_GetManagementGroup",
+        "summary": "Read a management group.",
+        "description": "Reads one management group. Its managementGroup property is the parent group, absent for a group that hangs off the tenant.",
+        "responses": {
+          "200": {
+            "description": "The scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope": "managementGroup",
+      "x-cybercloud-scope-type": "CyberCloud.Resources/managementGroups",
+      "x-cybercloud-display": {
+        "name": "Management group",
+        "plural": "Management groups",
+        "summary": "The optional tree above the subscription, for role inheritance. docs/plan/06 § The hierarchy."
+      },
+      "put": {
+        "operationId": "Scopes_PutManagementGroup",
+        "summary": "Create a management group.",
+        "description": "Creates the management group at this address, or returns the existing one unchanged. ⚠ The parent is set at creation: a repeated PUT naming the same parent is a 200, one naming a different parent is a 409 — a move is not built (docs/plan/06 § The hierarchy). A role assigned at a group is inherited by every subscription assigned to it and everything below them; a subscription is assigned by PUT on the subscription with its managementGroup property set.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Scope.ManagementGroupCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The scope already existed and is returned unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The scope was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/tenants/{tenantId}/subscriptions": {
       "parameters": [
         {
@@ -16034,6 +16229,18 @@
           "format": "uuid"
         }
       },
+      "ManagementGroupName": {
+        "name": "managementGroupName",
+        "in": "path",
+        "required": true,
+        "description": "The management group — the optional tree above the subscription, unique within the tenant. docs/plan/06 § The hierarchy.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        }
+      },
       "ResourceGroupName": {
         "name": "resourceGroupName",
         "in": "path",
@@ -23882,7 +24089,7 @@
       "Scope": {
         "type": "object",
         "title": "Scope",
-        "description": "A tenant, a subscription or a resource group, as the API renders it. ⚠ There is no provisioningState: a scope is one grain activation and converges before the call returns, which is the visible half of \"a scope is not a resource\".",
+        "description": "A tenant, a management group, a subscription or a resource group, as the API renders it. ⚠ There is no provisioningState: a scope is one grain activation and converges before the call returns, which is the visible half of \"a scope is not a resource\".",
         "properties": {
           "id": {
             "type": "string",
@@ -23892,6 +24099,10 @@
             "type": "string",
             "description": "The region: a tenant's home region or a group's default. ⚠ Absent rather than empty where the scope has none, so a client tests for the property instead of comparing against \"\"."
           },
+          "managementGroup": {
+            "type": "string",
+            "description": "The management group this scope hangs off — a subscription's group, or a group's parent group. ⚠ Absent for a scope that hangs off the tenant directly, and for a tenant or a resource group. docs/plan/06 § The hierarchy."
+          },
           "name": {
             "type": "string",
             "description": "The name a human reads."
@@ -23900,6 +24111,7 @@
             "type": "string",
             "description": "The Azure-shaped type string.",
             "enum": [
+              "CyberCloud.Resources/managementGroups",
               "CyberCloud.Resources/subscriptions/resourceGroups",
               "CyberCloud.Resources/subscriptions",
               "CyberCloud.Resources/tenants"
@@ -23916,7 +24128,7 @@
       "Scope.List": {
         "type": "object",
         "title": "Scope.List",
-        "description": "One page of scopes — a tenant's subscriptions or a subscription's resource groups. ⚠ The page holds what the caller may read: a listing runs a permission check per member (docs/plan/07 § The enforcement seam), so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "description": "One page of scopes — a tenant's subscriptions, a tenant's management groups or a subscription's resource groups. ⚠ The page holds what the caller may read: a listing runs a permission check per member (docs/plan/07 § The enforcement seam), so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent, never when a page is smaller than you asked for.",
         "properties": {
           "nextLink": {
             "type": "string",
@@ -23933,6 +24145,22 @@
         "required": [
           "value"
         ],
+        "additionalProperties": false
+      },
+      "Scope.ManagementGroupCreate": {
+        "type": "object",
+        "title": "Scope.ManagementGroupCreate",
+        "description": "The body of a PUT that creates a management group.",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "The name a person reads. Optional; defaults to the group's name."
+          },
+          "managementGroup": {
+            "type": "string",
+            "description": "The parent group, by name. Optional: absent or empty hangs the group off the tenant. ⚠ Set at creation and not movable — a later PUT naming a different parent is a 409. The tree is capped at six levels."
+          }
+        },
         "additionalProperties": false
       },
       "Scope.ResourceGroupCreate": {
@@ -23959,6 +24187,10 @@
           "displayName": {
             "type": "string",
             "description": "The name on an invoice and in every scope picker. Required — a subscription identified only by its GUID is one nobody can pick out of a list."
+          },
+          "managementGroup": {
+            "type": "string",
+            "description": "The management group to assign the subscription to, by name. Optional. ⚠ Absent leaves the assignment unchanged on a subscription that exists and means the tenant root on one that does not; the empty string moves the subscription to the tenant root. Assigning needs write on the group as well as on the tenant. docs/plan/06 § The hierarchy."
           }
         },
         "required": [

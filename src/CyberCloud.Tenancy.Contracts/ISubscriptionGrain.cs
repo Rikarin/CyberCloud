@@ -46,14 +46,29 @@ public interface ISubscriptionGrain : IGrainWithStringKey {
     /// <summary>Sets or clears the lock at this scope.</summary>
     /// <param name="level">The lock. <see cref="LockLevel.None" /> clears it.</param>
     /// <remarks>
-    ///     ⚠ <b>The top of the chain that exists.</b> docs/plan/06 § Tags, locks makes a lock
+    ///     ⚠ <b>The top of the chain that carries a lock.</b> docs/plan/06 § Tags, locks makes a lock
     ///     "inherited down the hierarchy", and the hierarchy above a subscription is the management
-    ///     group — docs/plan/01 puts management groups at M2 and there is no grain for one, so a lock
-    ///     set here is the highest lock the platform can currently express.
-    ///     <c>ResourceScopeLockResolver</c> says so out loud rather than implying that the walk is
-    ///     complete.
+    ///     group. The group exists since issue #39 (<see cref="IManagementGroupGrain" />) and
+    ///     <b>carries no lock</b> — its record has no <c>Lock</c> member and no <c>SetLockAsync</c> —
+    ///     so a lock set here is still the highest lock the platform can express, and
+    ///     <c>ResourceScopeLockResolver</c> still says so out loud rather than implying that the walk
+    ///     is complete. docs/plan/06 § Tags, locks records the group-level lock as owed.
     /// </remarks>
     Task<Result> SetLockAsync(LockLevel level);
+
+    /// <summary>
+    ///     Records which management group this subscription hangs off, or none. Idempotent.
+    /// </summary>
+    /// <param name="managementGroup">
+    ///     The group's name, or empty for the tenant root. ⚠ The record only: the ReBAC
+    ///     <c>parent</c> edge that makes a group's roles reach this subscription is
+    ///     <c>IScopeRelationWriter</c>'s, and <c>ScopeManagerService</c> moves the edge before it
+    ///     moves this record — a record that named a group whose roles did not reach here would be
+    ///     the listing-versus-authorization split docs/plan/07 § Azure RBAC, expressed in it warns
+    ///     about.
+    /// </param>
+    /// <returns>The record as it now stands.</returns>
+    Task<Result<SubscriptionDescriptor>> SetManagementGroupAsync(string managementGroup);
 
     /// <summary>
     ///     Creates a resource group in this subscription, and records it here.

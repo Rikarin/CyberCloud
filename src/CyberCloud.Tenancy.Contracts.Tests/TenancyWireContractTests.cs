@@ -115,7 +115,23 @@ public sealed class TenancyWireContractTests {
         // Appended, never inserted — docs/plan/05 § Serialization. Both carry the scope's own lock,
         // which is what let ILockResolver stop returning None for every scope above the resource.
         ("ResourceGroupDescriptor", 7, "Lock"),
-        ("SubscriptionDescriptor", 7, "Lock")
+        ("SubscriptionDescriptor", 7, "Lock"),
+
+        // The management group a subscription hangs off — docs/plan/06 § The hierarchy, issue #39.
+        // Appended at 8; a record written before it reads back as "no group", which is what every
+        // such subscription is.
+        ("SubscriptionDescriptor", 8, "ManagementGroup"),
+
+        // The scope above the subscription, issue #39.
+        ("ManagementGroupDescriptor", 0, "Name"),
+        ("ManagementGroupDescriptor", 1, "TenantId"),
+        ("ManagementGroupDescriptor", 2, "DisplayName"),
+        ("ManagementGroupDescriptor", 3, "Parent"),
+        ("ManagementGroupDescriptor", 4, "Depth"),
+        ("ManagementGroupDescriptor", 5, "Children"),
+        ("ManagementGroupDescriptor", 6, "Subscriptions"),
+        ("ManagementGroupDescriptor", 7, "CreatedAt"),
+        ("ManagementGroupDescriptor", 8, "Version")
     ];
 
     /// <summary>The aliases this assembly publishes. Changing one is a wire break.</summary>
@@ -128,6 +144,7 @@ public sealed class TenancyWireContractTests {
         // Grain interfaces.
         ("IClientIndexGrain", "CyberCloud.Tenancy.IClientIndexGrain"),
         ("IEmailIndexGrain", "CyberCloud.Tenancy.IEmailIndexGrain"),
+        ("IManagementGroupGrain", "CyberCloud.Tenancy.IManagementGroupGrain"),
         ("IQuotaGrain", "CyberCloud.Tenancy.IQuotaGrain"),
         ("IResourceGroupGrain", "CyberCloud.Tenancy.IResourceGroupGrain"),
         ("IResourceIndexGrain", "CyberCloud.Tenancy.IResourceIndexGrain"),
@@ -154,6 +171,7 @@ public sealed class TenancyWireContractTests {
         // Wire records.
         ("ChildTypeCount", "CyberCloud.Tenancy.ChildTypeCount"),
         ("IndexEntry", "CyberCloud.Tenancy.IndexEntry"),
+        ("ManagementGroupDescriptor", "CyberCloud.Tenancy.ManagementGroupDescriptor"),
         ("QuotaLease", "CyberCloud.Tenancy.QuotaLease"),
         ("QuotaUsage", "CyberCloud.Tenancy.QuotaUsage"),
         ("ResourceGroupDescriptor", "CyberCloud.Tenancy.ResourceGroupDescriptor"),

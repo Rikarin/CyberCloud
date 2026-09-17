@@ -226,8 +226,8 @@ public sealed class ReBacRoleAssignmentStore(IGrainFactory grains, ILogger<ReBac
     /// </summary>
     /// <remarks>
     ///     A scope object's id is the scope spelled forwards — <c>tenant:{N}</c>,
-    ///     <c>subscription:{N}</c>, <c>resourceGroup:{N}-{name}</c> — so three of the four reverse
-    ///     with no lookup. A resource object's id is a GUID with no path in it, and its own grain is
+    ///     <c>managementGroup:{name}</c>, <c>subscription:{N}</c>, <c>resourceGroup:{N}-{name}</c> —
+    ///     so four of the five reverse with no lookup. A resource object's id is a GUID with no path in it, and its own grain is
     ///     what knows the path: one <c>IResourceGrain.GetAsync</c> with no api-version and no
     ///     pointers, which projects nothing and answers the envelope. ⚠ The empty api-version is
     ///     deliberate — the read wants the address and not a body, and an unknown version projects
@@ -262,6 +262,14 @@ public sealed class ReBacRoleAssignmentStore(IGrainFactory grains, ILogger<ReBac
             );
         }
 
+        // A management group's object id is its name and nothing else — ReBacScopeAuthorizer.ObjectOf.
+        if (string.Equals(@object.Type, ObjectTypes.ManagementGroup, StringComparison.Ordinal)
+            && ResourceNaming.IsValid(@object.Id)) {
+            return Result<RoleAssignmentCollectionId>.Success(
+                RoleAssignmentCollectionId.OnScope(ScopeId.ManagementGroupOf(tenantId, @object.Id))
+            );
+        }
+
         if (string.Equals(@object.Type, ResourceObjectType, StringComparison.Ordinal)
             && GuidFormat.TryParseN(@object.Id, out var resourceId)) {
             var resource = await tenant.GetGrain<IResourceGrain>(GrainKeys.Resource(resourceId)).GetAsync("", []);
@@ -285,8 +293,8 @@ public sealed class ReBacRoleAssignmentStore(IGrainFactory grains, ILogger<ReBac
             ErrorCode.InternalError,
             $"A role assignment is written on '{@object.Type}:{@object.Id}', which is not a scope "
             + "this API addresses, so it cannot be listed under an address. Only a tenant, a "
-            + "subscription, a resource group or a resource carries role assignments — "
-            + "docs/plan/07 § Azure RBAC, expressed in it."
+            + "management group, a subscription, a resource group or a resource carries role "
+            + "assignments — docs/plan/07 § Azure RBAC, expressed in it."
         );
     }
 

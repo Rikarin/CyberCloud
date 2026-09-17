@@ -89,6 +89,12 @@ public sealed class ScopeManagerService(
     /// <remarks>⚠ <see cref="ScopeBodyProperties" />'s, for the reason above.</remarks>
     public const string DisplayNameProperty = ScopeBodyProperties.DisplayName;
 
+    /// <summary>
+    ///     The body property naming the management group a subscription or a group hangs off.
+    /// </summary>
+    /// <remarks>⚠ <see cref="ScopeBodyProperties" />'s, for the reason above.</remarks>
+    public const string ManagementGroupProperty = ScopeBodyProperties.ManagementGroup;
+
     /// <inheritdoc />
     public async Task<Result<ScopeSnapshot>> CreateAsync(
         ScopeRequest request,
@@ -124,9 +130,21 @@ public sealed class ScopeManagerService(
 
         using var document = body.GetValueOrThrow();
 
-        return scope.Kind == ScopeKind.Subscription
-            ? await CreateSubscriptionAsync(scope, document.RootElement, request.Caller, cancellationToken)
-            : await CreateGroupAsync(scope, document.RootElement, request.Caller, cancellationToken);
+        return scope.Kind switch {
+            ScopeKind.Subscription => await CreateSubscriptionAsync(
+                scope,
+                document.RootElement,
+                request.Caller,
+                cancellationToken
+            ),
+            ScopeKind.ManagementGroup => await CreateManagementGroupAsync(
+                scope,
+                document.RootElement,
+                request.Caller,
+                cancellationToken
+            ),
+            _ => await CreateGroupAsync(scope, document.RootElement, request.Caller, cancellationToken)
+        };
     }
 
     /// <inheritdoc />
@@ -140,6 +158,10 @@ public sealed class ScopeManagerService(
 
         var scope = resolved.GetValueOrThrow();
 
+        if (scope.Kind == ScopeKind.ManagementGroup) {
+            return await DeleteManagementGroupAsync(scope, request.Caller, cancellationToken);
+        }
+
         if (scope.Kind != ScopeKind.ResourceGroup) {
             // ⚠ NOT a 404 and not a silent partial. A subscription delete is every group's delete
             // plus the meter, the quota and the shard; a tenant's is that plus the directory and the
@@ -147,10 +169,11 @@ public sealed class ScopeManagerService(
             // for a shard nothing lists.
             return Result.Failure(
                 ErrorCode.InvalidResourceId,
-                $"'{scope.Path}' is a {scope.Kind} and only a resource group can be deleted over this "
-                + "API. Deleting a subscription or a tenant also has to end the meter, release the "
-                + "quota and unassign the shard, and none of that is built — a delete that removed "
-                + "the record and left those would be worse than one that refuses."
+                $"'{scope.Path}' is a {scope.Kind} and only a resource group or a management group "
+                + "can be deleted over this API. Deleting a subscription or a tenant also has to end "
+                + "the meter, release the quota and unassign the shard, and none of that is built — "
+                + "a delete that removed the record and left those would be worse than one that "
+                + "refuses."
             );
         }
 
@@ -247,6 +270,7 @@ public sealed class ScopeManagerService(
         return scope.Kind switch {
             ScopeKind.Tenant => await ReadTenantAsync(scope),
             ScopeKind.Subscription => await ReadSubscriptionAsync(scope),
+            ScopeKind.ManagementGroup => await ReadManagementGroupAsync(scope),
             _ => await ReadGroupAsync(scope)
         };
     }
@@ -295,15 +319,34 @@ public sealed class ScopeManagerService(
             return CollectionNotFound(parent);
         }
 
-        return parent.Kind switch {
-            ScopeKind.Tenant => await ListSubscriptionsAsync(parent, request, cancellationToken),
-            ScopeKind.Subscription => await ListGroupsAsync(parent, request, cancellationToken),
-            _ => Result<ScopeListPage>.Failure(
+        if (parent.Kind is not (ScopeKind.Tenant or ScopeKind.Subscription)) {
+            return Result<ScopeListPage>.Failure(
                 ErrorCode.InvalidResourceId,
-                $"'{parent.Path}' is a resource group, and a resource group has no scope children to "
-                + "list. What is inside it is resources, addressed by type: "
-                + "'/…/resourceGroups/{name}/providers/{namespace}/{type}' — docs/plan/10 § Shape."
-            )
+                $"'{parent.Path}' is a {parent.Kind}, and it has no scope children to list. A "
+                + "resource group holds resources, addressed by type: "
+                + "'/…/resourceGroups/{name}/providers/{namespace}/{type}' — docs/plan/10 § Shape. A "
+                + "management group's children are listed flat under the tenant, "
+                + "'/tenants/{t}/managementGroups', each carrying its parent — docs/plan/06 § The "
+                + "hierarchy."
+            );
+        }
+
+        // ⚠ The member kind decides between a tenant's two collections; a request that does not say
+        // gets the one the parent had before issue #39. ScopeCollectionId is where the pair is
+        // checked, so a (Subscription, ManagementGroup) request is refused by its constructor rather
+        // than routed to a listing that would answer the wrong question.
+        ScopeCollectionId collection;
+
+        try {
+            collection = new(parent, request.MemberKind);
+        } catch (ArgumentException invalid) {
+            return Result<ScopeListPage>.Failure(ErrorCode.InvalidResourceId, invalid.Message);
+        }
+
+        return collection.MemberKind switch {
+            ScopeKind.Subscription => await ListSubscriptionsAsync(collection, request, cancellationToken),
+            ScopeKind.ManagementGroup => await ListManagementGroupsAsync(collection, request, cancellationToken),
+            _ => await ListGroupsAsync(collection, request, cancellationToken)
         };
     }
 
@@ -345,9 +388,21 @@ public sealed class ScopeManagerService(
         }
 
         // ── The shard, first, because everything below writes durable state into it. ─────────────
-        var assigned = await grains
-            .GetGrain<IShardMapGrain>(GrainKeys.ShardMap())
-            .AssignAsync(request.TenantId, request.HomeRegion);
+        var shardMap = grains.GetGrain<IShardMapGrain>(GrainKeys.ShardMap());
+
+        if (request.DurableShard.Length > 0) {
+            // ⚠ The pin BEFORE the assignment, and the assignment then finds it — issue #39. A
+            // re-driven create carrying the same shard finds its own pin and is a no-op; one
+            // carrying a different shard is the move IShardMapGrain.PinAsync refuses by name, and
+            // the refusal is returned before a single durable row is written for this tenant.
+            var pinned = await shardMap.PinAsync(request.TenantId, request.DurableShard, null);
+
+            if (pinned.TryGetError(out var pinError)) {
+                return Result<ScopeSnapshot>.Failure(pinError);
+            }
+        }
+
+        var assigned = await shardMap.AssignAsync(request.TenantId, request.HomeRegion);
 
         if (assigned.TryGetError(out var shardError)) {
             return Result<ScopeSnapshot>.Failure(shardError);
@@ -492,10 +547,48 @@ public sealed class ScopeManagerService(
             .ForTenant(scope.TenantId.ToString("D", CultureInfo.InvariantCulture))
             .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(scope.SubscriptionId));
 
-        var existed = (await subscription.GetAsync()).IsSuccess;
+        var current = await subscription.GetAsync();
+        var existed = current.IsSuccess;
+        var currentGroup = existed ? current.GetValueOrThrow().ManagementGroup : "";
+
+        // ── The management group, if the body names one — issue #39. ────────────────────────────
+        //
+        // ⚠ ABSENT IS "UNCHANGED", AND THE EMPTY STRING IS "THE ROOT" — ScopeBodyProperties
+        // .ManagementGroup says why a body that never mentions the property must not move a
+        // subscription. On a create, "unchanged" is the root, because there is nothing to keep.
+        var requestedGroup = OptionalText(body, ManagementGroupProperty) ?? currentGroup;
+
+        var targetParent = ScopeId.Tenant(scope.TenantId);
+
+        if (requestedGroup.Length > 0) {
+            var placed = await EnsureGroupAcceptsAsync(
+                ScopeId.ManagementGroupOf(scope.TenantId, requestedGroup),
+                caller,
+                cancellationToken
+            );
+
+            if (placed.TryGetError(out var placeError)) {
+                return Result<ScopeSnapshot>.Failure(placeError);
+            }
+
+            targetParent = placed.GetValueOrThrow();
+        }
 
         // ── The parent edge, before the durable write. See the type's remarks. ──────────────────
-        var linked = await relations.LinkToParentAsync(scope, cancellationToken);
+        //
+        // ⚠ THREE SHAPES OF THE SAME STEP. A new subscription is linked to its parent — the tenant,
+        // or the group the body names. An existing one whose group is unchanged is re-linked to the
+        // same parent, which the tuple store makes a no-op. An existing one being MOVED has its edge
+        // relinked, delete-then-write, so the chain is never two parents long —
+        // IScopeRelationWriter.RelinkParentAsync carries the argument.
+        var currentParent = currentGroup.Length > 0
+            ? ScopeId.ManagementGroupOf(scope.TenantId, currentGroup)
+            : ScopeId.Tenant(scope.TenantId);
+
+        var linked = !existed || currentParent == targetParent
+            ? await relations.LinkToParentAsync(scope, targetParent, cancellationToken)
+            : await relations.RelinkParentAsync(scope, currentParent, targetParent, cancellationToken);
+
         if (linked.TryGetError(out var linkError)) {
             return Result<ScopeSnapshot>.Failure(linkError);
         }
@@ -503,6 +596,16 @@ public sealed class ScopeManagerService(
         var created = await subscription.CreateAsync(displayName);
         if (created.TryGetError(out var createError)) {
             return Result<ScopeSnapshot>.Failure(createError);
+        }
+
+        // ── The tree, after the edge: the group's membership and the subscription's own record. ──
+        //
+        // ⚠ The listings first and the leaf's record last, and none of the four is returned as a
+        // failure — the edge is written and the subscription exists, so the caller's request has
+        // succeeded, and each of these is what the next identical PUT repairs. The same trade
+        // ITenantGrain.AddSubscriptionAsync makes below.
+        if (!string.Equals(currentGroup, requestedGroup, StringComparison.Ordinal)) {
+            await RecordAssignmentAsync(scope, currentGroup, requestedGroup);
         }
 
         // ⚠ AFTER the subscription exists, and it is what makes ITenantGrain.ListSubscriptionsAsync
@@ -524,7 +627,10 @@ public sealed class ScopeManagerService(
             );
         }
 
-        var descriptor = created.GetValueOrThrow();
+        // Re-read rather than rendered from `created`: the assignment above may have bumped the
+        // version and set the group, and a PUT's body is what a GET of the same address renders.
+        var after = await subscription.GetAsync();
+        var descriptor = after.IsSuccess ? after.GetValueOrThrow() : created.GetValueOrThrow();
 
         return Result<ScopeSnapshot>.Success(
             new() {
@@ -533,9 +639,386 @@ public sealed class ScopeManagerService(
                 Name = descriptor.DisplayName,
                 Type = ScopeTypeNames.Subscription,
                 Created = !existed,
-                Version = descriptor.Version
+                Version = descriptor.Version,
+                ManagementGroup = descriptor.ManagementGroup
             }
         );
+    }
+
+    /// <summary>
+    ///     Whether a management group exists and the caller may place a scope under it, answering
+    ///     with the group's address on success.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The group is named in the BODY, so a group that is not there is a <c>400</c> and
+    ///         not the canonical <c>404</c>.</b> The 404 rule protects an address the caller typed
+    ///         into the URL from confirming a sibling's existence; a body property that names a
+    ///         group the caller cannot see is answered with the same sentence whether the group is
+    ///         absent or hidden — <see cref="IScopeAuthorizer.AuthorizeAsync" /> is asked first and
+    ///         its refusal is passed through unchanged, so the two cases stay indistinguishable and
+    ///         the code is the one a body problem carries.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>write</c> on the group, not <c>read</c>.</b> Placing a subscription under a
+    ///         group hands every role holder on the group inherited rights over the subscription;
+    ///         the caller has to be someone the group would let change what is inside it, which is
+    ///         what <c>write</c> means on every other scope. Azure asks for the same on both ends
+    ///         of a subscription move.
+    ///     </para>
+    /// </remarks>
+    async Task<Result<ScopeId>> EnsureGroupAcceptsAsync(
+        ScopeId group,
+        CallerContext caller,
+        CancellationToken cancellationToken
+    ) {
+        var permitted = await authorizer.AuthorizeAsync(
+            group,
+            Permissions.Write,
+            Permissions.Read,
+            caller,
+            cancellationToken: cancellationToken
+        );
+
+        if (permitted.TryGetError(out var denied)) {
+            return denied.Code == ErrorCode.ResourceNotFound
+                ? Result<ScopeId>.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    $"'{ManagementGroupProperty}' names '{group.ManagementGroup}', and "
+                    + $"'{group.Path}' does not exist."
+                )
+                : Result<ScopeId>.Failure(denied);
+        }
+
+        var record = await grains
+            .ForTenant(group.TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<IManagementGroupGrain>(GrainKeys.ManagementGroup(group.ManagementGroup))
+            .GetAsync();
+
+        return record.IsFailure
+            ? Result<ScopeId>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"'{ManagementGroupProperty}' names '{group.ManagementGroup}', and "
+                + $"'{group.Path}' does not exist."
+            )
+            : Result<ScopeId>.Success(group);
+    }
+
+    /// <summary>
+    ///     Moves a subscription between the groups' membership lists and stamps its own record —
+    ///     the tree, after the edge. Logged and never returned: see the call site.
+    /// </summary>
+    async Task RecordAssignmentAsync(ScopeId scope, string fromGroup, string toGroup) {
+        var tenant = grains.ForTenant(scope.TenantId.ToString("D", CultureInfo.InvariantCulture));
+
+        if (fromGroup.Length > 0) {
+            var removed = await tenant
+                .GetGrain<IManagementGroupGrain>(GrainKeys.ManagementGroup(fromGroup))
+                .RemoveSubscriptionAsync(scope.SubscriptionId);
+
+            if (removed.TryGetError(out var removeError)) {
+                logger.LogError(
+                    "Subscription {SubscriptionId} left management group '{Group}' but the group still "
+                    + "lists it: {Message}. The edge has moved; the listing catches up on the next "
+                    + "identical PUT.",
+                    scope.SubscriptionId,
+                    fromGroup,
+                    removeError.Message
+                );
+            }
+        }
+
+        if (toGroup.Length > 0) {
+            var added = await tenant
+                .GetGrain<IManagementGroupGrain>(GrainKeys.ManagementGroup(toGroup))
+                .AddSubscriptionAsync(scope.SubscriptionId);
+
+            if (added.TryGetError(out var addError)) {
+                logger.LogError(
+                    "Subscription {SubscriptionId} joined management group '{Group}' but the group does "
+                    + "not list it: {Message}. The edge has moved; the listing catches up on the next "
+                    + "identical PUT.",
+                    scope.SubscriptionId,
+                    toGroup,
+                    addError.Message
+                );
+            }
+        }
+
+        var stamped = await tenant
+            .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(scope.SubscriptionId))
+            .SetManagementGroupAsync(toGroup);
+
+        if (stamped.TryGetError(out var stampError)) {
+            logger.LogError(
+                "Subscription {SubscriptionId} now hangs off '{Group}' in the tuple store but its own "
+                + "record says '{Previous}': {Message}. The next identical PUT re-stamps it.",
+                scope.SubscriptionId,
+                toGroup.Length == 0 ? "the tenant" : toGroup,
+                fromGroup.Length == 0 ? "the tenant" : fromGroup,
+                stampError.Message
+            );
+        }
+    }
+
+    // ── Create: a management group ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Creates a management group in the caller's tenant, under the tenant or under the group
+    ///     the body names — issue #39.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The check is <c>write</c> on the PARENT, as for every scope create</b> — the
+    ///         tenant for a root group, the parent group for a nested one — and the parent must
+    ///         exist. For a nested group the parent's record is also where the depth comes from:
+    ///         <c>IManagementGroupGrain.CreateAsync</c> takes the parent's depth as an argument
+    ///         because a grain cannot read another grain inside its own turn, and the cap it enforces
+    ///         is what keeps a legal tree inside docs/plan/07 § Check's twelve hops.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Idempotent on the same parent, refused on a different one.</b> A group's parent
+    ///         is set at creation — <c>IManagementGroupGrain</c>'s remarks say what a move would
+    ///         need and why it is owed rather than built — so a repeated <c>PUT</c> with the same
+    ///         body is a <c>200</c> and one naming another parent is the grain's <c>409</c>, passed
+    ///         through.
+    ///     </para>
+    /// </remarks>
+    async Task<Result<ScopeSnapshot>> CreateManagementGroupAsync(
+        ScopeId scope,
+        JsonElement body,
+        CallerContext caller,
+        CancellationToken cancellationToken
+    ) {
+        var tenantGrains = grains.ForTenant(scope.TenantId.ToString("D", CultureInfo.InvariantCulture));
+        var tenant = tenantGrains.GetGrain<ITenantGrain>(GrainKeys.Tenant(scope.TenantId));
+
+        var record = await tenant.GetAsync();
+        if (record.IsFailure) {
+            return NotFound(scope);
+        }
+
+        var parentName = OptionalText(body, ManagementGroupProperty) ?? "";
+
+        if (string.Equals(parentName, scope.ManagementGroup, StringComparison.Ordinal)) {
+            return Result<ScopeSnapshot>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"'{scope.Path}' cannot be its own parent. A group hangs off another group or off the "
+                + "tenant — docs/plan/06 § The hierarchy."
+            );
+        }
+
+        var parent = ScopeId.Tenant(scope.TenantId);
+        var parentDepth = 0;
+
+        if (parentName.Length > 0) {
+            var parentScope = ScopeId.ManagementGroupOf(scope.TenantId, parentName);
+
+            var accepted = await EnsureGroupAcceptsAsync(parentScope, caller, cancellationToken);
+            if (accepted.TryGetError(out var parentError)) {
+                return Result<ScopeSnapshot>.Failure(parentError);
+            }
+
+            var parentRecord = await tenantGrains
+                .GetGrain<IManagementGroupGrain>(GrainKeys.ManagementGroup(parentName))
+                .GetAsync();
+
+            if (parentRecord.IsFailure) {
+                return Result<ScopeSnapshot>.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    $"'{ManagementGroupProperty}' names '{parentName}', and '{parentScope.Path}' does not exist."
+                );
+            }
+
+            parent = parentScope;
+            parentDepth = parentRecord.GetValueOrThrow().Depth;
+        } else {
+            var permitted = await authorizer.AuthorizeAsync(
+                parent,
+                Permissions.Write,
+                Permissions.Read,
+                caller,
+                cancellationToken: cancellationToken
+            );
+
+            if (permitted.TryGetError(out var denied)) {
+                return Result<ScopeSnapshot>.Failure(denied);
+            }
+        }
+
+        var group = tenantGrains.GetGrain<IManagementGroupGrain>(GrainKeys.ManagementGroup(scope.ManagementGroup));
+
+        var existing = await group.GetAsync();
+        var existed = existing.IsSuccess;
+
+        if (existed && !string.Equals(existing.GetValueOrThrow().Parent, parentName, StringComparison.Ordinal)) {
+            // ⚠ Refused BEFORE the edge is written, and by this service rather than only by the
+            // grain: the grain's refusal comes after LinkToParentAsync would have written a second
+            // parent tuple, which is exactly the two-parent chain the schema comment forbids.
+            return Result<ScopeSnapshot>.Failure(
+                ErrorCode.Conflict,
+                $"'{scope.Path}' already exists under "
+                + (existing.GetValueOrThrow().Parent.Length == 0
+                    ? "the tenant"
+                    : $"'{existing.GetValueOrThrow().Parent}'")
+                + " and this request names "
+                + (parentName.Length == 0 ? "the tenant" : $"'{parentName}'")
+                + " as its parent. A group's parent is set at creation and a move is not built — "
+                + "IManagementGroupGrain says what a safe move would need, and docs/plan/06 § The "
+                + "hierarchy records it as owed."
+            );
+        }
+
+        // ── The parent edge, before the durable write. See the type's remarks. ──────────────────
+        var linked = await relations.LinkToParentAsync(scope, parent, cancellationToken);
+        if (linked.TryGetError(out var linkError)) {
+            return Result<ScopeSnapshot>.Failure(linkError);
+        }
+
+        var created = await group.CreateAsync(Text(body, DisplayNameProperty), parentName, parentDepth);
+        if (created.TryGetError(out var createError)) {
+            return Result<ScopeSnapshot>.Failure(createError);
+        }
+
+        // ── The listings, after the record. Logged, not returned — the group exists. ────────────
+        var listed = await tenant.AddManagementGroupAsync(scope.ManagementGroup);
+        if (listed.TryGetError(out var listError)) {
+            logger.LogError(
+                "Management group '{Group}' was created in tenant {TenantId} but was not added to the "
+                + "tenant's listing: {Message}. The group is usable; the listing is short until the "
+                + "next identical PUT.",
+                scope.ManagementGroup,
+                scope.TenantId,
+                listError.Message
+            );
+        }
+
+        if (parentName.Length > 0) {
+            var childed = await tenantGrains
+                .GetGrain<IManagementGroupGrain>(GrainKeys.ManagementGroup(parentName))
+                .AddChildAsync(scope.ManagementGroup);
+
+            if (childed.TryGetError(out var childError)) {
+                logger.LogError(
+                    "Management group '{Group}' was created under '{Parent}' but the parent does not "
+                    + "list it: {Message}. The edge is written; the listing catches up on the next "
+                    + "identical PUT.",
+                    scope.ManagementGroup,
+                    parentName,
+                    childError.Message
+                );
+            }
+        }
+
+        var descriptor = created.GetValueOrThrow();
+
+        return Result<ScopeSnapshot>.Success(
+            new() {
+                Path = scope.Path,
+                Kind = ScopeKind.ManagementGroup,
+                Name = descriptor.DisplayName,
+                Type = ScopeTypeNames.ManagementGroup,
+                Created = !existed,
+                Version = descriptor.Version,
+                ManagementGroup = descriptor.Parent
+            }
+        );
+    }
+
+    // ── Delete: a management group ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Deletes an empty management group: the record in one turn with the emptiness check, then
+    ///     the listings, then the <c>parent</c> edge.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The record goes first and the edge goes last, which is the create reversed</b> —
+    ///     docs/plan/06 § Two-phase create, "deletion is the same in reverse". The grain's own delete
+    ///     refuses while anything hangs off the group, so nothing after it runs for a group that is
+    ///     not empty; and once the record is gone the edge points at an object that resolves to
+    ///     nothing, so a crash before the last step leaves an inert tuple the next <c>DELETE</c>
+    ///     removes. The other order would leave, for a moment, a group with a record and no edge —
+    ///     visible in the listing and readable by nobody.
+    /// </remarks>
+    async Task<Result> DeleteManagementGroupAsync(ScopeId scope, CallerContext caller, CancellationToken cancellationToken) {
+        // ⚠ On the group itself, as for a resource group's delete — it exists, so it has an object.
+        var permitted = await authorizer.AuthorizeAsync(
+            scope,
+            Permissions.Write,
+            Permissions.Read,
+            caller,
+            cancellationToken: cancellationToken
+        );
+
+        if (permitted.TryGetError(out var denied)) {
+            return Result.Failure(denied);
+        }
+
+        var tenantGrains = grains.ForTenant(scope.TenantId.ToString("D", CultureInfo.InvariantCulture));
+        var group = tenantGrains.GetGrain<IManagementGroupGrain>(GrainKeys.ManagementGroup(scope.ManagementGroup));
+
+        // ⚠ Success for a group that is already gone, and the grain answers with the parent it HAD,
+        // so a re-driven DELETE after a crash between the record and the sweep still knows which
+        // parent's child list and which edge to clear — ManagementGroupState.LastParent.
+        var deleted = await group.DeleteAsync();
+        if (deleted.TryGetError(out var deleteError)) {
+            return Result.Failure(deleteError);
+        }
+
+        await SweepManagementGroupAsync(scope, deleted.GetValueOrThrow(), tenantGrains, cancellationToken);
+        return Result.Success;
+    }
+
+    async Task SweepManagementGroupAsync(
+        ScopeId scope,
+        string parentName,
+        TenantGrainFactory tenantGrains,
+        CancellationToken cancellationToken
+    ) {
+        var unlisted = await tenantGrains
+            .GetGrain<ITenantGrain>(GrainKeys.Tenant(scope.TenantId))
+            .RemoveManagementGroupAsync(scope.ManagementGroup);
+
+        if (unlisted.TryGetError(out var unlistError)) {
+            logger.LogError(
+                "Management group '{Group}' is deleted but the tenant still lists it: {Message}. The "
+                + "listing entry is filtered by the read and removed by the next DELETE.",
+                scope.ManagementGroup,
+                unlistError.Message
+            );
+        }
+
+        if (parentName.Length > 0) {
+            var unchilded = await tenantGrains
+                .GetGrain<IManagementGroupGrain>(GrainKeys.ManagementGroup(parentName))
+                .RemoveChildAsync(scope.ManagementGroup);
+
+            if (unchilded.TryGetError(out var unchildError)) {
+                logger.LogError(
+                    "Management group '{Group}' is deleted but '{Parent}' still lists it as a child: "
+                    + "{Message}. Removed by the next DELETE.",
+                    scope.ManagementGroup,
+                    parentName,
+                    unchildError.Message
+                );
+            }
+        }
+
+        var parent = parentName.Length > 0
+            ? ScopeId.ManagementGroupOf(scope.TenantId, parentName)
+            : ScopeId.Tenant(scope.TenantId);
+
+        var unlinked = await relations.UnlinkFromParentAsync(scope, parent, cancellationToken);
+        if (unlinked.TryGetError(out var unlinkError)) {
+            logger.LogError(
+                "Management group '{Group}' is deleted but its parent edge to '{Parent}' remains: "
+                + "{Message}. The edge is inert — the object it is on resolves to nothing — and the "
+                + "next DELETE removes it.",
+                scope.ManagementGroup,
+                parent.Path,
+                unlinkError.Message
+            );
+        }
     }
 
     // ── Create: a resource group ───────────────────────────────────────────────────────────────
@@ -690,7 +1173,32 @@ public sealed class ScopeManagerService(
                 Kind = ScopeKind.Subscription,
                 Name = descriptor.DisplayName,
                 Type = ScopeTypeNames.Subscription,
-                Version = descriptor.Version
+                Version = descriptor.Version,
+                ManagementGroup = descriptor.ManagementGroup
+            }
+        );
+    }
+
+    async Task<Result<ScopeSnapshot>> ReadManagementGroupAsync(ScopeId scope) {
+        var record = await grains
+            .ForTenant(scope.TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<IManagementGroupGrain>(GrainKeys.ManagementGroup(scope.ManagementGroup))
+            .GetAsync();
+
+        if (record.IsFailure) {
+            return NotFound(scope);
+        }
+
+        var descriptor = record.GetValueOrThrow();
+
+        return Result<ScopeSnapshot>.Success(
+            new() {
+                Path = scope.Path,
+                Kind = ScopeKind.ManagementGroup,
+                Name = descriptor.DisplayName,
+                Type = ScopeTypeNames.ManagementGroup,
+                Version = descriptor.Version,
+                ManagementGroup = descriptor.Parent
             }
         );
     }
@@ -733,10 +1241,12 @@ public sealed class ScopeManagerService(
     ///     Azure's <c>GET /subscriptions</c> answers the same question the same way.
     /// </remarks>
     async Task<Result<ScopeListPage>> ListSubscriptionsAsync(
-        ScopeId tenantScope,
+        ScopeCollectionId collection,
         ScopeListRequest request,
         CancellationToken cancellationToken
     ) {
+        var tenantScope = collection.Parent;
+
         var listed = await grains
             .ForTenant(tenantScope.TenantId.ToString("D", CultureInfo.InvariantCulture))
             .GetGrain<ITenantGrain>(GrainKeys.Tenant(tenantScope.TenantId))
@@ -758,7 +1268,45 @@ public sealed class ScopeManagerService(
             .Take(request.PageSize)
             .ToArray();
 
-        return await PageAsync(tenantScope, candidates, request, ReadSubscriptionAsync, cancellationToken);
+        return await PageAsync(collection, candidates, request, ReadSubscriptionAsync, cancellationToken);
+    }
+
+    /// <summary>
+    ///     A tenant's management groups — every one, flat, ordered by name.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>No check on the tenant, for the reason the subscription collection has none</b>: a
+    ///     caller holding <c>reader</c> on one group and nothing on the tenant sees that group. The
+    ///     per-member filter is the whole of the authorization, and the engine's own answer for this
+    ///     collection is always the per-member path — <c>ReBacScopeAuthorizer.ListReadableAsync</c>
+    ///     says why a scoped walk cannot see a flat listing of a tree.
+    /// </remarks>
+    async Task<Result<ScopeListPage>> ListManagementGroupsAsync(
+        ScopeCollectionId collection,
+        ScopeListRequest request,
+        CancellationToken cancellationToken
+    ) {
+        var tenantScope = collection.Parent;
+
+        var listed = await grains
+            .ForTenant(tenantScope.TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<ITenantGrain>(GrainKeys.Tenant(tenantScope.TenantId))
+            .ListManagementGroupsAsync();
+
+        if (listed.IsFailure) {
+            return CollectionNotFound(tenantScope);
+        }
+
+        // Ordered by name, ordinally — a group's name is unique within its tenant by the grain
+        // key's construction, and it is the continuation.
+        var candidates = listed.GetValueOrThrow()
+            .Select(name => (Key: name, Scope: ScopeId.ManagementGroupOf(tenantScope.TenantId, name)))
+            .Where(x => string.CompareOrdinal(x.Key, request.Continuation) > 0)
+            .OrderBy(x => x.Key, StringComparer.Ordinal)
+            .Take(request.PageSize)
+            .ToArray();
+
+        return await PageAsync(collection, candidates, request, ReadManagementGroupAsync, cancellationToken);
     }
 
     /// <summary>
@@ -775,10 +1323,12 @@ public sealed class ScopeManagerService(
     ///     collection under an address that is not there.
     /// </remarks>
     async Task<Result<ScopeListPage>> ListGroupsAsync(
-        ScopeId subscriptionScope,
+        ScopeCollectionId collection,
         ScopeListRequest request,
         CancellationToken cancellationToken
     ) {
+        var subscriptionScope = collection.Parent;
+
         var permitted = await authorizer.AuthorizeAsync(
             subscriptionScope,
             Permissions.Read,
@@ -814,7 +1364,7 @@ public sealed class ScopeManagerService(
             .Take(request.PageSize)
             .ToArray();
 
-        return await PageAsync(subscriptionScope, candidates, request, ReadGroupAsync, cancellationToken);
+        return await PageAsync(collection, candidates, request, ReadGroupAsync, cancellationToken);
     }
 
     /// <summary>
@@ -822,7 +1372,7 @@ public sealed class ScopeManagerService(
     ///     page, a <c>Check</c> per member when the engine declines, then each survivor rendered by
     ///     the by-id read.
     /// </summary>
-    /// <param name="parent">The scope the members hang off — what the engine scopes the walk to.</param>
+    /// <param name="collection">The collection — its parent is what the engine scopes the walk to, its member kind which walk.</param>
     /// <param name="candidates">The page, already ordered and cut, with each member's continuation key.</param>
     /// <param name="request">The request, for the caller and the page size.</param>
     /// <param name="read">The by-id read for this kind of member.</param>
@@ -836,7 +1386,7 @@ public sealed class ScopeManagerService(
     ///     not on that list.
     /// </remarks>
     async Task<Result<ScopeListPage>> PageAsync(
-        ScopeId parent,
+        ScopeCollectionId collection,
         (string Key, ScopeId Scope)[] candidates,
         ScopeListRequest request,
         Func<ScopeId, Task<Result<ScopeSnapshot>>> read,
@@ -846,7 +1396,7 @@ public sealed class ScopeManagerService(
 
         var readable = candidates.Length > 0
             ? await authorizer.ListReadableAsync(
-                parent,
+                collection,
                 [.. candidates.Select(x => x.Scope)],
                 Permissions.Read,
                 request.Caller,
@@ -939,6 +1489,16 @@ public sealed class ScopeManagerService(
         body.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString() ?? ""
             : "";
+
+    /// <summary>
+    ///     A string property, or <see langword="null" /> when the body does not carry it — the
+    ///     distinction <see cref="ScopeBodyProperties.ManagementGroup" /> rests on. A present
+    ///     <c>null</c> reads as the empty string, so a client can clear with either.
+    /// </summary>
+    static string? OptionalText(JsonElement body, string property) =>
+        body.TryGetProperty(property, out var value)
+            ? value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : ""
+            : null;
 
     static Result<ScopeSnapshot> NotFound(ScopeId scope) =>
         Result<ScopeSnapshot>.Failure(

@@ -32,7 +32,7 @@ Everything below in this table is downstream of it.
 |---|---|---|---|---|
 | Azure Resource Manager | The resource ID grammar, providers, API versions, LROs, tags, locks, `PUT` semantics | `CyberCloud.ResourceManager` | **M1** | [08](08-resource-manager.md). Grains hold desired state; a reconcile scheduler drives providers |
 | ARM templates / Bicep | Declarative deployment of a resource graph | `CyberCloud.Resources/deployments` | **M2** | A JSON template with `dependsOn`, evaluated into a DAG by a deployment grain. **No Bicep** — a second language is a compiler we would own |
-| Management Groups | Subscription grouping for policy and RBAC | `CyberCloud.Management/managementGroups` | **M2** | A tree above subscriptions; ReBAC inherits down it |
+| Management Groups | Subscription grouping for policy and RBAC | `CyberCloud.Management/managementGroups` | **M2** | A tree above subscriptions; ReBAC inherits down it. ⚠ Landed with #39 as a *scope path*, `/tenants/{t}/managementGroups/{name}`, and not as a typed resource under this namespace — the same shape subscriptions took, and for the same reason ([06 § The hierarchy](06-tenancy-and-resource-model.md)). The RBAC half is built; the policy half has no policy engine to attach to yet |
 | Subscriptions | Billing and quota boundary | `CyberCloud.Platform/subscriptions` | **M1** | [06](06-tenancy-and-resource-model.md) |
 | Resource Groups | Lifecycle boundary | ⊂ subscriptions | **M1** | Same doc |
 | Azure Policy | Deny/audit/modify rules over resource shape | `CyberCloud.Policy/policyDefinitions` | **M3** | JSON-Logic-shaped conditions over the resource body, evaluated in the write path before the provider is called |

@@ -161,6 +161,20 @@ move for the one tenant that outgrows a shard. It quiesces the tenant (rejects w
 Retry-After`), copies the grain rows, flips the map, and un-quiesces. Minutes of read-only for one
 tenant, run deliberately. Budgeted at 0.5 EM in M2, not M1.
 
+⚠ **What landed with #39 is the placement half of that method, and the move half is now M3 — said
+here so the paragraph above is read as the design and not as the state.** `IShardMapGrain.PinAsync`
+places a tenant that has *never* been placed on the shard the operator names — a tenant created with
+`TenantCreateRequest.DurableShard` is pinned before `AssignAsync` runs and the assignment it then
+finds is the pin, with the region filled in — and it needs no quiesce and no copy, because there is
+nothing yet to quiesce or copy. A pin that would *move* an assigned tenant is refused with the four
+steps in the message: only the flip is a map edit, flipping without the copy repoints a live tenant at
+an empty database, and the copy is not built. Two smaller facts, both refusals: a pin onto a shard that
+is out of the placement rotation is refused rather than honoured, because the rotation flag exists to
+drain a shard and a pin that bypassed it would defeat the drain; and a hot hash-tag override through
+the map is refused, because `IShardMapCache.HotHashTagFor` reads `Hot:HashTagOverrides` at wiring time
+and never the map, so an override recorded in the map would be a fact nothing acts on. The configured
+read-only pin, `DurableTierOptions.Pins`, is unchanged and still beats the map.
+
 ## Storage provider wiring
 
 `Orleans.Multitenant`'s `configureTenantOptions` callback is where the sharding actually happens, and

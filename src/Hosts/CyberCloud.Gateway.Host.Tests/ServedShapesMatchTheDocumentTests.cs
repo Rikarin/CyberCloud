@@ -190,6 +190,36 @@ public sealed class ServedShapesMatchTheDocumentTests {
     }
 
     /// <summary>
+    ///     ⚠ The fourth scope (issue #39) renders through the same writer and validates against the
+    ///     same <c>Scope</c> — with the one member the other scopes never carry, the group it hangs
+    ///     off, present in the document's schema and in the body.
+    /// </summary>
+    [Fact]
+    public async Task AManagementGroupValidatesAgainstTheScope200WithItsParent() {
+        var gateway = new GatewayHarness();
+
+        gateway.Scopes.OnRead = request => Result<ScopeSnapshot>.Success(
+            new() {
+                Path = request.Path,
+                Kind = ScopeKind.ManagementGroup,
+                Name = "Platform Prod",
+                Type = ScopeTypeNames.ManagementGroup,
+                ManagementGroup = "platform"
+            }
+        );
+
+        var response = await gateway.SendAsync(
+            "GET",
+            GatewayHarness.ManagementGroupPath(GatewayHarness.TenantA, "platform-prod"),
+            gateway.Token(GatewayHarness.TenantA)
+        );
+
+        response.Status.ShouldBe(StatusCodes.Status200OK, response.Body);
+        Conforms(response.Body, ResponseSchema(OpenApiEmitter.ManagementGroupPathTemplate, "get", "200"));
+        response.Body.ShouldContain("\"managementGroup\":\"platform\"");
+    }
+
+    /// <summary>
     ///     ⚠ Both scope collections validate against the one <c>Scope.List</c> page, and each
     ///     element against the one <c>Scope</c> — the same schema a by-id read validates against,
     ///     which is what makes "an element is what a GET renders" a documented promise.
@@ -197,6 +227,7 @@ public sealed class ServedShapesMatchTheDocumentTests {
     [Theory]
     [InlineData(OpenApiEmitter.SubscriptionCollectionPathTemplate, ScopeKind.Subscription)]
     [InlineData(OpenApiEmitter.ResourceGroupCollectionPathTemplate, ScopeKind.ResourceGroup)]
+    [InlineData(OpenApiEmitter.ManagementGroupCollectionPathTemplate, ScopeKind.ManagementGroup)]
     public async Task AScopeCollectionValidatesAgainstTheScopeList200(string template, ScopeKind kind) {
         var gateway = new GatewayHarness();
 
@@ -208,13 +239,16 @@ public sealed class ServedShapesMatchTheDocumentTests {
             new() {
                 Items = [
                     new() {
-                        Path = kind == ScopeKind.Subscription
-                            ? GatewayHarness.SubscriptionPath(GatewayHarness.TenantA)
-                            : GatewayHarness.GroupPath(GatewayHarness.TenantA),
+                        Path = kind switch {
+                            ScopeKind.Subscription => GatewayHarness.SubscriptionPath(GatewayHarness.TenantA),
+                            ScopeKind.ManagementGroup => GatewayHarness.ManagementGroupPath(GatewayHarness.TenantA),
+                            _ => GatewayHarness.GroupPath(GatewayHarness.TenantA)
+                        },
                         Kind = kind,
-                        Name = kind == ScopeKind.Subscription ? "Default" : "prod",
+                        Name = kind == ScopeKind.ResourceGroup ? "prod" : "Default",
                         Type = ScopeTypeNames.Of(kind),
-                        Location = kind == ScopeKind.Subscription ? "" : "eu-central"
+                        Location = kind == ScopeKind.ResourceGroup ? "eu-central" : "",
+                        ManagementGroup = kind == ScopeKind.ManagementGroup ? "parent" : ""
                     }
                 ],
                 Continuation = "page-2"

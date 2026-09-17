@@ -129,7 +129,7 @@ sealed class DispatchStage(
     }
 
     /// <summary>
-    ///     A scope — docs/plan/06 § The hierarchy's subscription and resource group.
+    ///     A scope — docs/plan/06 § The hierarchy's management group, subscription and resource group.
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -202,10 +202,10 @@ sealed class DispatchStage(
                 StatusCode = StatusCodes.Status405MethodNotAllowed,
                 Error = new(
                     ErrorCode.InvalidRequestBody,
-                    $"{method} is not supported on a scope. A subscription and a resource group are "
-                    + "read with GET, created with PUT and — for a resource group — deleted with "
-                    + "DELETE; POST is an action on an existing resource and never a create "
-                    + "(docs/plan/08 § The write path, end to end)."
+                    $"{method} is not supported on a scope. A management group, a subscription and a "
+                    + "resource group are read with GET, created with PUT and — for a management group "
+                    + "or a resource group — deleted with DELETE; POST is an action on an existing "
+                    + "resource and never a create (docs/plan/08 § The write path, end to end)."
                 )
             }.WithHeader(GatewayHeaders.Allow, "GET, PUT, DELETE");
         }
@@ -260,6 +260,8 @@ sealed class DispatchStage(
             new() {
                 // ⚠ The rebuilt parent path, carrying the TOKEN's tenant. Never context.Http.Request.Path.
                 ParentPath = context.Route.Scopes.Parent.Path,
+                // Which of the parent's collections — a tenant has two since issue #39.
+                MemberKind = context.Route.Scopes.MemberKind,
                 Caller = context.Caller,
                 Top = top,
                 Continuation = query["$skipToken"].ToString()

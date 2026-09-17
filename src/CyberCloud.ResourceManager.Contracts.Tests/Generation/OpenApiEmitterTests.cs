@@ -412,20 +412,21 @@ public sealed class OpenApiEmitterTests {
 
         OpenApiStructure.Validate(document).ShouldBeEmpty();
 
-        // Two resource paths, two collection paths, /operations/{operationId}, the three scope
-        // paths and the two scope collections. ⚠ The count was 3 until a type gained a collection
-        // path, 5 until the scope API reached the document (issue #63) and 8 until the scope
-        // collections did; it is asserted at all because a path that silently replaced another
+        // Two resource paths, two collection paths, /operations/{operationId}, the four scope
+        // paths and the three scope collections. ⚠ The count was 3 until a type gained a collection
+        // path, 5 until the scope API reached the document (issue #63), 8 until the scope
+        // collections did and 10 until the management group brought a path and a collection
+        // (issue #39); it is asserted at all because a path that silently replaced another
         // would leave the document valid and one provider missing, which is the failure
         // `paths[key] = …` makes invisible.
-        document["paths"]!.AsObject().Count.ShouldBe(10);
+        document["paths"]!.AsObject().Count.ShouldBe(12);
 
-        // ⚠ And the three that came from no provider are named, not just counted — and the two
-        // collections read as collections on those three, never as a fourth and fifth scope. A
-        // count of 10 is also what a document with duplicated collection paths would have.
+        // ⚠ And the four that came from no provider are named, not just counted — and the three
+        // collections read as collections on those four, never as a fifth, sixth and seventh scope.
+        // A count of 12 is also what a document with duplicated collection paths would have.
         DocumentReader.ScopesOf(document)
             .Select(x => x.Kind)
-            .ShouldBe(["tenant", "subscription", "resourceGroup"]);
+            .ShouldBe(["tenant", "managementGroup", "subscription", "resourceGroup"]);
         document["components"]!["schemas"]!.AsObject().ShouldContainKey("CyberCloud.DBforMySQL.servers");
         document["components"]!["schemas"]!.AsObject().ShouldContainKey("CyberCloud.DBforPostgreSQL.servers");
 

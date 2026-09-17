@@ -78,15 +78,24 @@ public static class CyberCloudSchema {
     ///     answer computed under a different rewrite is not an answer to the same question.
     /// </summary>
     /// <remarks>
-    ///     ⚠
-    ///     <b>
-    ///         2 since <see cref="Permissions.Purge" /> was defined on
-    ///         <see cref="ObjectTypes.Resource" />.
-    ///     </b> It was 1 while the resource manager checked a
-    ///     <c>purge</c> permission this schema did not declare — see the remarks on that permission for
-    ///     how a permission that always evaluated false went unnoticed.
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             3 since <see cref="ObjectTypes.ManagementGroup" /> was defined (issue #39) — a new
+    ///             type with a <c>parent</c> relation, which changes what a <c>subscription</c>'s
+    ///             <c>From("parent", …)</c> can resolve through.
+    ///         </b> A cached check computed under version 2 saw a subscription whose parent could
+    ///         only be a tenant; under 3 it may be a group with grants of its own, so the cache is
+    ///         invalidated rather than trusted.
+    ///     </para>
+    ///     <para>
+    ///         It was 2 since <see cref="Permissions.Purge" /> was defined on
+    ///         <see cref="ObjectTypes.Resource" />, and 1 while the resource manager checked a
+    ///         <c>purge</c> permission this schema did not declare — see the remarks on that
+    ///         permission for how a permission that always evaluated false went unnoticed.
+    ///     </para>
     /// </remarks>
-    public const int SchemaVersion = 2;
+    public const int SchemaVersion = 3;
 
     /// <summary>The built-in schema, built once.</summary>
     public static AuthorizationSchema Instance { get; } = Build();
@@ -97,6 +106,40 @@ public static class CyberCloudSchema {
             .Role(Relations.Owner, This)
             .Role(Relations.Contributor, This | Rel(Relations.Owner))
             .Role(Relations.Reader, This | Rel(Relations.Contributor))
+            .Relation(Relations.Suspended)
+            .Permission(Permissions.Read, Rel(Relations.Reader))
+            .Permission(Permissions.Write, Rel(Relations.Contributor))
+            .Permission(Permissions.Delete, Rel(Relations.Owner))
+            .Permission(
+                Permissions.AssignRole,
+                Rel(Relations.Owner) & !Rel(Relations.Suspended)
+            )
+            // ⚠ THE SCOPE ABOVE THE SUBSCRIPTION, AND THE SAME FOUR ROLES AND FOUR PERMISSIONS AS
+            // ONE — issue #39. Its `parent` is a tenant or another management group, so a role
+            // granted at the tenant reaches every group, and a role granted at a group reaches every
+            // group and subscription under it, through nothing but the From(parent, …) rewrites the
+            // other scopes already use. docs/plan/06 § The hierarchy: "for policy and role
+            // inheritance".
+            //
+            // ⚠ A SUBSCRIPTION IN A GROUP HAS THE GROUP AS ITS ONE `parent`, NOT THE TENANT AS WELL.
+            // The chain has to stay a chain: CheckGrain.WalkAncestorsAsync reads "one parent. A second
+            // is a data error", and ListObjectsEvaluator's scoped walk places an object by its chain.
+            // So assigning a subscription to a group REPLACES `subscription:S#parent@tenant:T` with
+            // `subscription:S#parent@managementGroup:G`, and the tenant's roles still reach S through
+            // G's own parent edge — one hop longer, which is what IManagementGroupGrain.MaxDepth
+            // budgets for. ReBacScopeRelationWriter.RelinkParentAsync is the one place the swap is
+            // made, and it deletes the old edge before writing the new one.
+            .DefineType(ObjectTypes.ManagementGroup)
+            .Relation(Relations.Parent)
+            .Role(Relations.Owner, This | From(Relations.Parent, Relations.Owner))
+            .Role(
+                Relations.Contributor,
+                This | From(Relations.Parent, Relations.Contributor) | Rel(Relations.Owner)
+            )
+            .Role(
+                Relations.Reader,
+                This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
+            )
             .Relation(Relations.Suspended)
             .Permission(Permissions.Read, Rel(Relations.Reader))
             .Permission(Permissions.Write, Rel(Relations.Contributor))

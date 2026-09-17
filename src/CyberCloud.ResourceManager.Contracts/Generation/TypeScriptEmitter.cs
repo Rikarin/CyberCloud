@@ -314,7 +314,7 @@ public static class TypeScriptEmitter {
             AppendScopeModels(built, scope);
         }
 
-        // ⚠ Once for all three scopes, because the document declares one response schema for all
+        // ⚠ Once for all four scopes, because the document declares one response schema for all
         // three. A type per kind would be three identical interfaces whose only difference is the
         // value of one string literal.
         AppendScopeResource(built, document, scopes);

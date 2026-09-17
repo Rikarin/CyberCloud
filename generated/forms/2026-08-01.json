@@ -8175,6 +8175,44 @@
     }
   },
   "scopeForms": {
+    "managementGroup": {
+      "scope": "managementGroup",
+      "scopeType": "CyberCloud.Resources/managementGroups",
+      "apiVersion": "2026-08-01",
+      "path": "/tenants/{tenantId}/managementGroups/{managementGroupName}",
+      "method": "PUT",
+      "addressPlaceholders": [
+        "tenantId",
+        "managementGroupName"
+      ],
+      "title": "Management group",
+      "plural": "Management groups",
+      "summary": "The optional tree above the subscription, for role inheritance. docs/plan/06 § The hierarchy.",
+      "overrideKey": "CyberCloud.Resources/managementGroups@2026-08-01",
+      "coveredPointers": [
+        "/displayName",
+        "/managementGroup"
+      ],
+      "longRunning": false,
+      "fields": [
+        {
+          "jsonPointer": "/displayName",
+          "name": "displayName",
+          "label": "Display name",
+          "control": "xui-input",
+          "required": false,
+          "help": "The name a person reads. Optional; defaults to the group's name."
+        },
+        {
+          "jsonPointer": "/managementGroup",
+          "name": "managementGroup",
+          "label": "Management group",
+          "control": "xui-input",
+          "required": false,
+          "help": "The parent group, by name. Optional: absent or empty hangs the group off the tenant. ⚠ Set at creation and not movable — a later PUT naming a different parent is a 409. The tree is capped at six levels."
+        }
+      ]
+    },
     "subscription": {
       "scope": "subscription",
       "scopeType": "CyberCloud.Resources/subscriptions",
@@ -8190,7 +8228,8 @@
       "summary": "The billing and quota boundary. docs/plan/06 § The hierarchy.",
       "overrideKey": "CyberCloud.Resources/subscriptions@2026-08-01",
       "coveredPointers": [
-        "/displayName"
+        "/displayName",
+        "/managementGroup"
       ],
       "longRunning": false,
       "fields": [
@@ -8201,6 +8240,14 @@
           "control": "xui-input",
           "required": true,
           "help": "The name on an invoice and in every scope picker. Required — a subscription identified only by its GUID is one nobody can pick out of a list."
+        },
+        {
+          "jsonPointer": "/managementGroup",
+          "name": "managementGroup",
+          "label": "Management group",
+          "control": "xui-input",
+          "required": false,
+          "help": "The management group to assign the subscription to, by name. Optional. ⚠ Absent leaves the assignment unchanged on a subscription that exists and means the tenant root on one that does not; the empty string moves the subscription to the tenant root. Assigning needs write on the group as well as on the tenant. docs/plan/06 § The hierarchy."
         }
       ]
     },
