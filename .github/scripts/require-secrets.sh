@@ -17,6 +17,15 @@
 #     produces a green job that scanned nothing, which is the exact failure this whole set of
 #     workflows is written against. An unconfigured scan is a scan that did not happen, and the tick
 #     has to say so.
+#
+# ── ⚠ AND SINCE ISSUE #25 THIS IS THE SECOND HALF OF A PAIR ──────────────────────────────────────
+#
+# gate-on-secrets.sh sits in front of it. That script skips when NONE of a job's secrets is set —
+# with a named `skipped:` step, a notice and a docs/plan/23 § CI secrets row per secret, which are the
+# three things the bare `if:` above lacks — and hands a PARTIAL configuration to this one, which
+# fails naming the missing half exactly as before. "Fail, don't skip" is still the rule for a job
+# somebody has started to configure; a year of red runs on jobs nobody could configure at all is what
+# the first half exists to end. Its header has the argument.
 
 set -euo pipefail
 

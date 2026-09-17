@@ -71,8 +71,11 @@
 // a failure everywhere, because a scan that could not read an artefact has not scanned it.
 //
 // ⚠ Build.Images' SBOMs are read when they exist and reported as ○ when they do not. `Licence`
-// depends on `Images`, so on CI they exist; locally `Images` is blocked without a registry, and the
-// way to run this target on a workstation is `./build.sh Licence --skip Charts Images`.
+// depends on `Images`, so on a CI run with a registry they exist; without one `Images` is blocked,
+// and the way to run this target — on a workstation, and in weekly.yml until docs/plan/23 § CI
+// secrets is acted on — is `./build.sh Licence --skip Images` (add `Charts` locally without helm).
+// ScanPlatformImages tells a skip that was asked for by name from an `Images` that ran and wrote
+// nothing: the first is a ○ row and a warning on CI too, the second is still a failure there.
 
 using Nuke.Common;
 using Nuke.Common.IO;
@@ -454,10 +457,35 @@ partial class Build {
         if (sboms.Count == 0) {
             rows.Add(new("Platform images", "(every host under src/Hosts)", RootDirectory.GetRelativePathTo(SbomDirectory).ToString(), "no SBOM", NotInspected, "Images has not run in this checkout"));
 
-            if (IsServerBuild) {
+            // ⚠ `--skip Images` ON CI IS A ○, NOT A ✘, AND ONLY WHEN IT WAS ASKED FOR IN SO MANY WORDS.
+            //
+            // Issue #25: weekly.yml has no registry to push to until docs/plan/23 § CI secrets is
+            // acted on, so `Images` cannot run there, and a `Licence` that failed on the missing SBOMs
+            // every Sunday was a scan of every bundle component and every upstream image (twenty and
+            // thirty-three on 2026-09-18) reported as red for a reason that had nothing to do with any
+            // of them. The workflow now
+            // says `--skip Images` when the registry secret is absent, and this branch is how the
+            // target tells "Images was skipped, on purpose, by name" from "Images ran and wrote
+            // nothing" — the second is still the failure below, because a target that depends on
+            // Images and finds no SBOM after Images ran has found a broken Images.
+            //
+            // ⚠ It stays a ○ in the report and a warning in the log, never a ✔. The platform's own
+            // images were not scanned, and weekly.yml prints a `skipped:` step naming the secret that
+            // would change that. What this must never become is a green row over an unscanned host.
+            var imagesSkipped = SkippedTargets.Any(x => x.Name == nameof(Images));
+
+            if (IsServerBuild && !imagesSkipped) {
                 violations.Add(
                     $"no SBOM under {RootDirectory.GetRelativePathTo(SbomDirectory)}/ on a CI build. Licence depends on "
                     + "Images, which writes one per host, so this run scanned none of the platform's own images"
+                );
+            } else if (imagesSkipped) {
+                Log.Warning(
+                    "Licence: Images was skipped (--skip Images), so no SBOM exists under {Directory}/ and "
+                    + "the platform's own images were NOT scanned — ○, not ✔. On CI that is the "
+                    + "no-registry shape docs/plan/23 § CI secrets describes; the bundle's components and "
+                    + "their upstream images above were scanned in full.",
+                    RootDirectory.GetRelativePathTo(SbomDirectory)
                 );
             } else {
                 Log.Warning(

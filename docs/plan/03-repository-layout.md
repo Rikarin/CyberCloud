@@ -9,7 +9,7 @@ each time.
 ```
 CyberCloud/
 ├── .config/dotnet-tools.json     # nuke, dotnet-ef, dotnet-counters, dotnet-trace, coverlet.console
-├── .github/workflows/            # ci.yml, release.yml, charts.yml, e2e-nightly.yml, chaos-nightly.yml
+├── .github/workflows/            # gate.yml (reusable), pr.yml, main.yml, nightly.yml, weekly.yml, release.yml — 23 § CI shape
 ├── build/                        # Nuke — the single entry point for every build action
 │   ├── _build.csproj
 │   ├── Build.cs                  # partial: target graph
@@ -21,6 +21,7 @@ CyberCloud/
 │   ├── Build.Architecture.cs     # the gates in 00 § Non-negotiables
 │   ├── Build.Licence.cs          # ADR-011 scan over charts + images
 │   ├── Build.Portal.cs           # pnpm install/lint/test/build, performance budget, axe
+│   ├── Build.Bootstrap.cs        # deploy/bootstrap/bootstrap.sh preflight and --dry-run; the first phase of E2E
 │   ├── Build.E2E.cs              # ─┐
 │   ├── Build.Chaos.cs            #  ├ against a real deployment; nightly and weekly, not per-PR
 │   ├── Build.Load.cs             # ─┘

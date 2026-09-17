@@ -151,4 +151,27 @@
 # DEFLATE a rate, never inflate one. A line covered in the instrumented process is really covered;
 # out-of-process execution simply adds nothing. So no row here is flattered by it, and no green
 # project is secretly red.
-CyberCloud.Silo.Host                              58.6
+#
+# ── 2026-09-18: 58.6 → 68.1, the pin caught up with a project that grew (#25) ───────────────────
+#
+# The floor asked for this: "IMPROVED by 9.5 point(s). Raise the pin to 68.1". The assembly is 357
+# coverable lines now, not the 256 the 2026-09-03 paragraph counts — since that date #88's sign-up
+# seeding (PlatformBootstrapTask.cs), #36's tunnel routing, #33's sending surface and #29's feeds host
+# all touched this project — and the in-process tests that came with them cover their
+# share. Nothing about the boundary above changed: HelloGrain.cs and Program.cs still read as 0 % for
+# the reason at the top of that section, and the three ways out are still the three ways out.
+#
+# ⚠ MEASURED ON WINDOWS x64, IN THE FAST LANE (./build.sh Test --test-lane Fast, 65 suites), and the
+# first Linux run of pr.yml is where this number is confirmed or corrected: the floor's own message
+# names the figure to write, to one decimal, and the tolerance is half a point either way
+# (CoverageReport.cs § PinTolerance). The lane does not move the number — the sixteen
+# *.Cluster.Conformance suites the lane leaves out instrument the provider reconcilers on a k3s and
+# never load this assembly — but the platform might, by a tenth or two, and if it does the pin
+# follows the Linux measurement, which is the one that gates.
+#
+# ⚠ Why nobody saw the 9.5 points arrive: between 2026-09-03 and this date the coverage floor never
+# completed on the x64 runner: `gate / test` has been red on every main.yml run since (#25 counts
+# twelve), the last of them, 35027771880, on three real test failures before EnforceCoverageFloor
+# ran. The Fast lane is the first place the floor has been evaluated over a green run since the pin
+# was written — which is itself an argument for the lane.
+CyberCloud.Silo.Host                              68.1

@@ -1,6 +1,6 @@
 // docs/plan/03 § build/ — the target graph. Everything a target actually does lives in a sibling
 // partial: Build.Compile.cs, Build.Test.cs, Build.Generate.cs, Build.Charts.cs, Build.Images.cs,
-// Build.Architecture.cs, Build.Licence.cs, Build.Portal.cs, Build.E2E.cs, Build.Chaos.cs,
+// Build.Architecture.cs, Build.Licence.cs, Build.Portal.cs, Build.Bootstrap.cs, Build.E2E.cs, Build.Chaos.cs,
 // Build.Load.cs, Build.Publish.cs. Four files are not partials of this class and are named for what
 // they read rather than for a target: ArchitectureFacts.cs (assembly metadata), CoverageReport.cs
 // (Cobertura), OciRegistry.cs (image manifests and configs) and TargetPreconditions.cs (the shape of
@@ -64,20 +64,26 @@ sealed partial class Build : NukeBuild {
     // ── Target graph ──────────────────────────────────────────────────────────────────────────
     //
     //   Clean
-    //   Restore ──► Compile ──┬──► Test
+    //   Restore ──► Compile ──┬──► Test           (--test-lane All | Fast | Cluster — Build.Test.cs § TestLane)
     //                         ├──► Generate
     //                         ├──► Architecture
-    //                         ├──► E2E            (blocks: no suite, no staging, no cyc)
+    //                         ├──► E2E            (blocks: no suite, no staging, no cyc; runs Bootstrap's phase first)
     //                         ├──► Chaos          (blocks: no suite, no cluster)
     //                         ├──► Load           (blocks: no suite, no environment)
     //                         ├──► Charts ────────┐
     //                         └──► Images ────────┴──► Licence
     //   Portal
+    //   Bootstrap
     //
     //   Publish ──► Test, Generate, Architecture, Portal, Licence   (blocks: no version, no feeds, no cyc)
     //
     // Publish's fan-in is written out rather than drawn: it reaches five nodes from three different
     // rows above, and the lines needed to show that cost more than they explain.
+    //
+    // `Bootstrap` and `Portal` are the two roots with no edge into them, for two different reasons:
+    // Portal's is in Build.Portal.cs (two toolchains, independently invocable); Bootstrap's is that
+    // deploy/bootstrap/bootstrap.sh is bash and kubectl, and a job whose content is a dry-run against
+    // a hostile cluster should not compile the platform to get there — Build.Bootstrap.cs.
     //
     // ⚠ "BLOCKS" IS NOT "STUB", AND THE DIFFERENCE IS THE WHOLE DESIGN OF THOSE FIVE TARGETS. A stub
     // logs that it is unwritten and succeeds. A blocked target is written — it discovers its work,
@@ -177,6 +183,14 @@ sealed partial class Build : NukeBuild {
         _ => _
             .Description("pnpm install/lint/test/build over portal/, performance budget, axe.")
             .Executes(BuildPortal);
+
+    Target Bootstrap =>
+        _ => _
+            .Description(
+                "deploy/bootstrap/bootstrap.sh: the seven preflight cases, and --dry-run against --kube-context. "
+                + "docs/plan/09 § The platform's own cluster."
+            )
+            .Executes(ExerciseBootstrap);
 
     Target E2E =>
         _ => _

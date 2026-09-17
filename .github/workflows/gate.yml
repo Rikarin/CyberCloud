@@ -10,6 +10,22 @@
 #
 # Everything here invokes the build. Nothing here reimplements it. The steps that are not a
 # `./build.sh` call are all of one kind: proving that the call was not a no-op.
+#
+# ── ⚠ `test` IS THE FAST LANE SINCE ISSUE #25, AND THE OTHER LANE IS NOT IN THIS FILE ────────────
+#
+# `./build.sh Test` over every suite took 29 m 14 s on the runner (main.yml run 35027771880), 24 of
+# them a serial chain of k3s-holding suites — Build.Test.cs § TestLane has the timestamps. That is
+# over the 25 minutes docs/plan/23 § CI shape gives a PR, and the doc's remedy is "parallelism or
+# moving a test to nightly — with a written reason". So `test` here runs `--test-lane Fast`:
+# everything but the sixteen *.Cluster.Conformance suites. Those run as main.yml's own `test-cluster`
+# job (`--test-lane Cluster`), where there is no budget, and nightly.yml runs the whole target in one
+# process, the one run in which the coverage floor sees every suite.
+#
+# ⚠ The cluster lane is deliberately NOT a conditional job in this file. It was, for a draft, behind a
+# `cluster-lane` input — and a job skipped by `if:` still appears in the run's job list with the
+# conclusion `skipped`, which .github/scripts/assert-budget.sh fails on, for the good reason that on a
+# PR a skipped gate is a gate that did not happen. A lane that is not a PR gate has no business in the
+# PR gate's file. What is shared stays shared; what main adds, main owns.
 
 name: gate
 
@@ -74,7 +90,12 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # ── docs/plan/23 § Test layers, rows Unit, Grain, Reconciler, Conformance, Isolation, Contract ───
+  # ── docs/plan/23 § Test layers, rows Unit, Grain, Conformance, Isolation, Contract ───────────────
+  #
+  # The Reconciler row — "k3s in Testcontainers, real API server, real SSA" — is main.yml's
+  # `test-cluster`. This job still holds two suites with a k3s in them (CyberCloud.Kubernetes.Tests
+  # and CyberCloud.AppHost.Tests): they are the only coverage of their assemblies, and Build.Test.cs
+  # § TestLane has the measurement that put them here.
   test:
     name: test
     # A pinned image rather than `ubuntu-latest`, so a runner-image roll is a commit here and not a
@@ -88,7 +109,7 @@ jobs:
     # measure the floor correctly. Nothing here depends on the architecture any more; moving it is a
     # decision about cost and speed, not about whether the gate works.
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/dotnet
@@ -111,8 +132,8 @@ jobs:
           docker run --rm hello-world > /dev/null
           echo "Docker works — the Grain, Reconciler and Conformance layers have what they need."
 
-      - name: ./build.sh Test
-        run: .github/scripts/run-build.sh "$RUNNER_TEMP/test.log" Test
+      - name: ./build.sh Test --test-lane Fast
+        run: .github/scripts/run-build.sh "$RUNNER_TEMP/test.log" Test --test-lane Fast
 
       # always(): the guard is diagnostic as well as a gate, and its "N suite(s), M test(s)
       # executed." line is worth as much beside a failed run as beside a green one.

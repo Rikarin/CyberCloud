@@ -9,7 +9,8 @@ locally and in CI, so "works on my machine" and "works in CI" are the same code 
 |---|---|
 | `Restore` `Compile` | .NET, with CPM and deterministic builds |
 | `Generate` | Provider registry → OpenAPI → CLI verbs → SDK → portal forms (ADR-012). **Fails on drift** |
-| `Test` | Unit + grain tests, coverage floor per project |
+| `Test` | Unit + grain tests, coverage floor per project. `--test-lane Fast` / `Cluster` split the `*.Cluster.Conformance` suites off for CI — § CI shape |
+| `Bootstrap` | `deploy/bootstrap/bootstrap.sh`: seven preflight cases, and `--dry-run` against `--kube-context`. The first phase of `E2E`, callable alone ([09 § The platform's own cluster](09-kubernetes-fabric.md)) |
 | `Charts` | `helm lint`, generate `values.schema.json` from annotated values, **fail on drift**, package |
 | `Images` | Build, SBOM (Syft), sign (cosign), push by digest |
 | `Architecture` | The gates below |
@@ -46,7 +47,7 @@ time.
 |---|---|---|---|
 | **Unit** | xUnit v3, NSubstitute, Shouldly | Every PR, < 3 min | Coverage ≥ 70 % per project |
 | **Grain** | `Orleans.TestingHost` + Testcontainers (Redis, Postgres, NATS) — ADR-018 | Every PR, < 12 min | All pass |
-| **Reconciler** | `k3s` in Testcontainers, real API server, real SSA | Every PR, < 15 min | All pass |
+| **Reconciler** | `k3s` in Testcontainers, real API server, real SSA — the `*.Cluster.Conformance` suites | Every merge to main + nightly. ⚠ Not every PR — see below | All pass |
 | **Conformance** | The shared provider suite, per provider | Every PR touching a provider | 100 % — a provider that fails is not registered |
 | **Isolation** | `CyberCloud.Isolation` — every provider, every verb, wrong tenant | Every PR | **Zero** findings |
 | **Contract** | OpenAPI diff, SDK/CLI regeneration, wire round-trip | Every PR | No breaks |
@@ -67,6 +68,23 @@ a row names a project and the rate it is held to, an unlisted project below 70 %
 listed project that drops below its rate fails, and a listed project that reaches 70 % fails until
 its row is deleted. `build/README.md § coverage-below-floor.txt` has the reasoning. It carries **one**
 project.
+
+⚠ **The Reconciler row left the PR on 2026-09-18, and the reason is a measurement, not a preference.**
+This table said "Every PR, < 15 min" of it. On the GitHub-hosted `ubuntu-24.04` runner — 4 vCPUs, so
+the suites that hold a k3s run one at a time (`build/Build.Test.cs § ClusterBackedSuiteDegree`) —
+`main.yml` run 35027771880 (2026-09-15) spent **24 minutes** on that serial chain before most other
+suites could start, and `gate / test` took 29 m 14 s: over the PR budget below by itself. The doc's own
+remedy is "parallelism or moving a test to nightly — with a written reason", and this is the reason.
+`./build.sh Test --test-lane Fast` runs everything but the sixteen `*.Cluster.Conformance` suites on
+every PR; `--test-lane Cluster` runs only those, as its own job, on every merge to main; `nightly.yml`
+runs the whole target in one process. `Build.Test.cs § TestLane` has the timestamps and the second
+measurement that shaped the split: `CyberCloud.Kubernetes.Tests` and `CyberCloud.AppHost.Tests` hold a
+k3s too, and leaving them out of the PR lane put `CyberCloud.Kubernetes` at 10.1 % and `CyberCloud.AppHost`
+at nothing, so they stay on the PR. **The coverage floor follows the lane**: the PR lane enforces it
+over the suites it ran, the nightly full run over every suite, and the cluster lane does not measure
+coverage at all rather than fail every project it does not touch. A merge therefore sees the
+reconciler suites the same day, which is what #25 asked for — a suite red on Linux for ten days was
+one whose only run was inside a job that was red anyway.
 
 ### Skipped by default — the assertions that need a server, and what running them proved
 
@@ -168,15 +186,77 @@ signal.
 
 | Workflow | Trigger | Duration |
 |---|---|---|
-| `pr.yml` | Every PR | ≤ 25 min — everything in the "Every PR" rows above, parallelised |
-| `main.yml` | Merge | + images, charts, SBOM, signatures, deploy to dev |
-| `nightly.yml` | 02:00 | E2E, cluster e2e, hostile BYO, chaos, security |
+| `pr.yml` | Every PR | ≤ 25 min — everything in the "Every PR" rows above, parallelised; `Test` in its `Fast` lane |
+| `main.yml` | Merge | + the `Cluster` lane of `Test`, images, charts, SBOM, signatures, deploy to dev |
+| `nightly.yml` | 02:00 | The full `Test` run, E2E, the bootstrap dry-run on kind, hostile BYO, chaos, security |
 | `weekly.yml` | Sunday | Load, licence scan, dependency review, a restore drill |
 | `release.yml` | Tag | Full gate, publish everything, staged rollout |
 
 **25 minutes for a PR is a budget, not an observation.** It is enforced: a PR that pushes the pipeline
 past it fails, and the fix is parallelism or moving a test to nightly — with a written reason. A
 40-minute PR pipeline is how a team stops running tests locally and starts merging on hope.
+
+⚠ **A job that needs a secret this repository does not have skips, and says so; it does not fail.**
+Until 2026-09-18 `main`, `nightly` and `weekly` were red on every run because they named secrets and
+targets that do not exist (#25), and a red job cannot get redder: a suite went red on Linux with #75
+and nobody saw it for ten days, because the only place it ran was inside a workflow that was red
+anyway. A job whose secrets are all absent now has a step named
+`skipped: <SECRET> is not configured — docs/plan/23 § CI secrets` in its step list, a notice on the
+run page, and a green tick that means "the things that could run, ran". A job with *some* of its
+secrets set still fails naming the rest — that is a half-configured job, not an unconfigured one
+(`.github/scripts/gate-on-secrets.sh`). Jobs blocked on work rather than on a secret (`deploy-dev`,
+`rollout`, `restore-drill`) carry a `::warning` annotation naming the work, every run, and fail only
+when somebody creates the secret that nothing can yet consume. § CI secrets below is the list.
+
+## CI secrets
+
+Configured under the repository's *Settings → Secrets and variables → Actions*, or on the `dev` and
+`release` environments where a job names one. Who sets them: the repository owner — there is one
+maintainer — and every row below is a *decision* before it is a credential. #25 named two of those
+decisions outright: **where staging runs**, and whether the E2E lane is allowed anywhere near a
+production cluster. The safe shape is a disposable k3s or a Lima VM rather than a shared environment;
+an E2E suite that can reach production is one misconfigured base URL away from a bad day.
+
+`CiSecretsReconciliationTests` in `src/CyberCloud.ResourceManager.Contracts.Tests` fails the build
+when a workflow references a secret this table does not list, or the table lists one no workflow
+reads, so the table and the workflows cannot drift apart.
+
+| Secret | Unlocks | Who sets it, and what has to be decided first |
+|---|---|---|
+| `CONTAINER_REGISTRY` | `main.yml / images` — build, SBOM, cosign signature, push by digest ([18 § Platform security](18-security-vault-and-malware-scan.md)); `weekly.yml / licence`'s platform-image half; `nightly.yml / security-runtime`'s Trivy scan; `release.yml / publish` | The owner, once **which registry** is decided. `ghcr.io/<owner>/cybercloud` is the option that needs no new account; the value is the registry and repository prefix, e.g. `ghcr.io/acme/cybercloud` |
+| `REGISTRY_USERNAME` | The same four jobs | A principal that can push there — for ghcr.io, a fine-grained token with `write:packages` |
+| `REGISTRY_PASSWORD` | The same four jobs | Its password or token |
+| `DEV_KUBECONFIG` | `main.yml / deploy-dev` | ⚠ **Not yet.** The job is blocked on work (table below); creating this turns a skip into a failure |
+| `E2E_BASE_URL` | `nightly.yml / e2e`; `weekly.yml / load` | The owner, once **where staging runs** is decided — a disposable environment that cannot reach production. `Build.E2E.cs § E2EBaseUrl` has no fallback on purpose |
+| `STAGING_KUBECONFIG` | `nightly.yml / e2e` (the bootstrap dry-run against staging) and `nightly.yml / chaos` | The same decision; for chaos, a cluster "that can lose a silo, a shard and a NATS node without anybody minding" |
+| `STAGING_KUBE_CONTEXT` | Optional — the context inside `STAGING_KUBECONFIG`; defaults to its current-context | With the kubeconfig, when it holds more than one context |
+| `ZAP_TARGET_URL` | `nightly.yml / security-runtime` — the ZAP baseline | Usually the same host as `E2E_BASE_URL` |
+| `DOCKERHUB_USERNAME` `DOCKERHUB_TOKEN` | Optional — `weekly.yml / licence` spends an account's Docker Hub budget on manifest reads instead of the runner's shared anonymous one (`build/OciRegistry.cs`) | Only if the first no-registry `licence` run reports HTTP 429 on the eleven docker.io images |
+| `NUGET_FEED` `NUGET_API_KEY` | `release.yml / publish` | The owner, once **the feed** is decided. `Build.Publish.cs` gives it no default because "a default feed is how a pre-release build ends up on nuget.org" |
+| `CHART_REGISTRY` | `release.yml / publish` — packaged charts, `oci://…` | With the registry decision above |
+| `PROD_KUBECONFIG` | `release.yml / rollout` | ⚠ **Not yet.** Blocked on work (table below) |
+
+**Blocked on work, not on a secret.** These are green with a `::warning` on every run, and the warning
+names the work. Creating the secret does not unblock them.
+
+| Job | What is missing | Where it is argued |
+|---|---|---|
+| `main.yml / deploy-dev`, `release.yml / rollout` | A `Deploy` target in `build/`; `charts/platform`; for `rollout`, the canary's abort condition — error rate, p99 and grain-activation failures queryable per stage | `build/Build.cs § target graph`; `deploy/README.md § What an operator actually types`; [16](16-observability.md) |
+| `nightly.yml / e2e`, and the Cluster e2e row | `test/CyberCloud.E2E`; a `cyc` under `cli/`; for the row, CAPI + Kamaji + KubeVirt on the VM lane | `build/Build.E2E.cs`; § The lane that needs a kubelet |
+| `nightly.yml / chaos` | `test/CyberCloud.Chaos`; a way to verify the environment's size (invariant 7 needs 30 silos) | `build/Build.Chaos.cs` |
+| `weekly.yml / load` | `test/CyberCloud.Load`; a committed baseline for the 20 %-regression rule | `build/Build.Load.cs` |
+| `weekly.yml / restore-drill` | A backup mechanism for the durable tier; a written restore procedure; a scratch environment to restore into | [05 § The two tiers](05-state-and-storage.md); `deploy/README.md § Idempotence` |
+
+### Action pins
+
+Every `uses:` in `.github/` is a 40-hex commit SHA with the release it stands for written beside it
+(`actions/checkout@3d3c42e5… # v7.0.1`). A tag is a pointer somebody else moves — the 2025
+tj-actions/changed-files compromise repointed every version tag at a commit that read the runner's
+secrets, and every workflow that trusted a tag ran it. [18 § Platform security](18-security-vault-and-malware-scan.md)
+says "a pinned digest, never a tag" of images; this is the same rule for the code that builds them,
+and `.github/scripts/assert-actions-pinned.sh` enforces it on every PR. The comment is what makes a
+SHA reviewable: bump the SHA, bump the comment, and check the two agree on the action's release page,
+which is the one thing a local check cannot do.
 
 ## Environments and rollout
 

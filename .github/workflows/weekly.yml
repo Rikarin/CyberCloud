@@ -10,11 +10,34 @@
 # that is meaningful without a diff, and which catches an advisory published against a package
 # nobody has touched in a month.
 #
-# ── ⚠ SECRETS THIS WORKFLOW REQUIRES ─────────────────────────────────────────────────────────────
+# ── ⚠ WHAT RUNS ON A SUNDAY WITH NO SECRETS, AND WHAT SKIPS ──────────────────────────────────────
 #
-#   E2E_BASE_URL   an environment that can be driven to 10 000 tenants, 5 000 rps and 2 000 000
-#                  resident grains. Build.Load.cs is explicit that a smaller one "does not produce a
-#                  smaller version of these answers, it produces different ones".
+# Until issue #25 all four jobs were red on every Sunday. `dependencies` was red on a real finding
+# (SSH.NET 2025.1.0 under Testcontainers, two High advisories — pinned to 2026.0.0 in
+# Directory.Packages.props); the other three were red on inputs that do not exist, which is a red
+# nobody can act on and a red that hides the one somebody could.
+#
+#   `licence`       RUNS. The bundle half of the scan — every component's LICENSE file at its pinned
+#                   release (twenty on 2026-09-18), their charts' annotations, their images' labels
+#                   (thirty-three) and, with syft, what each image links — needs a network and no
+#                   secret. The platform-
+#                   image half needs `Images`, which needs a registry, so without one the job says
+#                   `--skip Images` and Build.Licence.cs reports that half as ○ rather than ✘.
+#   `dependencies`  RUNS.
+#   `load`          SKIPS on E2E_BASE_URL, and would fail on the missing suite with it set.
+#   `restore-drill` BLOCKED on three things that are not secrets, and now says so as a warning
+#                   annotation on a green job rather than as a red one. See the job for the argument.
+#
+# ── ⚠ SECRETS THIS WORKFLOW USES ─────────────────────────────────────────────────────────────────
+#
+#   E2E_BASE_URL         an environment that can be driven to 10 000 tenants, 5 000 rps and 2 000 000
+#                        resident grains. Build.Load.cs is explicit that a smaller one "does not
+#                        produce a smaller version of these answers, it produces different ones".
+#   CONTAINER_REGISTRY   the registry `Images` pushes to, so `Licence` can scan the platform's own
+#   REGISTRY_USERNAME    images too. Without them the bundle half of the scan still runs in full.
+#   REGISTRY_PASSWORD
+#   DOCKERHUB_USERNAME   optional — spends an account's Docker Hub budget on the manifest reads the
+#   DOCKERHUB_TOKEN      scan makes, instead of the runner's shared anonymous one. See `licence`.
 
 name: weekly
 
@@ -51,23 +74,32 @@ jobs:
       E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/dotnet
 
-      - name: Preconditions
+      - name: Is the load environment configured?
+        id: secrets
         run: |
-          .github/scripts/require-secrets.sh load \
-            "docs/plan/23 § Test layers, row Load: the docs/plan/00 quality bar at scale, gating 'budgets met' before a release." \
+          .github/scripts/gate-on-secrets.sh load \
+            "docs/plan/23 § Test layers, row Load: the docs/plan/00 quality bar at scale, gating 'budgets met' before a release. No scenario was driven." \
             "E2E_BASE_URL=create the secret with an environment that can actually be driven to the numbers in docs/plan/23 § The load scenarios"
+
+      - name: "skipped: E2E_BASE_URL is not configured — docs/plan/23 § CI secrets"
+        if: steps.secrets.outputs.configured != 'true'
+        run: |
+          echo "::warning title=load::load is also BLOCKED on a suite that does not exist — test/CyberCloud.Load — and on a committed baseline for the 20 %-regression rule (Build.Load.cs). With the secret set, ./build.sh Load fails naming both. docs/plan/23 § CI secrets, 'Blocked on work, not on a secret'."
+
+      - uses: ./.github/actions/dotnet
+        if: steps.secrets.outputs.configured == 'true'
 
       # ⚠ Expected to fail on three preconditions today: no test/CyberCloud.Load, and no committed
       # load baseline — without which the 20 %-regression rule in docs/plan/23 § The load scenarios
       # is unenforceable and "the budgets alone would pass a release that got five times slower
       # while staying under them".
       - name: ./build.sh Load
+        if: steps.secrets.outputs.configured == 'true'
         run: .github/scripts/run-build.sh "$RUNNER_TEMP/load.log" Load --e2e-base-url "$E2E_BASE_URL"
 
       - name: Upload the load results
-        if: always()
+        if: always() && steps.secrets.outputs.configured == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: load-results
@@ -81,22 +113,29 @@ jobs:
 
   # ── docs/plan/23 § Build, row `Licence`: "ADR-011 scan over charts and images" ───────────────────
   #
-  # ⚠ THIS JOB IS RED TODAY FOR A REASON THAT IS NOT THE SCAN, AND THE ORDER MATTERS.
+  # `Licence` depends on `Charts` and `Images`. `Charts` runs here — helm is on the runner image.
+  # `Images` needs a registry, and the two shapes of this job follow from whether there is one:
   #
-  # `Licence` depends on `Charts` and `Images`. `Images` is BLOCKED without a registry, syft and
-  # cosign, so `./build.sh Licence` never reaches ScanLicences at all — verified by running it: it
-  # ends "Images is BLOCKED on 3 of 3 precondition(s)". Configure those and the target reaches
-  # Build.Licence.cs, which since issue #17 is the scan itself: every bundle component's licence
-  # read off its artefacts, every image's contents through syft against ADR-011's deny-list, and
-  # the SBOMs `Images` just wrote. On CI a missing syft FAILS the target rather than warning, so the
-  # `Install syft` step below is load-bearing and not a courtesy.
+  #   * registry configured: cosign, login, `./build.sh Licence` in full — Charts, Images, the scan
+  #     over the bundle AND over the SBOMs Images just wrote.
+  #   * registry absent: `./build.sh Licence --skip Images`. Build.Licence.cs § ScanPlatformImages
+  #     tells a skip asked for by name from an Images that ran and wrote nothing, and reports the
+  #     platform-image half as ○ with a warning rather than as the ✘ it was every Sunday until #25.
+  #     The bundle half — every component's licence read off its artefacts, every upstream image's
+  #     contents through syft against ADR-011's deny-list — runs in full either way.
+  #
+  # ⚠ syft IS INSTALLED BY THIS JOB IN BOTH SHAPES, AND THAT IS LOAD-BEARING. On CI a missing syft
+  # FAILS the target rather than warning (Build.Licence.cs § ResolveOptionalTool): a weekly scan that
+  # skipped the SBOM half would be green over exactly the row with a legal consequence.
   #
   # ⚠ DOCKER HUB RATIONS ANONYMOUS MANIFEST READS, AND GITHUB RUNNERS SHARE ADDRESSES. Eleven of the
   # bundle's thirty-two images are on docker.io; the scan makes two manifest GETs per image, and a
   # runner whose address is already over the 100-per-six-hours budget gets HTTP 429 on all of them —
   # which the scan reports as a finding, because an artefact it could not read is one it did not
   # scan. build/OciRegistry.cs reads DOCKERHUB_USERNAME and DOCKERHUB_TOKEN when they are set and
-  # spends the account's budget instead. They are optional and are passed below when present.
+  # spends the account's budget instead. They are optional and are passed below when present. ⚠ The
+  # first no-registry run of this job is where that rate limit will be measured for real; if it
+  # bites, the two secrets are the fix and docs/plan/23 § CI secrets lists them.
   #
   # The tripwire step stays: it exits 0 the moment the log no longer says "Not implemented yet",
   # which it no longer does, and .github/scripts/assert-stub-still-blocked.sh explains why the call
@@ -115,30 +154,63 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/dotnet
 
-      - name: Preconditions
+      - name: Is the registry configured?
+        id: secrets
         run: |
-          .github/scripts/require-secrets.sh licence \
-            "docs/plan/23 § Build, row Licence: an ADR-011 scan over charts and images. Build.cs makes Licence depend on Charts and Images, so the images have to exist to be scanned." \
+          .github/scripts/gate-on-secrets.sh licence \
+            "docs/plan/23 § Build, row Licence: an ADR-011 scan over charts and images. Build.cs makes Licence depend on Images, so the platform's own images can only be scanned where they can be pushed. The bundle's components and upstream images are scanned below regardless." \
             "CONTAINER_REGISTRY=create the secret with the registry and repository prefix" \
             "REGISTRY_USERNAME=create the secret with a principal that can push there" \
             "REGISTRY_PASSWORD=create the secret with its password or token"
+
+      - name: "skipped: CONTAINER_REGISTRY / REGISTRY_USERNAME / REGISTRY_PASSWORD are not configured, so the platform's own images are not scanned — docs/plan/23 § CI secrets"
+        if: steps.secrets.outputs.configured != 'true'
+        run: echo "The bundle half of the scan runs below with --skip Images. The platform-image half is reported as ○ by Build.Licence.cs."
 
       - name: Install syft
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
 
       - name: Install cosign
+        if: steps.secrets.outputs.configured == 'true'
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Log in to the registry
+        if: steps.secrets.outputs.configured == 'true'
         run: |
           echo "$REGISTRY_PASSWORD" | docker login "${CONTAINER_REGISTRY%%/*}" \
             --username "$REGISTRY_USERNAME" --password-stdin
 
       - name: ./build.sh Licence
+        if: steps.secrets.outputs.configured == 'true'
         run: |
           .github/scripts/run-build.sh "$RUNNER_TEMP/licence.log" Licence \
             --container-registry "$CONTAINER_REGISTRY" \
             --container-image-tag "weekly-${GITHUB_SHA::7}"
+
+      - name: ./build.sh Licence --skip Images
+        if: steps.secrets.outputs.configured != 'true'
+        run: .github/scripts/run-build.sh "$RUNNER_TEMP/licence.log" Licence --skip Images
+
+      # ⚠ Two different sentences have to be true of the log, depending on which shape ran. With a
+      # registry, the platform images MUST have been scanned — a "was skipped" in that log means
+      # `--skip Images` leaked into the configured path. Without one, the ○ MUST be there — its
+      # absence means Build.Licence.cs stopped reporting the half it did not scan.
+      - name: The scan covered what it could and said what it could not
+        run: |
+          if [ "${{ steps.secrets.outputs.configured }}" = "true" ]; then
+            if grep -q 'Images was skipped' "$RUNNER_TEMP/licence.log"; then
+              echo "::error title=Licence::the registry is configured and the log still says Images was skipped, so the platform's own images were not scanned on a run that could have scanned them."
+              exit 1
+            fi
+            echo "Platform images scanned from the SBOMs Images wrote."
+          else
+            if ! grep -q 'Images was skipped' "$RUNNER_TEMP/licence.log"; then
+              echo "::error title=Licence::./build.sh Licence --skip Images did not report the platform-image half as skipped. Build.Licence.cs § ScanPlatformImages prints that ○ so a reader of this run knows what was not scanned; its absence means the row went quiet."
+              exit 1
+            fi
+            echo "○ Platform images not scanned — no registry. The bundle half ran in full."
+          fi
+          grep -E 'Licence: [0-9]+ artefact' "$RUNNER_TEMP/licence.log" | tail -1
 
       # The moment there is something to scan, a stub that scans it is no longer an acceptable pass.
       - name: Licence is not a stub over real artefacts
@@ -146,6 +218,15 @@ jobs:
         run: |
           .github/scripts/assert-stub-still-blocked.sh Licence "$RUNNER_TEMP/licence.log" \
             artifacts/images.json 'artifacts/charts/*.tgz'
+
+      - name: Upload the licence report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: licence-report
+          path: artifacts/licence/
+          if-no-files-found: error
+          retention-days: 400
 
   # ── docs/plan/23 § CI shape, row `weekly.yml`, the "dependency review" column ────────────────────
   dependencies:
@@ -175,9 +256,20 @@ jobs:
 
   # ── docs/plan/23 § CI shape, row `weekly.yml`, the "restore drill" column ────────────────────────
   #
-  # ⚠ BLOCKED, AND NOT ON A SECRET. Written out rather than omitted, because "a restore drill" is one
-  # of the four things that row promises and a weekly workflow with three of them is a workflow that
-  # quietly redefined the row.
+  # ⚠ BLOCKED, AND NOT ON A SECRET — AND SINCE #25 A WARNING ON A GREEN JOB, NOT A RED ONE.
+  #
+  # Written out rather than omitted, because "a restore drill" is one of the four things that row
+  # promises and a weekly workflow with three of them is a workflow that quietly redefined the row.
+  # It used to `exit 1`, on the argument that reporting the drill green would be the most expensive
+  # possible way to find out the backups do not restore. That argument is right about a GREEN TICK
+  # OVER A DRILL THAT RAN NOTHING and wrong about what a permanent red buys: a year of Sundays red on
+  # this job made the whole workflow red, and a red `dependencies` job — a real High advisory in the
+  # closure — sat inside it for four days looking exactly like every other Sunday.
+  #
+  # So the job is green and the run page carries a `::warning` annotation naming the three blockers
+  # every week, which is what a reader of a green weekly run sees first. The drill has not moved: it
+  # is still three pieces of work, still listed in docs/plan/23 § CI secrets under "Blocked on work,
+  # not on a secret", and the day one of them lands this comment is the first thing to rewrite.
   restore-drill:
     name: restore-drill
     runs-on: ubuntu-24.04
@@ -185,11 +277,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: What a restore drill needs that this repository does not have
+      - name: "blocked: no backup, no restore procedure, no scratch environment — docs/plan/23 § CI secrets"
         run: |
-          cat <<'BLOCKED'
-          ::error title=restore-drill::restore-drill is BLOCKED on 3 input(s), none of them a secret.
-          BLOCKED
+          echo "::warning title=restore-drill::restore-drill is BLOCKED on 3 input(s), none of them a secret — nothing in the repository takes a backup, no restore procedure is written, and there is no scratch environment to restore into. docs/plan/23 § CI secrets, 'Blocked on work, not on a secret'."
           cat <<'BLOCKED'
 
             ✘ nothing in the repository takes a backup.
@@ -205,8 +295,11 @@ jobs:
               To unblock: a throwaway shard per drill. docs/plan/23 § Environments and rollout has
               dev, staging and prod, and restoring over any of the three is not a drill.
 
-          ⚠ The point of a restore drill is finding out that the backups do not restore. Reporting
-          this as green until somebody writes the three things above would be the most expensive
-          possible version of exactly that discovery, made at exactly the wrong moment.
+          ⚠ The point of a restore drill is finding out that the backups do not restore. This job
+          drilled nothing; the tick above it is the workflow's, not the drill's.
           BLOCKED
-          exit 1
+          {
+            echo "### ○ restore-drill — blocked on work, not on a secret"
+            echo
+            echo "No backup mechanism, no written restore procedure, no scratch environment. Nothing was drilled."
+          } >> "$GITHUB_STEP_SUMMARY"
