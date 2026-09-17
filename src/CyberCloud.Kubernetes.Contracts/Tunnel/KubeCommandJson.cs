@@ -49,6 +49,9 @@ public static class KubeCommandJson {
 
         [JsonPropertyName("resourcePath")]
         public string ResourcePath { get; init; } = string.Empty;
+
+        [JsonPropertyName("ownerResourceId")]
+        public Guid OwnerResourceId { get; init; }
     }
 
     /// <summary>Serializes a built command.</summary>
@@ -68,7 +71,8 @@ public static class KubeCommandJson {
                 Annotations = new(command.Annotations, StringComparer.Ordinal),
                 ReconcileHash = command.ReconcileHash,
                 Force = command.Force,
-                ResourcePath = command.ResourcePath
+                ResourcePath = command.ResourcePath,
+                OwnerResourceId = command.OwnerResourceId
             }
         );
     }
@@ -91,14 +95,33 @@ public static class KubeCommandJson {
 
         var value = wire.GetValueOrThrow();
 
-        foreach (var label in KubeLabels.Mandatory) {
-            if (!value.Labels.ContainsKey(label)) {
+        if (value.OwnerResourceId != Guid.Empty) {
+            // ⚠ A CO-WRITER'S COMMAND CARRIES NO LABELS BY DESIGN, AND THE CHECK INVERTS. The seven
+            // are the owner's and stay on the object; a co-owned command that DID carry labels
+            // would be a co-writer claiming the owner's identity, which is the FieldManagerConflict
+            // the co-owned mode exists to avoid. So the agent refuses the labelled shape here, and
+            // requires the fragment bookkeeping instead — unless it is a withdrawal, whose whole
+            // point is to carry none of this co-writer's annotations.
+            if (value.Labels.Count > 0) {
                 return Result<KubeCommand>.Failure(
                     ErrorCode.InvalidRequestBody,
-                    $"A command arrived over the tunnel without the '{label}' label. Every object "
-                    + "the platform applies carries the seven cybercloud.io/* labels (ADR-013), and "
-                    + "the agent refuses one that does not rather than applying it."
+                    $"A co-owned command for resource {value.ResourceId:D} arrived over the tunnel carrying "
+                    + $"{value.Labels.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)} "
+                    + "label(s). A co-writer applies a fragment under the owner's labels and writes none "
+                    + "of its own (IKubeCommandBuilder.CoWriting); the agent refuses the labelled shape "
+                    + "rather than letting a fragment claim the owner's identity."
                 );
+            }
+        } else {
+            foreach (var label in KubeLabels.Mandatory) {
+                if (!value.Labels.ContainsKey(label)) {
+                    return Result<KubeCommand>.Failure(
+                        ErrorCode.InvalidRequestBody,
+                        $"A command arrived over the tunnel without the '{label}' label. Every object "
+                        + "the platform applies carries the seven cybercloud.io/* labels (ADR-013), and "
+                        + "the agent refuses one that does not rather than applying it."
+                    );
+                }
             }
         }
 
@@ -114,7 +137,8 @@ public static class KubeCommandJson {
                 Annotations = value.Annotations,
                 ReconcileHash = value.ReconcileHash,
                 Force = value.Force,
-                ResourcePath = value.ResourcePath
+                ResourcePath = value.ResourcePath,
+                OwnerResourceId = value.OwnerResourceId
             }
         );
     }

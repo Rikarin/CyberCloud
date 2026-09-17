@@ -178,6 +178,39 @@ public readonly record struct ReconcileContext(
     ///     here.
     /// </remarks>
     public IAgentTunnels Agents { get; init; } = new UnavailableAgentTunnels();
+
+    /// <summary>
+    ///     The seam a child reconciler co-writes onto a parent's — or a sibling's — object through:
+    ///     a fragment applied beside the owner's fields, under the owner's labels, and withdrawn on
+    ///     teardown without deleting the owner's object. Issue #89; docs/plan/09 § The command
+    ///     builder, "A second writer on an object".
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             Derived from <see cref="Cluster" /> rather than wired by the driver, which is not
+    ///             the shape the seams above take, and the reason is that it needs nothing the driver
+    ///             knows.
+    ///         </b> <see cref="SecretWriter" /> and <see cref="Objects" /> default to a refusal because
+    ///         only a host can say where the vault or the object store is. A co-write is a read and a
+    ///         server-side apply against the pass's own cluster connection, so the default over
+    ///         <see cref="Cluster" /> is the complete implementation, a hand-built context gets a
+    ///         working one for free, and a pass with no cluster gets <see cref="NoClusterCoWriter" />,
+    ///         which fails by name.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What a co-writer still has to know on its own: the owner's object's name.</b> The
+    ///         seam takes an <see cref="ObjectRef" />, and a child resource derives the parent's name
+    ///         from its own address the way <c>NatGateways.VpcRefOf</c> does — a pure function of the
+    ///         namespace and the parent's name — and a sibling's from the name its body carries.
+    ///         Whether the named object exists is the fabric's answer, on the read: a sibling whose
+    ///         owner has not converged yet is <see cref="ErrorCode.ResourceNotFound" />, and the pass
+    ///         reports <c>InProgress</c> rather than creating it.
+    ///     </para>
+    /// </remarks>
+    public IKubeCoWriter CoWriter { get; init; } =
+        Cluster is null ? new NoClusterCoWriter() : new KubeCoWriter(Cluster);
 }
 
 /// <summary>

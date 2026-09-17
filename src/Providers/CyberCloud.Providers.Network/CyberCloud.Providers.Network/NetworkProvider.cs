@@ -247,8 +247,9 @@ namespace CyberCloud.Providers.Network;
 ///             is on <see cref="NatGateways" />.
 ///         </item>
 ///         <item>
-///             ⚠ <b><c>virtualNetworks/peerings</c> — OWED (#31), AND THE BLOCKER IS THIS PLATFORM'S
-///             OWN APPLY PATH RATHER THAN THE SUBSTRATE ALONE.</b> Three facts, each measured:
+///             ⚠ <b><c>virtualNetworks/peerings</c> — OWED (#31), AND THE BLOCKER WAS THIS PLATFORM'S
+///             OWN APPLY PATH RATHER THAN THE SUBSTRATE ALONE, UNTIL #89 BUILT THE WAY OUT.</b> Three
+///             facts, each measured:
 ///             <list type="number">
 ///                 <item>
 ///                     <b>A Kube-OVN peering has no object of its own.</b> Read firsthand in
@@ -262,18 +263,23 @@ namespace CyberCloud.Providers.Network;
 ///                     two parents.
 ///                 </item>
 ///                 <item>
-///                     ⚠ <b>A merge-and-apply design cannot land either, and this is the new
-///                     finding.</b> <c>KubeCommandBuilder</c> injects ADR-013's seven labels and two
-///                     annotations non-overridably, from the <i>applying</i> resource's identity. A
-///                     peering applying its parent's <c>Vpc</c> therefore claims
+///                     ⚠ <b>A merge-and-apply design could not land either, until the builder grew a
+///                     mode for it.</b> The ordinary <c>KubeCommandBuilder</c> build injects ADR-013's
+///                     seven labels and two annotations non-overridably, from the <i>applying</i>
+///                     resource's identity. A peering applying its parent's <c>Vpc</c> that way claims
 ///                     <c>cybercloud.io/resource-id</c>, <c>…/resource-type</c> and
 ///                     <c>…/reconcile-hash</c> at values that differ from the parent's, and the API
 ///                     server answers a <c>FieldManagerConflict</c> on every one — the exact conflict
 ///                     ADR-013 exists to produce, with <c>Force</c> unreachable from the builder on
 ///                     purpose. Applying under the parent's field manager instead makes each apply
 ///                     prune the other's slice, because a manager's apply is the whole set of fields it
-///                     owns. So on this platform <b>two resources cannot own one Kubernetes object</b>,
-///                     by construction, and that is a stronger statement than the list-type one.
+///                     owns. #89's <c>IKubeCommandBuilder.CoWriting</c> is the third way: the owner's
+///                     labels stay, every co-writer of one <c>Vpc</c> applies under one manager named
+///                     for the owner — a manager per peering conflicts on the atomic lists forever,
+///                     measured — each peering's fragment is merged with the others' and carried with
+///                     its own hash, the live <c>resourceVersion</c> makes two peerings racing onto one
+///                     <c>Vpc</c> lose loudly, and teardown withdraws the fragment rather than deleting
+///                     the network's object. docs/plan/09 § A second writer on an object.
 ///                 </item>
 ///                 <item>
 ///                     <b>The parent cannot render its children's peerings</b> without the reader
@@ -282,12 +288,14 @@ namespace CyberCloud.Providers.Network;
 ///                     never converges: <c>DriftScanner</c> <i>"reports; it does not repair"</i>.
 ///                 </item>
 ///             </list>
-///             What would close it is a co-owned apply on the platform — a builder mode that stamps
-///             the <i>owning</i> resource's labels, a field manager per child type and a hash key per
-///             fragment — plus a conformance-case member that creates a sibling network, since the
-///             shared harness builds only the parent chain. Both are platform surface and neither is a
-///             provider's to add quietly. Recorded at
-///             <c>charts/managed/kube-ovn-vpc/conformance.yaml § owed</c>,
+///             What the platform half needed — the co-owned apply, <c>ReconcileContext.CoWriter</c> as
+///             the seam a peering reconciler reaches it through, and
+///             <c>IProviderCaseSource.Siblings</c> so the shared harness can create the second network
+///             — landed with #89. What remains is this provider's: the <c>peerings</c> type itself,
+///             and two harness gaps a Docker-free case would hit first — <c>FakeKubeCluster</c> refuses
+///             a co-owned command by name rather than modelling a second writer, and the harness
+///             empties the fake cluster between assertions so a sibling's <c>Vpc</c> is not there to
+///             write onto. Recorded at <c>charts/managed/kube-ovn-vpc/conformance.yaml § owed</c>,
 ///             <c>peerings-need-a-second-writer-on-the-vpc</c>.
 ///         </item>
 ///     </list>

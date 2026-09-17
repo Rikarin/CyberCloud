@@ -54,6 +54,11 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
     JsonElement chartValues;
     bool chartRequested;
 
+    // ⚠ The co-owned mode's one input beyond the ordinary chain. Non-null switches BuildCore to
+    // BuildCoOwned, and everything the ordinary build injects from the applying resource's identity
+    // is instead read off this object's labels — see IKubeCommandBuilder.CoWriting.
+    KubeObject? coWriting;
+
     // ── The build ──────────────────────────────────────────────────────────────────────────────
 
     static readonly JsonSerializerOptions ObjectJsonOptions = new(JsonSerializerDefaults.Web) {
@@ -164,6 +169,17 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
                 );
             }
 
+            if (KubeLabels.IsFragmentAnnotation(key)) {
+                // ⚠ In either mode. A hand-written fragment annotation in the ordinary mode would
+                // make the owner's apply claim a co-writer's bookkeeping; in the co-owned mode it
+                // would let one co-writer forge what another applied, which the merge then trusts.
+                throw new ArgumentException(
+                    $"'{key}' is a per-fragment annotation the co-owned mode writes for itself "
+                    + "(IKubeCommandBuilder.CoWriting) and cannot be set by a caller in either mode.",
+                    nameof(extra)
+                );
+            }
+
             // An annotation KEY obeys the label-key rule; an annotation VALUE does not obey the
             // label-value rule at all — that is the whole reason the resource path is an annotation
             // and the resource id is a label. So the key is checked and the value is not.
@@ -204,6 +220,12 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
         extraAnnotations[KubeLabels.Prefix + "/owner-resource-id"] =
             parent.Id.ToString("D", CultureInfo.InvariantCulture);
 
+        return this;
+    }
+
+    IKubeCommandBuilder IKubeCommandBuilder.CoWriting(KubeObject live) {
+        ArgumentNullException.ThrowIfNull(live);
+        coWriting = live;
         return this;
     }
 
@@ -249,6 +271,51 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
         CascadePolicy policy,
         CancellationToken cancellationToken
     ) {
+        if (coWriting is not null) {
+            // ⚠ A WITHDRAWAL, NOT A DELETE, AND IT GOES THROUGH ApplyAsync. The object is the
+            // owner's. What this co-writer can take back is its own fragment, and the way to take
+            // a fragment back under server-side apply is to apply without it: the shared manager's
+            // new field set is the other co-writers' union, and the API server removes what the
+            // manager owned and no longer applies. A reconciler that reaches for DeleteAsync out of
+            // habit on teardown therefore withdraws rather than deleting both networks' VPCs.
+            var withdrawal = BuildCoOwned(withdraw: true);
+            if (withdrawal.TryGetError(out var withdrawError)) {
+                return Result.Failure(withdrawError);
+            }
+
+            var applied = await connection.ApplyAsync(withdrawal.GetValueOrThrow(), cancellationToken)
+                .ConfigureAwait(false);
+
+            if (applied.TryGetError(out var applyError)) {
+                return Result.Failure(applyError);
+            }
+
+            // ⚠ THE INTERFACE'S SHAPE IS A BARE Result, SO THE THREE "NOT APPLIED" OUTCOMES BECOME
+            // CODED FAILURES RATHER THAN A SUCCESS THAT WITHDREW NOTHING. Stale is PreconditionFailed —
+            // the object moved, read again (KubeCoWriter does); Conflict is Conflict — the union the
+            // other co-writers hold now collides with a field somebody else owns, and nothing was
+            // written; Suspended is OperationInProgress — the cluster is out of reach and the
+            // withdrawal has not happened yet.
+            var outcome = applied.GetValueOrThrow();
+
+            return outcome.Result switch {
+                ApplyResult.Stale => Result.Failure(
+                    ErrorCode.PreconditionFailed,
+                    $"'{outcome.Target}' moved between the read and the withdrawal; nothing was written. "
+                    + "Read it again and withdraw again."
+                ),
+                ApplyResult.Conflict => Result.Failure(
+                    ErrorCode.Conflict,
+                    outcome.Drift?.Describe() ?? outcome.Message
+                ),
+                ApplyResult.Suspended => Result.Failure(
+                    ErrorCode.OperationInProgress,
+                    outcome.Message.Length > 0 ? outcome.Message : "the cluster is unreachable; the withdrawal has not happened yet"
+                ),
+                _ => Result.Success
+            };
+        }
+
         var built = BuildCore();
         return built.TryGetError(out var error)
             ? Result.Failure(error)
@@ -257,6 +324,10 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
     }
 
     Result<KubeCommand> BuildCore() {
+        if (coWriting is not null) {
+            return BuildCoOwned(withdraw: false);
+        }
+
         if (!resourceSet) {
             // Unreachable through the public chain — WithResourceId is what returns this interface.
             // Kept because the class implements all three stages and this is the invariant that
@@ -388,6 +459,407 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
                 ResourcePath = resource.Path
             }
         );
+    }
+
+    // ── The co-owned build — IKubeCommandBuilder.CoWriting ─────────────────────────────────────────
+
+    /// <summary>
+    ///     Builds a co-writer's command: the union of every co-writer's fragment, under the owner's
+    ///     shared co-writer manager, carrying the live object's <c>resourceVersion</c> and no labels.
+    /// </summary>
+    /// <param name="withdraw">
+    ///     <c>true</c> to leave this co-writer's fragment and annotations out — the teardown — and
+    ///     apply only what the other co-writers hold.
+    /// </param>
+    Result<KubeCommand> BuildCoOwned(bool withdraw) {
+        var live = coWriting!;
+
+        // ── What the ordinary mode allows and this one refuses ────────────────────────────────────
+        //
+        // ⚠ Refused by name rather than ignored. Each of these would let a co-writer say something
+        // about the OBJECT — whose it is, what owns it, what its templates are labelled — and every
+        // one of those is the owner's to say. Ignoring the call would leave the caller believing it
+        // took effect, which is the same objection WithLabels' mandatory-key check makes.
+        if (extraLabels.Count > 0) {
+            return Invalid(
+                "WithLabels was called in the co-owned mode. Labels on an object are its owner's — the "
+                + "seven mandatory ones name the owner, and an extra one would ride under the co-writers' "
+                + "shared manager, where the next co-writer's apply prunes it. A co-writer adds only its "
+                + "fragment. IKubeCommandBuilder.CoWriting."
+            );
+        }
+
+        if (templatePaths.Count > 0) {
+            return Invalid(
+                "WithTemplateLabels was called in the co-owned mode. A nested template's labels are the "
+                + "owner's, for the reason its own are. IKubeCommandBuilder.CoWriting."
+            );
+        }
+
+        if (ownerReferences.Count > 0) {
+            return Invalid(
+                "WithOwner was called in the co-owned mode. An owner reference decides when the garbage "
+                + "collector removes the object, and that is the object's owner's decision, not a "
+                + "co-writer's. IKubeCommandBuilder.CoWriting."
+            );
+        }
+
+        if (extraAnnotations.Count > 0) {
+            // ⚠ Not because an annotation says whose the object is — it does not — but because it
+            // would ride under the shared manager WITHOUT being in this co-writer's stored fragment,
+            // so the next co-writer's apply, which is the union of the stored fragments, would prune
+            // it. That is the clobber the mode exists to prevent, arriving by the side door.
+            return Invalid(
+                "WithAnnotations was called in the co-owned mode. An annotation applied beside a fragment "
+                + "rides under the co-writers' shared manager without being part of the fragment the "
+                + "other co-writers merge, so the next co-writer's apply would remove it. The three "
+                + "per-fragment annotations are written by the builder, and the rest of an object's "
+                + "metadata is its owner's. IKubeCommandBuilder.CoWriting."
+            );
+        }
+
+        if (fieldManager is not null) {
+            return Invalid(
+                "WithFieldManager was called in the co-owned mode. Every co-writer of one object applies "
+                + "under one manager named for the object's owner — KubeLabels.CoWriterFieldManager — "
+                + "because the lists a co-writer reaches are atomic and a manager of its own would "
+                + "conflict on the whole list forever. The manager is derived, not chosen."
+            );
+        }
+
+        if (subscriptionOverride is not null) {
+            return Invalid(
+                "WithSubscriptionId was called in the co-owned mode. The subscription label is the "
+                + "owner's and a co-writer writes no labels, so there is nothing for the override to "
+                + "change. IKubeCommandBuilder.CoWriting."
+            );
+        }
+
+        if (chartRequested) {
+            return Invalid(
+                "Chart was called in the co-owned mode. A chart renders whole objects with their own "
+                + "identity, and a fragment is a slice of somebody else's. Render the slice and pass it "
+                + "with ObjectJson. IKubeCommandBuilder.CoWriting."
+            );
+        }
+
+        if (kind is null || !kind.IsComplete) {
+            return Invalid(
+                "no complete kind was set. The co-owned mode addresses the owner's object by the same "
+                + "GroupVersionKind the read used; call WithKind with Version, Kind and Plural."
+            );
+        }
+
+        if (live.Ref.Kind.IsComplete && live.Ref.Kind != kind) {
+            return Invalid(
+                $"WithKind names '{kind}' and the live object passed to CoWriting is a '{live.Ref.Kind}'. "
+                + "A fragment is applied onto the object that was read, so the two must agree."
+            );
+        }
+
+        // ── Who owns the object, read off the object ──────────────────────────────────────────────
+        JsonObject liveDocument;
+        try {
+            liveDocument = JsonNode.Parse(live.Json) as JsonObject
+                ?? throw new JsonException("the live object is not a JSON object");
+        } catch (JsonException ex) {
+            return Invalid($"the live object passed to CoWriting is not valid JSON: {ex.Message}");
+        }
+
+        var liveMetadata = liveDocument["metadata"] as JsonObject;
+        var liveLabels = liveMetadata?["labels"] as JsonObject;
+
+        foreach (var key in KubeLabels.Mandatory) {
+            if (liveLabels?[key]?.GetValue<string>() is not { Length: > 0 }) {
+                return Invalid(
+                    $"the live object '{live.Ref}' carries no '{key}' label, so this platform does not own "
+                    + "it. A co-writer writes only onto an object another Cyber Cloud resource rendered — "
+                    + "the seven labels are how that object names its owner, and without them there is "
+                    + "no owner to co-write with."
+                );
+            }
+        }
+
+        if (!string.Equals(liveLabels![KubeLabels.ManagedBy]!.GetValue<string>(), KubeLabels.ManagedByValue, StringComparison.Ordinal)) {
+            return Invalid(
+                $"the live object '{live.Ref}' is managed by "
+                + $"'{liveLabels[KubeLabels.ManagedBy]!.GetValue<string>()}', not by this platform."
+            );
+        }
+
+        var ownerTenant = liveLabels[KubeLabels.TenantId]!.GetValue<string>();
+        if (!string.Equals(ownerTenant, KubeLabels.GuidValue(tenantId), StringComparison.Ordinal)) {
+            // ⚠ THE TENANT BOUNDARY, CHECKED ON THE OBJECT RATHER THAN ON THE CALLER'S CLAIM. A
+            // peering is VPC-to-VPC within a tenant (docs/plan/14) and there is no cross-tenant
+            // co-write on this platform; a co-writer that reached another tenant's object would be
+            // writing routes into somebody else's network.
+            return Invalid(
+                $"the live object '{live.Ref}' belongs to tenant {ownerTenant} and the co-writer is in "
+                + $"tenant {KubeLabels.GuidValue(tenantId)}. A co-writer never reaches across a tenant."
+            );
+        }
+
+        var ownerIdValue = liveLabels[KubeLabels.ResourceId]!.GetValue<string>();
+        if (!Guid.TryParseExact(ownerIdValue, "D", out var ownerId) || ownerId == Guid.Empty) {
+            return Invalid(
+                $"the live object '{live.Ref}' carries '{ownerIdValue}' as its resource id, which is not "
+                + "a GUID, so nothing can name the manager its co-writers share."
+            );
+        }
+
+        if (ownerId == resource.Id) {
+            return Invalid(
+                $"resource {resource.Id:D} is co-writing an object it owns itself. The co-owned mode is "
+                + "for a second writer; the owner applies with Object or ObjectJson and no CoWriting call."
+            );
+        }
+
+        var ownerTypeValue = liveLabels[KubeLabels.ResourceType]!.GetValue<string>();
+
+        // ── The optimistic lock ───────────────────────────────────────────────────────────────────
+        var resourceVersion = live.ResourceVersion.Length > 0
+            ? live.ResourceVersion
+            : liveMetadata?["resourceVersion"]?.GetValue<string>() ?? string.Empty;
+
+        if (resourceVersion.Length == 0) {
+            return Invalid(
+                $"the live object '{live.Ref}' carries no resourceVersion. A co-owned apply carries the "
+                + "version it was computed from so that two co-writers racing onto one object lose "
+                + "loudly (ApplyResult.Stale) rather than one applying a union computed from a version "
+                + "the other has already replaced. Read the object with IKubeClusterConnection.GetAsync."
+            );
+        }
+
+        // ── The other co-writers' fragments, off the object ───────────────────────────────────────
+        var liveAnnotations = liveMetadata?["annotations"] as JsonObject;
+        var fragments = new List<(Guid Writer, JsonObject Fragment)>();
+        var annotations = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        if (liveAnnotations is not null) {
+            foreach (var (key, value) in liveAnnotations) {
+                if (!KubeLabels.TryReadFragmentWriter(key, out var writer) || writer == resource.Id) {
+                    continue;
+                }
+
+                var stored = value?.GetValue<string>();
+                JsonObject? fragment = null;
+                try {
+                    fragment = stored is null ? null : JsonNode.Parse(stored) as JsonObject;
+                } catch (JsonException) {
+                    // Fall through to the refusal below.
+                }
+
+                if (fragment is null) {
+                    // ⚠ Refused rather than skipped. Skipping would apply a union WITHOUT that
+                    // co-writer's fragment, which is exactly the prune this mode exists to prevent —
+                    // and a corrupt bookkeeping annotation is somebody's hand edit, which is worth
+                    // a person's attention rather than a silent repair.
+                    return Invalid(
+                        $"the live object '{live.Ref}' carries '{key}', which should hold a co-writer's "
+                        + "fragment as JSON and does not. Applying without it would prune that co-writer's "
+                        + $"slice of the object. Restore or remove the annotation; the co-writer is resource "
+                        + $"{writer:D}."
+                    );
+                }
+
+                fragments.Add((writer, fragment));
+
+                // The other co-writers' three annotations ride along verbatim, because the shared
+                // manager owns them and an apply that left one out would remove it.
+                annotations[key] = stored!;
+
+                foreach (var companion in new[] { KubeLabels.FragmentHashAnnotation(writer), KubeLabels.FragmentPathAnnotation(writer) }) {
+                    if (liveAnnotations[companion]?.GetValue<string>() is { } companionValue) {
+                        annotations[companion] = companionValue;
+                    }
+                }
+            }
+        }
+
+        // ── This co-writer's fragment ─────────────────────────────────────────────────────────────
+        var fragmentHash = string.Empty;
+        var suppliedName = string.Empty;
+
+        if (withdraw) {
+            if (!string.IsNullOrEmpty(body)) {
+                return Invalid(
+                    "a co-owned DeleteAsync withdraws this co-writer's fragment, and a body was set. "
+                    + "The withdrawal applies what the OTHER co-writers hold, read off the object; "
+                    + "there is nothing of this co-writer's to apply. Drop the Object/ObjectJson call."
+                );
+            }
+        } else {
+            if (string.IsNullOrEmpty(body)) {
+                return Invalid("no fragment was set. Call Object(...) or ObjectJson(...) with the slice this resource contributes.");
+            }
+
+            JsonObject supplied;
+            try {
+                supplied = JsonNode.Parse(body) as JsonObject
+                    ?? throw new JsonException("the body is not a JSON object");
+            } catch (JsonException ex) {
+                return Invalid($"the fragment is not valid JSON: {ex.Message}");
+            }
+
+            suppliedName = (supplied["metadata"] as JsonObject)?["name"]?.GetValue<string>() ?? string.Empty;
+
+            var shaped = ShapeFragment(supplied, live);
+            if (shaped.TryGetError(out var shapeError)) {
+                return Result<KubeCommand>.Failure(shapeError);
+            }
+
+            var ownFragment = shaped.GetValueOrThrow();
+
+            // The hash is over THIS fragment alone, canonical — never over the union. A co-writer's
+            // no-op question is "did my slice change", and folding the others in would answer it with
+            // their changes.
+            var canonical = Canonical(ownFragment);
+            fragmentHash = KubeLabels.ReconcileHash(canonical);
+
+            fragments.Add((resource.Id, ownFragment));
+            annotations[KubeLabels.FragmentAnnotation(resource.Id)] = canonical;
+            annotations[KubeLabels.FragmentHashAnnotation(resource.Id)] = fragmentHash;
+            annotations[KubeLabels.FragmentPathAnnotation(resource.Id)] = resource.Path;
+        }
+
+        var merged = FragmentMerge.Merge(fragments);
+        if (merged.TryGetError(out var mergeError)) {
+            return Result<KubeCommand>.Failure(mergeError);
+        }
+
+        // ── The name — the OWNER's object's, never this resource's ────────────────────────────────
+        //
+        // ⚠ ResolveName's fallback to resource.Name is the trap here: a peering's name is not a
+        // Vpc's, and applying a fragment under the co-writer's own name would create a new object.
+        var name = live.Ref.Name;
+        if (suppliedName.Length > 0) {
+            if (name.Length > 0 && !string.Equals(name, suppliedName, StringComparison.Ordinal)) {
+                return Invalid(
+                    $"the fragment names '{suppliedName}' and the live object is '{name}'. A fragment is applied "
+                    + "onto the object that was read; drop metadata.name from the fragment or read the right object."
+                );
+            }
+
+            name = suppliedName;
+        }
+
+        if (name.Length == 0) {
+            return Invalid(
+                "the live object passed to CoWriting has no name in its Ref and the fragment carries none. "
+                + "There is nothing to PATCH."
+            );
+        }
+
+        var targetNamespace = ns ?? live.Ref.Namespace;
+        var document = merged.GetValueOrThrow();
+
+        document["apiVersion"] = kind.ApiVersion;
+        document["kind"] = kind.Kind;
+
+        var metadata = new JsonObject { ["name"] = name };
+        if (!string.IsNullOrEmpty(targetNamespace)) {
+            metadata["namespace"] = targetNamespace;
+        }
+
+        metadata["resourceVersion"] = resourceVersion;
+
+        if (annotations.Count > 0) {
+            metadata["annotations"] = Merge(null, annotations);
+        }
+
+        document["metadata"] = metadata;
+
+        return Result<KubeCommand>.Success(
+            new() {
+                TenantId = tenantId,
+                SubscriptionId = resource.SubscriptionId,
+                ResourceId = resource.Id,
+                Target = new() { Kind = kind, Namespace = targetNamespace, Name = name },
+                Body = document.ToJsonString(),
+                FieldManager = KubeLabels.CoWriterFieldManager(ownerTypeValue, ownerIdValue),
+                Labels = new Dictionary<string, string>(StringComparer.Ordinal),
+                Annotations = annotations,
+                ReconcileHash = fragmentHash,
+                Force = false,
+                ResourcePath = resource.Path,
+                OwnerResourceId = ownerId
+            }
+        );
+    }
+
+    /// <summary>
+    ///     Reduces a caller's body to the fragment it contributes: everything but the object's own
+    ///     identity, which the fragment may not carry.
+    /// </summary>
+    /// <param name="supplied">The body as the caller passed it.</param>
+    /// <param name="live">The owner's object, for the messages.</param>
+    /// <remarks>
+    ///     <c>apiVersion</c> and <c>kind</c> are dropped, because the command sets them from the
+    ///     GroupVersionKind as the ordinary mode does. <c>metadata.name</c> and
+    ///     <c>metadata.namespace</c> are dropped, because they address the object and the address is
+    ///     checked against the live one. Anything else under <c>metadata</c> — labels, annotations,
+    ///     owner references, finalizers — and anything under <c>status</c> is refused: those say
+    ///     whose the object is or what its controller saw, and neither is a co-writer's to say.
+    /// </remarks>
+    static Result<JsonObject> ShapeFragment(JsonObject supplied, KubeObject live) {
+        var fragment = new JsonObject();
+
+        foreach (var (key, value) in supplied) {
+            switch (key) {
+                case "apiVersion":
+                case "kind":
+                    continue;
+
+                case "status":
+                    return Result<JsonObject>.Failure(
+                        ErrorCode.InvalidRequestBody,
+                        "The Kubernetes command cannot be built: the fragment carries 'status'. Status is "
+                        + "the controller's report on the owner's object, and a co-writer applies desired "
+                        + "state only."
+                    );
+
+                case "metadata": {
+                    if (value is not JsonObject metadata) {
+                        return Result<JsonObject>.Failure(
+                            ErrorCode.InvalidRequestBody,
+                            "The Kubernetes command cannot be built: the fragment's 'metadata' is not an object."
+                        );
+                    }
+
+                    foreach (var member in metadata) {
+                        if (member.Key is "name" or "namespace") {
+                            continue;
+                        }
+
+                        return Result<JsonObject>.Failure(
+                            ErrorCode.InvalidRequestBody,
+                            $"The Kubernetes command cannot be built: the fragment carries 'metadata.{member.Key}' "
+                            + $"for '{live.Ref}'. Labels, annotations, owner references and the rest of an "
+                            + "object's metadata say whose it is, and that is its owner's to say. A co-writer "
+                            + "adds only its own fragment — the annotations that record it are written by "
+                            + "the builder. IKubeCommandBuilder.CoWriting."
+                        );
+                    }
+
+                    continue;
+                }
+
+                default:
+                    fragment[key] = value?.DeepClone();
+                    break;
+            }
+        }
+
+        if (fragment.Count == 0) {
+            return Result<JsonObject>.Failure(
+                ErrorCode.InvalidRequestBody,
+                "The Kubernetes command cannot be built: the fragment is empty once the object's identity "
+                + "is set aside. An empty fragment is a withdrawal, and a withdrawal is DeleteAsync in the "
+                + "co-owned mode."
+            );
+        }
+
+        return Result<JsonObject>.Success(fragment);
     }
 
     /// <summary>The seven, in ADR-013's order.</summary>

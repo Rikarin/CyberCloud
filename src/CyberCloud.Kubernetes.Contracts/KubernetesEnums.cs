@@ -129,7 +129,27 @@ public enum ApplyResult {
     ///     fail them, so that a tenant's network outage does not produce a failed operation and a
     ///     "provisioning failed" in the portal.
     /// </summary>
-    Suspended = 5
+    Suspended = 5,
+
+    /// <summary>
+    ///     ⚠
+    ///     <b>
+    ///         The object moved between the read the command was built from and the write, and
+    ///         the write was not applied.
+    ///     </b> A co-owned apply (<see cref="IKubeCommandBuilder.CoWriting" />) carries the live
+    ///     object's <c>metadata.resourceVersion</c>, and the API server refuses an apply whose
+    ///     version is no longer the object's — its optimistic lock, a <c>409</c> with no
+    ///     <c>FieldManagerConflict</c> cause. Nothing is drifting and nobody owns anything wrongly:
+    ///     another writer got there first, and the answer is to read again and apply again, which
+    ///     <c>KubeCoWriter</c> does a bounded number of times before handing this back.
+    /// </summary>
+    /// <remarks>
+    ///     Distinguished from <see cref="Conflict" /> because the two want opposite responses. A
+    ///     conflict is a drift event with a name and forcing over it is forbidden; a stale write is
+    ///     the race the co-owned mode exists to lose <i>loudly</i>, and re-reading is the whole
+    ///     repair. A reconciler treats it as <c>InProgress</c> with a short retry.
+    /// </remarks>
+    Stale = 6
 }
 
 /// <summary>How a delete cascades — docs/plan/09 § The command builder, <c>WithOwner</c>.</summary>

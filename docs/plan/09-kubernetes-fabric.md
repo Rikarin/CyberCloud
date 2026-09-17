@@ -109,6 +109,7 @@ public interface IKubeCommandBuilder       // ← only here do Apply/Build/Delet
     IKubeCommandBuilder WithAnnotations(params (string, string)[] extra);
     IKubeCommandBuilder WithOwner(ResourceId parent);     // → ownerReferences + cascade
     IKubeCommandBuilder WithFieldManager(string manager); // defaults to cybercloud/{provider}
+    IKubeCommandBuilder CoWriting(KubeObject live);       // a fragment onto ANOTHER resource's object — see below
     IKubeCommandBuilder Chart(string chart, JsonElement values);   // render then apply
     IKubeCommandBuilder Object<T>(T obj) where T : IKubernetesObject<V1ObjectMeta>;
     KubeCommand Build();
@@ -169,6 +170,72 @@ what makes Cozystack's charts reusable — without the GitOps controller.
 **Server-side apply, always**, with a stable field manager per provider. That gives us conflict
 detection for free: if a tenant hand-edits a field we own, the next apply reports a conflict rather
 than silently reverting, and *that* becomes a drift event with a name.
+
+### A second writer on an object — the co-owned apply
+
+Everything above assumes one object has one owning resource. A VNet peering does not fit: it is an
+entry in `Vpc.spec.vpcPeerings` plus static routes on **both** networks' `Vpc` objects, each already
+owned by the `virtualNetworks` resource that rendered it. Under the ordinary build a peering applying
+its parent's `Vpc` claims `resource-id`, `resource-type` and `reconcile-hash` at values that differ
+from the owner's — a `FieldManagerConflict` on every one, which is exactly the conflict the paragraph
+above exists to produce (#31 found it; #89 built the way out). `CoWriting(live)` switches the builder
+to the **co-owned** mode, whose rules are:
+
+- **Labels are the owner's, and so is the rest of the metadata.** The builder injects none and refuses
+  `WithLabels`, `WithTemplateLabels`, `WithOwner`, `WithAnnotations`, `WithFieldManager` and
+  `WithSubscriptionId` by name: a co-writer adds only its own fragment, and an annotation applied
+  beside a fragment would ride under the shared manager without being in the fragment the next
+  co-writer merges, which prunes it. The live object must carry the seven — a co-writer writes only onto an object this
+  platform owns — and its `tenant-id` must be the co-writer's own. Who the owner is comes off the
+  live object's labels, never from the caller.
+- **One field manager per co-owned object, named for the owner:**
+  `cybercloud/{ownerType}/{ownerId}` — `cybercloud/cybercloud.network_virtualnetworks/3a8f0c22-…` —
+  shared by every co-writer of that object and distinct from the owner's `cybercloud/{provider}`.
+  ⚠ **A manager per co-writer is the obvious shape and it does not converge.** `Vpc.spec.vpcPeerings`
+  and `Vpc.spec.staticRoutes` declare no `x-kubernetes-list-type`, so each is one atomic value with one
+  set of owners; a second manager applying the list with its own entry added is a
+  `FieldManagerConflict` on the whole list, forever, because `Force` is unreachable. Measured against
+  `rancher/k3s:v1.35.7-k3s1` in `CoOwnedApplyTests.AManagerPerCoWriterWouldConflictOnTheAtomicListWhichIsWhyTheyShareOne`.
+- **A fragment, a hash and a path per co-writer**, as annotations keyed by the co-writer's GUID —
+  `cybercloud.io/fragment.{id}`, `cybercloud.io/fragment-hash.{id}`, `cybercloud.io/fragment-path.{id}`
+  — beside the owner's two rather than over them. The hash is over *this* fragment alone, so a
+  co-writer's no-op question is answered about its own slice. The fragment itself is written down
+  because the co-writers share a manager and a manager's apply is the whole set of fields it owns:
+  each apply merges every *other* stored fragment with the caller's and applies the union — objects
+  recursively, arrays by concatenation in co-writer order, a scalar two fragments set differently
+  refused naming the path and both co-writers. It is bookkeeping, not desired state; the grain holds
+  the truth (ADR-001).
+- **`metadata.resourceVersion` is carried** from the live object, so two co-writers racing onto one
+  object lose loudly: the API server's optimistic lock is a `409` with no `FieldManagerConflict`
+  cause, which `KubeApiClient` reports as `ApplyResult.Stale` — not a drift event; nothing is owned
+  wrongly — and `KubeCoWriter` reads again and applies again, three times, before handing it back.
+- **Teardown withdraws.** `DeleteAsync` in this mode applies the other co-writers' union without this
+  one's and drops only this co-writer's three annotations; it never deletes the owner's object. When
+  the last fragment goes the shared manager owns nothing and the API server drops its entry.
+- **The owner's delete wins.** ⚠ The API server does **not** hold the lock against an object that is
+  absent: an apply carrying a `resourceVersion` against a name that is not there goes down the
+  create-on-update path, which clears the version and *creates* — measured in
+  `CoOwnedApplyTests.TheApiServerDoesNotHoldTheLockAgainstAnAbsentObjectWhichIsWhyTheClientRefuses`.
+  A co-writer that created the owner's object would create it under the owner's name with none of
+  the seven labels and none of the owner's spec. So `KubeApiClient` refuses a co-owned apply whose
+  read-before-write found nothing (`KubeCommand.OwnerResourceId` marks the command), and the tunnel
+  agent refuses a co-owned command that carries labels. The window between that read and the `PATCH`
+  remains, and is the one thing here the API server does not close.
+
+A child reconciler reaches this through `ReconcileContext.CoWriter` — `ApplyFragmentAsync` and
+`WithdrawFragmentAsync` over the pass's own connection, read-then-apply with the stale retry inside
+— rather than through the builder directly. The full round trip — owner applies, two co-writers add
+fragments, all three slices and the seven labels coexist, each withdraws only its own, the owner's
+re-apply is `Unchanged` — is `CoOwnedApplyTests.TwoCoWritersFragmentsCoexistWithTheOwnersAndEachRemovesOnlyItsOwn`
+against a real k3s; the rules without a cluster are `CoOwnedCommandBuilderTests`.
+
+⚠ **What the conformance harness can and cannot do with it yet.** `IProviderCaseSource.Siblings` lets
+a case create the second network a peering names, beside the ancestor chain, converged before the
+first assertion. Two gaps remain and are named where they bite: `FakeKubeCluster` stores a body
+verbatim and so *refuses* a co-owned command by name rather than replacing the owner's object with a
+fragment, and `ConformanceState.Reset` empties the fake cluster between assertions, so a sibling's
+*objects* are gone when a test starts. A Docker-free peering case needs both closed;
+`charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `peerings-need-a-second-writer-on-the-vpc`.
 
 ## Observing: informers, not polling
 

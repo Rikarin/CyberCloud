@@ -498,6 +498,57 @@ public interface IProviderCaseSource {
     static virtual ImmutableArray<ProviderConformanceCase> Ancestors => [];
 
     /// <summary>
+    ///     Resources the type under test <b>relates to</b> without descending from — the second
+    ///     virtual network a peering joins to its parent — created once per harness before the first
+    ///     assertion, beside the ancestor chain. Empty for every type before
+    ///     <c>CyberCloud.Network/virtualNetworks/peerings</c>.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             WHY THIS EXISTS, AND WHY <see cref="Ancestors" /> COULD NOT CARRY IT.
+    ///         </b> Issue #89: the shared harness builds the parent chain and nothing else, so a
+    ///         peering — a child of network A whose body names network B — had no B to converge onto
+    ///         and could not be given a case at all. An ancestor is a resource the type's <i>address</i>
+    ///         interleaves and the harness derives the whole chain from <c>ResourceTypeName.Depth</c>;
+    ///         a sibling is named by the type's <i>body</i>, and nothing about the address says how
+    ///         many there are or what they are called. So the case source says: which case describes
+    ///         the sibling (its type, api-version and a body its schema accepts, composed rather than
+    ///         restated for the reason <see cref="Ancestors" /> gives) and what the harness should
+    ///         call it. The body the case supplies then names <see cref="SiblingResource.Name" />.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Where a sibling lives.</b> Under the harness's own ancestor names, at the sibling
+    ///         type's depth: a <c>virtualNetworks</c> sibling of a <c>virtualNetworks/peerings</c> case
+    ///         sits at the root beside <c>ancestor-0</c>; a <c>probes/samples</c> sibling of a
+    ///         <c>probes/samples</c> case sits under <c>ancestor-0</c> beside the samples the suite
+    ///         creates. <c>ProviderTestCluster.SiblingAddress</c> is the one place that arithmetic is
+    ///         done, and <c>ProviderTestCluster.Siblings</c> refuses, by member name and before the
+    ///         first assertion, a sibling from another provider, one nested deeper than the case's
+    ///         ancestor chain reaches, one whose ancestor types are not the case's own, and one named
+    ///         like the ancestor at its level.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Here, on the source, with a default, for exactly the reason <see cref="Ancestors" />
+    ///         is.</b> Omitting it is not silent: a type whose body names a sibling that was never
+    ///         created never converges, and the first convergence assertion fails with the reconciler's
+    ///         own words. Nothing stops being asserted.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What this does NOT do, stated so the next person does not look for it.</b> The
+    ///         harness empties the fake cluster between assertions (<c>ConformanceState.Reset</c>), so a
+    ///         sibling's <i>objects</i> are gone by the time a test runs and only the sibling
+    ///         <i>resource</i> — its grain, its index binding, its <c>Succeeded</c> state — persists. A
+    ///         type that co-writes onto a sibling's object needs that object back before it can
+    ///         converge, and this member does not put it back. Recorded at
+    ///         <c>charts/managed/kube-ovn-vpc/conformance.yaml § owed</c>,
+    ///         <c>peerings-need-a-second-writer-on-the-vpc</c>.
+    ///     </para>
+    /// </remarks>
+    static virtual ImmutableArray<SiblingResource> Siblings => [];
+
+    /// <summary>
     ///     The module a <b>clusterless</b> type converges onto, or <see langword="null" /> for a type
     ///     that converges Kubernetes objects — which is every type before
     ///     <c>CyberCloud.Communication/services</c>.
@@ -557,4 +608,28 @@ public interface IProviderCaseSource {
     ///     </para>
     /// </remarks>
     static virtual void ConfigureSilo(ISiloBuilder silo) { }
+}
+
+/// <summary>
+///     One resource the harness creates beside the ancestor chain because the type under test
+///     relates to it — <see cref="IProviderCaseSource.Siblings" />.
+/// </summary>
+/// <remarks>
+///     ⚠ Both members <c>required</c>, for the reason every member of
+///     <see cref="ProviderConformanceCase" /> is: a sibling with no case has no body the harness can
+///     create, and one with no name is one the case's body cannot name.
+/// </remarks>
+public sealed record SiblingResource {
+    /// <summary>
+    ///     The sibling type's own conformance case — its type, its api-version, and a body its schema
+    ///     accepts. Composed from the sibling type's <c>.Conformance</c> registration rather than
+    ///     written again here, so there is one description of that type's valid body.
+    /// </summary>
+    public required ProviderConformanceCase Case { get; init; }
+
+    /// <summary>
+    ///     What the harness calls it — the name the case's body then refers to. DNS-1123, per
+    ///     docs/plan/06 § Identifiers, and never the harness's ancestor name at the same level.
+    /// </summary>
+    public required string Name { get; init; }
 }

@@ -181,6 +181,25 @@ public sealed class KubeApiClient(
         var priorVersion = existing.ValueOrDefault?.ResourceVersion ?? string.Empty;
         var priorJson = existing.ValueOrDefault?.Json;
 
+        if (command.IsCoOwned && !existedBefore) {
+            // ⚠ A CO-WRITER NEVER CREATES THE OWNER'S OBJECT, AND THE API SERVER WOULD LET IT.
+            // Measured against rancher/k3s:v1.35.7-k3s1 in CoOwnedApplyTests: an apply patch whose
+            // body carries a metadata.resourceVersion against an object that is not there does NOT
+            // fail the optimistic lock — the create-on-update path clears the version and creates.
+            // What it would create is the owner's object, under the owner's name, with none of the
+            // seven labels and none of the owner's spec: an unlabelled object the drift scan cannot
+            // attribute and the owner's next apply then conflicts with. So absence is refused here,
+            // in the one place that has read the object a moment before writing it. The window
+            // between this read and the PATCH remains, and is named in the co-owned mode's remarks.
+            return Result<ApplyOutcome>.Failure(
+                ErrorCode.ResourceNotFound,
+                $"'{target}' is not in cluster {clusterId:D}, and the command is a co-writer's fragment "
+                + $"for resource {command.OwnerResourceId:D}'s object. A co-writer never creates the "
+                + "owner's object — the create would carry none of the owner's labels or spec — so the "
+                + "owner has to have converged first. The owner's delete wins."
+            );
+        }
+
         object body;
         try {
             body = new V1Patch(
@@ -247,6 +266,24 @@ public sealed class KubeApiClient(
             // portal, and a tenant editing their own cluster is not a provisioning failure. It is
             // drift, it has a name, and docs/plan/08's drift detection is what consumes it.
             var conflicts = ConflictParser.Parse(ex.Response.Content);
+
+            if (conflicts.Count == 0 && ConflictParser.IsOptimisticLock(ex.Response.Content)) {
+                // ⚠ THE OTHER 409, AND IT IS NOT DRIFT. The body carried a metadata.resourceVersion —
+                // a co-owned apply always does — and the object has moved since. Nobody owns anything
+                // wrongly and nothing was written; the repair is to read again, which KubeCoWriter
+                // does. Reporting this as Conflict would hand the reconciler a drift event with no
+                // fields in it and tell it to wait for a tenant to undo an edit that never happened.
+                return Result<ApplyOutcome>.Success(
+                    new() {
+                        Result = ApplyResult.Stale,
+                        Target = target,
+                        ResourceVersion = priorVersion,
+                        ReconcileHash = command.ReconcileHash,
+                        Message = $"'{target}' moved between the read the command was built from and the "
+                            + "apply; nothing was written. Read it again and apply again."
+                    }
+                );
+            }
 
             return Result<ApplyOutcome>.Success(
                 new() {

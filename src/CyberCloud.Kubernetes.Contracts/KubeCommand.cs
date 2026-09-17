@@ -94,6 +94,24 @@ public sealed record KubeCommand {
     [Id(10)]
     public string ResourcePath { get; init; } = string.Empty;
 
+    /// <summary>
+    ///     The GUID of the resource that <b>owns</b> the object, when this command is a co-writer's
+    ///     fragment onto somebody else's object — <see cref="IKubeCommandBuilder.CoWriting" />.
+    ///     <see cref="Guid.Empty" /> for the ordinary case, where <see cref="ResourceId" /> is the owner.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Read off the live object's <c>cybercloud.io/resource-id</c> label, never supplied.</b>
+    ///     It is what a cluster connection keys two refusals on: a co-owned apply against an object
+    ///     that is not there is refused rather than creating an unlabelled object under the owner's
+    ///     name, and a co-owned <c>DeleteAsync</c> withdraws the fragment rather than deleting the
+    ///     owner's object.
+    /// </remarks>
+    [Id(11)]
+    public Guid OwnerResourceId { get; init; }
+
+    /// <summary>Whether this command writes a fragment onto an object another resource owns.</summary>
+    public bool IsCoOwned => OwnerResourceId != Guid.Empty;
+
     // Internal so that only KubeCommandBuilder can mint one. A record's positional/init surface
     // would otherwise let a caller construct an unlabelled command directly, which is the exact
     // hole the type-state chain exists to close.
@@ -261,6 +279,79 @@ public interface IKubeCommandBuilder {
         string ownerUid
     );
 
+    /// <summary>
+    ///     Switches the command to the <b>co-owned</b> mode: the body is a fragment written onto an
+    ///     object <i>another</i> resource owns, and the owner keeps everything that says whose the
+    ///     object is.
+    /// </summary>
+    /// <param name="live">
+    ///     The owner's object, as <see cref="IKubeClusterConnection.GetAsync" /> returned it a moment
+    ///     ago. Its labels name the owner, its <c>metadata.resourceVersion</c> is carried into the
+    ///     apply as the optimistic lock, and its fragment annotations are how the builder learns what
+    ///     the other co-writers have applied. ⚠ Read it on every pass; a cached copy is a stale
+    ///     version, and the apply is refused as <see cref="ApplyResult.Stale" />.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         <b>Why the ordinary mode cannot do this, and what this mode changes.</b> Issue #89: a
+    ///         VNet peering is two entries on two <c>Vpc</c> objects, each already owned by the
+    ///         <c>virtualNetworks</c> resource that rendered it. The ordinary <c>Build()</c> injects the
+    ///         applying resource's seven labels and two annotations, non-overridably, so a peering
+    ///         applying its parent's <c>Vpc</c> would claim <c>resource-id</c>, <c>resource-type</c>
+    ///         and <c>reconcile-hash</c> at values that differ from the owner's — a
+    ///         <c>FieldManagerConflict</c> on every one, which is the conflict ADR-013 exists to
+    ///         produce. In this mode the rules are:
+    ///     </para>
+    ///     <list type="bullet">
+    ///         <item>
+    ///             <b>Labels are the owner's, and so is the rest of the metadata.</b> The builder
+    ///             injects none, and refuses <see cref="WithLabels" />, <see cref="WithTemplateLabels" />,
+    ///             <see cref="WithOwner" /> and <see cref="WithAnnotations" />: a co-writer may add
+    ///             only its own fragment, and an annotation applied beside a fragment would ride under
+    ///             the shared manager without being in the fragment the next co-writer merges, which
+    ///             prunes it. The live object must carry the seven — a co-writer writes only onto
+    ///             objects this platform owns — and its <c>tenant-id</c> must be the co-writer's own.
+    ///         </item>
+    ///         <item>
+    ///             <b>One field manager per co-owned object</b>,
+    ///             <see cref="KubeLabels.CoWriterFieldManager" />, named for the owner and shared by
+    ///             every co-writer of that object; <see cref="WithFieldManager" /> is refused. The
+    ///             reason is the atomic list — see that member.
+    ///         </item>
+    ///         <item>
+    ///             <b>A hash and a path per fragment</b>,
+    ///             <see cref="KubeLabels.FragmentHashAnnotationPrefix" /> and
+    ///             <see cref="KubeLabels.FragmentPathAnnotationPrefix" /> keyed by the co-writer's
+    ///             GUID, beside the owner's two annotations rather than over them; and the fragment
+    ///             itself under <see cref="KubeLabels.FragmentAnnotationPrefix" />, which is what lets
+    ///             the next co-writer merge without asking.
+    ///         </item>
+    ///         <item>
+    ///             <b>The union is applied.</b> The body is merged with every other co-writer's stored
+    ///             fragment — objects recursively, arrays by concatenation in co-writer order, and a
+    ///             scalar two fragments set differently is a refusal naming the path — so no
+    ///             co-writer's apply prunes another's.
+    ///         </item>
+    ///         <item>
+    ///             <b><c>metadata.resourceVersion</c> is carried</b> from <paramref name="live" />, so
+    ///             two co-writers racing onto one object lose loudly: the second is
+    ///             <see cref="ApplyResult.Stale" /> and reads again, rather than applying a union
+    ///             computed from a version that no longer exists.
+    ///         </item>
+    ///         <item>
+    ///             <b>Teardown withdraws.</b> <see cref="DeleteAsync" /> in this mode applies the
+    ///             other co-writers' fragments without this one's and drops only this co-writer's
+    ///             three annotations; it never deletes the owner's object. The owner's delete wins:
+    ///             once the object is gone, a co-owned apply is refused rather than re-creating it.
+    ///         </item>
+    ///     </list>
+    ///     <para>
+    ///         ⚠ <b>Never for an object the resource itself owns.</b> A resource co-writing its own
+    ///         object is refused by name; the ordinary mode is one <see cref="Object{T}" /> call away.
+    ///     </para>
+    /// </remarks>
+    IKubeCommandBuilder CoWriting(KubeObject live);
+
     /// <summary>Overrides the field manager. Defaults to <c>cybercloud/{provider}</c>.</summary>
     /// <param name="manager">The field manager name.</param>
     IKubeCommandBuilder WithFieldManager(string manager);
@@ -336,8 +427,14 @@ public interface IKubeCommandBuilder {
     /// <param name="cancellationToken">The reconcile's token.</param>
     Task<Result<ApplyOutcome>> ApplyAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Builds and deletes.</summary>
-    /// <param name="policy">How to cascade.</param>
+    /// <summary>
+    ///     Builds and deletes — or, after <see cref="CoWriting" />, withdraws this co-writer's
+    ///     fragment and leaves the owner's object standing.
+    /// </summary>
+    /// <param name="policy">
+    ///     How to cascade. Ignored in the co-owned mode, where nothing is deleted: the object is the
+    ///     owner's, and how its dependents go is the owner's call.
+    /// </param>
     /// <param name="cancellationToken">The reconcile's token.</param>
     Task<Result> DeleteAsync(
         CascadePolicy policy = CascadePolicy.Background,
