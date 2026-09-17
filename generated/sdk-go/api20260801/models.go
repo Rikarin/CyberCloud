@@ -1447,6 +1447,70 @@ type PostgreSQLServerListKeysResult struct {
 	Username string `json:"username"`
 }
 
+// ManagedGrafanaPreset is the values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.
+type ManagedGrafanaPreset string
+
+const (
+	ManagedGrafanaPresetC1Large  ManagedGrafanaPreset = "c1.large"
+	ManagedGrafanaPresetC1Medium ManagedGrafanaPreset = "c1.medium"
+	ManagedGrafanaPresetC1Small  ManagedGrafanaPreset = "c1.small"
+)
+
+// ManagedGrafanaData is Managed Grafana: the body a caller writes. An unmodified Grafana OSS instance in your cluster, provisioned with one monitor workspace's metrics and logs as its datasources and reachable at a URL your pages embed rendered dashboards from.
+type ManagedGrafanaData struct {
+	// The region the instance is billed in — its workspace's.
+	Location string `json:"location"`
+	// The instance's own settings.
+	Properties *ManagedGrafanaProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// ManagedGrafanaProperties is The instance's own settings.
+type ManagedGrafanaProperties struct {
+	// Whether anybody who can reach the URL may view dashboards without signing in, as a Viewer. Off means every visit signs in as the admin user the url action returns. ⚠ A rendered panel embedded by URL in another page is a visit like any other, so embedding needs this on or a signed-in browser.
+	AnonymousViewers *bool `json:"anonymousViewers,omitempty"`
+	// The cluster the instance runs in. ⚠ It must be the cluster its workspace publishes into: Grafana reads the workspace's accountID, database and ingest key from the workspace's own objects in the same namespace.
+	ClusterID string `json:"clusterId"`
+	// CPU and memory for the instance.
+	Sizing *ManagedGrafanaPropertiesSizing `json:"sizing,omitempty"`
+	// The CyberCloud.Monitor/workspaces resource the datasources point at, as its full resource id path. It must be in this tenant and in the same resource group as the instance; the instance sees that workspace and nothing else.
+	Workspace string `json:"workspace"`
+}
+
+// ManagedGrafanaPropertiesSizing is CPU and memory for the instance.
+type ManagedGrafanaPropertiesSizing struct {
+	// How much the pod gets. Grafana renders in the browser and queries the workspace's stores, so the small row serves a team; the larger rows are for many concurrent dashboards.
+	Preset *ManagedGrafanaPreset `json:"preset,omitempty"`
+}
+
+// ManagedGrafanaResource is one Managed Grafana, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type ManagedGrafanaResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data ManagedGrafanaData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *ManagedGrafanaResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// ManagedGrafanaUrlResult is what url returns. ⚠ Secret material — never log or persist this.
+type ManagedGrafanaUrlResult struct {
+	// The administrator's password, read from the tenant's vault for this call only. Minted once when the instance was created.
+	AdminPassword string `json:"adminPassword"`
+	// The administrator's user name.
+	AdminUser string `json:"adminUser"`
+	// Where the instance answers inside the cluster. A dashboard or a panel is embedded by appending Grafana's own /d/… or /d-solo/… path to it — ADR-011's one permitted integration.
+	Url string `json:"url"`
+	// The workspace the two provisioned datasources read from.
+	Workspace string `json:"workspace"`
+}
+
 // DocumentDatabaseAccountPreset is the values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.
 type DocumentDatabaseAccountPreset string
 
@@ -2328,6 +2392,78 @@ type AlertRuleListInstancesResult struct {
 	Open int64 `json:"open"`
 	// Where the rule is now: ok, pending or firing.
 	State string `json:"state"`
+}
+
+// OpenTelemetryCollectorPreset is the values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.
+type OpenTelemetryCollectorPreset string
+
+const (
+	OpenTelemetryCollectorPresetC1Large  OpenTelemetryCollectorPreset = "c1.large"
+	OpenTelemetryCollectorPresetC1Medium OpenTelemetryCollectorPreset = "c1.medium"
+	OpenTelemetryCollectorPresetC1Small  OpenTelemetryCollectorPreset = "c1.small"
+)
+
+// OpenTelemetryCollectorData is OpenTelemetry collector: the body a caller writes. A managed OpenTelemetry collector in your cluster that your workloads send OTLP to, carrying metrics, logs and traces into this workspace.
+type OpenTelemetryCollectorData struct {
+	// The region the collector is billed in — its workspace's.
+	Location string `json:"location"`
+	// The collector's own settings.
+	Properties *OpenTelemetryCollectorProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// OpenTelemetryCollectorProperties is The collector's own settings.
+type OpenTelemetryCollectorProperties struct {
+	// The cluster the collector runs in. ⚠ It must be the cluster its workspace publishes into: the collector reads the workspace's accountID, database and ingest key from the workspace's own objects in the same namespace, and in any other cluster the pod waits on a ConfigMap that is not there.
+	ClusterID string `json:"clusterId"`
+	// Which OTLP protocols the collector listens on. At least one; both is the default.
+	Receivers *OpenTelemetryCollectorPropertiesReceivers `json:"receivers,omitempty"`
+	// How many collector pods share the endpoint. The collector is stateless, so more replicas is more fan-in and nothing else.
+	Replicas *int64 `json:"replicas,omitempty"`
+	// CPU and memory for each collector pod.
+	Sizing *OpenTelemetryCollectorPropertiesSizing `json:"sizing,omitempty"`
+}
+
+// OpenTelemetryCollectorPropertiesReceivers is Which OTLP protocols the collector listens on. At least one; both is the default.
+type OpenTelemetryCollectorPropertiesReceivers struct {
+	// Accept OTLP over gRPC on port 4317 — what most SDKs send by default.
+	OtlpGrpc *bool `json:"otlpGrpc,omitempty"`
+	// Accept OTLP over HTTP on port 4318 — protobuf or JSON, for browsers and anything that cannot speak gRPC.
+	OtlpHttp *bool `json:"otlpHttp,omitempty"`
+}
+
+// OpenTelemetryCollectorPropertiesSizing is CPU and memory for each collector pod.
+type OpenTelemetryCollectorPropertiesSizing struct {
+	// How much each pod gets. The small row carries a few thousand spans a second; the larger rows are for a whole cluster's telemetry through one gateway. The memory limiter is set from the preset, so an oversized burst is refused rather than killed.
+	Preset *OpenTelemetryCollectorPreset `json:"preset,omitempty"`
+}
+
+// OpenTelemetryCollectorResource is one OpenTelemetry collector, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type OpenTelemetryCollectorResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data OpenTelemetryCollectorData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *OpenTelemetryCollectorResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// OpenTelemetryCollectorListEndpointsResult is what listEndpoints returns.
+type OpenTelemetryCollectorListEndpointsResult struct {
+	// Where OTLP over gRPC is accepted inside the cluster, host:port — empty when the gRPC receiver is off.
+	OtlpGrpcEndpoint string `json:"otlpGrpcEndpoint"`
+	// Where OTLP over HTTP is accepted inside the cluster, as a URL — empty when the HTTP receiver is off. Signals go to /v1/traces, /v1/metrics and /v1/logs under it.
+	OtlpHttpEndpoint string `json:"otlpHttpEndpoint"`
+	// The Service's in-cluster DNS name, for a workload that builds its own URL.
+	Service string `json:"service"`
+	// The workspace everything sent here lands in.
+	Workspace string `json:"workspace"`
 }
 
 // PublicIPAddressData is Public IP address: the body a caller writes. A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic.

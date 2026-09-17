@@ -3309,6 +3309,175 @@ public sealed partial class PostgreSQLServerCollection {
 }
 
 /// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ManagedGrafanaPreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>c1.large</summary>
+    [JsonStringEnumMemberName("c1.large")]
+    C1Large = 1,
+
+    /// <summary>c1.medium</summary>
+    [JsonStringEnumMemberName("c1.medium")]
+    C1Medium = 2,
+
+    /// <summary>c1.small</summary>
+    [JsonStringEnumMemberName("c1.small")]
+    C1Small = 3
+}
+
+/// <summary>The body of a CyberCloud.Dashboard/grafanas.</summary>
+/// <remarks>An unmodified Grafana OSS instance in your cluster, provisioned with one monitor workspace's metrics and logs as its datasources and reachable at a URL your pages embed rendered dashboards from.</remarks>
+public sealed partial class ManagedGrafanaData {
+
+    /// <summary>The region the instance is billed in — its workspace's.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The instance's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The instance's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>Whether anybody who can reach the URL may view dashboards without signing in, as a Viewer. Off means every visit signs in as the admin user the url action returns. ⚠ A rendered panel embedded by URL in another page is a visit like any other, so embedding needs this on or a signed-in browser.</summary>
+        /// <remarks>Defaults to false when left unset.</remarks>
+        [JsonPropertyName("anonymousViewers")]
+        public bool? AnonymousViewers { get; set; }
+
+        /// <summary>The cluster the instance runs in. ⚠ It must be the cluster its workspace publishes into: Grafana reads the workspace's accountID, database and ingest key from the workspace's own objects in the same namespace.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>CPU and memory for the instance.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>The CyberCloud.Monitor/workspaces resource the datasources point at, as its full resource id path. It must be in this tenant and in the same resource group as the instance; the instance sees that workspace and nothing else.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("workspace")]
+        public required string Workspace { get; set; }
+
+        /// <summary>CPU and memory for the instance.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>How much the pod gets. Grafana renders in the browser and queries the workspace's stores, so the small row serves a team; the larger rows are for many concurrent dashboards.</summary>
+            /// <remarks>Defaults to "c1.small" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public ManagedGrafanaPreset? Preset { get; set; }
+        }
+    }
+}
+
+/// <summary>One Managed Grafana, as the API returns it, and the operations on it.</summary>
+public sealed partial class ManagedGrafanaResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required ManagedGrafanaData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<ManagedGrafanaResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<ManagedGrafanaResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        ManagedGrafanaData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What url returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class UrlResult {
+
+        /// <summary>The administrator's password, read from the tenant's vault for this call only. Minted once when the instance was created.</summary>
+        [JsonPropertyName("adminPassword")]
+        public required string AdminPassword { get; set; }
+
+        /// <summary>The administrator's user name.</summary>
+        [JsonPropertyName("adminUser")]
+        public required string AdminUser { get; set; }
+
+        /// <summary>Where the instance answers inside the cluster. A dashboard or a panel is embedded by appending Grafana's own /d/… or /d-solo/… path to it — ADR-011's one permitted integration.</summary>
+        [JsonPropertyName("url")]
+        public required string Url { get; set; }
+
+        /// <summary>The workspace the two provisioned datasources read from.</summary>
+        [JsonPropertyName("workspace")]
+        public required string Workspace { get; set; }
+    }
+
+    /// <summary>Url. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<UrlResult>> UrlAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Managed Grafanas in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class ManagedGrafanaCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Dashboard/grafanas";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Dashboard/grafanas/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Dashboard/grafanas";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Managed Grafana.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<ManagedGrafanaResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        ManagedGrafanaData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Managed Grafana by name.</summary>
+    public partial Task<Response<ManagedGrafanaResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Managed Grafanas in this group, paged.</summary>
+    public partial AsyncPageable<ManagedGrafanaResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum DocumentDatabaseAccountPreset {
     /// <summary>Never assigned. Not a value the API accepts.</summary>
     Unknown = 0,
@@ -5385,6 +5554,192 @@ public sealed partial class AlertRuleCollection {
 
     /// <summary>The Alert rules in one parent, paged.</summary>
     public partial AsyncPageable<AlertRuleResource> GetAllAsync(string workspacesName, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum OpenTelemetryCollectorPreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>c1.large</summary>
+    [JsonStringEnumMemberName("c1.large")]
+    C1Large = 1,
+
+    /// <summary>c1.medium</summary>
+    [JsonStringEnumMemberName("c1.medium")]
+    C1Medium = 2,
+
+    /// <summary>c1.small</summary>
+    [JsonStringEnumMemberName("c1.small")]
+    C1Small = 3
+}
+
+/// <summary>The body of a CyberCloud.Monitor/workspaces/collectors.</summary>
+/// <remarks>A managed OpenTelemetry collector in your cluster that your workloads send OTLP to, carrying metrics, logs and traces into this workspace.</remarks>
+public sealed partial class OpenTelemetryCollectorData {
+
+    /// <summary>The region the collector is billed in — its workspace's.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The collector's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The collector's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster the collector runs in. ⚠ It must be the cluster its workspace publishes into: the collector reads the workspace's accountID, database and ingest key from the workspace's own objects in the same namespace, and in any other cluster the pod waits on a ConfigMap that is not there.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>Which OTLP protocols the collector listens on. At least one; both is the default.</summary>
+        [JsonPropertyName("receivers")]
+        public ReceiversData? Receivers { get; set; }
+
+        /// <summary>How many collector pods share the endpoint. The collector is stateless, so more replicas is more fan-in and nothing else.</summary>
+        /// <remarks>Defaults to 1 when left unset.</remarks>
+        [JsonPropertyName("replicas")]
+        public long? Replicas { get; set; }
+
+        /// <summary>CPU and memory for each collector pod.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>Which OTLP protocols the collector listens on. At least one; both is the default.</summary>
+        public sealed partial class ReceiversData {
+
+            /// <summary>Accept OTLP over gRPC on port 4317 — what most SDKs send by default.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("otlpGrpc")]
+            public bool? OtlpGrpc { get; set; }
+
+            /// <summary>Accept OTLP over HTTP on port 4318 — protobuf or JSON, for browsers and anything that cannot speak gRPC.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("otlpHttp")]
+            public bool? OtlpHttp { get; set; }
+        }
+
+        /// <summary>CPU and memory for each collector pod.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>How much each pod gets. The small row carries a few thousand spans a second; the larger rows are for a whole cluster's telemetry through one gateway. The memory limiter is set from the preset, so an oversized burst is refused rather than killed.</summary>
+            /// <remarks>Defaults to "c1.small" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public OpenTelemetryCollectorPreset? Preset { get; set; }
+        }
+    }
+}
+
+/// <summary>One OpenTelemetry collector, as the API returns it, and the operations on it.</summary>
+public sealed partial class OpenTelemetryCollectorResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required OpenTelemetryCollectorData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<OpenTelemetryCollectorResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<OpenTelemetryCollectorResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        OpenTelemetryCollectorData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listEndpoints returns.</summary>
+    public sealed partial class ListEndpointsResult {
+
+        /// <summary>Where OTLP over gRPC is accepted inside the cluster, host:port — empty when the gRPC receiver is off.</summary>
+        [JsonPropertyName("otlpGrpcEndpoint")]
+        public required string OtlpGrpcEndpoint { get; set; }
+
+        /// <summary>Where OTLP over HTTP is accepted inside the cluster, as a URL — empty when the HTTP receiver is off. Signals go to /v1/traces, /v1/metrics and /v1/logs under it.</summary>
+        [JsonPropertyName("otlpHttpEndpoint")]
+        public required string OtlpHttpEndpoint { get; set; }
+
+        /// <summary>The Service's in-cluster DNS name, for a workload that builds its own URL.</summary>
+        [JsonPropertyName("service")]
+        public required string Service { get; set; }
+
+        /// <summary>The workspace everything sent here lands in.</summary>
+        [JsonPropertyName("workspace")]
+        public required string Workspace { get; set; }
+    }
+
+    /// <summary>ListEndpoints. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListEndpointsResult>> ListEndpointsAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The OpenTelemetry collectors in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class OpenTelemetryCollectorCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Monitor/workspaces/collectors";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/collectors/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/collectors";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one OpenTelemetry collector.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<OpenTelemetryCollectorResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string workspacesName, string name,
+        OpenTelemetryCollectorData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one OpenTelemetry collector by name.</summary>
+    public partial Task<Response<OpenTelemetryCollectorResource>> GetAsync(string workspacesName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The OpenTelemetry collectors in one parent, paged.</summary>
+    public partial AsyncPageable<OpenTelemetryCollectorResource> GetAllAsync(string workspacesName, CancellationToken cancellationToken = default);
 }
 
 /// <summary>The body of a CyberCloud.Network/publicIpAddresses.</summary>

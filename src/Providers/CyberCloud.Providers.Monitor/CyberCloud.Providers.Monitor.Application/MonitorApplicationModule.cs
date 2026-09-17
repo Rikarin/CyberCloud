@@ -53,6 +53,14 @@ public sealed class MonitorApplicationModule : AbpModule {
 
         context.Services.AddCyberCloudProvider(new MonitorProvider());
 
+        // ⚠ A SECOND PROVIDER FROM THE SAME MODULE, AND IT IS THE ONLY MODULE THAT LOADS TWO.
+        // CyberCloud.Dashboard/grafanas lives in this family's assemblies — docs/plan/03 § Providers
+        // lists `grafanas` under CyberCloud.Providers.Monitor — under the namespace docs/plan/01
+        // gives it. A host that loaded this module got one namespace until #32's third noun; it gets
+        // two now, and HostCompositionTests names both. DashboardProvider's remarks carry the
+        // argument for the shape.
+        context.Services.AddCyberCloudProvider(new DashboardProvider());
+
         // ⚠ THE TWO SEAMS THE ALERT RULES HOLD, IN BOTH HOSTS. AddCyberCloudProvider registers the
         // reconciler and the handler by concrete type; it cannot register what their constructors
         // ask for. MonitorAlertRuleReconciler and MonitorAlertRuleListInstancesHandler both take

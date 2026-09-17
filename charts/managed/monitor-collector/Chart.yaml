@@ -1,0 +1,54 @@
+# OpenTelemetry collector as a service — docs/plan/16 § OTel Collector as a service, "M2 · 1.0 EM.
+# A tenant-owned collector deployment in their cluster, configured declaratively."
+#
+# ⚠ THIS CHART RENDERS A POD UNDER A RESOURCE WHOSE PARENT RENDERS NONE. charts/managed/monitor-workspace
+# is a tenancy — a routing rule, a key and a row — and this is the first thing under it that a kubelet
+# schedules: upstream's collector image, by digest, with a configuration this platform renders and a
+# Service tenant workloads send OTLP to.
+#
+# ⚠ THE WORKSPACE'S COORDINATES ARE NOT IN ANYTHING THIS CHART RENDERS, AND THAT IS THE DESIGN. The
+# configuration writes `${env:CYBERCLOUD_ACCOUNT_ID}` and `${env:CYBERCLOUD_DATABASE}` where the
+# workspace's accountID and database go, and the Deployment hands the pod those variables from the
+# workspace's own ingest row (`monitor-{workspace}`, a ConfigMap) and its ingest key
+# (`monitor-{workspace}-ingest`, a Secret) by reference. The kubelet does the substitution at pod
+# start; a collector whose workspace has not converged is a pod held in CreateContainerConfigError,
+# by name, until it has. MonitorWorkspaces.WorkspaceEnv carries the argument; SOURCE names what was
+# read to write it.
+#
+# ⚠ IT IS UNDER charts/managed/ AND WRAPS NO OPERATOR, which cloud-shell and haproxy established is
+# allowed: `Build.Charts` requires SOURCE, conformance.yaml and both cybercloud.io/* annotations, and
+# this chart owes all three. The image is somebody else's — open-telemetry's own contrib
+# distribution, unmodified — so SOURCE has an upstream to name.
+apiVersion: v2
+name: monitor-collector
+description: A managed OpenTelemetry collector in a tenant's cluster — upstream's collector image, pinned by digest, listening for OTLP and carrying metrics, logs and traces into one monitor workspace.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The collector release the pinned digest belongs to. MonitorCollectors.ImageTag is the same string
+# and CollectorDeclarationTests compares the two files' pins.
+appVersion: "0.161.0"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - observability
+  - opentelemetry
+  - otlp
+  - collector
+
+home: https://opentelemetry.io/docs/collector/
+sources:
+  - https://github.com/open-telemetry/opentelemetry-collector-releases
+  - https://github.com/open-telemetry/opentelemetry-collector-contrib
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as `x-cybercloud-*`.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Monitor/workspaces/collectors
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: none

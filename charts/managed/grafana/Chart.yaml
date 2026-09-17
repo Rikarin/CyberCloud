@@ -1,0 +1,55 @@
+# Managed Grafana — docs/plan/16 § Managed Grafana, "M2 · 0.8 EM. One instance per tenant …
+# datasources pre-wired to that tenant's workspace and nothing else."
+#
+# ⚠ ADR-011, READ FOR A DEPLOYED COMPONENT, IS WHAT LETS THIS CHART EXIST. The row: "Grafana |
+# AGPL-3.0 | ⚠ Offerable as a managed instance (we distribute, we do not modify). Our portal must not
+# embed or link Grafana code — it embeds rendered dashboards by URL." This chart renders upstream's
+# `grafana/grafana` image by digest, unmodified, configured through its documented environment
+# variables and a provisioning file; nothing of Grafana's is built, patched or linked into any platform
+# assembly, and the portal's one integration is the URL the `url` action returns. Grafanas' remarks
+# carry the reading in full; build/Build.Licence.cs § LicenceExceptions carries it beside the image.
+#
+# ⚠ NOT grafana-operator, WHICH IS WHAT docs/plan/16 NAMES. The operator is a bundle component that does
+# not exist, a CRD the cluster-backed harness would stub with an open schema, and a second reconciler
+# between this one and the pod; what it would buy — dashboards as a versioned sub-resource — needs an
+# api-version with an array of objects. One Deployment from a pinned image is what the operator would
+# have rendered anyway. conformance.yaml § owed, `dashboards-are-not-a-sub-resource`.
+#
+# ⚠ THE WORKSPACE'S COORDINATES ARE NOT IN ANYTHING THIS CHART RENDERS — the arrangement
+# charts/managed/monitor-collector has, for its reason. The provisioning file writes
+# `$CYBERCLOUD_ACCOUNT_ID` and `$CYBERCLOUD_DATABASE`, Grafana's own provisioning-file interpolation,
+# and the Deployment hands the pod those variables from the workspace's row and ingest key by
+# reference. A Grafana whose workspace has not converged is a pod held in CreateContainerConfigError,
+# by name, until it has.
+apiVersion: v2
+name: grafana
+description: An unmodified Grafana OSS instance in a tenant's cluster, pinned by digest, provisioned with one monitor workspace's metrics and logs as its two datasources, and reachable at a URL pages embed rendered dashboards from.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The Grafana release the pinned digest belongs to. Grafanas.ImageTag is the same string and
+# GrafanaDeclarationTests compares the two files' pins.
+appVersion: "13.2.2"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - observability
+  - dashboards
+  - grafana
+
+home: https://grafana.com/oss/grafana/
+sources:
+  - https://github.com/grafana/grafana
+  - https://github.com/grafana/clickhouse-datasource
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as `x-cybercloud-*`.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Dashboard/grafanas
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: none

@@ -3202,6 +3202,152 @@
         }
       ]
     },
+    "CyberCloud.Dashboard/grafanas": {
+      "resourceType": "CyberCloud.Dashboard/grafanas",
+      "apiVersion": "2026-08-01",
+      "title": "Managed Grafana",
+      "plural": "Managed Grafanas",
+      "summary": "An unmodified Grafana OSS instance in your cluster, provisioned with one monitor workspace's metrics and logs as its datasources and reachable at a URL your pages embed rendered dashboards from.",
+      "overrideKey": "CyberCloud.Dashboard/grafanas@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/anonymousViewers",
+        "/properties/clusterId",
+        "/properties/sizing",
+        "/properties/sizing/preset",
+        "/properties/workspace",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the instance is billed in — its workspace's.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Managed Grafana to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The instance's own settings."
+        },
+        {
+          "jsonPointer": "/properties/anonymousViewers",
+          "name": "anonymousViewers",
+          "label": "Anonymous viewers",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "general",
+          "hint": "Whether anybody who can reach the URL may view dashboards without signing in, as a Viewer. Off means every visit signs in as the admin user the url action returns. ⚠ A rendered panel embedded by URL in another page is a visit like any other, so embedding needs this on or a signed-in browser.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster the instance runs in. ⚠ It must be the cluster its workspace publishes into: Grafana reads the workspace's accountID, database and ingest key from the workspace's own objects in the same namespace.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Managed Grafana to change it."
+        },
+        {
+          "jsonPointer": "/properties/sizing",
+          "name": "sizing",
+          "label": "Sizing",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "CPU and memory for the instance."
+        },
+        {
+          "jsonPointer": "/properties/sizing/preset",
+          "name": "preset",
+          "label": "Preset",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "How much the pod gets. Grafana renders in the browser and queries the workspace's stores, so the small row serves a team; the larger rows are for many concurrent dashboards.",
+          "choices": [
+            {
+              "value": "c1.large",
+              "label": "C1 large"
+            },
+            {
+              "value": "c1.medium",
+              "label": "C1 medium"
+            },
+            {
+              "value": "c1.small",
+              "label": "C1 small"
+            }
+          ],
+          "default": "c1.small"
+        },
+        {
+          "jsonPointer": "/properties/workspace",
+          "name": "workspace",
+          "label": "Workspace",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The CyberCloud.Monitor/workspaces resource the datasources point at, as its full resource id path. It must be in this tenant and in the same resource group as the instance; the instance sees that workspace and nothing else.",
+          "maxLength": 512,
+          "format": "cybercloud-resource-id",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Managed Grafana to change it.",
+          "placeholder": "/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.Monitor/workspaces/prod"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "url",
+          "label": "Url",
+          "permission": "url",
+          "longRunning": false,
+          "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.DocumentDB/accounts": {
       "resourceType": "CyberCloud.DocumentDB/accounts",
       "apiVersion": "2026-08-01",
@@ -5684,6 +5830,173 @@
         {
           "name": "listInstances",
           "label": "List instances",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
+    "CyberCloud.Monitor/workspaces/collectors": {
+      "resourceType": "CyberCloud.Monitor/workspaces/collectors",
+      "apiVersion": "2026-08-01",
+      "title": "OpenTelemetry collector",
+      "plural": "OpenTelemetry collectors",
+      "summary": "A managed OpenTelemetry collector in your cluster that your workloads send OTLP to, carrying metrics, logs and traces into this workspace.",
+      "overrideKey": "CyberCloud.Monitor/workspaces/collectors@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/receivers",
+        "/properties/receivers/otlpGrpc",
+        "/properties/receivers/otlpHttp",
+        "/properties/replicas",
+        "/properties/sizing",
+        "/properties/sizing/preset",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the collector is billed in — its workspace's.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new OpenTelemetry collector to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The collector's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster the collector runs in. ⚠ It must be the cluster its workspace publishes into: the collector reads the workspace's accountID, database and ingest key from the workspace's own objects in the same namespace, and in any other cluster the pod waits on a ConfigMap that is not there.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new OpenTelemetry collector to change it."
+        },
+        {
+          "jsonPointer": "/properties/receivers",
+          "name": "receivers",
+          "label": "Receivers",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Which OTLP protocols the collector listens on. At least one; both is the default."
+        },
+        {
+          "jsonPointer": "/properties/receivers/otlpGrpc",
+          "name": "otlpGrpc",
+          "label": "Otlp grpc",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "receivers",
+          "hint": "Accept OTLP over gRPC on port 4317 — what most SDKs send by default.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/receivers/otlpHttp",
+          "name": "otlpHttp",
+          "label": "Otlp http",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "receivers",
+          "hint": "Accept OTLP over HTTP on port 4318 — protobuf or JSON, for browsers and anything that cannot speak gRPC.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/replicas",
+          "name": "replicas",
+          "label": "Replicas",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "general",
+          "hint": "How many collector pods share the endpoint. The collector is stateless, so more replicas is more fan-in and nothing else.",
+          "minimum": 1,
+          "maximum": 3,
+          "default": 1
+        },
+        {
+          "jsonPointer": "/properties/sizing",
+          "name": "sizing",
+          "label": "Sizing",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "CPU and memory for each collector pod."
+        },
+        {
+          "jsonPointer": "/properties/sizing/preset",
+          "name": "preset",
+          "label": "Preset",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "How much each pod gets. The small row carries a few thousand spans a second; the larger rows are for a whole cluster's telemetry through one gateway. The memory limiter is set from the preset, so an oversized burst is refused rather than killed.",
+          "choices": [
+            {
+              "value": "c1.large",
+              "label": "C1 large"
+            },
+            {
+              "value": "c1.medium",
+              "label": "C1 medium"
+            },
+            {
+              "value": "c1.small",
+              "label": "C1 small"
+            }
+          ],
+          "default": "c1.small"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listEndpoints",
+          "label": "List endpoints",
           "permission": "read",
           "longRunning": false,
           "secret": false,

@@ -1081,6 +1081,51 @@ export interface DBforPostgreSQLServersListKeysResult {
 }
 
 /** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
+export type DashboardGrafanasPreset =
+  | 'c1.large'
+  | 'c1.medium'
+  | 'c1.small';
+
+/** Managed Grafana. An unmodified Grafana OSS instance in your cluster, provisioned with one monitor workspace's metrics and logs as its datasources and reachable at a URL your pages embed rendered dashboards from. */
+export interface DashboardGrafanasData {
+  /** The region the instance is billed in — its workspace's. */
+  location: string;
+  /** The instance's own settings. */
+  properties?: {
+    /** Whether anybody who can reach the URL may view dashboards without signing in, as a Viewer. Off means every visit signs in as the admin user the url action returns. ⚠ A rendered panel embedded by URL in another page is a visit like any other, so embedding needs this on or a signed-in browser. */
+    anonymousViewers?: boolean;
+    /** The cluster the instance runs in. ⚠ It must be the cluster its workspace publishes into: Grafana reads the workspace's accountID, database and ingest key from the workspace's own objects in the same namespace. */
+    clusterId: string;
+    /** CPU and memory for the instance. */
+    sizing?: {
+      /** How much the pod gets. Grafana renders in the browser and queries the workspace's stores, so the small row serves a team; the larger rows are for many concurrent dashboards. */
+      preset?: DashboardGrafanasPreset;
+    };
+    /** The CyberCloud.Monitor/workspaces resource the datasources point at, as its full resource id path. It must be in this tenant and in the same resource group as the instance; the instance sees that workspace and nothing else. */
+    workspace: string;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Managed Grafana, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface DashboardGrafanasResource extends Resource, DashboardGrafanasData {
+  readonly type: 'CyberCloud.Dashboard/grafanas';
+}
+
+/** What url returns. ⚠ Secret material — never log or persist this. */
+export interface DashboardGrafanasUrlResult {
+  /** The administrator's password, read from the tenant's vault for this call only. Minted once when the instance was created. */
+  adminPassword: string;
+  /** The administrator's user name. */
+  adminUser: string;
+  /** Where the instance answers inside the cluster. A dashboard or a panel is embedded by appending Grafana's own /d/… or /d-solo/… path to it — ADR-011's one permitted integration. */
+  url: string;
+  /** The workspace the two provisioned datasources read from. */
+  workspace: string;
+}
+
+/** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
 export type DocumentDBAccountsPreset =
   | 's1.2xlarge'
   | 's1.4xlarge'
@@ -1708,6 +1753,56 @@ export interface MonitorWorkspacesAlertRulesListInstancesResult {
   open: number;
   /** Where the rule is now: ok, pending or firing. */
   state: string;
+}
+
+/** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
+export type MonitorWorkspacesCollectorsPreset =
+  | 'c1.large'
+  | 'c1.medium'
+  | 'c1.small';
+
+/** OpenTelemetry collector. A managed OpenTelemetry collector in your cluster that your workloads send OTLP to, carrying metrics, logs and traces into this workspace. */
+export interface MonitorWorkspacesCollectorsData {
+  /** The region the collector is billed in — its workspace's. */
+  location: string;
+  /** The collector's own settings. */
+  properties?: {
+    /** The cluster the collector runs in. ⚠ It must be the cluster its workspace publishes into: the collector reads the workspace's accountID, database and ingest key from the workspace's own objects in the same namespace, and in any other cluster the pod waits on a ConfigMap that is not there. */
+    clusterId: string;
+    /** Which OTLP protocols the collector listens on. At least one; both is the default. */
+    receivers?: {
+      /** Accept OTLP over gRPC on port 4317 — what most SDKs send by default. */
+      otlpGrpc?: boolean;
+      /** Accept OTLP over HTTP on port 4318 — protobuf or JSON, for browsers and anything that cannot speak gRPC. */
+      otlpHttp?: boolean;
+    };
+    /** How many collector pods share the endpoint. The collector is stateless, so more replicas is more fan-in and nothing else. */
+    replicas?: number;
+    /** CPU and memory for each collector pod. */
+    sizing?: {
+      /** How much each pod gets. The small row carries a few thousand spans a second; the larger rows are for a whole cluster's telemetry through one gateway. The memory limiter is set from the preset, so an oversized burst is refused rather than killed. */
+      preset?: MonitorWorkspacesCollectorsPreset;
+    };
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One OpenTelemetry collector, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface MonitorWorkspacesCollectorsResource extends Resource, MonitorWorkspacesCollectorsData {
+  readonly type: 'CyberCloud.Monitor/workspaces/collectors';
+}
+
+/** What listEndpoints returns. */
+export interface MonitorWorkspacesCollectorsListEndpointsResult {
+  /** Where OTLP over gRPC is accepted inside the cluster, host:port — empty when the gRPC receiver is off. */
+  otlpGrpcEndpoint: string;
+  /** Where OTLP over HTTP is accepted inside the cluster, as a URL — empty when the HTTP receiver is off. Signals go to /v1/traces, /v1/metrics and /v1/logs under it. */
+  otlpHttpEndpoint: string;
+  /** The Service's in-cluster DNS name, for a workload that builds its own URL. */
+  service: string;
+  /** The workspace everything sent here lands in. */
+  workspace: string;
 }
 
 /** Public IP address. A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic. */

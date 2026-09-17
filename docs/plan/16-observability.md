@@ -12,7 +12,7 @@ safe because tenancy is enforced at ingest, not at query.
 | Logs | **ClickHouse** | SQL | ADR-016 — Loki cannot answer "find this correlation id across a tenant" in bounded time, and that is the query support actually runs |
 | Traces | **ClickHouse** | SQL + a trace view | One store for logs and traces means a span links to its logs by join, not by hope |
 | Events (audit, resource changes) | **ClickHouse** | SQL | Same pipeline, different table |
-| Dashboards | **Grafana** per tenant | — | ⚠ AGPL: we distribute unmodified, we do not link. The portal embeds rendered panels by URL |
+| Dashboards | **Grafana** per tenant — ⚠ landed as one Deployment per `CyberCloud.Dashboard/grafanas` resource, not `grafana-operator`; § Managed Grafana says why | — | ⚠ AGPL: we distribute unmodified, we do not link. The portal embeds rendered panels by URL |
 | Alerting | **vmalert** + a notification grain — ⚠ landed as one evaluator grain per workspace on a reminder, with no `vmalert` between it and the store; § Alerts says why | — | Rules are a resource; delivery is [17](17-communication-and-email.md) |
 
 ## Ingest
@@ -75,6 +75,57 @@ exporters:  [cybercloud, ...tenant's own]
 - Deployment mode is `daemonset` (node-level) or `deployment` (gateway), declared.
 - ⚠ A tenant may export to their *own* backends as well. That is the feature; it also means egress is
   metered and the config allow-list must cover exporter endpoints.
+
+### Resource model — landed 2026-09-17 (#32)
+
+⚠ **Under the workspace, and the configuration is rendered rather than accepted.** The sketch above is a
+tenant declaring receivers, processors and exporters; what landed offers the allow-list's safest subset
+as two switches and renders the whole file itself, so there is no config to validate and no exporter a
+tenant can point elsewhere:
+
+```
+CyberCloud.Monitor/workspaces/{workspace}/collectors/{name}
+  ├─ clusterId — ⚠ the cluster the workspace publishes into, see below
+  ├─ receivers/{otlpGrpc, otlpHttp} — at least one; both off is refused at the first pass
+  ├─ replicas ≤ 3, sizing/preset (c1.small | c1.medium | c1.large)
+  └─ action: listEndpoints → the Service's in-cluster address for each protocol that is on
+```
+
+Three objects — a `ConfigMap` holding the collector configuration, a `Deployment` of upstream's
+`otel/opentelemetry-collector-contrib` **pinned by digest in the bundle's shape**, and a `ClusterIP`
+`Service`. The exporters address the workspace's stores exactly as the workspace's own `listKeys` does:
+`prometheus_remote_write` to the remote-write endpoint under its `accountID`, `clickhouse` to the query
+host under its database, both authenticated as the workspace's `VMUser` with its ingest key.
+
+⚠ **The workspace's coordinates are in none of the three documents, and that is the design.** A child's
+reconcile pass never learns its parent's GUID, and the `accountID` is a fold of that GUID — the fact
+that keyed the alert evaluator. So the configuration writes `${env:CYBERCLOUD_ACCOUNT_ID}`,
+`${env:CYBERCLOUD_DATABASE}` and `${env:CYBERCLOUD_INGEST_KEY}`, and the `Deployment` hands the pod
+those three from the workspace's own row (`configMapKeyRef`) and ingest-key `Secret`
+(`secretKeyRef`): the **kubelet** does the reading at pod start. Every rendered document is therefore a
+pure function of the address and the body, the ingest key never passes through the control plane a
+second time, and a collector whose workspace has not converged is a pod the kubelet holds by name
+until it has. The cost is stated rather than discovered: the collector runs in the cluster its
+workspace publishes into, which is the regional cluster and not a tenant's connected one —
+`charts/managed/monitor-collector/conformance.yaml § owed`,
+`collector-runs-where-its-workspace-is-published`. § Ingest's row, published for a host that does not
+exist, has two readers now, and both are pods.
+
+⚠ **The pod is proved to start.** `MonitorCollectorClusterBackedConformance.TheCollectorPodStartsAndAcceptsAnOtlpExport`
+runs the rendered `Deployment` on the cluster-backed suite's k3s — a kubelet, the workspace's row and
+key, and nothing else — and asserts the pod goes Ready and an OTLP/HTTP export POSTed through the API
+server's service proxy is answered `200`. It is the first cluster-backed assertion in the tree that
+reads what a node did rather than what the API server holds. What it does not prove is where the
+export goes: both exporters point at hosts the k3s does not resolve, and the batch processor is what
+lets the receiver answer in front of them.
+
+What the sketch above promises and this does not, each `charts/managed/monitor-collector/conformance.yaml
+§ owed`: the declarative receiver, processor and exporter lists with the allow-list over them
+(`tenant-authored-config-is-not-accepted`, which also covers `daemonset` mode and tenant-owned
+exporters with their metered egress); an authenticated ingress (`collector-ingress-is-unauthenticated`);
+the ClickHouse tables the exporter writes into, which nothing creates
+(`collector-clickhouse-tables-are-the-exporters-shape`); and the two platform hosts the configuration
+names and nothing resolves (`the-endpoints-are-named-not-resolved`).
 
 ## Alerts — M2
 
@@ -149,12 +200,13 @@ PromQL `/api/v1/query` under the workspace's `accountID`, a SQL query under its 
 from the row the workspace publishes — is `charts/managed/monitor-workspace/conformance.yaml § owed`,
 `alert-rules-query-seam-is-refusing`, and it needs a real VictoriaMetrics to be proved against. One
 rule is one instance however many series offend, the schema having no array of objects; the
-per-series shape is the api-version that grows the tree. And the App Insights-shaped views,
-`collectors` and managed Grafana are the three nouns of #32's four this did not take — each a resource
-type with a chart or a portal surface of its own, priced above at 1.0 and 0.8 EM for the two the
-document prices, and recorded as `charts/managed/monitor-workspace/conformance.yaml § owed`,
-`observability-three-of-four-nouns-not-landed`, so the row's ◐ has an entry behind it and not only
-a sentence.
+per-series shape is the api-version that grows the tree. ⚠ **This paragraph used to end by naming
+three nouns of #32's four this did not take; two of them landed on 2026-09-17** — `collectors` above
+and managed Grafana below, each a resource type with a chart of its own. The App Insights-shaped views
+are the one noun left, undesigned and unpriced by this document, and recorded as
+`charts/managed/monitor-workspace/conformance.yaml § owed`,
+`observability-app-insights-views-not-landed`, so the row's ◐ still has an entry behind it and not
+only a sentence.
 
 ## Managed Grafana — `CyberCloud.Dashboard/grafanas` · M2 · 0.8 EM
 
@@ -165,6 +217,49 @@ restorable like any resource.
 The portal does not embed Grafana's UI. It renders its own charts (`@xui/echarts`) for the common
 views — resource health, the four golden signals, cost — and links out to Grafana for exploration.
 Embedding someone else's SPA inside ours produces two auth models, two themes and two bug trackers.
+
+### Resource model — landed 2026-09-17 (#32)
+
+```
+CyberCloud.Dashboard/grafanas/{name}
+  ├─ clusterId — the workspace's cluster
+  ├─ workspace — a CyberCloud.Monitor/workspaces resource id path, ⚠ this tenant's, this resource group's
+  ├─ anonymousViewers, sizing/preset
+  └─ action: url → the in-cluster URL, the admin user, and the admin password minted once into the vault
+```
+
+⚠ **ADR-011, read for a deployed component, is what lets the type converge.** The row says *"Offerable
+as a managed instance (we distribute, we do not modify). Our portal must not embed or link Grafana code
+— it embeds rendered dashboards by URL."* What landed is upstream's `grafana/grafana` **by digest,
+unmodified**, configured through `GF_*` variables and a datasource provisioning file, in one
+`Deployment` per resource; the portal takes no Grafana package (`GrafanaDeclarationTests` reads
+`portal/package.json` to keep it that way) and the `url` action is the one integration. The exception
+ADR-011 § Enforcement asks for is written into `build/Build.Licence.cs § LicenceExceptions` beside the
+image with this reading as its argument — ⚠ and the scan does not read that image yet, because it reads
+bundle components and platform images and a chart under `charts/managed/` is neither
+(`charts/managed/grafana/conformance.yaml § owed`, `licence-scan-does-not-read-workload-images`). Had
+the row refused AGPL for a deployed component, the type would be published exactly as it is and the
+reconciler would fail every pass naming the ADR; it does not, so it converges.
+
+⚠ **Not `grafana-operator`, which the heading above names.** The operator is a bundle component that
+does not exist, a CRD the cluster-backed harness would stub with an open schema, and a second
+reconciler between this one and the pod; what it would buy — dashboards as the sub-resource the
+paragraph above asks for — needs an api-version with an array of objects the schema does not have.
+Grafana's state is an `emptyDir` on purpose: a claim would make dashboards survive a restart and look
+versioned while being neither. `charts/managed/grafana/conformance.yaml § owed`,
+`dashboards-are-not-a-sub-resource` and `not-grafana-operator`.
+
+The two datasources are the workspace's `listKeys` endpoints — Prometheus at the PromQL endpoint,
+the ClickHouse plugin over HTTP at the SQL endpoint — authenticated as the workspace's `VMUser`, both
+`editable: false`, and both reach the workspace's coordinates the way the collector does: Grafana's own
+`$VAR` provisioning interpolation over the three variables the kubelet fills from the workspace's row
+and `Secret`. That is why the workspace must be in the instance's resource group — a pod cannot mount
+a `Secret` from another namespace — and the reconciler refuses a pointer that is another tenant's,
+another group's or another type's before it mints anything. **OIDC against our identity system is not
+wired** (`oidc-against-identity-is-not-wired`); the URL is in-cluster (`no-external-endpoint`); the
+ClickHouse plugin is fetched from grafana.com at pod start rather than baked into an image
+(`clickhouse-plugin-is-fetched-at-start`); and, unlike the collector, the pod's start is not proved on
+the cluster-backed suite's kubelet, for that last reason (`the-pod-start-is-unproved-on-a-kubelet`).
 
 ## What the platform monitors about itself
 

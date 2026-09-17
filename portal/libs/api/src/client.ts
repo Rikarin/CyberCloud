@@ -48,6 +48,9 @@ import type {
   DBforPostgreSQLServersData,
   DBforPostgreSQLServersListKeysResult,
   DBforPostgreSQLServersResource,
+  DashboardGrafanasData,
+  DashboardGrafanasResource,
+  DashboardGrafanasUrlResult,
   DocumentDBAccountsData,
   DocumentDBAccountsListKeysResult,
   DocumentDBAccountsResource,
@@ -65,6 +68,9 @@ import type {
   MonitorWorkspacesAlertRulesData,
   MonitorWorkspacesAlertRulesListInstancesResult,
   MonitorWorkspacesAlertRulesResource,
+  MonitorWorkspacesCollectorsData,
+  MonitorWorkspacesCollectorsListEndpointsResult,
+  MonitorWorkspacesCollectorsResource,
   MonitorWorkspacesData,
   MonitorWorkspacesListKeysResult,
   MonitorWorkspacesResource,
@@ -595,6 +601,36 @@ export class CyberCloudApi {
     return this.transport.send<unknown>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.DBforPostgreSQL/servers/${CyberCloudApi.segment(resourceName)}/restore` });
   }
 
+  /** Reads one Managed Grafana. */
+  getManagedGrafana(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<DashboardGrafanasResource>> {
+    return this.transport.send<DashboardGrafanasResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Dashboard/grafanas/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Managed Grafana. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateManagedGrafana(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: DashboardGrafanasData): Promise<ApiResponse<DashboardGrafanasResource>> {
+    return this.transport.send<DashboardGrafanasResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Dashboard/grafanas/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Managed Grafana. A merge patch: what is not set is not changed. */
+  updateManagedGrafana(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: Partial<DashboardGrafanasData>): Promise<ApiResponse<DashboardGrafanasResource>> {
+    return this.transport.send<DashboardGrafanasResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Dashboard/grafanas/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Managed Grafana. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteManagedGrafana(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Dashboard/grafanas/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Managed Grafanas in a resource group. ⚠ A short page never means "that is all there is". */
+  listManagedGrafana(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<DashboardGrafanasResource>>> {
+    return this.transport.send<Page<DashboardGrafanasResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Dashboard/grafanas`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** url — permission 'url'. ⚠ The response carries secret material. */
+  urlManagedGrafana(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<DashboardGrafanasUrlResult>> {
+    return this.transport.send<DashboardGrafanasUrlResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Dashboard/grafanas/${CyberCloudApi.segment(resourceName)}/url` });
+  }
+
   /** Reads one Document database account. */
   getDocumentDatabaseAccount(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<DocumentDBAccountsResource>> {
     return this.transport.send<DocumentDBAccountsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.DocumentDB/accounts/${CyberCloudApi.segment(resourceName)}` });
@@ -808,6 +844,36 @@ export class CyberCloudApi {
   /** listInstances — permission 'read'. */
   listInstancesAlertRule(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string): Promise<ApiResponse<MonitorWorkspacesAlertRulesListInstancesResult>> {
     return this.transport.send<MonitorWorkspacesAlertRulesListInstancesResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/alertRules/${CyberCloudApi.segment(resourceName)}/listInstances` });
+  }
+
+  /** Reads one OpenTelemetry collector. */
+  getOpenTelemetryCollector(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string): Promise<ApiResponse<MonitorWorkspacesCollectorsResource>> {
+    return this.transport.send<MonitorWorkspacesCollectorsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/collectors/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one OpenTelemetry collector. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateOpenTelemetryCollector(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, data: MonitorWorkspacesCollectorsData): Promise<ApiResponse<MonitorWorkspacesCollectorsResource>> {
+    return this.transport.send<MonitorWorkspacesCollectorsResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/collectors/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one OpenTelemetry collector. A merge patch: what is not set is not changed. */
+  updateOpenTelemetryCollector(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, data: Partial<MonitorWorkspacesCollectorsData>): Promise<ApiResponse<MonitorWorkspacesCollectorsResource>> {
+    return this.transport.send<MonitorWorkspacesCollectorsResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/collectors/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one OpenTelemetry collector. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteOpenTelemetryCollector(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/collectors/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the OpenTelemetry collectors in a resource group. ⚠ A short page never means "that is all there is". */
+  listOpenTelemetryCollector(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, page: PageRequest = {}): Promise<ApiResponse<Page<MonitorWorkspacesCollectorsResource>>> {
+    return this.transport.send<Page<MonitorWorkspacesCollectorsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/collectors`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** listEndpoints — permission 'read'. */
+  listEndpointsOpenTelemetryCollector(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string): Promise<ApiResponse<MonitorWorkspacesCollectorsListEndpointsResult>> {
+    return this.transport.send<MonitorWorkspacesCollectorsListEndpointsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/collectors/${CyberCloudApi.segment(resourceName)}/listEndpoints` });
   }
 
   /** Reads one Public IP address. */

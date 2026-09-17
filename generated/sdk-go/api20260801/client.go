@@ -34,6 +34,7 @@ type Client struct {
 	ContainerService  *ContainerServiceProvider
 	DBforMySQL        *DBforMySQLProvider
 	DBforPostgreSQL   *DBforPostgreSQLProvider
+	Dashboard         *DashboardProvider
 	DocumentDB        *DocumentDBProvider
 	Mail              *MailProvider
 	Messaging         *MessagingProvider
@@ -59,6 +60,7 @@ func NewClient(transport Transport) *Client {
 		ContainerService:  newContainerServiceProvider(transport),
 		DBforMySQL:        newDBforMySQLProvider(transport),
 		DBforPostgreSQL:   newDBforPostgreSQLProvider(transport),
+		Dashboard:         newDashboardProvider(transport),
 		DocumentDB:        newDocumentDBProvider(transport),
 		Mail:              newMailProvider(transport),
 		Messaging:         newMessagingProvider(transport),
@@ -931,6 +933,67 @@ func (c *PostgreSQLServerClient) BeginRestore(ctx context.Context, tenantID, sub
 	return begin[PostgreSQLServerResource](ctx, c.transport, "POST", path+"/restore", nil, path)
 }
 
+// DashboardProvider holds the resource types of CyberCloud.Dashboard.
+type DashboardProvider struct {
+	Grafanas *ManagedGrafanaClient
+}
+
+// newDashboardProvider builds the group's clients over one transport.
+func newDashboardProvider(transport Transport) *DashboardProvider {
+	return &DashboardProvider{
+		Grafanas: &ManagedGrafanaClient{transport: transport},
+	}
+}
+
+// ManagedGrafanaClient is managed grafanas — CyberCloud.Dashboard/grafanas. An unmodified Grafana OSS instance in your cluster, provisioned with one monitor workspace's metrics and logs as its datasources and reachable at a URL your pages embed rendered dashboards from.
+type ManagedGrafanaClient struct {
+	transport Transport
+}
+
+// Get reads one Managed Grafana.
+func (c *ManagedGrafanaClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*ManagedGrafanaResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Dashboard/grafanas/" + segment(resourceName)
+	var result ManagedGrafanaResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Managed Grafana. ⚠ Long-running: Wait on the result.
+func (c *ManagedGrafanaClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data ManagedGrafanaData) (*Operation[ManagedGrafanaResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Dashboard/grafanas/" + segment(resourceName)
+	return begin[ManagedGrafanaResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Managed Grafana. A merge patch: what is not set is not changed.
+func (c *ManagedGrafanaClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data ManagedGrafanaData) (*Operation[ManagedGrafanaResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Dashboard/grafanas/" + segment(resourceName)
+	return begin[ManagedGrafanaResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Managed Grafana. ⚠ Permanent: this type declares no soft-delete window.
+func (c *ManagedGrafanaClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Dashboard/grafanas/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Managed Grafanas in a resource group. ⚠ A short page never means "that is all there is".
+func (c *ManagedGrafanaClient) List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[ManagedGrafanaResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Dashboard/grafanas"
+	return newPager[ManagedGrafanaResource](c.transport, path, options)
+}
+
+// Url runs url — permission 'url'. ⚠ The response carries secret material.
+func (c *ManagedGrafanaClient) Url(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*ManagedGrafanaUrlResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Dashboard/grafanas/" + segment(resourceName) + "/url"
+	var result ManagedGrafanaUrlResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // DocumentDBProvider holds the resource types of CyberCloud.DocumentDB.
 type DocumentDBProvider struct {
 	Accounts *DocumentDatabaseAccountClient
@@ -1210,6 +1273,7 @@ func (c *RabbitMQClusterClient) ListKeys(ctx context.Context, tenantID, subscrip
 type MonitorProvider struct {
 	Workspaces           *MonitorWorkspaceClient
 	WorkspacesAlertRules *AlertRuleClient
+	WorkspacesCollectors *OpenTelemetryCollectorClient
 }
 
 // newMonitorProvider builds the group's clients over one transport.
@@ -1217,6 +1281,7 @@ func newMonitorProvider(transport Transport) *MonitorProvider {
 	return &MonitorProvider{
 		Workspaces:           &MonitorWorkspaceClient{transport: transport},
 		WorkspacesAlertRules: &AlertRuleClient{transport: transport},
+		WorkspacesCollectors: &OpenTelemetryCollectorClient{transport: transport},
 	}
 }
 
@@ -1324,6 +1389,55 @@ func (c *AlertRuleClient) List(tenantID, subscriptionID, resourceGroupName, work
 func (c *AlertRuleClient) ListInstances(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string) (*AlertRuleListInstancesResult, error) {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/alertRules/" + segment(resourceName) + "/listInstances"
 	var result AlertRuleListInstancesResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// OpenTelemetryCollectorClient is opentelemetry collectors — CyberCloud.Monitor/workspaces/collectors. A managed OpenTelemetry collector in your cluster that your workloads send OTLP to, carrying metrics, logs and traces into this workspace.
+type OpenTelemetryCollectorClient struct {
+	transport Transport
+}
+
+// Get reads one OpenTelemetry collector.
+func (c *OpenTelemetryCollectorClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string) (*OpenTelemetryCollectorResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/collectors/" + segment(resourceName)
+	var result OpenTelemetryCollectorResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one OpenTelemetry collector. ⚠ Long-running: Wait on the result.
+func (c *OpenTelemetryCollectorClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, data OpenTelemetryCollectorData) (*Operation[OpenTelemetryCollectorResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/collectors/" + segment(resourceName)
+	return begin[OpenTelemetryCollectorResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one OpenTelemetry collector. A merge patch: what is not set is not changed.
+func (c *OpenTelemetryCollectorClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, data OpenTelemetryCollectorData) (*Operation[OpenTelemetryCollectorResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/collectors/" + segment(resourceName)
+	return begin[OpenTelemetryCollectorResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one OpenTelemetry collector. ⚠ Permanent: this type declares no soft-delete window.
+func (c *OpenTelemetryCollectorClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/collectors/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the OpenTelemetry collectors in a resource group. ⚠ A short page never means "that is all there is".
+func (c *OpenTelemetryCollectorClient) List(tenantID, subscriptionID, resourceGroupName, workspacesName string, options *ListOptions) *Pager[OpenTelemetryCollectorResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/collectors"
+	return newPager[OpenTelemetryCollectorResource](c.transport, path, options)
+}
+
+// ListEndpoints runs listEndpoints — permission 'read'.
+func (c *OpenTelemetryCollectorClient) ListEndpoints(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string) (*OpenTelemetryCollectorListEndpointsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/collectors/" + segment(resourceName) + "/listEndpoints"
+	var result OpenTelemetryCollectorListEndpointsResult
 	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}

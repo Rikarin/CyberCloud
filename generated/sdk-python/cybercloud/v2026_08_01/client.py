@@ -57,6 +57,9 @@ from .models import (
     LoadBalancerShowBackendsResult,
     MailDomainData,
     MailDomainResource,
+    ManagedGrafanaData,
+    ManagedGrafanaResource,
+    ManagedGrafanaUrlResult,
     ManagedKubernetesClusterData,
     ManagedKubernetesClusterListCredentialsResult,
     ManagedKubernetesClusterResource,
@@ -81,6 +84,9 @@ from .models import (
     OpenSearchServiceData,
     OpenSearchServiceListKeysResult,
     OpenSearchServiceResource,
+    OpenTelemetryCollectorData,
+    OpenTelemetryCollectorListEndpointsResult,
+    OpenTelemetryCollectorResource,
     OperationStatus,
     PostgreSQLServerData,
     PostgreSQLServerListKeysResult,
@@ -856,6 +862,56 @@ class DBforPostgreSQLProvider:
         self.servers = PostgreSQLServerClient(transport)
 
 
+class ManagedGrafanaClient:
+    """Managed Grafanas — CyberCloud.Dashboard/grafanas. An unmodified Grafana OSS instance in your cluster, provisioned with one monitor workspace's metrics and logs as its datasources and reachable at a URL your pages embed rendered dashboards from."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> ManagedGrafanaResource:
+        """Reads one Managed Grafana."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Dashboard/grafanas/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return ManagedGrafanaResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: ManagedGrafanaData) -> Operation[ManagedGrafanaResource]:
+        """Creates or replaces one Managed Grafana. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Dashboard/grafanas/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ManagedGrafanaResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: ManagedGrafanaData) -> Operation[ManagedGrafanaResource]:
+        """Amends one Managed Grafana. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Dashboard/grafanas/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ManagedGrafanaResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Managed Grafana. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Dashboard/grafanas/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[ManagedGrafanaResource]:
+        """Lists the Managed Grafanas in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Dashboard/grafanas", top, ManagedGrafanaResource.from_wire)
+
+    def url(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> ManagedGrafanaUrlResult:
+        """url — permission 'url'. ⚠ The response carries secret material."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Dashboard/grafanas/{_segment(resource_name)}/url"))
+        raise_for_status(response)
+        return ManagedGrafanaUrlResult.from_wire(wire_of(response))
+
+
+class DashboardProvider:
+    """The resource types of CyberCloud.Dashboard."""
+
+    def __init__(self, transport: Transport) -> None:
+        self.grafanas = ManagedGrafanaClient(transport)
+
+
 class DocumentDatabaseAccountClient:
     """Document database accounts — CyberCloud.DocumentDB/accounts. MongoDB-compatible, not MongoDB: FerretDB over PostgreSQL, covering CRUD, indexes and the wire protocol. Multi-document transactions are not supported. Runs on a CloudNativePG cluster, so failover, backup and point-in-time recovery are the operator's."""
 
@@ -1186,12 +1242,56 @@ class AlertRuleClient:
         return AlertRuleListInstancesResult.from_wire(wire_of(response))
 
 
+class OpenTelemetryCollectorClient:
+    """OpenTelemetry collectors — CyberCloud.Monitor/workspaces/collectors. A managed OpenTelemetry collector in your cluster that your workloads send OTLP to, carrying metrics, logs and traces into this workspace."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str) -> OpenTelemetryCollectorResource:
+        """Reads one OpenTelemetry collector."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/collectors/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return OpenTelemetryCollectorResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, data: OpenTelemetryCollectorData) -> Operation[OpenTelemetryCollectorResource]:
+        """Creates or replaces one OpenTelemetry collector. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/collectors/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, OpenTelemetryCollectorResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, data: OpenTelemetryCollectorData) -> Operation[OpenTelemetryCollectorResource]:
+        """Amends one OpenTelemetry collector. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/collectors/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, OpenTelemetryCollectorResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one OpenTelemetry collector. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/collectors/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, *, top: Optional[int] = None) -> Pager[OpenTelemetryCollectorResource]:
+        """Lists the OpenTelemetry collectors in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/collectors", top, OpenTelemetryCollectorResource.from_wire)
+
+    def list_endpoints(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str) -> OpenTelemetryCollectorListEndpointsResult:
+        """listEndpoints — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/collectors/{_segment(resource_name)}/listEndpoints"))
+        raise_for_status(response)
+        return OpenTelemetryCollectorListEndpointsResult.from_wire(wire_of(response))
+
+
 class MonitorProvider:
     """The resource types of CyberCloud.Monitor."""
 
     def __init__(self, transport: Transport) -> None:
         self.workspaces = MonitorWorkspaceClient(transport)
         self.workspaces_alert_rules = AlertRuleClient(transport)
+        self.workspaces_collectors = OpenTelemetryCollectorClient(transport)
 
 
 class PublicIPAddressClient:
@@ -1791,6 +1891,7 @@ class CyberCloudClient:
         self.containerservice = ContainerServiceProvider(transport)
         self.dbformysql = DBforMySQLProvider(transport)
         self.dbforpostgresql = DBforPostgreSQLProvider(transport)
+        self.dashboard = DashboardProvider(transport)
         self.documentdb = DocumentDBProvider(transport)
         self.mail = MailProvider(transport)
         self.messaging = MessagingProvider(transport)

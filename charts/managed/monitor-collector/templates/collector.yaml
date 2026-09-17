@@ -1,0 +1,152 @@
+{{/*
+A managed OpenTelemetry collector — docs/plan/16 § OTel Collector as a service.
+
+⚠ THREE OBJECTS IN THE ORDER THE RECONCILER APPLIES THEM, and the order is about the message a tenant
+gets rather than the outcome: a Deployment whose ConfigMap does not exist yet schedules a pod that
+reports CreateContainerConfigError, which reads as a broken image rather than as an apply that has not
+happened; a Service before its pods is an address that refuses connections.
+
+⚠ THE POD'S ENV IS THE WHOLE TENANCY WIRING. Three variables, two objects, neither rendered here: the
+workspace's row (a ConfigMap the workspace's own reconciler applied) and its ingest key (a Secret the
+same reconciler applied). None of the references is `optional`, on purpose — an optional reference
+starts the pod with three empty strings and a collector exporting to `/insert//prometheus`, which
+VictoriaMetrics refuses or, worse, routes to a default account. Held until the workspace's row exists
+is the honest state for a collector whose workspace does not.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "monitorCollector.objectName" . }}
+  labels:
+    {{- include "monitorCollector.platformLabels" . | nindent 4 }}
+data:
+  config.yaml: |
+    {{- include "monitorCollector.config" . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "monitorCollector.objectName" . }}
+  labels:
+    {{- include "monitorCollector.platformLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "monitorCollector.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "monitorCollector.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{/*
+          ⚠ A ConfigMap edit does not restart a pod on its own; the hash on the template is what makes
+          a configuration change a rollout. The reconciler writes KubeLabels.ReconcileHash of the
+          rendered text; here it is Helm's sha256sum of the same text.
+        */}}
+        cybercloud.io/collector-config: {{ include "monitorCollector.config" . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        {{/*
+          ⚠ 10001 — the image's own `USER 10001:10001`, read off its config (SOURCE). Written explicitly
+          so a rebuilt image that switched to a named user cannot change who the collector runs as
+          without a diff in this chart.
+        */}}
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: collector
+          {{/*
+            ⚠ BY DIGEST, IN THE BUNDLE'S SHAPE. The value is @internal and the same string as
+            MonitorCollectors.Image; CollectorDeclarationTests fails when they drift.
+          */}}
+          image: {{ .Values.image | quote }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: CYBERCLOUD_ACCOUNT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "monitorCollector.workspaceRow" . }}
+                  key: accountId
+            - name: CYBERCLOUD_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "monitorCollector.workspaceRow" . }}
+                  key: database
+            - name: CYBERCLOUD_INGEST_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "monitorCollector.workspaceKeySecret" . }}
+                  key: ingestKey
+          ports:
+            {{- if .Values.receivers.otlpGrpc }}
+            - name: otlp-grpc
+              containerPort: 4317
+              protocol: TCP
+            {{- end }}
+            {{- if .Values.receivers.otlpHttp }}
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
+            {{- end }}
+          {{/*
+            ⚠ The health_check extension and not a receiver port: a TCP probe on 4317 reports a
+            collector ready while its exporters are still starting; the extension answers 200 only once
+            the whole service has.
+          */}}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            periodSeconds: 5
+          resources:
+            requests:
+              {{- include "monitorCollector.resources" . | fromJson | toYaml | nindent 14 }}
+            limits:
+              {{- include "monitorCollector.resources" . | fromJson | toYaml | nindent 14 }}
+          volumeMounts:
+            - name: config
+              {{/* The image's own `--config /etc/otelcol-contrib/config.yaml`; mounting over the directory needs no args. */}}
+              mountPath: /etc/otelcol-contrib
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "monitorCollector.objectName" . }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "monitorCollector.objectName" . }}
+  labels:
+    {{- include "monitorCollector.platformLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "monitorCollector.selectorLabels" . | nindent 4 }}
+  {{/*
+    ⚠ Only the ports the body turns on. A port on the Service with no receiver behind it is a
+    connection refused that reads as a broken collector.
+  */}}
+  ports:
+    {{- if .Values.receivers.otlpGrpc }}
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    {{- end }}
+    {{- if .Values.receivers.otlpHttp }}
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+    {{- end }}

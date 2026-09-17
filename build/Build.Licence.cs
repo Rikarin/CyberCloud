@@ -114,10 +114,13 @@ partial class Build {
     ///         would pass the thing it exists to catch.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>AGPL is here and Grafana is not an exception yet.</b> ADR-011 marks Grafana "⚠
-    ///         Offerable as a managed instance (we distribute, we do not modify)". That is a condition,
-    ///         and the day a Grafana image enters the bundle the condition gets written into
+    ///         ⚠ <b>AGPL is here and Grafana is an exception, written where this paragraph said it
+    ///         would be.</b> ADR-011 marks Grafana "⚠ Offerable as a managed instance (we distribute,
+    ///         we do not modify)". That is a condition, and it is written into
     ///         <see cref="LicenceExceptions" /> next to the artefact it excuses — not into this list.
+    ///         This paragraph used to end "the day a Grafana image enters the bundle"; the image
+    ///         entered the tree as a workload <c>charts/managed/grafana</c> renders (#32), which is
+    ///         not the bundle and not yet a thing this scan reads — the entry's own remarks say so.
     ///     </para>
     /// </remarks>
     static readonly string[] ServiceRestrictedLicences = [
@@ -136,11 +139,42 @@ partial class Build {
     ///     beside it — ADR-011's "outside an allow-list with a written reason".
     /// </summary>
     /// <remarks>
-    ///     Keyed by the artefact as the report names it: an image reference without its digest, a
-    ///     component name, or an SBOM package as <c>name@version</c>. Empty today, on purpose: an
-    ///     allowance with no artefact behind it is a permission nobody argued for.
+    ///     <para>
+    ///         Keyed by the artefact as the report names it: an image reference without its digest, a
+    ///         component name, or an SBOM package as <c>name@version</c>. It was empty until #32's
+    ///         third noun, on purpose: an allowance with no artefact behind it is a permission nobody
+    ///         argued for. The one entry has an artefact behind it — <c>charts/managed/grafana</c>
+    ///         renders <c>grafana/grafana</c> by digest — and the argument beside it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The scan does not reach the artefact the entry excuses, and the entry is written
+    ///         anyway.</b> <see cref="ScanComponent" /> reads <c>charts/bundle/</c> components' images
+    ///         and <see cref="ScanPlatformImages" /> the platform's own; an image a chart under
+    ///         <c>charts/managed/</c> renders — <c>haproxy</c>'s GPL-2.0 before this, Grafana's AGPL-3.0
+    ///         and the collector's Apache-2.0 now — is outside both. So today nothing in this target
+    ///         reads the entry, <c>GrafanaDeclarationTests.TheLicenceGateCarriesTheGrafanaExceptionBesideTheImage</c>
+    ///         is its only reader, and the day the scan widens to <c>image:</c> values under
+    ///         <c>charts/managed/*/values.yaml</c> it finds an argued exception rather than a red
+    ///         row. <c>charts/managed/grafana/conformance.yaml § owed</c>,
+    ///         <c>licence-scan-does-not-read-workload-images</c>, is the debt.
+    ///     </para>
     /// </remarks>
-    static readonly Dictionary<string, string> LicenceExceptions = new(StringComparer.Ordinal);
+    static readonly Dictionary<string, string> LicenceExceptions = new(StringComparer.Ordinal) {
+        // ⚠ ADR-011 § The licence audit, the Grafana row, read for a DEPLOYED component: "Offerable as
+        // a managed instance (we distribute, we do not modify). Our portal must not embed or link
+        // Grafana code — it embeds rendered dashboards by URL." CyberCloud.Dashboard/grafanas runs
+        // upstream's image by digest in a tenant's namespace, configured through GF_* variables and a
+        // provisioning file — distributed unmodified, its network clause binding whoever MODIFIES and
+        // serves — and the portal's one integration is the URL the `url` action returns. Grafanas'
+        // remarks carry the three-part reading; charts/managed/grafana/SOURCE repeats it beside the
+        // pin. Had the row refused AGPL for a deployed component, this entry would not exist and
+        // GrafanaReconciler would fail every pass naming the ADR.
+        ["grafana/grafana"] =
+            "AGPL-3.0, allowed by ADR-011's Grafana row as a managed instance: we distribute, we do not "
+            + "modify. Upstream's image, pinned by digest, configured through its documented surface; no "
+            + "Grafana code is linked into any platform assembly or into the portal, which embeds rendered "
+            + "dashboards by URL. Rendered by charts/managed/grafana for CyberCloud.Dashboard/grafanas."
+    };
 
     /// <summary>One line of the report: an artefact, where its licence was read from, and the verdict.</summary>
     /// <param name="Section">Which table it goes in.</param>

@@ -165,9 +165,23 @@ namespace CyberCloud.Providers.Monitor;
 ///         period is two live credentials at once, which <c>ISecretWriter</c>'s mint-once rule
 ///         cannot hold — the same blocker <c>CyberCloud.Storage/accounts</c> records against
 ///         <c>regenerateKeys</c>, now on its second sighting and on a type where it decides a whole
-///         child rather than one action. No <c>collectors</c>: M2 in docs/plan/16 and the half of
-///         issue #32 this branch did not take. No <c>dataSources</c> body property, for the reason
+///         child rather than one action. No <c>dataSources</c> body property, for the reason
 ///         on <see cref="MonitorWorkspaces.ListKeysResponse" /> — it is an output.
+///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             AND <c>workspaces/collectors</c> IS DECLARED (#32, the second noun), WHICH MAKES THIS
+///             THE FIRST FAMILY WITH A CLUSTER-BACKED PARENT, A CLUSTERLESS CHILD AND A CHILD THAT
+///             RUNS A POD.
+///         </b> This paragraph used to say <i>"No <c>collectors</c>: M2 in docs/plan/16 and the half
+///         of issue #32 this branch did not take."</i> A collector is a Deployment of upstream's
+///         collector image under the workspace, exporting into the workspace's stores exactly as the
+///         workspace's <c>listKeys</c> addresses them — and it learns the workspace's coordinates
+///         from the workspace's own row through the kubelet rather than from this pass, which is the
+///         argument on <see cref="MonitorCollectors" />. The managed Grafana that reads the same
+///         workspace is <see cref="DashboardProvider" />, the second provider in this assembly, under
+///         docs/plan/01's own namespace for it.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -323,8 +337,84 @@ public sealed class MonitorProvider : IResourceProvider {
                 + "holds for long enough the action group is told through a Communication service, and "
                 + "again when it stops."
             )
-            .SupportsTags();
+            .SupportsTags()
+            // ── workspaces/collectors — #32, the second noun ────────────────────────────────────
+            //
+            // ⚠ RequiresCluster AND Chart ON A CHILD WHOSE SIBLING HAS NEITHER, AND BOTH PRESENCES
+            // ARE THE DECLARATION. A collector is three objects in a cluster — a ConfigMap, a
+            // Deployment and a Service — so it is the shape AgentPools established: a child with its
+            // own clusterId, converged onto the fake cluster in the Docker-free suite and onto a real
+            // kubelet in the cluster-backed one, where the pod has to START and accept an export.
+            //
+            // ⚠ TWO METERS FROM A PRESET, AND THE COUNT. A collector is a pod; it draws vCPU and
+            // memory the way loadBalancers does, multiplied by its replica count, because three
+            // replicas of a small preset reserve three pods' worth and not one.
+            //
+            // ⚠ NO SupportsSoftDelete. A collector holds nothing: its state is its configuration,
+            // which is a function of the body, and the telemetry it carried is in the workspace,
+            // which has the window.
+            .ResourceType(MonitorCollectors.TypePath)
+            .ApiVersion(MonitorWorkspaces.V2026, MonitorCollectors.Schema2026)
+            .Reconciler<MonitorCollectorReconciler>()
+            .Meter(QuotaMeter.Vcpu, CollectorVcpuDrawn)
+            .Meter(QuotaMeter.MemoryGb, CollectorMemoryDrawn)
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            // ⚠ SYNCHRONOUS, WITH A HANDLER, AND NOT SECRET: an endpoint inside the cluster is an
+            // address, and the collector's ingress is unauthenticated by design and by record —
+            // conformance.yaml § owed, collector-ingress-is-unauthenticated.
+            .Action(
+                MonitorCollectors.ListEndpointsAction,
+                ActionKind.Post,
+                MonitorCollectors.ListEndpointsPermission,
+                response: MonitorCollectors.ListEndpointsResponse,
+                handler: typeof(MonitorCollectorListEndpointsHandler)
+            )
+            .Display(
+                "OpenTelemetry collector",
+                "OpenTelemetry collectors",
+                shortName: "collector",
+                summary: "A managed OpenTelemetry collector in your cluster that your workloads send OTLP "
+                + "to, carrying metrics, logs and traces into this workspace."
+            )
+            .Chart(MonitorCollectors.ChartName)
+            .SupportsTags()
+            .RequiresCluster(MonitorCollectors.ClusterIdPointer);
     }
+
+    /// <summary>vCPU: the sizing preset's cpu, in cores, times the replica count.</summary>
+    /// <remarks>
+    ///     ⚠ <b>A product, like <c>natsClusters</c>', and the second factor is the one an obvious
+    ///     derivation forgets.</b> Three replicas of <c>c1.small</c> are three pods requesting
+    ///     <c>250m</c> each; a reservation of <c>250m</c> would let a subscription at its vCPU limit
+    ///     schedule two more pods than it paid for.
+    /// </remarks>
+    static MeterDerivation CollectorVcpuDrawn { get; } =
+        MeterDerivation.Of(
+            "sizing.preset's cpu, in cores, times replicas",
+            ["/properties/sizing/preset", "/properties/replicas"],
+            body => KubeQuantity.TryParse(MonitorCollectors.Resources(body).Cpu, out var cores)
+                ? Result<decimal>.Success(cores * MonitorCollectors.Replicas(body))
+                : Result<decimal>.Failure(
+                    ErrorCode.InternalError,
+                    "the sizing preset behind '/properties/sizing/preset' carries a cpu quantity that "
+                    + "does not parse, so no reservation can be computed"
+                )
+        );
+
+    /// <summary>Memory: the sizing preset's memory, in GiB, times the replica count.</summary>
+    static MeterDerivation CollectorMemoryDrawn { get; } =
+        MeterDerivation.Of(
+            "sizing.preset's memory, in GiB, times replicas",
+            ["/properties/sizing/preset", "/properties/replicas"],
+            body => KubeQuantity.TryGibibytes(MonitorCollectors.Resources(body).Memory, out var gibibytes)
+                ? Result<decimal>.Success(gibibytes * MonitorCollectors.Replicas(body))
+                : Result<decimal>.Failure(
+                    ErrorCode.InternalError,
+                    "the sizing preset behind '/properties/sizing/preset' carries a memory quantity "
+                    + "that does not parse, so no reservation can be computed"
+                )
+        );
 
     /// <summary>How long a deleted workspace stays recoverable.</summary>
     /// <remarks>

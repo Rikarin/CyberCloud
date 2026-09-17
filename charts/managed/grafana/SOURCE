@@ -1,0 +1,90 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked. Grafana Labs
+# publishes a `grafana` Helm chart with some two hundred values, a sidecar model for dashboards and
+# datasources, and an image tag rather than a digest; what is wanted here is one Deployment from a
+# pinned image with a provisioning file this platform renders, so the four objects are written here and
+# the only things taken from upstream are the container image and one plugin.
+
+vendored: none
+upstream: https://github.com/grafana/grafana
+
+# The image this chart runs, unmodified.
+image: docker.io/grafana/grafana
+image-source: https://github.com/grafana/grafana
+
+# ── LICENCE — ADR-011, read for a DEPLOYED component ─────────────────────────────────────────────
+#
+# ⚠ AGPL-3.0, AND THE ROW IN ADR-011 § The licence audit IS THE DECISION: "Grafana | AGPL-3.0 |
+# ⚠ Offerable as a managed instance (we distribute, we do not modify). Our portal must not embed or link
+# Grafana code — it embeds rendered dashboards by URL." Three readings, each checked against this chart:
+#
+#   1. DISTRIBUTED, NOT MODIFIED. The Deployment runs grafana/grafana by digest, straight from Docker
+#      Hub, configured the way upstream documents — GF_* environment variables and a datasource
+#      provisioning file. No image is built, no file inside one is patched, no Grafana library is
+#      linked into any platform assembly. AGPL's network clause binds whoever MODIFIES and serves; this
+#      platform serves upstream's bytes, and a tenant who wants the source is sent to upstream's.
+#   2. NO GRAFANA CODE IN THE PORTAL. The `url` action hands back an address, and
+#      GF_SECURITY_ALLOW_EMBEDDING=true lets a rendered panel sit in an iframe by URL — the one
+#      integration the row permits. No Grafana package is in portal/package.json and
+#      GrafanaDeclarationTests keeps it that way.
+#   3. THE BUILD GATE'S ALLOW-LIST IS FOR THE BUNDLE, AND THIS IS NOT A BUNDLE COMPONENT.
+#      build/Build.Licence.cs scans charts/bundle/ and the platform's own images; a chart under
+#      charts/managed/ that renders an upstream image — haproxy before this, the collector beside it —
+#      is outside both scans. The exception ADR-011 § Enforcement asks for is written into
+#      LicenceExceptions NOW, keyed by this image and carrying this reading as its argument, so the day
+#      the scan widens to workload images it finds the argument and not a red row. conformance.yaml
+#      § owed, `licence-scan-does-not-read-workload-images`.
+#
+# Had the row refused AGPL for a deployed component, the type would still be published and
+# GrafanaReconciler would fail every pass naming the ADR. The row does not refuse.
+licence: AGPL-3.0, run as an unmodified upstream image in its own container; ADR-011 § Grafana
+
+# The one plugin, installed by grafana-cli at pod start.
+plugin: grafana-clickhouse-datasource 4.21.3
+plugin-source: https://github.com/grafana/clickhouse-datasource
+# ⚠ Apache-2.0 — its LICENSE at v4.21.3 read on 2026-09-17. Fetched from grafana.com at pod start and
+# not pinned by digest; conformance.yaml § owed, `clickhouse-plugin-is-fetched-at-start`.
+plugin-licence: Apache-2.0
+
+# ── The pin, and how it was resolved ─────────────────────────────────────────────────────────────
+#
+# ⚠ BY DIGEST, IN THE BUNDLE'S SHAPE. Resolved on 2026-09-17:
+#
+#   $ docker buildx imagetools inspect grafana/grafana:13.2.2
+#   Name:      docker.io/grafana/grafana:13.2.2
+#   MediaType: application/vnd.docker.distribution.manifest.list.v2+json
+#   Digest:    sha256:ac461fb352abc50da10a51c7d02462e9c05488f11f53f14b3ad79a8145f638a0
+#
+# The manifest LIST digest, so amd64 and arm64 nodes pull through one reference. 13.2.2 was
+# `latest` when resolved (published 2026-09-15); the same pin is Grafanas.Image in C# and `image` in
+# values.yaml, and GrafanaDeclarationTests compares the two.
+#
+# ── What was read off the image, and where it landed ─────────────────────────────────────────────
+#
+#   * `User: 472` — numeric. Written into the pod's securityContext as runAsUser, runAsGroup and
+#     fsGroup (Grafanas.GrafanaUid), the last so the emptyDir under /var/lib/grafana is writable.
+#   * `Entrypoint: /run.sh`, `ExposedPorts: 3000/tcp`. Grafana's own entrypoint reads GF_* variables
+#     and GF_INSTALL_PLUGINS; nothing is overridden.
+#   * No `org.opencontainers.image.licenses` label — only `org.opencontainers.image.source`. The
+#     licence is read off the repository's LICENSE (AGPL-3.0) and not off the image.
+#
+# Read from Grafana's documentation (Provisioning § Data sources, Configuration § security and
+# auth.anonymous) at 13.x:
+#
+#   * `$VAR` and `${VAR}` are expanded in every provisioning-file value at load; `$$` is a literal.
+#     That is what lets the file carry no coordinate of the workspace.
+#   * `GF_SECURITY_ALLOW_EMBEDDING=true` removes `X-Frame-Options: deny`; without it a panel URL in an
+#     iframe renders nothing. It is unconditional here because embedding by URL is the only way this
+#     platform will ever show a Grafana panel (ADR-011).
+#   * `GF_AUTH_ANONYMOUS_ENABLED` / `GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer` is the `anonymousViewers`
+#     property; off, every visit signs in.
+#   * The datasource `uid`s are fixed (`cybercloud-metrics`, `cybercloud-logs`) so a dashboard JSON a
+#     tenant exports from one instance imports into another.
+#
+# Read from grafana/clickhouse-datasource's README at v4.21.3: jsonData carries `host`, `port`,
+# `protocol` (native|http), `secure`, `path`, `defaultDatabase`, `username`; secureJsonData carries
+# `password`. The HTTP protocol with a path is what lets the datasource speak to the workspace's SQL
+# endpoint — MonitorWorkspaces.SqlEndpoint, `https://telemetry.cybercloud.svc/sql/{database}` — rather
+# than to a ClickHouse host this chart would otherwise have to name.

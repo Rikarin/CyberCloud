@@ -662,6 +662,21 @@ GPL-3.0 half of this footnote entirely if it matures, because it is an Apache-2.
 speaking LINSTOR's API. It is `0.x`. A `0.x` control plane is not where a customer's block storage
 goes, and this is a note in a licence audit rather than a decision in it.
 
+> ✅ **THE GRAFANA ROW WAS READ FOR A DEPLOYED COMPONENT ON 2026-09-17 (#32), AND THE READING IS:
+> ALLOWED, ON THE CONDITION THE ROW STATES.** `CyberCloud.Dashboard/grafanas` runs upstream's
+> `grafana/grafana` image by digest, unmodified, configured through its documented environment
+> variables and a provisioning file, one `Deployment` per resource in the tenant's namespace. That is
+> *"we distribute, we do not modify"* — AGPL's network clause binds whoever modifies and serves, and
+> the platform serves upstream's bytes. The portal takes no Grafana package and its one integration
+> is the URL the type's `url` action returns, which is *"embeds rendered dashboards by URL"*. The
+> exception § Enforcement asks for is written into `build/Build.Licence.cs § LicenceExceptions`,
+> keyed by the image, with this reading beside it. ⚠ **What the row does not yet have is a gate that
+> reads the image**: the scan below covers bundle components and the platform's own images, and an
+> image a chart under `charts/managed/` renders is neither — haproxy's GPL-2.0 was outside it before
+> Grafana was. `charts/managed/grafana/conformance.yaml § owed`,
+> `licence-scan-does-not-read-workload-images`. Had the row refused AGPL as a deployed component, the
+> type would be published exactly as it is and its reconciler would fail every pass naming this ADR.
+
 **Enforcement.** A build gate runs a licence scan over the chart set and the container images in the
 platform bundle, and fails on any SSPL/BUSL/AGPL image outside an allow-list with a written reason.
 

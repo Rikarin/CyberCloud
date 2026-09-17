@@ -1,0 +1,169 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/monitor-collector/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the monitor-collector chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "image": {
+      "default": "otel/opentelemetry-collector-contrib:0.161.0@sha256:fd328de2552466ad78385e1b1289c3f2402b1c45f265b252aab1955b42845ac1",
+      "description": "The collector image, pinned by digest in the bundle's shape.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Upstream's contrib distribution, unmodified. ⚠ `repository:tag@sha256:…` — the shape every charts/bundle component records its images in — and the same string as MonitorCollectors.Image; CollectorDeclarationTests fails when the two drift. Resolved 2026-09-17; SOURCE has the command and the output. A tenant choosing what runs in a pod that holds their workspace's ingest key is not a configuration surface.",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/image"
+    },
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity injected by the reconciler. Not a tenant-facing setting.",
+      "properties": {
+        "apiVersion": {
+          "default": "2026-08-01",
+          "description": "The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "managedBy": {
+          "default": "cybercloud",
+          "description": "Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 6,
+          "x-cybercloud-pointer": "/properties/platform/managedBy"
+        },
+        "resourceGroup": {
+          "default": "",
+          "description": "Resource group name, rendered into the cybercloud.io/resource-group label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceGroup"
+        },
+        "resourceId": {
+          "default": "",
+          "description": "Resource GUID, rendered into the cybercloud.io/resource-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/resourceId"
+        },
+        "resourceType": {
+          "default": "CyberCloud.Monitor/workspaces/collectors",
+          "description": "Fully qualified resource type, rendered into the cybercloud.io/resource-type label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "subscriptionId": {
+          "default": "",
+          "description": "Subscription GUID, rendered into the cybercloud.io/subscription-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/subscriptionId"
+        },
+        "tenantId": {
+          "default": "",
+          "description": "Tenant GUID, rendered into the cybercloud.io/tenant-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tenantId"
+        },
+        "workspace": {
+          "default": "prod",
+          "description": "The parent workspace's name — a component of every object name, and the stem of the workspace's own row and ingest-key Secret the pod reads its coordinates from.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 7,
+          "x-cybercloud-pointer": "/properties/platform/workspace"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "receivers": {
+      "additionalProperties": false,
+      "description": "Which OTLP protocols the collector listens on. At least one; both is the default.",
+      "properties": {
+        "otlpGrpc": {
+          "default": true,
+          "description": "Accept OTLP over gRPC on port 4317 — what most SDKs send by default.",
+          "type": "boolean",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/receivers/otlpGrpc"
+        },
+        "otlpHttp": {
+          "default": true,
+          "description": "Accept OTLP over HTTP on port 4318 — protobuf or JSON, for browsers and anything that cannot speak gRPC.",
+          "type": "boolean",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/receivers/otlpHttp"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/receivers"
+    },
+    "replicas": {
+      "default": 1,
+      "description": "How many collector pods share the endpoint. The collector is stateless, so more replicas is more fan-in and nothing else.",
+      "maximum": 3,
+      "minimum": 1,
+      "type": "integer",
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/replicas"
+    },
+    "sizing": {
+      "additionalProperties": false,
+      "description": "CPU and memory for each collector pod.",
+      "properties": {
+        "preset": {
+          "default": "c1.small",
+          "description": "How much each pod gets. The small row carries a few thousand spans a second; the larger rows are for a whole cluster's telemetry through one gateway. The memory limiter is set from the preset, so an oversized burst is refused rather than killed.",
+          "enum": [
+            "c1.large",
+            "c1.medium",
+            "c1.small"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/sizing/preset",
+          "x-cybercloud-widget": "cozy-preset"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/sizing"
+    }
+  },
+  "title": "monitor-collector chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "monitor-collector",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces/collectors"
+}

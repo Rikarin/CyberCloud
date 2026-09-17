@@ -1,0 +1,159 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Monitor/workspaces/collectors. This file is
+# data: `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet, and the
+# target says so in its own log rather than implying otherwise.
+
+resourceType: CyberCloud.Monitor/workspaces/collectors
+apiVersion: "2026-08-01"
+chart: monitor-collector
+
+# Objects the reconciler must have applied once the resource reports Succeeded, in apply order.
+#
+# ⚠ THREE CORE KINDS AND ONE OF THEM BECOMES A POD, which is the first time under this family's
+# parent. The ConfigMap first, so the pod never mounts a volume that is not there; the Service last,
+# so nothing is addressable before there is something to address. ⚠ NONE OF THE THREE CARRIES THE
+# WORKSPACE'S accountID, DATABASE OR KEY: the Deployment names the workspace's own row and Secret by
+# reference and the kubelet substitutes them at pod start. See Chart.yaml's header.
+renders:
+  - group: ""
+    version: v1
+    kind: ConfigMap
+    count: 1
+  - group: apps
+    version: v1
+    kind: Deployment
+    count: 1
+  - group: ""
+    version: v1
+    kind: Service
+    count: 1
+
+# ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
+# which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.monitor_workspaces_collectors
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: the-pod-starts-and-accepts-an-export
+    says: >
+      On a real kubelet, with the workspace's row and ingest key in the namespace and NOTHING else —
+      no VictoriaMetrics, no ClickHouse, no ingest host — the collector pod goes Ready and an
+      OTLP/HTTP export POSTed to the Service is answered 200. ✅ ASSERTED:
+      MonitorCollectorClusterBackedConformance.TheCollectorPodStartsAndAcceptsAnOtlpExport, on the
+      k3s the cluster-backed suite starts. It is the one assertion on this row that reads what a
+      kubelet did rather than what the API server holds.
+  - id: an-export-lands-in-the-workspace
+    says: >
+      A span, a log record and a metric sent to the endpoint listEndpoints returned appear in the
+      workspace's stores under ITS accountID and ITS database and nobody else's. ⚠ Provable only
+      against a real VictoriaMetrics and ClickHouse, which the cluster-backed suite does not have —
+      the same wall charts/managed/monitor-workspace's `metrics-round-trip` is behind.
+  - id: a-receiver-switched-off-stops-listening
+    says: >
+      A PUT turning one protocol off removes its port from the Service and the container, and the
+      collector rolls once; a PUT turning both off is refused by name and changes nothing.
+  - id: the-endpoint-is-stable-across-rollouts
+    says: >
+      listEndpoints returns the same two addresses before, during and after a configuration change,
+      because they are the Service's and the Service is not rolled.
+  - id: a-delete-takes-the-pod-down-and-the-address-with-it
+    says: >
+      After DELETE the old address answers the canonical 404, the Service is gone before the pods
+      are, and nothing is left in the namespace carrying this resource's id.
+
+# ── Owed ────────────────────────────────────────────────────────────────────────────────────────
+#
+# What this row does NOT do, each with what closes it. A gap that is written down is a decision; a
+# gap that is not is a defect somebody rediscovers.
+owed:
+  - id: tenant-authored-config-is-not-accepted
+    says: >
+      docs/plan/16 describes a tenant declaring `receivers: [otlp, prometheus, filelog,
+      kubeletstats]`, `processors: [batch, memory_limiter, k8sattributes, filter, transform]` and
+      `exporters: [cybercloud, ...tenant's own]`, validated against a component allow-list before
+      apply. This version renders the whole configuration itself and offers two switches — which
+      OTLP protocols to listen on. There is no config to validate because there is none to accept, no
+      `filter`/`transform` a bad config could leak PII through, and no exporter a tenant can point
+      at their own backend — which is also the FEATURE the plan names ("a tenant may export to their
+      own backends as well") and the egress it says must be metered. The mode is `deployment`;
+      `daemonset` is not offered.
+    closes: >
+      An api-version with the receiver, processor and exporter lists as typed properties (an array
+      of objects, which the schema does not have), the reconciler's allow-list over them, egress
+      metering per exporter endpoint, and a `mode` property that renders a DaemonSet.
+  - id: collector-runs-where-its-workspace-is-published
+    says: >
+      The Deployment reads the workspace's accountID, database and ingest key from the workspace's
+      own row and Secret in its own namespace, so the collector has to run in the cluster the
+      workspace's `clusterId` names. docs/plan/16 says "in their cluster"; a tenant's connected
+      cluster (CyberCloud.ContainerService/connectedClusters) is not that cluster, and a collector
+      placed there is a pod the kubelet holds in CreateContainerConfigError naming a ConfigMap that
+      will never appear. Nothing checks the two clusterIds agree — a child's pass reads its own body —
+      and the kubelet's message names the object, which is the diagnosis a tenant gets.
+    closes: >
+      Either the ingest host, which resolves an ingest KEY to a workspace and needs no row in the
+      collector's cluster — the exporter then carries the key alone and the collector runs anywhere —
+      or a reconciler-side check that the collector's clusterId is its workspace's, which needs the
+      parent's body and a seam the driver does not offer a child today.
+  - id: collector-ingress-is-unauthenticated
+    says: >
+      Anything inside the cluster that can reach the Service's ClusterIP can send to it. The
+      collector authenticates its EXPORTS to the workspace as the workspace's VMUser; nothing
+      authenticates a workload to the collector, and listEndpoints is therefore not a secret action.
+      In a tenant's own namespace that is the tenant's own workloads; across namespaces it is
+      whatever the cluster's network policy allows, which this type does not render.
+    closes: A NetworkPolicy restricting ingress to the namespace, or an OTLP receiver with an authenticator extension and a tenant-held token — the api-version that grows the tree.
+  - id: collector-clickhouse-tables-are-the-exporters-shape
+    says: >
+      The clickhouse exporter runs with `create_schema: false` and writes to tables named
+      `otel_logs` and `otel_traces` in the workspace's database, in the shape upstream's exporter
+      expects. Nothing in this repository creates that database or those tables —
+      charts/managed/monitor-workspace records `clickhouse-ttl-is-published-not-applied` for the
+      same reason — so every export of logs and traces lands in the exporter's retry queue until the
+      ingest host's schema step exists. The metrics half is different: the prometheusremotewrite
+      exporter writes into a VictoriaMetrics account that needs no schema and answers the moment
+      vmauth resolves the VMUser.
+    closes: The ingest host's schema step creating the database and the exporter's two tables, with the retention TTL the workspace's row publishes.
+  - id: the-endpoints-are-named-not-resolved
+    says: >
+      `ingest.cybercloud.svc` and `telemetry.cybercloud.svc` are MonitorWorkspaces.IngestHost and
+      MonitorWorkspaces.QueryHost — platform addresses nothing in this repository provisions or
+      verifies, the same gap charts/managed/monitor-workspace records as
+      `vmcluster-is-named-not-resolved`. A collector whose exporters point at hosts that do not
+      resolve starts, goes Ready, accepts exports and retries them forever, which is what the
+      cluster-backed suite measured and is also what a tenant would see in the minute before the
+      region's stores answer — and for as long as they do not.
+    closes: charts/bundle/ rendering the two Services from the same constants, plus a gate comparing them.
+  - id: the-image-pin-is-a-record-nothing-refreshes
+    says: >
+      The digest is pinned in the bundle's shape, and `charts/bundle/images.sh` does not read
+      charts/managed/ — so a tag whose digest moved upstream is caught for every bundle component and
+      for no workload image. The pin here is exact and the kubelet pulls those bytes; what nobody
+      does is ask whether the tag still serves them.
+    closes: images.sh reading `image:` values out of charts/managed/*/values.yaml alongside the bundle's records.
+  - id: nothing-here-is-metered-beyond-quota
+    says: >
+      The collector draws vCPU and memory times replicas against the subscription's quota and
+      nothing else. docs/plan/16 prices the collector at 1.0 EM and says egress to a tenant's own
+      backends "is metered"; there is no tenant backend yet and no meter for the bytes this
+      collector carries.
+    closes: A usage meter on the workspace's ingest, which is the ingest host's, and the egress meter that arrives with tenant-owned exporters.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
+meters:
+  - vcpu
+  - memoryGb
+  - resources

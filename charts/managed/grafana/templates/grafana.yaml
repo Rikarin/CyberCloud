@@ -1,0 +1,170 @@
+{{/*
+A managed Grafana — docs/plan/16 § Managed Grafana.
+
+⚠ THREE OF THE FOUR OBJECTS, IN THE ORDER THE RECONCILER APPLIES THEM. The fourth — the admin
+credential's Secret — is applied FIRST by GrafanaReconciler from what the tenant's vault returned, and
+is not rendered here for the reason charts/managed/monitor-workspace gives for its ingest key: a
+credential built inside one reconcile pass has no value in any body this chart could carry. The
+Deployment names it in two secretKeyRefs.
+
+⚠ THE POD'S ENV IS THE WHOLE TENANCY WIRING, the arrangement charts/managed/monitor-collector has:
+three variables from the workspace's row and ingest key, by reference, none `optional`, so a Grafana
+whose workspace has not converged is held by the kubelet naming the missing object rather than started
+with empty datasource URLs.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "grafana.objectName" . }}
+  labels:
+    {{- include "grafana.platformLabels" . | nindent 4 }}
+data:
+  datasources.yaml: |
+    {{- include "grafana.datasources" . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "grafana.objectName" . }}
+  labels:
+    {{- include "grafana.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ ONE, AND Recreate. Grafana OSS keeps its state in SQLite on the emptyDir below; two pods would be
+    two instances with two sets of sessions behind one URL, and a rolling update would run both at
+    once. conformance.yaml § owed, `one-instance-is-a-single-point-of-failure`.
+  */}}
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "grafana.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "grafana.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{/* A provisioning edit does not restart a pod on its own; the hash on the template does. */}}
+        cybercloud.io/grafana-provisioning: {{ include "grafana.datasources" . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        {{/*
+          ⚠ 472 — the image's own `USER 472`, read off its config (SOURCE). fsGroup as well, so the
+          emptyDir under /var/lib/grafana is writable by that uid.
+        */}}
+        runAsUser: 472
+        runAsGroup: 472
+        fsGroup: 472
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: grafana
+          {{/*
+            ⚠ BY DIGEST, IN THE BUNDLE'S SHAPE, AND UNMODIFIED — ADR-011's condition, spelled as the
+            reference. The value is @internal and the same string as Grafanas.Image.
+          */}}
+          image: {{ .Values.image | quote }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: CYBERCLOUD_ACCOUNT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "grafana.workspaceRow" . }}
+                  key: accountId
+            - name: CYBERCLOUD_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "grafana.workspaceRow" . }}
+                  key: database
+            - name: CYBERCLOUD_INGEST_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "grafana.workspaceKeySecret" . }}
+                  key: ingestKey
+            - name: GF_SECURITY_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "grafana.adminSecretName" . }}
+                  key: adminUser
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "grafana.adminSecretName" . }}
+                  key: adminPassword
+            {{/*
+              ⚠ ADR-011's ONE PERMITTED INTEGRATION, spelled as Grafana spells it. Without it Grafana
+              sends X-Frame-Options: deny and a panel URL in an iframe renders nothing. Unconditional,
+              because embedding by URL is the only way this platform will ever show a Grafana panel.
+            */}}
+            - name: GF_SECURITY_ALLOW_EMBEDDING
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: {{ .Values.anonymousViewers | quote }}
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: Viewer
+            - name: GF_INSTALL_PLUGINS
+              value: {{ .Values.plugins | quote }}
+            - name: GF_PATHS_DATA
+              value: /var/lib/grafana
+            - name: GF_PATHS_PLUGINS
+              value: /var/lib/grafana/plugins
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            periodSeconds: 5
+          resources:
+            requests:
+              {{- include "grafana.resources" . | fromJson | toYaml | nindent 14 }}
+            limits:
+              {{- include "grafana.resources" . | fromJson | toYaml | nindent 14 }}
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            {{/*
+              ⚠ The root filesystem is read-only and these two emptyDirs are what Grafana writes: its
+              SQLite database and downloaded plugins under /var/lib/grafana, scratch under /tmp. A
+              dashboard saved in the UI dies with the pod — conformance.yaml § owed,
+              `dashboards-are-not-a-sub-resource`; the datasources come back from the file every start.
+            */}}
+            - name: data
+              mountPath: /var/lib/grafana
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: datasources
+          configMap:
+            name: {{ include "grafana.objectName" . }}
+        - name: data
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "grafana.objectName" . }}
+  labels:
+    {{- include "grafana.platformLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "grafana.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
