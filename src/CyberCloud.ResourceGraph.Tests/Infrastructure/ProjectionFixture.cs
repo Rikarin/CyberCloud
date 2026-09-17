@@ -153,6 +153,15 @@ public sealed class ProjectionFixture : IAsyncLifetime {
         written.IsSuccess.ShouldBeTrue(written.Error?.Message);
     }
 
+    /// <summary>Deletes one tuple, the way a park's reparent and assignment drop do.</summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="tuple">The tuple, spelled <c>type:id#relation@subject</c>.</param>
+    public async Task RevokeAsync(Guid tenant, string tuple) {
+        var store = For(tenant).GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(tenant));
+        var deleted = await store.DeleteAsync(RelationTuple.Parse(tuple).GetValueOrThrow());
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+    }
+
     /// <summary>Polls the projection until the resource's row is at the version, or fails after a bound.</summary>
     /// <param name="tenant">The tenant.</param>
     /// <param name="resourceId">The resource.</param>

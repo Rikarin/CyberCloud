@@ -97,6 +97,42 @@ public static class ResourceChangedLog {
     }
 
     /// <summary>
+    ///     The NATS URL as a log line may carry it: the scheme, the host and the port, and never
+    ///     the credential.
+    /// </summary>
+    /// <param name="natsUrl">
+    ///     <see cref="ResourceGraphOptions.NatsUrl" /> — one URL, or several separated by commas as
+    ///     the client accepts them.
+    /// </param>
+    /// <remarks>
+    ///     ⚠ An authenticated server's URL is <c>nats://user:password@host:4222</c>, and the first
+    ///     version interpolated it whole into every failed-publish message and every reconnect
+    ///     warning, on the gateway and on the silo (#54 review). A URL that does not parse is
+    ///     returned as it came — it names no host anyone could log into.
+    /// </remarks>
+    public static string RedactedUrl(string natsUrl) {
+        if (string.IsNullOrEmpty(natsUrl)) {
+            return natsUrl ?? string.Empty;
+        }
+
+        return string.Join(
+            ',',
+            natsUrl.Split(',').Select(static part => {
+                    var trimmed = part.Trim();
+
+                    if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) || uri.UserInfo.Length == 0) {
+                        return trimmed;
+                    }
+
+                    return uri.IsDefaultPort
+                        ? $"{uri.Scheme}://{uri.Host}"
+                        : string.Create(CultureInfo.InvariantCulture, $"{uri.Scheme}://{uri.Host}:{uri.Port}");
+                }
+            )
+        );
+    }
+
+    /// <summary>
     ///     Reads the tenant out of a subject, so a consumer can route before it decodes the body.
     /// </summary>
     /// <param name="subject">A subject of the form <c>cc.{tenant:N}.res.…</c>.</param>

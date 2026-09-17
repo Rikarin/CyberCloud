@@ -256,6 +256,33 @@ public sealed class ResourceGrain(
     }
 
     /// <inheritdoc />
+    public async Task<Result<ResourceSnapshot>> ParkAsync() {
+        if (!state.State.Exists) {
+            return NotFound<ResourceSnapshot>();
+        }
+
+        if (state.State.ProvisioningState != ProvisioningState.Deleting) {
+            return Result<ResourceSnapshot>.Failure(
+                ErrorCode.Conflict,
+                $"'{state.State.Path}' is {state.State.ProvisioningState} and only a Deleting resource "
+                + "can be parked. The park follows a soft delete's teardown — docs/plan/08 § Soft delete."
+            );
+        }
+
+        // ⚠ THE STATE, THE OPERATION AND THE ETAG ALL STAY. The resource is still Deleting with the
+        // delete's OperationId on it, which is what BeginRestoreAsync reads and what its remarks
+        // explain the absence of a single-writer guard by. What this write is FOR is the count: the
+        // park is a transition of the resource — its data plane is down and its address is gone —
+        // and the projection orders transitions by this number. CompleteAsync leaves the etag alone
+        // for a silo-side transition too; nothing a caller holds an If-Match against changed.
+        state.State.ModifiedAt = clock.UtcNow;
+        state.State.Version++;
+
+        await state.WriteStateAsync();
+        return Result<ResourceSnapshot>.Success(Snapshot(state.State.ApiVersion, []));
+    }
+
+    /// <inheritdoc />
     public async Task<Result<ResourceSnapshot>> BeginRestoreAsync(Guid operationId) {
         if (!state.State.Exists) {
             // ⚠ The canonical NotFound, and it is reachable rather than defensive: a restore is

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text.Json;
 
 namespace CyberCloud.ResourceGraph;
 
@@ -136,9 +137,16 @@ public sealed class ClickHouseResourceGraphStore {
 
         var read = await clickHouse.ExecuteAsync(ResourceGraphTable.SelectRow(tenantId), ResourceParameter(resourceId), cancellationToken);
 
-        return read.TryGetError(out var readError)
-            ? Result<ResourceGraphLookup>.Failure(readError)
-            : Result<ResourceGraphLookup>.Success(new(ResourceGraphJson.DecodeFirstRow(read.GetValueOrThrow())));
+        if (read.TryGetError(out var readError)) {
+            return Result<ResourceGraphLookup>.Failure(readError);
+        }
+
+        try {
+            return Result<ResourceGraphLookup>.Success(new(ResourceGraphJson.DecodeFirstRow(read.GetValueOrThrow())));
+        }
+        catch (JsonException exception) {
+            return NotJson<ResourceGraphLookup>(read.GetValueOrThrow(), exception);
+        }
     }
 
     /// <summary>
@@ -149,9 +157,30 @@ public sealed class ClickHouseResourceGraphStore {
     async Task<Result<long>> HeldVersionAsync(Guid tenantId, Guid resourceId, CancellationToken cancellationToken) {
         var read = await clickHouse.ExecuteAsync(ResourceGraphTable.SelectVersion(tenantId), ResourceParameter(resourceId), cancellationToken);
 
-        return read.TryGetError(out var readError)
-            ? Result<long>.Failure(readError)
-            : Result<long>.Success(ResourceGraphJson.DecodeNumber(read.GetValueOrThrow(), "version") ?? 0);
+        if (read.TryGetError(out var readError)) {
+            return Result<long>.Failure(readError);
+        }
+
+        try {
+            return Result<long>.Success(ResourceGraphJson.DecodeNumber(read.GetValueOrThrow(), "version") ?? 0);
+        }
+        catch (JsonException exception) {
+            return NotJson<long>(read.GetValueOrThrow(), exception);
+        }
+    }
+
+    /// <summary>
+    ///     A <c>200</c> whose body is not the <c>JSONEachRow</c> the statement asked for, as a
+    ///     failure the caller retries. ⚠ A proxy's HTML error page on a 200 is the case that found
+    ///     this; before it the <see cref="JsonException" /> escaped the projector's loop (#54 review).
+    /// </summary>
+    static Result<T> NotJson<T>(string body, JsonException exception) where T : notnull {
+        var excerpt = body.Length > 200 ? body[..200] + "…" : body;
+
+        return Result<T>.Failure(
+            ErrorCode.InternalError,
+            $"ClickHouse answered 200 with a body that is not JSONEachRow: {exception.Message}. The body began: {excerpt.Trim()}"
+        );
     }
 
     async Task<Result> PrepareAsync(Guid tenantId, CancellationToken cancellationToken) {

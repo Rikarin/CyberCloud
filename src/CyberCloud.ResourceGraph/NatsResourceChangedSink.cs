@@ -16,7 +16,8 @@ namespace CyberCloud.ResourceGraph;
 ///         projection eventually consistent, so a create is not refused because a list will lag — and
 ///         a NATS client that cannot reach its server throws. Every path here turns that into a
 ///         failure the caller logs, with the subject in the message so the operator knows which event
-///         is missing from the projection.
+///         is missing from the projection — and the server's address without its credential, since
+///         the message is headed for a log line.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The stream is declared lazily and once.</b> <see cref="ResourceChangedLog.EnsureAsync" />
@@ -99,7 +100,7 @@ public sealed class NatsResourceChangedSink : IResourceChangedSink, IAsyncDispos
         catch (OperationCanceledException) {
             return Result.Failure(
                 ErrorCode.InternalError,
-                $"Publishing resource-changed on '{subject}' to NATS at '{options.NatsUrl}' did not complete "
+                $"Publishing resource-changed on '{subject}' to NATS at '{ResourceChangedLog.RedactedUrl(options.NatsUrl)}' did not complete "
                 + $"within {options.PublishTimeout.TotalSeconds:0}s. The write stands; the resource-graph "
                 + "projection is behind by this event until the resource changes again."
             );
@@ -107,7 +108,7 @@ public sealed class NatsResourceChangedSink : IResourceChangedSink, IAsyncDispos
         catch (Exception exception) when (exception is NatsException or TimeoutException or InvalidOperationException) {
             return Result.Failure(
                 ErrorCode.InternalError,
-                $"Publishing resource-changed on '{subject}' to NATS at '{options.NatsUrl}' failed: "
+                $"Publishing resource-changed on '{subject}' to NATS at '{ResourceChangedLog.RedactedUrl(options.NatsUrl)}' failed: "
                 + $"{exception.GetType().Name}: {exception.Message}. The write stands; the resource-graph "
                 + "projection is behind by this event until the resource changes again."
             );

@@ -204,6 +204,35 @@ public interface IResourceGrain : IGrainWithStringKey {
     Task<Result> CompleteDeleteAsync();
 
     /// <summary>
+    ///     Records that a soft delete's teardown finished and the recovery window opened. The
+    ///     resource stays <c>Deleting</c> and keeps everything a restore needs; what moves is the
+    ///     version and the modified time.
+    /// </summary>
+    /// <returns>
+    ///     The snapshot the <see cref="ResourceChangeKind.SoftDeleted" /> event carries, or
+    ///     <see cref="ErrorCode.Conflict" /> when the resource is not <c>Deleting</c>.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Exists so the park is a version the grain counted.</b> The projection is keyed on
+    ///         <see cref="ResourceSnapshot.Version" /> and drops anything at or below what it holds;
+    ///         the park itself writes the index, the relation store and the group, and none of those
+    ///         is this grain, so without this member the <c>SoftDeleted</c> event would carry the
+    ///         same version as the gateway's <c>Deleting</c> and be dropped. Inventing
+    ///         <c>Version + 1</c> at the emitter, as <c>Deleted</c> does for a grain that is about to
+    ///         be cleared, would collide with the next real write — <see cref="BeginRestoreAsync" />
+    ///         counts one — and the restore's own event would be the one dropped instead.
+    ///     </para>
+    ///     <para>
+    ///         The counterpart of <see cref="CompleteDeleteAsync" /> for the type that has a window:
+    ///         called after the reconciler's <c>DeleteAsync</c> converged, and nowhere else. A
+    ///         re-drive calls it again and counts again, which the projection absorbs as a later
+    ///         version of the same row.
+    ///     </para>
+    /// </remarks>
+    Task<Result<ResourceSnapshot>> ParkAsync();
+
+    /// <summary>
     ///     Begins a restore: moves a soft-deleted resource out of <c>Deleting</c> and records the
     ///     operation that will apply its desired state again.
     /// </summary>

@@ -71,4 +71,18 @@ public sealed class SubjectGrammarTests {
         var change = Event("CyberCloud.Testing", "widgets") with { Version = 7 };
         ResourceChangedLog.MessageId(change).ShouldBe($"{Resource:N}.7");
     }
+
+    [Theory]
+    [InlineData("nats://user:s3cret@nats.internal:4222", "nats://nats.internal:4222")]
+    [InlineData("nats://user:s3cret@nats.internal", "nats://nats.internal")]
+    [InlineData("tls://token@nats-a:4222, nats://user:pw@nats-b:4223", "tls://nats-a:4222,nats://nats-b:4223")]
+    [InlineData("nats://127.0.0.1:4222", "nats://127.0.0.1:4222")]
+    [InlineData("not a url", "not a url")]
+    [InlineData("", "")]
+    public void TheUrlALogLineCarriesHasNoCredential(string url, string expected) {
+        // An authenticated server's URL holds the password, and the sink's failure message and the
+        // projector's reconnect warning both name the server. Neither may name the credential.
+        ResourceChangedLog.RedactedUrl(url).ShouldBe(expected);
+        ResourceChangedLog.RedactedUrl(url).ShouldNotContain("s3cret");
+    }
 }

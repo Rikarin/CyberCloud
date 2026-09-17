@@ -23,11 +23,16 @@ namespace CyberCloud.ResourceGraph;
 ///         <c>change</c> is the event kind, because a list of "what happened to this tenant's
 ///         resources in the last hour" is the audit sink docs/plan/04 § Streams lists as a consumer,
 ///         and it costs one <c>LowCardinality(String)</c>. <c>is_deleted</c> is set by a
-///         <c>Deleted</c> event and read as a filter, because a resource that is gone must leave the
-///         list without leaving the table — a <c>DELETE</c> in ClickHouse is a mutation, which is
-///         asynchronous and expensive, and a tombstone row under the same engine is neither.
-///         <c>access</c> is the column docs/plan/07 § ListObjects says the index maintains — see
-///         <see cref="ResourceGraphRow.Access" /> for what it holds.
+///         <c>Deleted</c> event and by a <c>SoftDeleted</c> one, and read as a filter, because a
+///         resource that is gone — or parked, which docs/plan/08 § Soft delete puts "in no
+///         listing" — must leave the list without leaving the table: a <c>DELETE</c> in ClickHouse
+///         is a mutation, which is asynchronous and expensive, and a tombstone row under the same
+///         engine is neither. The two tombstones differ in <c>change</c> and in <c>access</c>: the
+///         hard one has no readers, the parked one's readers are the subscription's holders, so
+///         "what can I restore in this subscription" is <c>is_deleted = 1 AND change = 'SoftDeleted'</c>
+///         under the same access filter as the list. <c>access</c> is the column docs/plan/07
+///         § ListObjects says the index maintains — see <see cref="ResourceGraphRow.Access" /> for
+///         what it holds.
 ///     </para>
 ///     <para>
 ///         The database is <c>tenant_{tenantId:N}</c>, following docs/plan/05 § Every store's
@@ -144,7 +149,10 @@ public sealed record ResourceGraphRow {
 
     public string Change { get; init; } = string.Empty;
 
-    /// <summary>1 after a <c>Deleted</c> event; readers filter on 0.</summary>
+    /// <summary>
+    ///     1 after a <c>Deleted</c> or a <c>SoftDeleted</c> event; a listing filters on 0, and
+    ///     <see cref="Change" /> tells the two apart.
+    /// </summary>
     public byte IsDeleted { get; init; }
 
     /// <summary>

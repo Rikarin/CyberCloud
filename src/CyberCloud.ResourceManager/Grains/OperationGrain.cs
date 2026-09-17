@@ -717,6 +717,38 @@ public sealed class OperationGrain(
             return;
         }
 
+        // ── AND THE PROJECTION IS TOLD, AT A VERSION THE GRAIN COUNTED ──────────────────────────
+        //
+        // ⚠ WITHOUT THIS THE PARKED RESOURCE STAYED IN THE LIST FOR ITS WHOLE WINDOW (#54 review).
+        // The gateway emitted Deleting at the accept and this path emitted nothing after it, so the
+        // projection held a live Deleting row with the pre-park access column for seven days — the
+        // exact opposite of docs/plan/08 § Soft delete, which puts a parked resource in no listing
+        // and makes its readers the subscription-scoped holders. The Deleted branch could not be
+        // shared: it emits after IResourceGrain.CompleteDeleteAsync, which this path must never call.
+        //
+        // ⚠ THE GRAIN COUNTS THE PARK, AND THAT IS WHY IResourceGrain.ParkAsync EXISTS. Every step
+        // above writes some grain other than the resource's, so the snapshot's version is still the
+        // one the gateway's Deleting carried and the projector would drop an event at it. The
+        // Deleted branch invents Version + 1 because its grain is about to be cleared and nothing
+        // can count after it; here the next count is BeginRestoreAsync's, and an invented number
+        // would collide with it and drop the restore's own event instead. So the grain counts one,
+        // and the event carries what it counted.
+        //
+        // ⚠ AFTER THE REPARENT AND THE DROP, so the access column the projector reads under this
+        // version is the window's: the subscription's holders through the moved edge, and none of
+        // the direct grants. NotFound is a grain a purge cleared under a re-drive, which has its own
+        // Deleted event and nothing left to announce here.
+        var parked = await Resource(spec).ParkAsync();
+        if (parked.TryGetError(out var parkError)) {
+            if (parkError.Code != ErrorCode.ResourceNotFound) {
+                await ScheduleAsync(ReconcileOutcome.Failed(parkError, true));
+                return;
+            }
+        }
+        else {
+            await EmitAsync(ResourceChangeKind.SoftDeleted, spec, parked.GetValueOrThrow());
+        }
+
         Append(
             Progress(
                 "parked",

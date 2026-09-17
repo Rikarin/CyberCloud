@@ -265,8 +265,9 @@ here rather than rewritten so the original argument stays readable.
 - **The producer column reads "`IResourceGrain` on every state transition", and it is two
   emitters, neither of them the resource grain.** `ResourceManagerService` emits `Created`, `Updated`
   and `Deleting` at step 11 of the write path, from the gateway; `OperationGrain` emits
-  `StateChanged` at a terminal reconcile and `Deleted` when the teardown clears the grain, from a
-  silo. Both build the event through one function, so the columns cannot drift. The resource grain
+  `StateChanged` at a terminal reconcile, `SoftDeleted` when a teardown parks the resource for its
+  recovery window, and `Deleted` when a teardown clears the grain, from a silo. Both build the
+  event through one function, so the columns cannot drift. The resource grain
   itself publishes nothing: a publish inside a grain's state write is the Orleans provider's shape,
   and the seam is kept for the day it is worth taking.
 - **Of the four consumers listed for `resource-changed`, one exists.** The resource-graph projection

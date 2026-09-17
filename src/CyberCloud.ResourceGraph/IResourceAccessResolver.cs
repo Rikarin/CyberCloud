@@ -69,7 +69,23 @@ public sealed class ReBacResourceAccessResolver : IResourceAccessResolver {
             .ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture))
             .GetGrain<ICheckGrain>(GrainKeys.CheckCache(ObjectTypes.Resource, resourceId.ToString("N", CultureInfo.InvariantCulture)));
 
-        var listed = await check.ListRoleAssignmentsAsync(true).WaitAsync(cancellationToken);
+        Result<IReadOnlyList<RoleAssignment>> listed;
+
+        try {
+            listed = await check.ListRoleAssignmentsAsync(true).WaitAsync(cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException) {
+            // ⚠ A grain call that THROWS is the engine not answering — a SiloUnavailableException
+            // while the tenant's silo restarts, a timeout past the cluster's ResponseTimeout — and
+            // the contract above promises a failure for that, not an exception the projector has
+            // to know the Orleans type hierarchy to catch. The projector NAKs the message on it and
+            // the row lands when the silo is back.
+            return Result<ImmutableArray<string>>.Failure(
+                ErrorCode.InternalError,
+                $"The authorization engine did not answer for resource {resourceId:D} in tenant {tenantId:D}: "
+                + $"{exception.GetType().Name}: {exception.Message}"
+            );
+        }
 
         if (listed.TryGetError(out var error)) {
             return Result<ImmutableArray<string>>.Failure(error);

@@ -1010,7 +1010,8 @@ rather than description.** What landed is `CyberCloud.ResourceGraph`, one module
   `charts/managed/monitor-workspace/conformance.yaml § owed` had recorded nothing did. The three
   extra columns: `change LowCardinality(String)` (the event kind, so "what happened in the last
   hour" is a query), `is_deleted UInt8` (a `Deleted` event writes a tombstone row rather than
-  issuing a mutation), and `access Array(String)`. Two rows for one resource collapse to the highest
+  issuing a mutation, and a `SoftDeleted` one writes a tombstone that keeps its readers), and
+  `access Array(String)`. Two rows for one resource collapse to the highest
   `version` at merge time and `FINAL` collapses them before it; the projector also drops any event
   at or below the version it can read, so a replay of a thousand events is a thousand reads and no
   writes. `ProjectionRoundTripTests.AReplayAndAReorderedEventAreDroppedAndTheTableHoldsTheLatestVersion`
@@ -1023,13 +1024,37 @@ rather than description.** What landed is `CyberCloud.ResourceGraph`, one module
   the grain's etag".
 - **The stream has two producers, and one of them is new.** The write path emits `Created`,
   `Updated` and `Deleting` at step 11 from the gateway; `OperationGrain` emits `StateChanged` when
-  a reconcile reaches a terminal state and `Deleted` when the teardown clears the grain — the
-  transition a list cares about most, `Creating → Succeeded`, told nobody before. Both go through
-  `ResourceChangedEvents.From`, so the columns cannot drift between them. The `Deleted` event takes
-  the version after the last one the grain counted, read just before the clear, so a `Deleting` or
-  `StateChanged` that lands late is dropped rather than resurrecting the row.
+  a reconcile reaches a terminal state, `SoftDeleted` when a teardown parks the resource, and
+  `Deleted` when a teardown clears the grain — the transition a list cares about most,
+  `Creating → Succeeded`, told nobody before. Both go through `ResourceChangedEvents.From`, so the
+  columns cannot drift between them. The `Deleted` event takes the version after the last one the
+  grain counted, read just before the clear, so a `Deleting` or `StateChanged` that lands late is
+  dropped rather than resurrecting the row.
   `WritePathTests.TheSiloEmitsTheTerminalTransitionAndTheTeardownAsLaterVersions` pins the four
   events, their order and their strictly increasing versions.
+- **A parked resource is a tombstone with readers, and the park had to become a version the grain
+  counted (#54 review).** The first cut emitted nothing after the gateway's `Deleting` on a soft
+  delete — `ParkAsync` returns before the branch that emits `Deleted`, and rightly, since that
+  branch follows `IResourceGrain.CompleteDeleteAsync` — so a parked resource sat in the projection
+  as a live `Deleting` row with its pre-park access column for the whole window, the opposite of
+  § Soft delete's "in no listing" and "the people who can see a deleted resource become the people
+  who hold subscription-scoped rights". Now `ParkAsync` emits `SoftDeleted` after the reparent and
+  the assignment drop; the projector writes it with `is_deleted = 1` and resolves its readers, which
+  through the moved edge are the subscription's holders, so "what can I restore in this
+  subscription" is `is_deleted = 1 AND change = 'SoftDeleted'` under the list's own access filter.
+  ⚠ The version could not be invented the way `Deleted`'s is: the park writes the index, the
+  relation store and the group, and not the resource grain, so the snapshot still carried the
+  `Deleting` event's number and would have been dropped; `Version + 1` would have collided with
+  `BeginRestoreAsync`'s count and dropped the restore's `Updated` instead. `IResourceGrain.ParkAsync`
+  counts one — the resource stays `Deleting` with the delete's operation on it, only the version and
+  the modified time move — and the event carries what it counted.
+  `SoftDeletePathTests.AParkEmitsSoftDeletedAtAVersionTheGrainCountedAndTheRestoreEmitsAboveIt` pins
+  ten events over one resource's life and that the restore lands strictly above the park;
+  `ProjectionRoundTripTests.ASoftDeletedEventLeavesTheListAndKeepsTheSubscriptionsHoldersAsItsReaders`
+  reads the tombstone and its readers back out of ClickHouse. One pair of numbers is shared and
+  the test says so: `PurgeCoreAsync` reads the grain without writing it, so a purge's `Deleting`
+  carries the park's version and the projector drops it — the tombstone it would have written is
+  the one already there, and the clear that follows is what changes the row.
 - **"A consumer per tenant" is where the row lands, not how it is pulled.** One durable JetStream
   consumer, `resource-graph`, shared by every silo, so a message is projected once however many silos
   run; the tenant is the second subject token and is routed before the body is decoded, the access
@@ -1069,8 +1094,18 @@ rather than description.** What landed is `CyberCloud.ResourceGraph`, one module
   changed scope and re-inserts the row at the same version with the new column. The row's version
   must not move for that, so the engine needs a second ordering key or the recompute writes
   `version + 0` and relies on insert order; decide before building.
-- **The silo's two events are best-effort in the same sense the gateway's are.** A silo that dies
-  between `CompleteAsync` and the publish loses the `StateChanged`; the next change repairs the row.
+- **The silo's events are best-effort in the same sense the gateway's are, and for one of them
+  "the next change repairs the row" is not true.** A silo that dies between `CompleteAsync` and
+  the publish loses the `StateChanged`, and between `ParkAsync` and the publish loses the
+  `SoftDeleted`; the next change repairs either row. A silo that dies between
+  `CompleteDeleteAsync` and the publish loses the `Deleted`, and **nothing repairs that one**: the
+  re-drive reads `NotFound`, deliberately emits nothing (a second event would be the duplicate the
+  projector drops), and no later change can exist for a grain that is gone — so the row stays
+  `Deleting`, listed, `is_deleted = 0`, for as long as the table does (#54 review). Two shapes
+  close it and neither is built: write `last.Version + 1` into the operation's durable state before
+  the clear, so the re-drive has the number to emit with; or emit before the clear, which makes a
+  `CompleteDeleteAsync` that then fails for an hour a resource tombstoned in the projection while
+  its grain still answers by id. The first is the honest one and costs a durable write per delete.
   A stream that is the record rather than a replay buffer would want the publish inside the grain's
   write, which is the Orleans stream provider's shape and the reason the seam is kept.
 - **Portal SignalR fan-out, the audit sink and billing** are listed as consumers in 04 § Streams and

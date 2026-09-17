@@ -1,7 +1,6 @@
 using CyberCloud.Core.Time;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using NATS.Client.Core;
 using NATS.Client.JetStream;
 using NATS.Client.JetStream.Models;
 using System.Collections.Immutable;
@@ -44,6 +43,18 @@ namespace CyberCloud.ResourceGraph;
 ///         the stream. What would be wrong is a projector that acknowledged what it could not write —
 ///         that row would be gone from the stream and absent from the table, with nothing left to
 ///         say so.
+///     </para>
+///     <para>
+///         ⚠ <b>And nothing that throws out of a message stops the silo.</b> This is a
+///         <see cref="BackgroundService" />, and the host's default
+///         <c>BackgroundServiceExceptionBehavior</c> is <c>StopHost</c> — no host in this tree
+///         overrides it — so an exception that escapes <see cref="ExecuteAsync" /> is a silo that
+///         shuts down over one message. The first version caught the NATS client's four exception
+///         types and let the rest through, which made an <c>OrleansException</c> from the check
+///         grain (a silo mid-restart) or a <c>JsonException</c> from a ClickHouse body that was not
+///         JSON (a proxy's error page on a 200) a way to take the whole silo down from a projection
+///         (#54 review). A message whose handling throws is NAKed with the same delay a failed
+///         store gets; anything that escapes the consumer itself is the reconnect path.
 ///     </para>
 /// </remarks>
 public sealed class ResourceGraphProjector : BackgroundService {
@@ -125,12 +136,15 @@ public sealed class ResourceGraphProjector : BackgroundService {
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
                 return;
             }
-            catch (Exception exception) when (exception is NatsException or TimeoutException or InvalidOperationException or System.Net.Sockets.SocketException) {
+            catch (Exception exception) {
+                // ⚠ Every exception, for the reason the remarks give: with StopHost as the host's
+                // behaviour this catch is the line between "the projector reconnects" and "the silo
+                // stops". The URL is logged without its credential.
                 logger.LogWarning(
                     exception,
                     "resource-graph projector lost {Stream} at {Url}; retrying in {Delay}s",
                     options.Stream,
-                    options.NatsUrl,
+                    ResourceChangedLog.RedactedUrl(options.NatsUrl),
                     ReconnectDelay.TotalSeconds
                 );
 
@@ -173,6 +187,9 @@ public sealed class ResourceGraphProjector : BackgroundService {
 
         // ⚠ A deleted resource has no tuples left to ask about — the operation grain unlinked its
         // parent edge in the same pass — and a row nobody can list is what a tombstone should be.
+        // A SOFT-deleted one is the other way round: it is out of the list too, but its parent edge
+        // now names its subscription, and the holders that edge reaches are exactly who docs/plan/08
+        // § Soft delete says may see it during the window. So its readers are resolved.
         if (change.Change != ResourceChangeKind.Deleted) {
             var resolved = await access.ReadersOfAsync(change.TenantId, change.ResourceId, cancellationToken);
 
@@ -204,7 +221,7 @@ public sealed class ResourceGraphProjector : BackgroundService {
             DesiredHash = change.DesiredHash,
             Version = change.Version,
             Change = change.Change.ToString(),
-            IsDeleted = change.Change == ResourceChangeKind.Deleted ? (byte)1 : (byte)0,
+            IsDeleted = change.Change is ResourceChangeKind.Deleted or ResourceChangeKind.SoftDeleted ? (byte)1 : (byte)0,
             Access = readers,
             ProjectedAt = clock.UtcNow
         };
@@ -244,7 +261,40 @@ public sealed class ResourceGraphProjector : BackgroundService {
             return;
         }
 
-        var projected = await ProjectAsync(change, cancellationToken);
+        // ⚠ TERMINATED, NOT NAKED. ProjectAsync refuses an event with no tenant or no resource, and
+        // the first version treated that refusal like a store that did not answer — a NAK every
+        // five seconds for the seven days of retention, for a message that would never key a row.
+        // The subject's tenant already matched the body's, so this is an all-zero tenant subject
+        // carrying an all-zero body: a publisher's bug, logged where it can be found.
+        if (change.TenantId == Guid.Empty || change.ResourceId == Guid.Empty) {
+            logger.LogError(
+                "resource-changed on '{Subject}' names no tenant or no resource and was terminated; the projection is keyed on both",
+                message.Subject
+            );
+            await message.AckTerminateAsync(cancellationToken: cancellationToken);
+            return;
+        }
+
+        Result<ProjectionOutcome> projected;
+
+        try {
+            projected = await ProjectAsync(change, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException) {
+            // The resolver turns a grain call that throws into a Result and the store does the
+            // same for a body that is not JSON — the two the review found escaping — and this is
+            // the belt for whatever neither foresaw. The message is redelivered exactly as a
+            // failed store's is.
+            logger.LogWarning(
+                exception,
+                "resource-changed on '{Subject}' at version {Version} threw and will be redelivered in {Delay}s",
+                message.Subject,
+                change.Version,
+                RetryDelay.TotalSeconds
+            );
+            await message.NakAsync(new AckOpts { NakDelay = RetryDelay }, cancellationToken);
+            return;
+        }
 
         if (projected.TryGetError(out var error)) {
             logger.LogWarning(

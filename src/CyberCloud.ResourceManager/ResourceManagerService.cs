@@ -2913,7 +2913,7 @@ public sealed class ResourceManagerService(
         CancellationToken cancellationToken
     ) {
         // ⚠ ONE BUILDER FOR BOTH EMITTERS. OperationGrain emits the silo-side half of the stream
-        // (StateChanged, Deleted) through the same function, so the columns cannot drift between the
+        // (StateChanged, SoftDeleted, Deleted) through the same function, so the columns cannot drift between the
         // gateway's events and the silo's — see ResourceChangedEvents.
         var published = await changes.PublishAsync(
             ResourceChangedEvents.From(change, target.Id, target.ApiVersion.Value, snapshot),

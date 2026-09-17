@@ -144,6 +144,59 @@ public sealed class ProjectionRoundTripTests(ProjectionFixture fixture) {
     }
 
     [Fact]
+    public async Task ASoftDeletedEventLeavesTheListAndKeepsTheSubscriptionsHoldersAsItsReaders() {
+        // docs/plan/08 § Soft delete: a parked resource is in no listing, and "the people who can
+        // see a deleted resource become the people who hold subscription-scoped rights". Until the
+        // #54 review the park emitted nothing, so the row stayed a live Deleting one with its
+        // pre-park readers for the whole window.
+        var token = TestContext.Current.CancellationToken;
+        var resourceId = Guid.NewGuid();
+        var group = Guid.NewGuid();
+        var subscription = ProjectionFixture.Subscription;
+
+        // What a create leaves: the resource under its group, the group under its subscription,
+        // Erin reading the group, Frank owning the subscription, and Grace granted on the resource.
+        await fixture.GrantAsync(ProjectionFixture.Tenant, $"resource:{N(resourceId)}#parent@resourceGroup:{N(group)}");
+        await fixture.GrantAsync(ProjectionFixture.Tenant, $"resourceGroup:{N(group)}#parent@subscription:{N(subscription)}");
+        await fixture.GrantAsync(ProjectionFixture.Tenant, $"resourceGroup:{N(group)}#reader@user:erin");
+        await fixture.GrantAsync(ProjectionFixture.Tenant, $"subscription:{N(subscription)}#owner@user:frank");
+        await fixture.GrantAsync(ProjectionFixture.Tenant, $"resource:{N(resourceId)}#reader@user:grace");
+
+        var created = ProjectionFixture.Created(resourceId, "parked");
+        (await fixture.Sink.PublishAsync(created, token)).IsSuccess.ShouldBeTrue();
+        (await fixture.WaitForVersionAsync(ProjectionFixture.Tenant, resourceId, 1)).Access.ShouldBe(["user:erin", "user:frank", "user:grace"]);
+
+        // The park, as OperationGrain.ParkAsync leaves the tuples: the edge moves to the
+        // subscription and the direct grant is dropped. Then the event it emits at the version the
+        // grain counted for it.
+        await fixture.RevokeAsync(ProjectionFixture.Tenant, $"resource:{N(resourceId)}#parent@resourceGroup:{N(group)}");
+        await fixture.GrantAsync(ProjectionFixture.Tenant, $"resource:{N(resourceId)}#parent@subscription:{N(subscription)}");
+        await fixture.RevokeAsync(ProjectionFixture.Tenant, $"resource:{N(resourceId)}#reader@user:grace");
+
+        var parked = created with { Change = ResourceChangeKind.SoftDeleted, ProvisioningState = ProvisioningState.Deleting, Version = 4 };
+        (await fixture.Sink.PublishAsync(parked, token)).IsSuccess.ShouldBeTrue();
+
+        var row = await fixture.WaitForVersionAsync(ProjectionFixture.Tenant, resourceId, 4);
+
+        row.IsDeleted.ShouldBe((byte)1, "a parked resource is in no listing");
+        row.Change.ShouldBe("SoftDeleted", "and the change column is what tells it from a purged one");
+        row.ProvisioningState.ShouldBe("Deleting");
+        row.Access.ShouldBe(["user:frank"], "the subscription's holders through the moved edge; not the group's reader, not the dropped grant");
+
+        // And a restore is the gateway's Updated at the next version, after the edge came back.
+        await fixture.RevokeAsync(ProjectionFixture.Tenant, $"resource:{N(resourceId)}#parent@subscription:{N(subscription)}");
+        await fixture.GrantAsync(ProjectionFixture.Tenant, $"resource:{N(resourceId)}#parent@resourceGroup:{N(group)}");
+
+        var restored = created with { Change = ResourceChangeKind.Updated, ProvisioningState = ProvisioningState.Updating, Version = 5 };
+        (await fixture.Sink.PublishAsync(restored, token)).IsSuccess.ShouldBeTrue();
+
+        var back = await fixture.WaitForVersionAsync(ProjectionFixture.Tenant, resourceId, 5);
+
+        back.IsDeleted.ShouldBe((byte)0, "the restore puts it back in the list");
+        back.Access.ShouldBe(["user:erin", "user:frank"], "the group's reader is back and the dropped grant is not — docs/plan/08 § Soft delete");
+    }
+
+    [Fact]
     public async Task ABodyWhoseTenantDisagreesWithItsSubjectIsTerminatedNotProjected() {
         var token = TestContext.Current.CancellationToken;
         var resourceId = Guid.NewGuid();
@@ -171,6 +224,32 @@ public sealed class ProjectionRoundTripTests(ProjectionFixture fixture) {
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+    }
+
+    [Fact]
+    public async Task AnEventNamingNoResourceOnTheStreamIsTerminatedNotRedelivered() {
+        // ⚠ The first version NAKed it with a delay, forever: an all-zero body under an all-zero
+        // tenant subject passes the tenant check, fails ProjectAsync's key check, and was treated
+        // like a store that did not answer — one redelivery every five seconds for seven days.
+        var token = TestContext.Current.CancellationToken;
+        var unkeyed = ProjectionFixture.Created(Guid.Empty, "nobody");
+
+        var messagesBefore = (await fixture.JetStream.GetStreamAsync(fixture.Options.Stream, cancellationToken: token)).Info.State.Messages;
+        var redeliveredBefore = (await fixture.JetStream.GetConsumerAsync(fixture.Options.Stream, fixture.Options.Consumer, token)).Info.NumRedelivered;
+
+        var acknowledged = await fixture.JetStream.PublishAsync(unkeyed.Subject, ResourceChangedJson.Encode(unkeyed), cancellationToken: token);
+        acknowledged.EnsureSuccess();
+
+        await WaitUntilDrainedAsync(token);
+
+        // ⚠ A NAK with a delay is not ack-pending while it waits, so a drained consumer proves
+        // nothing by itself; the redelivery would arrive RetryDelay later, and this waits past it.
+        await Task.Delay(ResourceGraphProjector.RetryDelay + TimeSpan.FromSeconds(1), token);
+
+        var consumer = await fixture.JetStream.GetConsumerAsync(fixture.Options.Stream, fixture.Options.Consumer, token);
+        consumer.Info.NumRedelivered.ShouldBe(redeliveredBefore, "terminated, not NAKed: nothing came back");
+        consumer.Info.NumAckPending.ShouldBe(0);
+        (await fixture.JetStream.GetStreamAsync(fixture.Options.Stream, cancellationToken: token)).Info.State.Messages.ShouldBe(messagesBefore + 1, "the message stays on the stream for whoever wants to find the publisher");
     }
 
     [Fact]
