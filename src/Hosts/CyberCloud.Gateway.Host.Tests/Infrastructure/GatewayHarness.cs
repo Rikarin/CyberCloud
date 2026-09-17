@@ -19,11 +19,17 @@ namespace CyberCloud.Gateway.Host.Tests.Infrastructure;
 /// <param name="Body">The response body, as text.</param>
 /// <param name="Headers">Every response header.</param>
 /// <param name="Trace">The stages the pipeline entered, in order.</param>
+/// <param name="Caller">
+///     The caller stage 3 built — the object <c>GatewayComposition.MapGateway</c> parks for a hub to
+///     read, so on a hub route this <i>is</i> what the hub sees. A request refused before stage 3
+///     has the empty default: <c>Guid.Empty</c> for the tenant and no subject.
+/// </param>
 sealed record GatewayResponse(
     int Status,
     string Body,
     IHeaderDictionary Headers,
-    IReadOnlyList<string> Trace
+    IReadOnlyList<string> Trace,
+    CallerContext Caller
 ) {
     /// <summary>One header, or empty.</summary>
     public string Header(string name) => Headers.TryGetValue(name, out var value) ? value.ToString() : "";
@@ -236,7 +242,8 @@ sealed class GatewayHarness {
             http.Response.StatusCode,
             Encoding.UTF8.GetString(response.ToArray()),
             http.Response.Headers,
-            [.. context.Snapshot().Reached.Select(x => x.ToString())]
+            [.. context.Snapshot().Reached.Select(x => x.ToString())],
+            context.Caller
         );
     }
 }

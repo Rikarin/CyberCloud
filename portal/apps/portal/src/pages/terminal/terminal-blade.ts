@@ -36,8 +36,16 @@ const RESOURCE_NAME = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
 type Outcome = { readonly kind: 'terminated' | 'wasIdle' } | { readonly kind: 'failed'; readonly message: string };
 
 /**
- * The cloud shell: docs/plan/20 § The pages that are not generated, "`xterm.js` in a dockable
- * panel", over docs/plan/19's `CyberCloud.Terminal/consoles`.
+ * The cloud shell: docs/plan/20 § The pages that are not generated's cloud terminal row, over
+ * docs/plan/19's `CyberCloud.Terminal/consoles`.
+ *
+ * ⚠ **A routed page under the resource group, not the "dockable panel" the row's first draft
+ * said.** The panel would be a shell-wide affordance with no scope of its own, and a shell has a
+ * scope: it runs in a console resource, which lives in a resource group, so
+ * `subscriptions/{s}/resourceGroups/{g}/terminal` is where the group's consoles are and where a
+ * link (`?console=`) can name one. The row in docs/plan/20 records the same. A dockable pane
+ * that hosts this page's `TerminalPane` from any blade is a later affordance over the same
+ * `TerminalSession`, not a different terminal.
  *
  * A shell needs a console resource to run in — the home volume, the identity and the network
  * policy that `connect` refuses to start a pod without — so the page starts from the group's
@@ -58,10 +66,16 @@ type Outcome = { readonly kind: 'terminated' | 'wasIdle' } | { readonly kind: 'f
  * own message, in the pane, so the state of the row is visible where a person would look for a
  * prompt. Everything before that point — the console, the ticket, the socket — is real.
  *
- * ⚠ **`terminate` is two clicks and `connect` is none.** A connect against a running shell joins
- * it (the handler applies rather than creates), so opening the page costs nothing that was not
- * already running. A terminate stops a process somebody may be mid-command in, so the row asks
- * once — the same rule the access page applies to revoking a role.
+ * ⚠ **`terminate` is two clicks and `connect` is none — and none is a decision, because a
+ * navigation can start a pod.** `connect` applies the shell pod rather than creating it, so
+ * against a running shell opening the page joins it and costs nothing new; against an idle
+ * console the same call starts the pod, and a person who followed a `?console=` link has started
+ * one without clicking. That is accepted, for what the console itself pins: the pod is
+ * reclaimed on the idle timeout `connect` reports (the limits line under the pane says so), the
+ * pod is the console's own and runs in the tenant's cluster under the console's network policy,
+ * and a click before every shell would make the page a button in front of a terminal. A terminate stops a process
+ * somebody may be mid-command in, so the row asks once — the same rule the access page applies
+ * to revoking a role.
  */
 @Component({
   selector: 'cc-terminal-blade',

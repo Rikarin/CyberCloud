@@ -228,12 +228,16 @@ that work is two files and one rule:
 - **`apps/portal/proxy.conf.json`** forwards `/api` to the gateway on `localhost:5100`, stripping the
   prefix, because `API_BASE_PATH` is `/api` and the gateway serves its routes at the root. It stands
   in for the API shim docs/plan/03 § `portal/` gives `CyberCloud.Portal.Host`, which does not exist.
+  ⚠ The entry says `"ws": true`, and that is not decoration: the terminal pane opens
+  `ws://localhost:4200/api/hubs/terminal?ticket=…` on the same prefix, and Vite forwards a WebSocket
+  Upgrade only for an entry that asks (`ws: true`, or a `ws:` target) — every HTTP request would reach
+  the gateway and the one socket would not, with no error on the server side to say so.
 - **`apps/identity/proxy.conf.json`** forwards `/api`, `/connect` and `/.well-known` to the identity
   host on `localhost:5101`.
 - ⚠ **The ports are pinned in `angular.json`'s `serve.options` and in `CyberCloudResources`, and
   `AppHostTopologyTests` reads the proxy files back and refuses a drift** — a proxy file naming a
   stale port is a portal that renders and cannot call anything, with the only symptom an
-  `ECONNREFUSED` in the dev server's console.
+  `ECONNREFUSED` in the dev server's console. The same test refuses the `/api` entry without `ws`.
 
 The apps run through Aspire's JavaScript hosting with `install: false` — run
 `pnpm install --frozen-lockfile` here once first — and with whatever `node` is on `PATH`, which

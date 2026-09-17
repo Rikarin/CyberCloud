@@ -66,6 +66,46 @@ public sealed class HubTicketTests {
         upgrade.Body.ShouldBeEmpty();
         upgrade.Trace.ShouldContain("ResolveTenant");
         upgrade.Trace.ShouldContain("Dispatch");
+
+        // ⚠ And the caller is the one the mint had — tenant, subject type and subject id — not
+        // merely *a* caller. `GatewayResponse.Caller` is the object MapGateway parks for the hub, so
+        // this is the hub's view; a store that answered with another ticket's claims would pass every
+        // line above and fail here. The correlation id is the one field that differs by design: it
+        // is the upgrade's own request, not the mint's.
+        upgrade.Caller.TenantId.ShouldBe(GatewayHarness.TenantA);
+        upgrade.Caller.SubjectType.ShouldBe("user");
+        upgrade.Caller.SubjectId.ShouldBe("user-7");
+        upgrade.Caller.ImpersonatedBy.ShouldBeEmpty();
+        (upgrade.Caller with { CorrelationId = "" }).ShouldBe(minted.Caller with { CorrelationId = "" });
+        upgrade.Caller.CorrelationId.ShouldNotBeEmpty();
+        upgrade.Caller.CorrelationId.ShouldNotBe(minted.Caller.CorrelationId);
+    }
+
+    [Fact]
+    public async Task EachTicketRedeemsToItsOwnCallerWhateverTheOrder() {
+        // Two tenants mint, and the second ticket is redeemed first. The property is that a ticket is
+        // keyed by its own bytes and nothing else — not "the last claims parked", not "the first".
+        var gateway = new GatewayHarness();
+        var byA = await gateway.SendAsync("POST", "/hubs/terminal/ticket", gateway.Token(GatewayHarness.TenantA, "user-7"), "");
+        var byB = await gateway.SendAsync(
+            "POST",
+            "/hubs/terminal/ticket",
+            gateway.Token(GatewayHarness.TenantB, "sp-4", "servicePrincipal"),
+            ""
+        );
+
+        var asB = await gateway.SendAsync("GET", "/hubs/terminal", null, "ticket=" + TicketOf(byB));
+        var asA = await gateway.SendAsync("GET", "/hubs/terminal", null, "ticket=" + TicketOf(byA));
+
+        asB.Status.ShouldBe(StatusCodes.Status200OK);
+        asB.Caller.TenantId.ShouldBe(GatewayHarness.TenantB);
+        asB.Caller.SubjectType.ShouldBe("servicePrincipal");
+        asB.Caller.SubjectId.ShouldBe("sp-4");
+
+        asA.Status.ShouldBe(StatusCodes.Status200OK);
+        asA.Caller.TenantId.ShouldBe(GatewayHarness.TenantA);
+        asA.Caller.SubjectType.ShouldBe("user");
+        asA.Caller.SubjectId.ShouldBe("user-7");
     }
 
     [Fact]
@@ -81,6 +121,11 @@ public sealed class HubTicketTests {
         second.Status.ShouldBe(StatusCodes.Status401Unauthorized);
         second.Header("WWW-Authenticate").ShouldBe("Bearer");
         second.Body.ShouldContain("the hub ticket was not accepted");
+
+        // Refused at stage 2, so stage 3 never ran and no caller exists for a hub to read.
+        second.Trace.ShouldNotContain("ResolveTenant");
+        second.Caller.TenantId.ShouldBe(Guid.Empty);
+        second.Caller.SubjectId.ShouldBeEmpty();
     }
 
     [Fact]

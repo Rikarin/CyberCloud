@@ -21,13 +21,15 @@ namespace CyberCloud.Gateway.Host.Hubs;
 ///     <para>
 ///         ⚠ <b>Reconnect carries a <c>since</c> version.</b> docs/plan/10 § SignalR:
 ///         <i>
-///             "Reconnect uses SignalR's automatic reconnect plus a <c>since</c> version on
-///             resubscribe, so a portal tab that slept through a deploy catches up rather than showing
-///             stale state forever."
+///             "Reconnect is the portal's own — a fresh ticket and a new socket, on a backoff ladder
+///             — plus a <c>since</c> version on resubscribe, so a portal tab that slept through a
+///             deploy catches up rather than showing stale state forever."
 ///         </i> The parameter is on <see cref="SubscribeAsync" /> and is passed
 ///         through to the stream replay; the replay itself needs the stream bridge that
 ///         <see cref="IConnectionGrain" /> documents as owed — and which is now buildable, because
-///         the grain lives in a silo rather than in this client.
+///         the grain lives in a silo rather than in this client. The reconnect itself is the
+///         client's and not SignalR's, because a browser opened this hub with a single-use
+///         <c>HubTickets</c> ticket and the URL it would reopen holds the spent one.
 ///     </para>
 /// </remarks>
 public abstract class InterestHub(IGrainFactory grains, IConcurrencyLimiter limiter) : Hub {

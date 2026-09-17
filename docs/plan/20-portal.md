@@ -106,7 +106,7 @@ portal/README.md § The Angular pin and § SSR isolation.
 | Metrics explorer | Query builder, chart types, pinning to dashboards | 0.6 |
 | Log search | `@xui/code-block` + a results grid over ClickHouse. ⚠ Needs a query cost preview or someone will run a 400-day scan | 0.6 |
 | Network topology | `@xui/node-graph` — VPCs, subnets, endpoints, peerings. The one view that is genuinely better than a list | 0.5 |
-| Cloud terminal | `xterm.js` in a dockable panel ([19](19-cloud-terminal-and-virtual-desktop.md)) | 0.4 |
+| Cloud terminal | `xterm.js` over a console's `connect` ([19](19-cloud-terminal-and-virtual-desktop.md)). ⚠ Landed as a routed page under the resource group — `subscriptions/{s}/resourceGroups/{g}/terminal`, `portal/apps/portal/src/pages/terminal` — not the dockable panel this row first said: a shell runs in a console resource, and a console has a group, so the page has a scope and a link can name a console. A dockable pane over the same `TerminalSession` is a later affordance, not a second terminal | 0.4 |
 | Access (ReBAC) | Role assignments, the effective-permissions explorer, "why does this user have access" | 0.6 |
 | Identity admin | Users, groups, apps, MFA, sign-in logs | 0.5 |
 | Onboarding | Sign-up → tenant → first cluster → first resource, as a guided flow | 0.4 |

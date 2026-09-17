@@ -3,8 +3,9 @@ import { InjectionToken } from '@angular/core';
 /**
  * The names on the wire between the terminal pane and the gateway's `TerminalHub` — the C# side's
  * `TerminalProtocol`, spelled once here. SignalR binds by string, so a rename on either side is a
- * method the other cannot find; `terminal-session.spec.ts` pins these and `ConsoleSessionTests`
- * pins the C# ones, against the same four words.
+ * method the other cannot find; `terminal-session.spec.ts` pins these and
+ * `TerminalHubTests.TheWireNamesAreTheFourThePortalSpeaks` reads the C# ones off the hub itself,
+ * against the same four words.
  */
 export const terminalProtocol = {
   /** Client → hub: join a session and start receiving `Output`. */

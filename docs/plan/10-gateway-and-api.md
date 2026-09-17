@@ -255,8 +255,13 @@ changes. A user who loses access to a resource group must stop receiving its eve
 live-update channel is an authorization bypass with a nice UI. The `IConnectionGrain` subscribes to
 the tenant's relation-version stream and drops now-unauthorized interests.
 
-**Reconnect** uses SignalR's automatic reconnect plus a `since` version on resubscribe, so a portal tab
-that slept through a deploy catches up rather than showing stale state forever.
+**Reconnect** is the portal's own — a fresh ticket and a new socket, on a backoff ladder — plus a
+`since` version on resubscribe, so a portal tab that slept through a deploy catches up rather than
+showing stale state forever. ⚠ Not SignalR's `withAutomaticReconnect`, for any browser client of any
+hub: it reopens the URL the connection was built with, and that URL holds a ticket that was spent when
+the connection first opened, so the reconnect would be a `401` every time. This paragraph said
+"SignalR's automatic reconnect" until the ticket landed; the terminal is the first client written the
+new way (`TerminalSession`), and the three live-update hubs follow it when the portal opens them.
 
 ⚠ **A browser opens a hub with a ticket, never with the bearer token in the URL.** Stage 2 reads the
 `Authorization` header and nothing else, and a browser cannot put a header on a WebSocket; the SignalR
