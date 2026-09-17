@@ -11,8 +11,30 @@ import { fileURLToPath } from 'node:url';
 const serverDistFolder = dirname(fileURLToPath(import.meta.url));
 const browserDistFolder = resolve(serverDistFolder, '../browser');
 
+/**
+ * The proxy headers this process trusts: none, unless `NG_TRUST_PROXY_HEADERS` names them.
+ *
+ * The portal's `server.ts` has the full reasoning — `@angular/ssr` 22.1 strips the `Forwarded` and
+ * `X-Forwarded-*` headers it was not told to trust and warns on stderr for each one, which behind
+ * an ingress is a line per request — and the same variable, the same grammar and the same
+ * middleware apply here. This file repeats them rather than importing them because the identity
+ * app shares no code with the portal (`tsconfig.app.json` says why).
+ *
+ * ⚠ The stake is higher on this origin. A trusted `X-Forwarded-Host` becomes the host in the URL
+ * the engine renders, and this origin's pages are where a person types a password; a proxy header
+ * an attacker could set is a proxy header that could put their host into the sign-in page's URL.
+ * The engine checks a trusted forwarded host against `angular.json`'s `security.allowedHosts` (or
+ * `NG_ALLOWED_HOSTS`), so the list here must name only what the ingress in front sets and
+ * validates. `scripts/ssr-identity.test.mjs` pins the default: hostile proxy headers on every
+ * request, none in the rendered document, no warning printed.
+ */
+const trustProxyHeaders: readonly string[] = (process.env['NG_TRUST_PROXY_HEADERS'] ?? '')
+  .split(',')
+  .map(header => header.trim().toLowerCase())
+  .filter(header => header.length > 0);
+
 const app = express();
-const angularApp = new AngularNodeAppEngine();
+const angularApp = new AngularNodeAppEngine({ trustProxyHeaders });
 
 /**
  * ⚠ **The cache rule, first, before anything that can render.**
@@ -25,6 +47,19 @@ const angularApp = new AngularNodeAppEngine();
 app.use((_req, res, next) => {
   res.setHeader('Cache-Control', 'no-store, private, max-age=0, must-revalidate');
   res.setHeader('Vary', 'Cookie');
+  next();
+});
+
+/**
+ * Removes every proxy header the list above does not trust, before anything downstream can read
+ * it. Node lower-cases every incoming header name, so the comparison is exact.
+ */
+app.use((req, _res, next) => {
+  for (const name of Object.keys(req.headers)) {
+    if ((name === 'forwarded' || name.startsWith('x-forwarded-')) && !trustProxyHeaders.includes(name)) {
+      delete req.headers[name];
+    }
+  }
   next();
 });
 

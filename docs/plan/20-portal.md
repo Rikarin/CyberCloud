@@ -81,6 +81,15 @@ token. Getting this wrong leaks one tenant's data to another through a CDN cache
 bug this document can prevent. It is an explicit test: two concurrent SSR requests with different
 tenants, asserting no shared state.
 
+⚠ **The SSR process trusts no proxy header unless the deployment names it.** The render never reads
+the request's origin — the identity issuer is a `<meta>` in the document, redirects are relative, and
+the shell is the same for every scheme and host — so `Forwarded` and `X-Forwarded-*` are removed at
+the process's edge and `@angular/ssr` is handed the trust list explicitly (`NG_TRUST_PROXY_HEADERS`,
+empty by default). A deployment behind an ingress that terminates TLS or serves a prefix names exactly
+the headers that ingress sets, and sets `NG_ALLOWED_HOSTS` to the names it serves, because the built
+bundle allows `localhost` alone. The same two SSR gates assert the engine warns about nothing —
+portal/README.md § The Angular pin and § SSR isolation.
+
 ## The pages that are not generated
 
 | Area | Why it is bespoke | EM |

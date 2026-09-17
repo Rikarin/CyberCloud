@@ -38,6 +38,12 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { missingClassRules, missingClassRulesMessage } from './rendered-class-coverage.mjs';
+import {
+  captureProxyHeaderWarnings,
+  hostileProxyHeaders,
+  proxyHeaderMarkers,
+  renderWithTrustedForwardedHost
+} from './ssr-proxy-headers.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const serverBundle = join(here, '..', 'dist', 'portal', 'server', 'server.mjs');
@@ -81,6 +87,12 @@ const check = (name, fn) => {
     results.push({ name, ok: false, error });
   }
 };
+
+/**
+ * Hooked before the bundle is imported, so a warning the engine printed at any point of this run is
+ * on record — `scripts/ssr-proxy-headers.mjs` says which one and why it must never appear.
+ */
+const proxyHeaderWarnings = captureProxyHeaderWarnings();
 
 /** Boot the real server on an ephemeral port. */
 const { reqHandler } = await import(pathToFileURL(serverBundle).href);
@@ -129,9 +141,58 @@ const [acmeCallback, initechCallback] = await Promise.all([
   }).then(async r => ({ status: r.status, headers: r.headers, body: await r.text() }))
 ]);
 
+/**
+ * The same page, asked for from behind a proxy that lies: every `Forwarded` and `X-Forwarded-*`
+ * header the engine knows, each with a value that would show in the render if it were honoured.
+ * `server.ts` trusts none of them unless `NG_TRUST_PROXY_HEADERS` says so, and this run has it
+ * unset, so the document must be the one `acme` got — byte for byte — and the engine must have had
+ * nothing to warn about.
+ */
+const proxied = await fetch(`${base}/resources`, { headers: hostileProxyHeaders }).then(async r => ({
+  status: r.status,
+  body: await r.text()
+}));
+
+/**
+ * The other half, in a child process with `NG_TRUST_PROXY_HEADERS=x-forwarded-host`: the list is
+ * read at startup, so it cannot be tested in this one. A trusted `evil.example` fails the engine's
+ * allowed-hosts check and is refused, which is the proof that the list reached the engine.
+ */
+const trustedHost = renderWithTrustedForwardedHost(serverBundle, '/resources');
+
 check('both concurrent renders succeed', () => {
   assert.equal(acme.status, 200);
   assert.equal(initech.status, 200);
+});
+
+check('untrusted proxy headers neither reach the render nor make the engine warn', () => {
+  assert.equal(proxied.status, 200, 'a request carrying hostile proxy headers did not render');
+  for (const marker of proxyHeaderMarkers) {
+    assert.ok(!proxied.body.includes(marker), `"${marker}" from a proxy header reached the rendered HTML`);
+  }
+  assert.equal(
+    proxied.body,
+    acme.body,
+    'the render behind a lying proxy differs from the render without one, so a proxy header changed the document'
+  );
+  assert.deepEqual(
+    proxyHeaderWarnings.seen,
+    [],
+    'the engine warned about a proxy header — server.ts is meant to drop every untrusted one before the engine sees it, so behind an ingress this is a line on stderr per request'
+  );
+});
+
+check('NG_TRUST_PROXY_HEADERS hands the engine exactly the headers it names', () => {
+  assert.equal(
+    trustedHost.status,
+    400,
+    `with x-forwarded-host trusted, "evil.example" rendered (HTTP ${trustedHost.status}) instead of failing the allowed-hosts check — the list did not reach the engine`
+  );
+  assert.deepEqual(
+    trustedHost.warnings,
+    [],
+    'the engine warned while x-forwarded-host was trusted, so the middleware and the engine are working from different lists'
+  );
 });
 
 check('the sign-in callback renders on the server with no token and no window access', () => {
@@ -271,6 +332,7 @@ check('every class the rendered page uses has a rule behind it', () => {
 });
 
 server.close();
+proxyHeaderWarnings.restore();
 
 console.log('\nSSR isolation — docs/plan/20 § SSR\n');
 for (const r of results) console.log(`  ${r.ok ? '✓' : '✗'} ${r.name}`);

@@ -858,7 +858,16 @@ so "follows xUI" is a test rather than a sentence. Two things were found on the 
    reason about" policy is withdrawn for the rule this ADR already states: the tooling follows xUI
    too, and is at `22.1.6`, one exact version of its own (the test pins that too). `@angular/build`
    22.1 is a different bundler (`vite@8` and `rolldown` where 22.0.8 was `vite@7` and `rollup`);
-   portal/README.md § The Angular pin has what the move cost in lockfile and bundle.
+   portal/README.md § The Angular pin has what the move cost in lockfile and bundle, measured at
+   the move and again by #92 on 2026-09-17 — same lockfile, no peer output, initial bundle
+   195.3 KB gzipped against a 250 KB budget. ⚠ The one behaviour the new tooling brought that a
+   version bump does not: `@angular/ssr` 22.1 strips the `Forwarded`/`X-Forwarded-*` headers it
+   was not told to trust and warns on stderr for each — a line per request behind any ingress.
+   #92 made it a decision in both `server.ts` files: `trustProxyHeaders` is passed explicitly from
+   `NG_TRUST_PROXY_HEADERS` (empty by default; the render never reads the request's origin), a
+   middleware drops every proxy header not on the list before the engine sees it, and both SSR
+   gates assert the engine warns about nothing. The registry head is 22.1.7 / 22.1.8 and xUI has
+   tested against neither, so the pins stay.
 2. **`strict-peer-dependencies=true` in `portal/.npmrc` was never read.** pnpm 11, pinned since the
    portal's first commit, reads only registry and auth settings from `.npmrc`; everything else has
    to be in `pnpm-workspace.yaml`. So the "with `strict-peer-dependencies`, `pnpm install` fails"
