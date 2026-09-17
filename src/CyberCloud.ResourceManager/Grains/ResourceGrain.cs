@@ -375,10 +375,61 @@ public sealed class ResourceGrain(
                     Observed = state.State.Observed,
                     ClusterId = state.State.ClusterId,
                     ProvisioningState = state.State.ProvisioningState,
-                    OperationId = state.State.OperationId
+                    OperationId = state.State.OperationId,
+                    PendingChanges = [.. state.State.PendingChanges.Select(x => x.Change)],
+                    ChangeSequence = state.State.PendingChanges.Count == 0 ? 0 : state.State.PendingChanges[^1].Sequence,
+                    ChangesDropped = state.State.ChangesDropped
                 }
             )
         );
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> NotifyChangedAsync(ResourceChangedEvent change) {
+        ArgumentNullException.ThrowIfNull(change);
+
+        if (!state.State.Exists) {
+            return NotFound();
+        }
+
+        // ⚠ THE SEQUENCE ADVANCES EVEN WHEN THE EVENT IS DROPPED. An acknowledgement names "up to the
+        // number I read", so a dropped event that did not consume a number would let a later event
+        // reuse it, and a pass that read the earlier list would acknowledge the newcomer unseen.
+        state.State.ChangeSequence++;
+        state.State.PendingChanges.Add(new() { Sequence = state.State.ChangeSequence, Change = change });
+
+        while (state.State.PendingChanges.Count > ReconcileInput.MaxPendingChanges) {
+            state.State.PendingChanges.RemoveAt(0);
+            state.State.ChangesDropped++;
+        }
+
+        await state.WriteStateAsync();
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> AcknowledgeChangesAsync(long throughSequence) {
+        if (!state.State.Exists) {
+            return NotFound();
+        }
+
+        var before = state.State.PendingChanges.Count;
+        state.State.PendingChanges.RemoveAll(x => x.Sequence <= throughSequence);
+
+        // ⚠ The drop count is reset only when the acknowledgement reaches the newest event. A pass
+        // that read a list with drops in it and converged has rescanned, so the drops it saw are
+        // dealt with — but if more arrived after its read, those may have been dropped too, and the
+        // next pass has to be told.
+        var caughtUp = state.State.PendingChanges.Count == 0;
+        if (caughtUp) {
+            state.State.ChangesDropped = 0;
+        }
+
+        if (before != state.State.PendingChanges.Count || caughtUp) {
+            await state.WriteStateAsync();
+        }
+
+        return Result.Success;
     }
 
     /// <inheritdoc />

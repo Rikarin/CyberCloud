@@ -91,6 +91,7 @@ public sealed class ReconcileDriver(
     IObjectStore objects,
     NamespaceEnsurer namespaces,
     IClock clock,
+    ResourceViews views,
     IAgentTunnels? agents = null
 ) {
     /// <summary>How long one pass may take. Clause 3 of docs/plan/08 § The reconcile loop.</summary>
@@ -298,6 +299,8 @@ public sealed class ReconcileDriver(
             }
         }
 
+        var seams = views.For(id);
+
         var context = new ReconcileContext(
             id,
             reconcileInput.ApiVersion,
@@ -316,7 +319,15 @@ public sealed class ReconcileDriver(
                 // CONVERGENCE. The reconciler reports; this driver decides whether the report is due.
                 ClusterConnections = produced,
                 // The host's agent-tunnel seam, or the refusing default for a driver built without one.
-                Agents = agents ?? new UnavailableAgentTunnels()
+                Agents = agents ?? new UnavailableAgentTunnels(),
+                // ⚠ BOUND TO THIS RESOURCE HERE, AND THE RECONCILER CANNOT REBIND THEM. Every read the
+                // view performs is checked with `id` as the subject and every watch it registers is in
+                // `id`'s subscription — IResourceView has the rule. This is the one place the owner is
+                // chosen, and it is chosen from the operation's resource, never from the body.
+                View = seams.View,
+                Watch = seams.Watch,
+                Changes = reconcileInput.PendingChanges,
+                ChangesDropped = reconcileInput.ChangesDropped
             };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -433,6 +444,28 @@ public sealed class ReconcileDriver(
         // frozen at whatever it was before the trouble started.
         await ObserveAsync(reconciler, resource, id, reconcileInput, desired, connection, cancellationToken);
 
+        // ── Acknowledging the changes this pass was handed ───────────────────────────────────────
+        //
+        // ⚠ ONLY ON Converged, AND ONLY UP TO WHAT THIS PASS READ. An InProgress pass has not finished
+        // acting on the list and a failed one may not have started, so both see it again; and an
+        // event delivered between this pass's read and now has a higher sequence than the one read,
+        // so it stays for the next pass. ReconcileContext.Changes carries the argument for the
+        // reconciler's side of this.
+        if (outcome.IsConverged && !tearingDown && reconcileInput.ChangeSequence > 0) {
+            var acknowledged = await resource.AcknowledgeChangesAsync(reconcileInput.ChangeSequence);
+
+            if (acknowledged.TryGetError(out var acknowledgeError)) {
+                // Not a failed pass: the resource converged. What is stale is a list the next pass
+                // will see once more, which is the harmless direction.
+                log.Report(
+                    "acknowledging-changes",
+                    $"the pass converged and the {reconcileInput.PendingChanges.Length.ToString(CultureInfo.InvariantCulture)} "
+                    + $"delivered change(s) it read could not be acknowledged: {acknowledgeError.Message} "
+                    + "The next pass sees them again."
+                );
+            }
+        }
+
         return new(outcome, log.Drain(), true);
     }
 
@@ -535,6 +568,7 @@ public sealed class ReconcileDriver(
         }
 
         var log = new CollectingReconcileLog(clock);
+        var reclaimSeams = views.For(id);
 
         var context = new ReconcileContext(
             id,
@@ -545,7 +579,15 @@ public sealed class ReconcileDriver(
             clusters.Connect(reconcileInput.ClusterId),
             secrets,
             log
-        ) { SecretWriter = secretWriter, Objects = objects, Agents = agents ?? new UnavailableAgentTunnels() };
+        ) {
+                SecretWriter = secretWriter,
+                Objects = objects,
+                Agents = agents ?? new UnavailableAgentTunnels(),
+                // The same seams a reconcile pass carries, bound the same way; RetainedVolumesAsync
+                // is a read of what this resource kept and may need to name another resource's disks.
+                View = reclaimSeams.View,
+                Watch = reclaimSeams.Watch
+            };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(PassBudget);

@@ -132,6 +132,23 @@ ask, because a grant to a principal since deprovisioned must remain removable. T
 `N`-form GUID a token carries as `sub` — any other spelling names a subject no token presents and is
 refused rather than folded. `RoleAssignmentTests` drives all of it through the real grains.
 
+**A resource is a fifth principal type, and it is not a subject type (issue #90).** `SubjectTypes`
+stays closed at `user`, `servicePrincipal` and `managedIdentity` — what a token can carry, what can
+sign in. `principalType: "resource"` with the resource's own `N`-form GUID is what a tenant grants
+when one resource has to read another: a backup vault the `reader` role on the resource group whose
+shares it protects, the way Azure grants a vault's system-assigned identity a role on what it backs
+up — minus the identity, because the resource's GUID is already a stable, tenant-scoped object id.
+The subject a check then sees is `resource:{id}`, which the schema already knows as an object and
+Zanzibar makes a valid subject; the reconcile driver puts exactly that subject into every
+cross-resource read ([08 § What the resource manager deliberately does not do](08-resource-manager.md)),
+so the grant and the check meet on one spelling. Its existence is answered by `IResourceGrain` in the
+assignment's tenant rather than by the directory — the directory is identity's and a resource is the
+manager's — with the same three consequences as above: asked after `assignRole`, asked `ForTenant`
+so another tenant's resource does not exist here, and never asked on a revoke. A resource never acts
+outside its own reconcile pass, and it acts as itself: `CallerContext.ImpersonatedBy` is empty by
+construction, so an audit line reads "the vault read the share", not "the vault read the share as
+Alice".
+
 ⚠ **The derived name, re-taken with the cost stated, and it stands (issue #86).** `PUT
 …/roleAssignments/{guid}` is what every ARM client emits — the SDKs, `az role assignment create`,
 and Terraform's `azurerm_role_assignment`, which mints a random UUID when `name` is unset. A

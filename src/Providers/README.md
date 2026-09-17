@@ -2450,6 +2450,23 @@ Cross-provider references go through `CyberCloud.ResourceManager` by resource id
 authorization, quota and audit sit. `Build.Architecture` fails the build on a violation — on the
 `ProjectReference` as well as on the binding, so a `const`-only dependency does not slip through.
 
+**"Through `CyberCloud.ResourceManager` by resource id" is `IResourceView` and `IResourceWatch` on
+`ReconcileContext`, and nothing else** (issue #90;
+[08 § What the resource manager deliberately does not do](../../docs/plan/08-resource-manager.md)).
+A reconciler that needs another provider's resource — a backup vault reading the file share it
+protects, a bucket resolving a customer-managed key — takes the resource's path in its own desired
+body, hands it to `ctx.View.ReadAsync`, and gets back the other provider's *contract*: the snapshot
+the gateway would return, and the addresses of the objects the other provider rendered. It reads
+only what the tenant has granted it — the check is the gateway's own authorizer with the owning
+resource as the ReBAC subject, `resource:{id}`, and the grant is an ordinary role assignment with
+`principalType: "resource"` — and it can never write: the interface has no member that could, and
+`CrossResourceViewTests.TheViewHasNoMemberThatCouldWrite` keeps it so. `ctx.Watch.SubscribeAsync(type)`
+is how it hears about changes to resources of a type in its own subscription, on its next pass.
+What it may **not** do is reach the grains behind the view — `IResourceGrain`, `IResourceIndexGrain`,
+`IResourceGroupGrain`, `IQuotaGrain`, `IResourceManager` — and rule 8 of the Assembly graph gate
+fails the build if it names one. Both assemblies that carry those interfaces are ones a provider
+legitimately references, so rule 2 could not see this and rule 8 reads the type table instead.
+
 What a provider *may* reference is `module-layering.txt`, which is rule 7: `CyberCloud.Core`,
 `CyberCloud.Kubernetes`, `CyberCloud.ResourceManager` and `CyberCloud.Tenancy`, and nothing else. A
 line between two providers cannot be added there — rule 2 refuses what rule 7 would grant. ⚠ **Two

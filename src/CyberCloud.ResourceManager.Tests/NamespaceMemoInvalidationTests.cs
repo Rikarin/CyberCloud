@@ -3,6 +3,7 @@ using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Tests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using System.Collections.Concurrent;
 
@@ -171,7 +172,16 @@ public sealed class NamespaceMemoInvalidationTests(ResourceManagerCluster cluste
             new UnavailableSecretWriter(),
             new UnavailableObjectStore(),
             namespaces,
-            TestClock.Instance
+            TestClock.Instance,
+            // The cross-resource seam, over the harness's switchable authorizer; nothing here reads it.
+            new ResourceViews(
+                cluster.Registry,
+                cluster.Grains,
+                new SwitchableAuthorizer(),
+                new OneConnectionFactory(connection),
+                TestClock.Instance,
+                NullLogger<ResourceViews>.Instance
+            )
         );
     }
 

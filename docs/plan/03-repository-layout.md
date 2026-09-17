@@ -375,6 +375,26 @@ Enforced by `Build.Architecture`, failing the build on violation:
    acyclic. A module is an assembly name truncated to its first two dotted segments, so
    `CyberCloud.Identity` and `CyberCloud.Identity.Contracts` are one; a provider's module is its
    family. `src/Hosts` and `cli/` are out of scope — rules 4 and 5 are what constrain a host.
+8. No `Providers.*` assembly names the resource manager's grain interfaces or entry points —
+   `IResourceGrain`, `IOperationGrain`, `IResourceIndexGrain`, `IResourceGroupGrain`,
+   `ISubscriptionGrain`, `IQuotaGrain`, `IResourceManager`, the two authorizers and the ReBAC grains;
+   `build/Build.Architecture.cs` § `ManagerOnlyTypes` is the list. A provider reaches another
+   provider's resource through `IResourceView` and `IResourceWatch` on `ReconcileContext`
+   ([08 § What the resource manager deliberately does not do](08-resource-manager.md)), and through
+   nothing else.
+
+⚠ **Rule 8 was added on 2026-09-18 (issue #90), and it is the rule that rule 2 could not be.** Rule 2
+is about assembly references, and a provider *legitimately* references
+`CyberCloud.ResourceManager.Contracts` and `CyberCloud.Tenancy.Contracts` — for `IResourceReconciler`
+and `QuotaMeter`. Both assemblies also carry the grain interfaces through which every resource in the
+platform can be read and written, so until rule 8 the only thing between a reconciler and
+`GetGrain<IResourceGrain>(somebodyElse)` was a sentence in a `GlobalUsings.cs` comment: *"Naming
+either from a reconciler is a review failure, not a compile one."* The cross-resource seam gave a
+provider a sanctioned way to read another resource, and a sanctioned way is only a boundary if the
+unsanctioned way fails the build. Rule 8 reads the `TypeRef` table — an interface has no `const` to
+inline, so a grain call always leaves a row — and it has no project-file half because it needs none.
+What it cannot see is a string-keyed reflection call, and nothing static can; CC1006 and the
+`ForTenant` discipline stand between a provider and that.
 
 ⚠ **Rule 7 was added on 2026-08-12 and rules 2 and 4 changed with it. All three were holes found by
 constructing a violation and watching the gate stay green**, which is the only way any of them could

@@ -312,6 +312,14 @@ public sealed class IsolationCluster : IAsyncLifetime {
     public IRoleAssignmentManager Roles { get; private set; } = null!;
 
     /// <summary>
+    ///     The cross-resource seam of docs/plan/08 § What the resource manager deliberately does not
+    ///     do, over the real authorizer. <c>Views.For(owner)</c> is what a reconcile pass for
+    ///     <c>owner</c> receives; <c>CrossResourceViewTests</c> and <c>ResourceWatchTests</c> attack
+    ///     it.
+    /// </summary>
+    public ResourceViews Views { get; private set; } = null!;
+
+    /// <summary>
     ///     The test vault both halves share — the silo mints into it, the client reads out of it.
     /// </summary>
     /// <remarks>
@@ -633,7 +641,31 @@ public sealed class IsolationCluster : IAsyncLifetime {
             // IResourceAuthorizer or by nothing at all. The vault is shared with the silo so that a
             // credential the victim's create minted is really there to be stolen.
             new ActionDispatcher(Handlers, new NoClusterConnectionFactory(), Vault),
-            NullLogger<ResourceManagerService>.Instance
+            NullLogger<ResourceManagerService>.Instance,
+            // ⚠ THE CROSS-RESOURCE SEAM'S DELIVERY HALF, OVER THE SAME REAL AUTHORIZER. A watcher is
+            // told about a change only after the fan-out has checked that the watcher may read the
+            // changed resource — the rule IResourceView writes down — and this suite is where that
+            // check is driven through the real engine. ResourceWatchTests attacks it.
+            new ResourceWatchFanout(
+                Registry,
+                cluster.GrainFactory,
+                new ReBacResourceAuthorizer(cluster.GrainFactory, NullLogger<ReBacResourceAuthorizer>.Instance),
+                NullLogger<ResourceWatchFanout>.Instance
+            )
+        );
+
+        // ⚠ THE SEAM ITSELF, BUILT THE WAY ReconcileDriver BUILDS IT: the real ReBacResourceAuthorizer
+        // over the real schema, the client's registry, and the fixture's fake cluster for the rendered
+        // objects. Views.For(owner) is what a pass receives as ReconcileContext.View, bound to the
+        // owner the driver chose — so an attack through this object is an attack on the rule, not on
+        // a double of it.
+        Views = new ResourceViews(
+            Registry,
+            cluster.GrainFactory,
+            new ReBacResourceAuthorizer(cluster.GrainFactory, NullLogger<ReBacResourceAuthorizer>.Instance),
+            new FakeClusterConnectionFactory(World),
+            new ConformanceClock(),
+            NullLogger<ResourceViews>.Instance
         );
 
         Scopes = new ScopeManagerService(

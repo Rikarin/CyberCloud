@@ -104,6 +104,16 @@ CyberCloud.ResourceManager.Grains.OperationGrain
 # remembers the exact path — which is the state issue #71 was filed about, restored one flush at a
 # time and visible to nobody.
 CyberCloud.ResourceManager.Grains.ParkedResourceRegistryGrain
+#
+# ResourceWatchGrain is the per-(subscription, type) list of resources that asked to hear when
+# resources of that type change — docs/plan/08 § What the resource manager deliberately does not
+# do, the cross-resource seam of issue #90. The test above answers no for the reason it does for the
+# parked registry: the enumeration has no second home. A watch is registered by a reconciler, and a
+# reconciler holds nothing between passes (docs/plan/08 § The reconcile loop, clause 2) — its next
+# pass will re-register, but the passes in between are the ones the fan-out has to find it on, and a
+# fan-out reading an empty set after a silo restart delivers nothing and reports nothing wrong. A
+# vault that missed the change to a share it protects is a backup that silently stopped covering it.
+CyberCloud.ResourceManager.Grains.ResourceWatchGrain
 
 # ── Metering — docs/plan/22 ────────────────────────────────────────────────────────────────────
 # The two halves of "a usage record, once emitted, is never lost and never double-counted"

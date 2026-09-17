@@ -569,6 +569,52 @@ public class GrainKeysTests {
         Should.Throw<ArgumentException>(() => GrainKeys.ClientIndex(Tenant, clientId));
     }
 
+    // ── The watch index: hash(subscriptionId + canonical type), per subscription ──────────────
+
+    [Fact]
+    public void AWatchIsPerSubscriptionAndPerType() {
+        // docs/plan/08 § What the resource manager deliberately does not do — a provider hears about
+        // "resources of type X in my subscription", so the same type in two subscriptions is two
+        // entries, and two types in one subscription are two entries.
+        var shares = new ResourceTypeName("CyberCloud.Storage", "accounts/fileShares");
+        var accounts = new ResourceTypeName("CyberCloud.Storage", "accounts");
+
+        var a = GrainKeys.WatchIndex(Subscription, shares);
+        var b = GrainKeys.WatchIndex(Tenant, shares);
+        var c = GrainKeys.WatchIndex(Subscription, accounts);
+
+        a.ShouldNotBe(b);
+        a.ShouldNotBe(c);
+        a.ShouldStartWith("idx/watch/");
+    }
+
+    [Fact]
+    public void AWatchFoldsTheTypeToItsCanonicalSpelling() {
+        // ⚠ The provider namespace is case-preserving, so two spellings of one type must be one watch
+        // list — otherwise a change reaches whichever half spelled it the way the writer did.
+        var spelled = new ResourceTypeName("CyberCloud.Storage", "accounts/fileShares");
+        var lowered = new ResourceTypeName("cybercloud.storage", "accounts/fileshares");
+
+        GrainKeys.WatchIndex(Subscription, spelled).ShouldBe(GrainKeys.WatchIndex(Subscription, lowered));
+    }
+
+    [Fact]
+    public void TheWatchIndexShapeRoundTripsToItsDigest() {
+        var key = GrainKeys.WatchIndex(Subscription, new("CyberCloud.Sample", "widgets"));
+
+        var parsed = GrainKeys.Parse(key).GetValueOrThrow();
+
+        parsed.Kind.ShouldBe(GrainKeyKind.WatchIndex);
+        parsed.Digest.Length.ShouldBe(GrainKeys.DigestLength);
+        parsed.Id.ShouldBe(Guid.Empty);
+        parsed.ToString().ShouldBe(key);
+    }
+
+    [Fact]
+    public void AWatchOnNoTypeIsRefused() {
+        Should.Throw<ArgumentException>(() => GrainKeys.WatchIndex(Subscription, default));
+    }
+
     // ── The email index: hash(tenantId + normalized email), per tenant ────────────────────────
 
     [Fact]

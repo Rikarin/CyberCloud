@@ -154,7 +154,7 @@ partial class Build {
     ///     </para>
     /// </summary>
     static readonly (string Gate, string Checks)[] ArchitectureGates = [
-        ("Assembly graph", "the seven rules in docs/plan/03"),
+        ("Assembly graph", "the eight rules in docs/plan/03"),
         ("Storage tier",
             "every [PersistentState] against durable-grains.txt; a Durable binding outside the list needs [DurableStateRationale]"),
         ("Tenant keys",
@@ -265,7 +265,7 @@ partial class Build {
     // ── The target ────────────────────────────────────────────────────────────────────────────
 
     void CheckArchitecture() {
-        // Logged before the gates run, not after: the assembly-graph gate narrates its seven rules
+        // Logged before the gates run, not after: the assembly-graph gate narrates its eight rules
         // as it goes, and those lines are unreadable above the header that says what they belong to.
         Log.Information(
             "Architecture: {Count} gates — the ten in docs/plan/23 § The architecture gates, plus "
@@ -383,7 +383,7 @@ partial class Build {
     // ── Gate: assembly graph — docs/plan/03 § Assembly graph rules ────────────────────────────
 
     /// <summary>
-    ///     The seven rules, read off the compiled assemblies and — where metadata cannot see — off
+    ///     The eight rules, read off the compiled assemblies and — where metadata cannot see — off
     ///     the project files.
     ///     <para>
     ///         ⚠
@@ -608,8 +608,78 @@ partial class Build {
             ModuleLayeringViolations(moduleEdges)
         );
 
-        return GateOutcome.From("Assembly graph", inspected, "rule candidate(s) across 7 rules", violations);
+        // ── Rule 8 ────────────────────────────────────────────────────────────────────────────
+        //
+        // ⚠ THE RULE 2 CANNOT STATE, BECAUSE IT IS ABOUT TYPES INSIDE AN ASSEMBLY A PROVIDER MAY
+        // REFERENCE. A provider legitimately binds CyberCloud.ResourceManager.Contracts (for
+        // IResourceReconciler) and CyberCloud.Tenancy.Contracts (for QuotaMeter), and both carry the
+        // grain interfaces through which every resource in the platform can be read and written —
+        // IResourceGrain, IResourceIndexGrain, IResourceGroupGrain, and the rest of the list below.
+        // Until issue #90 the only thing between a reconciler and `GetGrain<IResourceGrain>(other)`
+        // was a sentence in a GlobalUsings comment ("naming either from a reconciler is a review
+        // failure, not a compile one"). Now there is a seam for reading another resource
+        // (IResourceView, on ReconcileContext) and this rule is what makes it the ONLY way: a
+        // provider that names one of these types from its own code fails the build, with the seam
+        // named in the message.
+        //
+        // ⚠ READ FROM THE TypeRef TABLE, NOT FROM AssemblyRef. An interface has no const to inline,
+        // so a grain call always leaves a TypeRef row — this rule has no equivalent of rule 2's
+        // project-file half because it needs none. What it cannot see is a provider reaching the
+        // same grain through a string-keyed reflection call, and nothing static can; CC1006 and the
+        // ForTenant discipline are what stand between a provider and that.
+        var reachable = providers
+            .Where(x => x.ReferencedTypes.Count > 0)
+            .ToList();
+
+        Rule(
+            8,
+            "No Providers.* assembly names the resource manager's grain interfaces or entry points; "
+            + "another resource is reached through IResourceView and IResourceWatch on ReconcileContext.",
+            reachable.Count,
+            reachable.SelectMany(provider => provider.ReferencedTypes
+                    .Where(reference => ManagerOnlyTypes.Contains(reference.Type))
+                    .Select(reference =>
+                        $"{provider.Name} names {reference.Type} from {reference.Assembly}; read another resource "
+                        + "through ReconcileContext.View and hear about it through ReconcileContext.Watch — the "
+                        + "write path's steps and the grains behind them are the manager's alone"
+                    )
+            )
+        );
+
+        return GateOutcome.From("Assembly graph", inspected, "rule candidate(s) across 8 rules", violations);
     }
+
+    /// <summary>
+    ///     The types rule 8 forbids a provider to name: every grain the manager owns, the two scope
+    ///     grains whose steps in the write path are the manager's, the quota grain, the manager's
+    ///     entry point, and the two authorization seams docs/plan/07 § The enforcement seam says a
+    ///     provider never calls.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Full metadata names, spelled out rather than derived</b>, so that the rule's reach
+    ///     is a diff somebody reviews. Deriving it as "every <c>I*Grain</c> in these two assemblies"
+    ///     would catch <c>IResourceReconciler</c>'s neighbours on the day one is added and nobody
+    ///     notices, and would miss <c>IResourceManager</c>, which is not a grain.
+    /// </remarks>
+    static readonly HashSet<string> ManagerOnlyTypes = new(StringComparer.Ordinal) {
+        "CyberCloud.ResourceManager.Contracts.IResourceGrain",
+        "CyberCloud.ResourceManager.Contracts.IOperationGrain",
+        "CyberCloud.ResourceManager.Contracts.IResourceWatchGrain",
+        "CyberCloud.ResourceManager.Contracts.IParkedResourceRegistryGrain",
+        "CyberCloud.ResourceManager.Contracts.IExpirySweeperGrain",
+        "CyberCloud.ResourceManager.Contracts.IResourceManager",
+        "CyberCloud.ResourceManager.Contracts.IScopeManager",
+        "CyberCloud.ResourceManager.Contracts.IRoleAssignmentManager",
+        "CyberCloud.ResourceManager.Contracts.IResourceAuthorizer",
+        "CyberCloud.ResourceManager.Contracts.IScopeAuthorizer",
+        "CyberCloud.Tenancy.Contracts.IResourceIndexGrain",
+        "CyberCloud.Tenancy.Contracts.IResourceGroupGrain",
+        "CyberCloud.Tenancy.Contracts.ISubscriptionGrain",
+        "CyberCloud.Tenancy.Contracts.IQuotaGrain",
+        "CyberCloud.Authorization.Contracts.ICheckGrain",
+        "CyberCloud.Authorization.Contracts.ITupleStoreGrain",
+        "CyberCloud.Authorization.Contracts.IListObjectsGrain"
+    };
 
     // ── The edges the rules are about ─────────────────────────────────────────────────────────
 

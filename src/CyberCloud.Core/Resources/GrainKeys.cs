@@ -38,6 +38,13 @@ public enum GrainKeyKind {
     /// </summary>
     ClientIndex,
 
+    /// <summary>
+    ///     <c>IResourceWatchGrain</c> — <c>idx/watch/{digest}</c>, the resources in one subscription
+    ///     that asked to hear when resources of one type change. See
+    ///     <see cref="GrainKeys.WatchIndex" />.
+    /// </summary>
+    WatchIndex,
+
     /// <summary><c>IOperationGrain</c> — <c>op/{operationId:N}</c>.</summary>
     Operation,
 
@@ -289,6 +296,7 @@ public readonly record struct GrainKey {
             GrainKeyKind.User => GrainKeys.User(Id),
             GrainKeyKind.EmailIndex => GrainKeys.EmailIndexPrefix + Digest,
             GrainKeyKind.ClientIndex => GrainKeys.ClientIndexPrefix + Digest,
+            GrainKeyKind.WatchIndex => GrainKeys.WatchIndexPrefix + Digest,
             GrainKeyKind.Operation => GrainKeys.Operation(Id),
             GrainKeyKind.ClusterConnection => GrainKeys.ClusterConnection(Id),
             GrainKeyKind.Tenant => GrainKeys.Tenant(Id),
@@ -662,6 +670,13 @@ public static class GrainKeys {
 
     /// <summary><c>idx/client/</c> — the per-tenant OAuth client-id index.</summary>
     public const string ClientIndexPrefix = "idx/client/";
+
+    /// <summary>
+    ///     <c>idx/watch/</c> — <c>IResourceWatchGrain</c>, the per-(subscription, type) list of
+    ///     resources that asked to hear about changes. docs/plan/08 § What the resource manager
+    ///     deliberately does not do.
+    /// </summary>
+    public const string WatchIndexPrefix = "idx/watch/";
 
     /// <summary><c>tenant/</c> — the tenant's own entity grain.</summary>
     public const string TenantPrefix = "tenant/";
@@ -1385,6 +1400,50 @@ public static class GrainKeys {
             + Digest(ClientIndexPrefix, N(tenantId) + "\n" + validated.GetValueOrThrow());
     }
 
+    /// <summary>
+    ///     <c>idx/watch/{sha256(subscriptionId + type)[..16]}</c> — <c>IResourceWatchGrain</c>, the
+    ///     resources in one subscription that asked to be told when resources of one type change.
+    ///     docs/plan/08 § What the resource manager deliberately does not do.
+    /// </summary>
+    /// <param name="subscriptionId">The subscription the watchers and the watched resources share.</param>
+    /// <param name="type">The type being watched. Folded to its canonical spelling before hashing.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             Keyed by subscription rather than by tenant or by resource group, and that is the
+    ///             seam's scope stated as a key.
+    ///         </b> A provider asks to hear about "resources of type X in my subscription". One entry
+    ///         per (subscription, type) makes the fan-out one grain read per change rather than a
+    ///         scan, and it makes a watch registered in one subscription unable to hear another
+    ///         subscription's changes by construction. The tenant is the qualification, as for every
+    ///         key in this class, so two tenants' subscriptions never share an entry either.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The type is hashed canonical, the way <see cref="PathIndex" /> hashes
+    ///             <see cref="ResourceId.CanonicalPath" />.
+    ///         </b> The provider namespace is case-preserving (<see cref="ResourceTypeName" />), so
+    ///         hashing the spelling a provider happened to use would give
+    ///         <c>CyberCloud.Storage/accounts</c> and <c>cybercloud.storage/accounts</c> two watch
+    ///         lists, and a change would reach whichever half spelled it the way the writer did.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="type" /> is empty.</exception>
+    public static string WatchIndex(Guid subscriptionId, ResourceTypeName type) {
+        if (type.IsEmpty) {
+            throw new ArgumentException(
+                "A watch index is keyed by one resource type, and this type is empty. A watch on "
+                + "every type is not a watch; it is a copy of the resource-changed stream, which "
+                + "docs/plan/08 § The resource-graph projection routes elsewhere.",
+                nameof(type)
+            );
+        }
+
+        return WatchIndexPrefix + Digest(WatchIndexPrefix, N(subscriptionId) + "\n" + type.Canonical.ToString());
+    }
+
     /// <summary>The longest a <c>client_id</c> may be — the same bound the email index uses.</summary>
     public const int MaxClientIdLength = 254;
 
@@ -1609,7 +1668,8 @@ public static class GrainKeys {
                 + "'op/{id}', 'cluster/{id}', "
                 + "'tenant/{id}', 'group/{id}', 'app/{id}', 'sp/{id}', 'session/{id}', 'mi/{id}', 'signup/{id}', "
                 + "'platform/{singleton}', 'idx/path/{digest}', "
-                + "'idx/email/{digest}', 'idx/client/{digest}', 'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
+                + "'idx/email/{digest}', 'idx/client/{digest}', 'idx/watch/{digest}', "
+                + "'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
                 + "'rel/sub/{type}/{id}', 'rel/check/{type}/{id}', 'rel/list/{type}/{id}' or "
                 + "'rel/idx/{type}/{id}' — see "
                 + "docs/plan/06 § Grain keys, "
@@ -1755,14 +1815,16 @@ public static class GrainKeys {
             "path" => GrainKeyKind.PathIndex,
             "email" => GrainKeyKind.EmailIndex,
             "client" => GrainKeyKind.ClientIndex,
+            "watch" => GrainKeyKind.WatchIndex,
             _ => GrainKeyKind.None
         };
 
         if (kind == GrainKeyKind.None) {
             return Invalid(
-                $"'{key}' is not a grain key: '{segments[1]}' is not an index. The three indexes are "
-                + "'idx/path' (docs/plan/06 § Grain keys), 'idx/email' (docs/plan/06 § Grain keys) and "
-                + "'idx/client' (docs/plan/11 § Protocol)."
+                $"'{key}' is not a grain key: '{segments[1]}' is not an index. The four indexes are "
+                + "'idx/path' (docs/plan/06 § Grain keys), 'idx/email' (docs/plan/06 § Grain keys), "
+                + "'idx/client' (docs/plan/11 § Protocol) and 'idx/watch' (docs/plan/08 § What the "
+                + "resource manager deliberately does not do)."
             );
         }
 

@@ -205,11 +205,16 @@ owed:
       THAN THE FILER. A shared metadata store means filer.toml pointing at Postgres, Redis or etcd —
       and this platform runs a managed Postgres one provider namespace away. src/Providers/README.md
       § Hard rule forbids a Providers.* assembly referencing another, deliberately, and the sanctioned
-      route is "through CyberCloud.ResourceManager by resource id" — which today means a body property
-      holding a resource id and a reconciler that resolves it, and no provider has ever done that. So
-      the first service that needs another service is this one, and the seam it needs is untested.
-      Until then an account survives a filer POD restart (the metadata volume is persistent) and not
-      a filer NODE loss.
+      route is "through CyberCloud.ResourceManager by resource id" — which since issue #90
+      (2026-09-18) is a body property holding the Postgres server's path and `ctx.View.ReadAsync` on
+      ReconcileContext, checked by the gateway's own authorizer with THIS ACCOUNT as the subject once
+      the tenant has granted `resource:{account}` reader on the server (docs/plan/08 § What the
+      resource manager deliberately does not do). The seam is built and driven through the real
+      engine in test/CyberCloud.Isolation; what no provider has done yet is USE it, and this filer is
+      still the first service with a reason to. What the view hands back is the server's snapshot
+      and its rendered objects' addresses — not its credential, which stays a SecretRef the filer's
+      own reconciler would have to be granted separately. Until then an account survives a filer POD
+      restart (the metadata volume is persistent) and not a filer NODE loss.
   - id: encryption-at-rest
     says: >
       docs/plan/15 § The resource model: "Encryption at rest is on by default with a platform-managed
@@ -306,13 +311,19 @@ owed:
       schedules and retention, with Velero, volume snapshots, engine-native backup and "bucket
       replication for object" as its four backends — and docs/plan/05 § Backup and restore already
       splits a SHARD restore (M1) from a TENANT restore (M3, "more product than plumbing"), of which
-      a vault is the tenant-facing half. What blocks it is not this provider: a vault protects
-      resources of several providers and src/Providers/README.md § Hard rule forbids one Providers.*
-      assembly referencing another, so a vault is the first type whose reconciler must reach OTHER
-      providers' resources by id through CyberCloud.ResourceManager — the seam
-      `filer-is-a-single-point-of-failure` above names as untested. And the `backup` row above
-      records why this account cannot even be its own destination. It is a provider namespace of its
-      own, after that seam, and it is not started.
+      a vault is the tenant-facing half. A vault protects resources of several providers and
+      src/Providers/README.md § Hard rule forbids one Providers.* assembly referencing another, so a
+      vault is the first type whose reconciler must reach OTHER providers' resources — and since
+      issue #90 (2026-09-18) it can: `ctx.View` reads a protected resource's snapshot and the
+      addresses of the objects its provider rendered, checked as `resource:{vault}` by the gateway's
+      own authorizer, and `ctx.Watch.SubscribeAsync(type)` tells the vault on its next pass which
+      protected resources changed (docs/plan/08 § What the resource manager deliberately does not
+      do). What the seam does NOT give a vault is a pass of its own on a schedule — a converged
+      resource has no reminder, and docs/plan/08 records the manager-started pass as owed — nor a
+      write into the protected resource, by design: a vault writes snapshots BESIDE what it protects.
+      And the `backup` row above records why this account cannot even be its own destination. The
+      vault is a provider namespace of its own and it is not started; what changed is that the seam
+      is no longer the blocker.
   - id: customer-managed-keys
     says: >
       The third third of #30. docs/plan/15 § The resource model: "customer-managed keys from the
@@ -324,4 +335,8 @@ owed:
       catalogue has and this tree has not published, so there is no resource for a bucket property
       to reference. The order that works is a first-class encryption field upstream or a decision
       that extraArgs carries it; then KeyVault/vaults; then a `encryption.keyId` property on a NEW
-      api-version of accounts/buckets. None of the three is started.
+      api-version of accounts/buckets, which the bucket's reconciler resolves through `ctx.View` as
+      `resource:{bucket}` once the tenant has granted it reader on the key (issue #90,
+      docs/plan/08 § What the resource manager deliberately does not do) — the seam that step
+      needed exists; the key material itself stays a SecretRef the view never returns. None of the
+      three is started.
