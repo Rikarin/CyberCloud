@@ -9,12 +9,19 @@
       message id nobody remembers being ignored rather than fatal, and the template whose missing
       parameter fails before the carrier.
 
-      ⚠ NO Testcontainers AND NO Aspire.Hosting, AND THAT IS THE SAME DEVIATION FROM ADR-018 THAT
+      Since #93 it also holds the email carrier's suites: MailMessagesTests, the bytes of every message
+      (Message-ID, List-Unsubscribe, Auto-Submitted, RFC 2047 subjects, quoted-printable bodies, the two
+      injection paths) with no relay; and SmtpChannelProviderTests, the hand-written SMTP client against
+      a real Mailpit in a Testcontainer through the real send path, reading the headers back from the
+      server's API and asserting a suppressed address produced nothing in the inbox.
+
+      ⚠ IN-MEMORY GRAIN STORAGE, AND THAT IS THE SAME DEVIATION FROM ADR-018 THAT
       CyberCloud.Metering.Tests AND CyberCloud.ResourceManager.Tests RECORD, OWED BACK ON THE SAME
       TERMS. docs/plan/02 ADR-018 wants grain behaviour tested "against a real in-process TestCluster
       … with real storage providers backed by Testcontainers". This project uses Orleans.TestingHost's
       TestCluster with AddMemoryGrainStorage instead, because the environment this was built in could
-      not start a container.
+      not start a container. It CAN now — the Mailpit suite is proof — so what stays owed is the
+      storage half alone, and the reason it stays is scope rather than environment.
 
       What that costs, stated so it can be paid rather than forgotten:
 
@@ -29,9 +36,12 @@
           to exercise re-activation, which keeps the same in-process store — so
           "IdempotencySurvivesDeactivation" proves the grain re-reads its state rather than proving
           Redis kept it.
-        - Nothing here exercises a real carrier, by design. IChannelProvider is the seam and
+        - The grain suites exercise no real carrier, by design. IChannelProvider is the seam and
           InMemoryChannelProvider is the double; what is proven is our side of it, which is where
-          every property docs/plan/17 asks for actually lives.
+          every property docs/plan/17 asks for actually lives. The one real carrier is exercised by
+          its own suite against its own server, and against Mailpit only: STARTTLS and AUTH are read
+          against their RFCs and run against nothing, which SmtpChannelProviderTests says in its
+          remarks.
     -->
 
     <ItemGroup>
@@ -39,6 +49,11 @@
         <PackageReference Include="Shouldly"/>
         <PackageReference Include="Microsoft.Orleans.TestingHost"/>
         <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup Label="A real SMTP server — ADR-018, docs/plan/23 § Test layers">
+        <!-- The generic ContainerBuilder, because there is no Testcontainers.Mailpit. -->
+        <PackageReference Include="Testcontainers"/>
     </ItemGroup>
 
     <ItemGroup Label="Global usings">

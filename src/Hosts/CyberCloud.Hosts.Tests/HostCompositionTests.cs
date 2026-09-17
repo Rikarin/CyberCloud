@@ -963,6 +963,86 @@ public sealed class HostCompositionTests {
     }
 
     /// <summary>
+    ///     ⚠ The silo wires the email carrier — and, in Development, routes the platform's own codes
+    ///     through it — when <c>CyberCloud:Communication:Smtp</c> names a relay, and keeps the
+    ///     refusing seam and the console-only OTP seam when it does not (#93).
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Three shapes of one silo. Bare Development: the provider collection holds the five
+    ///         refusing seams and nothing named <c>smtp</c>, and the OTP seam logs alone. Development
+    ///         with a relay: <c>SmtpChannelProvider</c> is in the collection and the OTP seam is the
+    ///         development one <i>with mail</i> — <c>DevelopmentOtpDelivery.AlsoMails</c> — pointed
+    ///         at the platform's own service. Staging with a relay and no route: the carrier is
+    ///         there for tenants' channels, and the OTP seam is still <c>UnavailableOtpDelivery</c>,
+    ///         because a relay is not a route and nobody's authentication traffic is routed to a
+    ///         service the operator did not name.
+    ///     </para>
+    ///     <para>
+    ///         Nothing connects to the relay: composition constructs the carrier, it does not call
+    ///         it. The misconfigured-throws half is <c>MailMessagesTests</c>' to hold through
+    ///         <c>SmtpRelayOptions.Validate</c>, not this test's.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheSiloWiresTheEmailCarrierAndTheDevelopmentMailRouteOnlyWhenARelayIsConfigured() {
+        await using var bare = await BuildSiloAsync();
+
+        bare.Services.GetServices<CyberCloud.Communication.Contracts.IChannelProvider>()
+            .Select(x => x.Name)
+            .ShouldNotContain("smtp", "no relay, no carrier — UnavailableEmailProvider's refusal names the section");
+
+        bare.Services.GetRequiredService<CyberCloud.Identity.Contracts.IOtpDeliverySeam>()
+            .ShouldBeOfType<CyberCloud.Identity.Seams.DevelopmentOtpDelivery>()
+            .AlsoMails.ShouldBeFalse("the console alone, as before #93");
+
+        await using var withRelay = await SiloComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                .. SmtpRelayArguments
+            ]
+        );
+
+        withRelay.Services.GetServices<CyberCloud.Communication.Contracts.IChannelProvider>()
+            .Count(x => x.Name == "smtp" && x.Kind == CyberCloud.Communication.Contracts.ChannelKind.Email)
+            .ShouldBe(1, "the carrier joins the collection beside the refusing seam");
+
+        withRelay.Services.GetRequiredService<CyberCloud.Identity.Contracts.IOtpDeliverySeam>()
+            .ShouldBeOfType<CyberCloud.Identity.Seams.DevelopmentOtpDelivery>()
+            .AlsoMails.ShouldBeTrue("the code goes to Mailpit's inbox as well as the console");
+
+        await using var staging = await SiloComposition.BuildAsync(
+            [
+                "--environment", "Staging",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                .. SmtpRelayArguments
+            ]
+        );
+
+        staging.Services.GetServices<CyberCloud.Communication.Contracts.IChannelProvider>()
+            .ShouldContain(x => x.Name == "smtp", "a tenant's email channel sends through the relay in any environment");
+
+        staging.Services.GetRequiredService<CyberCloud.Identity.Contracts.IOtpDeliverySeam>()
+            .ShouldBeOfType<CyberCloud.Identity.Seams.UnavailableOtpDelivery>("a relay is not a route — CyberCloud:Identity:OtpDelivery is the operator's to set");
+    }
+
+    /// <summary>
+    ///     A complete <c>CyberCloud:Communication:Smtp</c> section in the AppHost's Mailpit shape, as
+    ///     the arguments that spell it. ⚠ Nothing listens on the port; composition never connects.
+    /// </summary>
+    static readonly string[] SmtpRelayArguments = [
+        "--CyberCloud:Communication:Smtp:Host=127.0.0.1",
+        "--CyberCloud:Communication:Smtp:Port=1",
+        "--CyberCloud:Communication:Smtp:Security=None",
+        "--CyberCloud:Communication:Smtp:From=no-reply@cybercloud.local"
+    ];
+
+    /// <summary>
     ///     A complete <c>CyberCloud:ObjectStorage</c> section, as the arguments that spell it. ⚠ The
     ///     credential is a placeholder for a store nothing connects to.
     /// </summary>

@@ -230,9 +230,15 @@ The orchestrator is in the host rather than in the grain because `PlatformCrossT
 denies a platform grain reaching into a tenant, and the host is an Orleans client outside that
 filter. Two things make it possible on a fresh run at all: the silo's `PlatformBootstrapTask` seeds
 the shard map from the configured durable shards and writes `platform:root#operator` for the sign-up
-operator when `CyberCloud:Identity:SelfServeSignUp` is on, and — there being no MTA (#93) — a
-Development-only `DevelopmentOtpDelivery` writes the enrolment code to the silo's log, where the
-Aspire dashboard shows it. The progress UI, the welcome mail and the optional cluster are the part
+operator when `CyberCloud:Identity:SelfServeSignUp` is on, and a Development-only
+`DevelopmentOtpDelivery` writes the enrolment code to the silo's log, where the Aspire dashboard
+shows it — and, since #93 gave the AppHost a relay (Mailpit), mails it through the platform's own
+communication service as well, so it is also in the inbox at `http://localhost:8025`
+([17 § The outbound carrier](17-communication-and-email.md)). ⚠ That cross-tenant send — the user's
+`UserGrain` into the platform tenant's message grain — is the one edge
+`CyberCloudGrainCallTenantSeparator` opens through the separation this paragraph describes, and the
+route to the platform's service was unreachable on a real silo until it did. The progress UI, the
+welcome mail and the optional cluster are the part
 of [06 § Tenant lifecycle](06-tenancy-and-resource-model.md)'s operation still owed; the step record
 in the grain is its seed.
 

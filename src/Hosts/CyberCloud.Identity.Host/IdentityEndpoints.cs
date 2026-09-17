@@ -137,8 +137,8 @@ namespace CyberCloud.Identity.Host;
 ///         <c>POST /api/signup/complete</c>) and "use a password instead" as the link beneath it.
 ///         On <c>succeeded</c> the page navigates, full-page, to the response's <c>returnUrl</c>,
 ///         which is the original <c>/authorize</c> request with <c>tenant=&lt;new tenant&gt;</c>
-///         set. ⚠ On a development run the code is in the silo's console in the Aspire dashboard
-///         rather than in a mailbox — there is no MTA (#93) — and the page says so.
+///         set. ⚠ On a development run the code is in Mailpit's inbox at <c>http://localhost:8025</c>
+///         and in the silo's console in the Aspire dashboard (#93), and the page says so.
 ///         <see cref="MapSignUp" /> carries the endpoint-level rules.
 ///     </para>
 ///     <para>

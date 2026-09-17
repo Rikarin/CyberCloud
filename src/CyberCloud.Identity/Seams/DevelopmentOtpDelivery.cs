@@ -5,8 +5,9 @@ using Microsoft.Extensions.Logging;
 namespace CyberCloud.Identity.Seams;
 
 /// <summary>
-///     An <see cref="IOtpDeliverySeam" /> that writes the code to the silo's log instead of sending
-///     it — for a development run with no MTA (#93), and for nothing else.
+///     An <see cref="IOtpDeliverySeam" /> that writes the code to the silo's log and — when the
+///     development run has a relay — also mails it through <see cref="CommunicationOtpDelivery" />.
+///     For a development run (#93), and for nothing else.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -22,9 +23,21 @@ namespace CyberCloud.Identity.Seams;
 ///         <see cref="OtpPolicy" />'s fourth property.</b> A code is minted and delivered inside a
 ///         grain activation, so the only process that ever holds the plaintext is the silo that ran
 ///         the grain — the host never sees it, and could not print it. On the AppHost the person
-///         reads it in the Aspire dashboard: <c>silo-one</c>'s or <c>silo-two</c>'s console (the
+///         reads it in the Aspire dashboard: <c>silo-1</c>'s or <c>silo-2</c>'s console (the
 ///         grain lives on one of them), or the structured logs with the filter
 ///         <c>DEVELOPMENT OTP</c>, which searches both.
+///     </para>
+///     <para>
+///         <b>And, since #93's carrier, in an inbox.</b> The AppHost runs Mailpit and configures the
+///         silos to send through it, so <c>SiloIdentityComposition</c> hands this seam a
+///         <see cref="CommunicationOtpDelivery" /> pointed at the platform's own communication
+///         service and the code lands at <c>http://localhost:8025</c> as well. The log line stays,
+///         because the person on the dashboard should still find the code there. ⚠ <b>The mail
+///         failing does not fail the delivery.</b> A Mailpit still starting, a relay a laptop's
+///         firewall refused — in Development the log line is a delivery in its own right, so the
+///         refusal is logged beside the code (<c>IdentityLog.DevelopmentOtpNotMailed</c>) and the
+///         sign-up continues. Outside Development this type does not load, so that leniency reaches
+///         no production tenant.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The address is a structured property and never in the message.</b> docs/plan/11
@@ -38,12 +51,17 @@ public sealed class DevelopmentOtpDelivery : IOtpDeliverySeam {
     public const string DestinationProperty = "Destination";
 
     readonly ILogger<DevelopmentOtpDelivery> logger;
+    readonly IOtpDeliverySeam? mail;
 
     /// <summary>Builds the seam, or refuses to.</summary>
     /// <param name="environment">The host's environment. Must be Development.</param>
     /// <param name="logger">Where the codes go.</param>
+    /// <param name="mail">
+    ///     The seam the code is also sent through — <see cref="CommunicationOtpDelivery" /> over
+    ///     the development relay — or <see langword="null" /> for the log alone.
+    /// </param>
     /// <exception cref="InvalidOperationException">The environment is not Development.</exception>
-    public DevelopmentOtpDelivery(IHostEnvironment environment, ILogger<DevelopmentOtpDelivery> logger) {
+    public DevelopmentOtpDelivery(IHostEnvironment environment, ILogger<DevelopmentOtpDelivery> logger, IOtpDeliverySeam? mail = null) {
         ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(logger);
 
@@ -51,17 +69,21 @@ public sealed class DevelopmentOtpDelivery : IOtpDeliverySeam {
             throw new InvalidOperationException(
                 $"DevelopmentOtpDelivery refuses to load in the '{environment.EnvironmentName}' "
                 + "environment. It writes one-time codes to the log instead of sending them, which is "
-                + "acceptable on a developer's laptop with no MTA (#93) and nowhere else. Configure "
+                + "acceptable on a developer's laptop (#93) and nowhere else. Configure "
                 + "CyberCloud:Identity:OtpDelivery so CommunicationOtpDelivery sends them through "
                 + "CyberCloud.Communication instead — docs/plan/11 § Credentials, docs/plan/17."
             );
         }
 
         this.logger = logger;
+        this.mail = mail;
     }
 
+    /// <summary>Whether the code is mailed as well as logged.</summary>
+    public bool AlsoMails => mail is not null;
+
     /// <inheritdoc />
-    public Task<Result> DeliverAsync(OtpDelivery delivery, CancellationToken cancellationToken = default) {
+    public async Task<Result> DeliverAsync(OtpDelivery delivery, CancellationToken cancellationToken = default) {
         ArgumentNullException.ThrowIfNull(delivery);
 
         // ⚠ The address is in the SCOPE and not in the template. A scope property reaches every
@@ -75,6 +97,18 @@ public sealed class DevelopmentOtpDelivery : IOtpDeliverySeam {
             IdentityLog.DevelopmentOtpDelivered(logger, delivery.Code, delivery.UserId, delivery.Purpose, delivery.Kind);
         }
 
-        return Task.FromResult(Result.Success);
+        if (mail is null) {
+            return Result.Success;
+        }
+
+        // The log line above is already a delivery; the mail is the second copy, and its failure is
+        // reported beside the code rather than to the person — see the class remarks.
+        var mailed = await mail.DeliverAsync(delivery, cancellationToken);
+
+        if (mailed.TryGetError(out var refused)) {
+            IdentityLog.DevelopmentOtpNotMailed(logger, delivery.UserId, refused.Message);
+        }
+
+        return Result.Success;
     }
 }

@@ -9,12 +9,21 @@
       CyberCloud.Mail, which is Postfix/Dovecot/Rspamd and a per-tenant mailbox server — docs/plan/17
       opens by insisting the two are different products and this assembly holds that line.
 
-      ⚠ NO TWILIO CLIENT, NO META CLOUD API CLIENT, NO SES CLIENT, DELIBERATELY. IChannelProvider is
-      the seam; this assembly ships an in-memory implementation for tests and one honest "there is no
-      carrier" refusal per channel. There are no credentials to test against and no network to reach,
-      and a half-real carrier client is worse than a seam because it looks like it sent something.
-      See IChannelProvider for exactly what a real one owes, and Providers/ChannelProviders.cs for
-      what each seam refuses with.
+      ⚠ ONE CARRIER, EMAIL OVER SMTP, AND NO TWILIO CLIENT, NO META CLOUD API CLIENT, NO SES API
+      CLIENT, DELIBERATELY. IChannelProvider is the seam; this assembly ships an in-memory
+      implementation for tests, one honest "there is no carrier" refusal per channel, and — since #93 —
+      Providers/Smtp: a hand-written SMTP submission client (RFC 5321 with STARTTLS and AUTH, the shape
+      Amazon SES's SMTP endpoint and a Postfix relay both speak) behind SmtpChannelProvider, registered
+      when CyberCloud:Communication:Smtp names a relay. Hand-written rather than MailKit for the reason
+      CyberCloud.ObjectStorage hand-wrote SigV4: docs/plan/02 § Dependency register admits nothing
+      without an ADR, and what is needed fits in three files. For the other four channels there are no
+      credentials to test against and no network to reach, and a half-real carrier client is worse than
+      a seam because it looks like it sent something. See IChannelProvider for exactly what a real one
+      owes, and Providers/ChannelProviders.cs for what each seam refuses with.
+
+      ⚠ System.Net.Sockets AND System.Net.Security ARE THE ONLY NETWORK SURFACE HERE. The SMTP client
+      reaches a relay and nothing else; no HTTP client, because SMTP has no status query and a relay's
+      bounces arrive as mail (the ingestion is owed — charts/bundle/bundle.yaml § owed).
 
       ⚠ CHAT IS M3 AND IS ABSENT. docs/plan/17 § Chat scopes it as threads, participants, read
       receipts and typing over SignalR — a different shape from "dispatch one of these", so it is not

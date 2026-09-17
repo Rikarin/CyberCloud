@@ -7,6 +7,8 @@ using CyberCloud.Core.Time;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Credentials;
 using CyberCloud.Identity.Tests.Infrastructure;
+using CyberCloud.Tenancy;
+using CyberCloud.Tenancy.Separation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
@@ -92,6 +94,16 @@ public sealed class OtpIssuanceTests(OtpIssuanceCluster cluster) {
         // failed to deliver it would also leave one carrier call, and would leave the user holding a
         // code the platform had already replaced.
         cluster.Codes.Distinct(StringComparer.Ordinal).Count().ShouldBe(1);
+    }
+
+    [Fact]
+    public void ThePlatformServiceEdgeNamesTheRealMessageGrainInterface() {
+        // ⚠ The tenancy module names the sending module's grain interface as a STRING, because it
+        // may reference nothing but Core (module-layering.txt). A rename of IMessageGrain would
+        // silently close the edge every OTP in the platform depends on; this is the pin that makes
+        // it a compile-and-test failure instead. This project is where both modules meet.
+        CyberCloudGrainCallTenantSeparator.PlatformMessageGrainInterface
+            .ShouldBe(typeof(IMessageGrain).FullName, "the separator's string is the interface Orleans names in IIncomingGrainCallContext.InterfaceName");
     }
 
     [Fact]
@@ -536,8 +548,12 @@ public sealed class OtpIssuanceCluster : IAsyncLifetime {
     /// <summary>The tenant the users belong to.</summary>
     public static Guid Tenant { get; } = Guid.Parse("77777777-7777-4777-8777-777777777777");
 
-    /// <summary>The tenant that owns the communication service. ⚠ Deliberately not <see cref="Tenant" />.</summary>
-    public static Guid PlatformTenant { get; } = Guid.Parse("88888888-8888-4888-8888-888888888888");
+    /// <summary>
+    ///     The tenant that owns the communication service. ⚠ Deliberately not <see cref="Tenant" />,
+    ///     and — since #93 — the real platform tenant, all zeroes: it is the one tenant whose message
+    ///     grain <c>CyberCloudGrainCallTenantSeparator</c> lets another tenant's grain reach.
+    /// </summary>
+    public static Guid PlatformTenant { get; } = Guid.Empty;
 
     /// <summary>The service the route names.</summary>
     public static Guid ServiceId { get; } = Guid.Parse("99999999-9999-4999-8999-999999999999");
@@ -698,12 +714,25 @@ public sealed class OtpIssuanceCluster : IAsyncLifetime {
                 }
             );
 
+            // ⚠ THE REAL SILO'S TENANT SEPARATION, AND UNTIL #93 THIS CLUSTER RAN WITHOUT IT. A code is
+            // minted by UserGrain in the user's tenant and sent through the platform's service in
+            // ANOTHER tenant — the edge CommunicationOtpDelivery's remarks call the design. With
+            // AddCyberCloudTenantSeparation wired, as CyberCloud.Silo.Host wires it through
+            // AddCyberCloudTenancy, that edge is a grain-to-grain cross-tenant call and the
+            // authorizer refuses it unless something says otherwise; every test in this class used
+            // to pass without the filter and every one of them would have failed on the first real
+            // silo. CyberCloudGrainCallTenantSeparator's platform-service edge is what says otherwise,
+            // and this line is what makes these tests prove it.
+            silo.AddCyberCloudTenantSeparation();
+
             silo.AddCyberCloudCommunication();
             silo.AddCyberCloudIdentity();
 
             // ⚠ The line CyberCloud.Silo.Host makes from CyberCloud:Identity:OtpDelivery. Without it
             // this silo would resolve UnavailableOtpDelivery — which is what UnwiredOtpDeliveryTests
-            // asserts against IdentityCluster, deliberately kept in that state.
+            // asserts against IdentityCluster, deliberately kept in that state. The route is the
+            // PLATFORM tenant — all zeroes, ReBacScopeAuthorizer.PlatformTenant — because that is the
+            // one tenant whose communication service the separator lets every other tenant reach.
             silo.AddCommunicationOtpDelivery(PlatformTenant, ServiceId);
         }
     }

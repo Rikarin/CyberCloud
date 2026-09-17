@@ -284,10 +284,11 @@ public static partial class IdentityLog {
     ///         <b>
     ///             The one template in this file that renders a credential, and the constructor of
     ///             the only caller refuses to run outside Development
-    ///         </b> — <c>DevelopmentOtpDelivery</c>. There is no MTA on a development run (#93), and
-    ///         the person reading the code off the Aspire dashboard is the person who typed the
-    ///         address ten seconds earlier. Warning rather than Information so it stands out in a
-    ///         console, and the message starts with a marker a dashboard filter can find.
+    ///         </b> — <c>DevelopmentOtpDelivery</c>. On a development run the code also goes to
+    ///         Mailpit's inbox when the AppHost's relay is configured (#93), and this line stays
+    ///         beside it because the person reading it off the Aspire dashboard is the person who
+    ///         typed the address ten seconds earlier. Warning rather than Information so it stands
+    ///         out in a console, and the message starts with a marker a dashboard filter can find.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The address is not a parameter, and it must not become one.</b> It reaches the
@@ -303,7 +304,7 @@ public static partial class IdentityLog {
         EventId = 1113,
         Level = LogLevel.Warning,
         Message =
-        "⚠ DEVELOPMENT OTP DELIVERY (no MTA, #93): code {Code} for user {UserId}, {Purpose} via {Kind}. This seam refuses to load outside Development."
+        "⚠ DEVELOPMENT OTP DELIVERY (#93): code {Code} for user {UserId}, {Purpose} via {Kind}. This seam refuses to load outside Development."
     )]
     public static partial void DevelopmentOtpDelivered(
         ILogger logger,
@@ -312,6 +313,25 @@ public static partial class IdentityLog {
         OtpPurpose purpose,
         CredentialKind kind
     );
+
+    /// <summary>
+    ///     The Development seam also mailed the code through the platform's communication service —
+    ///     Mailpit on the AppHost — and the mail was refused. The line above still has the code.
+    /// </summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="userId">Who it was for.</param>
+    /// <param name="reason">The sending module's own sentence.</param>
+    /// <remarks>
+    ///     ⚠ Warning and not Error, and the delivery still reports success: in Development the log
+    ///     line <i>is</i> a delivery, and a Mailpit that is not up yet must not turn a sign-up into
+    ///     "something went wrong" when the code is on the console the person is looking at.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 1122,
+        Level = LogLevel.Warning,
+        Message = "The development code for user {UserId} was logged above and was NOT mailed: {Reason}"
+    )]
+    public static partial void DevelopmentOtpNotMailed(ILogger logger, Guid userId, string reason);
 
     /// <summary>A self-serve sign-up began and allocated its ids. ⚠ No address.</summary>
     /// <param name="logger">The sink.</param>

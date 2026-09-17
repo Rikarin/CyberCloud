@@ -182,10 +182,19 @@ public static class IdentitySiloBuilderExtensions {
 
     /// <summary>
     ///     Points <see cref="IOtpDeliverySeam" /> at the silo's log — <see cref="DevelopmentOtpDelivery" />
-    ///     — when, and only when, <paramref name="environment" /> is Development.
+    ///     — when, and only when, <paramref name="environment" /> is Development; and, when a route
+    ///     is given, at that communication service as well.
     /// </summary>
     /// <param name="builder">The silo being composed.</param>
     /// <param name="environment">The host's environment, which decides everything.</param>
+    /// <param name="alsoThrough">
+    ///     A communication service the code is mailed through beside the log line — the platform's
+    ///     own service over the AppHost's Mailpit (#93) — or <see langword="null" /> for the log
+    ///     alone. ⚠ Not the same as <see cref="AddCommunicationOtpDelivery" />: that one is the
+    ///     production seam and a failed send is a failed delivery; this one logs first and a failed
+    ///     mail is a warning beside the code, for the reason <see cref="DevelopmentOtpDelivery" />
+    ///     gives.
+    /// </param>
     /// <returns>The same builder, for chaining.</returns>
     /// <remarks>
     ///     <para>
@@ -207,7 +216,11 @@ public static class IdentitySiloBuilderExtensions {
     ///         <see cref="AddCommunicationOtpDelivery" /> gives.
     ///     </para>
     /// </remarks>
-    public static ISiloBuilder AddDevelopmentOtpDelivery(this ISiloBuilder builder, IHostEnvironment environment) {
+    public static ISiloBuilder AddDevelopmentOtpDelivery(
+        this ISiloBuilder builder,
+        IHostEnvironment environment,
+        OtpDeliveryRoute? alsoThrough = null
+    ) {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(environment);
 
@@ -218,7 +231,10 @@ public static class IdentitySiloBuilderExtensions {
         builder.Services.Replace(
             ServiceDescriptor.Singleton<IOtpDeliverySeam>(services => new DevelopmentOtpDelivery(
                     environment,
-                    services.GetRequiredService<ILogger<DevelopmentOtpDelivery>>()
+                    services.GetRequiredService<ILogger<DevelopmentOtpDelivery>>(),
+                    alsoThrough is null
+                        ? null
+                        : new CommunicationOtpDelivery(services.GetRequiredService<IMessageSender>(), alsoThrough)
                 )
             )
         );

@@ -29,9 +29,11 @@ namespace CyberCloud.Providers.Communication.Conformance;
 ///         ⚠ <b>SO STATE PLAINLY WHAT A GREEN RUN HERE PROVES AND WHAT IT DOES NOT.</b> It proves
 ///         the twelve-step write path, the verb grammar, the four reconciler clauses, the
 ///         cross-tenant 404 and the delete-read-back, over grain state read around the reconciler.
-///         It proves <b>nothing</b> about a message reaching anybody — no carrier exists in this
-///         build, every channel resolves to the refusing seam, and a <c>send</c> here would refuse
-///         honestly. It proves nothing about the silo-kill criterion either, because the
+///         It proves <b>nothing</b> about a message reaching anybody — this harness registers no
+///         carrier, so every channel here resolves to the refusing seam and a <c>send</c> would
+///         refuse honestly; the one carrier that ships (#93, email over SMTP) is proven against a
+///         real relay by <c>SmtpChannelProviderTests</c> in <c>CyberCloud.Communication.Tests</c>.
+///         It proves nothing about the silo-kill criterion either, because the
 ///         cluster-backed harness refuses a case with no objects by name; that is
 ///         <c>charts/bundle/bundle.yaml § owed</c>. And the one property that matters most on this
 ///         family — that a suppressed address is never handed to a carrier — is not this suite's to

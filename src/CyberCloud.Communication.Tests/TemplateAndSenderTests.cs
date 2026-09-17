@@ -543,23 +543,61 @@ public sealed class ChannelConfigurationTests(CommunicationCluster cluster) {
     }
 
     [Fact]
-    public void AnUnnamedProviderWithSeveralCandidatesIsRefusedRatherThanPickedByRegistrationOrder() {
+    public void AnUnnamedProviderWithSeveralCarriersIsRefusedRatherThanPickedByRegistrationOrder() {
+        // Two REAL carriers for one channel. Before #93 this row used the in-memory double beside
+        // the refusing seam, which is no longer ambiguous — see the row below.
         var registry = new ChannelProviderRegistry(
             [
-                new InMemoryChannelProvider(ChannelKind.Sms),
-                new UnavailableSmsProvider(
-                    Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableSmsProvider>.Instance
+                new InMemoryChannelProvider(ChannelKind.Email),
+                new Providers.Smtp.SmtpChannelProvider(
+                    new() { Host = "relay.example", From = "no-reply@cybercloud.example" },
+                    new Core.Time.SystemClock(),
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<Providers.Smtp.SmtpChannelProvider>.Instance
+                ),
+                new UnavailableEmailProvider(
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableEmailProvider>.Instance
                 )
             ]
         );
 
-        registry.Resolve(ChannelKind.Sms, string.Empty)
-            .Error!
+        var refused = registry.Resolve(ChannelKind.Email, string.Empty);
+
+        refused.Error!
             .Code
             .ShouldBe(
                 ErrorCode.InvalidRequestBody,
                 "which carrier a tenant sends through is not a thing to decide by the order somebody "
                 + "wrote lines in a wiring method"
             );
+
+        refused.Error.Message.ShouldContain("2 registered carriers (in-memory, smtp)", Case.Sensitive, "and the seam is not counted among them");
+    }
+
+    [Fact]
+    public void AnUnnamedProviderResolvesToTheOneCarrierBesideTheRefusingSeam() {
+        // ⚠ THE DEFAULT #93 DEPENDS ON. A tenant's `channels` resource with kind: email and no
+        // provider, on a silo with the relay configured, must reach the relay — not a refusal saying
+        // the channel has two providers, one of which is the absence of one.
+        var registry = new ChannelProviderRegistry(
+            [
+                new UnavailableEmailProvider(
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableEmailProvider>.Instance
+                ),
+                new InMemoryChannelProvider(ChannelKind.Email)
+            ]
+        );
+
+        registry.Resolve(ChannelKind.Email, string.Empty).GetValueOrThrow().Name.ShouldBe("in-memory");
+
+        // And with nothing real registered, the seam is still what an unnamed channel gets.
+        var seamOnly = new ChannelProviderRegistry(
+            [
+                new UnavailableEmailProvider(
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableEmailProvider>.Instance
+                )
+            ]
+        );
+
+        seamOnly.Resolve(ChannelKind.Email, string.Empty).GetValueOrThrow().ShouldBeAssignableTo<IRefusingChannelProvider>();
     }
 }

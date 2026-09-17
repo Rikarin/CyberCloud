@@ -108,17 +108,83 @@ the complaint in place, and deleting the resource leaves it in place too — the
 that would otherwise have un-unsubscribed a recipient. `SuppressionEnforcementTests` in
 `CyberCloud.Providers.Communication.Tests` was sabotage-tested on both.
 
-⚠ **What ✅ on the roadmap row does not mean, said here as well as there.** No carrier client ships:
-every channel resolves to the module's refusing seam unless a host registers a real `IChannelProvider`,
-so a `send` today refuses honestly rather than sending. The sender-id registration flow has its grain
-(`ISenderIdentityGrain`) and no resource surface, so `ChannelConfiguration.SenderId` is always empty
-from this surface. Inbound `STOP` suppresses and is forwarded nowhere. **Delivery receipts have their
-read half only**: `status` renders what `IWebhookRouter` recorded, and no host maps a path a carrier's
-callback could reach — `HandleWebhookAsync(HttpRequest)` at the top of this document is the provider's
-half, and the ingress in front of it lands with the first carrier, because the carrier's signature is
-the only authentication a callback has (`charts/bundle/bundle.yaml § owed`,
-`communication-receipts-have-no-ingress`). And the platform's own outbound MTA — "our own Postfix"
-above — does not exist, which is the item the same section carries as `the-platform-has-no-mta`.
+⚠ **What ✅ on the roadmap row does not mean, said here as well as there.** One carrier client ships
+— email, [§ The outbound carrier](#the-outbound-carrier--landed-2026-09-18-93) below — and the other
+four channels resolve to the module's refusing seam unless a host registers a real `IChannelProvider`,
+so an SMS `send` today refuses honestly rather than sending. The sender-id registration flow has its
+grain (`ISenderIdentityGrain`) and no resource surface, so `ChannelConfiguration.SenderId` is always
+empty from this surface. Inbound `STOP` suppresses and is forwarded nowhere. **Delivery receipts have
+their read half only**: `status` renders what `IWebhookRouter` recorded, and no host maps a path a
+carrier's callback could reach — `HandleWebhookAsync(HttpRequest)` at the top of this document is the
+provider's half, and the ingress in front of it lands with the first deployed relay, because the
+carrier's signature is the only authentication a callback has (`charts/bundle/bundle.yaml § owed`,
+`communication-receipts-have-no-ingress`, which since #93 carries the email-specific design: a
+Postfix relay's bounce is an RFC 3464 DSN *mailed* to the envelope sender, SES's is an SNS
+notification, and neither is a webhook). And the platform's own outbound MTA — "our own Postfix"
+above, the warmed pool with its PTR records and feedback loops — is still not deployed, which is what
+the same section's `the-platform-has-no-mta` now says.
+
+### The outbound carrier — landed 2026-09-18 (#93)
+
+`SmtpChannelProvider` in `CyberCloud.Communication/Providers/Smtp` is the email `IChannelProvider`:
+one SMTP submission per message to whatever relay `CyberCloud:Communication:Smtp` names — a host, a
+port, `StartTls` | `ImplicitTls` | `None`, an optional `AUTH PLAIN`/`LOGIN` credential, and the
+`From` address. That is the shape Amazon SES's SMTP endpoint (587, `STARTTLS`, a credential pair)
+and a Postfix relay in the same cluster (25, no auth on a private network) both speak, so the
+"Amazon SES/our own Postfix" of [§ The channel abstraction](#the-channel-abstraction) is one client.
+⚠ **Hand-written, not MailKit**, for the reason `CyberCloud.ObjectStorage` hand-wrote SigV4:
+[02 § Dependency register](02-technology-decisions.md) admits nothing without an ADR, and RFC 5321
+with `STARTTLS`, `AUTH` and dot-stuffing fits in one file (`SmtpConnection`). It is proven against a
+real server — Mailpit in a Testcontainer, `SmtpChannelProviderTests`, reading the headers back
+through the server's API — and its refusals against a scripted one (`SmtpRefusalTests`: a relay
+without `STARTTLS` when the section insists, an untrusted certificate, a credential the client will
+not send in the clear, a `550`, a relay that never answers). ⚠ The happy halves of `STARTTLS` and
+`AUTH` were read against RFC 3207 and RFC 4954 and not run to their end, because both need a
+certificate the client trusts. The first relay with TLS is the first run of those two paths.
+
+**What is applied on the way out**, which is the half of [§ Deliverability](#deliverability--the-part-that-decides-whether-this-works)
+that belongs to the *message* rather than to the sending IP:
+
+| Rule | How, and why it is not optional |
+|---|---|
+| A per-message `Message-ID` | Minted under the `From` domain from the message grain's id, and returned as the provider message id. It is the handle a bounce or a feedback-loop report quotes back, so it is the key the receipt path will correlate on. ⚠ SES rewrites it to its own id; the owed ingestion has to map |
+| `List-Unsubscribe` | A `mailto:` at the configured `UnsubscribeMailbox`, on every message. Gmail and Yahoo require it of bulk senders since 2024 and score its absence on everything else; a recipient who uses it is a recipient who did not cost the domain a complaint. ⚠ `mailto:` and not RFC 8058's one-click `https:`, because one-click needs an ingress that accepts the `POST`, and there is none yet |
+| `Auto-Submitted: auto-generated` | RFC 3834. An OTP is not written by a person, and saying so stops every vacation responder from answering the platform's `From` |
+| `Date`, `MIME-Version`, `Content-Type: text/plain; charset=utf-8`, quoted-printable | The basics whose absence is a spam signal, and an explicit charset so a Czech template is not mojibake |
+| **The suppression check** | Not in the carrier — `MessageGrain.DispatchAsync` runs it before a provider is resolved, exactly as before — and asserted against the real server: a suppressed address produces no connection to the relay at all |
+| Header and body injection | A subject with a line break is RFC 2047-encoded as one value, the body is quoted-printable, and the transport dot-stuffs, so a template author can add neither a header nor an SMTP command |
+
+**The development carrier.** The AppHost runs Mailpit (`axllent/mailpit`, SMTP on 1025, inbox on
+`http://localhost:8025`) and points both silos at it through `CyberCloud:Communication:Smtp` with
+`Security=None` and no credential — the one arrangement `SmtpRelayOptions.Validate` accepts without
+TLS, because there is no password to put on the wire. A tenant's `channels` resource with
+`kind: email` sends through it, and so does the platform: `PlatformBootstrapTask` writes **the
+platform's own `services` grain** — addressed as `services/platform` in the platform tenant's
+`platform` resource group, keyed by the id that address derives, so a resource created there later
+adopts it — with an email channel on the `smtp` carrier, and in Development `DevelopmentOtpDelivery`
+mails every sign-up code through it *beside* the console line, which stays. `PersonOverHttpTests`
+reads the code off the console and asserts the same code is in the inbox.
+
+⚠ **The cross-tenant edge this needed, and the defect it found.** A code is minted by `UserGrain`
+in the user's tenant and sent through the platform tenant's message grain — a grain-to-grain
+cross-tenant call, which `PlatformCrossTenantAuthorizer` refuses. Every test of the route to the
+platform's service had run without the separation wired; on a real silo the first OTP would have
+died with `Tenant "X" attempted to access tenant "0000…"`. `CyberCloudGrainCallTenantSeparator` now
+opens exactly one edge: a call **into the platform tenant's `IMessageGrain`** is not tenant-separated.
+Nothing else in the platform tenant is reachable that way — its tuple store above all — and
+[11 § Sign-up](11-identity.md) and the separator's own remarks carry what the edge costs.
+
+⚠ **What remains, each with its row in `charts/bundle/bundle.yaml § owed`.** The relay itself
+(`the-platform-has-no-mta`): a warmed outbound pool with PTR records, feedback-loop registrations,
+RBL monitoring and the separate sending IPs [25](25-risks-and-open-questions.md)'s closed row 2
+requires; on a cluster it is a Postfix relay or an SES SMTP credential, and the configuration section
+is ready for either. Bounce and complaint ingestion (`communication-receipts-have-no-ingress`): the
+design is written there — a DSN parser for a Postfix relay, an SNS-signature-verified endpoint for
+SES, both landing on `DeliveryReceipt.Suppresses`. A tenant's own SMTP account
+(`CredentialMode.TenantAccount`) is refused by the carrier rather than sent through the platform's
+relay under the platform's name, because a BYO relay has a *host* per tenant and
+`ChannelConfiguration` cannot carry one yet. And `SMTPUTF8` addresses, which the client refuses by
+name.
 
 ⚠ **A manual block has one owner, and it was the review of #33 that found the hole.** The first cut
 let any number of `suppressions` resources name one address: the second read the first's entry as its

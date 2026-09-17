@@ -38,13 +38,16 @@ namespace CyberCloud.AppHost.Tests;
 ///         the code paths are.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The one-time code is read from the silo's console, because that is where it is.</b>
-///         There is no MTA (#93); <c>DevelopmentOtpDelivery</c> logs the code on the silo whose
-///         grain minted it, and a person reads it in the Aspire dashboard. The test reads the same
-///         console through <see cref="ResourceLoggerService" />, watching both silos because the
-///         sign-up grain is placed on either. Nothing is substituted at the delivery seam: the code
-///         that arrives is the code the grain wrote, and a wrong one is answered
-///         <c>verified: false</c> first to prove the check is a check.
+///         ⚠ <b>The one-time code is read from the silo's console, and checked against Mailpit's
+///         inbox.</b> <c>DevelopmentOtpDelivery</c> logs the code on the silo whose grain minted it
+///         and — the AppHost having a relay since #93 — mails it through the platform's own
+///         communication service to Mailpit, where a person reads it at
+///         <c>http://localhost:8025</c>. The test reads the console through
+///         <see cref="ResourceLoggerService" />, watching both silos because the sign-up grain is
+///         placed on either, then reads the inbox through Mailpit's API and asserts the two agree.
+///         Nothing is substituted at the delivery seam: the code that arrives is the code the grain
+///         wrote, and a wrong one is answered <c>verified: false</c> first to prove the check is a
+///         check.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Cookies are carried by hand.</b> Every cookie the identity host sets is
@@ -93,7 +96,7 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
     const string Password = "person-over-http-correct-horse-9";
 
     static readonly Regex DeliveredCode = new(
-        @"DEVELOPMENT OTP DELIVERY \(no MTA, #93\): code (?<code>\d{6}) for user (?<user>[0-9a-f-]{36})",
+        @"DEVELOPMENT OTP DELIVERY \(#93\): code (?<code>\d{6}) for user (?<user>[0-9a-f-]{36})",
         RegexOptions.CultureInvariant | RegexOptions.Compiled
     );
 
@@ -167,10 +170,18 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
         var ticket = begun.CookieSet(SignUpTicketCookie.CookieName);
         ticket.ShouldNotBeNullOrEmpty("begin issues " + SignUpTicketCookie.CookieName);
 
-        // ── Step 5: the code, from the silo's console. ──────────────────────────────────────────
+        // ── Step 5: the code, from the silo's console — and the same code from Mailpit's inbox. ──
         var code = await ReadDeliveredCodeAsync(console, cancellationToken);
 
         TestContext.Current.TestOutputHelper?.WriteLine($"one-time code {code} read from the silo console");
+
+        // ⚠ THE PART #93 ADDED. The console line is still where the test reads the code, because it
+        // is where a person is told to look first; this asserts that the same code ALSO arrived
+        // where a person would look second: the relay's inbox at http://localhost:8025, sent through
+        // the platform's own communication service and the smtp carrier — a real SMTP submission
+        // from the silo to a real SMTP server, read back through the server's API.
+        var mailed = await ReadMailedCodeAsync(http, cancellationToken);
+        mailed.ShouldBe(code, "the code in the inbox is the code on the console — one delivery, two places");
 
         // ── Step 6: a wrong code is refused, the right one is burnt. ────────────────────────────
         var wrong = await PostJsonAsync(http, "/api/signup/verify", ticket, new { code = "000000" }, cancellationToken);
@@ -407,6 +418,46 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
             $"No one-time code appeared on either silo's console within {CodeBudget}. DevelopmentOtpDelivery "
             + "logs it at Warning when the silo runs in Development with no CyberCloud:Identity:OtpDelivery "
             + $"configured; {console.Count} console line(s) were read."
+        );
+    }
+
+    /// <summary>
+    ///     The code in the newest message Mailpit holds for <see cref="Email" />, read through its
+    ///     API on <c>http://localhost:8025</c>.
+    /// </summary>
+    /// <remarks>
+    ///     The relay answers the silo's <c>250</c> before it has indexed the message, so this polls
+    ///     briefly rather than reading once. The body is the free-text OTP send —
+    ///     "<i>424242</i> is your code." — and the same regex shape the console reader uses picks the
+    ///     six digits out of it.
+    /// </remarks>
+    static async Task<string> ReadMailedCodeAsync(HttpClient http, CancellationToken cancellationToken) {
+        var inbox = new Uri($"http://localhost:{CyberCloudResources.MailpitHttpPort.ToString(CultureInfo.InvariantCulture)}/");
+        var clock = Stopwatch.StartNew();
+
+        while (clock.Elapsed < TimeSpan.FromSeconds(30)) {
+            using var listing = await http.GetAsync(new Uri(inbox, "api/v1/search?query=to:" + Email), cancellationToken);
+            var messages = Json(await listing.Content.ReadAsStringAsync(cancellationToken)).GetProperty("messages");
+
+            if (messages.GetArrayLength() > 0) {
+                var id = messages[0].GetProperty("ID").GetString()!;
+                using var message = await http.GetAsync(new Uri(inbox, "api/v1/message/" + id), cancellationToken);
+                var text = Json(await message.Content.ReadAsStringAsync(cancellationToken)).GetProperty("Text").GetString() ?? string.Empty;
+
+                var digits = Regex.Match(text, @"\b(?<code>\d{6})\b", RegexOptions.CultureInvariant);
+                digits.Success.ShouldBeTrue("the mailed body carries the six-digit code: " + text);
+
+                return digits.Groups["code"].Value;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+        }
+
+        throw new InvalidOperationException(
+            $"No message to {Email} reached Mailpit within 30 s. The silo's PlatformBootstrapTask writes the "
+            + "platform's communication service when CyberCloud:Communication:Smtp is set, and "
+            + "DevelopmentOtpDelivery mails the code through it beside logging it; a 'was NOT mailed' Warning "
+            + "on the silo console says why the relay refused."
         );
     }
 

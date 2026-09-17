@@ -117,7 +117,8 @@ public sealed class AppHostTopologyTests {
         foreach (var expected in new[] {
                      CyberCloudResources.Gateway, CyberCloudResources.Identity, CyberCloudResources.Feeds,
                      CyberCloudResources.Portal, CyberCloudResources.IdentityApp,
-                     CyberCloudResources.ObjectStore, CyberCloudResources.ObjectStoreBucketInit
+                     CyberCloudResources.ObjectStore, CyberCloudResources.ObjectStoreBucketInit,
+                     CyberCloudResources.Mailpit
                  }) {
             names.ShouldContain(
                 expected,
@@ -231,6 +232,52 @@ public sealed class AppHostTopologyTests {
                     $"{name} writes into {CyberCloudResources.ObjectStoreBucket} and must wait for the container that creates it"
                 );
         }
+    }
+
+    [Fact]
+    public async Task TheMailRelayIsInTheModelAndBothSilosSendThroughIt() {
+        var built = Model();
+
+        // ⚠ The development carrier (#93): Mailpit, the image the carrier's own suite runs against,
+        // SMTP on 1025 and the inbox on 8025, both published unproxied so the literal addresses the
+        // silos and the README carry are the addresses.
+        var mailpit = built.Resource(CyberCloudResources.Mailpit).ShouldBeOfType<ContainerResource>();
+
+        var image = mailpit.Annotations.OfType<ContainerImageAnnotation>().ShouldHaveSingleItem();
+        image.Image.ShouldBe("axllent/mailpit");
+        image.Tag.ShouldBe(
+            "v1.31.1",
+            "SmtpChannelProviderTests.Image runs the carrier against this exact tag; the dialect proven is the dialect this run speaks"
+        );
+
+        var endpoints = mailpit.Annotations.OfType<EndpointAnnotation>().ToDictionary(x => x.Name, StringComparer.Ordinal);
+        endpoints["smtp"].Port.ShouldBe(CyberCloudResources.MailpitSmtpPort);
+        endpoints["smtp"].TargetPort.ShouldBe(CyberCloudResources.MailpitSmtpPort);
+        endpoints["smtp"].IsProxied.ShouldBeFalse("the silos are handed localhost:1025 as a literal");
+        endpoints["http"].Port.ShouldBe(CyberCloudResources.MailpitHttpPort);
+        endpoints["http"].IsProxied.ShouldBeFalse("a person is told http://localhost:8025");
+
+        // Both silos, because the grain that mints a code lives on either — and the section is the
+        // one switch that registers the carrier, writes the platform's service and mails the codes.
+        foreach (var name in new[] { CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo }) {
+            var environment = await built.EnvironmentOf(name);
+
+            environment["CyberCloud__Communication__Smtp__Host"].ShouldBe("localhost", $"{name} reaches Mailpit on the published port");
+            environment["CyberCloud__Communication__Smtp__Port"].ShouldBe(CyberCloudResources.MailpitSmtpPort.ToString());
+            environment["CyberCloud__Communication__Smtp__Security"].ShouldBe("None", "Mailpit speaks no TLS, and there is no password to protect");
+            environment["CyberCloud__Communication__Smtp__From"].ShouldBe(CyberCloudResources.PlatformSender);
+            environment["CyberCloud__Communication__Smtp__UnsubscribeMailbox"].ShouldBe(CyberCloudResources.PlatformUnsubscribeMailbox, "List-Unsubscribe is sent, and its mailbox lands in the same inbox");
+            environment.ShouldNotContainKey("CyberCloud__Communication__Smtp__Password", "no credential on a relay that trusts the laptop");
+
+            // ⚠ No explicit route: the silo is in Development, so the unset section is what makes
+            // DevelopmentOtpDelivery log the code AND mail it through the platform's own service.
+            environment.ShouldNotContainKey("CyberCloud__Identity__OtpDelivery__ServiceId");
+            environment["DOTNET_ENVIRONMENT"].ShouldBe("Development");
+        }
+
+        // Nothing waits on the relay, for the reason nothing waits on k3s — CyberCloudTopology.
+        built.Resource(CyberCloudResources.SiloOne).Annotations.OfType<WaitAnnotation>()
+            .ShouldNotContain(x => x.Resource.Name == CyberCloudResources.Mailpit, "a carrier is a data plane the control plane refuses honestly without");
     }
 
     [Fact]

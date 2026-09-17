@@ -153,6 +153,45 @@ public sealed class OtpSeamWiringTests {
     }
 
     [Fact]
+    public void ADevelopmentSiloWithARelayLogsAndMailsItsCodes() {
+        // ⚠ The line CyberCloud.Silo.Host makes when CyberCloud:Communication:Smtp names a relay and
+        // the route is unset, in Development (#93): one seam, which logs the code AND hands it to
+        // CommunicationOtpDelivery over the platform's own service — the AppHost's Mailpit.
+        var services = Compose(silo => silo.AddCyberCloudIdentity()
+            .AddDevelopmentOtpDelivery(
+                new FixedEnvironment(Environments.Development),
+                new OtpDeliveryRoute { TenantId = Guid.Empty, ServiceId = Guid.NewGuid() }
+            )
+        );
+
+        services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
+        services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
+
+        var seam = services.BuildServiceProvider().GetRequiredService<IOtpDeliverySeam>().ShouldBeOfType<DevelopmentOtpDelivery>();
+        seam.AlsoMails.ShouldBeTrue("the relay is configured, so the code goes to the inbox as well as the console");
+
+        services.Count(x => x.ServiceType == typeof(IOtpDeliverySeam)).ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData("Production")]
+    [InlineData("Staging")]
+    public void AProductionSiloWithARelayAndNoRouteStillKeepsTheRefusingSeam(string environmentName) {
+        // ⚠ THE ROW THAT WOULD CATCH THE TEMPTING FIX: "a relay is configured, so mail the codes
+        // through the platform's service everywhere". Outside Development the route is the
+        // operator's to configure — CyberCloud:Identity:OtpDelivery — and the relay alone opts
+        // nobody in. The logging seam's constructor would refuse a second time anyway.
+        var seam = Seam(silo => silo.AddCyberCloudIdentity()
+            .AddDevelopmentOtpDelivery(
+                new FixedEnvironment(environmentName),
+                new OtpDeliveryRoute { TenantId = Guid.Empty, ServiceId = Guid.NewGuid() }
+            )
+        );
+
+        seam.ShouldBeOfType<UnavailableOtpDelivery>();
+    }
+
+    [Fact]
     public void AConfiguredRouteWinsOverTheDevelopmentSeam() {
         // The composition calls one or the other, never both; this pins that the real seam is what a
         // developer who wired a communication service gets even if both calls were made.

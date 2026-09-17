@@ -151,4 +151,28 @@
 # DEFLATE a rate, never inflate one. A line covered in the instrumented process is really covered;
 # out-of-process execution simply adds nothing. So no row here is flattered by it, and no green
 # project is secretly red.
-CyberCloud.Silo.Host                              58.6
+
+# ── 2026-09-18: the row is gone, and the arithmetic above is what said it would be ──────────────
+#
+# CyberCloud.Silo.Host cleared the floor, and it did so the way the 2026-09-03 paragraph said was the
+# only way it could: by growing in-process code faster than out-of-process code. PlatformBootstrapTask
+# (2026-09-15, #88) and its third half plus PlatformCommunicationService (#93) are startup work a
+# TestCluster runs inside the instrumented process — CyberCloud.Silo.Host.Tests drives the task
+# against the real grains, CyberCloud.Hosts.Tests composes the real SiloComposition — so the
+# assembly now has 433 coverable lines, the same 86 out-of-process ones (HelloGrain.cs 54,
+# Program.cs 32) and a ceiling of 347/433 = 80.1 %.
+#
+# MEASURED, so the deletion is a number and not a hope: coverlet over CyberCloud.Silo.Host.Tests and
+# CyberCloud.Hosts.Tests, merged by line the way CoverageReport.Read merges, reads 306/433 = 70.7 %
+# on this change and 66.7 % on the master it branched from — so the 58.6 % pin was already eight
+# points stale before #93, which is what a pin nobody re-measures does. ⚠ Two suites, not the full
+# Test target: that target also starts the AppHost, whose fixed ports were in use by other work on
+# the machine the measurement was taken on. The full run's union can only be HIGHER, because every
+# other suite adds hits and none removes any, so ≥ 70 % holds under the gate's own reading. If it
+# ever reads under, the row comes back with the measured number and this paragraph says why it was
+# wrong.
+#
+# What stays true from the paragraph above: the 86 out-of-process lines are still measured as 0 %
+# for the boundary reason and no other, and the honest fix for THAT is still instrumenting the silo
+# processes the AppHost launches. The row's absence is a floor cleared with 0.7 points to spare, not
+# a boundary closed.

@@ -21,9 +21,9 @@ type Step = 'address' | 'code' | 'details';
  * 1. **The address.** `POST /api/signup/begin` answers `sent: true` whether the address was free,
  *    taken or malformed — the same enumeration rule the sign-in page lives under — and sets the
  *    ticket cookie every later call is authenticated by. The page then says where the code is,
- *    and on a development run that is the silo's console in the Aspire dashboard rather than a
- *    mailbox, because there is no MTA (#93). The page says that too, because a person staring at
- *    an empty inbox has no other way to learn it.
+ *    and on a development run that is Mailpit's inbox at http://localhost:8025 — the AppHost's
+ *    relay since #93 — and the silo's console in the Aspire dashboard as well. The page says that
+ *    too, because a person staring at their real inbox has no other way to learn it.
  * 2. **The code.** `POST /api/signup/verify` answers one `false` for a wrong, expired or burnt
  *    code; after five wrong answers the challenge is gone and the page offers a fresh one.
  * 3. **The details and the credential.** A display name, an organisation name, and — as
@@ -59,7 +59,8 @@ type Step = 'address' | 'code' | 'details';
           @case ('code') {
             <span i18n="@@identity.signUp.codeSubheading">Check {{ email() }} for a 6-digit code.</span>
             <span class="block" i18n="@@identity.signUp.codeDevHint">
-              On a development run there is no mail: the code is in the silo's console in the Aspire dashboard.
+              On a development run the mail is in Mailpit at http://localhost:8025, and the code is also in the silo's
+              console in the Aspire dashboard.
             </span>
           }
           @default {

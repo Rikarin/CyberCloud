@@ -247,18 +247,43 @@ public static class CyberCloudTopology {
             )
             .WaitFor(objectStore);
 
+        // ── The mail relay — docs/plan/17, #93 ─────────────────────────────────────────────────────────
+        //
+        // Mailpit: an SMTP server on 1025 that accepts every message and delivers none, and a web inbox
+        // on 8025 where they all land. It is the carrier behind CyberCloud.Communication's email channel
+        // on this run — the smtp carrier the silos register when CyberCloud:Communication:Smtp names a
+        // relay (WithDevelopmentMailRelay) — so a sign-up code and an alert arrive somewhere a person can
+        // open, http://localhost:8025, instead of only on a silo's console. The console line stays.
+        //
+        // ⚠ THE SAME IMAGE TAG SmtpChannelProviderTests RUNS THE CARRIER AGAINST, and AppHostTopologyTests
+        // holds the two together: the dialect the client is proven against is the dialect this run speaks.
+        //
+        // ⚠ BOTH PORTS UNPROXIED, like k3s' and SeaweedFS', because the endpoint has to BE the address:
+        // the silos are handed the literal localhost:1025, and a person is told http://localhost:8025.
+        //
+        // ⚠ NOTHING WAITS ON IT, for the reason nothing waits on k3s below: a carrier is a data plane the
+        // control plane refuses honestly without. A code minted before Mailpit is up is logged on the
+        // console and its mail is a Warning beside it (DevelopmentOtpDelivery); Mailpit is up in about a
+        // second and the silos take longer than that to start, so in practice the first code lands.
+        builder
+            .AddContainer(CyberCloudResources.Mailpit, CyberCloudResources.MailpitImage, CyberCloudResources.MailpitTag)
+            .WithEndpoint(CyberCloudResources.MailpitSmtpPort, CyberCloudResources.MailpitSmtpPort, "tcp", "smtp", isProxied: false)
+            .WithEndpoint(CyberCloudResources.MailpitHttpPort, CyberCloudResources.MailpitHttpPort, "http", "http", isProxied: false)
+            .WithHttpHealthCheck("/readyz", 200, "http");
+
         var siloOne = builder
             .AddProject<CyberCloud_Silo_Host>(CyberCloudResources.SiloOne)
             .WithCyberCloudStorage(redis, shardA, shardB, platformShard)
             .WithReference(nats)
             .WithObjectStore()
+            .WithDevelopmentMailRelay()
             .WithEnvironment("CyberCloud__Silo__KubeconfigRoot", kubeconfigRoot)
             // ⚠ Self-serve sign-up is a decision three processes have to agree on, and this is the first
             // of the three. On a silo it makes PlatformBootstrapTask write the platform:root#operator
             // grant sign-up creates tenants under; on the identity host it opens /api/signup/*. Both
             // silos carry it because either may be the one that starts first, and the task is
-            // idempotent. There is no MTA on this run (#93): the enrolment code goes to the silo's
-            // console instead — DevelopmentOtpDelivery, read in the dashboard.
+            // idempotent. The enrolment code goes to Mailpit's inbox through the relay above AND to
+            // the silo's console — DevelopmentOtpDelivery, read in the dashboard (#93).
             .WithEnvironment(SelfServeSignUpVariable, "true")
             .WithOrleansPorts(CyberCloudResources.SiloOnePort, CyberCloudResources.SiloOneGatewayPort)
             // ⚠ The endpoint is declared, not inherited. Aspire reads a project's endpoints from its
@@ -278,6 +303,7 @@ public static class CyberCloudTopology {
             .WithCyberCloudStorage(redis, shardA, shardB, platformShard)
             .WithReference(nats)
             .WithObjectStore()
+            .WithDevelopmentMailRelay()
             .WithEnvironment("CyberCloud__Silo__KubeconfigRoot", kubeconfigRoot)
             .WithEnvironment(SelfServeSignUpVariable, "true")
             .WithOrleansPorts(CyberCloudResources.SiloTwoPort, CyberCloudResources.SiloTwoGatewayPort)
