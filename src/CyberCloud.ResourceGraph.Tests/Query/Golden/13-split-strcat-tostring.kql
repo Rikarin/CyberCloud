@@ -1,0 +1,3 @@
+resources
+| extend family = split(name, '-', 0), parts = split(name, '-')
+| project label = strcat(name, ' v', version, ' in ', location, ' ', tags), family, parts, versionText = tostring(version), tagText = tostring(tags)

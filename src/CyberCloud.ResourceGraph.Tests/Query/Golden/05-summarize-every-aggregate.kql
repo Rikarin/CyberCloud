@@ -1,0 +1,2 @@
+resources
+| summarize names = dcount(name), min(version), max(version), total = sum(version), avg(version) by region = tolower(location), provider

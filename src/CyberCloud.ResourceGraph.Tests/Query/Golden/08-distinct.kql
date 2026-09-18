@@ -1,0 +1,3 @@
+resources
+| where provisioningState != 'Failed'
+| distinct type, location

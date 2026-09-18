@@ -1082,11 +1082,119 @@ rather than description.** What landed is `CyberCloud.ResourceGraph`, one module
   the line without which the stream carries only the silo-side transitions — and stands up the
   region's ClickHouse as a container, the same image `ProjectionRoundTripTests` uses.
 
-⚠ **Owed, and this is the list that closes the second half of #54.**
+⚠ **BUILT (issue #54, the query half), and [01 § Management](01-azure-parity-catalogue.md)'s "Not
+KQL — SQL over a flattened table" is corrected: the query language is a KQL subset, translated to
+SQL and never SQL exposed.** The person typing the query knows Azure Resource Graph's `resources`
+table, and a SQL surface would have put ClickHouse's grammar and the storage's column names on the
+wire. What landed, in the same module and behind one seam:
 
-- **The query API.** Nothing reads the table but the tests. The resource graph API — SQL over the
-  flattened table, paged, with the access filter above — is the issue's other half and is not here.
-  `ClickHouseResourceGraphStore.ReadAsync` is one row by id, which is the seed of it and not it.
+- **The address is `POST /tenants/{t}/providers/CyberCloud.ResourceGraph/resources`, with
+  `{ "query": "resources | …", "$top": n, "$skipToken": "…" }` as the body, and the answer is the
+  collection envelope plus `columns`.** `CyberCloud.ResourceGraph` is the second reserved provider
+  namespace (`ResourceGraphAddress`; `ProviderRegistry.Build` refuses a provider that claims it,
+  as it refuses `CyberCloud.Authorization`), and under it the gateway asks one grammar and nothing
+  else: a route for the one address, a `400` naming it for anything else, and never a fall-through
+  into the scope or resource grammars. It is the one `POST` in this API that is not an action, and
+  the router sees it before the action grammar so that "`POST` appears only for actions on an
+  existing resource" stays true of every path that reaches the resource manager. A `GET` is a
+  `405` with `Allow: POST`. `$top` and `$skipToken` are read from the body first and the query
+  string second, because a `nextLink` is a URL and the link is the whole next request (#76): a
+  client follows it by `POST`ing the same body. The `$skipToken` is an offset into the same query's
+  result with a fingerprint of the query text, so a token that arrives with another query is a
+  `400`; it is not a snapshot, and a query with `order by resourceId` pages exactly. There is no
+  `count` and no `totalRecords` — the page holds what the caller may read, and a total would say
+  how many rows exist that they may not.
+  `ResourceGraphQueryRoutingTests` pins the shape, the verbs, the tenant rebuild and both readings
+  of the page parameters; `ResourceGraphQueryEndToEndTests` drives a KQL body through the real
+  pipeline against a ClickHouse container the real projector fed.
+- **The seam is `IResourceGraphQuery` in `CyberCloud.ResourceManager.Contracts`, the fourth entry
+  point beside the resource, scope and role assignment managers, and the one that reads no
+  grain.** The implementation is `ResourceGraphQueryService` in `CyberCloud.ResourceGraph`, which
+  the gateway registers with `AddResourceGraphQuery` when `CyberCloud:ResourceGraph:ClickHouseEndpoint`
+  is set — the same section the silos' projector binds, and the AppHost now gives the gateway
+  `WithResourceGraph()` too. A gateway without the endpoint keeps `UnavailableResourceGraphQuery`,
+  which answers `500` naming the section rather than an empty page that reads as "you have no
+  resources"; a silo keeps it whatever its section says, because a silo serves no query.
+  `HostCompositionTests.TheGatewayAnswersResourceGraphQueriesOnlyWithAClickHouseEndpointAndTheSiloNeverDoes`
+  holds all three. The gateway still names no authorization type and runs no projector.
+- **The parser is Microsoft's (`Microsoft.Azure.Kusto.Language`, [02 § Data, transport,
+  Kubernetes](02-technology-decisions.md) for the licence reading), the schema is one table, and
+  the translator is ours.** `ResourceGraphSchema` declares `resources` to the binder with Azure's
+  spellings where Azure has the column — `name`, `type` (as `{provider}/{type}`), `location`,
+  `resourceGroup`, `subscriptionId`, `tags` — plus `resourceId`, `provider`, `apiVersion`,
+  `provisioningState`, `clusterId`, `createdAt`, `modifiedAt`, `version`, `change`. `access`,
+  `is_deleted`, `tenant_id`, `desired_hash` and `projected_at` are not in the language: the binder
+  does not know them, so no `where` can name them. `KqlTranslator` walks the bound tree and emits
+  one ClickHouse statement over `tenant_{id:N}.resource_graph FINAL` whose base `WHERE` is
+  `is_deleted = 0 AND hasAny(access, {access:Array(String)})` before any operator runs — the access
+  filtering [07 § ListObjects](07-rebac-authorization.md) promised, as a bound parameter holding
+  the caller's subject and the usersets `IMembershipIndexGrain` closes them into
+  (`MembershipIndexCallerAccessResolver`, one read per query; an unwritten slice is rebuilt first,
+  the #37 review finding). Each tabular operator merges into the current `SELECT` or wraps it as a
+  derived table, with column references inlined to their defining expressions, so no `WHERE` ever
+  names an alias; `prefer_column_name_to_alias=1` rides on the request for the one case where an
+  alias shadows a source column (`extend name = toupper(name)`).
+- **The subset, stated as [02 § ADR-011](02-technology-decisions.md)'s FerretDB row asks —
+  "state the supported subset explicitly" — and refused by name with the list in the refusal.**
+  Operators: `where`, `project`, `extend`, `summarize` (`count`, `dcount`, `min`, `max`, `sum`,
+  `avg`, `by …`), `order by`/`sort by`, `take`/`limit`, `distinct`, `count`. Scalar functions:
+  `tolower`, `toupper`, `strcat`, `split`, `isnotempty`, `isempty`, `tostring`, `todynamic`, and
+  `not`. Comparisons: `==`, `!=`, `=~`, `!~`, `<`, `<=`, `>`, `>=`, `has`, `contains`,
+  `startswith`, `endswith`, `in`, `and`, `or`. Literals: string, long, real, bool, `datetime(…)`
+  in UTC. `tags.key` and `tags['key']` read the `Map` and yield `''` for a key the resource does
+  not carry, so `isempty(tags.env)` is "untagged". Everything else — `join`, `union`,
+  `mv-expand`, `top`, `project-away`, `matches regex`, `!in`, `between`, arithmetic, `ago`, `now`,
+  `bin`, `let` — is an `InvalidRequestBody` naming the token and the four lists (`KqlSubset`).
+  KQL's `has` is a whole-term match and ClickHouse's `hasToken` refuses a needle with a separator,
+  so the term becomes an escaped RE2 pattern bound as one parameter; `order by` defaults to
+  descending as KQL's does. `KqlTranslationGoldenTests` pins twenty KQL → SQL cases as files under
+  `CyberCloud.ResourceGraph.Tests/Query/Golden` (rewrite with `CYBERCLOUD_UPDATE_GOLDEN=1` and
+  review the diff); `KqlRefusalTests` pins the refusals by the token they name;
+  `ResourceGraphQueryServiceTests` runs every shape against the real ClickHouse behind the real
+  projector and the real membership index, and is where `toBool` on a bool column and the words
+  `true`/`false` for `tostring(bool)` were found to be needed.
+- **Every emitted SQL is parameterised, one table, the caller's tenant database, with four
+  settings no caller can change.** A literal from the query text — a string, a number, a date, a
+  tag key — is a `{pN:Type}` placeholder and a `SqlParameter`; the tenant's database is derived
+  from the token's GUID; a column name is an identifier the translator checked against
+  `[A-Za-z_][A-Za-z0-9_]*`. `KqlInjectionTests` binds `x' OR 1=1; DROP TABLE …; --` through
+  eleven positions and finds it in a parameter and in no SQL text, and
+  `ResourceGraphQueryEndToEndTests` runs it against the container and reads the table back
+  afterwards. On the request: `max_execution_time` (`QueryTimeout`, 10 s) and `max_rows_to_read`
+  (`QueryMaxRowsToRead`, a million) are the budget; `readonly=2` makes the connection refuse any
+  statement that is not a read, belt to the translator's braces; `prefer_column_name_to_alias=1`
+  is the alias rule above.
+- **`cyc graph query "<kql>" [--tenant T] [--top N] [--skip-token …] [--all]`** is hand-written
+  beside `cyc rest`, follows a `nextLink` by `POST`ing the same query with the link's
+  `$skipToken`, and is reserved in `CommandTree.ReservedGroups` so no provider can shadow it —
+  [21 § Grammar](21-cli-and-sdks.md), and `GraphQueryTests`.
+
+⚠ **Owed, and this is the list that stays open after the query half.**
+
+- **The address is outside the generated document, and that is #63's question asked a fourth
+  time** — [10 § Shape](10-gateway-and-api.md) records it beside the role assignment API's. The
+  reserved namespace keeps it out of the registry the emitters read, so `openapi/`, the three SDKs
+  and the portal's generated client are silent about it and `cyc graph query` is the CLI's whole
+  knowledge of it. The fix has the same shape as #63's — a third non-registry source, one path,
+  emitted with `x-cybercloud-scope` — and it is owed rather than done because it touches all five
+  surfaces at once. `ServedShapesMatchTheDocumentTests` does not see the address for the same
+  reason it does not see the role assignment's.
+- **An `id` column spelled as the resource path.** Azure's `resources` has one; this table's row
+  does not hold a nested type's parent names (`ResourceChangedEvent` carries `Type` and `Name`
+  and not `ParentNames`), so a path spelled from the row would be wrong for every child resource.
+  `resourceId` is the GUID instead. What closes it: `ParentNames` on the event and a column on the
+  row, then `id` in `ResourceGraphSchema` as `concat(...)` over the six parts — a projection
+  change, so a re-projection from the stream fills it.
+- **`ago`, `now` and `bin`.** The three functions a "modified in the last hour" or a "created per
+  day" query wants, left out because each reads a clock the translator would have to bind as a
+  parameter at translation time — which is fine — and because `bin` over `DateTime64` is
+  `toStartOfInterval` with an interval grammar of its own. Small, and the shape is written:
+  `now()` and `ago(1d)` are one `DateTime64(3)` parameter each; `bin(createdAt, 1d)` is
+  `toStartOfInterval(created_at, INTERVAL 1 DAY)`.
+- **A stale membership slice under-lists.** `MembershipIndexCallerAccessResolver` rebuilds a
+  slice nothing has written and reads a slice stamped with an older schema version as it stands,
+  because the current version lives in `CyberCloud.Authorization` and not in its contracts; the
+  next tuple write rebuilds it. Under-lists and never over-lists, so recorded and not fixed.
 - **The access column moves on resource changes only.** A role assigned on a group after its
   resources were projected reaches each row when that resource next changes, not when the role is
   written. What closes it: a consumer of the tuple store's writes — the same `IRelationWriteInterceptor`

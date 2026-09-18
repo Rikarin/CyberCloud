@@ -89,14 +89,42 @@ public sealed class ClickHouseClient {
     /// <param name="parameters">The placeholders' values, by name.</param>
     /// <param name="cancellationToken">Cancels the request.</param>
     /// <returns>The body, or a failure carrying ClickHouse's own error text.</returns>
-    public async Task<Result<string>> ExecuteAsync(
+    public Task<Result<string>> ExecuteAsync(
         string sql,
         IReadOnlyDictionary<string, string>? parameters = null,
         CancellationToken cancellationToken = default
+    ) =>
+        ExecuteAsync(sql, parameters, null, cancellationToken);
+
+    /// <summary>
+    ///     <see cref="ExecuteAsync(string, IReadOnlyDictionary{string, string}?, CancellationToken)" />
+    ///     with per-request ClickHouse settings — the query API's <c>max_execution_time</c>,
+    ///     <c>max_rows_to_read</c> and <c>readonly</c>.
+    /// </summary>
+    /// <param name="sql">The statement, with <c>{name:Type}</c> placeholders for values.</param>
+    /// <param name="parameters">The placeholders' values, by name.</param>
+    /// <param name="settings">
+    ///     Settings for this one request, each sent as a query-string key. ⚠ A setting name is
+    ///     interpolated into the URL, so this takes names the caller spelled in code and never one
+    ///     from a request; the values are escaped like a parameter's.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the request.</param>
+    /// <returns>The body, or a failure carrying ClickHouse's own error text.</returns>
+    public async Task<Result<string>> ExecuteAsync(
+        string sql,
+        IReadOnlyDictionary<string, string>? parameters,
+        IReadOnlyDictionary<string, string>? settings,
+        CancellationToken cancellationToken
     ) {
         ArgumentNullException.ThrowIfNull(sql);
 
         var query = new StringBuilder("?date_time_input_format=best_effort&output_format_json_quote_64bit_integers=0");
+
+        if (settings is not null) {
+            foreach (var (name, value) in settings) {
+                query.Append('&').Append(Uri.EscapeDataString(name)).Append('=').Append(Uri.EscapeDataString(value));
+            }
+        }
 
         if (parameters is not null) {
             foreach (var (name, value) in parameters) {

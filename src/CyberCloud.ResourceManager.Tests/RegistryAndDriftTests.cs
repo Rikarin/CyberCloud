@@ -153,6 +153,19 @@ public sealed class ProviderRegistryTests {
             .Message.ShouldContain(RoleAssignmentId.ProviderNamespace);
     }
 
+    [Theory]
+    [InlineData(ResourceGraphAddress.ProviderNamespace)]
+    [InlineData("cybercloud.resourcegraph")]
+    public void AProviderMayNotDeclareTheResourceGraphNamespace(string spelling) {
+        // ⚠ THE THIRD RESERVATION, FOR THE SECOND ROUTING REASON (#54). The resource graph is queried
+        // at /tenants/{t}/providers/CyberCloud.ResourceGraph/resources, and the gateway routes
+        // everything under that namespace to the query service BEFORE it looks at the registry —
+        // ResourceGraphAddress's remarks. A provider registered here would have every one of its
+        // types answered as "not the resource graph's address". Case-insensitive, as above.
+        Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new NamespacedProvider(spelling)]))
+            .Message.ShouldContain(ResourceGraphAddress.ProviderNamespace);
+    }
+
     [Fact]
     public void AProviderThatDeclaresNothingIsABuildFailure() {
         Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new SilentProvider()]))

@@ -22,6 +22,17 @@
 
       The connection grain is exercised by direct instantiation rather than through a TestCluster,
       which ConnectionGrain's own remarks explain and constrain: it uses no grain infrastructure.
+
+      ⚠ ONE CONTAINER AFTER ALL, FOR ONE SUITE, AND THE "NO CONTAINER" ABOVE STILL HOLDS FOR THE
+      PIPELINE. ResourceGraphQueryEndToEndTests (#54) starts a ClickHouse in Testcontainers, has the
+      real projector write rows into it and drives a KQL body through the same in-process pipeline
+      every other test here uses, with the real ResourceGraphQueryService where the others have a
+      recording fake. The pipeline is still served with no server and no socket; the container is
+      the store behind the one seam whose whole worth is what a store answers — a fake ClickHouse
+      would prove that the translator's SQL is the SQL the fake expects, which is the golden-file
+      suite in CyberCloud.ResourceGraph.Tests and not a second thing worth proving. Like
+      CyberCloud.ObjectStorage.Tests' SeaweedFS suite it needs a Docker daemon and fails without
+      one rather than skipping: a gate that goes green when the store is absent is not a gate.
     -->
 
     <ItemGroup>
@@ -34,6 +45,10 @@
         <PackageReference Include="NSubstitute"/>
         <PackageReference Include="Orleans.Multitenant"/>
         <PackageReference Include="Microsoft.Orleans.Server"/>
+    </ItemGroup>
+
+    <ItemGroup Label="A real ClickHouse for the resource graph's end-to-end query — see the header">
+        <PackageReference Include="Testcontainers"/>
     </ItemGroup>
 
     <ItemGroup Label="Global usings">

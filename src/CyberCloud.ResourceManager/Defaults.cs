@@ -488,3 +488,36 @@ public sealed class UnavailablePrincipalDirectory : IPrincipalDirectory {
             )
         );
 }
+
+/// <summary>
+///     The resource graph query a host with no ClickHouse endpoint keeps: it refuses by name.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Refuses rather than answering an empty page, for the reason
+///     <see cref="UnavailablePrincipalDirectory" /> refuses rather than answering <c>false</c>.</b>
+///     An empty result from a query endpoint reads as "you have no resources", which is the wrong
+///     sentence for "nothing is wired"; a caller with a hundred resources and an operator with a
+///     blank section would each spend an afternoon on it. The real service lives in
+///     <c>CyberCloud.ResourceGraph</c> — the assembly that speaks ClickHouse and KQL, which this one
+///     deliberately does not — and the gateway registers it with <c>AddResourceGraphQuery</c> when
+///     <c>CyberCloud:ResourceGraph:ClickHouseEndpoint</c> is set, replacing this descriptor. A silo
+///     composes the manager too and serves no query, so this is what a silo keeps.
+/// </remarks>
+public sealed class UnavailableResourceGraphQuery : IResourceGraphQuery {
+    /// <inheritdoc />
+    public Task<Result<ResourceGraphQueryPage>> QueryAsync(
+        ResourceGraphQueryRequest request,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<ResourceGraphQueryPage>.Failure(
+                ErrorCode.InternalError,
+                "No resource graph is wired on this host, so the query cannot be answered. The gateway "
+                + "that serves the resource graph sets CyberCloud:ResourceGraph:ClickHouseEndpoint (and "
+                + "AllowInsecureTransport for a plain-http endpoint on a laptop), which registers the "
+                + "ClickHouse-backed IResourceGraphQuery in place of this one — docs/plan/08 § The "
+                + "resource-graph projection. This refuses rather than answering an empty page: \"you "
+                + "have no resources\" is the wrong sentence for \"nothing is wired\"."
+            )
+        );
+}

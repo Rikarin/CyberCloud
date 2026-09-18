@@ -43,7 +43,7 @@ public sealed class ReservedGroupTests {
     ///     <see cref="TheReservedListIsExactlyTheseNames" />.
     /// </summary>
     static readonly string[] ReservedNames = [
-        "login", "logout", "account", "rest", "config", "completion", "complete", "extension", "version"
+        "login", "logout", "account", "rest", "config", "completion", "complete", "extension", "version", "graph"
     ];
 
     /// <summary>The same names, as xUnit theory rows.</summary>
@@ -134,7 +134,7 @@ public sealed class ReservedGroupTests {
     ///     reservation it is testing.
     /// </remarks>
     /// <param name="group">The group name.</param>
-    static VerbTreeDocument TreeWith(string group) =>
+    internal static VerbTreeDocument TreeWith(string group) =>
         new() {
             Format = VerbTreeCatalog.SupportedFormat,
             ApiVersion = "2026-08-01",

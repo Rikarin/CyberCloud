@@ -206,6 +206,16 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<IPrincipalDirectory, UnavailablePrincipalDirectory>();
         services.TryAddSingleton<IRoleAssignmentManager, RoleAssignmentService>();
 
+        // ── The resource graph query. docs/plan/08 § The resource-graph projection — the read half of #54. ──
+        //
+        // ⚠ THE FOURTH ENTRY POINT, AND THE ONLY ONE WHOSE REAL IMPLEMENTATION IS NOT IN THIS
+        // ASSEMBLY. It speaks KQL and ClickHouse, which live in CyberCloud.ResourceGraph — the module
+        // that already holds the projection's writer — and this assembly deliberately names neither.
+        // The default refuses by name, like the vault's and the directory's; the gateway replaces it
+        // with AddResourceGraphQuery when its section carries a ClickHouse endpoint, and a silo keeps
+        // the refusal because a silo serves no query.
+        services.TryAddSingleton<IResourceGraphQuery, UnavailableResourceGraphQuery>();
+
         // ── The SignalR connection grain's dependencies. docs/plan/10 § SignalR ──────────────────
         //
         // ⚠ IN THIS LIST BECAUSE THE GRAIN IS IN THIS ASSEMBLY, AND IT IS IN THIS ASSEMBLY BECAUSE

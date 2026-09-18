@@ -1,0 +1,4 @@
+resources
+| extend name = toupper(name), tolower(provider)
+| where name == 'MAIN'
+| project resourceId, name, Column1

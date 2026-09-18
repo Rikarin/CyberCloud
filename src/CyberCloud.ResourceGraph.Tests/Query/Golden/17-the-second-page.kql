@@ -1,0 +1,4 @@
+// offset: 100
+resources
+| where provider == 'CyberCloud.Storage'
+| project name, type

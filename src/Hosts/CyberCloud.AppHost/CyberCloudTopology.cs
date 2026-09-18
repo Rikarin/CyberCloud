@@ -384,6 +384,11 @@ public static class CyberCloudTopology {
             // The publisher's half of the resource-changed stream — see § Streams above for why the
             // gateway, an Orleans client, is the process that has to hold it.
             .WithReference(nats)
+            // The resource graph's QUERY half (#54): the gateway answers
+            // POST /tenants/{t}/providers/CyberCloud.ResourceGraph/resources from the same ClickHouse
+            // the silos project into. Same section as the silos' — a gateway with the endpoint queries
+            // and still runs no projector (GatewayComposition's remarks).
+            .WithResourceGraph()
             .WithEnvironment("CyberCloud__Gateway__Identity__Issuer", CyberCloudResources.IdentityIssuer)
             // ⚠ PublicBaseUri is what the gateway tells OTHERS about itself — the agent tunnel address a
             // connected cluster's install command carries (#36), among other things. The shipped default
@@ -393,7 +398,10 @@ public static class CyberCloudTopology {
             .WithHttpEndpoint(CyberCloudResources.GatewayPort, isProxied: false)
             .WithHttpHealthCheck("/health")
             .WaitFor(siloOne)
-            .WaitFor(identity);
+            .WaitFor(identity)
+            // A quieter start, as for the silos: the first query against a ClickHouse that is not
+            // listening yet is a 500 that reads like a misconfiguration.
+            .WaitFor(clickHouse);
 
         builder
             .AddProject<CyberCloud_Registry_Feeds_Host>(CyberCloudResources.Feeds)

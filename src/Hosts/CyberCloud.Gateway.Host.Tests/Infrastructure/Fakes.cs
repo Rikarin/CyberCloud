@@ -688,3 +688,40 @@ sealed class RecordingRoleAssignmentManager : IRoleAssignmentManager {
         return Task.FromResult(answer(request));
     }
 }
+
+/// <summary>
+///     A resource graph query that records every request it was asked and answers from a script.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>The same substitution <see cref="RecordingRoleAssignmentManager" /> is, with the same
+///     warning.</b> A query route proven against this fake proves that stage 6 admits the address
+///     under its reserved namespace and that stage 8 hands the caller, the text and the page
+///     parameters over and renders the page. Whether the KQL translates, whether the access column
+///     is applied and whether ClickHouse answers is <c>ResourceGraphQueryService</c>'s, driven
+///     against the real store in <c>CyberCloud.ResourceGraph.Tests</c> and, over this very
+///     pipeline, in <c>ResourceGraphQueryEndToEndTests</c>.
+/// </remarks>
+sealed class RecordingResourceGraphQuery : IResourceGraphQuery {
+    /// <summary>Every request, in order.</summary>
+    public ConcurrentQueue<ResourceGraphQueryRequest> Requests { get; } = new();
+
+    /// <summary>
+    ///     What <see cref="QueryAsync" /> answers. Default: two rows of <c>name</c> and
+    ///     <c>location</c>, and a next page.
+    /// </summary>
+    public Func<ResourceGraphQueryRequest, Result<ResourceGraphQueryPage>> OnQuery { get; set; } =
+        request => Result<ResourceGraphQueryPage>.Success(
+            new() {
+                Columns = [new("name", "string"), new("location", "string")],
+                Rows = ["""{"name":"pg-main","location":"eu-central"}""", """{"name":"pg-replica","location":"eu-west"}"""],
+                Continuation = "2.0123456789abcdef"
+            }
+        );
+
+    /// <inheritdoc />
+    public Task<Result<ResourceGraphQueryPage>> QueryAsync(ResourceGraphQueryRequest request, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(request);
+        Requests.Enqueue(request);
+        return Task.FromResult(OnQuery(request));
+    }
+}

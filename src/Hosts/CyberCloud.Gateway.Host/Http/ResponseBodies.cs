@@ -330,6 +330,69 @@ static class ResponseBodies {
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
+    /// <summary>
+    ///     Renders a page of a resource graph query in the same <c>{ "value": [ … ], "nextLink": … }</c>
+    ///     shape as <see cref="Collection" />, plus the result's <c>columns</c>.
+    ///     docs/plan/08 § The resource-graph projection.
+    /// </summary>
+    /// <param name="page">The page the query service built.</param>
+    /// <param name="nextLink">The absolute next-page URL, or empty when there is no next page.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Each element is the row as ClickHouse rendered it, written raw</b> — the shape is
+    ///         the query's (<c>ResourceGraphQueryPage.Rows</c>'s remarks), so there is no object this
+    ///         renderer could type. <c>columns</c> is the one addition to the envelope: a
+    ///         <c>project</c>'s result has no <c>type</c> member to tell a table renderer what it is
+    ///         looking at, and Azure Resource Graph's response carries the same list for the same
+    ///         reason. It is written before <c>value</c> so a streaming reader knows the shape before
+    ///         the rows.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>No <c>count</c> and no <c>totalRecords</c></b>, Azure's or anyone's: the page
+    ///         holds what the caller may read, and a total would say how many rows exist that they
+    ///         may not — the same oracle <see cref="Collection" /> declines to open.
+    ///     </para>
+    /// </remarks>
+    public static string ResourceGraphPage(ResourceGraphQueryPage page, string nextLink) {
+        ArgumentNullException.ThrowIfNull(page);
+        ArgumentNullException.ThrowIfNull(nextLink);
+
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(1024);
+
+        using (var writer = new Utf8JsonWriter(buffer)) {
+            writer.WriteStartObject();
+            writer.WritePropertyName("columns");
+            writer.WriteStartArray();
+
+            foreach (var column in page.Columns) {
+                writer.WriteStartObject();
+                writer.WriteString("name", column.Name);
+                writer.WriteString("type", column.Type);
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+            writer.WritePropertyName("value");
+            writer.WriteStartArray();
+
+            foreach (var row in page.Rows) {
+                // ⚠ Raw, and trusted: the text came from ClickHouse's JSON format, which
+                // ResourceGraphQueryService already parsed once to slice the page.
+                writer.WriteRawValue(row, skipInputValidation: false);
+            }
+
+            writer.WriteEndArray();
+
+            if (nextLink.Length > 0) {
+                writer.WriteString("nextLink", nextLink);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
     /// <summary>The one scope object, written into whichever document is being built.</summary>
     static void WriteScope(Utf8JsonWriter writer, ScopeSnapshot scope) {
         writer.WriteStartObject();

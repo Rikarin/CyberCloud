@@ -1,0 +1,4 @@
+resources
+| extend copy = todynamic(tostring(tags)), same = todynamic(tags)
+| where copy.env == 'prod' and same.env == 'prod'
+| project name

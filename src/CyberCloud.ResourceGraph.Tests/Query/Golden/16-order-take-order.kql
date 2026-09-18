@@ -1,0 +1,4 @@
+resources
+| sort by modifiedAt desc
+| limit 10
+| order by name asc

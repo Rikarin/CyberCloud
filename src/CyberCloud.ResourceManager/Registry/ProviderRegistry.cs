@@ -138,6 +138,26 @@ public sealed class ProviderRegistry : IProviderRegistry {
                 );
             }
 
+            // ⚠ THE THIRD RESERVATION, FOR THE SECOND ROUTING REASON (#54). The resource graph is
+            // queried at /tenants/{t}/providers/CyberCloud.ResourceGraph/resources
+            // (ResourceGraphAddress), and the gateway routes everything under that namespace to the
+            // query service before it looks at the registry. A provider that registered it would
+            // have every one of its types answered as "not the resource graph's address" — a 400
+            // naming a query endpoint for a PUT that never mentioned one.
+            if (string.Equals(
+                    provider.ProviderNamespace,
+                    ResourceGraphAddress.ProviderNamespace,
+                    StringComparison.OrdinalIgnoreCase
+                )) {
+                throw new InvalidOperationException(
+                    $"Provider '{provider.ProviderNamespace}' declares the reserved namespace "
+                    + $"'{ResourceGraphAddress.ProviderNamespace}'. The one address under it is the "
+                    + "resource graph's query endpoint — docs/plan/08 § The resource-graph projection — "
+                    + "and the gateway routes it before it looks at the registry, so no type this "
+                    + "provider declared could ever be reached. See ResourceGraphAddress.ProviderNamespace."
+                );
+            }
+
             if (!seenNamespaces.Add(provider.ProviderNamespace)) {
                 throw new InvalidOperationException(
                     $"Two providers declare the namespace '{provider.ProviderNamespace}'. A namespace names "

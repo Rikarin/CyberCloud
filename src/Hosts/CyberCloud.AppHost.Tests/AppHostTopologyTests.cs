@@ -252,7 +252,12 @@ public sealed class AppHostTopologyTests {
             environment["ConnectionStrings__nats"].ShouldContain(CyberCloudResources.Nats);
         }
 
-        foreach (var name in new[] { CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo }) {
+        // ⚠ The gateway is in this list since the query half of #54: it answers
+        // POST …/providers/CyberCloud.ResourceGraph/resources from the same ClickHouse, and without
+        // the endpoint every query is a 500 naming the section. It still runs no projector —
+        // GatewayComposition calls AddResourceGraphQuery, never AddResourceGraphProjector, and
+        // HostCompositionTests holds that line.
+        foreach (var name in new[] { CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo, CyberCloudResources.Gateway }) {
             var environment = await built.EnvironmentOf(name);
 
             environment["CyberCloud__ResourceGraph__ClickHouseEndpoint"].ShouldBe($"http://localhost:{CyberCloudResources.ClickHouseHttpPort}");
@@ -260,8 +265,8 @@ public sealed class AppHostTopologyTests {
             environment["CyberCloud__ResourceGraph__AllowInsecureTransport"].ShouldBe("true", $"{name} speaks plain http to a container on the laptop, and the option exists so production cannot");
         }
 
-        (await built.EnvironmentOf(CyberCloudResources.Gateway))
-            .ShouldNotContainKey("CyberCloud__ResourceGraph__ClickHouseEndpoint", "the gateway publishes and does not project");
+        built.Resource(CyberCloudResources.Gateway).Annotations.OfType<WaitAnnotation>()
+            .ShouldContain(x => x.Resource.Name == CyberCloudResources.ClickHouse, "the gateway's first query would otherwise race the container's start");
 
         var clickHouse = built.Resource(CyberCloudResources.ClickHouse);
         clickHouse.ShouldBeAssignableTo<ContainerResource>();

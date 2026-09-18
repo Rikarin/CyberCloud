@@ -1027,6 +1027,60 @@ public sealed class HostCompositionTests {
     }
 
     /// <summary>
+    ///     The query half of #54 — docs/plan/08 § The resource-graph projection: a gateway with a
+    ///     ClickHouse endpoint answers queries, one without keeps the refusing default, and neither
+    ///     runs the projector; a silo keeps the refusal whatever it is given.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The refusing default is asserted by type, because "something resolves" is true of
+    ///     both: <c>UnavailableResourceGraphQuery</c> answers every query with a <c>500</c> naming
+    ///     the section, and a gateway that shipped with it where the ClickHouse-backed one was meant
+    ///     would pass a weaker test and fail every portal list.
+    /// </remarks>
+    [Fact]
+    public async Task TheGatewayAnswersResourceGraphQueriesOnlyWithAClickHouseEndpointAndTheSiloNeverDoes() {
+        await using var bareGateway = await BuildGatewayAsync();
+
+        bareGateway.Services.GetRequiredService<IResourceGraphQuery>()
+            .ShouldBeOfType<UnavailableResourceGraphQuery>("no endpoint, no projection to query — and the refusal names the section");
+
+        await using var gateway = await GatewayComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                IssuerArgument,
+                // ⚠ No NATS: the query half stands on its own, and a gateway that reads the
+                // projection without publishing to the stream is a supported shape.
+                "--CyberCloud:ResourceGraph:ClickHouseEndpoint=http://127.0.0.1:1",
+                "--CyberCloud:ResourceGraph:AllowInsecureTransport=true"
+            ]
+        );
+
+        gateway.Services.GetRequiredService<IResourceGraphQuery>()
+            .ShouldBeOfType<CyberCloud.ResourceGraph.Query.ResourceGraphQueryService>("the endpoint is set, so the ClickHouse-backed service replaces the refusal");
+        gateway.Services.GetRequiredService<IResourceChangedSink>().ShouldBeOfType<LoggingResourceChangedSink>("no NATS URL keeps the logging sink");
+        gateway.Services.GetService<CyberCloud.ResourceGraph.ResourceGraphProjector>().ShouldBeNull("the gateway queries and does not project");
+        gateway.Services.GetRequiredService<CyberCloud.ResourceGraph.Query.ICallerAccessResolver>()
+            .ShouldBeOfType<CyberCloud.ResourceGraph.Query.MembershipIndexCallerAccessResolver>("the caller's usersets come from the Leopard index and not a double");
+
+        await using var silo = await SiloComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                "--ConnectionStrings:nats=nats://127.0.0.1:1",
+                "--CyberCloud:ResourceGraph:ClickHouseEndpoint=http://127.0.0.1:1",
+                "--CyberCloud:ResourceGraph:AllowInsecureTransport=true"
+            ]
+        );
+
+        silo.Services.GetRequiredService<IResourceGraphQuery>()
+            .ShouldBeOfType<UnavailableResourceGraphQuery>("a silo serves no query, whatever its section carries");
+    }
+
+    /// <summary>
     ///     A complete <c>CyberCloud:ObjectStorage</c> section, as the arguments that spell it. ⚠ The
     ///     credential is a placeholder for a store nothing connects to.
     /// </summary>

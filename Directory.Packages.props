@@ -158,6 +158,38 @@
         <PackageVersion Include="KubernetesClient" Version="19.0.2"/>
     </ItemGroup>
 
+    <ItemGroup Label="Query languages — the resource graph's KQL subset, issue #54">
+        <!--
+          Microsoft's own Kusto Query Language parser and binder: the resource graph API takes a KQL
+          SUBSET and translates it to ClickHouse SQL (docs/plan/08 § The resource-graph projection,
+          correcting docs/plan/01 § Management's "Not KQL — SQL over a flattened table"), and this is
+          what parses the text, binds every name against the declared `resources` table and reports a
+          typo as "'foo' does not refer to any known column" before a line of SQL is built. Writing a
+          KQL parser here instead would be a compiler we would own, which is the reason docs/plan/01
+          gives for having no Bicep.
+
+          12.4.1 is the newest stable (api.nuget.org flat-container index, read 2026-09-18; 7.1.0 →
+          12.4.1, no prerelease suffix on any of them). netstandard2.0/net6.0 targets, no dependencies.
+
+          ⚠ THE LICENCE ROW, READ OFF THE ARTEFACT RATHER THAN OFF THE REPOSITORY, BECAUSE THE TWO
+          DIFFER. The source at github.com/microsoft/Kusto-Query-Language is Apache-2.0 (the LICENSE
+          file and GitHub's own detection agree). The NuGet package is NOT: its nuspec says
+          `<license type="file">EULA-agreement.txt</license>` with requireLicenseAcceptance=true, and
+          that file is the "MICROSOFT SOFTWARE LICENSE TERMS — AZURE DATA EXPLORER SDK": a proprietary
+          EULA granting install-and-use rights, distribution of the "distributable code" inside our
+          applications, and forbidding reverse engineering. What ADR-011 (docs/plan/02) guards against
+          is a licence whose purpose is to forbid offering the software as a service — SSPL, BUSL,
+          AGPL, Elastic, RSAL — and this EULA has no such clause: the platform RUNS the parser in the
+          gateway's process and distributes it to nobody. So it passes the ADR, but not with the
+          "Apache-2.0" label the first draft of #54's brief gave it, and the exit if the EULA ever
+          bites is written here: build the Apache-2.0 source ourselves (the repository README calls the
+          package "this source code … available as a package on nuget.org") and reference that
+          instead. `Build.Licence` scans charts and images, not NuGet packages, so this row is the one
+          place the fact is recorded.
+        -->
+        <PackageVersion Include="Microsoft.Azure.Kusto.Language" Version="12.4.1"/>
+    </ItemGroup>
+
     <ItemGroup Label="Surfaces">
         <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10"/>
         <PackageVersion Include="System.CommandLine" Version="2.0.10"/>

@@ -151,6 +151,21 @@ public static class GatewayComposition {
             builder.Services.AddResourceChangedPublisher(resourceGraph);
         }
 
+        // ── The resource graph's query API — docs/plan/08 § The resource-graph projection, the read half of #54 ──
+        //
+        // ⚠ THE GATEWAY QUERIES AND STILL DOES NOT PROJECT. Stage 8 dispatches
+        // POST /tenants/{t}/providers/CyberCloud.ResourceGraph/resources to IResourceGraphQuery, and
+        // the ClickHouse-backed one reads the projection in THIS process: one HTTP round trip to the
+        // region's ClickHouse and one grain read for the caller's usersets. The projector that
+        // fills the table runs on the silos — AddResourceGraphQuery registers no hosted service.
+        //
+        // ⚠ CONDITIONAL, AND THE FALLBACK REFUSES BY NAME. A gateway with no ClickHouse endpoint
+        // keeps UnavailableResourceGraphQuery, which answers 500 with the section to set, rather
+        // than an empty page that reads as "you have no resources".
+        if (resourceGraph.IsQueryConfigured) {
+            builder.Services.AddResourceGraphQuery(resourceGraph);
+        }
+
         // docs/plan/10 § SignalR — AddSignalR and nothing else. No AddStackExchangeRedis: "No SignalR
         // backplane product." The fan-out is a connection grain plus Orleans streams, which is
         // O(interested) rather than O(pods).
