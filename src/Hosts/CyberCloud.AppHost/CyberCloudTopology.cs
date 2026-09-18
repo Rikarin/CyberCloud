@@ -222,7 +222,18 @@ public static class CyberCloudTopology {
         // An unconditional write then dies with "being used by another process" out of a line that
         // reads as a formatting step, and the whole AppHost with it. The content is a constant, so
         // after the first run there is nothing to write.
-        if (!File.Exists(objectStoreConfigFile) || !string.Equals(File.ReadAllText(objectStoreConfigFile), objectStoreIdentities, StringComparison.Ordinal)) {
+        //
+        // ⚠ AND THE READ ITSELF DIES THE SAME WAY, WHICH THE GUARD ABOVE DID NOT ALLOW FOR. Measured on
+        // 2026-09-17 by CyberCloud.AppHost.Tests run whole: AppHostTopologyTests builds this model in
+        // the same process and at the same moment as the LocalTopology collection fixture starts the
+        // real one, so the SeaweedFS the fixture started holds the bind-mounted file exactly while
+        // `SelfServeSignUpIsOneDecisionOnAllThreeSides` reaches this line — `File.ReadAllText` threw
+        // "being used by another process" out of a step that reads as a comparison, and the model
+        // test failed with a message about a SeaweedFS it never started. This method is the only
+        // writer of the file and the content is a constant, so a file that exists and cannot be read
+        // is one this method wrote with this content and a container is mounting; comparing it would
+        // answer "equal", and the answer is taken without the read.
+        if (!File.Exists(objectStoreConfigFile) || HoldsOtherContent(objectStoreConfigFile, objectStoreIdentities)) {
             File.WriteAllText(objectStoreConfigFile, objectStoreIdentities);
         }
 
@@ -416,5 +427,22 @@ public static class CyberCloudTopology {
         // to start without a cluster would be modelling the opposite of ADR-001. It also costs: k3s takes
         // about 20 s to serve `/readyz` and the two silos are up in a third of that.
         _ = k3s;
+    }
+
+    /// <summary>
+    ///     Whether an existing file holds something other than <paramref name="expected" /> — and
+    ///     therefore has to be rewritten. A file that cannot be opened is reported as holding the
+    ///     expected content, for the reason at the one call site.
+    /// </summary>
+    /// <param name="path">The file, which exists.</param>
+    /// <param name="expected">The constant this method's caller would write.</param>
+    static bool HoldsOtherContent(string path, string expected) {
+        try {
+            return !string.Equals(File.ReadAllText(path), expected, StringComparison.Ordinal);
+        } catch (IOException) {
+            // Held by a SeaweedFS that is mounting it, on Docker Desktop for Windows. The only writer
+            // of this file is the line that calls this method, and it writes a constant.
+            return false;
+        }
     }
 }

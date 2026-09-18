@@ -387,9 +387,26 @@ installed, and **CloudNativePG** — not the test — creates a `PersistentVolum
 > it cannot be a claim the test wrote — which is exactly the criticism `bundle.yaml` § owed,
 > `one-volume-has-been-provisioned`, makes of itself. See `an-operator-created-and-bound-the-claim`.
 
+**cert-manager, openebs-localpv and cloudnative-pg, one run, `--component` three times — and then
+the platform's own reconciler.** `M1StoryOnAFreshCluster` is docs/plan/24 § Phase 2's exit story,
+steps 4–5: one `install.sh` run puts the three components on a fresh k3s across phases 15, 25 and 50,
+then the **real resource manager** — an Orleans silo over the same k3s, a PostgreSQL shard and a Redis,
+with the PostgreSQL and Network providers in it — creates a `virtualNetworks`, a subnet under it and
+a `DBforPostgreSQL/servers` through the real write path. CloudNativePG brings the primary pod to
+`Running`, `listKeys` reads the operator's Secret through the cluster connection, and `psql` inside
+the primary connects to `<name>-rw` with that credential. The first time a managed database has
+started under test — and the first run found none ever could have (`bundle.yaml` § owed,
+`the-reconciler-drove-a-server-onto-an-operator-this-bundle-installed`). About 3 m 25 s warm; it
+lifts the assembly to about eight minutes.
+
+> ⚠ The three components are the same three the classes above install, so the count of pins
+> installed *by a test* is still three. cert-manager is there because the story asks for it, not
+> because anything in it consumes one; the two Kube-OVN objects are admitted against open-schema
+> stubs on a lane with no kube-ovn and route nothing.
+
 What that supports is **the install mechanism**, and now one path through it end to end: the script
 runs unattended against a cluster it is handed, reads a pin out of a `component.yaml` rather than
-carrying one, two components install onto one node without fighting, and its `--wait` makes
+carrying one, three components install onto one node without fighting, and its `--wait` makes
 "installed" mean "serving" — **for a `helm` component**. What it does not support is the roster.
 Sixteen pins are still resolved-but-never-applied *by a test*.
 
@@ -504,8 +521,8 @@ to 3 m 15 s** with two installing classes — roughly 80 s for Testcontainers to
 for the helm install with `--wait`, the assertions in under a second, and the rest variance in what
 the machine was already doing. A red run costs more: the sabotage that removes `crds.enabled` takes
 **6 m 40 s**, because helm retries its post-install hook before giving up. The
-suite takes `ClusterSlot`, the same cross-process permit the other **fourteen** assemblies built on
-`ClusterInfrastructure` take, so it does not widen the concurrency Task #95 capped — it lengthens the
+suite takes `ClusterSlot`, the same cross-process permit the other **fifteen** assemblies built on
+`ClusterInfrastructure` take (the PostgreSQL family's joined on 2026-09-17), so it does not widen the concurrency Task #95 capped — it lengthens the
 serial tail on a machine where a daemon answers, and costs nothing at all on one where none does.
 
 > ⚠ That count read "fifteen" until 2026-09-05 and was one too many: fifteen assemblies take
@@ -515,9 +532,15 @@ serial tail on a machine where a daemon answers, and costs nothing at all on one
 > seventeen itself; the permit is no longer the only thing holding the line.
 
 **With the cloudnative-pg class it is 4 m 27 s to 4 m 47 s green across three runs, 9 tests, none
-skipped, measured 2026-09-03.**
-The class costs about **1 m 50 s**: 26 s for `install.sh` to put both components on the cluster
-(cheaper than cert-manager's single row, which pays a `startupapicheck` Job), 8 s to the operator's
+skipped, measured 2026-09-03. With the story class as well: 20 tests, none skipped, about eight
+minutes of real work on a 24-CPU host, measured 2026-09-17 — plus whatever `ClusterSlot` makes it
+wait while another process holds a cluster.** ⚠ Without `helm` on `PATH` the four installing classes
+*skip* and the sixteen daemon-free tests keep the run green — 16 passed, 3 skipped, exit 0, measured
+the same day, before the story class landed — which is why `./build.sh Test` now fails such a run
+when a Docker endpoint is present (`build/README.md` § `Test` says how many cluster-backed cases ran).
+
+The cloudnative-pg class costs about **1 m 50 s**: 26 s for `install.sh` to put both components on
+the cluster (cheaper than cert-manager's single row, which pays a `startupapicheck` Job), 8 s to the operator's
 claim, 18 s to `Bound`, 68 s to `Ready` — the bulk of that last figure being the
 `ghcr.io/cloudnative-pg/postgresql` pull — and a second k3s start for the rest.
 

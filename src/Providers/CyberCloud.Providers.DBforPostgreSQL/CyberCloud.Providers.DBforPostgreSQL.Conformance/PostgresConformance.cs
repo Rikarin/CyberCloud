@@ -153,4 +153,12 @@ public sealed class PostgresServerConformance(ProviderTestCluster<PostgresCase> 
     : ProviderConformanceTests<PostgresCase>(cluster), IClassFixture<ProviderTestCluster<PostgresCase>>;
 
 /// <summary>The container-backed half, skipped loudly, against the managed-PostgreSQL provider.</summary>
+/// <remarks>
+///     ⚠ <b>The project this skip names did not exist until 2026-09-17.</b> The message promises
+///     that the five criteria run "in its own <c>&lt;Provider&gt;.Cluster.Conformance</c> project",
+///     and for this family there was none: fourteen families had one, this one and Communication did
+///     not, and nothing counts the projects against these registrations. It exists now —
+///     <c>CyberCloud.Providers.DBforPostgreSQL.Cluster.Conformance</c>, two class declarations — and
+///     its <c>.csproj</c> records how the gap stayed green.
+/// </remarks>
 public sealed class PostgresServerClusterConformance() : ClusterBackedConformanceTests(PostgresCase.ProviderCase);

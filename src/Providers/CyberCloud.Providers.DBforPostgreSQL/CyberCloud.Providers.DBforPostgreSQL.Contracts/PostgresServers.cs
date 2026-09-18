@@ -690,11 +690,14 @@ public static class PostgresServers {
     /// <param name="name">The resource's own name.</param>
     public static string PoolerName(string name) => name + "-pooler";
 
-    /// <summary>The name of the basic-auth <c>Secret</c> CloudNativePG reads the owner's password from.</summary>
+    /// <summary>The name of the basic-auth <c>Secret</c> CloudNativePG writes the owner's password into.</summary>
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
-    ///     ⚠ Matches <c>templates/cluster.yaml</c>'s <c>{{ include "postgres.name" . }}-app</c>. See
-    ///     <see cref="ClusterJson" /> for why this reconciler references it and does not write it.
+    ///     ⚠ CloudNativePG's own default — <c>Cluster.GetApplicationSecretName()</c> is
+    ///     <c>{cluster}-app</c> when <c>initdb.secret</c> is unset — and <c>templates/cluster.yaml</c>'s
+    ///     <c>{{ include "postgres.name" . }}-app</c>. <see cref="ClusterJson" /> deliberately does
+    ///     NOT name it: a named secret is one the operator expects to find, an unnamed one is one it
+    ///     writes. <c>PostgresServerListKeysHandler</c> reads it by this name.
     /// </remarks>
     public static string CredentialSecretName(string name) => name + "-app";
 
@@ -783,13 +786,16 @@ public static class PostgresServers {
     ///     <para>
     ///         ⚠
     ///         <b>
-    ///             The owner's password appears here as a <i>reference by name</i> and never as a
-    ///             value, and the <c>Secret</c> it names is not written by this reconciler.
+    ///             The owner's password appears here neither as a value nor as a reference, and the
+    ///             <c>Secret</c> that ends up holding it is written by the operator.
     ///         </b> CNPG's
-    ///         <c>bootstrap.initdb.secret.name</c> is the seam that makes that possible: the operator
-    ///         reads the password out of a <c>Secret</c> in the namespace, so the only component that
-    ///         ever holds the plaintext is whatever writes that <c>Secret</c> — docs/plan/12 § The
-    ///         pattern, once, piece 5, "credential provisioning into the tenant's Vault".
+    ///         <c>bootstrap.initdb.secret.name</c> is the seam a platform that minted the credential
+    ///         would take: the operator reads the password out of a <c>Secret</c> in the namespace, so
+    ///         the only component that ever holds the plaintext is whatever writes that
+    ///         <c>Secret</c> — docs/plan/12 § The pattern, once, piece 5, "credential provisioning
+    ///         into the tenant's Vault". ⚠ Taking the seam means WRITING the Secret as well as naming
+    ///         it; this renderer named it and wrote nothing until 2026-09-17, and the paragraph inside
+    ///         <see cref="ClusterJson" /> records what that cost.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Piece 5 is built and this row still declines to use it.</b> <c>ISecretWriter</c>
@@ -842,10 +848,22 @@ public static class PostgresServers {
 
         postgresql["parameters"] = parameters;
 
+        // ⚠ NO `secret` HERE, AND UNTIL 2026-09-17 THERE WAS ONE — `{ "name": CredentialSecretName(name) }`
+        // — WHICH IS WHY NO MANAGED DATABASE HAD EVER STARTED. The remarks above already said the
+        // seam is left unrendered so that CloudNativePG generates the password; the code named the
+        // Secret anyway, and the two had never met an operator. Read against v1.30.0:
+        // `Cluster.ShouldInitDBCreateApplicationSecret` is true only while `initdb.secret` is nil or
+        // its name is empty (api/v1/cluster_funcs.go), so a NAMED secret is one the operator expects
+        // somebody else to have written. Nothing here writes it. The initdb Job then mounts it, the
+        // kubelet answers `CreateContainerConfigError: secret "<name>-app" not found`, and the
+        // primary never runs — measured on the first run of test/CyberCloud.Bundle.Cluster.Conformance
+        // § M1StoryOnAFreshCluster, the first test in this repository with the operator installed.
+        // Left absent, the operator writes `{name}-app` itself with the same two keys
+        // PostgresServerListKeysHandler reads. The name stays public because the handler still
+        // needs it; the renderer must never mention it.
         var initdb = new JsonObject {
             ["database"] = Database(desired),
-            ["owner"] = Owner(desired),
-            ["secret"] = new JsonObject { ["name"] = CredentialSecretName(name) }
+            ["owner"] = Owner(desired)
         };
 
         // ⚠ The EXTENSION name, which for pgvector is `vector`. `CREATE EXTENSION pgvector` fails —

@@ -15,6 +15,7 @@ using Orleans.Configuration;
 using Orleans.Multitenant;
 using Orleans.TestingHost;
 using StackExchange.Redis;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
 using k8s;
@@ -68,6 +69,31 @@ public static class ClusterConformanceState<TSource>
 
     /// <summary>The Redis the reminder table lives in.</summary>
     public static string RedisConnectionString { get; set; } = string.Empty;
+
+    /// <summary>
+    ///     Cases from <b>other</b> families the harness registers beside the case under test — their
+    ///     providers, their reconcilers and their action handlers — so that one silo can write a story
+    ///     that crosses a provider boundary. Empty for every per-provider suite.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Static for the reason every other member here is</b>: the silo configurator is
+    ///         constructed with <c>new()</c> and reads it. Set by <see cref="ClusterConformanceHarness{TSource}.StartAsync" />
+    ///         before the silos start, and only correct because each assembly runs one class at a
+    ///         time.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Why a member here and not on <c>IProviderCaseSource</c>.</b> The Docker-free
+    ///         harness has no use for it — a conformance case is about one type, and
+    ///         <c>ProviderTestCluster</c> would ignore the member — and an interface member one of the
+    ///         two harnesses ignores is the "assertion the suite quietly stops making" shape
+    ///         <c>ProviderConformanceCase</c>'s remarks argue against. The one caller is docs/plan/24
+    ///         § Phase 2's exit story, which writes a network, a subnet and a database through one
+    ///         resource manager; it hands the network cases in from the outside, and nothing about a
+    ///         provider's own conformance changes.
+    ///     </para>
+    /// </remarks>
+    public static ImmutableArray<ProviderConformanceCase> Companions { get; set; } = [];
 }
 
 /// <summary>
@@ -255,17 +281,24 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
     /// <param name="basePort">The silo port to start allocating from, so two clusters can coexist.</param>
     /// <param name="endpoints">The already-started containers.</param>
     /// <param name="cancellationToken">The test's token.</param>
+    /// <param name="companions">
+    ///     Cases from other families to register beside the case under test — see
+    ///     <see cref="ClusterConformanceState{TSource}.Companions" />. Omitted by every per-provider
+    ///     suite.
+    /// </param>
     public static async Task<ClusterConformanceHarness<TSource>> StartAsync(
         int silos,
         string serviceId,
         int basePort,
         ClusterEndpoints endpoints,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        ImmutableArray<ProviderConformanceCase> companions = default
     ) {
         ArgumentNullException.ThrowIfNull(endpoints);
 
         ClusterConformanceState<TSource>.DurableConnectionString = endpoints.DurableConnectionString;
         ClusterConformanceState<TSource>.RedisConnectionString = endpoints.RedisConnectionString;
+        ClusterConformanceState<TSource>.Companions = companions.IsDefault ? [] : companions;
 
         var harness = new ClusterConformanceHarness<TSource>();
 
@@ -302,7 +335,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         harness.cluster = builder.Build();
         await harness.cluster.DeployAsync().ConfigureAwait(false);
 
-        harness.Registry = ProviderRegistry.Build([Case.CreateProvider()]);
+        harness.Registry = ProviderRegistry.Build(Providers());
 
         await harness.CreateSubscriptionAsync(ConformanceIds.Tenant, ConformanceIds.Subscription)
             .ConfigureAwait(false);
@@ -326,9 +359,19 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             // ⚠ The same test vault the silo's container holds, for the reason ProviderTestCluster
             // gives: a synchronous action runs HERE and the mint that produced its credential ran in
             // the silo, so two instances would be a listKeys that cannot find its own create.
+            //
+            // ⚠ AND THE SAME REAL CLUSTER THE SILO'S RECONCILERS WRITE TO, WHICH THIS WAS NOT UNTIL
+            // 2026-09-17. It was `new NoClusterConnectionFactory()`, so every action that declares
+            // RequiresCluster — CyberCloud.DBforPostgreSQL/servers' listKeys reads the Secret
+            // CloudNativePG generates — was refused by the dispatcher before its handler ran, on the
+            // one harness in the tree whose cluster is real. No cluster-backed suite asserts an action,
+            // so nothing noticed; the docs/plan/24 § Phase 2 story test is the first caller to ask a
+            // real API server for a credential through this path, and it could not have with the
+            // null factory. The Docker-free harness has always handed its dispatcher the fake it hands
+            // its silo, so this is the two harnesses agreeing rather than a new capability.
             new ActionDispatcher(
                 harness.Handlers(),
-                new NoClusterConnectionFactory(),
+                new RealClusterConnectionFactory(harness.Connection),
                 ClusterConformanceState<TSource>.Vault
             ),
             NullLogger<ResourceManagerService>.Instance
@@ -343,6 +386,57 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
 
         return harness;
     }
+
+    /// <summary>
+    ///     One provider instance per family the harness serves: the case's own, then each
+    ///     companion's whose namespace is not already represented.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>De-duplicated by <c>ProviderNamespace</c>, and the reason is the shape of a case.</b>
+    ///     A <c>ProviderConformanceCase</c> is one <i>type</i> and carries its family's
+    ///     <c>CreateProvider</c>, so two companions from one family — a network and its subnet — would
+    ///     each construct a <c>NetworkProvider</c>, and <c>ProviderRegistry.Build</c> refuses a
+    ///     namespace declared twice. Called from both sides of the silo boundary so the registry the
+    ///     write path validates against and the one the reconcile driver resolves from are built the
+    ///     same way.
+    /// </remarks>
+    static List<IResourceProvider> Providers() {
+        var providers = new List<IResourceProvider> { Case.CreateProvider() };
+
+        foreach (var companion in ClusterConformanceState<TSource>.Companions) {
+            var candidate = companion.CreateProvider();
+
+            if (providers.Any(x => string.Equals(x.ProviderNamespace, candidate.ProviderNamespace, StringComparison.OrdinalIgnoreCase))) {
+                continue;
+            }
+
+            providers.Add(candidate);
+        }
+
+        return providers;
+    }
+
+    /// <summary>
+    ///     A companion's address, with as many placeholder parent names as its type nests under —
+    ///     for deriving its kinds, never for writing.
+    /// </summary>
+    /// <param name="companion">The case.</param>
+    /// <remarks>
+    ///     ⚠ The parent names are placeholders because <c>ResourceId</c> refuses a child address with
+    ///     the wrong number of them, and the CRD stub needs only the kind, the scope and the plural,
+    ///     none of which depend on a name. A story test writes its companions under names of its own
+    ///     choosing.
+    /// </remarks>
+    static ResourceId CompanionAddress(ProviderConformanceCase companion) =>
+        new(
+            ConformanceIds.Tenant,
+            ConformanceIds.Subscription,
+            ConformanceIds.ResourceGroup,
+            companion.Type,
+            "crd-discovery",
+            Guid.NewGuid(),
+            string.Join('/', Enumerable.Range(0, companion.Type.Depth - 1).Select(ConformanceIds.AncestorName))
+        );
 
     /// <summary>Creates the ancestors the type under test hangs off, outermost first.</summary>
     /// <param name="cancellationToken">The harness's token.</param>
@@ -643,6 +737,13 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                 Case.Objects(Address("crd-discovery").WithId(Guid.NewGuid()), Namespace).AsEnumerable(),
                 (all, next) => all.Concat(next)
             )
+            // ⚠ AND THE COMPANIONS' KINDS, for the same reason as the ancestors' above: a story that
+            // writes a network beside a database would otherwise fail its first network apply with
+            // the nameless HttpOperationException this method exists to remove. Empty for every
+            // per-provider suite, so nothing changes for them.
+            .Concat(ClusterConformanceState<TSource>.Companions
+                .SelectMany(companion => companion.Objects(CompanionAddress(companion), Namespace))
+            )
             // ⚠ THE SCOPE COMES ALONG WITH THE KIND, AND IT IS DERIVED FOR THE REASON THIS METHOD
             // DERIVES EVERYTHING ELSE. Until CyberCloud.Network/virtualNetworks there was no
             // cluster-scoped object in the tree and this projection was `.Select(x => x.Kind)` with a
@@ -899,13 +1000,21 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                         new RealClusterConnectionFactory(ClusterConformanceState<TSource>.Connection)
                     );
 
-                    services.AddSingleton<IResourceProvider>(_ => TSource.ProviderCase.CreateProvider());
+                    // ⚠ ONE REGISTRATION PER FAMILY, the case's own first. Providers() is the same
+                    // list the client-side registry is built from, so the write path and the
+                    // reconcile driver agree on which types exist.
+                    foreach (var provider in Providers()) {
+                        services.AddSingleton<IResourceProvider>(provider);
+                    }
+
                     services.AddSingleton(TSource.ProviderCase.ReconcilerType);
 
-                    // ⚠ AND EVERY ANCESTOR'S RECONCILER — ReconcileDriver resolves each type's from
-                    // this container by the concrete type the registry stores, so a parent whose
-                    // reconciler is missing fails inside the silo rather than on the request path.
+                    // ⚠ AND EVERY ANCESTOR'S AND COMPANION'S RECONCILER — ReconcileDriver resolves
+                    // each type's from this container by the concrete type the registry stores, so a
+                    // parent whose reconciler is missing fails inside the silo rather than on the
+                    // request path.
                     foreach (var reconciler in TSource.Ancestors
+                                 .Concat(ClusterConformanceState<TSource>.Companions)
                                  .Select(x => x.ReconcilerType)
                                  .Where(x => x != TSource.ProviderCase.ReconcilerType)
                                  .Distinct()) {
@@ -915,7 +1024,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                     services.AddSingleton<ISecretResolver>(ClusterConformanceState<TSource>.Vault);
                     services.AddSingleton<ISecretWriter>(ClusterConformanceState<TSource>.Vault);
 
-                    foreach (var handler in ProviderRegistry.Build([TSource.ProviderCase.CreateProvider()])
+                    foreach (var handler in ProviderRegistry.Build(Providers())
                                  .Types
                                      .SelectMany(x => x.Actions)
                                      .Select(x => x.HandlerType)

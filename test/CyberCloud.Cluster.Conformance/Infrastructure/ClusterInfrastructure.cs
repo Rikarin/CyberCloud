@@ -205,6 +205,18 @@ public static class ClusterInfrastructure {
     /// <param name="provider">The provider under test.</param>
     /// <param name="wouldProve">What the calling test would have proved.</param>
     /// <param name="reason">What went wrong, when it was not Docker's absence.</param>
+    /// <remarks>
+    ///     ⚠ <b><c>NEEDS:</c> is read by the build.</b> <c>build/Build.Test.cs</c>
+    ///     § <c>PrerequisiteSkips</c> reads every cluster-backed suite's report after a <c>Test</c>
+    ///     run and treats a skip carrying that word as "the lane did not run because something was
+    ///     missing", which beside a Docker endpoint fails the run. Every skip in this tree that names
+    ///     a missing daemon or tool spells it this way — <c>EmptyClusterFixture.Skip</c> and
+    ///     <c>M1StoryClusterFixture.Skip</c> in the bundle suite included — and the one skip a working
+    ///     lane makes honestly ("created no PersistentVolumeClaim on a real cluster") does not, because
+    ///     nothing is missing. Renaming the word here without renaming
+    ///     <c>Build.Test.cs § PrerequisiteMarker</c> would not break anything and would quietly make
+    ///     the guard blind to this message, which is why the two are written down together.
+    /// </remarks>
     public static string SkipMessage(string provider, string wouldProve, Exception? reason = null) =>
         $"SKIPPED — {provider}: the cluster-backed conformance infrastructure did not come up, so "
         + "nothing was checked. "
@@ -220,6 +232,45 @@ public static class ClusterInfrastructure {
         ex is null ? "no exception was recorded." : ex.GetType().Name + ": " + ex.Message;
 
     static async Task<ClusterEndpoints> StartAsync(CancellationToken cancellationToken) {
+        var containers = await StartContainersAsync(cancellationToken).ConfigureAwait(false);
+
+        // Testcontainers' resource reaper removes the containers when this process dies, including a
+        // process that was killed. This is the tidy path, not the guarantee.
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => {
+            try {
+                containers.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            } catch (Exception) {
+                // A container that will not stop at process exit is Ryuk's problem, not a test result.
+            }
+        };
+
+        return containers.Endpoints;
+    }
+
+    /// <summary>
+    ///     Starts a fresh k3s, PostgreSQL and Redis, applies the Orleans schema to the shard, and
+    ///     hands the three back with their endpoints — to a caller that will dispose them.
+    /// </summary>
+    /// <param name="cancellationToken">The caller's token.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Public, and the one caller besides <see cref="TryStartAsync" /> is the reason.</b>
+    ///         The process-wide trio above lives until the process exits, which is right for the
+    ///         provider suites — one cluster for every class in the assembly — and wrong for a test
+    ///         whose subject is <i>what a fresh cluster becomes</i>: <c>CyberCloud.Bundle.Cluster.Conformance</c>
+    ///         installs <c>charts/bundle/</c> components onto an API server that must hold none of
+    ///         them beforehand, and then needs the Orleans harness over the same k3s. Before this
+    ///         method it would have had to copy the three builders and the schema apply, and the pin
+    ///         and the reminder-table configuration would have had a second home to drift in.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><see cref="ClusterSlot" /> is taken here, before the first container.</b> The permit
+    ///         is per process and idempotent, so a bundle fixture that already holds it for its own
+    ///         k3s pays nothing; a process that does not yet hold it waits here, which is the whole
+    ///         point of the permit.
+    ///     </para>
+    /// </remarks>
+    public static async Task<ClusterContainers> StartContainersAsync(CancellationToken cancellationToken) {
         // ⚠ Taken BEFORE the containers, and released only when the process exits. See the remarks.
         ClusterSlot.Acquire();
 
@@ -257,19 +308,29 @@ public static class ClusterInfrastructure {
             redis.GetConnectionString()
         );
 
-        // Testcontainers' resource reaper removes the containers when this process dies, including a
-        // process that was killed. This is the tidy path, not the guarantee.
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => {
-            try {
-                k3s.DisposeAsync().AsTask().GetAwaiter().GetResult();
-                postgres.DisposeAsync().AsTask().GetAwaiter().GetResult();
-                redis.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            } catch (Exception) {
-                // A container that will not stop at process exit is Ryuk's problem, not a test result.
-            }
-        };
+        return new ClusterContainers(k3s, postgres, redis, endpoints);
+    }
+}
 
-        return endpoints;
+/// <summary>
+///     The three containers <see cref="ClusterInfrastructure.StartContainersAsync" /> started, with
+///     where they are. Disposing it stops all three.
+/// </summary>
+/// <param name="K3s">The API server.</param>
+/// <param name="Postgres">The durable shard, schema applied.</param>
+/// <param name="Redis">The reminder table.</param>
+/// <param name="Endpoints">Where the three are.</param>
+public sealed record ClusterContainers(
+    K3sContainer K3s,
+    PostgreSqlContainer Postgres,
+    RedisContainer Redis,
+    ClusterEndpoints Endpoints
+) : IAsyncDisposable {
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync() {
+        await K3s.DisposeAsync().ConfigureAwait(false);
+        await Postgres.DisposeAsync().ConfigureAwait(false);
+        await Redis.DisposeAsync().ConfigureAwait(false);
     }
 }
 

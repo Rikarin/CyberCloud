@@ -281,6 +281,45 @@ owed:
       bundle component. It says nothing about the other seventeen charts, and nothing at all about a
       RECONCILER: the resource here is applied by a test running helm and kubectl, not by the
       platform's own reconcile path.
+  - id: the-reconciler-drove-a-server-onto-an-operator-this-bundle-installed
+    says: >
+      ✅ THE ROW ABOVE ENDS ON "NOTHING AT ALL ABOUT A RECONCILER", AND THIS ROW IS THE RECONCILER.
+      test/CyberCloud.Bundle.Cluster.Conformance § M1StoryOnAFreshCluster — docs/plan/24 § Phase 2's
+      exit story, steps 4–5 — runs ONE `install.sh` with `--component cert-manager --component
+      openebs-localpv --component cloudnative-pg` onto a fresh k3s, asserts the three land in the
+      roster's order across phases 15, 25 and 50, and then starts the platform's own resource manager
+      over that cluster: an Orleans silo with the PostgreSQL and Network providers, a real durable
+      shard and a real reminder table (test/CyberCloud.Cluster.Conformance's harness, handed the two
+      network cases as companions). Through the real write path it creates a
+      CyberCloud.Network/virtualNetworks, a subnet under it and a CyberCloud.DBforPostgreSQL/servers;
+      PostgresServerReconciler applies the Cluster; CloudNativePG — installed a minute earlier by this
+      directory's script — brings the primary pod to Running; `listKeys` reads the operator's Secret
+      through the cluster connection; and `psql` in the primary connects to `<name>-rw` with that
+      credential and answers SELECT 1. THE FIRST TIME A MANAGED DATABASE HAS STARTED UNDER TEST.
+      ⚠ AND THE FIRST RUN FOUND THAT NONE EVER COULD HAVE. The renderer named
+      `bootstrap.initdb.secret`, which CloudNativePG reads as "somebody wrote this" and this platform
+      never writes; the initdb Job sat on `secret "<name>-app" not found`. charts/managed/postgres/
+      conformance.yaml § owed, `a-named-initdb-secret-kept-every-server-from-starting`, is the row.
+      Nothing in this directory was wrong; what this directory's suite did was put an operator where
+      the reconciler's output would meet one.
+      ⚠ WHAT IT DOES NOT SAY, FOR THE COUNT ABOVE. The three components are the same three the older
+      classes install — the count of pins installed by a test is still THREE of nineteen — and
+      cert-manager is installed here because the story asks for it, not because anything in the story
+      consumes it: no Certificate is created, so its presence beside the other two proves co-tenancy
+      of three and nothing about cert-manager. The two Kube-OVN objects are admitted against the
+      harness's open-schema stubs on a lane with no kube-ovn (`kube-ovn-needs-a-node-this-lane-cannot-give`)
+      and route nothing. The `kubectl` in this story is the test's own — `kubectl exec` for the
+      SELECT — and install.sh's kubectl branch is still unexecuted under test.
+      ⚠ THE LANE, RE-MEASURED. The story class costs about 3 m 25 s of serial tail on this 24-CPU host
+      with a warm image cache: 20 s for the three containers, the three-row install, seconds for the
+      silo and the two network objects, and about a minute from the server converging to a Running
+      primary, most of it the `ghcr.io/cloudnative-pg/postgresql:17` pull (254 MB, 28 s). It is the
+      fourth class in this assembly to start a k3s of its own, and the assembly's wall clock is now
+      about eight minutes, against 4 m 27 s – 4 m 47 s with three. It stays per-PR for the reason the
+      row above gives — the lane that would take it does not exist — and the same row still owes that
+      lane. BundleInstaller.BudgetFor bounds the installer run at 32 m — three helm timeouts and the
+      margin — rather than the one-row 12 m the older call sites paid; the arithmetic is in
+      BundleInstaller.Budget's remarks.
   - id: the-manifest-path-waits-for-nothing
     says: >
       ⚠ FOUND ON 2026-09-03 BY READING install.sh WHILE ADDING A SELECTOR TO IT, AND IT REFUTES A

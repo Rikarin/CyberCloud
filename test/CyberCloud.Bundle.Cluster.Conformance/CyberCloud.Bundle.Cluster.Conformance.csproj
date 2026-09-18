@@ -117,6 +117,22 @@
           name into a second file — is how the two come to disagree.
         -->
         <ProjectReference Include="../CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
+
+        <!--
+          ⚠ TWO PROVIDER FAMILIES, AND THIS IS THE ONE PLACE UNDER test/ THAT NAMES ANY. Every other
+          cluster-backed assembly is one provider's; test/CyberCloud.Cluster.Conformance deliberately
+          references none, so that a provider joins it by declaring a case rather than by an edit.
+          M1StoryOnAFreshCluster is different in kind: docs/plan/24 § Phase 2's exit story crosses a
+          provider boundary — "create a VPC and a Postgres server in it" — so the story needs both
+          families' cases in one silo, and those cases are declared in the families' own Docker-free
+          conformance projects. Referencing the CONFORMANCE projects rather than the providers keeps
+          the rule the shared harness has: what a provider says about itself arrives as a
+          ProviderConformanceCase, declared once.
+        -->
+        <ProjectReference
+            Include="../../src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Conformance/CyberCloud.Providers.DBforPostgreSQL.Conformance.csproj"/>
+        <ProjectReference
+            Include="../../src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Conformance/CyberCloud.Providers.Network.Conformance.csproj"/>
     </ItemGroup>
 
 </Project>

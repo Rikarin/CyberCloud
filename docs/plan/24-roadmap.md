@@ -127,7 +127,7 @@ built on an unfinished manager is twenty copies of the manager's missing half.
 | Gateway: pipeline, auth, rate limits, region proxy, SignalR hubs, LRO endpoints | 4.2 | [10](10-gateway-and-api.md) | — no resource type. ⚠ #68 is an open **blocker**: the deployed gateway registers no `ICallerContextResolver` and 500s on every request, which is a different failure from "not written" and a worse one to read a green table over |
 | **Managed Kubernetes** (CAPI + Kamaji + KubeVirt) + node pools + credentials | 4.0 | [09](09-kubernetes-fabric.md), [13](13-compute-vm-containers.md) | ◐ `ContainerService/managedClusters` and `…/agentPools` both published; **the third noun in this row is the one that is owed.** The descriptor writes `kube-secret://{namespace}/{cluster}-kubeconfig#value` and nothing resolves that scheme, so the first call through an attached connection fails on the credential — `charts/managed/kubernetes/conformance.yaml` § `the-cluster-this-creates-is-not-connectable`. #24 is open behind it: no bootable node image for a Kubernetes minor worth offering |
 | Vault (OpenBao) | 2.0 | [18](18-security-vault-and-malware-scan.md) | ⚠ **Not shipped, and here the type list says so positively rather than saying nothing:** [01](01-azure-parity-catalogue.md) names `CyberCloud.KeyVault/vaults` as an M1 type at this row's 2.0 EM, and it is not one of the 32 |
-| Postgres · Valkey · NATS providers | 3.0 | [12](12-managed-data-services.md) | ✅ all three — `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`. ⚠ #69 (the seven-day recovery window came back to an `initdb`) closed 2026-09-15 by taking the claims into the platform's custody across the soft delete; the operator re-electing a primary over reattached claims is the half only a cluster with CloudNativePG installed can show — `charts/managed/postgres/conformance.yaml § owed` |
+| Postgres · Valkey · NATS providers | 3.0 | [12](12-managed-data-services.md) | ✅ all three — `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`. ⚠ #69 (the seven-day recovery window came back to an `initdb`) closed 2026-09-15 by taking the claims into the platform's custody across the soft delete; the operator re-electing a primary over reattached claims is the half only a cluster with CloudNativePG installed can show — `charts/managed/postgres/conformance.yaml § owed`. ⚠ **Such a cluster exists under test since 2026-09-17, and its first run found that no managed PostgreSQL had ever been able to start**: `PostgresServers.ClusterJson` named `bootstrap.initdb.secret`, which makes CloudNativePG *expect* the owner's Secret rather than write it, and the initdb Job sat on `secret "…-app" not found` — a defect no fake API server could show and a unit test pinned as correct. Fixed; `test/CyberCloud.Bundle.Cluster.Conformance § M1StoryOnAFreshCluster` now installs the operator through `install.sh`, creates a server through the real write path, watches the primary run, fetches the credential through `listKeys` and connects with it — [23 § The lane that needs a kubelet](23-build-ci-and-testing.md#the-lane-that-needs-a-kubelet) |
 | Container registry (Harbor) | 1.5 | [13](13-compute-vm-containers.md) | ✅ `ContainerRegistry/registries` |
 | Network: VPC, subnets, security groups, public IPs, DNS, L4 LB, WireGuard | 6.3 | [14](14-networking.md) | ◐ **3.3 shipped, 3.0 ⛔ blocked outside this repository (#23).** The split is below, and it is the row this reconciliation was asked for by name |
 | Object storage (SeaweedFS, S3) | 2.0 | [15](15-storage-blob-file.md) | ✅ `Storage/accounts` and `…/buckets` |
@@ -162,6 +162,16 @@ marked ⛔ rather than ⊘ precisely so that [§ Running total](#running-total) 
 > from Vault → open the cloud terminal and `psql` into it using a managed identity → see metrics and
 > logs → invite a colleague and grant them Reader on one resource group → do all of it again from
 > `cyc` → see the usage accruing.
+
+⚠ **Steps 4–5 run under test since 2026-09-17**, on a k3s the test installs the operator onto:
+`test/CyberCloud.Bundle.Cluster.Conformance § M1StoryOnAFreshCluster` creates the VPC, a subnet and
+the server through the real resource manager, waits for CloudNativePG's primary, fetches the
+credential and runs `SELECT 1` with it from inside the cluster. Two things the sentence says that the
+test does not: "in it" — no property of `DBforPostgreSQL/servers` names a network or a subnet, so the
+server is merely in the same resource group, and the VPC and subnet are Kube-OVN objects admitted
+against open-schema stubs on a lane with no Kube-OVN; and "from Vault" — this type declines the vault
+seam by design and the credential's path out is `listKeys` reading the operator's Secret
+(`PostgresServers.ClusterJson`). The `psql` is the test's, not the cloud terminal's.
 
 Plus: three design-partner tenants running for four weeks with no cross-tenant incident; the chaos
 invariants green; the load suite meeting the [00](00-vision-and-principles.md) budgets at 10 % of

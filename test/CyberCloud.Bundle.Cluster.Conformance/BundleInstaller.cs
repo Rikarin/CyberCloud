@@ -87,7 +87,10 @@ public static class BundleInstaller {
     /// </summary>
     public const string CloudNativePgComponent = "cloudnative-pg";
 
-    /// <summary>How long the installer gets before the test gives up on it.</summary>
+    /// <summary>
+    ///     How long the installer gets for a run that selects one <c>install: helm</c> component
+    ///     before the test gives up on it.
+    /// </summary>
     /// <remarks>
     ///     ⚠ Longer than <c>install.sh</c>'s own <c>--timeout 10m</c> on the helm call, so a helm
     ///     timeout surfaces as helm's message rather than as this harness killing the process. A
@@ -104,32 +107,109 @@ public static class BundleInstaller {
     ///     alone but by <c>10 m × (helm rows selected) + 5 m × (manifest rows selected)</c>.
     ///     ⚠
     ///     <b>
-    ///         Twelve minutes still bounds every run this assembly makes, and that is COUNTED
-    ///         rather than assumed.
-    ///     </b> Three call sites run the installer for real rather than
-    ///     <c>--dry-run</c>: <c>--phase 15</c> (cert-manager), <c>--phase 25</c> (openebs-localpv)
-    ///     and one <c>--component</c> pair (openebs-localpv, cloudnative-pg). The THREE distinct
-    ///     components between them — cert-manager, openebs-localpv, cloudnative-pg — all declare
-    ///     <c>install: helm</c> in their component.yaml, so ZERO of the three runs reaches the manifest
-    ///     branch and no run under test can pay the establishment wait at all — which is the same
-    ///     fact <see cref="CloudNativePgOnAnEmptyCluster" /> states as a gap. Raising this number now
-    ///     would buy slack no test can spend and would hide a slow helm install, which is the defect
-    ///     the paragraph above exists to prevent.
-    ///     ⚠ <b>What must move it, so the next person does not discover it as a harness timeout.</b>
-    ///     The first test that installs a <c>manifest:</c> component — the row
-    ///     <c>charts/bundle/README.md</c> already names as next — makes this bound wrong for any
-    ///     selection wider than one component: a <c>--phase 40</c> run is three manifest rows and one
-    ///     helm row, so 3 × 5 m + 10 m = 25 m, and a full install is 30 m of establishment waits
-    ///     alone. <c>charts/bundle/bundle.yaml</c> § owed,
-    ///     <c>the-manifest-path-waits-for-nothing</c>, carries why that wait is cluster-wide and what
-    ///     it costs.
+    ///         Twelve minutes bounded every run this assembly made until 2026-09-17, and that was
+    ///         COUNTED rather than assumed — and then a fourth call site made the count wrong.
+    ///     </b> Three call sites ran the installer for real rather than <c>--dry-run</c>:
+    ///     <c>--phase 15</c> (cert-manager), <c>--phase 25</c> (openebs-localpv) and one
+    ///     <c>--component</c> pair (openebs-localpv, cloudnative-pg). The THREE distinct components
+    ///     between them all declare <c>install: helm</c>, so none of the three runs reaches the
+    ///     manifest branch. The pair was already two helm rows under one 12 m bound — 20 m of helm
+    ///     timeouts that this harness would have cut off at 12 — and the docs/plan/24 § Phase 2 story
+    ///     (<see cref="M1StoryOnAFreshCluster" />) selects THREE helm rows in one run. A constant
+    ///     cannot be honest about a selection it does not know, so the bound is now
+    ///     <see cref="BudgetFor" />, which reads the selected components' own <c>install:</c> and
+    ///     <c>waitFor:</c> blocks and adds up exactly the timeouts the script would spend. This
+    ///     constant is what that arithmetic charges ONE helm row, and the three older call sites
+    ///     still pay it once or twice.
+    ///     ⚠ <b>What the arithmetic charges a manifest row, so the next person does not discover it
+    ///     as a harness timeout.</b> The row <c>charts/bundle/README.md</c> names as next installs a
+    ///     <c>manifest:</c> component: a <c>--phase 40</c> run is three manifest rows and one helm row,
+    ///     so 3 × 5 m + 10 m = 25 m of establishment waits, and a full install is 30 m of them alone.
+    ///     <c>charts/bundle/bundle.yaml</c> § owed, <c>the-manifest-path-waits-for-nothing</c>,
+    ///     carries why that wait is cluster-wide and what it costs.
     ///     ⚠ <b>And since 2026-09-15 a manifest row also waits for its <c>waitFor:</c> entries, 10 m
     ///     each</b>, so the same <c>--phase 40</c> is bounded by 3 × 5 m + 5 × 10 m + 10 m. Even one
     ///     manifest row alone — kubevirt, measured at 1 m 40 s to <c>Deployed</c> on a warm cache and
-    ///     about seven minutes on a cold one — does not fit under this number with margin, which is
-    ///     the arithmetic the first such test has to do before it is written.
+    ///     about seven minutes on a cold one — would not have fitted under twelve minutes with margin.
+    ///     <see cref="BudgetFor" /> reads the <c>waitFor:</c> block so that it does now.
     /// </remarks>
     public static readonly TimeSpan Budget = TimeSpan.FromMinutes(12);
+
+    /// <summary>The helm branch's <c>--wait --timeout 10m</c>, charged per helm row.</summary>
+    static readonly TimeSpan HelmTimeout = TimeSpan.FromMinutes(10);
+
+    /// <summary>The manifest branch's <c>kubectl wait --for=condition=Established --timeout=5m</c>.</summary>
+    static readonly TimeSpan EstablishedTimeout = TimeSpan.FromMinutes(5);
+
+    /// <summary>The manifest branch's <c>kubectl wait --timeout=10m</c>, charged per <c>waitFor:</c> entry.</summary>
+    static readonly TimeSpan WaitForTimeout = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    ///     What <see cref="Budget" /> adds on top of one helm timeout: the process start, the chart
+    ///     fetch, the roster read and the shutdown — everything a run spends that is not a wait.
+    /// </summary>
+    static readonly TimeSpan Margin = Budget - HelmTimeout;
+
+    /// <summary>
+    ///     How long a run of the installer that selects exactly these components gets: the sum of
+    ///     every timeout <c>install.sh</c> can spend on them, plus <see cref="Margin" />.
+    /// </summary>
+    /// <param name="components">The components the run selects, by directory name.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Read out of each <c>component.yaml</c>, not typed per call site</b>, so the bound
+    ///         moves when a component's kind or its <c>waitFor:</c> block does. The rates are the
+    ///         script's own: <c>install: helm</c> and <c>helm-archive</c> pay one
+    ///         <see cref="HelmTimeout" /> — two when the helm row declares a <c>chartCrds</c> chart,
+    ///         which the script installs first with its own <c>--wait</c>; <c>install: manifest</c>
+    ///         pays one <see cref="EstablishedTimeout" /> and one <see cref="WaitForTimeout" /> per
+    ///         <c>waitFor:</c> entry; <c>install: file</c> waits for nothing, by the script's own
+    ///         argument, and pays nothing here.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A budget, not a prediction.</b> The three helm rows the story test selects were
+    ///         measured together at under three minutes on this host with a warm image cache
+    ///         (<see cref="M1StoryOnAFreshCluster" />); this method answers 32 m for them. The gap
+    ///         is deliberate and is the same argument <see cref="Budget" /> makes for one row: the
+    ///         harness must never be the first to give up, or a slow install reports as a killed
+    ///         process rather than as helm's own message naming the resource that never became ready.
+    ///     </para>
+    /// </remarks>
+    public static TimeSpan BudgetFor(IEnumerable<string> components) {
+        ArgumentNullException.ThrowIfNull(components);
+
+        var waits = TimeSpan.Zero;
+
+        foreach (var component in components) {
+            switch (Pin(component, "install")) {
+                case "helm":
+                    waits += HelmTimeout;
+
+                    if (!string.IsNullOrEmpty(Pin(component, "chartCrds"))) {
+                        waits += HelmTimeout;
+                    }
+
+                    break;
+                case "helm-archive":
+                    waits += HelmTimeout;
+                    break;
+                case "manifest":
+                    waits += EstablishedTimeout + WaitForTimeout * WaitFor(component).Count;
+                    break;
+                case "file":
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        $"charts/bundle/{component}/component.yaml declares `install: "
+                        + $"{Pin(component, "install")}`, which is not one of the four kinds "
+                        + "install.sh installs, so this harness cannot say how long the script would "
+                        + "wait for it. charts/bundle/README.md § What a component owes."
+                    );
+            }
+        }
+
+        return waits + Margin;
+    }
 
     /// <summary>The repository root — the directory holding <c>CyberCloud.slnx</c>.</summary>
     /// <remarks>
@@ -363,6 +443,10 @@ public static class BundleInstaller {
     ///     touches no cluster.
     /// </param>
     /// <param name="cancellationToken">The test's token.</param>
+    /// <param name="budget">
+    ///     How long the run gets, defaulting to <see cref="Budget" /> — one helm row's worth. A run
+    ///     that selects more than one installing component passes <see cref="BudgetFor" />.
+    /// </param>
     /// <remarks>
     ///     ⚠
     ///     <b>
@@ -378,8 +462,9 @@ public static class BundleInstaller {
     public static Task<Run> RunAsync(
         string arguments,
         string? kubeconfig,
-        CancellationToken cancellationToken
-    ) => RunAsync(Script, arguments, kubeconfig, cancellationToken);
+        CancellationToken cancellationToken,
+        TimeSpan? budget = null
+    ) => RunAsync(Script, arguments, kubeconfig, cancellationToken, budget: budget);
 
     /// <summary>
     ///     Runs an <c>install.sh</c> that is not the checked-in one — a copy of <c>charts/bundle/</c>
@@ -400,6 +485,7 @@ public static class BundleInstaller {
     ///     Variables to set for the run — what a person exports before <c>install.sh</c>, which
     ///     is how <c>substitute.sh</c>'s <c>${VAR:=default}</c> pass is overridden. Empty by default.
     /// </param>
+    /// <param name="budget">How long the run gets; <see cref="Budget" /> when omitted.</param>
     /// <remarks>
     ///     ⚠ <b>Forward slashes on Windows, and it is not cosmetic.</b> <c>install.sh</c> finds its
     ///     directory with <c>dirname "${BASH_SOURCE[0]}"</c>, and a path handed to Git's bash with
@@ -414,7 +500,8 @@ public static class BundleInstaller {
         string arguments,
         string? kubeconfig,
         CancellationToken cancellationToken,
-        IReadOnlyDictionary<string, string>? environment = null
+        IReadOnlyDictionary<string, string>? environment = null,
+        TimeSpan? budget = null
     ) {
         var start = new ProcessStartInfo(Bash ?? "bash") {
             WorkingDirectory = RepositoryRoot,
@@ -447,11 +534,11 @@ public static class BundleInstaller {
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        budget.CancelAfter(Budget);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(budget ?? Budget);
 
         try {
-            await process.WaitForExitAsync(budget.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(deadline.Token).ConfigureAwait(false);
         } catch (OperationCanceledException) {
             Kill(process);
             throw;
@@ -472,6 +559,70 @@ public static class BundleInstaller {
             // carriage return before reaching anything about the installer.
             output.Append(line).Append('\n');
         }
+    }
+
+    /// <summary>
+    ///     Runs a command that is not the installer — <c>helm template</c>, <c>kubectl apply</c>,
+    ///     <c>kubectl exec</c> — feeds it <paramref name="input" />, and returns what it said.
+    /// </summary>
+    /// <param name="command">The command, resolved on <c>PATH</c>.</param>
+    /// <param name="arguments">Its arguments, one per entry and never split on spaces.</param>
+    /// <param name="input">Standard input, or <see langword="null" /> to leave it closed.</param>
+    /// <param name="kubeconfig">
+    ///     A kubeconfig file for the command to act against, or <see langword="null" /> for one that
+    ///     touches no cluster.
+    /// </param>
+    /// <param name="token">The test's token.</param>
+    /// <remarks>
+    ///     ⚠ Standard output and standard error are interleaved into one string, exactly as
+    ///     <see cref="RunAsync(string,string,string?,CancellationToken,TimeSpan?)" /> does it and for
+    ///     the same reason: a failure report that separates a tool's diagnosis from the line it was
+    ///     diagnosing is a report nobody can read. Lines end in <c>'\n'</c> for the reason
+    ///     <see cref="Append" /> gives.
+    /// </remarks>
+    public static async Task<(int ExitCode, string Output)> CaptureAsync(
+        string command,
+        IReadOnlyList<string> arguments,
+        string? input,
+        string? kubeconfig,
+        CancellationToken token
+    ) {
+        ArgumentNullException.ThrowIfNull(arguments);
+
+        var start = new ProcessStartInfo(command) {
+            WorkingDirectory = RepositoryRoot,
+            RedirectStandardInput = input is not null,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+
+        foreach (var argument in arguments) {
+            start.ArgumentList.Add(argument);
+        }
+
+        if (kubeconfig is not null) {
+            start.Environment["KUBECONFIG"] = kubeconfig;
+        }
+
+        using var process = new Process { StartInfo = start };
+        var output = new StringBuilder();
+
+        process.OutputDataReceived += (_, e) => Append(output, e.Data);
+        process.ErrorDataReceived += (_, e) => Append(output, e.Data);
+
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        if (input is not null) {
+            await process.StandardInput.WriteAsync(input).ConfigureAwait(false);
+            process.StandardInput.Close();
+        }
+
+        await process.WaitForExitAsync(token).ConfigureAwait(false);
+
+        return (process.ExitCode, output.ToString());
     }
 
     static void Kill(Process process) {

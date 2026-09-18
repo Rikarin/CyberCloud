@@ -381,7 +381,11 @@ the CPU budget still bounds the total.
 
 Counted 2026-09-05 over this tree's own build output, at **73** per-PR suites: **21** can start a
 container and **17 of those 21 hold a k3s API server**. The four that do not are
-`CyberCloud.{Authorization,ServiceDefaults,Tenancy,Vault}.Tests`.
+`CyberCloud.{Authorization,ServiceDefaults,Tenancy,Vault}.Tests`. ⚠ Nineteen since 2026-09-17,
+counted over the build output rather than the prose: the bundle suite had joined since the count
+above, and `CyberCloud.Providers.DBforPostgreSQL.Cluster.Conformance` landed that day, after its
+Docker-free half had promised it since the family shipped. docs/plan/23 § The lane that needs a
+kubelet lists all nineteen by name.
 
 ### The degree is derived from the host
 
@@ -548,6 +552,36 @@ The literal `Aspire.Hosting.Testing` in `build/` is checked from the other side 
 `CyberCloud.AppHost.Tests` § `ClusterBackedGatingTests`, which spells the same name against the type
 that actually starts the topology — the defect class `GenerationReportTests` exists for, one
 directory over.
+
+### `Test` says how many cluster-backed cases ran, and fails a lane that skipped beside a daemon
+
+Until 2026-09-15 the whole cluster-backed lane skipped on the machine that wrote it — a cgroup v1
+host, a kubelet that refused to start, every suite's cluster-facing tests skipping
+with a message that read as a missing daemon — and nothing in `build/` could tell that run from one
+that proved everything, because pass and fail come from an exit code and every such suite keeps a
+daemon-free companion that satisfies `--minimum-expected-tests 1`.
+
+`Build.Test.cs` § `ReportClusterBackedCases` reads the `.trx` each cluster-holding suite wrote and
+prints one line: how many cases ran across them, how many skipped, and the two numbers per suite. The
+companions are in the first number and it says so; the second is what tells the two states apart.
+
+⚠ **It fails the run — not merely reports — in exactly one situation: a Docker endpoint is present
+and a cluster-holding suite either skipped at least as many cases as it ran, or skipped any case for
+a named missing prerequisite.** Measured 2026-09-17: with a working cluster every one of the nineteen
+runs between 7 and 146 cases and skips at most one per type (the honest "created no
+PersistentVolumeClaim" skip); without one, each runs its companions and skips the rest. The second
+clause exists because the first missed the suite that mattered on the day it was written —
+`CyberCloud.Bundle.Cluster.Conformance` is sixteen daemon-free tests and four installing ones, and
+with Docker but no `helm` it reported 16 passed, 3 skipped, exit 0. Every prerequisite skip in the
+tree spells `NEEDS:`, and the honest skip does not; `PrerequisiteMarker` is that word,
+`test/CyberCloud.Cluster.Conformance` § `SkipConventionTests` pins the two spellings together, and the
+failure quotes the first such skip, which names what to install.
+
+⚠ **It is not "any skip fails".** A machine with no daemon skipping the lane is this repository's
+contract (§ `ReportSkippedTests`), and the endpoint probe — the named pipe on Windows,
+`/var/run/docker.sock` elsewhere, `DOCKER_HOST` anywhere; never `docker info`, which hangs when the
+daemon is unhealthy — is what keeps the guard off such a machine. A machine *with* a daemon and
+without `helm` is asked to install helm, by name, rather than told its build is green.
 
 ## Why the analyser exemptions are where they are
 

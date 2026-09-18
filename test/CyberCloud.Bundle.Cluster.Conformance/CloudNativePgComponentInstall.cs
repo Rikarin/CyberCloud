@@ -305,13 +305,17 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
         // documented to filter the roster rather than to order it, so storage must still be installed
         // before the operator that provisions through it. bundle.yaml puts openebs-localpv in phase
         // 25 and cloudnative-pg in phase 50, and the run below is asserted to obey that and not this.
+        // ⚠ Two helm rows, so two helm timeouts — BundleInstaller.BudgetFor reads that off the two
+        // component.yaml files. Until 2026-09-17 this run had the one-row Budget, which would have
+        // killed a slow second row eight minutes before helm said what it was waiting for.
         var run = await BundleInstaller.RunAsync(
             "--component "
             + BundleInstaller.CloudNativePgComponent
             + " --component "
             + BundleInstaller.OpenEbsLocalPvComponent,
             cluster.KubeconfigPath,
-            token
+            token,
+            BundleInstaller.BudgetFor([BundleInstaller.OpenEbsLocalPvComponent, BundleInstaller.CloudNativePgComponent])
         );
 
         run.ExitCode.ShouldBe(
@@ -561,63 +565,17 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
 
     /// <summary>Runs a command, feeds it <paramref name="input" />, and returns what it said.</summary>
     /// <remarks>
-    ///     ⚠ Standard output and standard error are interleaved into one string, exactly as
-    ///     <see cref="BundleInstaller.RunAsync" /> does it and for the same reason: a failure report
-    ///     that separates a tool's diagnosis from the line it was diagnosing is a report nobody can
-    ///     read.
+    ///     <see cref="BundleInstaller.CaptureAsync" />, which moved there on 2026-09-17 when the
+    ///     docs/plan/24 § Phase 2 story test became its second caller. Kept as a one-line forwarder so
+    ///     the call sites in this class read as they did.
     /// </remarks>
-    static async Task<(int ExitCode, string Output)> CaptureAsync(
+    static Task<(int ExitCode, string Output)> CaptureAsync(
         string command,
         IReadOnlyList<string> arguments,
         string? input,
         string? kubeconfig,
         CancellationToken token
-    ) {
-        var start = new ProcessStartInfo(command) {
-            WorkingDirectory = BundleInstaller.RepositoryRoot,
-            RedirectStandardInput = input is not null,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-
-        foreach (var argument in arguments) {
-            start.ArgumentList.Add(argument);
-        }
-
-        if (kubeconfig is not null) {
-            start.Environment["KUBECONFIG"] = kubeconfig;
-        }
-
-        using var process = new Process { StartInfo = start };
-        var output = new StringBuilder();
-
-        process.OutputDataReceived += (_, e) => Append(output, e.Data);
-        process.ErrorDataReceived += (_, e) => Append(output, e.Data);
-
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-
-        if (input is not null) {
-            await process.StandardInput.WriteAsync(input).ConfigureAwait(false);
-            process.StandardInput.Close();
-        }
-
-        await process.WaitForExitAsync(token).ConfigureAwait(false);
-
-        return (process.ExitCode, output.ToString());
-    }
-
-    static void Append(StringBuilder output, string? line) {
-        if (line is null) {
-            return;
-        }
-
-        lock (output) {
-            output.AppendLine(line);
-        }
-    }
+    ) => BundleInstaller.CaptureAsync(command, arguments, input, kubeconfig, token);
 
     /// <summary>Polls until <paramref name="read" /> returns non-null, or the budget runs out.</summary>
     static async Task<T?> Poll<T>(TimeSpan budget, Func<Task<T?>> read, CancellationToken token)

@@ -261,6 +261,44 @@ public sealed class AppHostTopologyTests {
         ServePortOf("identity").ShouldBe(CyberCloudResources.IdentityAppPort);
     }
 
+    /// <summary>
+    ///     The model still builds while a container from another run holds the SeaweedFS identity
+    ///     file open.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Measured, not imagined — 2026-09-17, this suite run whole.</b> The LocalTopology
+    ///     collection fixture starts the real SeaweedFS in this same process, Docker Desktop for
+    ///     Windows holds the bind-mounted <c>.seaweedfs/s3.json</c> open while it runs, and
+    ///     <c>SelfServeSignUpIsOneDecisionOnAllThreeSides</c> reached
+    ///     <see cref="CyberCloudTopology.Compose" />'s "written only when it differs" guard at that
+    ///     moment: the guard's own <c>File.ReadAllText</c> threw "being used by another process", and a
+    ///     model-only test failed with a message about a container it never started. The guard now
+    ///     treats a file it cannot read as one it wrote — the only writer is that line and the content
+    ///     is a constant — and this test holds the file the way the container does, so the repair is
+    ///     exercised on a machine with no Docker at all rather than only when the fixture's timing
+    ///     lines up.
+    /// </remarks>
+    [Fact]
+    public void TheModelBuildsWhileAnotherProcessHoldsTheObjectStoreIdentityFile() {
+        var directory = Path.Combine(RepositoryRoot, "src", "Hosts", "CyberCloud.AppHost", ".seaweedfs");
+        var file = Path.Combine(directory, "s3.json");
+
+        // The first Model() writes the file if it is not there; every later one compares and leaves it.
+        Model();
+        File.Exists(file).ShouldBeTrue("Compose did not write the SeaweedFS identity file it mounts");
+
+        // ⚠ FileShare.None is the lock the bind mount takes: no reader, no writer, until this handle
+        // closes. Held across the whole Compose, which is the shape the fixture's timing produced.
+        using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None)) {
+            var built = Model();
+
+            built.Names.ShouldContain(
+                CyberCloudResources.ObjectStore,
+                "Compose ran with the identity file held open and lost the object store on the way"
+            );
+        }
+    }
+
     /// <summary>The proxy file's entries, keyed by the path each forwards.</summary>
     static Dictionary<string, JsonElement> ReadProxy(string relative) {
         var path = Path.Combine(PortalRoot, relative);
