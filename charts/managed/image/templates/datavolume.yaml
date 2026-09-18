@@ -7,7 +7,7 @@ CDI `DataVolume`, imported — docs/plan/13 § Virtual Machines, "Image".
 bundle's default class is WaitForFirstConsumer and an image has no consumer — it is the SOURCE of a
 clone, never a mounted volume — so without the annotation the claim never binds, the import never
 starts, and the tenant sees an image that is Pending forever with nothing saying why. Measured on the
-first cluster-backed run (test/CyberCloud.Bundle.Cluster.Conformance § KubeVirtOnAnEmptyCluster).
+first cluster-backed run (test/CyberCloud.Bundle.Cluster.Nightly § KubeVirtOnAnEmptyCluster).
 charts/managed/disk makes the opposite choice for the opposite reason — Cdi.ImmediateBindAnnotation.
 */}}
 apiVersion: cdi.kubevirt.io/v1beta1

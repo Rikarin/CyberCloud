@@ -3,6 +3,13 @@
     <!--
       The first thing in this repository that installs a charts/bundle/ component onto an API server.
 
+      ⚠ THE PER-PR HALF. Three installing classes live here — cert-manager, openebs-localpv, and
+      openebs-localpv with cloudnative-pg — at under five minutes together. The fourth,
+      KubeVirtOnAnEmptyCluster, installs CDI and KubeVirt and boots a guest at about eight, and lives in
+      test/CyberCloud.Bundle.Cluster.Nightly: the `.Nightly` suffix is what keeps it off the per-PR
+      chain, and that project's csproj carries the runner measurement that decided it. It reuses this
+      project's EmptyClusterFixture and BundleInstaller by reference.
+
       ⚠ IT COVERS THREE COMPONENTS OF NINETEEN, AND ITS NAME IS THE ONLY HONEST PLACE TO SAY SO.
       charts/bundle/bundle.yaml § owed, `most-of-the-roster-has-never-been-installed`, is the
       row this project narrows rather than closes: every pin in that directory was resolved against a
@@ -118,13 +125,14 @@
         -->
         <ProjectReference Include="../CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
         <!--
-          ⚠ ONE PROVIDER'S .Contracts, FOR ONE READING. KubeVirtOnAnEmptyCluster hands the VirtualMachine
-          a real KubeVirt wrote to VirtualMachines.ReadinessOf, so the sentence the reconciler would put
-          in a tenant's InProgress message is asserted against a status no fake produced — the missing
-          KVM device, by name. No reconciler runs here; the object is applied by this test's own kubectl
-          from a chart, exactly as CloudNativePgOnAnEmptyCluster applies its Cluster.
+          ⚠ NO PROVIDER'S .Contracts, ANY MORE. For one day this project referenced
+          CyberCloud.Providers.Compute.Contracts for KubeVirtOnAnEmptyCluster's reading of a real
+          VirtualMachine; that class is in test/CyberCloud.Bundle.Cluster.Nightly now — the review of
+          #28 put its eight minutes off the per-PR chain — and the reference went with it. The nightly
+          project references THIS one, for EmptyClusterFixture and BundleInstaller, which is why both
+          stay public and why this project's shape must not assume it is the only assembly that starts
+          a bundle k3s.
         -->
-        <ProjectReference Include="../../src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Contracts/CyberCloud.Providers.Compute.Contracts.csproj"/>
     </ItemGroup>
 
 </Project>

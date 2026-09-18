@@ -1772,7 +1772,7 @@ class VirtualMachineData:
         class CloudInit:
             """First-boot configuration, as cloud-init reads it."""
 
-            # A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. Empty means no cloud-init at all.
+            # A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other path is refused. Empty means no cloud-init at all.
             user_data: Optional[str] = None
 
             @classmethod
@@ -1825,7 +1825,7 @@ class VirtualMachineData:
         size: VirtualMachineSize
         # First-boot configuration, as cloud-init reads it.
         cloud_init: Optional[VirtualMachineData.Properties.CloudInit] = None
-        # CyberCloud.Compute/disks resources attached to the machine, by name, in this resource group. A change attaches or detaches at the machine's next start. ⚠ A disk named os or cloudinit collides with the machine's own volumes and is refused at admission.
+        # CyberCloud.Compute/disks resources attached to the machine, by name, in this resource group. A change attaches or detaches at the machine's next start. ⚠ A disk named os or cloudinit collides with the machine's own volumes and is refused.
         data_disks: Optional[List[str]] = None
         # The tenant network the machine's interface joins. Both empty means the cluster's pod network.
         network: Optional[VirtualMachineData.Properties.Network] = None

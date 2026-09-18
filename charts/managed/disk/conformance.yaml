@@ -36,7 +36,13 @@ assertions:
       PendingPopulation — the claim exists and binds to the node of the first machine that mounts it.
       ⚠ THE OPPOSITE RULE FROM AN IMAGE'S, on purpose: an image without its bytes is useless, a disk
       without a consumer is inventory. A disk on no class at all stays Pending with CDI's own reason
-      in the InProgress message.
+      in the InProgress message. ⚠ Measured on a real CDI since #28's review, not read off its
+      source: test/CyberCloud.Bundle.Cluster.Nightly § KubeVirtOnAnEmptyCluster applies this chart
+      onto openebs-hostpath and CDI 1.66 leaves the claim at WaitForFirstConsumer (read twice on
+      2026-09-18, and not PendingPopulation, which the populator path would say); once a machine
+      naming the disk in `dataDisks` is applied the same DataVolume goes PVCBound → ImportScheduled
+      → Succeeded in about ten seconds, and once the machine is Running KubeVirt lists the volume on
+      the instance and the launcher pod mounts the claim.
   - id: the-claim-is-the-resource-name
     says: >
       The DataVolume, and so the claim, is named exactly as the resource is, so a machine naming
@@ -85,6 +91,9 @@ owed:
       openebs.io/local row, and with no entry it fills nothing and refuses rather than guessing. Every
       claim this family renders — a disk, an image, a machine's root clone — now asks for
       ReadWriteOnce, which is what a node-local disk can be and what every KubeVirt disk works with.
+      ⚠ The image found it and the disk was corrected on the image's evidence; since #28's review
+      the same nightly class applies this chart too, so the disk's claim binding and populating on
+      that CDI is measured rather than inferred from the sibling's.
       WHAT IT COSTS: live migration needs ReadWriteMany, so a machine on these disks cannot be moved
       between nodes even on a class that could offer it. Two halves close it: the bundle installing a
       StorageProfile for its own class (charts/bundle/containerized-data-importer's to own), and the

@@ -197,10 +197,10 @@ public sealed class VirtualMachineReconcilerTests {
     public async Task CloudInitIsResolvedOncePerPassAndReachesASecretAndNothingElse() {
         var reconciler = new VirtualMachineReconciler(new FixedClock());
         var connection = new RecordingConnection();
-        var secrets = new SeededSecrets(("tenants/a/web", "userdata", "#cloud-config\nusers:\n  - name: ops\n"));
+        var secrets = new SeededSecrets((Compute.VaultPath("web"), "userdata", "#cloud-config\nusers:\n  - name: ops\n"));
         var address = Compute.Machine("web");
         var ns = ReconcileDriver(address);
-        using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, cloudInit: "tenants/a/web#userdata"));
+        using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, cloudInit: Compute.VaultPath("web") + "#userdata"));
 
         var outcome = await reconciler.ReconcileAsync(Compute.Context(connection, address, body.RootElement, secrets), TestContext.Current.CancellationToken);
 
@@ -217,7 +217,7 @@ public sealed class VirtualMachineReconcilerTests {
         // ⚠ THE VALUE IS IN THE SECRET AND NOWHERE ELSE — docs/plan/13's non-negotiable for this type.
         var machine = connection.Applied[1].Body;
         machine.ShouldNotContain("#cloud-config");
-        machine.ShouldNotContain("tenants/a/web");
+        machine.ShouldNotContain(Compute.VaultPath("web"));
         machine.ShouldContain("web-cloud-init");
         Compute.Spec(machine)["template"]!["spec"]!["volumes"]!.AsArray().Count.ShouldBe(2);
 
@@ -234,12 +234,44 @@ public sealed class VirtualMachineReconcilerTests {
         var reconciler = new VirtualMachineReconciler(new FixedClock());
         var connection = new RecordingConnection();
         var address = Compute.Machine("web");
-        using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, cloudInit: "tenants/a/missing#userdata"));
+        using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, cloudInit: Compute.VaultPath("missing") + "#userdata"));
 
         var outcome = await reconciler.ReconcileAsync(Compute.Context(connection, address, body.RootElement, new SeededSecrets()), TestContext.Current.CancellationToken);
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
         connection.Applied.ShouldBeEmpty("a machine was applied that would mount a Secret nothing can fill");
+    }
+
+    [Fact]
+    public async Task AHandleOutsideTheTenantsOwnVaultPrefixIsRefusedBeforeItIsResolved() {
+        // ⚠ THE EXFILTRATION THE #28 REVIEW FOUND, CLOSED. The vault is shared and its token is the
+        // platform's, so a path is the only thing that scopes a read; tenant A's body names tenant B's
+        // registry password, which the seeded vault HOLDS — and the pass ends with the resolver never
+        // asked, nothing applied, and a refusal that names A's own prefix rather than B's path.
+        var reconciler = new VirtualMachineReconciler(new FixedClock());
+        var connection = new RecordingConnection();
+        var foreign = Compute.VaultPath("CyberCloud.ContainerRegistry/registries/11111111-1111-4111-8111-111111111111", Compute.TenantB);
+        var secrets = new SeededSecrets((foreign, "password", "bobs-registry-password"));
+        var address = Compute.Machine("web", Compute.TenantA, Compute.SubscriptionA);
+        using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, cloudInit: foreign + "#password"));
+
+        var outcome = await reconciler.ReconcileAsync(Compute.Context(connection, address, body.RootElement, secrets), TestContext.Current.CancellationToken);
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        outcome.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
+        outcome.Error.Message.ShouldContain(VirtualMachines.TenantVaultPrefix(Compute.TenantA));
+        outcome.Error.Message.ShouldNotContain("bobs-registry-password");
+        secrets.Resolves.ShouldBe(0, "the resolver was asked for another tenant's path; the check has to come first");
+        connection.Applied.ShouldBeEmpty();
+
+        // And the same shape under A's own prefix resolves, so the refusal is about the prefix and not the path's depth.
+        var own = Compute.VaultPath("CyberCloud.ContainerRegistry/registries/11111111-1111-4111-8111-111111111111");
+        using var ownBody = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, cloudInit: own + "#password"));
+        var ownSecrets = new SeededSecrets((own, "password", "alices-own"));
+
+        (await reconciler.ReconcileAsync(Compute.Context(connection, address, ownBody.RootElement, ownSecrets), TestContext.Current.CancellationToken))
+            .ShouldBe(ReconcileOutcome.Converged);
+        ownSecrets.Resolves.ShouldBe(1);
     }
 
     // ── Disks and the network join ──────────────────────────────────────────────────────────────
@@ -275,6 +307,27 @@ public sealed class VirtualMachineReconcilerTests {
     }
 
     [Fact]
+    public async Task ADiskTheBodyCannotRenderIsRefusedBeforeAnythingIsRead() {
+        // ⚠ Two kinds of name the schema admits and a real cluster would not: the machine's own volume
+        // names, which KubeVirt's webhook refuses as duplicates, and strings that are not resource
+        // names at all, which the API server refuses as a claim name — neither refuser is in either
+        // conformance suite. VirtualMachines.DataDiskProblem.
+        foreach (var bad in new[] { VirtualMachines.RootVolume, VirtualMachines.CloudInitVolume, "Not A Name", "../../etc" }) {
+            var connection = new RecordingConnection();
+            using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, dataDisks: ["data", bad]));
+
+            var outcome = await Pass(new VirtualMachineReconciler(new FixedClock()), connection, Compute.Machine("web"), body.RootElement);
+
+            outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed, bad);
+            outcome.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+            outcome.Error.Target.ShouldBe("/properties/dataDisks");
+            outcome.Error.Message.ShouldContain(bad);
+            connection.Applied.ShouldBeEmpty();
+            connection.Read.ShouldBeEmpty("a body that cannot render should cost the cluster nothing");
+        }
+    }
+
+    [Fact]
     public async Task ObserveReportsTheInstancePhaseAndTheRunStrategy() {
         var reconciler = new VirtualMachineReconciler(new FixedClock());
         var connection = new RecordingConnection();
@@ -302,8 +355,8 @@ public sealed class VirtualMachineReconcilerTests {
         var connection = new RecordingConnection();
         var address = Compute.Machine("web");
         var ns = ReconcileDriver(address);
-        var secrets = new SeededSecrets(("tenants/a/web", "userdata", "#cloud-config"));
-        using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, dataDisks: ["data"], cloudInit: "tenants/a/web#userdata"));
+        var secrets = new SeededSecrets((Compute.VaultPath("web"), "userdata", "#cloud-config"));
+        using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, dataDisks: ["data"], cloudInit: Compute.VaultPath("web") + "#userdata"));
 
         await reconciler.ReconcileAsync(Compute.Context(connection, address, body.RootElement, secrets), TestContext.Current.CancellationToken);
 

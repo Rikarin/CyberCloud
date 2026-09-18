@@ -2097,19 +2097,45 @@ attached to and a child shares its parent's lifetime by construction.
   status, a Secret, a constant. The three power actions apply and delete objects through the same
   `KubeCommand` seam the reconciler uses, and the shared suite's action assertion now drives a stop
   through the manager and validates the answer against `VirtualMachines.PowerResponse`.
-- **⚠ THE FIRST FAMILY WHOSE WEBHOOK HALF IS MEASURED RATHER THAN OWED.** Every
-  `.Cluster.Conformance` suite records that a derived CRD stub admits anything;
-  `charts/managed/kubernetes/conformance.yaml` calls it `a-green-cluster-suite-proves-the-apply-path-only`.
-  `test/CyberCloud.Bundle.Cluster.Conformance § KubeVirtOnAnEmptyCluster` installs openebs-localpv,
-  CDI and KubeVirt through `install.sh` — the first `manifest:` rows a test has ever installed —
-  imports an image through `charts/managed/image`, applies `charts/managed/virtual-machine`, and the
-  real `kubevirt.io` webhook admits it — and the guest boots: `Running` under KVM, 46 seconds after
-  the apply. ⚠ The test was written to assert `ErrorUnschedulable`, because issue #95 and
+- **⚠ THE FIRST TYPE THAT RESOLVES A VAULT PATH A TENANT SPELLED, AND THE PATH IS CHECKED AGAINST
+  THE TENANT BEFORE THE VAULT IS ASKED.** Every earlier consumer of `ISecretResolver` resolves a
+  path the platform built — `tenants/{tenantId}/{provider}/{type}/{id}`, five families — or keeps
+  the value server-side. `cloudInit.userData` is written by the tenant, and its value lands in a
+  Secret the tenant's own guest mounts; the resolver holds one platform-wide token in one namespace
+  (`OpenBaoSecretResolver`), so the path is the only thing that scopes the read. The adversarial
+  review of #28 found that a body naming
+  `tenants/<other>/CyberCloud.ContainerRegistry/registries/<id>#password` would have handed another
+  tenant's credential to a guest. `VirtualMachines.ParseCloudInitRef` now takes the tenant and
+  refuses a path outside `VirtualMachines.TenantVaultPrefix` with `AuthorizationFailed` — on the
+  first reconcile pass, because the write path validates a body against its schema and nothing
+  else, and naming the tenant's own prefix rather than whether the other path exists.
+  `VirtualMachineReconcilerTests.AHandleOutsideTheTenantsOwnVaultPrefixIsRefusedBeforeItIsResolved`
+  seeds the foreign path with a value and asserts the resolver is never asked.
+- **⚠ THE FIRST FAMILY WHOSE WEBHOOK HALF IS MEASURED RATHER THAN OWED — FOR THE THREE RENDERS ONE
+  TEST APPLIES, AND NO WIDER.** Every `.Cluster.Conformance` suite records that a derived CRD stub
+  admits anything; `charts/managed/kubernetes/conformance.yaml` calls it
+  `a-green-cluster-suite-proves-the-apply-path-only`. `test/CyberCloud.Bundle.Cluster.Nightly
+  § KubeVirtOnAnEmptyCluster` installs openebs-localpv, CDI and KubeVirt through `install.sh` — the
+  first `manifest:` rows a test has ever installed — and puts one render of each chart in front of
+  the real `cdi.kubevirt.io` and `kubevirt.io` webhooks: an image from a `docker://` url through
+  `charts/managed/image`, a blank disk through `charts/managed/disk`, and a machine through
+  `charts/managed/virtual-machine` that names the disk in `dataDisks`. The guest boots — `Running`
+  under KVM, 46 seconds after the apply — the disk CDI had left waiting for a consumer is
+  populated once the machine consumes it and the launcher mounts the claim, and
+  `VirtualMachines.Matches` holds against the admitted object. ⚠ What that sentence does NOT cover,
+  because the class never applies it: a catalogue image (several hundred megabytes; cirros is the
+  import), an `http(s)://` source, a cloud-init Secret on a real guest, a machine on a tenant
+  subnet, and every stop/start/restart against a real KubeVirt. The review of #28 found the first
+  version of this bullet claiming the family when it had measured two charts and no attached disk;
+  the disk half was measured in answer, and the rest is named here so the claim cannot grow by
+  being repeated. ⚠ The test was written to assert `ErrorUnschedulable`, because issue #95 and
   `charts/bundle/bundle.yaml § owed` said Docker Desktop's VM lends no `/dev/kvm`; the first run
   past CDI turned that red the other way, and `docker run --privileged alpine ls -l /dev/kvm` is the
   one-line measurement nobody had taken. What is still owed is the guest itself — nothing reaches a
   console or an agent — `charts/managed/virtual-machine/conformance.yaml § owed`,
-  `the-guest-is-not-reached`.
+  `the-guest-is-not-reached`. ⚠ And the class is nightly, not per-PR: it costs eight minutes on a
+  serial chain the runner had already spent 26 m 16 s on against a 25-minute budget, so the review
+  also opened the `*.Nightly` lane `docs/plan/23 § CI shape` describes and put the class in it.
 - **⚠ THE SIZE TABLE IS WHAT THE GUEST GETS, WHICH THE NODE POOL'S IS NOT.** `AgentPools` renders an
   instancetype name the bundle does not install and records its sizing table as a belief; this family
   renders `domain.cpu.cores` and `domain.memory.guest` from `VirtualMachines.Sizes`, so the number

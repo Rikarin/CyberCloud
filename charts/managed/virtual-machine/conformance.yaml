@@ -81,6 +81,26 @@ assertions:
       value into `{name}-cloud-init` under `userdata`, and the VirtualMachine names the Secret. The
       value appears in no body, no grain and no rendered chart — docs/plan/13 § Virtual Machines,
       "SSH keys and passwords are SecretRefs resolved at render".
+  - id: a-cloud-init-handle-names-the-tenants-own-vault-and-nothing-else
+    says: >
+      ⚠ THE ONE PLACE IN THE TREE WHERE A PATH A TENANT SPELLED IS RESOLVED AND ITS VALUE REACHES
+      SOMETHING THE TENANT CAN READ. The vault has one platform-wide token and a namespace per
+      platform, not per tenant (OpenBaoSecretResolver), so the path is the whole discriminator; every
+      other consumer resolves a path the platform built as `tenants/{tenantId}/…`. A handle whose
+      path is not under `tenants/{this tenant}/` is refused with AuthorizationFailed before the
+      resolver is asked, on the first reconcile pass — the write path has no per-type validator —
+      and the refusal names the tenant's own prefix, never whether the other path exists. Found by
+      the adversarial review of #28: without it a body naming
+      `tenants/<other>/CyberCloud.ContainerRegistry/registries/<id>#password` would hand another
+      tenant's credential to a guest. VirtualMachineReconcilerTests holds a seeded vault to it.
+  - id: a-data-disk-is-a-resource-name-and-not-the-machines-own-volume
+    says: >
+      Each `dataDisks` element is checked as a resource name, and against the machine's own volume
+      names `os` and `cloudinit`, before a claim name is rendered: the reconciler's first pass refuses
+      a body that fails either with InvalidRequestBody and the property named, so an arbitrary string
+      never reaches `persistentVolumeClaim.claimName` and a duplicate volume name never reaches the
+      webhook neither conformance suite has. ⚠ On the first pass and not at PUT — § owed,
+      `data-disk-names-are-checked-at-reconcile`.
   - id: the-network-join-is-the-subnets-own-object-name
     says: >
       A body naming a virtual network and a subnet renders `ovn.kubernetes.io/logical_switch:
@@ -93,7 +113,7 @@ assertions:
       printable status is InProgress with KubeVirt's word and, when the instance could not be placed,
       the scheduler's sentence — "Insufficient devices.kubevirt.io/kvm" on a node with no KVM device.
       ⚠ On the k3s-in-Docker lane the verdict is Running: the first machine rendered from this chart
-      booted under KVM 46 seconds after the apply (test/CyberCloud.Bundle.Cluster.Conformance
+      booted under KVM 46 seconds after the apply (test/CyberCloud.Bundle.Cluster.Nightly
       § KubeVirtOnAnEmptyCluster, 2026-09-17), against a record that said the lane had no /dev/kvm.
 
 # Meters the type must emit.
@@ -115,11 +135,14 @@ owed:
   - id: the-guest-is-not-reached
     says: >
       ✅ A VIRTUAL MACHINE HAS RUN ON THIS PLATFORM, AND THE ROW THAT SAID IT COULD NOT ON THIS LANE
-      WAS WRONG. test/CyberCloud.Bundle.Cluster.Conformance § KubeVirtOnAnEmptyCluster installs CDI
-      and KubeVirt through install.sh, imports an image through charts/managed/image and applies this
-      chart against them: KubeVirt's validating webhook admits the render, CDI clones the image into
-      the root disk on the bundle's class, the scheduler places the launcher with the KVM device it
-      asked for, and the machine reports Running 46 seconds after the apply (2026-09-17). Issue #95
+      WAS WRONG. test/CyberCloud.Bundle.Cluster.Nightly § KubeVirtOnAnEmptyCluster — nightly since
+      #28's review, for the eight minutes it costs — installs CDI and KubeVirt through install.sh,
+      imports an image through charts/managed/image, provisions a disk through charts/managed/disk
+      and applies this chart naming it against them: KubeVirt's validating webhook admits the render,
+      CDI clones the image into the root disk on the bundle's class, the scheduler places the
+      launcher with the KVM device it asked for, the machine reports Running 46 seconds after the
+      apply (2026-09-17), the disk is populated once the machine consumes it and the launcher mounts
+      its claim, and VirtualMachines.Matches holds against the admitted object. Issue #95
       and charts/bundle/bundle.yaml § owed said Docker Desktop's VM lends no /dev/kvm to a container;
       it does, to a privileged one, because WSL2 runs with nested virtualization — nobody had
       measured it. The test asserts Running, the device on the node and on the launcher's requests,
@@ -139,13 +162,27 @@ owed:
       to fan a count out into N VirtualMachines this provider owns, which needs the reconciler to
       list its own objects — the reader charts/managed/kube-ovn-snat records under
       `one-subnet-per-nat-gateway`. Not a follow-up commit's size, and not implied by this family.
+      ⚠ WHAT THE REVIEW OF #28 ADDED, MEASURED RATHER THAN ASSUMED: the bundle's KubeVirt pin DOES
+      serve the pool group — `kubectl api-resources --api-group=pool.kubevirt.io` on the k3s the
+      nightly class installs it onto answers `virtualmachinepools` (short names vmpool, vmpools),
+      read on 2026-09-18 — while charts/bundle/kubevirt/component.yaml claims `serves: kubevirt.io/v1`
+      alone, on purpose ("only the version this platform's dependants use is claimed"). So a
+      scale-set chart's first line is a `serves:` widening the Bundle gate would check, then the
+      render, the fourth type, the meters times replicas, and a nightly assertion that a pool of
+      one boots — a row of its own, and this row stays until it lands. Declined for this branch on
+      that arithmetic, with the review's finding recorded here rather than in a commit message.
   - id: container-instances-are-not-landed
     says: >
       docs/plan/13 § Container Instances — `CyberCloud.ContainerInstance/containerGroups`, a Pod or a
       Job in the tenant's namespace — is #28's fifth noun and a different provider namespace. It is
       the cheapest provider in the catalogue and the one docs/plan/13 wants to prove the log-streaming
       path with, which nothing in this tree has; it waits for that path rather than shipping a Pod
-      whose logs nobody can read.
+      whose logs nobody can read. ⚠ The review of #28 counted it as half of the issue's scope not
+      delivered; docs/plan/13 prices it as its own row (`CyberCloud.ContainerInstance/containerGroups
+      · M2 · 0.8 EM`) beside the VM row's 3.0, docs/plan/03's layout gives a provider namespace a
+      family of its own, and docs/plan/24's roadmap row stays ◐ until both nouns land — so it is a
+      family this branch does not start, said here and in docs/plan/13 § Virtual Machines rather than
+      implied by the type list.
   - id: power-state-can-lose-a-race
     says: >
       ⚠ THE COST OF KEEPING THE POWER STATE ON THE OBJECT. A reconcile pass reads `spec.runStrategy`
@@ -182,6 +219,18 @@ owed:
       SubjectAccessReview this platform has not reasoned about, so a shared image catalogue that a
       tenant's resource groups all clone from is not offered; each group imports its own. The same
       shape charts/managed/kube-ovn-snat records as `the-address-must-be-in-the-same-resource-group`.
+  - id: data-disk-names-are-checked-at-reconcile
+    says: >
+      `dataDisks` declares no per-element Pattern or MaxLength, and not because the registry cannot
+      carry them — SchemaProperty applies both per element and ResourceSchema.Validate would enforce
+      them at PUT — but because `./build.sh Charts` refuses `@pattern` and `@length` on a `{array}`
+      @param, the standing gap charts/managed/kafka/conformance.yaml records as
+      `cidr-shape-is-unenforced` and charts/README.md § What a chart cannot say enumerates the sites
+      of. So a bad element is a 202 followed by a Failed operation naming the property, rather than a
+      400; VirtualMachines.DataDiskProblem is the check, and the day the chart surface carries the
+      constraint it moves to the schema and this row goes. The same shape as `cloudInit.userData`'s
+      tenancy check and the image reconciler's empty-url refusal: the write path has no per-type
+      validator, so every relation the schema cannot state is refused on the first pass.
   - id: the-joins-are-not-resolved-before-202
     says: >
       `image`, each `dataDisks` entry, `network.virtualNetwork` and `network.subnet` are NAMES whose

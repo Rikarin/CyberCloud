@@ -1,4 +1,6 @@
+using CyberCloud.Bundle.Cluster.Conformance;
 using CyberCloud.Cluster.Conformance.Infrastructure;
+using CyberCloud.Providers.Compute.Contracts;
 using Shouldly;
 using System.Diagnostics;
 using System.Net;
@@ -8,7 +10,7 @@ using k8s;
 using k8s.Autorest;
 using k8s.Models;
 
-namespace CyberCloud.Bundle.Cluster.Conformance;
+namespace CyberCloud.Bundle.Cluster.Nightly;
 
 /// <summary>
 ///     What <c>charts/bundle/install.sh</c> would run for the two phase-30 components and the storage
@@ -17,10 +19,12 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 /// <remarks>
 ///     ⚠ <b>The daemon-free companion the other installing classes each have</b>, for the reason
 ///     <see cref="CertManagerComponentInstaller" /> states: a run whose every test skipped reports
-///     "Zero tests ran" and fails under <c>--minimum-expected-tests 1</c>. What it asserts that the
-///     cluster class cannot see is the ORDER: three components from two phases, named on the command
-///     line the wrong way round, and the roster puts storage first and CDI before KubeVirt — the
-///     dependency <c>charts/bundle/kubevirt/component.yaml § requires</c> records.
+///     "Zero tests ran" and fails under <c>--minimum-expected-tests 1</c>. It moved to this assembly
+///     with the class it accompanies, because the trap is per assembly: the sibling keeps its own
+///     three companions. What it asserts that the cluster class cannot see is the ORDER: three
+///     components from two phases, named on the command line the wrong way round, and the roster
+///     puts storage first and CDI before KubeVirt — the dependency
+///     <c>charts/bundle/kubevirt/component.yaml § requires</c> records.
 /// </remarks>
 public sealed class KubeVirtComponentInstaller {
     /// <summary>
@@ -75,8 +79,10 @@ public sealed class KubeVirtComponentInstaller {
 
 /// <summary>
 ///     CDI and KubeVirt installed by <c>install.sh</c> onto one k3s, an image imported through
-///     <c>charts/managed/image</c>, and a <c>charts/managed/virtual-machine</c> render admitted by
-///     KubeVirt's own webhooks and booted — the first guest this platform has ever run.
+///     <c>charts/managed/image</c>, a disk provisioned through <c>charts/managed/disk</c>, and a
+///     <c>charts/managed/virtual-machine</c> render that attaches the disk, is admitted by KubeVirt's
+///     own webhooks and boots — the first guest this platform has ever run, with the family's three
+///     charts all in front of the operators they were written for.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -89,7 +95,36 @@ public sealed class KubeVirtComponentInstaller {
 ///         <c>install.sh --component</c> installs openebs-localpv, containerized-data-importer and
 ///         kubevirt in the roster's order onto a fresh k3s, waits for <c>CDI</c> and <c>KubeVirt</c>
 ///         to report <c>Deployed</c>, and then the real <c>cdi.kubevirt.io</c> and <c>kubevirt.io</c>
-///         webhooks are what admit — or refuse — the two charts.
+///         webhooks are what admit — or refuse — the three charts.
+///     </para>
+///     <para>
+///         ⚠ <b>NIGHTLY, NOT PER-PR, AND THE NUMBER THAT DECIDED IT WAS READ OFF THE RUNNER.</b> This
+///         class landed in <c>test/CyberCloud.Bundle.Cluster.Conformance</c> and the review of #28
+///         asked what it costs there. gate.yml's <c>test</c> job runs every cluster-backed suite one
+///         at a time, and on 2026-09-15 that chain took master 26 m 16 s on the runner — past the
+///         25-minute budget pr.yml enforces, four minutes short of the job's 30-minute timeout — with
+///         this assembly's sibling at 3 m 49 s of it. Eight minutes more would have timed the job
+///         out on every PR. So the class moved to the <c>.Nightly</c> suffix, which
+///         <c>build/Build.Test.cs § SuiteOwning</c> routes to <c>TestNightly</c> and nightly.yml's
+///         <c>slow-suites</c> job runs; the sibling's three classes stay per-PR at under five minutes.
+///     </para>
+///     <para>
+///         ⚠ <b>THE DISK CHART IS MEASURED HERE TOO, AND IT WAS NOT UNTIL THE REVIEW ASKED.</b> The
+///         first version of this class applied the image and the machine and said the family's
+///         webhook half was measured; <c>charts/managed/disk</c> had never met a real CDI, no data
+///         disk had ever been attached, and the disk manifest's <c>access-mode-is-read-write-once</c>
+///         row was written from the image's failure alone. Now a blank <c>DataVolume</c> is applied
+///         from the disk chart — no immediate-bind annotation, on the bundle's WaitForFirstConsumer
+///         class — and two things are read off the real operator: the phase CDI leaves a disk nobody
+///         has attached in, which is what <c>Cdi.IsProvisioned</c> calls provisioned and the disk
+///         reconciler calls converged, and then, once the machine that names it in <c>dataDisks</c>
+///         is Running, that the same <c>DataVolume</c> reached <c>Succeeded</c>, that KubeVirt lists
+///         the volume on the instance, and that the launcher pod mounts the claim. Read twice on
+///         2026-09-18: the blank disk sits at <c>WaitForFirstConsumer</c> — not
+///         <c>PendingPopulation</c>, so CDI 1.66 takes the classic path and not the populator's for
+///         a blank source on this class — and once the machine is applied it goes <c>PVCBound</c>,
+///         <c>ImportScheduled</c>, <c>Succeeded</c> in about ten seconds, before the root clone
+///         finishes. What is still not proven is inside the guest — see below.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THE ASSERTION IS <c>Running</c>, AND THIS CLASS WAS WRITTEN TO ASSERT THE OPPOSITE.</b>
@@ -110,9 +145,9 @@ public sealed class KubeVirtComponentInstaller {
 ///         ⚠ <b>What <c>Running</c> does and does not prove.</b> It proves KubeVirt admitted the render,
 ///         CDI cloned the image's claim into the root disk on the bundle's class, the scheduler placed
 ///         the launcher pod with the KVM device it asked for, and libvirt reported the guest running.
-///         It does not prove the guest finished booting, that cloud-init ran, or that a disk showed
-///         up inside it — nothing here reaches a console or a guest agent, and cirros ships neither
-///         cloud-init nor qemu-guest-agent. Those are
+///         It does not prove the guest finished booting, that cloud-init ran, or that the attached
+///         disk showed up inside it as a block device — nothing here reaches a console or a guest
+///         agent, and cirros ships neither cloud-init nor qemu-guest-agent. Those are
 ///         <c>charts/managed/virtual-machine/conformance.yaml § owed</c>, <c>the-guest-is-not-reached</c>,
 ///         and the VM lane (#95) keeps kube-ovn, LINSTOR and the node-pool Machines — but no longer
 ///         KVM as such.
@@ -136,6 +171,11 @@ public sealed class KubeVirtComponentInstaller {
 ///         at ~5 m, most of it image pulls), under a minute for the cirros import, and 46 seconds from
 ///         the machine's apply to <c>Running</c> — the clone took about 20 seconds of that. The budgets
 ///         below are generous multiples; the commit that added this class has the exact readings.
+///         With the disk added (2026-09-18, on a host thirteen agents were sharing): the disk is
+///         provisioned within seconds of its apply, and the machine goes from applied to
+///         <c>Running</c> in about 40 seconds with the disk populating inside that; the class stays
+///         inside eight minutes of its own work, and <c>./build.sh TestNightly</c> reported 9 m 40 s
+///         for the target with the wait for <c>ClusterSlot</c> behind another suite included.
 ///     </para>
 /// </remarks>
 /// <param name="cluster">The empty k3s.</param>
@@ -144,7 +184,17 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
     const string CdiGroup = "cdi.kubevirt.io";
     const string Probe = "bundle-kubevirt-probe";
     const string ImageName = "cirros";
+    const string DiskName = "data";
     const string MachineName = "probe";
+
+    /// <summary>The size of the image's claim, the disk, and the machine's root clone, all 1Gi: cirros is a few tens of megabytes.</summary>
+    const string OneGibibyte = "1Gi";
+
+    /// <summary>The bundle's own class, named explicitly for the reason <c>OpenEbsLocalPvOnAnEmptyCluster</c> gives: k3s ships a default of its own.</summary>
+    const string StorageClass = "openebs-hostpath";
+
+    /// <summary>The size the machine is rendered at: one core, which is what a one-node k3s has to spare.</summary>
+    const string MachineSize = "s1.small";
 
     /// <summary>A container disk small enough to import inside a test budget — see the class remarks.</summary>
     const string CirrosDisk = "docker://quay.io/kubevirt/cirros-container-disk-demo:v1.9.0";
@@ -161,11 +211,13 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
     /// <summary>
     ///     After one <c>install.sh</c> run installs the storage class, CDI and KubeVirt onto one
     ///     cluster, an image imported through <c>charts/managed/image</c> reaches <c>Succeeded</c>, a
-    ///     machine rendered from <c>charts/managed/virtual-machine</c> is admitted by KubeVirt's
-    ///     webhooks, its root disk is cloned from the image, and the guest runs under KVM.
+    ///     blank disk from <c>charts/managed/disk</c> is provisioned and waits for a consumer, a
+    ///     machine rendered from <c>charts/managed/virtual-machine</c> naming that disk is admitted
+    ///     by KubeVirt's webhooks, its root disk is cloned from the image, the guest runs under KVM,
+    ///     and the disk is populated and mounted by the machine that consumed it.
     /// </summary>
     [Fact]
-    public async Task InstallingCdiAndKubeVirtAdmitsAMachineThatBootsUnderKvm() {
+    public async Task InstallingCdiAndKubeVirtAdmitsAMachineThatBootsUnderKvmWithADiskAttached() {
         Assert.SkipWhen(
             cluster.Client is null || cluster.KubeconfigPath is null,
             cluster.Skip(
@@ -173,16 +225,17 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
                 "virtual-machines-need-a-node-with-kvm",
                 "that one charts/bundle/install.sh run installs openebs-localpv, containerized-data-importer "
                 + "and kubevirt onto one API server, that a charts/managed/image DataVolume imports on the "
-                + "bundle's class, and that a charts/managed/virtual-machine render is admitted by "
-                + "KubeVirt's webhooks and reaches Running under KVM."
+                + "bundle's class, that a charts/managed/disk DataVolume is provisioned on it and populated "
+                + "once a machine consumes it, and that a charts/managed/virtual-machine render attaching the "
+                + "disk is admitted by KubeVirt's webhooks and reaches Running under KVM."
             )
         );
 
         Assert.SkipUnless(
             BundleInstaller.OnPath("kubectl") && BundleInstaller.OnPath("helm"),
-            "SKIPPED — this class renders two charts with `helm template` and applies them with "
+            "SKIPPED — this class renders three charts with `helm template` and applies them with "
             + "`kubectl`, and one of the two is not on PATH. WOULD PROVE: that KubeVirt's and CDI's real "
-            + "webhooks admit what CyberCloud.Compute renders, and that the guest boots."
+            + "webhooks admit what CyberCloud.Compute renders, and that the guest boots with its disk."
         );
 
         var client = cluster.Client!;
@@ -235,6 +288,14 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
         PhaseOf(await client.CustomObjects.GetClusterCustomObjectAsync(CdiGroup, "v1beta1", "cdis", "cdi", cancellationToken: token))
             .ShouldBe("Deployed");
 
+        // ⚠ READ AND REPORTED, NOT ASSERTED. charts/managed/virtual-machine/conformance.yaml § owed,
+        // `scale-sets-are-not-landed`, names KubeVirt's VirtualMachinePool as the shape a scale set
+        // would render, and kubevirt/component.yaml claims `serves: kubevirt.io/v1` alone — the
+        // operator installs the other definitions at runtime, so whether this pin serves the pool
+        // group is a fact only a cluster can answer. The diagnostic line at the bottom carries the
+        // answer for the row to quote; nothing here depends on it.
+        var poolsServed = await IsServedAsync(client, "pool.kubevirt.io", "v1alpha1", "virtualmachinepools", token);
+
         // ── The node advertises KVM, which is the premise the whole record had backwards ───────
         var nodes = await client.CoreV1.ListNodeAsync(cancellationToken: token);
         var node = nodes.Items.ShouldHaveSingleItem("a Testcontainers k3s is one node");
@@ -257,7 +318,7 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
         var image = await RenderAsync(
             "image",
             ImageName,
-            ["--set", "source.kind=url", "--set", "source.url=" + CirrosDisk, "--set", "size=1Gi", "--set", "storageClass=openebs-hostpath"],
+            ["--set", "source.kind=url", "--set", "source.url=" + CirrosDisk, "--set", "size=" + OneGibibyte, "--set", "storageClass=" + StorageClass],
             token
         );
 
@@ -287,13 +348,60 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
 
         var importTook = importStarted.Elapsed;
 
+        // ── A disk nobody has attached: provisioned, and waiting for its first consumer ─────────
+        //
+        // ⚠ THE DISK CHART'S FIRST MEETING WITH A REAL CDI. No immediate-bind annotation, on a
+        // WaitForFirstConsumer class, so what CDI does with a claim nobody consumes is the thing under
+        // test: the disk reconciler converges on WaitForFirstConsumer or PendingPopulation
+        // (Cdi.IsProvisioned) and calls that inventory, and until this ran that was a reading of
+        // CDI's source rather than of CDI. Which of the two phases 1.66 reports for a blank source on
+        // this class is recorded in the diagnostic line at the bottom, not asserted: KubeVirt's own
+        // controller treats the two as one, and so does the platform.
+        var disk = await RenderAsync(
+            "disk",
+            DiskName,
+            ["--set", "size=" + OneGibibyte, "--set", "storageClass=" + StorageClass],
+            token
+        );
+
+        disk.ShouldContain("blank: {}", Case.Sensitive, "a managed disk is a blank DataVolume. Rendered:\n" + disk);
+        disk.ShouldNotContain("cdi.kubevirt.io/storage.bind.immediate.requested", Case.Sensitive, "a disk must bind to its first consumer's node, not to CDI's helper pod's — the chart's own template says why");
+        disk.ShouldContain("ReadWriteOnce", Case.Sensitive, "CDI has no StorageProfile for openebs.io/local; the disk chart writes the access mode for the same reason the image chart does");
+
+        await ApplyAsync(disk, token);
+
+        var provisioned = await Poll(
+            ImportBudget,
+            async () => {
+                var current = await client.CustomObjects.GetNamespacedCustomObjectAsync(CdiGroup, "v1beta1", Probe, "datavolumes", DiskName, cancellationToken: token);
+                var phase = PhaseOf(current);
+                return Cdi.IsProvisioned(phase) ? phase : null;
+            },
+            token
+        );
+
+        provisioned.ShouldNotBeNull(
+            $"the disk DataVolume did not reach a provisioned phase (Succeeded, WaitForFirstConsumer or PendingPopulation) within {ImportBudget.TotalMinutes:F0} minutes. "
+            + "The image imported on the same class moments ago, so this is what CDI does with a BLANK source and no "
+            + "immediate-bind annotation — the branch the disk reconciler was written from CDI's source for. Last status:\n"
+            + await DescribeAsync(client, CdiGroup, "v1beta1", Probe, "datavolumes", DiskName, token)
+        );
+
+        provisioned.ShouldNotBe(
+            Cdi.Succeeded,
+            "a blank disk on a WaitForFirstConsumer class was populated before anything consumed it, so either the class binds "
+            + "immediately — which OpenEbsLocalPvOnAnEmptyCluster asserts it does not — or the chart grew the annotation it must not carry"
+        );
+
         // ── The machine: admitted by KubeVirt's own webhook, cloned by CDI, booted under KVM ───
         var machine = await RenderAsync(
             "virtual-machine",
             MachineName,
-            ["--set", "image=" + ImageName, "--set", "osDiskSize=1Gi", "--set", "size=s1.small"],
+            ["--set", "image=" + ImageName, "--set", "osDiskSize=" + OneGibibyte, "--set", "size=" + MachineSize, "--set", "dataDisks={" + DiskName + "}"],
             token
         );
+
+        machine.ShouldContain("claimName: \"" + DiskName + "\"", Case.Sensitive, "the disk was not rendered as a claim by its resource name. Rendered:\n" + machine);
 
         // ⚠ THE APPLY IS THE WEBHOOK ASSERTION. A derived CRD stub admits anything; kubevirt.io/v1's
         // validating webhook checks the run strategy, every volume against its disk, the data volume
@@ -343,24 +451,68 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
         launcher.Spec.Containers.Single(x => x.Name == "compute").Resources.Requests
             .ShouldContainKey(KvmDevice, "the launcher pod did not request the KVM device, so what ran is not what this lane's row is about");
 
+        // ── The disk: consumed by the machine, populated by CDI, mounted by the launcher ────────
+        //
+        // ⚠ THE SECOND HALF OF THE DISK MEASUREMENT. A claim that waited for its first consumer has
+        // one now: KubeVirt scheduled the launcher, the claim bound to its node, CDI's blank
+        // population ran, and the pod mounts the volume. Three objects say so, none of them written
+        // by this test.
+        PhaseOf(await client.CustomObjects.GetNamespacedCustomObjectAsync(CdiGroup, "v1beta1", Probe, "datavolumes", DiskName, cancellationToken: token))
+            .ShouldBe(
+                Cdi.Succeeded,
+                $"the disk sat at {provisioned} before the machine consumed it and was not populated once it did. The machine is "
+                + "Running, so KubeVirt started the guest without waiting for the disk — read the DataVolume's conditions:\n"
+                + await DescribeAsync(client, CdiGroup, "v1beta1", Probe, "datavolumes", DiskName, token)
+            );
+
+        instance.GetProperty("status").GetProperty("volumeStatus").EnumerateArray()
+            .Select(x => x.GetProperty("name").GetString())
+            .ShouldContain(DiskName, "KubeVirt does not list the disk among the instance's volumes");
+
+        launcher.Spec.Volumes
+            .Where(x => x.PersistentVolumeClaim is not null)
+            .Select(x => x.PersistentVolumeClaim.ClaimName)
+            .ShouldContain(Disks.ObjectNameOf(DiskName), "the launcher pod does not mount the disk's claim by the name Disks.ObjectNameOf renders");
+
         // ── What a tenant would read through the provider ──────────────────────────────────────
-        var readiness = CyberCloud.Providers.Compute.Contracts.VirtualMachines.ReadinessOf(
-            JsonSerializer.Serialize(await client.CustomObjects.GetNamespacedCustomObjectAsync(KubeVirtGroup, "v1", Probe, "virtualmachines", MachineName, cancellationToken: token))
+        //
+        // ⚠ BOTH READINGS THE RECONCILER TAKES, AGAINST AN OBJECT THE MUTATING WEBHOOK HAS BEEN
+        // THROUGH. Matches decides whether a read-back carries the desired body and ReadinessOf
+        // decides whether it converged; the two conformance suites see only what a derived stub
+        // stored. A body built with VirtualMachines.Body from the same values the chart was rendered
+        // with is what holds the chart's shape and the C# reading together — ComputeChartDriftTests
+        // compares two dictionaries and nothing else does.
+        var admitted = JsonSerializer.Serialize(
+            await client.CustomObjects.GetNamespacedCustomObjectAsync(KubeVirtGroup, "v1", Probe, "virtualmachines", MachineName, cancellationToken: token)
         );
 
+        using var desired = JsonDocument.Parse(
+            VirtualMachines.Body(Guid.Empty, image: ImageName, size: MachineSize, osDiskSize: OneGibibyte, dataDisks: [DiskName])
+        );
+
+        VirtualMachines.Matches(admitted, Probe, desired.RootElement).ShouldBeTrue(
+            "the reconciler would report the admitted VirtualMachine as not yet carrying the desired spec, forever: KubeVirt's "
+            + "mutating webhook changed a field Matches reads, or the chart and VirtualMachines.VirtualMachineJson disagree. "
+            + "The admitted object:\n"
+            + admitted
+        );
+
+        var readiness = VirtualMachines.ReadinessOf(admitted);
+
         readiness.Kind.ShouldBe(
-            CyberCloud.Providers.Compute.Contracts.VirtualMachines.ReadinessKind.Ready,
+            VirtualMachines.ReadinessKind.Ready,
             "the reconciler would not call this machine converged, and KubeVirt calls it Running: " + readiness.Detail
         );
 
         TestContext.Current.SendDiagnosticMessage(
             $"install.sh (openebs-localpv + CDI + KubeVirt): {installed.TotalSeconds:F0} s; cirros import: {importTook.TotalSeconds:F0} s; "
-            + $"machine applied to Running: {bootTook.TotalSeconds:F0} s"
+            + $"blank disk provisioned as {provisioned}; machine applied to Running with the disk attached: {bootTook.TotalSeconds:F0} s; "
+            + $"pool.kubevirt.io/v1alpha1 served by this pin: {poolsServed}"
         );
     }
 
-    /// <summary>The root DataVolume KubeVirt derives from the chart's template — <c>VirtualMachines.RootDataVolumeName</c>'s spelling.</summary>
-    const string VirtualMachineRoot = MachineName + "-root";
+    /// <summary>The root DataVolume KubeVirt derives from the chart's template, spelled by the contracts so the chart's helper is held to it.</summary>
+    static readonly string VirtualMachineRoot = VirtualMachines.RootDataVolumeName(MachineName);
     /// <summary>Whether a group answers a list — a 404 is unambiguous where discovery is not.</summary>
     static async Task<bool> IsServedAsync(IKubernetes client, string group, string version, string plural, CancellationToken token) {
         try {

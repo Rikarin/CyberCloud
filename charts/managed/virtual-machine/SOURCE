@@ -44,10 +44,13 @@ reviewed: 2026-09-17
 # virtualization on, `docker run --privileged alpine ls -l /dev/kvm` answers `crw-rw---- 10, 232`, the
 # k3s container is privileged, virt-handler's device plugin advertised `devices.kubevirt.io/kvm` on
 # the node, and the first machine rendered from this chart went WaitingForVolumeBinding →
-# Provisioning (the clone, ~20 s) → Running in 46 seconds. test/CyberCloud.Bundle.Cluster.Conformance
+# Provisioning (the clone, ~20 s) → Running in 46 seconds. test/CyberCloud.Bundle.Cluster.Nightly
 # § KubeVirtOnAnEmptyCluster asserts `Running`, the KVM device on the node and on the launcher pod's
-# requests. The ErrorUnschedulable reading above is what a real node WITHOUT nested virtualization
-# gives, and VirtualMachines.ReadinessOf carries the scheduler's sentence back for it.
+# requests, and — since #28's review — that a charts/managed/disk claim the body names in `dataDisks`
+# is populated once the machine consumes it and mounted by the launcher, and that
+# VirtualMachines.Matches holds against the admitted object. The ErrorUnschedulable reading above is
+# what a real node WITHOUT nested virtualization gives, and VirtualMachines.ReadinessOf carries the
+# scheduler's sentence back for it.
 #
 # ⚠ THE NODE IS `kubevirt.io/schedulable=true` WITHOUT KVM TOO. pkg/virt-handler/heartbeat/heartbeat.go
 # sets the label to false only while the device plugins are not yet initialised; a kvm plugin with

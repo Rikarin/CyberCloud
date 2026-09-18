@@ -58,6 +58,26 @@ partial class Build {
         /// </summary>
         PerPullRequest,
 
+        /// <summary>
+        ///     <c>TestNightly</c> — nightly, on the runner's own Docker daemon: container-backed
+        ///     suites that need no deployment and do not fit the per-PR budget.
+        /// </summary>
+        /// <remarks>
+        ///     ⚠ <b>The lane charts/bundle/README.md said did not exist, and why it exists now.</b>
+        ///     Until #28's review the only lanes past per-PR were the three deployment-driven ones,
+        ///     whose preconditions refuse to run without staging — so a Testcontainers suite moved
+        ///     there "would be run by nothing at all, which is worse than slow". That was the
+        ///     argument for keeping every k3s suite per-PR, and it held until one class cost eight
+        ///     minutes: <c>KubeVirtOnAnEmptyCluster</c> installs CDI and KubeVirt onto a fresh k3s
+        ///     and boots a guest, on a serial chain the runner already spent 26 minutes on against a
+        ///     25-minute budget (gate.yml's <c>test</c> job on master, 2026-09-15, read off the
+        ///     run's own log). This suite is the written reason docs/plan/23 § CI shape asks for: the
+        ///     projects it owns end in <c>.Nightly</c>, they run under the same two permits
+        ///     <see cref="RunSuites" /> gives every cluster-backed suite, and nightly.yml's
+        ///     <c>slow-suites</c> job is what runs them.
+        /// </remarks>
+        Nightly,
+
         /// <summary><c>E2E</c> — nightly and pre-release, against a real deployment.</summary>
         EndToEnd,
 
@@ -84,6 +104,7 @@ partial class Build {
         project.NameWithoutExtension switch {
             var name when name.EndsWith(".Tests", StringComparison.Ordinal) => TestSuite.PerPullRequest,
             var name when name.EndsWith(".Conformance", StringComparison.Ordinal) => TestSuite.PerPullRequest,
+            var name when name.EndsWith(".Nightly", StringComparison.Ordinal) => TestSuite.Nightly,
             "CyberCloud.E2E" => TestSuite.EndToEnd,
             "CyberCloud.Chaos" => TestSuite.Chaos,
             "CyberCloud.Load" => TestSuite.Load,
@@ -153,7 +174,7 @@ partial class Build {
         Assert.Empty(
             unowned,
             $"test/ holds {unowned.Count} project(s) that no target runs: {string.Join(", ", unowned)}. "
-            + "Every project under test/ must be claimed by Test, E2E, Chaos or Load — add it to "
+            + "Every project under test/ must be claimed by Test, TestNightly, E2E, Chaos or Load — add it to "
             + "Build.Test.cs § SuiteOwning and to Directory.Build.props § Project role detection, "
             + "which have to agree. docs/plan/03 § test/, docs/plan/23 § Test layers."
         );
@@ -210,7 +231,7 @@ partial class Build {
         // Discovery is split by owning target, but "does any target run it?" and "is it in the
         // solution?" are questions about all of them: a CyberCloud.Load missing from
         // CyberCloud.slnx is exactly as broken for `Load` as it would be for `Test`. `Test` is the
-        // only one of the four that runs on every PR, so it is the only one positioned to notice —
+        // only one of the five that runs on every PR, so it is the only one positioned to notice —
         // which also means neither may hide behind the early return below, or a repository whose
         // only suites are E2E/Chaos/Load would report "nothing to run" over a real defect.
         AssertEveryTestProjectIsOwned();
@@ -227,7 +248,7 @@ partial class Build {
             // `*.Tests` project lands, and it fails properly the moment a test fails.
             Log.Information(
                 "Test: no per-PR test projects found under {Roots} — nothing to run. Discovery is "
-                + "*.Tests, *.Conformance and CyberCloud.Isolation; the E2E, Chaos and Load suites "
+                + "*.Tests, *.Conformance and CyberCloud.Isolation; the Nightly, E2E, Chaos and Load suites "
                 + "are owned by their own targets. Build.Test.cs § SuiteOwning.",
                 string.Join(", ", SourceRoots.Select(x => x.Name))
             );
@@ -249,6 +270,53 @@ partial class Build {
         RunSuites(nameof(Test), projects, environment: null, collectCoverage: true);
 
         EnforceCoverageFloor(baseline);
+    }
+
+    /// <summary>
+    ///     Runs the <c>*.Nightly</c> suites: container-backed, deployment-free, and too slow for a PR.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         The same <see cref="RunSuites" /> as <c>Test</c>, under the same two permits, without
+    ///         the coverage wrap — docs/plan/23 § Test layers puts the floor on the per-PR rows, and
+    ///         a suite whose one test spends five minutes inside <c>install.sh</c> would measure
+    ///         nothing about the tree's own lines anyway.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Blocks, rather than passing, when there is nothing to run</b> — the opposite of
+    ///         <c>Test</c>'s early return, for <c>E2E</c>'s reason: nothing on the PR path depends on
+    ///         this target, it is invoked by nightly.yml on purpose, and "nothing ran, and here is
+    ///         why" answered with exit 0 is a night's coverage that never happened.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The two ownership guards are <c>Test</c>'s to run, not this target's.</b> They
+    ///         cover every suite whatever target owns it, and <c>Test</c> runs on every PR, which is
+    ///         where a project nobody claims gets noticed. Repeating them nightly would notice the
+    ///         same defect a day later.
+    ///     </para>
+    /// </remarks>
+    void RunNightlyTests() {
+        var suites = ProjectsIn(TestSuite.Nightly);
+        var preconditions = new TargetPreconditions(nameof(TestNightly));
+
+        preconditions.Require(
+            suites.Count > 0,
+            "there is no nightly suite — no project under src/, test/ or cli/ ends in .Nightly",
+            "name the project *.Nightly (Directory.Build.props § Project role detection, "
+            + "Build.Test.cs § SuiteOwning) and add it to CyberCloud.slnx"
+        );
+
+        preconditions.AssertSatisfied(
+            "docs/plan/23 § CI shape: \"25 minutes for a PR is a budget … the fix is parallelism or "
+            + "moving a test to nightly — with a written reason.\" This target is where a moved suite "
+            + "runs, and a run with nothing to move is not a run."
+        );
+
+        TestResultsDirectory.CreateOrCleanDirectory();
+
+        Log.Information("TestNightly: running {Count} nightly suite(s)", suites.Count);
+
+        RunSuites(nameof(TestNightly), suites, environment: null);
     }
 
     // ── Running a suite ───────────────────────────────────────────────────────────────────────

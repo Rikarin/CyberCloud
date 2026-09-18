@@ -3,7 +3,7 @@ KubeVirt `VirtualMachine` — docs/plan/13 § Virtual Machines.
 
 ⚠ This renders a custom resource; it does not install KubeVirt or CDI. Both are charts/bundle/'s job
 (phase 30), and this object is admitted by KubeVirt's own validating webhook — which is the half no
-derived CRD stub can check and test/CyberCloud.Bundle.Cluster.Conformance § KubeVirtOnAnEmptyCluster
+derived CRD stub can check and test/CyberCloud.Bundle.Cluster.Nightly § KubeVirtOnAnEmptyCluster
 applies this chart against for real.
 
 ⚠ ONE OBJECT, and the root disk is inside it. `dataVolumeTemplates` makes KubeVirt create the root

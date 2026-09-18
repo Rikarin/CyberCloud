@@ -18,7 +18,7 @@ namespace CyberCloud.Providers.Compute.Contracts;
 ///         provider"</i>. That is true of a <b>Kubernetes node</b> image, which has to carry a kubelet
 ///         at a pinned minor. A plain cloud image does not: the <c>containerdisks</c> project publishes
 ///         Ubuntu and Debian as container disks, rebuilt from the distributions' own cloud images, and
-///         <see cref="Catalogue" /> pins them <b>by digest</b> — so the catalogue is a table of five
+///         <see cref="Catalogue" /> pins them <b>by digest</b> — so the catalogue is a table of four
 ///         lines rather than an image pipeline, and a digest is a checksum the puller verifies rather
 ///         than one this platform would have to compute.
 ///     </para>
@@ -108,8 +108,10 @@ public static class Images {
     ///         image, so <c>ubuntu:24.04</c> names different bytes from one week to the next; a VM
     ///         booted from the tag would boot an image nobody on this platform had read. The digest is
     ///         what the tenant gets, the tag is what it was read off, and <c>charts/managed/image/SOURCE</c>
-    ///         records both with the date. The chart's <c>catalogue</c> block carries the same five
-    ///         rows, and <c>ComputeChartDriftTests</c> is what stops the two drifting.
+    ///         records both with the date. The chart's <c>catalogue</c> block carries the same four
+    ///         rows, and <c>ComputeChartDriftTests</c> is what stops the two drifting — and
+    ///         <c>ComputeDeclarationTests.TheCatalogueOffersLinuxOnlyAndEveryRowIsADigest</c> pins the
+    ///         count, because this sentence said "five" for a day while the table held four.
     ///     </para>
     /// </remarks>
     public static FrozenDictionary<string, CatalogueImage> Catalogue { get; } =

@@ -1,0 +1,70 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The first project in the nightly lane, and the reason the lane exists.
+
+      ⚠ ONE CLASS, EIGHT MINUTES, ON A CHAIN THAT WAS ALREADY OVER BUDGET. KubeVirtOnAnEmptyCluster
+      installs openebs-localpv, CDI and KubeVirt through charts/bundle/install.sh onto a fresh k3s,
+      imports an image through charts/managed/image, provisions a disk through charts/managed/disk,
+      applies charts/managed/virtual-machine against KubeVirt's real webhooks and reads the guest
+      Running under KVM. Measured at 7 m 03 s to 8 m 26 s on a ten-CPU host. It landed in
+      test/CyberCloud.Bundle.Cluster.Conformance, which is per-PR, and the review of #28 asked what
+      that costs: gate.yml's `test` job runs every cluster-backed suite one at a time (build/Build.Test.cs
+      § ClusterBackedSuiteDegree), that chain took 26 m 16 s on the runner on 2026-09-15 — read off the
+      job's own log, against a 25-minute budget pr.yml enforces and a 30-minute job timeout — and this
+      class would have put it past the timeout on every PR.
+
+      ⚠ THE SUFFIX IS THE LANE. Directory.Build.props § Project role detection and build/Build.Test.cs
+      § SuiteOwning both classify by suffix: `.Nightly` builds as a test host and is owned by
+      `TestNightly`, which nightly.yml's `slow-suites` job runs on the runner's own Docker daemon.
+      It is NOT `.Conformance`, which `Test` would run on every PR, and NOT `.Cluster.Conformance`,
+      which carries the same per-PR meaning in sixteen other assemblies. charts/bundle/README.md
+      § Verification used to say this lane did not exist and that a Testcontainers suite moved to
+      nightly "would be run by nothing at all"; that was true of the three deployment-driven targets
+      and is the sentence this project retires.
+
+      ⚠ WHAT MOVED AND WHAT STAYED. The cert-manager, openebs-localpv and cloudnative-pg classes stay in
+      test/CyberCloud.Bundle.Cluster.Conformance and stay per-PR: together they cost under five
+      minutes and are the install mechanism's own proof. What moved is the one class whose cost is the
+      operators it installs rather than the script that installs them. EmptyClusterFixture and
+      BundleInstaller stay where they were and are referenced from here, so this project starts its
+      k3s the same way and takes the same ClusterSlot permit as its sibling.
+
+      ⚠ THE DAEMON-FREE COMPANION MOVED WITH IT. KubeVirtComponentInstaller reads the installer's dry
+      run and needs no cluster; without it a run of this assembly on a machine with no Docker daemon
+      would skip its only test and report "Zero tests ran", which the minimum-expected-tests switch
+      fails. The same shape CertManagerComponentInstaller gives the sibling.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Testcontainers.K3s"/>
+        <!-- The raw client, for the half of every assertion here that is deliberately NOT our code. -->
+        <PackageReference Include="KubernetesClient"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+          For EmptyClusterFixture and BundleInstaller — the fixture that starts one k3s per class under
+          ClusterSlot, and the runner of install.sh. Both are that project's and are not copied here,
+          for the reason its own csproj gives about ClusterInfrastructure: a second spelling of a
+          lock-file name is how two suites come to hold two clusters.
+        -->
+        <ProjectReference Include="../CyberCloud.Bundle.Cluster.Conformance/CyberCloud.Bundle.Cluster.Conformance.csproj"/>
+        <!--
+          ⚠ ONE PROVIDER'S .Contracts, FOR TWO READINGS. KubeVirtOnAnEmptyCluster hands the
+          VirtualMachine a real KubeVirt wrote to VirtualMachines.ReadinessOf and VirtualMachines.Matches,
+          so the sentence the reconciler would put in a tenant's InProgress message and the comparison
+          that decides Converged are both asserted against an object the mutating webhook has been
+          through. No reconciler runs here; the objects are applied by this test's own kubectl from the
+          charts, exactly as CloudNativePgOnAnEmptyCluster applies its Cluster.
+        -->
+        <ProjectReference Include="../../src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Contracts/CyberCloud.Providers.Compute.Contracts.csproj"/>
+    </ItemGroup>
+
+</Project>

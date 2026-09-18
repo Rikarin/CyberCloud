@@ -346,8 +346,17 @@ public static class VirtualMachines {
                     Description: "CyberCloud.Compute/disks resources attached to the machine, by name, "
                     + "in this resource group. A change attaches or detaches at the machine's next "
                     + "start. ⚠ A disk named os or cloudinit collides with the machine's own volumes "
-                    + "and is refused at admission."
-                ) { ElementKind = SchemaKind.Text, DefaultJson = "[]", ExampleJson = "[\"data\"]" },
+                    + "and is refused."
+                ) {
+                    // ⚠ NO Pattern AND NO MaxLength, AND NOT BECAUSE THE ELEMENTS ARE FREE. The registry
+                    // would apply both per element (SchemaProperty.ElementKind's remarks) and Validate
+                    // would enforce them at PUT — and ./build.sh Charts refuses `@pattern` and `@length`
+                    // on a `{array}` @param, the standing gap charts/managed/kafka/conformance.yaml
+                    // records as `cidr-shape-is-unenforced`. So each element is checked by
+                    // DataDiskProblem on the first reconcile pass instead, before a claim name is
+                    // rendered; conformance.yaml § owed, `data-disk-names-are-checked-at-reconcile`.
+                    ElementKind = SchemaKind.Text, DefaultJson = "[]", ExampleJson = "[\"data\"]"
+                },
                 new(
                     "/properties/network",
                     SchemaKind.Nested,
@@ -380,7 +389,9 @@ public static class VirtualMachines {
                     Description: "A vault handle — path#field, optionally @version — whose value is the "
                     + "cloud-init user data: the #cloud-config with your users, SSH keys and packages. "
                     + "Resolved when the machine is rendered and written into a Secret the machine "
-                    + "mounts; the value never enters this body. Empty means no cloud-init at all."
+                    + "mounts; the value never enters this body. ⚠ The path must be under your own "
+                    + "tenant's vault prefix, tenants/<tenantId>/; any other path is refused. Empty "
+                    + "means no cloud-init at all."
                 ) { Pattern = OptionalSecretRefPattern, MaxLength = 512, Widget = WidgetHint.SecretRef, DefaultJson = "\"\"" }
             ]
         );
@@ -416,6 +427,43 @@ public static class VirtualMachines {
     public static ImmutableArray<string> DataDisks(JsonElement desired) =>
         [.. ComputeBodies.Strings(ComputeBodies.Property(desired, "dataDisks"))];
 
+    /// <summary>
+    ///     Why the body's <c>dataDisks</c> cannot be rendered, or empty when every entry can.
+    /// </summary>
+    /// <param name="desired">The validated desired body.</param>
+    /// <remarks>
+    ///     <para>
+    ///         Two checks the schema does not make. Each entry must be a resource name — the schema
+    ///         declares no per-element pattern, because the chart surface cannot carry one (the
+    ///         remark on the property says why), so without this any string a body carried reached
+    ///         <c>volumes[].persistentVolumeClaim.claimName</c> unvalidated and only a real API
+    ///         server's own name rules stood in the way. And no entry may be <c>os</c> or
+    ///         <c>cloudinit</c>, which are legal names the machine's own volumes already use: a body
+    ///         naming one renders two disks with one name, which KubeVirt's webhook refuses and a
+    ///         derived stub admits.
+    ///     </para>
+    ///     <para>
+    ///         The reconciler refuses on the first pass with the property named, rather than letting
+    ///         both conformance suites converge on a machine a real cluster would never take. Not at
+    ///         PUT, for the reason <see cref="ParseCloudInitRef" /> gives: the write path has no
+    ///         per-type validator.
+    ///     </para>
+    /// </remarks>
+    public static string DataDiskProblem(JsonElement desired) {
+        foreach (var disk in DataDisks(desired)) {
+            if (disk is RootVolume or CloudInitVolume) {
+                return $"dataDisks names '{disk}', which is the name of the machine's own "
+                    + $"{(disk == RootVolume ? "root" : "cloud-init")} volume. Rename the disk.";
+            }
+
+            if (ResourceNaming.Validate(disk, "disk name", "/properties/dataDisks").TryGetError(out var problem)) {
+                return problem.Message;
+            }
+        }
+
+        return string.Empty;
+    }
+
     /// <summary>The virtual network a body names, or empty.</summary>
     /// <param name="desired">The validated desired body.</param>
     public static string VirtualNetwork(JsonElement desired) =>
@@ -435,14 +483,60 @@ public static class VirtualMachines {
     /// <param name="desired">The validated desired body.</param>
     public static bool HasCloudInit(JsonElement desired) => CloudInitRef(desired).Length > 0;
 
-    /// <summary>Parses <c>path#field[@version]</c>, or the empty handle for an empty string.</summary>
-    /// <param name="spelled">The handle as a body spells it.</param>
+    /// <summary>The vault prefix every path a tenant's body names must start with.</summary>
+    /// <param name="tenantId">The tenant whose resource carries the handle.</param>
     /// <remarks>
-    ///     The same parse <c>CommunicationChannels.ParseSecretRef</c> does, spelled again here because
-    ///     rule 2 keeps one family's <c>.Contracts</c> out of another's, and the schema's pattern
-    ///     already refuses most of what this refuses. What it adds is the refusal's target.
+    ///     <para>
+    ///         ⚠ <b>THE ONLY PLACE IN THE TREE WHERE A TENANT-SPELLED VAULT PATH IS RESOLVED, SO THE
+    ///         ONLY PLACE THAT HAS TO SAY WHOSE PATHS A TENANT MAY SPELL.</b> Every other consumer of
+    ///         <c>ISecretResolver</c> resolves a path the platform built itself —
+    ///         <c>ContainerRegistries.SecretPath</c> and its four siblings all spell
+    ///         <c>tenants/{tenantId}/{provider}/{type}/{id}</c> — or keeps the value server-side. A
+    ///         cloud-init handle is written by the tenant, resolved by the platform's one broad vault
+    ///         token (<c>OpenBaoSecretResolver</c>'s remarks: a namespace per <i>platform</i>, not per
+    ///         tenant, so the path is the whole discriminator), and its VALUE is written into a Secret
+    ///         the tenant's own guest mounts. Without this prefix a body naming
+    ///         <c>tenants/&lt;other&gt;/CyberCloud.ContainerRegistry/registries/&lt;id&gt;#password</c>
+    ///         would hand another tenant's credential to a guest through cloud-init — found by the
+    ///         adversarial review of #28, before any production resolver had served this type.
+    ///     </para>
+    ///     <para>
+    ///         The same spelling the five platform-built paths use, so a tenant's own credentials —
+    ///         the ones <c>listKeys</c> and <c>listCredentials</c> already hand them — are inside the
+    ///         prefix and every other tenant's are outside it. <see cref="ParseCloudInitRef" />
+    ///         refuses before anything is resolved, and
+    ///         <c>VirtualMachineReconcilerTests.AHandleOutsideTheTenantsOwnVaultPrefixIsRefusedBeforeItIsResolved</c>
+    ///         holds a seeded vault to that.
+    ///     </para>
     /// </remarks>
-    public static Result<SecretRef> ParseCloudInitRef(string spelled) {
+    public static string TenantVaultPrefix(Guid tenantId) =>
+        string.Create(CultureInfo.InvariantCulture, $"tenants/{tenantId:D}/");
+
+    /// <summary>
+    ///     Parses <c>path#field[@version]</c>, refusing a path outside the tenant's own vault prefix,
+    ///     or returns the empty handle for an empty string.
+    /// </summary>
+    /// <param name="spelled">The handle as a body spells it.</param>
+    /// <param name="tenantId">
+    ///     The tenant whose resource carries the handle — the only tenant whose paths it may name.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         The same parse <c>CommunicationChannels.ParseSecretRef</c> does, spelled again here
+    ///         because rule 2 keeps one family's <c>.Contracts</c> out of another's, and the schema's
+    ///         pattern already refuses most of what this refuses. What it adds is the refusal's target
+    ///         and the tenancy check <see cref="TenantVaultPrefix" /> explains.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Refused with <see cref="ErrorCode.AuthorizationFailed" /> on the first reconcile
+    ///         pass and not at PUT</b>, because the write path validates a body against its schema and
+    ///         nothing else — <c>IProviderBuilder</c> has no per-type validator — and a schema pattern
+    ///         cannot carry the caller's tenant id. The refusal names the tenant's own prefix and the
+    ///         path as spelled, never whether that path exists, so a probe learns nothing about what
+    ///         another tenant's vault holds.
+    ///     </para>
+    /// </remarks>
+    public static Result<SecretRef> ParseCloudInitRef(string spelled, Guid tenantId) {
         if (string.IsNullOrWhiteSpace(spelled)) {
             return Result<SecretRef>.Success(new());
         }
@@ -458,12 +552,24 @@ public static class VirtualMachines {
             );
         }
 
+        var path = spelled[..hash];
+        var prefix = TenantVaultPrefix(tenantId);
+
+        if (!path.StartsWith(prefix, StringComparison.Ordinal) || path.Length == prefix.Length) {
+            return Result<SecretRef>.Failure(
+                ErrorCode.AuthorizationFailed,
+                $"cloudInit.userData names '{path}', which is not under your tenant's vault prefix "
+                + $"'{prefix}'. A machine can only be given a value your own tenant holds.",
+                "/properties/cloudInit/userData"
+            );
+        }
+
         var rest = spelled[(hash + 1)..];
         var at = rest.IndexOf('@', StringComparison.Ordinal);
 
         return Result<SecretRef>.Success(
             new() {
-                Path = spelled[..hash], Field = at < 0 ? rest : rest[..at], Version = at < 0 ? string.Empty : rest[(at + 1)..]
+                Path = path, Field = at < 0 ? rest : rest[..at], Version = at < 0 ? string.Empty : rest[(at + 1)..]
             }
         );
     }

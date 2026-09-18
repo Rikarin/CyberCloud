@@ -20,12 +20,17 @@ namespace CyberCloud.Providers.Compute.ClusterConformance;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The webhook half is proven elsewhere in this tree, for this family, for the first
-///         time.</b> <c>test/CyberCloud.Bundle.Cluster.Conformance § KubeVirtOnAnEmptyCluster</c>
-///         installs CDI and KubeVirt through <c>charts/bundle/install.sh</c>, applies the image and
-///         virtual-machine charts against them, and reads the guest running under KVM.
-///         Every earlier family's chart-schema half is still owed to a real operator
+///         time — for one render of each chart, nightly.</b>
+///         <c>test/CyberCloud.Bundle.Cluster.Nightly § KubeVirtOnAnEmptyCluster</c> installs CDI and
+///         KubeVirt through <c>charts/bundle/install.sh</c>, applies a <c>url</c> image, a blank disk
+///         and a machine that attaches the disk against them, reads the guest running under KVM and
+///         the disk populated and mounted, and holds <c>VirtualMachines.Matches</c> to the admitted
+///         object. Every earlier family's chart-schema half is still owed to a real operator
 ///         (<c>charts/managed/kubernetes/conformance.yaml § owed</c>,
-///         <c>a-green-cluster-suite-proves-the-apply-path-only</c>); this one's is measured.
+///         <c>a-green-cluster-suite-proves-the-apply-path-only</c>); this one's is measured for what
+///         that class applies — a catalogue import, an <c>http</c> source, cloud-init on a real
+///         guest and the power actions on a real KubeVirt are not among them, and
+///         <c>src/Providers/README.md § What the sixteenth provider measured</c> lists them.
 ///     </para>
 /// </remarks>
 /// <param name="fixture">The harness.</param>

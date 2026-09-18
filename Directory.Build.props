@@ -105,6 +105,15 @@
         -->
         <IsTestProject Condition="$(MSBuildProjectName.EndsWith('.Tests'))">true</IsTestProject>
         <IsTestProject Condition="$(MSBuildProjectName.EndsWith('.Conformance'))">true</IsTestProject>
+        <!--
+          ⚠ `.Nightly`: a container-backed suite that needs no deployment and does not fit the per-PR
+          budget. docs/plan/23 § CI shape makes 25 minutes a budget and names "moving a test to
+          nightly — with a written reason" as one of two repairs; this suffix is that move, and
+          build/Build.Test.cs § SuiteOwning routes it to `TestNightly`, which nightly.yml runs. The
+          first project to take it is test/CyberCloud.Bundle.Cluster.Nightly, whose one installing
+          class costs eight minutes on a lane that was already past the budget on the runner.
+        -->
+        <IsTestProject Condition="$(MSBuildProjectName.EndsWith('.Nightly'))">true</IsTestProject>
         <IsTestProject Condition="'$(MSBuildProjectName)' == 'CyberCloud.E2E'">true</IsTestProject>
         <IsTestProject Condition="'$(MSBuildProjectName)' == 'CyberCloud.Chaos'">true</IsTestProject>
         <IsTestProject Condition="'$(MSBuildProjectName)' == 'CyberCloud.Load'">true</IsTestProject>

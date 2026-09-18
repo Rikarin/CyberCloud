@@ -10,6 +10,7 @@ locally and in CI, so "works on my machine" and "works in CI" are the same code 
 | `Restore` `Compile` | .NET, with CPM and deterministic builds |
 | `Generate` | Provider registry → OpenAPI → CLI verbs → SDK → portal forms (ADR-012). **Fails on drift** |
 | `Test` | Unit + grain tests, coverage floor per project |
+| `TestNightly` | The `*.Nightly` suites: container-backed, deployment-free, too slow for a PR. See § CI shape |
 | `Charts` | `helm lint`, generate `values.schema.json` from annotated values, **fail on drift**, package |
 | `Images` | Build, SBOM (Syft), sign (cosign), push by digest |
 | `Architecture` | The gates below |
@@ -126,7 +127,7 @@ is moot on a v2 host and is kept for a host in the state this one was in.
 |---|---|
 | 19 of the bundle's 20 components installed and serving through `install.sh`; the four Cluster API controllers 1/1 after the `${VAR:=default}` substitution; KubeVirt and CDI `Deployed`; every `waitFor:` returning | **kube-ovn** — needs the `kube-ovn/role=master` node label, a CNI-less cluster, ADR-019 values and OVS kernel modules; refuses at template time here |
 | The `.Cluster.Conformance` suites, the reconciler layer, the bundle suite's three helm rows | **LINSTOR/DRBD** — the replicated storage stage, a kernel module (`bundle.yaml` § owed, `the-replicated-stage-is-not-installed`) |
-| A cgroup-v2 host is the *only* prerequisite for the per-PR lanes above; ⚠ **and KubeVirt guests run here** — the first `VirtualMachine` this platform rendered reported `Running` under KVM on k3s-in-Docker (#28, 2026-09-17, `test/CyberCloud.Bundle.Cluster.Conformance § KubeVirtOnAnEmptyCluster`). The right-hand column said this lane lends no `/dev/kvm`; a *privileged* container on a WSL2 host with nested virtualization has it, and an unprivileged one — the reading that misled — does not | **A guest that joins a cluster** — the node-pool Machines need the phase-40 rows under test and a guest the platform can reach (console, agent), neither of which this lane has yet; the Cluster e2e row of the table above is this lane's, and it is still nightly-and-unbuilt. ⚠ KVM itself is no longer on this side of the table on a WSL2 host; a real node without nested virtualization leaves a machine at `ErrorUnschedulable`, which `VirtualMachines.ReadinessOf` reports by name |
+| A cgroup-v2 host is the *only* prerequisite for the per-PR lanes above; ⚠ **and KubeVirt guests run here** — the first `VirtualMachine` this platform rendered reported `Running` under KVM on k3s-in-Docker (#28, 2026-09-17, `test/CyberCloud.Bundle.Cluster.Nightly § KubeVirtOnAnEmptyCluster`). The right-hand column said this lane lends no `/dev/kvm`; a *privileged* container on a WSL2 host with nested virtualization has it, and an unprivileged one — the reading that misled — does not | **A guest that joins a cluster** — the node-pool Machines need the phase-40 rows under test and a guest the platform can reach (console, agent), neither of which this lane has yet; the Cluster e2e row of the table above is this lane's, and it is still nightly-and-unbuilt. ⚠ KVM itself is no longer on this side of the table on a WSL2 host; a real node without nested virtualization leaves a machine at `ErrorUnschedulable`, which `VirtualMachines.ReadinessOf` reports by name |
 
 The lane that holds those three is the Hyper-V / real-node lane the Cluster e2e row already names.
 It does not exist yet; what changed on 2026-09-15 is that everything *else* no longer waits for it —
@@ -172,13 +173,24 @@ signal.
 |---|---|---|
 | `pr.yml` | Every PR | ≤ 25 min — everything in the "Every PR" rows above, parallelised |
 | `main.yml` | Merge | + images, charts, SBOM, signatures, deploy to dev |
-| `nightly.yml` | 02:00 | E2E, cluster e2e, hostile BYO, chaos, security |
+| `nightly.yml` | 02:00 | E2E, cluster e2e, hostile BYO, chaos, security, and the `*.Nightly` suites |
 | `weekly.yml` | Sunday | Load, licence scan, dependency review, a restore drill |
 | `release.yml` | Tag | Full gate, publish everything, staged rollout |
 
 **25 minutes for a PR is a budget, not an observation.** It is enforced: a PR that pushes the pipeline
 past it fails, and the fix is parallelism or moving a test to nightly — with a written reason. A
 40-minute PR pipeline is how a team stops running tests locally and starts merging on hope.
+
+**The move to nightly has a shape, since #28's review: a test project named `*.Nightly`.**
+`Directory.Build.props` § Project role detection builds it as a test host, `build/Build.Test.cs`
+§ `SuiteOwning` routes it to `TestNightly`, and `nightly.yml`'s `slow-suites` job runs it on the
+runner's own Docker daemon under the same one-cluster-at-a-time permit `Test` gives every
+container-backed suite. The written reason lives beside the suffix, in the project's own `.csproj`.
+The first occupant is `test/CyberCloud.Bundle.Cluster.Nightly`, whose one installing class puts CDI
+and KubeVirt on a fresh k3s and boots a guest in about eight minutes — on a serial chain that
+`gate.yml`'s `test` job had already spent 26 m 16 s on against this budget (master, 2026-09-15). ⚠ The
+three deployment-driven targets are not that lane and never were: `E2E`, `Chaos` and `Load` refuse to
+run without staging, so a Testcontainers suite moved to any of them would be run by nothing.
 
 ## Environments and rollout
 

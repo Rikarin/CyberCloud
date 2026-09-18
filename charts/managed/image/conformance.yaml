@@ -46,7 +46,7 @@ assertions:
       The DataVolume carries `cdi.kubevirt.io/storage.bind.immediate.requested: "true"`, so on the
       bundle's WaitForFirstConsumer class the claim binds without a consumer and the import runs; the
       resource is Succeeded when CDI reports Succeeded and InProgress with CDI's own progress
-      sentence until then. ⚠ Measured, not assumed: test/CyberCloud.Bundle.Cluster.Conformance
+      sentence until then. ⚠ Measured, not assumed: test/CyberCloud.Bundle.Cluster.Nightly
       § KubeVirtOnAnEmptyCluster imports an image through this chart on a real CDI.
   - id: a-failed-import-is-terminal
     says: >

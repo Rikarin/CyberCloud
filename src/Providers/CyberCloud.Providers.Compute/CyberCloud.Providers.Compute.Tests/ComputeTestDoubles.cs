@@ -21,6 +21,9 @@ static class Compute {
 
     public static ResourceId Image(string name) => new(TenantA, SubscriptionA, "prod", Images.Type, name, Guid.NewGuid());
 
+    /// <summary>A vault path under a tenant's own prefix — the only kind a cloud-init handle may name.</summary>
+    public static string VaultPath(string leaf, Guid? tenant = null) => VirtualMachines.TenantVaultPrefix(tenant ?? TenantA) + leaf;
+
     public static ReconcileContext Context(
         RecordingConnection connection,
         ResourceId address,

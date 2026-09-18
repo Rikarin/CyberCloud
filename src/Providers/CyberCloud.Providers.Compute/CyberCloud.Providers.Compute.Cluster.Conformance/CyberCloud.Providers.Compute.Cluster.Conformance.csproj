@@ -13,7 +13,7 @@
       and waits for Established, which makes the REST path exist and nothing else. No VirtualMachine
       in this suite has ever had an instance, no DataVolume has ever been filled, and no webhook has
       ever admitted or refused a render. The half that needs the real operators is
-      test/CyberCloud.Bundle.Cluster.Conformance § KubeVirtOnAnEmptyCluster, which installs both
+      test/CyberCloud.Bundle.Cluster.Nightly § KubeVirtOnAnEmptyCluster, which installs both
       through charts/bundle/install.sh, applies charts/managed/image and charts/managed/
       virtual-machine against them, and reads the guest Running — see ComputeClusterBackedConformance.
 

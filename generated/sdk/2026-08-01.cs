@@ -2032,7 +2032,7 @@ public sealed partial class VirtualMachineData {
         [JsonPropertyName("clusterId")]
         public required Guid ClusterId { get; set; }
 
-        /// <summary>CyberCloud.Compute/disks resources attached to the machine, by name, in this resource group. A change attaches or detaches at the machine's next start. ⚠ A disk named os or cloudinit collides with the machine's own volumes and is refused at admission.</summary>
+        /// <summary>CyberCloud.Compute/disks resources attached to the machine, by name, in this resource group. A change attaches or detaches at the machine's next start. ⚠ A disk named os or cloudinit collides with the machine's own volumes and is refused.</summary>
         /// <remarks>Defaults to [] when left unset.</remarks>
         [JsonPropertyName("dataDisks")]
         public IList<string> DataDisks { get; set; } = new List<string>();
@@ -2059,7 +2059,7 @@ public sealed partial class VirtualMachineData {
         /// <summary>First-boot configuration, as cloud-init reads it.</summary>
         public sealed partial class CloudInitData {
 
-            /// <summary>A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. Empty means no cloud-init at all.</summary>
+            /// <summary>A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/&lt;tenantId&gt;/; any other path is refused. Empty means no cloud-init at all.</summary>
             /// <remarks>Defaults to "" when left unset.</remarks>
             [JsonPropertyName("userData")]
             public string? UserData { get; set; }

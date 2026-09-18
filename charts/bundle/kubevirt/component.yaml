@@ -81,7 +81,7 @@ notes: >
   at all; a real node has no such problem. (2) containerized-data-importer must be `Deployed` FIRST —
   see `requires:` above. With both, the `KubeVirt` resource reached `Deployed` 1 m 40 s after apply
   on a warm cache, `virt-handler` and all nine of the operator's workloads Running.
-  ✅ A VirtualMachine HAS RUN HERE, since 2026-09-17: test/CyberCloud.Bundle.Cluster.Conformance
+  ✅ A VirtualMachine HAS RUN HERE, since 2026-09-17: test/CyberCloud.Bundle.Cluster.Nightly
   § KubeVirtOnAnEmptyCluster applies charts/managed/virtual-machine against this component and the
   guest reports Running under KVM. The sentence this paragraph carried — "Docker Desktop's VM
   exposes no /dev/kvm to a container" — was true of an unprivileged container and false of the

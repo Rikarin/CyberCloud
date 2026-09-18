@@ -940,7 +940,7 @@ type VirtualMachineProperties struct {
 	CloudInit *VirtualMachinePropertiesCloudInit `json:"cloudInit,omitempty"`
 	// The cluster the machine runs in. Must be the one its image and its disks are in — nothing checks that, and a machine placed elsewhere clones a claim that is not there.
 	ClusterID string `json:"clusterId"`
-	// CyberCloud.Compute/disks resources attached to the machine, by name, in this resource group. A change attaches or detaches at the machine's next start. ⚠ A disk named os or cloudinit collides with the machine's own volumes and is refused at admission.
+	// CyberCloud.Compute/disks resources attached to the machine, by name, in this resource group. A change attaches or detaches at the machine's next start. ⚠ A disk named os or cloudinit collides with the machine's own volumes and is refused.
 	DataDisks []string `json:"dataDisks,omitempty"`
 	// The CyberCloud.Compute/images resource the root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the machine waits for it and says so.
 	Image string `json:"image"`
@@ -954,7 +954,7 @@ type VirtualMachineProperties struct {
 
 // VirtualMachinePropertiesCloudInit is First-boot configuration, as cloud-init reads it.
 type VirtualMachinePropertiesCloudInit struct {
-	// A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. Empty means no cloud-init at all.
+	// A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other path is refused. Empty means no cloud-init at all.
 	UserData *string `json:"userData,omitempty"`
 }
 

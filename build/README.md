@@ -72,6 +72,7 @@ Target graph:
 ```
 Clean
 Restore ──► Compile ──┬──► Test
+                      ├──► TestNightly    (blocks: no *.Nightly suite)
                       ├──► Generate       (stub)
                       ├──► Architecture   (stub)
                       ├──► E2E            (stub)
@@ -117,7 +118,7 @@ Three guards, all of which have been shown to fire:
   below — discovery is split by owning target, and this is what stops a suite falling between them.
 
 The last two run before the "no test projects, nothing to run" early return, and cover every test
-project rather than only the per-PR ones, because `Test` is the only one of the four suite-running
+project rather than only the per-PR ones, because `Test` is the only one of the five suite-running
 targets that runs on every PR and so the only one positioned to notice.
 
 ## Which target runs which test project
@@ -131,6 +132,7 @@ it.
 | Project | Target | Runs |
 |---|---|---|
 | `*.Tests`, `*.Conformance`, `CyberCloud.Isolation` | `Test` | Every PR |
+| `*.Nightly` | `TestNightly` | Nightly, on the runner's own Docker daemon — container-backed suites that need no deployment and do not fit the PR budget. `Build.Test.cs` § `TestSuite.Nightly` has the measurement that opened the lane |
 | `CyberCloud.E2E` | `E2E` | Nightly + pre-release |
 | `CyberCloud.Chaos` | `Chaos` | Nightly |
 | `CyberCloud.Load` | `Load` | Weekly + pre-release |

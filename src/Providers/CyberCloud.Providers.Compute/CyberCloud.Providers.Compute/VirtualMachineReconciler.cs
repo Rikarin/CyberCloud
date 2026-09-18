@@ -90,6 +90,17 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
         var name = context.Id.Name;
         var ns = context.Namespace;
 
+        // ── A data disk the body cannot render is refused before anything is read ──────────────
+        //
+        // What the schema cannot say about `dataDisks`: an element must be a resource name (the chart
+        // surface refuses a per-element pattern, so the registry declares none) and must not be the
+        // root or cloud-init volume's own name. KubeVirt's webhook refuses the duplicate and a real API
+        // server the bad name; a derived stub admits both; this refuses either before any of them is
+        // asked, terminally, because a PUT is what changes it. VirtualMachines.DataDiskProblem.
+        if (VirtualMachines.DataDiskProblem(context.Desired) is { Length: > 0 } diskProblem) {
+            return ReconcileOutcome.Failed(new Error(ErrorCode.InvalidRequestBody, diskProblem, "/properties/dataDisks"));
+        }
+
         // ── An image that is still importing is waited for; one that is absent is KubeVirt's ──
         //
         // ⚠ ABSENT PROCEEDS AND IMPORTING WAITS, AND THE ASYMMETRY IS DELIBERATE. CDI's admission
@@ -146,10 +157,17 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
         }
 
         // ── Cloud-init: resolved once, written to a Secret, never to a body ────────────────────
+        //
+        // ⚠ THE TENANT'S OWN PATHS AND NOBODY ELSE'S, CHECKED BEFORE THE RESOLVER IS ASKED. This is
+        // the one place in the tree where a path a TENANT spelled reaches ISecretResolver and its
+        // value reaches something the tenant can read — the guest mounts the Secret — and the
+        // resolver holds one platform-wide token, so the path is the only thing that scopes the read.
+        // VirtualMachines.TenantVaultPrefix carries the argument; the parse refuses a path outside
+        // it with AuthorizationFailed, which ends the pass with nothing applied and nothing read.
         string? userData = null;
 
         if (VirtualMachines.HasCloudInit(context.Desired)) {
-            var handle = VirtualMachines.ParseCloudInitRef(VirtualMachines.CloudInitRef(context.Desired));
+            var handle = VirtualMachines.ParseCloudInitRef(VirtualMachines.CloudInitRef(context.Desired), context.Id.TenantId);
 
             if (handle.TryGetError(out var handleError)) {
                 return ReconcileOutcome.FromFailure(handleError);

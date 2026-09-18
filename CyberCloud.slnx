@@ -544,10 +544,12 @@
           before every render so a tag change does not boot a stopped machine. VirtualMachines' class
           remarks carry the argument and what it costs.
 
-          ⚠ THE FIRST FAMILY WHOSE WEBHOOK HALF IS MEASURED. Every earlier .Cluster.Conformance suite
-          proves the apply path against a derived CRD stub and records that no operator ever admitted
-          its render; test/CyberCloud.Bundle.Cluster.Conformance § KubeVirtOnAnEmptyCluster installs CDI
-          and KubeVirt through install.sh and applies this family's charts against the real webhooks.
+          ⚠ THE FIRST FAMILY WHOSE WEBHOOK HALF IS MEASURED, FOR ONE RENDER OF EACH CHART. Every
+          earlier .Cluster.Conformance suite proves the apply path against a derived CRD stub and
+          records that no operator ever admitted its render; test/CyberCloud.Bundle.Cluster.Nightly
+          § KubeVirtOnAnEmptyCluster installs CDI and KubeVirt through install.sh and applies a url
+          image, a blank disk and a machine attaching it against the real webhooks — nightly, not
+          per-PR, for the eight minutes it costs. src/Providers/README.md names what it does not apply.
         -->
         <Project Path="src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Contracts/CyberCloud.Providers.Compute.Contracts.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.csproj" />
@@ -625,6 +627,15 @@
           without one" in fifteen other assemblies here.
         -->
         <Project Path="test/CyberCloud.Bundle.Cluster.Conformance/CyberCloud.Bundle.Cluster.Conformance.csproj" />
+        <!--
+          ⚠ The nightly lane's first project, and the suffix is the lane. KubeVirtOnAnEmptyCluster
+          installs CDI and KubeVirt and boots a guest — eight minutes on a serial chain that the
+          runner already spent 26 of its 25-minute budget on (#28's review) — so it is `.Nightly`,
+          which Directory.Build.props § Project role detection builds as a test host and
+          build/Build.Test.cs § SuiteOwning routes to `TestNightly`, run by nightly.yml. It references
+          the per-PR sibling above for its fixture and installer rather than copying them.
+        -->
+        <Project Path="test/CyberCloud.Bundle.Cluster.Nightly/CyberCloud.Bundle.Cluster.Nightly.csproj" />
         <Project Path="test/CyberCloud.Isolation/CyberCloud.Isolation.csproj" />
     </Folder>
 </Solution>

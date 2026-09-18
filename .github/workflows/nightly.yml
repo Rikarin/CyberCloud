@@ -19,6 +19,9 @@
 #     class, and by a cluster with a webhook that says no. docs/plan/23 § Test layers calls that row
 #     "the brief's core premise".
 #   * the whole security row that does not need a deployment.
+#   * the `*.Nightly` suites, in `slow-suites`: container-backed, deployment-free, and too slow for
+#     the per-PR chain — the sixth row here, added by #28's review, and the only one that needs
+#     nothing but the runner's own Docker daemon. Build.Test.cs § TestSuite.Nightly.
 #
 # ── ⚠ SECRETS THIS WORKFLOW REQUIRES ─────────────────────────────────────────────────────────────
 #
@@ -256,6 +259,57 @@ jobs:
           context="${{ secrets.STAGING_KUBE_CONTEXT }}"
           [ -n "$context" ] || context="$(kubectl config current-context)"
           ./build.sh Chaos --kube-context "$context"
+
+  # ── docs/plan/23 § CI shape: "the fix is parallelism or moving a test to nightly — with a written reason" ──
+  #
+  # The `*.Nightly` suites: container-backed, needing no deployment, and too slow for the per-PR
+  # chain. This is the lane charts/bundle/README.md § Verification said did not exist — the three jobs
+  # above all refuse to run without staging, so a Testcontainers suite moved to any of them would be
+  # run by nothing — and it exists because of one class: KubeVirtOnAnEmptyCluster installs CDI and
+  # KubeVirt onto a fresh k3s and boots a guest in about eight minutes, on a serial chain gate.yml's
+  # `test` job already spent 26 m 16 s on against a 25-minute budget (master, 2026-09-15, read off
+  # the run's log). Build.Test.cs § TestSuite.Nightly is the written reason.
+  #
+  # ⚠ NOT gated by the roster `pr.yml` § EXPECTED_JOBS names, on purpose: the budget job measures the
+  # PR pipeline, and this job's whole point is to be outside it.
+  #
+  # ⚠ THE RUNNER NEEDS /dev/kvm, AND THIS JOB DOES NOT PRETEND OTHERWISE. The guest boots under KVM
+  # — the bundle never switches emulation on, kubevirt/component.yaml § notes — so a runner without
+  # the device leaves the machine at ErrorUnschedulable and the suite red, naming the missing device
+  # in its own message. GitHub's x64 Linux runners have carried it since 2024; the step below prints
+  # what this one has so a red run can be read without re-running it.
+  slow-suites:
+    name: slow-suites
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/dotnet
+
+      # The same preflight gate.yml's `test` job runs, for the same reason: one loud failure rather
+      # than a k3s that never starts and a skip message nobody reads at 02:00.
+      - name: Prove Docker can run the container-backed suites, and say whether the node has KVM
+        run: |
+          docker version --format 'client {{.Client.Version}}, server {{.Server.Version}}'
+          docker run --rm hello-world > /dev/null
+          ls -l /dev/kvm || echo "::warning title=KVM::/dev/kvm is absent on this runner; KubeVirtOnAnEmptyCluster will be red at ErrorUnschedulable, and that is the honest result"
+
+      - name: ./build.sh TestNightly
+        run: .github/scripts/run-build.sh "$RUNNER_TEMP/test-nightly.log" TestNightly
+
+      # The same three guards gate.yml applies to the per-PR run: the point of a nightly lane is
+      # that it ran, and a suite that skipped everything reports success without saying so.
+      - name: Prove the suites actually ran
+        if: always()
+        run: .github/scripts/assert-suites-ran.sh artifacts/test-results "$RUNNER_TEMP/test-nightly.log"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-nightly-results
+          path: artifacts/test-results
+          if-no-files-found: warn
 
   # ── docs/plan/23 § Test layers, row Security: the nightly half ───────────────────────────────────
   #

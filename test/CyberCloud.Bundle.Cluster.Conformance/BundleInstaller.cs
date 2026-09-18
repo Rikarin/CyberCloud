@@ -138,7 +138,8 @@ public static class BundleInstaller {
     ///     about seven minutes on a cold one — does not fit under this number with margin, which is
     ///     the arithmetic the first such test has to do before it is written.
     ///     ✅ <b>The first such test is written, and it did the arithmetic rather than moving this
-    ///     number.</b> <see cref="KubeVirtOnAnEmptyCluster" /> installs openebs-localpv, CDI and
+    ///     number.</b> <c>KubeVirtOnAnEmptyCluster</c> — in test/CyberCloud.Bundle.Cluster.Nightly,
+    ///     the lane #28's review moved it to — installs openebs-localpv, CDI and
     ///     KubeVirt in one run — one helm row and two manifest rows, bounded by
     ///     10 m + 2 × (5 m + 10 m) = 40 m — and passes that bound as <see cref="ManifestBudget" />
     ///     through <see cref="RunAsync(string, string?, CancellationToken, TimeSpan?)" />'s own
@@ -156,7 +157,7 @@ public static class BundleInstaller {
     ///     so that a slow <c>KubeVirt</c> resource surfaces as <c>kubectl wait</c>'s own timeout
     ///     rather than as this harness killing bash. Measured on 2026-09-17 on a fresh k3s with an
     ///     empty image cache, the run takes minutes and not tens of them —
-    ///     <see cref="KubeVirtOnAnEmptyCluster" /> records what.
+    ///     <c>KubeVirtOnAnEmptyCluster</c> records what.
     /// </remarks>
     public static readonly TimeSpan ManifestBudget = TimeSpan.FromMinutes(40);
 

@@ -238,7 +238,8 @@ owed:
       row under test now EXISTS on this machine (docs/plan/23 § The lane that needs a kubelet) and is
       not yet used for one.
       ✅ AND ON 2026-09-17 THE LANE WAS USED FOR TWO, WHICH MOVES THE COUNT ABOVE FROM THREE TO FIVE.
-      test/CyberCloud.Bundle.Cluster.Conformance § KubeVirtOnAnEmptyCluster runs THIS DIRECTORY'S
+      test/CyberCloud.Bundle.Cluster.Nightly § KubeVirtOnAnEmptyCluster — nightly since #28's
+      review, see the lane paragraph below — runs THIS DIRECTORY'S
       `install.sh --component kubevirt --component containerized-data-importer --component
       openebs-localpv` — named the wrong way round on purpose — onto one fresh k3s: the roster orders
       them, both `manifest:` rows go through the kubectl branch UNDER TEST for the first time, both
@@ -261,11 +262,19 @@ owed:
       across three runs with the cloudnative-pg class in it, against 2 m 20 s – 3 m 15 s without: the class costs about 1 m 50 s
       of serial tail, of which 26 s is the two-component install, 68 s is PostgreSQL reaching Ready,
       and the rest is a second k3s start. It stays in the per-PR lane, and NOT because that is cheap.
-      The only nightly lane that exists is `Build.E2E`, whose own preconditions refuse to run without
+      The only nightly lane that existed was `Build.E2E`, whose own preconditions refuse to run without
       `--e2e-base-url` pointing at a real staging deployment and without a `cyc` CLI to drive; a
       Testcontainers k3s suite moved there would be run by nothing, which is a worse outcome than a
       slow one. A lane for container-backed suites that are too slow for per-PR and need no
-      deployment does not exist, and creating one is the decision this row now owes.
+      deployment did not exist, and creating one was the decision this row owed.
+      ✅ THE LANE EXISTS SINCE #28's REVIEW, AND ONE CLASS IS IN IT. A test project named `*.Nightly`
+      is owned by `TestNightly` (build/Build.Test.cs § SuiteOwning) and run by nightly.yml's
+      `slow-suites` job on the runner's own Docker daemon; test/CyberCloud.Bundle.Cluster.Nightly
+      holds KubeVirtOnAnEmptyCluster, moved there because gate.yml's `test` job had already spent
+      26 m 16 s on the serial cluster chain against a 25-minute budget (master, 2026-09-15, read off
+      the run's log) and the class costs about eight more. The three classes in
+      test/CyberCloud.Bundle.Cluster.Conformance stay per-PR at under five minutes. docs/plan/23
+      § CI shape has the shape; the project's csproj has the reason.
   - id: an-operator-created-and-bound-the-claim
     says: >
       ✅ THE SENTENCE THIS DIRECTORY EXISTS FOR IS NO LONGER OWED, AND IT IS THE ONLY ROW HERE THAT

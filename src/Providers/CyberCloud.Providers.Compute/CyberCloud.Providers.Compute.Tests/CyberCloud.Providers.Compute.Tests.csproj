@@ -6,7 +6,7 @@
       ⚠ NEITHER, HERE. The TestCluster half is test/CyberCloud.Conformance's, because a provider's
       lifecycle is the SHARED suite's assertion, and the k3s half is
       CyberCloud.Providers.Compute.Cluster.Conformance's — with the webhook half, for the first time
-      in the tree, in test/CyberCloud.Bundle.Cluster.Conformance § KubeVirtOnAnEmptyCluster. What is
+      in the tree, in test/CyberCloud.Bundle.Cluster.Nightly § KubeVirtOnAnEmptyCluster. What is
       left is what only THIS provider can be wrong about: the power state surviving a reconcile, the
       readiness rule over KubeVirt's own status words, the cloud-init handle becoming a Secret and
       nothing else, the size table against the chart's, the catalogue against the chart's, and the

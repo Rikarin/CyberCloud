@@ -114,7 +114,7 @@ public sealed class ComputeDeclarationTests {
                      (Disks.Schema2026, Disks.Body(Compute.ClusterId)),
                      (Images.Schema2026, Images.Body(Compute.ClusterId)),
                      (Images.Schema2026, Images.Body(Compute.ClusterId, kind: Images.UrlSource, url: "docker://quay.io/kubevirt/cirros-container-disk-demo:v1.9.0")),
-                     (VirtualMachines.Schema2026, VirtualMachines.Body(Compute.ClusterId, dataDisks: ["data"], virtualNetwork: "vnet", subnet: "web", cloudInit: "tenants/a/web#userdata@3"))
+                     (VirtualMachines.Schema2026, VirtualMachines.Body(Compute.ClusterId, dataDisks: ["data"], virtualNetwork: "vnet", subnet: "web", cloudInit: Compute.VaultPath("web") + "#userdata@3"))
                  }) {
             using var document = JsonDocument.Parse(body);
             var validated = schema.Validate(document.RootElement, allowTags: true);
@@ -134,10 +134,58 @@ public sealed class ComputeDeclarationTests {
         handle.Widget.ShouldBe(WidgetHint.SecretRef);
         handle.Pattern.ShouldBe(VirtualMachines.OptionalSecretRefPattern);
 
-        VirtualMachines.ParseCloudInitRef("tenants/a/web#userdata@3").GetValueOrThrow()
-            .ShouldBe(new CyberCloud.Core.Contracts.SecretRef { Path = "tenants/a/web", Field = "userdata", Version = "3" });
-        VirtualMachines.ParseCloudInitRef("").GetValueOrThrow().IsEmpty.ShouldBeTrue();
-        VirtualMachines.ParseCloudInitRef("no-hash").IsFailure.ShouldBeTrue();
+        VirtualMachines.ParseCloudInitRef(Compute.VaultPath("web") + "#userdata@3", Compute.TenantA).GetValueOrThrow()
+            .ShouldBe(new CyberCloud.Core.Contracts.SecretRef { Path = Compute.VaultPath("web"), Field = "userdata", Version = "3" });
+        VirtualMachines.ParseCloudInitRef("", Compute.TenantA).GetValueOrThrow().IsEmpty.ShouldBeTrue();
+        VirtualMachines.ParseCloudInitRef("no-hash", Compute.TenantA).IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ACloudInitHandleMayNameOnlyTheTenantsOwnVaultPrefix() {
+        // ⚠ THE TENANCY CHECK ON THE ONE TENANT-SPELLED VAULT PATH IN THE TREE — VirtualMachines
+        // .TenantVaultPrefix carries the argument. Tenant A's body naming a path under tenant B's
+        // prefix, a platform path, or the bare prefix itself is refused before any resolver is asked,
+        // and the refusal is AuthorizationFailed rather than "not found": it must not say whether the
+        // path exists.
+        VirtualMachines.TenantVaultPrefix(Compute.TenantA).ShouldBe("tenants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/");
+
+        foreach (var foreign in new[] {
+                     Compute.VaultPath("CyberCloud.ContainerRegistry/registries/x", Compute.TenantB) + "#password",
+                     "platform/bootstrap#token",
+                     "tenants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa#userdata",
+                     "tenants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/#userdata",
+                     "tenants/AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA/web#userdata"
+                 }) {
+            var refused = VirtualMachines.ParseCloudInitRef(foreign, Compute.TenantA);
+
+            refused.IsFailure.ShouldBeTrue(foreign + " was accepted");
+            refused.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed, foreign);
+            refused.Error.Message.ShouldContain(VirtualMachines.TenantVaultPrefix(Compute.TenantA));
+        }
+
+        // The tenant's own credential paths — what listKeys and listCredentials already hand it — are inside.
+        VirtualMachines.ParseCloudInitRef(Compute.VaultPath("CyberCloud.ContainerRegistry/registries/x") + "#password", Compute.TenantA)
+            .IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ADataDiskNameIsCheckedAsAResourceNameBeforeItReachesAClaim() {
+        // ⚠ NOT BY THE SCHEMA, AND THE TEST SAYS SO. The registry could apply a per-element Pattern
+        // (SchemaProperty.ElementKind's remarks), and ./build.sh Charts refuses `@pattern` on a
+        // `{array}` @param — charts/managed/kafka's `cidr-shape-is-unenforced`. So the schema admits
+        // any string here, and VirtualMachines.DataDiskProblem is what stands between the body and
+        // `persistentVolumeClaim.claimName`; VirtualMachineReconcilerTests drives it through a pass.
+        foreach (var bad in new[] { "Data", "data_1", "-data", new string('d', ResourceNaming.MaxLength + 1), VirtualMachines.RootVolume, VirtualMachines.CloudInitVolume }) {
+            using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, dataDisks: ["fine", bad]));
+
+            VirtualMachines.Schema2026.Validate(body.RootElement, allowTags: true).IsSuccess.ShouldBeTrue(
+                "the schema refused a disk name, so the chart surface must have grown the per-element constraint it could not carry — retire DataDiskProblem's first check and this test"
+            );
+            VirtualMachines.DataDiskProblem(body.RootElement).ShouldContain(bad, Case.Sensitive, $"'{bad}' was accepted as a disk name");
+        }
+
+        using var good = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, dataDisks: ["data-1", "logs"]));
+        VirtualMachines.DataDiskProblem(good.RootElement).ShouldBeEmpty();
     }
 
     [Fact]

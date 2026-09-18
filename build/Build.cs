@@ -65,6 +65,7 @@ sealed partial class Build : NukeBuild {
     //
     //   Clean
     //   Restore ──► Compile ──┬──► Test
+    //                         ├──► TestNightly    (blocks: no *.Nightly suite)
     //                         ├──► Generate
     //                         ├──► Architecture
     //                         ├──► E2E            (blocks: no suite, no staging, no cyc)
@@ -79,17 +80,17 @@ sealed partial class Build : NukeBuild {
     // Publish's fan-in is written out rather than drawn: it reaches five nodes from three different
     // rows above, and the lines needed to show that cost more than they explain.
     //
-    // ⚠ "BLOCKS" IS NOT "STUB", AND THE DIFFERENCE IS THE WHOLE DESIGN OF THOSE FIVE TARGETS. A stub
+    // ⚠ "BLOCKS" IS NOT "STUB", AND THE DIFFERENCE IS THE WHOLE DESIGN OF THOSE SIX TARGETS. A stub
     // logs that it is unwritten and succeeds. A blocked target is written — it discovers its work,
     // reports how much of it there is, and then fails naming every input it does not have and the
     // command or parameter that would supply each. See TargetPreconditions.cs.
     //
     // The earlier note here said a stub that fails the build is worse than no stub, because it trains
     // everyone to ignore a red target. That is true of `Test` and `Architecture`, which gate every PR
-    // (docs/plan/23 § CI shape) and must be green on a clean checkout. It is not true of these five:
-    // none is on the PR path, each is invoked deliberately by somebody who wants images pushed or
-    // staging exercised, and answering "nothing was pushed, and here is why" with exit 0 is how a
-    // release goes out with no images in it.
+    // (docs/plan/23 § CI shape) and must be green on a clean checkout. It is not true of these six:
+    // none is on the PR path, each is invoked deliberately — by nightly.yml, or by somebody who wants
+    // images pushed or staging exercised — and answering "nothing was pushed, and here is why" with
+    // exit 0 is how a release goes out with no images in it.
     //
     // ⚠ Three edges that are missing on purpose, because each is the first thing a reader looks for:
     //
@@ -127,6 +128,12 @@ sealed partial class Build : NukeBuild {
             .Description("Unit and grain tests. docs/plan/23 § Test layers.")
             .DependsOn(Compile)
             .Executes(RunTests);
+
+    Target TestNightly =>
+        _ => _
+            .Description("The *.Nightly suites: container-backed, deployment-free, too slow for a PR. docs/plan/23 § CI shape.")
+            .DependsOn(Compile)
+            .Executes(RunNightlyTests);
 
     Target Generate =>
         _ => _

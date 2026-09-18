@@ -82,12 +82,26 @@ needs a `VolumeSnapshotClass` the node-local storage stage has none of, and `res
 ⚠ **The first machine ran, on the lane the plan said could not run one.** The first `VirtualMachine`
 this platform rendered was admitted by KubeVirt's webhooks on a real CDI and KubeVirt installed
 through `charts/bundle/install.sh` — the first family whose chart-schema half is measured rather than
-owed — and reported `Running` under KVM 46 seconds after the apply, on k3s-in-Docker. Issue #95 and
-`charts/bundle/bundle.yaml § owed` said Docker Desktop's VM lends no `/dev/kvm`; a privileged
-container on a WSL2 host with nested virtualization has it, and nobody had measured. What `Running`
-does not prove — the guest finishing its boot, cloud-init taking effect, a disk appearing inside — is
+owed, for one render of each of its three charts — and reported `Running` under KVM 46 seconds after
+the apply, on k3s-in-Docker, with a blank disk from `charts/managed/disk` attached, populated once
+the machine consumed it, and mounted by the launcher. Issue #95 and `charts/bundle/bundle.yaml
+§ owed` said Docker Desktop's VM lends no `/dev/kvm`; a privileged container on a WSL2 host with
+nested virtualization has it, and nobody had measured. What `Running` does not prove — the guest
+finishing its boot, cloud-init taking effect, the disk appearing inside as a block device — is
 `charts/managed/virtual-machine/conformance.yaml § owed`, `the-guest-is-not-reached`; kube-ovn,
-LINSTOR and the node-pool Machines stay the VM lane's (#95).
+LINSTOR and the node-pool Machines stay the VM lane's (#95). ⚠ **And that measurement is nightly**:
+the class costs eight minutes on a serial chain the PR runner had already spent 26 minutes on against
+[23 § CI shape](23-build-ci-and-testing.md)'s 25-minute budget, so #28's review opened the
+`*.Nightly` lane and put it there.
+⚠ **What the review of #28 corrected in this row.** `cloudInit.userData` is the one place in the
+tree where a vault path a *tenant* spelled is resolved, by a resolver holding one platform-wide
+token, into a Secret the tenant's own guest mounts; the reconciler now refuses any path outside
+`tenants/{tenantId}/` before the vault is asked (`VirtualMachines.TenantVaultPrefix`), which is the
+scoping [18 § Shape](18-security-vault-and-malware-scan.md)'s namespace-per-tenant topology
+would give and this platform's single namespace does not. And the two nouns of #28 this row does
+not land are recorded with what each waits for at `charts/managed/virtual-machine/conformance.yaml
+§ owed` — scale sets are this row's (`scale-sets-are-not-landed`); container instances are the next
+row's, a provider namespace of their own.
 
 ## Container Instances — `CyberCloud.ContainerInstance/containerGroups` · M2 · 0.8 EM
 
