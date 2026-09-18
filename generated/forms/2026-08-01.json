@@ -1419,6 +1419,538 @@
         }
       ]
     },
+    "CyberCloud.Compute/disks": {
+      "resourceType": "CyberCloud.Compute/disks",
+      "apiVersion": "2026-08-01",
+      "title": "Managed disk",
+      "plural": "Managed disks",
+      "summary": "A blank data disk of a size and a storage class, provisioned on its own and attached to a virtual machine by name. It outlives the machine.",
+      "overrideKey": "CyberCloud.Compute/disks@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/size",
+        "/properties/storageClass",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the disk is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Managed disk to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The disk's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster the disk is provisioned in. Only a virtual machine in the same cluster and the same resource group can attach it.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Managed disk to change it."
+        },
+        {
+          "jsonPointer": "/properties/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The disk's size, in Kubernetes quantity form. ⚠ Immutable: growing a disk depends on the storage class and shrinking one is never possible, so a bigger disk is a new disk.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Managed disk to change it.",
+          "default": "32Gi",
+          "placeholder": "32Gi"
+        },
+        {
+          "jsonPointer": "/properties/storageClass",
+          "name": "storageClass",
+          "label": "Storage class",
+          "control": "xui-storageclass",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "The storage class the disk is on. Empty means the cluster's default, which on a bundle-installed cluster is node-local: one copy, on one node, and the machine that attaches the disk runs on that node.",
+          "maxLength": 253,
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Managed disk to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": []
+    },
+    "CyberCloud.Compute/images": {
+      "resourceType": "CyberCloud.Compute/images",
+      "apiVersion": "2026-08-01",
+      "title": "Image",
+      "plural": "Images",
+      "summary": "A bootable disk image imported once into your resource group — one of the platform's Ubuntu and Debian cloud images, pinned by digest, or a container disk or HTTP address you supply — and cloned by every machine that boots from it.",
+      "overrideKey": "CyberCloud.Compute/images@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/size",
+        "/properties/source",
+        "/properties/source/kind",
+        "/properties/source/name",
+        "/properties/source/url",
+        "/properties/storageClass",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the image is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Image to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The image's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster the image is imported into. A virtual machine can boot from it only in the same cluster and the same resource group, because a clone is a claim in one namespace copied from a claim beside it.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Image to change it."
+        },
+        {
+          "jsonPointer": "/properties/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The claim the image is imported into, in Kubernetes quantity form. It must hold the image's virtual size — 10Gi fits every catalogue image — and it is the smallest disk a machine booted from this image can have.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Image to change it.",
+          "default": "10Gi",
+          "placeholder": "10Gi"
+        },
+        {
+          "jsonPointer": "/properties/source",
+          "name": "source",
+          "label": "Source",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Where the bytes come from."
+        },
+        {
+          "jsonPointer": "/properties/source/kind",
+          "name": "kind",
+          "label": "Kind",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "source",
+          "hint": "catalogue for one of the platform's own Linux cloud images, pinned by digest; url for an address you supply.",
+          "choices": [
+            {
+              "value": "catalogue",
+              "label": "Catalogue"
+            },
+            {
+              "value": "url",
+              "label": "Url"
+            }
+          ],
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Image to change it.",
+          "default": "catalogue"
+        },
+        {
+          "jsonPointer": "/properties/source/name",
+          "name": "name",
+          "label": "Name",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "source",
+          "hint": "Which catalogue image, when kind is catalogue. ⚠ Linux only: Windows Server is a licensing arrangement and not in this catalogue — docs/plan/13 § Images and licensing.",
+          "choices": [
+            {
+              "value": "debian-12",
+              "label": "Debian 12"
+            },
+            {
+              "value": "debian-13",
+              "label": "Debian 13"
+            },
+            {
+              "value": "ubuntu-22.04",
+              "label": "Ubuntu 22 04"
+            },
+            {
+              "value": "ubuntu-24.04",
+              "label": "Ubuntu 24 04"
+            }
+          ],
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Image to change it.",
+          "default": "ubuntu-24.04"
+        },
+        {
+          "jsonPointer": "/properties/source/url",
+          "name": "url",
+          "label": "Url",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "source",
+          "hint": "Where to import from, when kind is url. docker://registry/repository[:tag|@digest] is a container disk; http:// or https:// is a raw or qcow2 image. ⚠ An HTTP address carries no checksum and nothing verifies what arrives — pin a registry reference by digest when you can.",
+          "maxLength": 2048,
+          "pattern": "^(?:((docker|https?)://\\S+)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Image to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/storageClass",
+          "name": "storageClass",
+          "label": "Storage class",
+          "control": "xui-storageclass",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "The storage class the imported claim is on. Empty means the cluster's default, which on a bundle-installed cluster is the node-local class.",
+          "maxLength": 253,
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Image to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": []
+    },
+    "CyberCloud.Compute/virtualMachines": {
+      "resourceType": "CyberCloud.Compute/virtualMachines",
+      "apiVersion": "2026-08-01",
+      "title": "Virtual machine",
+      "plural": "Virtual machines",
+      "summary": "A virtual machine on KubeVirt: a size from the platform catalogue, a root disk cloned from an image, managed disks by name, a tenant subnet, and cloud-init from a vault handle. Start, stop and restart are actions; stop releases compute and keeps every disk.",
+      "overrideKey": "CyberCloud.Compute/virtualMachines@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/cloudInit",
+        "/properties/cloudInit/userData",
+        "/properties/clusterId",
+        "/properties/dataDisks",
+        "/properties/image",
+        "/properties/network",
+        "/properties/network/subnet",
+        "/properties/network/virtualNetwork",
+        "/properties/osDiskSize",
+        "/properties/size",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the machine is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual machine to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The machine's own settings."
+        },
+        {
+          "jsonPointer": "/properties/cloudInit",
+          "name": "cloudInit",
+          "label": "Cloud init",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "First-boot configuration, as cloud-init reads it."
+        },
+        {
+          "jsonPointer": "/properties/cloudInit/userData",
+          "name": "userData",
+          "label": "User data",
+          "control": "xui-secret-ref",
+          "type": "string",
+          "required": false,
+          "section": "cloudInit",
+          "hint": "A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other path is refused. Empty means no cloud-init at all.",
+          "maxLength": 512,
+          "pattern": "^(?:([^#@\\s]+#[^#@\\s]+(@[^#@\\s]+)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster the machine runs in. Must be the one its image and its disks are in — nothing checks that, and a machine placed elsewhere clones a claim that is not there.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual machine to change it."
+        },
+        {
+          "jsonPointer": "/properties/dataDisks",
+          "name": "dataDisks",
+          "label": "Data disks",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "CyberCloud.Compute/disks resources attached to the machine, by name, in this resource group. A change attaches or detaches at the machine's next start. ⚠ A disk named os or cloudinit collides with the machine's own volumes and is refused.",
+          "default": [],
+          "placeholder": [
+            "data"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/image",
+          "name": "image",
+          "label": "Image",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The CyberCloud.Compute/images resource the root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the machine waits for it and says so.",
+          "maxLength": 63,
+          "pattern": "^(?:[a-z0-9]([-a-z0-9]*[a-z0-9])?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual machine to change it.",
+          "default": "ubuntu",
+          "placeholder": "ubuntu"
+        },
+        {
+          "jsonPointer": "/properties/network",
+          "name": "network",
+          "label": "Network",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The tenant network the machine's interface joins. Both empty means the cluster's pod network."
+        },
+        {
+          "jsonPointer": "/properties/network/subnet",
+          "name": "subnet",
+          "label": "Subnet",
+          "control": "xui-subnet",
+          "type": "string",
+          "required": false,
+          "section": "network",
+          "hint": "The subnet of that network the interface takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the machine never starts.",
+          "maxLength": 63,
+          "pattern": "^(?:([a-z0-9]([-a-z0-9]*[a-z0-9])?)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual machine to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/network/virtualNetwork",
+          "name": "virtualNetwork",
+          "label": "Virtual network",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "network",
+          "hint": "The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.",
+          "maxLength": 63,
+          "pattern": "^(?:([a-z0-9]([-a-z0-9]*[a-z0-9])?)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual machine to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/osDiskSize",
+          "name": "osDiskSize",
+          "label": "Os disk size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The root disk, in Kubernetes quantity form. At least the image's own size; a clone into a smaller claim is refused by CDI, not by this API. ⚠ Immutable, for the reason a managed disk's size is.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual machine to change it.",
+          "default": "20Gi",
+          "placeholder": "20Gi"
+        },
+        {
+          "jsonPointer": "/properties/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The machine's size, from the platform's sizing catalogue: s1.small is 1 vCPU and 4 GiB, and each rung doubles both. Changing it takes effect the next time the machine starts — KubeVirt reports RestartRequired until then.",
+          "choices": [
+            {
+              "value": "s1.large",
+              "label": "S1 large"
+            },
+            {
+              "value": "s1.medium",
+              "label": "S1 medium"
+            },
+            {
+              "value": "s1.small",
+              "label": "S1 small"
+            },
+            {
+              "value": "s1.xlarge",
+              "label": "S1 xlarge"
+            }
+          ],
+          "default": "s1.small"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "restart",
+          "label": "Restart",
+          "permission": "write",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "start",
+          "label": "Start",
+          "permission": "write",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "stop",
+          "label": "Stop",
+          "permission": "write",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.ContainerRegistry/feeds": {
       "resourceType": "CyberCloud.ContainerRegistry/feeds",
       "apiVersion": "2026-08-01",

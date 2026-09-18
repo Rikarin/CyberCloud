@@ -22,6 +22,20 @@ checked: 2026-08-19
 serves:
   - cdi.kubevirt.io/v1beta1
 
+# ⚠ THE DEFINITION charts/managed/image AND charts/managed/disk RENDER AGAINST IS NOT IN THE ARTEFACT
+# ABOVE. cdi-operator.yaml defines cdis.cdi.kubevirt.io and nothing else; cdi-operator writes
+# datavolumes.cdi.kubevirt.io and the other kinds into the API server at runtime, from schemas
+# compiled into its binary, and the project publishes them as YAML at no tag (the v1.66.0 assets are
+# cdi-operator.yaml, cdi-cr.yaml, network-policies.yaml and a test binary; manifests/ holds templates
+# and examples). So crds.sh cannot fetch DataVolume from the release, and crds/ holds what a cluster
+# this release was installed on served, written by `crds.sh --capture --kubeconfig <file>` and
+# reported RUNTIME rather than compared — charts/bundle/README.md § The definitions the harness
+# validates against. Re-capture on a pin bump, from a cluster the new pin reached `Deployed` on.
+definitionsWrittenByOperator: >
+  cdi-operator.yaml carries cdis.cdi.kubevirt.io and the operator Deployment alone; cdi-operator
+  creates datavolumes.cdi.kubevirt.io and the rest at runtime from schemas compiled into the binary,
+  and no release asset or repository path at v1.66.0 carries them as YAML.
+
 requiredBy:
   - charts/bundle/cluster-api-provider-kubevirt
   # ⚠ Added 2026-09-15: KubeVirt v1.9.0's template controller needs the DataVolume kind at start.

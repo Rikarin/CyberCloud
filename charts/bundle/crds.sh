@@ -42,14 +42,31 @@
 # bakes its release identity into an annotation (victoria-metrics-operator's toJson render) carries
 # the identity the bundle gives it.
 #
+# ⚠ TWO OPERATORS WRITE THEIR DEFINITIONS AT RUNTIME, AND NO RELEASE ARTEFACT CARRIES THEM. KubeVirt's
+# kubevirt-operator.yaml defines kubevirts.kubevirt.io alone and CDI's cdi-operator.yaml
+# cdis.cdi.kubevirt.io alone; virt-operator and cdi-operator write VirtualMachine, DataVolume and the
+# rest into the API server from schemas compiled into their binaries, and neither project publishes
+# them as YAML at any tag (checked against the v1.9.0 and v1.66.0 release assets and the repositories'
+# manifests/ trees, 2026-09-18). So a component whose component.yaml argues, in
+# `definitionsWrittenByOperator:`, that its artefact carries the operator alone has its crds/ written
+# by `--capture --kubeconfig <file>` from a cluster the pinned release was installed on — the object
+# the API server serves, less what the server stamps on every object (status, uid, resourceVersion,
+# generation, creationTimestamp, managedFields) — and the check mode reports those files as RUNTIME
+# rather than comparing them with a release: there is no release to compare with, and saying
+# "matches" would be a tick over a comparison nobody made. Everything the harness does with the file
+# is the same: FakeKubeCluster validates against it and the k3s lane installs it in place of a stub.
+#
 # Usage:
 #   ./charts/bundle/crds.sh                       # check: fetch every pinned release and compare bytes
 #   ./charts/bundle/crds.sh --refresh             # (re)write every crds/*.yaml from the pinned release
 #   ./charts/bundle/crds.sh --component kube-ovn  # one component. Repeatable
 #   ./charts/bundle/crds.sh --wanted              # print the kinds charts render, per component, fetch nothing
+#   ./charts/bundle/crds.sh --capture --kubeconfig ~/.kube/k3s.yaml --component kubevirt
+#                                                 # write crds/*.yaml for a `definitionsWrittenByOperator:`
+#                                                 # component from a cluster its pinned release is installed on
 #
 # Exit codes, which build/Build.Definitions.cs reads:
-#   0  every committed definition matches the release its component pins
+#   0  every committed definition matches the release its component pins, or is a captured RUNTIME one
 #   1  at least one differs, is missing, or is committed for a kind no chart renders
 #   2  usage
 #   3  the release could not be fetched — offline, or no helm/curl — so nothing was compared
@@ -60,6 +77,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 managed="$(cd "$here/../managed" && pwd)"
 mode="check"
 only_components=()
+kubeconfig=""
 
 usage() {
     cat <<'USAGE'
@@ -67,11 +85,16 @@ Usage: crds.sh [options]
 
   --component <name>  One component only. Repeatable.
   --refresh           Write charts/bundle/<component>/crds/<plural>.<group>.yaml from the pinned release.
+  --capture           Write them from a live cluster instead, for a component whose component.yaml
+                      says `definitionsWrittenByOperator:` — the operator, not the artefact, installs
+                      them. Needs --kubeconfig and kubectl; touches only such components.
+  --kubeconfig <file> The cluster --capture reads, with the pinned release installed on it.
   --wanted            Print the operator-owned kinds charts/managed/ renders and which component owns each.
   -h, --help          This.
 
 With no mode, every pinned release is fetched and each committed definition is compared with it byte
-for byte. Exit 0 when all match, 1 on any difference, 3 when the release could not be fetched.
+for byte; a captured definition is reported RUNTIME and not compared. Exit 0 when all match, 1 on any
+difference, 3 when the release could not be fetched.
 USAGE
 }
 
@@ -79,6 +102,8 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --component) only_components+=("$2"); shift 2 ;;
         --refresh) mode="refresh"; shift ;;
+        --capture) mode="capture"; shift ;;
+        --kubeconfig) kubeconfig="$2"; shift 2 ;;
         --wanted) mode="wanted"; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "crds.sh: unknown option '$1'" >&2; usage >&2; exit 2 ;;
@@ -92,6 +117,13 @@ done
 
 key() {
     sed -n "s/^$2: *//p" "$1" | head -1 | tr -d '"'
+}
+
+# written_by_operator <file> — whether the component argues that its artefact carries the operator
+# alone and the operator writes the definitions at runtime. The argument's length is the Bundle
+# gate's to check (build/Build.Definitions.cs); this script reads only that the key is there.
+written_by_operator() {
+    grep -q '^definitionsWrittenByOperator:' "$1"
 }
 
 # sequence <file> <key> — the entries of a top-level block sequence, one per line.
@@ -306,6 +338,69 @@ definitions() {
     '
 }
 
+# identity <file> — `group kind` of one committed definition, read the way definitions() reads a
+# rendered one, so a captured file is placed by the same three lines a rendered one is.
+identity() {
+    awk '
+        /^[A-Za-z]/ { section = $0; sub(/:.*/, "", section); names = 0 }
+        section == "spec" && /^  group:[ \t]*/ { group = $0; sub(/^  group:[ \t]*/, "", group); gsub(/[ \t"]+$|^"/, "", group) }
+        section == "spec" && /^  names:[ \t]*$/ { names = 1; next }
+        section == "spec" && /^  [A-Za-z]/ { names = 0 }
+        names && /^    kind:[ \t]*/ { kind = $0; sub(/^    kind:[ \t]*/, "", kind); gsub(/[ \t"]+$|^"/, "", kind) }
+        END { if (group != "" && kind != "") print group, kind }
+    ' "$1"
+}
+
+# ── Capturing from a cluster ──────────────────────────────────────────────────────────────────
+#
+# capture <component.yaml> <wanted-pairs-file> <out-dir> — for each `group kind` the charts render
+# and this component serves, the CustomResourceDefinition the cluster behind --kubeconfig serves,
+# written to <out-dir>/<metadata.name>.yaml. Prints one `<file>	<group>	<kind>` line per file.
+#
+# ⚠ WHAT IS DROPPED, AND WHY EACH LINE IS ONE THE SERVER WROTE AND NOT THE OPERATOR. `status` is the
+# server's record of acceptance and stored versions; `creationTimestamp`, `generation`,
+# `resourceVersion`, `uid` and `managedFields` are stamped on every object at write time and differ
+# between two clusters that installed the same release. Everything else — labels, annotations, the
+# schema, the served versions, the printer columns — is what the operator asked for and is kept as
+# the server serialised it (kubectl sorts keys; the same release serialises the same way twice, which
+# is what makes a second capture a no-op diff). A three-line header names the provenance, because a
+# file with no `# Source:` line and no release to fetch would otherwise say nothing about where its
+# bytes came from.
+capture() {
+    local file="$1" wantedPairs="$2" out="$3" name release group kind crd
+    name=$(key "$file" component)
+    release=$(key "$file" release)
+    mkdir -p "$out"
+
+    # `<metadata.name> <spec.group> <spec.names.kind>` for every definition the cluster serves.
+    kubectl --kubeconfig "$kubeconfig" get crd \
+        -o custom-columns='NAME:.metadata.name,GROUP:.spec.group,KIND:.spec.names.kind' --no-headers \
+        > "$out/.served" || return 1
+
+    while read -r group kind; do
+        crd=$(awk -v g="$group" -v k="$kind" '$2 == g && $3 == k { print $1; exit }' "$out/.served")
+        if [[ -z "$crd" ]]; then
+            echo "crds.sh: charts/bundle/$name ABSENT — the cluster behind --kubeconfig serves no $kind in $group; is the pinned release installed and Deployed?" >&2
+            continue
+        fi
+        {
+            echo "# $crd as the API server of a cluster running charts/bundle/$name $release served it, captured by"
+            echo "# charts/bundle/crds.sh --capture: the operator writes this definition at runtime and no release"
+            echo "# artefact carries it — charts/bundle/$name/component.yaml § definitionsWrittenByOperator."
+            kubectl --kubeconfig "$kubeconfig" get crd "$crd" -o yaml | tr -d '\r' | awk '
+                /^[A-Za-z]/ { section = $0; sub(/:.*/, "", section); skip = 0 }
+                section == "status" { next }
+                section == "metadata" && /^  (creationTimestamp|generation|resourceVersion|uid):/ { next }
+                section == "metadata" && /^  managedFields:/ { skip = 1; next }
+                section == "metadata" && skip && /^  [A-Za-z]/ { skip = 0 }
+                skip { next }
+                { print }
+            '
+        } > "$out/$crd.yaml"
+        printf '%s\t%s\t%s\n' "$crd.yaml" "$group" "$kind"
+    done < "$wantedPairs"
+}
+
 # ── The roster ────────────────────────────────────────────────────────────────────────────────
 
 selected() {
@@ -349,6 +444,32 @@ for file in "$here"/*/component.yaml; do
         continue
     fi
 
+    if [[ "$mode" == "capture" ]]; then
+        if ! written_by_operator "$file"; then
+            echo "crds.sh: charts/bundle/$component is not captured — its component.yaml carries no definitionsWrittenByOperator:, so its definitions come from the release; run crds.sh --refresh"
+            continue
+        fi
+        if [[ -z "$kubeconfig" ]]; then
+            echo "crds.sh: --capture needs --kubeconfig <file>, a cluster charts/bundle/$component's pinned release is installed on" >&2
+            exit 2
+        fi
+        rm -rf "$scratch/out"
+        if ! capture "$file" "$scratch/pairs" "$scratch/out" > "$scratch/index"; then
+            echo "crds.sh: charts/bundle/$component could not be captured — kubectl could not list the cluster's definitions through $kubeconfig" >&2
+            [[ "$status" -eq 0 ]] && status=3
+            continue
+        fi
+        mkdir -p "$committed"
+        while IFS='	' read -r written group kind; do
+            cp "$scratch/out/$written" "$committed/$written"
+            echo "crds.sh: captured charts/bundle/$component/crds/$written ($(wc -c < "$committed/$written") bytes) — $kind in $group, from the cluster"
+        done < "$scratch/index"
+        while read -r group kind; do
+            awk -F'	' -v g="$group" -v k="$kind" '$2 == g && $3 == k { found = 1 } END { exit !found }' "$scratch/index" || status=1
+        done < "$scratch/pairs"
+        continue
+    fi
+
     if ! render "$file" > "$scratch/render" 2> "$scratch/render.err" || [[ ! -s "$scratch/render" ]]; then
         echo "crds.sh: charts/bundle/$component could not be fetched — $(tr '\n' ' ' < "$scratch/render.err" | cut -c1-300)" >&2
         [[ "$status" -eq 0 ]] && status=3
@@ -361,13 +482,32 @@ for file in "$here"/*/component.yaml; do
     cut -f1 "$scratch/index" > "$scratch/written"
 
     # Every wanted pair has to have produced a file; a pair that did not is a kind the release does
-    # not define — the Strimzi-drops-v1beta2 class of finding, one level down from `serves:`.
+    # not define — the Strimzi-drops-v1beta2 class of finding, one level down from `serves:` — unless
+    # the component argues that its operator writes the definition at runtime, in which case the
+    # committed file is a capture and is reported as such rather than compared with anything.
+    : > "$scratch/runtime"
     while read -r group kind; do
         if ! awk -F'	' -v g="$group" -v k="$kind" '$2 == g && $3 == k { found = 1 } END { exit !found }' "$scratch/index"; then
-            echo "crds.sh: charts/bundle/$component ABSENT — the pinned release defines no $kind in $group, and a chart under charts/managed/ renders one"
-            status=1
+            if written_by_operator "$file"; then
+                captured=""
+                for f in "$committed"/*.yaml; do
+                    [[ -e "$f" ]] || continue
+                    [[ "$(identity "$f")" == "$group $kind" ]] && { captured=$(basename "$f"); break; }
+                done
+                if [[ -n "$captured" ]]; then
+                    echo "$captured" >> "$scratch/runtime"
+                    echo "crds.sh: charts/bundle/$component/crds/$captured RUNTIME — the operator writes $kind in $group at runtime (component.yaml § definitionsWrittenByOperator); captured from a cluster and not compared with a release"
+                else
+                    echo "crds.sh: charts/bundle/$component/crds/ MISSING — the operator writes $kind in $group at runtime and no capture is committed; run crds.sh --capture --kubeconfig <file> against a cluster the pinned release is installed on"
+                    status=1
+                fi
+            else
+                echo "crds.sh: charts/bundle/$component ABSENT — the pinned release defines no $kind in $group, and a chart under charts/managed/ renders one"
+                status=1
+            fi
         fi
     done < "$scratch/pairs"
+    cat "$scratch/runtime" >> "$scratch/written"
 
     case "$mode" in
         refresh)
@@ -378,12 +518,15 @@ for file in "$here"/*/component.yaml; do
                 grep -qxF "$(basename "$f")" "$scratch/written" || { rm -f "$f"; echo "crds.sh: removed charts/bundle/$component/crds/$(basename "$f")"; }
             done
             while read -r written; do
+                # A captured file is not the release's to rewrite; --capture is.
+                grep -qxF "$written" "$scratch/runtime" && continue
                 cp "$scratch/out/$written" "$committed/$written"
                 echo "crds.sh: wrote charts/bundle/$component/crds/$written ($(wc -c < "$committed/$written") bytes)"
             done < "$scratch/written"
             ;;
         check)
             while read -r written; do
+                grep -qxF "$written" "$scratch/runtime" && continue
                 compared=$((compared + 1))
                 if [[ ! -f "$committed/$written" ]]; then
                     echo "crds.sh: charts/bundle/$component/crds/$written MISSING — the pinned release defines it and a chart renders it; run crds.sh --refresh"

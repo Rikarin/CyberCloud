@@ -85,7 +85,15 @@ at nothing, so they stay on the PR. **The coverage floor follows the lane**: the
 over the suites it ran, the nightly full run over every suite, and the cluster lane does not measure
 coverage at all rather than fail every project it does not touch. A merge therefore sees the
 reconciler suites the same day, which is what #25 asked for — a suite red on Linux for ten days was
-one whose only run was inside a job that was red anyway.
+one whose only run was inside a job that was red anyway. ⚠ **The lane is also where a suite whose
+cost is the operator it installs goes, and #28 is the first.**
+`CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance § KubeVirtOnAnEmptyCluster` puts CDI and
+KubeVirt on a fresh k3s through `install.sh` and boots a guest in about eight minutes; the review of
+#28 measured that against the same 26-minute chain and moved it off the PR. It takes the
+`.Cluster.Conformance` suffix rather than a lane of its own — named for the operator it installs, the
+way `CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance` is — so a merge sees it the
+same day, `main.yml`'s `test-cluster` job pays for it under a 45-minute timeout and no PR budget, and
+a second nightly-only lane, whose failures a merge cannot see, never opened.
 
 ⚠ **The Conformance row validates against the operators' real definitions since 2026-09-18, and for
 a month it did not.** Every reconciler renders its custom resource in C#, and the Docker-free suite's
@@ -94,7 +102,10 @@ definition per kind with an open schema. So `charts/managed/seaweedfs-bucket` re
 in a shape SeaweedFS's operator refuses, and twenty-eight green assertions per run said nothing
 (issue #91). The real `CustomResourceDefinition` of every kind a managed chart renders is now
 committed beside the bundle component that installs it, under `charts/bundle/<component>/crds/`,
-fetched from the pinned release by `charts/bundle/crds.sh`; `FakeKubeCluster` validates every apply
+fetched from the pinned release by `charts/bundle/crds.sh` — or, for the two operators that write
+their definitions at runtime and publish no YAML (KubeVirt and CDI, since #28), captured from a
+cluster the pin was installed on by `crds.sh --capture` and reported as such rather than compared
+(`charts/bundle/README.md` § The definitions the harness validates against); `FakeKubeCluster` validates every apply
 against it — required, type, enum, undeclared fields, bounds, associative-list keys, defaults — and
 the k3s harness installs the same bytes in place of the stub. Two gate rows hold the files: **Bundle**
 checks offline that every rendered operator-owned kind has one and nothing else is committed;
@@ -174,10 +185,12 @@ is moot on a v2 host and is kept for a host in the state this one was in.
 |---|---|
 | 19 of the bundle's 20 components installed and serving through `install.sh`; the four Cluster API controllers 1/1 after the `${VAR:=default}` substitution; KubeVirt and CDI `Deployed`; every `waitFor:` returning | **kube-ovn** — needs the `kube-ovn/role=master` node label, a CNI-less cluster, ADR-019 values and OVS kernel modules; refuses at template time here |
 | The `.Cluster.Conformance` suites, the reconciler layer, the bundle suite's three helm rows | **LINSTOR/DRBD** — the replicated storage stage, a kernel module (`bundle.yaml` § owed, `the-replicated-stage-is-not-installed`) |
-| A cgroup-v2 host is the *only* prerequisite for the per-PR lanes above | **KubeVirt guests** — Docker Desktop's VM lends no `/dev/kvm`, so a Machine here is software emulation; the Cluster e2e row of the table above is this lane's, and it is still nightly-and-unbuilt |
+| A cgroup-v2 host is the *only* prerequisite for the per-PR lanes above; ⚠ **and KubeVirt guests run here** — the first `VirtualMachine` this platform rendered reported `Running` under KVM on k3s-in-Docker (#28, 2026-09-17, `CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance § KubeVirtOnAnEmptyCluster`). The right-hand column said this lane lends no `/dev/kvm`; a *privileged* container on a WSL2 host with nested virtualization has it, and an unprivileged one — the reading that misled — does not | **A guest that joins a cluster** — the node-pool Machines need the phase-40 rows under test and a guest the platform can reach (console, agent), neither of which this lane has yet; the Cluster e2e row of the table above is this lane's, and it is still nightly-and-unbuilt. ⚠ KVM itself is no longer on this side of the table on a WSL2 host; a real node without nested virtualization leaves a machine at `ErrorUnschedulable`, which `VirtualMachines.ReadinessOf` reports by name |
 
 The lane that holds those three is the Hyper-V / real-node lane the Cluster e2e row already names.
-It does not exist yet; what changed on 2026-09-15 is that everything *else* no longer waits for it.
+It does not exist yet; what changed on 2026-09-15 is that everything *else* no longer waits for it —
+and what changed on 2026-09-17 is that one of the three, a guest under KVM, turned out not to need
+it on this host.
 
 ### The chaos invariants
 

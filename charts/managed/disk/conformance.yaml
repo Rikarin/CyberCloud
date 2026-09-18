@@ -1,0 +1,127 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Compute/disks. This file is data: `Build.Charts`
+# checks that it is present, non-empty, and names the same resource type as Chart.yaml.
+
+resourceType: CyberCloud.Compute/disks
+apiVersion: "2026-08-01"
+chart: disk
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+renders:
+  - group: cdi.kubevirt.io
+    version: v1beta1
+    kind: DataVolume
+    count: 1
+
+# ADR-013 — every rendered object carries all seven labels.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.compute_disks
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: a-disk-nobody-attached-is-provisioned-not-pending
+    says: >
+      A disk on a WaitForFirstConsumer class converges when CDI reports WaitForFirstConsumer or
+      PendingPopulation — the claim exists and binds to the node of the first machine that mounts it.
+      ⚠ THE OPPOSITE RULE FROM AN IMAGE'S, on purpose: an image without its bytes is useless, a disk
+      without a consumer is inventory. A disk on no class at all stays Pending with CDI's own reason
+      in the InProgress message. ⚠ Measured on a real CDI since #28's review, not read off its
+      source: CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance § KubeVirtOnAnEmptyCluster
+      applies this chart onto openebs-hostpath and CDI 1.66 leaves the claim at WaitForFirstConsumer
+      (read twice on 2026-09-18, and not PendingPopulation, which the populator path would say); once
+      a machine naming the disk in `dataDisks` is applied the same DataVolume goes PVCBound → ImportScheduled
+      → Succeeded in about ten seconds, and once the machine is Running KubeVirt lists the volume on
+      the instance and the launcher pod mounts the claim.
+  - id: the-claim-is-the-resource-name
+    says: >
+      The DataVolume, and so the claim, is named exactly as the resource is, so a machine naming
+      the disk in its body renders `persistentVolumeClaim.claimName: <disk>` without reading this
+      resource. A prefix here would be a second spelling the machine has to know.
+  - id: the-disk-outlives-the-machine
+    says: >
+      Deleting a machine that names this disk leaves the disk and its bytes; deleting the disk is what
+      removes them, and there is no recovery window. A disk is not a child of the machine because a
+      child shares its parent's lifetime by construction.
+  - id: one-disk-draws-its-size-and-one-resource
+    says: >
+      Creating a disk reserves `size` in GiB against QuotaMeter.StorageGb and 1 against
+      QuotaMeter.Resources, and nothing on the machine that attaches it draws the same gibibytes
+      again.
+
+# Meters the type must emit.
+meters:
+  - meter: resources
+    amount: 1
+  - meter: storageGb
+    amount: size
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────────
+owed:
+  - id: hot-attach-is-not-rendered
+    says: >
+      docs/plan/13 calls disks "hot-attachable". A machine's body naming a disk renders an ordinary
+      volume, which KubeVirt applies to the NEXT instance and reports RestartRequired until then; a
+      hotplug is a volume with `hotpluggable: true` added through the `addvolume` subresource, which
+      this platform's cluster connection cannot call and this chart does not render. So attaching a
+      disk to a running machine takes effect at its next restart, and the property description says
+      so.
+  - id: resize-is-not-offered
+    says: >
+      `size` is immutable. CDI refuses a change to a DataVolume's spec; growing the claim behind it
+      depends on the class's allowVolumeExpansion, and shrinking is never possible. A mutable size
+      would be a PUT that works on one class, is refused by the API server on another, and can
+      never go down — three behaviours behind one property. A bigger disk is a new disk until the
+      write path can consult the class.
+  - id: access-mode-is-read-write-once
+    says: >
+      ⚠ FOUND BY THE FIRST DataVolume EVER APPLIED TO A REAL CDI, 2026-09-17. The render left the
+      access mode to CDI's StorageProfile for the class, and CDI 1.66 answered "no accessMode
+      specified in StorageProfile openebs-hostpath": its table of known provisioners has no
+      openebs.io/local row, and with no entry it fills nothing and refuses rather than guessing. Every
+      claim this family renders — a disk, an image, a machine's root clone — now asks for
+      ReadWriteOnce, which is what a node-local disk can be and what every KubeVirt disk works with.
+      ⚠ The image found it and the disk was corrected on the image's evidence; since #28's review
+      the same nightly class applies this chart too, so the disk's claim binding and populating on
+      that CDI is measured rather than inferred from the sibling's.
+      WHAT IT COSTS: live migration needs ReadWriteMany, so a machine on these disks cannot be moved
+      between nodes even on a class that could offer it. Two halves close it: the bundle installing a
+      StorageProfile for its own class (charts/bundle/containerized-data-importer's to own), and the
+      access mode becoming the profile's again once it has one — or a property, once a class that
+      offers ReadWriteMany is installed (charts/bundle/bundle.yaml § owed,
+      `the-replicated-stage-is-not-installed`).
+  - id: node-local-storage-pins-the-disk-to-a-node
+    says: >
+      On the bundle's node-local class a disk binds to one node and the machine that mounts it has
+      to run there; a machine with two disks bound on two nodes cannot start at all. That is the
+      storage stage's property and not this type's — charts/bundle/bundle.yaml § owed,
+      `the-replicated-stage-is-not-installed` — and the storageClass description says it.
+  - id: nothing-mutable-reaches-the-cluster
+    says: >
+      Every tenant-facing property is immutable, so the only PUT this type accepts moves tags, and
+      tags reach no object. The shared suite's update assertion therefore varies a tag — the changed
+      body is the same body with `tags` on it — and proves that an update travels the grain path,
+      nothing about the cluster. Said here so a green update test is not read as more than it is.
+  - id: snapshot-is-not-offered
+    says: >
+      A disk snapshot is a VolumeSnapshot against a VolumeSnapshotClass the node-local class does not
+      have. charts/managed/virtual-machine records the machine half under the same id.
+  - id: a-disk-may-be-named-by-two-machines
+    says: >
+      Nothing checks that a disk is attached to at most one machine — charts/managed/virtual-machine
+      § owed carries the row; it is noted here because the refusal, when it comes, belongs to the
+      disk as much as to the machine.
+  - id: grafana-dashboard
+    says: >
+      Seventh sighting of charts/managed/nats' item of the same name. Capacity used inside a disk is
+      a fact the guest knows and the platform does not.

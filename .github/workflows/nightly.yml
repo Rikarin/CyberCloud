@@ -81,11 +81,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/dotnet
 
-      - name: Prove Docker can run the container-backed suites
+      - name: Prove Docker can run the container-backed suites, and say whether the node has KVM
         run: |
           docker version --format 'client {{.Client.Version}}, server {{.Server.Version}}'
           docker run --rm hello-world > /dev/null
           echo "cgroup version: $(docker info --format '{{.CgroupVersion}}')"
+          # main.yml's test-cluster job has the argument: one *.Cluster.Conformance suite boots a
+          # guest under KVM, and a runner without the device makes it red for a reason worth
+          # reading off the log rather than re-running for.
+          ls -l /dev/kvm || echo "::warning title=KVM::/dev/kvm is absent on this runner; CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance § KubeVirtOnAnEmptyCluster will be red at ErrorUnschedulable, and that is the honest result"
 
       - name: ./build.sh Test
         run: .github/scripts/run-build.sh "$RUNNER_TEMP/test.log" Test

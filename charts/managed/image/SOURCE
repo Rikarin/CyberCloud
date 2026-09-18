@@ -1,0 +1,54 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+
+vendored: none
+upstream: https://github.com/kubevirt/containerized-data-importer
+
+upstream-api: cdi.kubevirt.io/v1beta1
+
+importer: https://github.com/kubevirt/containerized-data-importer         # v1.66.0
+catalogue: https://github.com/kubevirt/containerdisks                     # quay.io/containerdisks
+
+reviewed: 2026-09-17
+
+# ── The catalogue, read off the registry rather than assumed ──────────────────────────────────────
+#
+# ⚠ EVERY ROW IS A DIGEST, AND THE TAG IT WAS READ FROM IS RECORDED HERE AND NOWHERE ELSE. The
+# containerdisks project rebuilds a tag whenever the distribution publishes a new cloud image, so a
+# tag names different bytes from one week to the next; the platform offers the bytes somebody read.
+# Resolved through the OCI distribution API (the same token dance charts/bundle/oci.sh does) on the
+# date below, asking for the index media types first so a multi-architecture tag answers with its
+# INDEX digest — the one `docker://…@sha256:` addresses. All four tags answered on the first request.
+#
+#   ubuntu-24.04   quay.io/containerdisks/ubuntu:24.04   sha256:1b49166bd3047c7d818be67cec73f891b12db7e792dbc91809412b6be1c20ec2
+#   ubuntu-22.04   quay.io/containerdisks/ubuntu:22.04   sha256:27d3bbe1374521aa43fc50b647d712c9c90693f1e8ce9516aa25aeb73f17681d
+#   debian-13      quay.io/containerdisks/debian:13      sha256:518a687c58255e8556906a6f51f45ed9e96b0997eedd6e8a12c36680d82e2956
+#   debian-12      quay.io/containerdisks/debian:12      sha256:ba8d5e83785ce239fa1ff9767ee0146019b96421f96543b68b154cf9e1ff4c7f
+#
+catalogue-reviewed: 2026-09-17
+#
+# ⚠ A REGISTRY READ IS NOT A BOOTED GUEST. This establishes that each digest exists and is what the
+# tag pointed at that day. It says nothing about whether the image boots on this platform — no guest
+# has run here, charts/managed/virtual-machine/conformance.yaml § owed, `running-is-the-vm-lanes`.
+#
+# ⚠ WHY NOT THE DISTRIBUTIONS' OWN URLS. cloud-images.ubuntu.com and cloud.debian.org publish the same
+# images with SHA256SUMS beside them, and CDI's HTTP importer takes no checksum — it has a URL, a
+# secret and a certificate bundle. A digest in a registry reference is verified by the puller; a
+# SHA256SUMS line would be a record this platform wrote down and nothing compared. The catalogue is
+# therefore registry references, and the `url` source keeps HTTP for tenants who accept the
+# difference (conformance.yaml § owed, `http-imports-are-unverified`).
+#
+# ⚠ WHY NOT ROCKY OR WINDOWS. containerdisks publishes no Rocky Linux disk; docs/plan/13 § Images and
+# licensing rules Windows Server out until a licensing arrangement exists.
+#
+# ── What the review established about CDI ────────────────────────────────────────────────────────
+#
+# ⚠ AN IMAGE HAS NO CONSUMER, SO ON A WaitForFirstConsumer CLASS IT NEEDS
+# `cdi.kubevirt.io/storage.bind.immediate.requested: "true"` OR IT NEVER IMPORTS. The annotation makes
+# CDI's controller bind the claim itself; charts/managed/disk deliberately omits it.
+#
+# ⚠ THE DataVolume SPEC IS IMMUTABLE, as charts/managed/disk/SOURCE records, which is why every
+# tenant-facing value here is @immutable.
+# ⚠ AND THE ACCESS MODE HAS TO BE WRITTEN, because CDI has no StorageProfile entry for openebs.io/local
+# — charts/managed/disk/SOURCE has the reading and its conformance.yaml § owed,
+# `access-mode-is-read-write-once`, the cost.
+upstream-webhook: CDI ships a validating webhook for DataVolume (spec immutability, exactly one source, a registry url must start with docker://) and a mutating one that fills spec.storage from the StorageProfile

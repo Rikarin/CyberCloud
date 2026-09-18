@@ -1,0 +1,87 @@
+# A virtual machine — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from VirtualMachines.Schema2026 by `./build.sh Charts`,
+# and so is values.schema.json. ADR-010 § Which end authors the schema: "The C# ResourceSchema is
+# authored. The chart's @param annotations are generated from it and diffed." Editing a generated row
+# here is undone on the next run and fails the build in between; add the field in C# instead.
+#
+# ⚠ THE POWER STATE IS NOT A TENANT VALUE. `runStrategy` below is @internal: the platform renders what
+# the VirtualMachine object already says — Always after a create or a start, Halted after a stop — and
+# a tenant changes it through the start/stop/restart actions, never through this file.
+#
+# ⚠ `image` AND `dataDisks` ARE NAMES IN THE SAME RESOURCE GROUP. The root disk is a CDI clone of the
+# image's claim and each data disk is the disk resource's claim, both in the release namespace; a
+# name that is not there is refused by CDI or reported by KubeVirt, never by this chart.
+
+## @param size {string} The machine's size, from the platform's sizing catalogue: s1.small is 1 vCPU and 4 GiB, and each rung doubles both. Changing it takes effect the next time the machine starts — KubeVirt reports RestartRequired until then.
+## @required
+## @enum s1.large | s1.medium | s1.small | s1.xlarge
+## @widget cozy-preset
+size: s1.small
+
+## @param image {string} The CyberCloud.Compute/images resource the root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the machine waits for it and says so.
+## @required
+## @immutable
+## @length ..63
+## @pattern [a-z0-9]([-a-z0-9]*[a-z0-9])?
+## @example "ubuntu"
+image: ubuntu
+
+## @param osDiskSize {string} The root disk, in Kubernetes quantity form. At least the image's own size; a clone into a smaller claim is refused by CDI, not by this API. ⚠ Immutable, for the reason a managed disk's size is.
+## @required
+## @immutable
+## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+## @example "20Gi"
+osDiskSize: "20Gi"
+
+## @param dataDisks {array} CyberCloud.Compute/disks resources attached to the machine, by name, in this resource group. A change attaches or detaches at the machine's next start. ⚠ A disk named os or cloudinit collides with the machine's own volumes and is refused.
+## @example ["data"]
+dataDisks: []
+
+## @param network {object} The tenant network the machine's interface joins. Both empty means the cluster's pod network.
+network:
+  ## @param virtualNetwork {string} The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.
+  ## @immutable
+  ## @length ..63
+  ## @pattern ([a-z0-9]([-a-z0-9]*[a-z0-9])?)?
+  virtualNetwork: ""
+  ## @param subnet {string} The subnet of that network the interface takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the machine never starts.
+  ## @immutable
+  ## @length ..63
+  ## @pattern ([a-z0-9]([-a-z0-9]*[a-z0-9])?)?
+  ## @widget subnet
+  subnet: ""
+
+## @param cloudInit {object} First-boot configuration, as cloud-init reads it.
+cloudInit:
+  ## @param userData {string} A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other path is refused. Empty means no cloud-init at all.
+  ## @length ..512
+  ## @pattern ([^#@\s]+#[^#@\s]+(@[^#@\s]+)?)?
+  ## @widget secret-ref
+  userData: ""
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Compute/virtualMachines
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param runStrategy {string} KubeVirt's run strategy — Always for a machine that should be on, Halted for one that should be off.
+## @internal The power state. The reconciler reads it off the VirtualMachine object before every render and writes back what it found; the start and stop actions are what change it. A tenant has no body property for it, which is why it is not generated from the schema.
+runStrategy: Always
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

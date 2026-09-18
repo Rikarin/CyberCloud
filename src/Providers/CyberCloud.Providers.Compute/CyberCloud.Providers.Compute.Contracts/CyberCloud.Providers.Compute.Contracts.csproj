@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". Here that is three schemas — a virtual machine, a managed disk and an image —
+      and the KubeVirt and CDI objects each renders into.
+
+      ⚠ NO GRAIN INTERFACES, AND IT IS THE FIRST FAMILY WHOSE RESOURCE HAS A POWER STATE. A virtual
+      machine is on or off, and that fact is not in its desired body: it is `spec.runStrategy` on the
+      VirtualMachine object in the cluster, moved by the start/stop actions and read back by the
+      reconciler — VirtualMachines.RunStrategyOf carries the argument for why the cluster rather than
+      a grain is where it lives. So even the one fact that looks like state to hold is somebody
+      else's status, which is the shape ADR-001 refuses.
+
+      ⚠ IT REFERENCES ONLY CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts —
+      the whole reference set docs/plan/03 § The .Contracts split allows a provider, and rule 2 of
+      § Assembly graph rules forbids the rest. That rule is why VirtualMachines.LogicalSwitchOf spells
+      the Kube-OVN Subnet object's name a second time rather than calling
+      NetworkSubnets.ObjectNameOf: a ProjectReference from one provider family to another is the
+      violation, whatever it is used for. ComputeNetworkJoinTests compares the two spellings from a
+      test project, which the rule does not reach.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

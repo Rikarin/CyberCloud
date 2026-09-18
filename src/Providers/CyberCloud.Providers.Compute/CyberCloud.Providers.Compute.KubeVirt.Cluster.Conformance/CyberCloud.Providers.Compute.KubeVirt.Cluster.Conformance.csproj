@@ -1,0 +1,84 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The Compute family's charts against the REAL CDI and KubeVirt — installed onto a fresh k3s by
+      charts/bundle/install.sh before the one cluster-backed class here runs.
+
+      ⚠ THE SECOND TEST PROJECT UNDER src/Providers THAT INSTALLS A BUNDLE COMPONENT, AND THE FIRST
+      TO INSTALL A `manifest:` ROW. KubeVirtOnAnEmptyCluster runs install.sh, selecting by component, for
+      openebs-localpv, containerized-data-importer and kubevirt, imports an image through
+      charts/managed/image, provisions a disk through charts/managed/disk, applies
+      charts/managed/virtual-machine against KubeVirt's real webhooks and reads the guest Running
+      under KVM. CyberCloud.Providers.Compute.Cluster.Conformance, the family's other k3s lane, applies
+      the same renders against a derived CRD stub and records that no operator admitted them; this
+      project is where an operator does.
+
+      ⚠ ONE CLASS, EIGHT MINUTES, AND THAT IS WHY IT IS A PROJECT OF ITS OWN IN THE CLUSTER LANE.
+      Measured at 7 m 03 s to 8 m 26 s on a ten-CPU host, most of it install.sh pulling the two
+      operators' images. The class landed in test/CyberCloud.Bundle.Cluster.Conformance and the review
+      of #28 asked what that costs on a PR: gate.yml's `test` job runs every cluster-backed suite one
+      at a time (build/Build.Test.cs § ClusterBackedSuiteDegree), that chain took 26 m 16 s on the
+      runner on 2026-09-15 — read off the job's own log, against a 25-minute budget pr.yml enforces
+      and a 30-minute job timeout — and this class would have put it past the timeout on every PR.
+      #25 had already split the same chain off the PR for the same measurement: the Cluster lane of
+      Test (build/Build.Test.cs § TestLane) runs the *.Cluster.Conformance suites on every merge and in
+      nightly.yml's full run, never on a PR. So this project takes that suffix and rides that lane,
+      the way CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance does for the operator it
+      installs; the cost is main.yml's `test-cluster` job's, which has a 45-minute timeout and no
+      PR budget, and the class remarks carry the readings.
+
+      ⚠ NOT `.Conformance`, AND NOT A CLASS IN THE FAMILY'S `.Cluster.Conformance`. The first would
+      put this assembly on every PR, where Test's Fast lane and the Labels gate run without a
+      daemon and read "Zero tests ran" as a failure. The second already exists, and its harness
+      derives an open-schema stub for every kind its k3s does not serve; the class here asserts first
+      that its k3s serves neither kubevirt.io nor cdi.kubevirt.io and then hands install.sh the real
+      definitions. Whichever ran first in one process would leave the other a cluster it was not
+      written for — a stub install.sh does not own, or a real webhook behind a suite that records
+      there is none — the Cnpg project's reason for its own process, and the same boundary here: one
+      k3s per process, ClusterSlot.
+
+      ⚠ WHAT MOVED AND WHAT STAYED. The cert-manager, openebs-localpv and cloudnative-pg classes stay in
+      test/CyberCloud.Bundle.Cluster.Conformance: together they cost under five minutes and are the
+      install mechanism's own proof. What moved is the one class whose cost is the operators it
+      installs rather than the script that installs them. EmptyClusterFixture and BundleInstaller
+      stay where they were and are referenced from here, so this project starts its k3s the same way
+      and takes the same ClusterSlot permit as that sibling.
+
+      ⚠ THE DAEMON-FREE COMPANION MOVED WITH IT. KubeVirtComponentInstaller reads the installer's dry
+      run and needs no cluster; without it a run of this assembly on a machine with no Docker daemon
+      would skip its only test and report "Zero tests ran", which the minimum-expected-tests switch
+      fails. The same shape CertManagerComponentInstaller gives the bundle suite.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Testcontainers.K3s"/>
+        <!-- The raw client, for the half of every assertion here that is deliberately NOT our code. -->
+        <PackageReference Include="KubernetesClient"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+          For EmptyClusterFixture and BundleInstaller — the fixture that starts one k3s per class under
+          ClusterSlot, and the runner of install.sh. Both are that project's and are not copied here,
+          for the reason its own csproj gives about ClusterInfrastructure: a second spelling of a
+          lock-file name is how two suites come to hold two clusters.
+        -->
+        <ProjectReference Include="../../../../test/CyberCloud.Bundle.Cluster.Conformance/CyberCloud.Bundle.Cluster.Conformance.csproj"/>
+        <!--
+          ⚠ THE FAMILY'S .Contracts, FOR TWO READINGS. KubeVirtOnAnEmptyCluster hands the
+          VirtualMachine a real KubeVirt wrote to VirtualMachines.ReadinessOf and VirtualMachines.Matches,
+          so the sentence the reconciler would put in a tenant's InProgress message and the comparison
+          that decides Converged are both asserted against an object the mutating webhook has been
+          through. No reconciler runs here; the objects are applied by this test's own kubectl from the
+          charts, exactly as CloudNativePgOnAnEmptyCluster applies its Cluster.
+        -->
+        <ProjectReference Include="../CyberCloud.Providers.Compute.Contracts/CyberCloud.Providers.Compute.Contracts.csproj"/>
+    </ItemGroup>
+
+</Project>

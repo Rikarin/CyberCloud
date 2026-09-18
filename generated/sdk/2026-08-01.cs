@@ -1694,6 +1694,668 @@ public sealed partial class MessageTemplateCollection {
     public partial AsyncPageable<MessageTemplateResource> GetAllAsync(string servicesName, CancellationToken cancellationToken = default);
 }
 
+/// <summary>The body of a CyberCloud.Compute/disks.</summary>
+/// <remarks>A blank data disk of a size and a storage class, provisioned on its own and attached to a virtual machine by name. It outlives the machine.</remarks>
+public sealed partial class ManagedDiskData {
+
+    /// <summary>The region the disk is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The disk's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The disk's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster the disk is provisioned in. Only a virtual machine in the same cluster and the same resource group can attach it.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>The disk's size, in Kubernetes quantity form. ⚠ Immutable: growing a disk depends on the storage class and shrinking one is never possible, so a bigger disk is a new disk.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "32Gi" when left unset.</remarks>
+        [JsonPropertyName("size")]
+        public required string Size { get; set; }
+
+        /// <summary>The storage class the disk is on. Empty means the cluster's default, which on a bundle-installed cluster is node-local: one copy, on one node, and the machine that attaches the disk runs on that node.</summary>
+        /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+        [JsonPropertyName("storageClass")]
+        public string? StorageClass { get; set; }
+    }
+}
+
+/// <summary>One Managed disk, as the API returns it, and the operations on it.</summary>
+public sealed partial class ManagedDiskResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required ManagedDiskData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<ManagedDiskResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<ManagedDiskResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        ManagedDiskData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Managed disks in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class ManagedDiskCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Compute/disks";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Compute/disks/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Compute/disks";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Managed disk.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<ManagedDiskResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        ManagedDiskData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Managed disk by name.</summary>
+    public partial Task<Response<ManagedDiskResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Managed disks in this group, paged.</summary>
+    public partial AsyncPageable<ManagedDiskResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/source/kind accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ImageKind {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>catalogue</summary>
+    [JsonStringEnumMemberName("catalogue")]
+    Catalogue = 1,
+
+    /// <summary>url</summary>
+    [JsonStringEnumMemberName("url")]
+    Url = 2
+}
+
+/// <summary>The values /properties/source/name accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ImageName {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>debian-12</summary>
+    [JsonStringEnumMemberName("debian-12")]
+    Debian12 = 1,
+
+    /// <summary>debian-13</summary>
+    [JsonStringEnumMemberName("debian-13")]
+    Debian13 = 2,
+
+    /// <summary>ubuntu-22.04</summary>
+    [JsonStringEnumMemberName("ubuntu-22.04")]
+    Ubuntu2204 = 3,
+
+    /// <summary>ubuntu-24.04</summary>
+    [JsonStringEnumMemberName("ubuntu-24.04")]
+    Ubuntu2404 = 4
+}
+
+/// <summary>The body of a CyberCloud.Compute/images.</summary>
+/// <remarks>A bootable disk image imported once into your resource group — one of the platform's Ubuntu and Debian cloud images, pinned by digest, or a container disk or HTTP address you supply — and cloned by every machine that boots from it.</remarks>
+public sealed partial class ImageData {
+
+    /// <summary>The region the image is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The image's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The image's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster the image is imported into. A virtual machine can boot from it only in the same cluster and the same resource group, because a clone is a claim in one namespace copied from a claim beside it.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>The claim the image is imported into, in Kubernetes quantity form. It must hold the image's virtual size — 10Gi fits every catalogue image — and it is the smallest disk a machine booted from this image can have.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10Gi" when left unset.</remarks>
+        [JsonPropertyName("size")]
+        public required string Size { get; set; }
+
+        /// <summary>Where the bytes come from.</summary>
+        [JsonPropertyName("source")]
+        public SourceData? Source { get; set; }
+
+        /// <summary>The storage class the imported claim is on. Empty means the cluster's default, which on a bundle-installed cluster is the node-local class.</summary>
+        /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+        [JsonPropertyName("storageClass")]
+        public string? StorageClass { get; set; }
+
+        /// <summary>Where the bytes come from.</summary>
+        public sealed partial class SourceData {
+
+            /// <summary>catalogue for one of the platform's own Linux cloud images, pinned by digest; url for an address you supply.</summary>
+            /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "catalogue" when left unset.</remarks>
+            [JsonPropertyName("kind")]
+            public required ImageKind Kind { get; set; }
+
+            /// <summary>Which catalogue image, when kind is catalogue. ⚠ Linux only: Windows Server is a licensing arrangement and not in this catalogue — docs/plan/13 § Images and licensing.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "ubuntu-24.04" when left unset.</remarks>
+            [JsonPropertyName("name")]
+            public ImageName? Name { get; set; }
+
+            /// <summary>Where to import from, when kind is url. docker://registry/repository[:tag|@digest] is a container disk; http:// or https:// is a raw or qcow2 image. ⚠ An HTTP address carries no checksum and nothing verifies what arrives — pin a registry reference by digest when you can.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("url")]
+            public string? Url { get; set; }
+        }
+    }
+}
+
+/// <summary>One Image, as the API returns it, and the operations on it.</summary>
+public sealed partial class ImageResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required ImageData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<ImageResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<ImageResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        ImageData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Images in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class ImageCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Compute/images";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Compute/images/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Compute/images";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Image.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<ImageResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        ImageData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Image by name.</summary>
+    public partial Task<Response<ImageResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Images in this group, paged.</summary>
+    public partial AsyncPageable<ImageResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/size accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum VirtualMachineSize {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>s1.large</summary>
+    [JsonStringEnumMemberName("s1.large")]
+    S1Large = 1,
+
+    /// <summary>s1.medium</summary>
+    [JsonStringEnumMemberName("s1.medium")]
+    S1Medium = 2,
+
+    /// <summary>s1.small</summary>
+    [JsonStringEnumMemberName("s1.small")]
+    S1Small = 3,
+
+    /// <summary>s1.xlarge</summary>
+    [JsonStringEnumMemberName("s1.xlarge")]
+    S1Xlarge = 4
+}
+
+/// <summary>The body of a CyberCloud.Compute/virtualMachines.</summary>
+/// <remarks>A virtual machine on KubeVirt: a size from the platform catalogue, a root disk cloned from an image, managed disks by name, a tenant subnet, and cloud-init from a vault handle. Start, stop and restart are actions; stop releases compute and keeps every disk.</remarks>
+public sealed partial class VirtualMachineData {
+
+    /// <summary>The region the machine is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The machine's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The machine's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>First-boot configuration, as cloud-init reads it.</summary>
+        [JsonPropertyName("cloudInit")]
+        public CloudInitData? CloudInit { get; set; }
+
+        /// <summary>The cluster the machine runs in. Must be the one its image and its disks are in — nothing checks that, and a machine placed elsewhere clones a claim that is not there.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>CyberCloud.Compute/disks resources attached to the machine, by name, in this resource group. A change attaches or detaches at the machine's next start. ⚠ A disk named os or cloudinit collides with the machine's own volumes and is refused.</summary>
+        /// <remarks>Defaults to [] when left unset.</remarks>
+        [JsonPropertyName("dataDisks")]
+        public IList<string> DataDisks { get; set; } = new List<string>();
+
+        /// <summary>The CyberCloud.Compute/images resource the root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the machine waits for it and says so.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "ubuntu" when left unset.</remarks>
+        [JsonPropertyName("image")]
+        public required string Image { get; set; }
+
+        /// <summary>The tenant network the machine's interface joins. Both empty means the cluster's pod network.</summary>
+        [JsonPropertyName("network")]
+        public NetworkData? Network { get; set; }
+
+        /// <summary>The root disk, in Kubernetes quantity form. At least the image's own size; a clone into a smaller claim is refused by CDI, not by this API. ⚠ Immutable, for the reason a managed disk's size is.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "20Gi" when left unset.</remarks>
+        [JsonPropertyName("osDiskSize")]
+        public required string OsDiskSize { get; set; }
+
+        /// <summary>The machine's size, from the platform's sizing catalogue: s1.small is 1 vCPU and 4 GiB, and each rung doubles both. Changing it takes effect the next time the machine starts — KubeVirt reports RestartRequired until then.</summary>
+        /// <remarks>Required on a create. Defaults to "s1.small" when left unset.</remarks>
+        [JsonPropertyName("size")]
+        public required VirtualMachineSize Size { get; set; }
+
+        /// <summary>First-boot configuration, as cloud-init reads it.</summary>
+        public sealed partial class CloudInitData {
+
+            /// <summary>A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/&lt;tenantId&gt;/; any other path is refused. Empty means no cloud-init at all.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("userData")]
+            public string? UserData { get; set; }
+        }
+
+        /// <summary>The tenant network the machine's interface joins. Both empty means the cluster's pod network.</summary>
+        public sealed partial class NetworkData {
+
+            /// <summary>The subnet of that network the interface takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the machine never starts.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("subnet")]
+            public string? Subnet { get; set; }
+
+            /// <summary>The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("virtualNetwork")]
+            public string? VirtualNetwork { get; set; }
+        }
+    }
+}
+
+/// <summary>One Virtual machine, as the API returns it, and the operations on it.</summary>
+public sealed partial class VirtualMachineResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required VirtualMachineData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<VirtualMachineResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<VirtualMachineResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        VirtualMachineData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /action accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum RestartResultAction {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>start</summary>
+        [JsonStringEnumMemberName("start")]
+        Start = 1,
+
+        /// <summary>stop</summary>
+        [JsonStringEnumMemberName("stop")]
+        Stop = 2,
+
+        /// <summary>restart</summary>
+        [JsonStringEnumMemberName("restart")]
+        Restart = 3
+    }
+
+    /// <summary>The values /runStrategy accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum RestartResultRunStrategy {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>Always</summary>
+        [JsonStringEnumMemberName("Always")]
+        Always = 1,
+
+        /// <summary>Halted</summary>
+        [JsonStringEnumMemberName("Halted")]
+        Halted = 2
+    }
+
+    /// <summary>The values /runStrategyBefore accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum RestartResultRunStrategyBefore {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>Always</summary>
+        [JsonStringEnumMemberName("Always")]
+        Always = 1,
+
+        /// <summary>Halted</summary>
+        [JsonStringEnumMemberName("Halted")]
+        Halted = 2
+    }
+
+    /// <summary>What restart returns.</summary>
+    public sealed partial class RestartResult {
+
+        /// <summary>start, stop or restart — which one ran.</summary>
+        [JsonPropertyName("action")]
+        public required RestartResultAction Action { get; set; }
+
+        /// <summary>The run strategy after the action. A restart leaves it as it was.</summary>
+        [JsonPropertyName("runStrategy")]
+        public required RestartResultRunStrategy RunStrategy { get; set; }
+
+        /// <summary>The machine's KubeVirt run strategy before the action: Always for a machine that should be on, Halted for one that should be off.</summary>
+        [JsonPropertyName("runStrategyBefore")]
+        public required RestartResultRunStrategyBefore RunStrategyBefore { get; set; }
+    }
+
+    /// <summary>Restart. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<RestartResult>> RestartAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /action accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum StartResultAction {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>start</summary>
+        [JsonStringEnumMemberName("start")]
+        Start = 1,
+
+        /// <summary>stop</summary>
+        [JsonStringEnumMemberName("stop")]
+        Stop = 2,
+
+        /// <summary>restart</summary>
+        [JsonStringEnumMemberName("restart")]
+        Restart = 3
+    }
+
+    /// <summary>The values /runStrategy accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum StartResultRunStrategy {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>Always</summary>
+        [JsonStringEnumMemberName("Always")]
+        Always = 1,
+
+        /// <summary>Halted</summary>
+        [JsonStringEnumMemberName("Halted")]
+        Halted = 2
+    }
+
+    /// <summary>The values /runStrategyBefore accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum StartResultRunStrategyBefore {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>Always</summary>
+        [JsonStringEnumMemberName("Always")]
+        Always = 1,
+
+        /// <summary>Halted</summary>
+        [JsonStringEnumMemberName("Halted")]
+        Halted = 2
+    }
+
+    /// <summary>What start returns.</summary>
+    public sealed partial class StartResult {
+
+        /// <summary>start, stop or restart — which one ran.</summary>
+        [JsonPropertyName("action")]
+        public required StartResultAction Action { get; set; }
+
+        /// <summary>The run strategy after the action. A restart leaves it as it was.</summary>
+        [JsonPropertyName("runStrategy")]
+        public required StartResultRunStrategy RunStrategy { get; set; }
+
+        /// <summary>The machine's KubeVirt run strategy before the action: Always for a machine that should be on, Halted for one that should be off.</summary>
+        [JsonPropertyName("runStrategyBefore")]
+        public required StartResultRunStrategyBefore RunStrategyBefore { get; set; }
+    }
+
+    /// <summary>Start. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<StartResult>> StartAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /action accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum StopResultAction {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>start</summary>
+        [JsonStringEnumMemberName("start")]
+        Start = 1,
+
+        /// <summary>stop</summary>
+        [JsonStringEnumMemberName("stop")]
+        Stop = 2,
+
+        /// <summary>restart</summary>
+        [JsonStringEnumMemberName("restart")]
+        Restart = 3
+    }
+
+    /// <summary>The values /runStrategy accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum StopResultRunStrategy {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>Always</summary>
+        [JsonStringEnumMemberName("Always")]
+        Always = 1,
+
+        /// <summary>Halted</summary>
+        [JsonStringEnumMemberName("Halted")]
+        Halted = 2
+    }
+
+    /// <summary>The values /runStrategyBefore accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum StopResultRunStrategyBefore {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>Always</summary>
+        [JsonStringEnumMemberName("Always")]
+        Always = 1,
+
+        /// <summary>Halted</summary>
+        [JsonStringEnumMemberName("Halted")]
+        Halted = 2
+    }
+
+    /// <summary>What stop returns.</summary>
+    public sealed partial class StopResult {
+
+        /// <summary>start, stop or restart — which one ran.</summary>
+        [JsonPropertyName("action")]
+        public required StopResultAction Action { get; set; }
+
+        /// <summary>The run strategy after the action. A restart leaves it as it was.</summary>
+        [JsonPropertyName("runStrategy")]
+        public required StopResultRunStrategy RunStrategy { get; set; }
+
+        /// <summary>The machine's KubeVirt run strategy before the action: Always for a machine that should be on, Halted for one that should be off.</summary>
+        [JsonPropertyName("runStrategyBefore")]
+        public required StopResultRunStrategyBefore RunStrategyBefore { get; set; }
+    }
+
+    /// <summary>Stop. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<StopResult>> StopAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Virtual machines in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class VirtualMachineCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Compute/virtualMachines";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Compute/virtualMachines/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Compute/virtualMachines";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Virtual machine.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<VirtualMachineResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        VirtualMachineData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Virtual machine by name.</summary>
+    public partial Task<Response<VirtualMachineResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Virtual machines in this group, paged.</summary>
+    public partial AsyncPageable<VirtualMachineResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/kind accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum ArtifactFeedKind {
     /// <summary>Never assigned. Not a value the API accepts.</summary>

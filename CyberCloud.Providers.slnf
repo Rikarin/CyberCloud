@@ -111,6 +111,13 @@
       "src/Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.Conformance/CyberCloud.Providers.RecoveryServices.Conformance.csproj",
       "src/Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.Cluster.Conformance/CyberCloud.Providers.RecoveryServices.Cluster.Conformance.csproj",
       "src/Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance/CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance.csproj",
+      "src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Contracts/CyberCloud.Providers.Compute.Contracts.csproj",
+      "src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.csproj",
+      "src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Application/CyberCloud.Providers.Compute.Application.csproj",
+      "src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Tests/CyberCloud.Providers.Compute.Tests.csproj",
+      "src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Conformance/CyberCloud.Providers.Compute.Conformance.csproj",
+      "src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Cluster.Conformance/CyberCloud.Providers.Compute.Cluster.Conformance.csproj",
+      "src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance/CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance.csproj",
       "test/CyberCloud.Conformance/CyberCloud.Conformance.csproj",
       "test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"
     ]

@@ -56,10 +56,20 @@ jobs:
 
   # ── docs/plan/23 § Test layers, row Reconciler: "k3s in Testcontainers, real API server, real SSA"
   #
-  # The sixteen *.Cluster.Conformance suites, and nothing else — `--test-lane Cluster`. Each holds a
-  # k3s, they run one at a time (Build.Test.cs § ClusterBackedSuiteDegree), and on a 4-vCPU runner the
-  # chain is about twenty minutes, which is why this is a job of its own, here and not in gate.yml: a
-  # PR has a 25-minute budget and a merge does not (gate.yml's header has the rest of that argument).
+  # The *.Cluster.Conformance suites, and nothing else — `--test-lane Cluster`. Each holds a k3s,
+  # they run one at a time (Build.Test.cs § ClusterBackedSuiteDegree), and on a 4-vCPU runner the
+  # chain was about twenty minutes for sixteen of them, which is why this is a job of its own, here
+  # and not in gate.yml: a PR has a 25-minute budget and a merge does not (gate.yml's header has the
+  # rest of that argument). Since #28 the chain carries the slowest suite in the tree too:
+  # CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance installs CDI and KubeVirt through
+  # install.sh and boots a guest, about eight minutes on its own — which is why it is here and not
+  # on a PR, and why the timeout below is what it is.
+  #
+  # ⚠ THAT SUITE NEEDS /dev/kvm, AND THIS JOB DOES NOT PRETEND OTHERWISE. The guest boots under KVM —
+  # the bundle never switches emulation on, charts/bundle/kubevirt/component.yaml § notes — so a
+  # runner without the device leaves the machine at ErrorUnschedulable and the suite red, naming the
+  # missing device in its own message. GitHub's x64 Linux runners have carried it since 2024; the
+  # preflight step prints what this one has so a red run can be read without re-running it.
   #
   # ⚠ NO COVERAGE FLOOR GUARD HERE, AND THAT IS NOT AN OVERSIGHT. The Cluster lane collects no
   # coverage — sixteen suites that instrument the reconcilers and nothing else would put every other
@@ -95,6 +105,7 @@ jobs:
             echo "::error title=test-cluster::the Docker daemon is on cgroup v$cgroup and k3s v1.35 will not schedule a pod on it. Every suite in this lane would skip its cluster-backed tests and report success. docs/plan/23 § The lane that needs a kubelet."
             exit 1
           fi
+          ls -l /dev/kvm || echo "::warning title=KVM::/dev/kvm is absent on this runner; CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance § KubeVirtOnAnEmptyCluster will be red at ErrorUnschedulable, and that is the honest result"
 
       - name: ./build.sh Test --test-lane Cluster
         run: .github/scripts/run-build.sh "$RUNNER_TEMP/test-cluster.log" Test --test-lane Cluster

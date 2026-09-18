@@ -29,6 +29,17 @@
 //     `serves:` does not cover its group/version, or is misnamed                       → Bundle
 //   * a committed definition no longer matches the release its component pins          → Definitions
 //   * a chart renders a kind the pinned release does not define at all                 → Definitions
+//   * a component says `definitionsWrittenByOperator:` in fewer characters than an
+//     argument takes, or says it while serving nothing                                 → Bundle
+//
+// ⚠ TWO COMPONENTS HAVE NO RELEASE TO COMPARE WITH, AND THE ROWS SAY SO RATHER THAN TICK. KubeVirt's
+// and CDI's artefacts carry the operator and its own top-level kind alone; virt-operator and
+// cdi-operator write VirtualMachine and DataVolume into the API server at runtime, and neither
+// project publishes those as YAML (#28 meeting #91, 2026-09-18). Their component.yaml argues that in
+// `definitionsWrittenByOperator:`, crds.sh writes their crds/ from a cluster the pin was installed on
+// (`--capture --kubeconfig`), the offline half here reads the captured files like any other, and the
+// online row counts them as "captured, not compared" in its detail — a RUNTIME line from the script
+// — instead of as a match nobody measured.
 
 using Nuke.Common.IO;
 using Nuke.Common.Tooling;
@@ -85,6 +96,36 @@ partial class Build {
         foreach (var component in components) {
             foreach (var entry in component.Serves) {
                 servedBy.TryAdd(entry, component.Name);
+            }
+
+            // ⚠ The same floor and the same reason `servesNoDefinitions:` has: a checkbox is how an
+            // exception becomes the default, and the exception here is a component whose crds/ no
+            // release can be fetched to check. The prose has to say which artefact carries what and
+            // where the definitions come from instead, and a component that serves nothing has no
+            // definition for an operator to write.
+            var reason = ReadBundleReason(component.File, "definitionsWrittenByOperator");
+
+            if (reason is null) {
+                continue;
+            }
+
+            var relative = RootDirectory.GetRelativePathTo(component.File).ToString().Replace('\\', '/');
+
+            if (component.Serves.Count == 0) {
+                yield return
+                    $"{relative} declares `definitionsWrittenByOperator:` and no `serves:` entry. The key "
+                    + "says the operator writes the definitions of the kinds this component serves; a "
+                    + "component that serves nothing has none for it to write, and the escape for that "
+                    + "is `servesNoDefinitions:`";
+            }
+
+            if (reason.Length < ServesNoDefinitionsMinimumReason) {
+                yield return
+                    $"{relative} declares `definitionsWrittenByOperator:` in {reason.Length} character(s) "
+                    + $"and the floor is {ServesNoDefinitionsMinimumReason}. Name the artefact, the one "
+                    + "definition it does carry, and where the rest come from — crds.sh --capture reads "
+                    + "this key as permission to commit a definition no release can be fetched to check, "
+                    + "and a one-word reason is a checkbox";
             }
         }
 
@@ -452,6 +493,7 @@ partial class Build {
         }
 
         var compared = run.Output.Count(x => x.EndsWith(" matches", StringComparison.Ordinal));
+        var captured = run.Output.Count(x => x.Contains(" RUNTIME — ", StringComparison.Ordinal));
 
         if (run.ExitCode == 3) {
             var why = run.Output.FirstOrDefault(x => x.Contains("could not be fetched", StringComparison.Ordinal)) ?? "a release could not be fetched";
@@ -480,7 +522,11 @@ partial class Build {
         return GateOutcome.From(
             Gate,
             compared,
-            $"definition(s) under charts/bundle/*/crds/ fetched from the release each component pins and compared byte for byte by charts/bundle/crds.sh",
+            "definition(s) under charts/bundle/*/crds/ fetched from the release each component pins and compared byte for byte by charts/bundle/crds.sh"
+            + (captured == 0
+                ? string.Empty
+                : $"; {captured.ToString(CultureInfo.InvariantCulture)} more captured from a cluster because the operator writes them at runtime "
+                + "(component.yaml § definitionsWrittenByOperator) and NOT compared — no release carries them"),
             violations
         );
     }

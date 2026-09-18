@@ -1,0 +1,41 @@
+# A virtual machine — docs/plan/13 § Virtual Machines: "KubeVirt. A VM is a VirtualMachine CR plus
+# DataVolumes from CDI plus a Kube-OVN interface."
+#
+# ⚠ THE FIRST CHART IN THE TREE WHOSE OBJECT HAS A POWER STATE. `spec.runStrategy` is Always or Halted,
+# the start/stop actions move it on the object, and the reconciler reads it back before every render.
+# This chart's `runStrategy` value is therefore @internal: what the platform renders is what the
+# object already says, and a tenant has no body property for it.
+#
+# ⚠ ONE OBJECT, AND THE CLOUD-INIT SECRET IS NOT IN IT. A Helm chart carries values, not vault
+# contents; the Secret a machine mounts is rendered by the reconciler from the resolved handle and
+# named here by convention — `{name}-cloud-init`, key `userdata`. conformance.yaml § renders says so.
+apiVersion: v2
+name: virtual-machine
+description: A virtual machine on KubeVirt — a size from the platform catalogue, a root disk cloned from an image, managed disks by name, a tenant subnet, and cloud-init from a vault handle.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ The KubeVirt release this chart's objects were reviewed against — charts/bundle/kubevirt's pin.
+appVersion: "1.9.0"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - kubevirt
+  - virtual-machine
+  - compute
+
+home: https://kubevirt.io
+sources:
+  - https://github.com/kubevirt/kubevirt
+  - https://github.com/kubevirt/containerized-data-importer
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Compute/virtualMachines
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: kubevirt

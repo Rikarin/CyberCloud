@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fourth project: "TestCluster + k3s".
+
+      ⚠ NEITHER, HERE. The TestCluster half is test/CyberCloud.Conformance's, because a provider's
+      lifecycle is the SHARED suite's assertion, and the k3s half is
+      CyberCloud.Providers.Compute.Cluster.Conformance's — with the webhook half, for the first time
+      in the tree, in CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance
+      § KubeVirtOnAnEmptyCluster. What is
+      left is what only THIS provider can be wrong about: the power state surviving a reconcile, the
+      readiness rule over KubeVirt's own status words, the cloud-init handle becoming a Secret and
+      nothing else, the size table against the chart's, the catalogue against the chart's, and the
+      subnet join against the Network family's own spelling of it.
+
+      ⚠ IT EMBEDS THE HELPERS OF TWO CHARTS. A Helm template is not a schema and nothing generates
+      it — ChartSurfaces filters templates/ out of the chart tree on purpose — so each fact the chart
+      and the C# both spell is two hand-maintained copies of one thing, and ComputeChartDriftTests is
+      what stops them drifting: the size table in virtual-machine's helpers and the catalogue in
+      image's, which is a template dictionary because a catalogue name carries a dot the values
+      subset has no key for.
+
+      ⚠ IT REFERENCES CyberCloud.Providers.Network.Contracts, AND IT IS THE FIRST TEST PROJECT TO
+      CROSS A FAMILY BOUNDARY. docs/plan/03 § Assembly graph rules, rule 2, is over the SHIPPED graph
+      — Build.Architecture reads ShippingAssemblies — and excludes test projects by construction, so
+      the reference is legal; it is here because the one fact this family spells a second time,
+      NetworkSubnets.ObjectNameOf's joining, has no other guard. A reference the shipped assemblies
+      may never take is what lets the test say the two spellings are one.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup Label="The half generation does not reach — see the header">
+        <EmbeddedResource Include="../../../../charts/managed/virtual-machine/templates/_helpers.tpl"
+                          LogicalName="virtual-machine.helpers.tpl"/>
+        <EmbeddedResource Include="../../../../charts/managed/image/templates/_helpers.tpl"
+                          LogicalName="image.helpers.tpl"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.csproj"/>
+        <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <!-- The Network family's own spelling of a subnet's object name — see the header. -->
+        <ProjectReference Include="../../CyberCloud.Providers.Network/CyberCloud.Providers.Network.Contracts/CyberCloud.Providers.Network.Contracts.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,139 @@
+{{/*
+KubeVirt `VirtualMachine` — docs/plan/13 § Virtual Machines.
+
+⚠ This renders a custom resource; it does not install KubeVirt or CDI. Both are charts/bundle/'s job
+(phase 30), and this object is admitted by KubeVirt's own validating webhook — which is the half no
+derived CRD stub can check and CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance
+§ KubeVirtOnAnEmptyCluster applies this chart against for real.
+
+⚠ ONE OBJECT, and the root disk is inside it. `dataVolumeTemplates` makes KubeVirt create the root
+DataVolume — a CDI clone of the image's claim in this namespace — and garbage-collect it with the
+machine. The cloud-init Secret is the reconciler's to render, because a chart must not carry a vault
+value; it is named here and nowhere else in this file.
+
+⚠ THE SEVEN LABELS ARE STAMPED INTO TWO TEMPLATES AS WELL AS ONTO THE OBJECT. KubeCommandBuilder
+stamps `spec/template` and `spec/dataVolumeTemplates` when the reconciler applies this render, so the
+launcher pod and the root claim are attributable; the chart writes the same labels so a `helm template`
+of it reads the way the applied object does.
+*/}}
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: {{ include "virtual-machine.objectName" . }}
+  labels:
+    {{- include "virtual-machine.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ THE POWER STATE, AND IT IS @internal. Always after a create or a start, Halted after a stop; the
+    reconciler reads it off the object before it renders. KubeVirt's webhook refuses a VM with neither
+    `running` nor `runStrategy` ("RunStrategy must be specified"), so it cannot be left out.
+  */}}
+  runStrategy: {{ .Values.runStrategy | quote }}
+  dataVolumeTemplates:
+    - metadata:
+        name: {{ include "virtual-machine.rootDataVolume" . }}
+        labels:
+          {{- include "virtual-machine.platformLabels" . | nindent 10 }}
+      spec:
+        {{/*
+          ⚠ `storage` and not `pvc`, so the volume mode comes from CDI's StorageProfile for the class
+          rather than from a guess here — Cdi.Storage says why. No storageClassName: the
+          root disk takes the cluster's default, which on a bundle-installed cluster is node-local
+          and WaitForFirstConsumer, so the clone runs on the node the machine is scheduled to.
+        */}}
+        storage:
+          {{/* ReadWriteOnce, for the reason charts/managed/disk gives: CDI has no profile for the bundle's class. */}}
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: {{ .Values.osDiskSize | quote }}
+        source:
+          {{/*
+            ⚠ A CLONE OF THE IMAGE'S CLAIM, IN THIS NAMESPACE. Images.ObjectNameOf is the bare resource
+            name, so the tenant's `image` value IS the claim's name; the namespace is the release's,
+            which is the resource group's. A cross-namespace clone is authorised against the creator
+            of the DataVolume — KubeVirt's controller, for a template — and is not offered.
+          */}}
+          pvc:
+            name: {{ .Values.image | quote }}
+            namespace: {{ .Release.Namespace | quote }}
+  template:
+    metadata:
+      labels:
+        {{- include "virtual-machine.platformLabels" . | nindent 8 }}
+      {{- $switch := include "virtual-machine.logicalSwitch" . }}
+      {{- if $switch }}
+      {{/*
+        ⚠ THE JOIN TO THE TENANT NETWORK IS THIS ONE ANNOTATION, read by Kube-OVN off the launcher pod,
+        which KubeVirt copies template annotations onto. On a cluster without Kube-OVN it is inert and
+        the machine sits on the pod network, which is what the k3s-in-Docker lane has.
+      */}}
+      annotations:
+        ovn.kubernetes.io/logical_switch: {{ $switch | quote }}
+      {{- end }}
+    spec:
+      domain:
+        {{/*
+          ⚠ QUANTITIES FROM THE SIZE TABLE, NOT AN INSTANCETYPE NAME. charts/managed/kubernetes-agentpool
+          names a VirtualMachineClusterInstancetype the bundle does not install and records that its
+          sizing table is a belief. Here the size IS the guest: what quota reserves is what boots.
+        */}}
+        cpu:
+          cores: {{ include "virtual-machine.cores" . }}
+        memory:
+          guest: {{ include "virtual-machine.memory" . | quote }}
+        devices:
+          disks:
+            {{/* The root disk boots first, by bootOrder; a data disk with a stray boot sector must not win. */}}
+            - name: os
+              disk:
+                bus: virtio
+              bootOrder: 1
+            {{- range .Values.dataDisks }}
+            - name: {{ . | quote }}
+              disk:
+                bus: virtio
+            {{- end }}
+            {{- if .Values.cloudInit.userData }}
+            - name: cloudinit
+              disk:
+                bus: virtio
+            {{- end }}
+          interfaces:
+            {{/*
+              ⚠ `bridge` binding, as the node pool renders and as Kube-OVN's own KubeVirt guide does:
+              with a logical-switch annotation the guest gets the fabric's address on its own
+              interface, and without one it gets the pod's. `masquerade` would work on a plain cluster
+              and break the tenant network.
+            */}}
+            - name: default
+              bridge: {}
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: os
+          dataVolume:
+            name: {{ include "virtual-machine.rootDataVolume" . }}
+        {{- range .Values.dataDisks }}
+        {{/* Disks.ObjectNameOf is the bare resource name, so the tenant's value is the claim's name. */}}
+        - name: {{ . | quote }}
+          persistentVolumeClaim:
+            claimName: {{ . | quote }}
+        {{- end }}
+        {{- if .Values.cloudInit.userData }}
+        {{/*
+          ⚠ THE SECRET IS NAMED AND NOT RENDERED. The reconciler writes `{name}-cloud-init` with the
+          resolved handle under the key `userdata`, which is what cloudInitNoCloud.secretRef reads.
+        */}}
+        - name: cloudinit
+          cloudInitNoCloud:
+            secretRef:
+              name: {{ include "virtual-machine.cloudInitSecret" . }}
+        {{- end }}
+      {{/*
+        ⚠ Long enough for a guest to flush on ACPI power-off, short enough that a hung guest does not
+        hold a stop for minutes. KubeVirt's own default is 30; VirtualMachines.TerminationGracePeriodSeconds.
+      */}}
+      terminationGracePeriodSeconds: 60

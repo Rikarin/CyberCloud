@@ -54,6 +54,8 @@ from .models import (
     FileShareData,
     FileShareListMountTargetsResult,
     FileShareResource,
+    ImageData,
+    ImageResource,
     KafkaClusterData,
     KafkaClusterListKeysResult,
     KafkaClusterResource,
@@ -62,6 +64,8 @@ from .models import (
     LoadBalancerShowBackendsResult,
     MailDomainData,
     MailDomainResource,
+    ManagedDiskData,
+    ManagedDiskResource,
     ManagedGrafanaData,
     ManagedGrafanaResource,
     ManagedGrafanaUrlResult,
@@ -123,6 +127,11 @@ from .models import (
     ValkeyCacheData,
     ValkeyCacheListKeysResult,
     ValkeyCacheResource,
+    VirtualMachineData,
+    VirtualMachineResource,
+    VirtualMachineRestartResult,
+    VirtualMachineStartResult,
+    VirtualMachineStopResult,
     VirtualNetworkData,
     VirtualNetworkResource,
     VirtualNetworkShowIsolationResult,
@@ -530,6 +539,144 @@ class CommunicationProvider:
         self.services_channels = CommunicationChannelClient(transport)
         self.services_suppressions = SuppressionClient(transport)
         self.services_templates = MessageTemplateClient(transport)
+
+
+class ManagedDiskClient:
+    """Managed disks — CyberCloud.Compute/disks. A blank data disk of a size and a storage class, provisioned on its own and attached to a virtual machine by name. It outlives the machine."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> ManagedDiskResource:
+        """Reads one Managed disk."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/disks/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return ManagedDiskResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: ManagedDiskData) -> Operation[ManagedDiskResource]:
+        """Creates or replaces one Managed disk. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/disks/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ManagedDiskResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: ManagedDiskData) -> Operation[ManagedDiskResource]:
+        """Amends one Managed disk. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/disks/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ManagedDiskResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Managed disk. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/disks/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[ManagedDiskResource]:
+        """Lists the Managed disks in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/disks", top, ManagedDiskResource.from_wire)
+
+
+class ImageClient:
+    """Images — CyberCloud.Compute/images. A bootable disk image imported once into your resource group — one of the platform's Ubuntu and Debian cloud images, pinned by digest, or a container disk or HTTP address you supply — and cloned by every machine that boots from it."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> ImageResource:
+        """Reads one Image."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/images/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return ImageResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: ImageData) -> Operation[ImageResource]:
+        """Creates or replaces one Image. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/images/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ImageResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: ImageData) -> Operation[ImageResource]:
+        """Amends one Image. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/images/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ImageResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Image. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/images/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[ImageResource]:
+        """Lists the Images in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/images", top, ImageResource.from_wire)
+
+
+class VirtualMachineClient:
+    """Virtual machines — CyberCloud.Compute/virtualMachines. A virtual machine on KubeVirt: a size from the platform catalogue, a root disk cloned from an image, managed disks by name, a tenant subnet, and cloud-init from a vault handle. Start, stop and restart are actions; stop releases compute and keeps every disk."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> VirtualMachineResource:
+        """Reads one Virtual machine."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/virtualMachines/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return VirtualMachineResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: VirtualMachineData) -> Operation[VirtualMachineResource]:
+        """Creates or replaces one Virtual machine. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/virtualMachines/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, VirtualMachineResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: VirtualMachineData) -> Operation[VirtualMachineResource]:
+        """Amends one Virtual machine. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/virtualMachines/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, VirtualMachineResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Virtual machine. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/virtualMachines/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[VirtualMachineResource]:
+        """Lists the Virtual machines in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/virtualMachines", top, VirtualMachineResource.from_wire)
+
+    def restart(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> VirtualMachineRestartResult:
+        """restart — permission 'write'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/virtualMachines/{_segment(resource_name)}/restart"))
+        raise_for_status(response)
+        return VirtualMachineRestartResult.from_wire(wire_of(response))
+
+    def start(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> VirtualMachineStartResult:
+        """start — permission 'write'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/virtualMachines/{_segment(resource_name)}/start"))
+        raise_for_status(response)
+        return VirtualMachineStartResult.from_wire(wire_of(response))
+
+    def stop(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> VirtualMachineStopResult:
+        """stop — permission 'write'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/virtualMachines/{_segment(resource_name)}/stop"))
+        raise_for_status(response)
+        return VirtualMachineStopResult.from_wire(wire_of(response))
+
+
+class ComputeProvider:
+    """The resource types of CyberCloud.Compute."""
+
+    def __init__(self, transport: Transport) -> None:
+        self.disks = ManagedDiskClient(transport)
+        self.images = ImageClient(transport)
+        self.virtual_machines = VirtualMachineClient(transport)
 
 
 class ArtifactFeedClient:
@@ -2020,6 +2167,7 @@ class CyberCloudClient:
         self.analytics = AnalyticsProvider(transport)
         self.cache = CacheProvider(transport)
         self.communication = CommunicationProvider(transport)
+        self.compute = ComputeProvider(transport)
         self.containerregistry = ContainerRegistryProvider(transport)
         self.containerservice = ContainerServiceProvider(transport)
         self.dbformysql = DBforMySQLProvider(transport)

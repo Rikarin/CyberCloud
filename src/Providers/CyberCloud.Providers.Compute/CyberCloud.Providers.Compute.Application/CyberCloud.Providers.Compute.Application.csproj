@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the third of the five projects: "ABP application services the gateway
+      routes to". It holds the ABP module and no application service; see NetworkApplicationModule for
+      why that is a property of the platform rather than an observation about any one provider.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="Volo.Abp.Ddd.Application"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Compute.Contracts/CyberCloud.Providers.Compute.Contracts.csproj"/>
+        <!--
+          ⚠ THE IMPLEMENTATION ASSEMBLY, AND THIS LINE IS WHAT MAKES THE MODULE BELOW WORTH LOADING —
+          the same line every sibling .Application carries, with the same reasoning: rule 2 has nothing
+          to say about a reference inside one family, and rule 5 still holds because the gateway binds
+          the module type and nothing from the implementation.
+        -->
+        <ProjectReference Include="../CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.csproj"/>
+        <!--
+          AddCyberCloudProvider lives in the implementation assembly, and module-layering.txt already
+          carries this family's edge to CyberCloud.ResourceManager.
+        -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

@@ -872,6 +872,14 @@ partial class Build {
         // and that the other side's `requiredBy:` agrees. The reader `requiredBy` never had.
         "requires",
 
+        // Read by charts/bundle/crds.sh, which then reports the component's crds/ as RUNTIME rather
+        // than fetching them from the release, and writes them from a cluster under --capture; and
+        // by Build.Definitions.cs § DefinitionViolations, which holds the prose to the same floor
+        // `servesNoDefinitions:` has. The argument, in prose: the pinned artefact carries the
+        // operator alone and the operator writes the served kinds' definitions at runtime — KubeVirt
+        // and CDI, whose releases publish no such YAML (#28 meeting #91).
+        "definitionsWrittenByOperator",
+
         // Read by people. Kept, and kept separate, because a key nobody reads at all is the defect
         // this list exists to catch and a key a reader needs is not.
         // ⚠ `requiredBy` is half read now: its `charts/bundle/` entries are checked against the

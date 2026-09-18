@@ -128,7 +128,8 @@ Beside each component that a managed chart renders against sits `crds/`, holding
 `CustomResourceDefinition` of every kind that chart renders — the document as the pinned release
 renders it under the component's own release name and namespace, the way `install.sh` installs it
 with no namespace suffix, byte for byte, one file per definition named `<plural>.<group>.yaml`.
-Fourteen components carry twenty-six of them; six carry none, because nothing under `charts/managed/`
+Sixteen components carry twenty-nine of them — two of those captured from a cluster rather than
+fetched from a release, the note below — and four carry none, because nothing under `charts/managed/`
 renders a kind they serve. (The identity matters for one publisher: victoria-metrics-operator renders
 each definition through `toJson` and bakes `meta.helm.sh/release-name` and `release-namespace` into
 its annotations. A suffixed install differs from the committed file in that one annotation and in
@@ -181,6 +182,24 @@ nothing the schema reads.)
 > checked beyond the type. An operator's admission webhook is not a definition and is not here. The
 > cluster-backed lane on a real k3s evaluates the CEL rules; the webhook stays for a cluster with the
 > operator installed. `bundle.yaml` § owed, `the-fake-does-not-evaluate-cel-rules`.
+
+> ⚠ **Two operators write their definitions at runtime, and those two directories are captured, not
+> fetched.** `kubevirt-operator.yaml` defines `kubevirts.kubevirt.io` alone and `cdi-operator.yaml`
+> `cdis.cdi.kubevirt.io` alone; `virt-operator` and `cdi-operator` create `VirtualMachine`,
+> `DataVolume` and the rest in the API server from schemas compiled into their binaries, and neither
+> project publishes them as YAML at any tag (the v1.9.0 and v1.66.0 assets and both repositories'
+> `manifests/` trees, read 2026-09-18 when #28's charts met this rule). So each of those two
+> `component.yaml`s argues that in `definitionsWrittenByOperator:` — prose, held to the same floor as
+> `servesNoDefinitions:` — and its `crds/` is written by
+> `./charts/bundle/crds.sh --capture --kubeconfig <file> --component kubevirt` from a cluster the
+> pinned release reached `Deployed` on: the definition as the server serves it, less what the server
+> stamps on every object (`status`, `uid`, `resourceVersion`, `generation`, `creationTimestamp`,
+> `managedFields`), under a three-line header naming the provenance. The harness treats the file
+> like any other. What differs is the **Definitions** row: it reports those files as *captured, not
+> compared*, because there is no release to compare with and a tick over a comparison nobody made is
+> the hole the row exists to close. Re-capture on a pin bump, from a cluster the new pin was
+> installed on — `CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance` starts exactly such a
+> cluster, and its kubeconfig is the one to hand the script.
 
 ## The ordering rule, and which half a machine enforces
 
@@ -403,10 +422,15 @@ it. `charts/README.md` § Licences are a build gate has the two halves side by s
 
 ## Verification, and its honest limit
 
-**Three of the twenty components are installed onto a real cluster by CI. Seventeen are not, and the
-state of the tree says which in `bundle.yaml` § owed rather than implying otherwise. All twenty were
-installed by hand on 2026-09-15 onto one k3s with a kubelet, and nineteen serve — the paragraphs
-below the suite's say what that run found.**
+**Five of the twenty components are installed onto a real cluster by CI — three helm rows and, since
+2026-09-17, the two `manifest:` rows of phase 30, CDI and KubeVirt, by
+`CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance § KubeVirtOnAnEmptyCluster`, all of them on
+every merge and every night in the `Cluster` lane of `Test` and none on a PR (#25), which then applies
+`charts/managed/image`, `charts/managed/disk` and `charts/managed/virtual-machine` against them and
+reads the guest `Running` with the disk attached. Fifteen are not, and the state of the tree says
+which in `bundle.yaml` § owed rather than implying otherwise. All twenty were installed by hand on
+2026-09-15 onto one k3s with a kubelet, and nineteen serve — the paragraphs below the suite's say
+what that run found.**
 
 > ⚠ **The denominator here read "eighteen" until 2026-09-02 and had been wrong since
 > `openebs-localpv` landed.** `bundle.yaml`'s `components:` holds nineteen rows and this directory
@@ -580,19 +604,42 @@ serial tail on a machine where a daemon answers, and costs nothing at all on one
 > seventeen itself; the permit is no longer the only thing holding the line.
 
 **With the cloudnative-pg class it is 4 m 27 s to 4 m 47 s green across three runs, 9 tests, none
-skipped, measured 2026-09-03.**
-The class costs about **1 m 50 s**: 26 s for `install.sh` to put both components on the cluster
-(cheaper than cert-manager's single row, which pays a `startupapicheck` Job), 8 s to the operator's
-claim, 18 s to `Bound`, 68 s to `Ready` — the bulk of that last figure being the
-`ghcr.io/cloudnative-pg/postgresql` pull — and a second k3s start for the rest.
+skipped, measured 2026-09-03.** The class costs about **1 m 50 s**: 26 s for `install.sh` to put
+both components on the cluster (cheaper than cert-manager's single row, which pays a
+`startupapicheck` Job), 8 s to the operator's claim, 18 s to `Bound`, 68 s to `Ready` — the bulk of
+that last figure being the `ghcr.io/cloudnative-pg/postgresql` pull — and a second k3s start for the
+rest.
 
-> ⚠ **The lane was decided rather than deferred, and the answer is "here", which is not the same as
-> "cheap".** The only nightly lane that exists is `Build.E2E`, and its own preconditions refuse to
+> ⚠ **The lane was decided rather than deferred, and the answer was "here", which is not the same as
+> "cheap".** The only nightly lane that existed was `Build.E2E`, and its own preconditions refuse to
 > run without `--e2e-base-url` pointing at a real staging deployment and a `cyc` CLI to drive — a
 > Testcontainers k3s suite moved there would be run by nothing at all, which is worse than slow. A
-> lane for container-backed suites that are too slow for per-PR and need no deployment does not
-> exist; creating one is what `bundle.yaml` § owed,
-> `most-of-the-roster-has-never-been-installed`, now records as owed.
+> lane for container-backed suites that are too slow for per-PR and need no deployment did not
+> exist, and creating one was what `bundle.yaml` § owed, `most-of-the-roster-has-never-been-installed`,
+> recorded as owed. ⚠ It exists since #25, and "here" now means every merge rather than every PR:
+> `./build.sh Test --test-lane Cluster` runs every `*.Cluster.Conformance` suite — this one included —
+> as `main.yml`'s own `test-cluster` job and inside `nightly.yml`'s full run, and `--test-lane Fast`
+> is what a PR pays for (`docs/plan/23 § CI shape`, `build/Build.Test.cs § TestLane`).
+
+**The KubeVirt class is the fourth installing class, and it is not in this assembly.**
+`CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance § KubeVirtOnAnEmptyCluster` costs
+**7 m 03 s to 8 m 26 s for the class, k3s start included**, on a fresh k3s — about five minutes (CDI
+`Deployed` at 1 m 30 s, KubeVirt at 5 m, most of it image pulls) for `install.sh` to put
+openebs-localpv, CDI and KubeVirt on (the two operators pull about a dozen images between them and
+each waits for its resource to report `Deployed`), under a minute for CDI to import a cirros
+container disk, seconds for a blank disk from `charts/managed/disk` to be provisioned, and about a
+minute (46 s on one run, 60 s on the next, half of it the clone) for the machine that attaches it to
+go from applied to `Running`. It landed here on 2026-09-17 as the slowest suite in the tree by a wide
+margin, and the review of #28 asked what that costs where it matters: `gate.yml`'s `test` job runs
+every cluster-backed suite one at a time, and on 2026-09-15 that chain took master **26 m 16 s** on
+the runner — read off the job's own log — against the 25-minute budget `pr.yml` enforces and four
+minutes short of the job's 30-minute timeout, with this assembly at 3 m 49 s of it. Eight minutes
+more would have timed the job out on every PR. #25 had measured the same chain and split it off the
+PR as the `Cluster` lane; so the class is a `.Cluster.Conformance` project of the Compute family's,
+named for the operator it installs the way `CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance`
+is, and it rides that lane — every merge, every night, no PR — rather than a lane of its own. It
+references this assembly for `EmptyClusterFixture` and `BundleInstaller` rather than copying them,
+so both stay public; the three classes here stay under five minutes, in the same lane.
 
 **The "nothing to run" trap was checked rather than reasoned about.** A run with `helm` off `PATH`
 reports *1 passed, 1 skipped* in 414 ms — not "Zero tests ran", which `--minimum-expected-tests 1`

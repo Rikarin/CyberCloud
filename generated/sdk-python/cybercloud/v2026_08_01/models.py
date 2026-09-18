@@ -1568,6 +1568,511 @@ class MessageTemplateRenderResult:
         return wire
 
 
+@dataclass
+class ManagedDiskData:
+    """Managed disk. A blank data disk of a size and a storage class, provisioned on its own and attached to a virtual machine by name. It outlives the machine. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The disk's own settings."""
+
+        # The cluster the disk is provisioned in. Only a virtual machine in the same cluster and the same resource group can attach it.
+        cluster_id: str
+        # The disk's size, in Kubernetes quantity form. ⚠ Immutable: growing a disk depends on the storage class and shrinking one is never possible, so a bigger disk is a new disk.
+        size: str
+        # The storage class the disk is on. Empty means the cluster's default, which on a bundle-installed cluster is node-local: one copy, on one node, and the machine that attaches the disk runs on that node.
+        storage_class: Optional[str] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> ManagedDiskData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                cluster_id=wire["clusterId"],
+                size=wire["size"],
+                storage_class=wire.get("storageClass"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["clusterId"] = self.cluster_id
+            wire["size"] = self.size
+            if self.storage_class is not None:
+                wire["storageClass"] = self.storage_class
+            return wire
+
+    # The region the disk is billed in.
+    location: str
+    # The disk's own settings.
+    properties: Optional[ManagedDiskData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ManagedDiskData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", ManagedDiskData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class ManagedDiskResource:
+    """One Managed disk, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: ManagedDiskData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ManagedDiskResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=ManagedDiskData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+ImageKind = Literal["catalogue", "url"]
+"""The values /properties/source/kind accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+ImageName = Literal["debian-12", "debian-13", "ubuntu-22.04", "ubuntu-24.04"]
+"""The values /properties/source/name accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class ImageData:
+    """Image. A bootable disk image imported once into your resource group — one of the platform's Ubuntu and Debian cloud images, pinned by digest, or a container disk or HTTP address you supply — and cloned by every machine that boots from it. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The image's own settings."""
+
+        @dataclass
+        class Source:
+            """Where the bytes come from."""
+
+            # catalogue for one of the platform's own Linux cloud images, pinned by digest; url for an address you supply.
+            kind: ImageKind
+            # Which catalogue image, when kind is catalogue. ⚠ Linux only: Windows Server is a licensing arrangement and not in this catalogue — docs/plan/13 § Images and licensing.
+            name: Optional[ImageName] = None
+            # Where to import from, when kind is url. docker://registry/repository[:tag|@digest] is a container disk; http:// or https:// is a raw or qcow2 image. ⚠ An HTTP address carries no checksum and nothing verifies what arrives — pin a registry reference by digest when you can.
+            url: Optional[str] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ImageData.Properties.Source:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    kind=wire["kind"],
+                    name=wire.get("name"),
+                    url=wire.get("url"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["kind"] = self.kind
+                if self.name is not None:
+                    wire["name"] = self.name
+                if self.url is not None:
+                    wire["url"] = self.url
+                return wire
+
+        # The cluster the image is imported into. A virtual machine can boot from it only in the same cluster and the same resource group, because a clone is a claim in one namespace copied from a claim beside it.
+        cluster_id: str
+        # The claim the image is imported into, in Kubernetes quantity form. It must hold the image's virtual size — 10Gi fits every catalogue image — and it is the smallest disk a machine booted from this image can have.
+        size: str
+        # Where the bytes come from.
+        source: Optional[ImageData.Properties.Source] = None
+        # The storage class the imported claim is on. Empty means the cluster's default, which on a bundle-installed cluster is the node-local class.
+        storage_class: Optional[str] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> ImageData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                cluster_id=wire["clusterId"],
+                size=wire["size"],
+                source=_opt(wire, "source", ImageData.Properties.Source.from_wire),
+                storage_class=wire.get("storageClass"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["clusterId"] = self.cluster_id
+            wire["size"] = self.size
+            if self.source is not None:
+                wire["source"] = self.source.to_wire()
+            if self.storage_class is not None:
+                wire["storageClass"] = self.storage_class
+            return wire
+
+    # The region the image is billed in.
+    location: str
+    # The image's own settings.
+    properties: Optional[ImageData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ImageData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", ImageData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class ImageResource:
+    """One Image, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: ImageData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ImageResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=ImageData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+VirtualMachineSize = Literal["s1.large", "s1.medium", "s1.small", "s1.xlarge"]
+"""The values /properties/size accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class VirtualMachineData:
+    """Virtual machine. A virtual machine on KubeVirt: a size from the platform catalogue, a root disk cloned from an image, managed disks by name, a tenant subnet, and cloud-init from a vault handle. Start, stop and restart are actions; stop releases compute and keeps every disk. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The machine's own settings."""
+
+        @dataclass
+        class CloudInit:
+            """First-boot configuration, as cloud-init reads it."""
+
+            # A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other path is refused. Empty means no cloud-init at all.
+            user_data: Optional[str] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> VirtualMachineData.Properties.CloudInit:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    user_data=wire.get("userData"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.user_data is not None:
+                    wire["userData"] = self.user_data
+                return wire
+
+        @dataclass
+        class Network:
+            """The tenant network the machine's interface joins. Both empty means the cluster's pod network."""
+
+            # The subnet of that network the interface takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the machine never starts.
+            subnet: Optional[str] = None
+            # The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.
+            virtual_network: Optional[str] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> VirtualMachineData.Properties.Network:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    subnet=wire.get("subnet"),
+                    virtual_network=wire.get("virtualNetwork"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.subnet is not None:
+                    wire["subnet"] = self.subnet
+                if self.virtual_network is not None:
+                    wire["virtualNetwork"] = self.virtual_network
+                return wire
+
+        # The cluster the machine runs in. Must be the one its image and its disks are in — nothing checks that, and a machine placed elsewhere clones a claim that is not there.
+        cluster_id: str
+        # The CyberCloud.Compute/images resource the root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the machine waits for it and says so.
+        image: str
+        # The root disk, in Kubernetes quantity form. At least the image's own size; a clone into a smaller claim is refused by CDI, not by this API. ⚠ Immutable, for the reason a managed disk's size is.
+        os_disk_size: str
+        # The machine's size, from the platform's sizing catalogue: s1.small is 1 vCPU and 4 GiB, and each rung doubles both. Changing it takes effect the next time the machine starts — KubeVirt reports RestartRequired until then.
+        size: VirtualMachineSize
+        # First-boot configuration, as cloud-init reads it.
+        cloud_init: Optional[VirtualMachineData.Properties.CloudInit] = None
+        # CyberCloud.Compute/disks resources attached to the machine, by name, in this resource group. A change attaches or detaches at the machine's next start. ⚠ A disk named os or cloudinit collides with the machine's own volumes and is refused.
+        data_disks: Optional[List[str]] = None
+        # The tenant network the machine's interface joins. Both empty means the cluster's pod network.
+        network: Optional[VirtualMachineData.Properties.Network] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> VirtualMachineData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                cluster_id=wire["clusterId"],
+                image=wire["image"],
+                os_disk_size=wire["osDiskSize"],
+                size=wire["size"],
+                cloud_init=_opt(wire, "cloudInit", VirtualMachineData.Properties.CloudInit.from_wire),
+                data_disks=wire.get("dataDisks"),
+                network=_opt(wire, "network", VirtualMachineData.Properties.Network.from_wire),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["clusterId"] = self.cluster_id
+            wire["image"] = self.image
+            wire["osDiskSize"] = self.os_disk_size
+            wire["size"] = self.size
+            if self.cloud_init is not None:
+                wire["cloudInit"] = self.cloud_init.to_wire()
+            if self.data_disks is not None:
+                wire["dataDisks"] = self.data_disks
+            if self.network is not None:
+                wire["network"] = self.network.to_wire()
+            return wire
+
+    # The region the machine is billed in.
+    location: str
+    # The machine's own settings.
+    properties: Optional[VirtualMachineData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> VirtualMachineData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", VirtualMachineData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class VirtualMachineResource:
+    """One Virtual machine, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: VirtualMachineData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> VirtualMachineResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=VirtualMachineData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+VirtualMachineRestartResultAction = Literal["start", "stop", "restart"]
+"""The values /action accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+VirtualMachineRestartResultRunStrategy = Literal["Always", "Halted"]
+"""The values /runStrategy accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+VirtualMachineRestartResultRunStrategyBefore = Literal["Always", "Halted"]
+"""The values /runStrategyBefore accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class VirtualMachineRestartResult:
+    """What restart returns."""
+
+    # start, stop or restart — which one ran.
+    action: VirtualMachineRestartResultAction
+    # The run strategy after the action. A restart leaves it as it was.
+    run_strategy: VirtualMachineRestartResultRunStrategy
+    # The machine's KubeVirt run strategy before the action: Always for a machine that should be on, Halted for one that should be off.
+    run_strategy_before: VirtualMachineRestartResultRunStrategyBefore
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> VirtualMachineRestartResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            action=wire["action"],
+            run_strategy=wire["runStrategy"],
+            run_strategy_before=wire["runStrategyBefore"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["action"] = self.action
+        wire["runStrategy"] = self.run_strategy
+        wire["runStrategyBefore"] = self.run_strategy_before
+        return wire
+
+
+VirtualMachineStartResultAction = Literal["start", "stop", "restart"]
+"""The values /action accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+VirtualMachineStartResultRunStrategy = Literal["Always", "Halted"]
+"""The values /runStrategy accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+VirtualMachineStartResultRunStrategyBefore = Literal["Always", "Halted"]
+"""The values /runStrategyBefore accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class VirtualMachineStartResult:
+    """What start returns."""
+
+    # start, stop or restart — which one ran.
+    action: VirtualMachineStartResultAction
+    # The run strategy after the action. A restart leaves it as it was.
+    run_strategy: VirtualMachineStartResultRunStrategy
+    # The machine's KubeVirt run strategy before the action: Always for a machine that should be on, Halted for one that should be off.
+    run_strategy_before: VirtualMachineStartResultRunStrategyBefore
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> VirtualMachineStartResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            action=wire["action"],
+            run_strategy=wire["runStrategy"],
+            run_strategy_before=wire["runStrategyBefore"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["action"] = self.action
+        wire["runStrategy"] = self.run_strategy
+        wire["runStrategyBefore"] = self.run_strategy_before
+        return wire
+
+
+VirtualMachineStopResultAction = Literal["start", "stop", "restart"]
+"""The values /action accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+VirtualMachineStopResultRunStrategy = Literal["Always", "Halted"]
+"""The values /runStrategy accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+VirtualMachineStopResultRunStrategyBefore = Literal["Always", "Halted"]
+"""The values /runStrategyBefore accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class VirtualMachineStopResult:
+    """What stop returns."""
+
+    # start, stop or restart — which one ran.
+    action: VirtualMachineStopResultAction
+    # The run strategy after the action. A restart leaves it as it was.
+    run_strategy: VirtualMachineStopResultRunStrategy
+    # The machine's KubeVirt run strategy before the action: Always for a machine that should be on, Halted for one that should be off.
+    run_strategy_before: VirtualMachineStopResultRunStrategyBefore
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> VirtualMachineStopResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            action=wire["action"],
+            run_strategy=wire["runStrategy"],
+            run_strategy_before=wire["runStrategyBefore"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["action"] = self.action
+        wire["runStrategy"] = self.run_strategy
+        wire["runStrategyBefore"] = self.run_strategy_before
+        return wire
+
+
 ArtifactFeedKind = Literal["nuget", "npm", "maven"]
 """The values /properties/kind accepts. ⚠ Closed: the write path refuses anything else."""
 
@@ -8211,6 +8716,27 @@ __all__ = [
     "MessageTemplateResource",
     "MessageTemplateRenderContent",
     "MessageTemplateRenderResult",
+    "ManagedDiskData",
+    "ManagedDiskResource",
+    "ImageKind",
+    "ImageName",
+    "ImageData",
+    "ImageResource",
+    "VirtualMachineSize",
+    "VirtualMachineData",
+    "VirtualMachineResource",
+    "VirtualMachineRestartResultAction",
+    "VirtualMachineRestartResultRunStrategy",
+    "VirtualMachineRestartResultRunStrategyBefore",
+    "VirtualMachineRestartResult",
+    "VirtualMachineStartResultAction",
+    "VirtualMachineStartResultRunStrategy",
+    "VirtualMachineStartResultRunStrategyBefore",
+    "VirtualMachineStartResult",
+    "VirtualMachineStopResultAction",
+    "VirtualMachineStopResultRunStrategy",
+    "VirtualMachineStopResultRunStrategyBefore",
+    "VirtualMachineStopResult",
     "ArtifactFeedKind",
     "ArtifactFeedData",
     "ArtifactFeedResource",

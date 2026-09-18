@@ -87,6 +87,15 @@ public static class BundleInstaller {
     /// </summary>
     public const string CloudNativePgComponent = "cloudnative-pg";
 
+    /// <summary>
+    ///     The importer behind <c>CyberCloud.Compute/images</c> and <c>disks</c>, and the first
+    ///     <c>manifest:</c> component a test installs.
+    /// </summary>
+    public const string CdiComponent = "containerized-data-importer";
+
+    /// <summary>The hypervisor behind <c>CyberCloud.Compute/virtualMachines</c>; the second <c>manifest:</c> row under test.</summary>
+    public const string KubeVirtComponent = "kubevirt";
+
     /// <summary>How long the installer gets before the test gives up on it.</summary>
     /// <remarks>
     ///     ⚠ Longer than <c>install.sh</c>'s own <c>--timeout 10m</c> on the helm call, so a helm
@@ -128,8 +137,30 @@ public static class BundleInstaller {
     ///     manifest row alone — kubevirt, measured at 1 m 40 s to <c>Deployed</c> on a warm cache and
     ///     about seven minutes on a cold one — does not fit under this number with margin, which is
     ///     the arithmetic the first such test has to do before it is written.
+    ///     ✅ <b>The first such test is written, and it did the arithmetic rather than moving this
+    ///     number.</b> <c>KubeVirtOnAnEmptyCluster</c> — in
+    ///     <c>CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance</c>, the project #28's review
+    ///     moved it to — installs openebs-localpv, CDI and
+    ///     KubeVirt in one run — one helm row and two manifest rows, bounded by
+    ///     10 m + 2 × (5 m + 10 m) = 40 m — and passes that bound as <see cref="ManifestBudget" />
+    ///     through <see cref="RunAsync(string, string?, CancellationToken, TimeSpan?)" />'s own
+    ///     parameter, so the three helm-only call sites keep the twelve minutes that hide nothing
+    ///     and the one run that can pay an establishment wait is the one allowed to.
     /// </remarks>
     public static readonly TimeSpan Budget = TimeSpan.FromMinutes(12);
+
+    /// <summary>
+    ///     What a run holding two <c>manifest:</c> rows and one helm row is bounded by: helm's 10 m,
+    ///     then 5 m of establishment wait and 10 m of <c>waitFor:</c> per manifest row.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Longer than the script's own worst case by the same rule <see cref="Budget" /> follows,
+    ///     so that a slow <c>KubeVirt</c> resource surfaces as <c>kubectl wait</c>'s own timeout
+    ///     rather than as this harness killing bash. Measured on 2026-09-17 on a fresh k3s with an
+    ///     empty image cache, the run takes minutes and not tens of them —
+    ///     <c>KubeVirtOnAnEmptyCluster</c> records what.
+    /// </remarks>
+    public static readonly TimeSpan ManifestBudget = TimeSpan.FromMinutes(40);
 
     /// <summary>The repository root — the directory holding <c>CyberCloud.slnx</c>.</summary>
     /// <remarks>
@@ -363,6 +394,7 @@ public static class BundleInstaller {
     ///     touches no cluster.
     /// </param>
     /// <param name="cancellationToken">The test's token.</param>
+    /// <param name="budget">How long the run gets, or <see langword="null" /> for <see cref="Budget" />.</param>
     /// <remarks>
     ///     ⚠
     ///     <b>
@@ -378,8 +410,9 @@ public static class BundleInstaller {
     public static Task<Run> RunAsync(
         string arguments,
         string? kubeconfig,
-        CancellationToken cancellationToken
-    ) => RunAsync(Script, arguments, kubeconfig, cancellationToken);
+        CancellationToken cancellationToken,
+        TimeSpan? budget = null
+    ) => RunAsync(Script, arguments, kubeconfig, cancellationToken, budget: budget);
 
     /// <summary>
     ///     Runs an <c>install.sh</c> that is not the checked-in one — a copy of <c>charts/bundle/</c>
@@ -400,6 +433,11 @@ public static class BundleInstaller {
     ///     Variables to set for the run — what a person exports before <c>install.sh</c>, which
     ///     is how <c>substitute.sh</c>'s <c>${VAR:=default}</c> pass is overridden. Empty by default.
     /// </param>
+    /// <param name="budget">
+    ///     How long the run gets before this harness kills it, or <see langword="null" /> for
+    ///     <see cref="Budget" />. A run that selects a <c>manifest:</c> row passes
+    ///     <see cref="ManifestBudget" />; nothing else should.
+    /// </param>
     /// <remarks>
     ///     ⚠ <b>Forward slashes on Windows, and it is not cosmetic.</b> <c>install.sh</c> finds its
     ///     directory with <c>dirname "${BASH_SOURCE[0]}"</c>, and a path handed to Git's bash with
@@ -414,7 +452,8 @@ public static class BundleInstaller {
         string arguments,
         string? kubeconfig,
         CancellationToken cancellationToken,
-        IReadOnlyDictionary<string, string>? environment = null
+        IReadOnlyDictionary<string, string>? environment = null,
+        TimeSpan? budget = null
     ) {
         var start = new ProcessStartInfo(Bash ?? "bash") {
             WorkingDirectory = RepositoryRoot,
@@ -447,11 +486,11 @@ public static class BundleInstaller {
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        budget.CancelAfter(Budget);
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        bounded.CancelAfter(budget ?? Budget);
 
         try {
-            await process.WaitForExitAsync(budget.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(bounded.Token).ConfigureAwait(false);
         } catch (OperationCanceledException) {
             Kill(process);
             throw;

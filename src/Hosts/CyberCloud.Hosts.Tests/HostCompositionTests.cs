@@ -72,6 +72,7 @@ public sealed class HostCompositionTests {
         "CyberCloud.Analytics",
         "CyberCloud.Cache",
         "CyberCloud.Communication",
+        "CyberCloud.Compute",
         "CyberCloud.ContainerRegistry",
         "CyberCloud.ContainerService",
         "CyberCloud.DBforMySQL",

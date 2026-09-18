@@ -2232,6 +2232,98 @@ for it (§ Hard rule above). What that measured:
   `listRecoveryPoints` with that reason. It cannot share a process with the stub lane: whichever ran
   first would leave the other with definitions it cannot use, and one k3s per process is the boundary.
 
+### What the eighteenth provider measured
+
+`CyberCloud.Compute/virtualMachines`, `disks` and `images`,
+[13 § Virtual Machines](../../docs/plan/13-compute-vm-containers.md), M2 · 3.0 EM, #28 — the core of
+the row #28 calls "the one that makes the platform a cloud rather than a managed-database service",
+on KubeVirt and CDI. Three root types and no child, because a managed disk outlives the machine it is
+attached to and a child shares its parent's lifetime by construction.
+
+- **⚠ THE FIRST TYPE WITH A POWER STATE, AND IT IS NOT IN THE BODY.** `start`, `stop` and `restart`
+  are actions, as doc 13 lists them and as Azure models them; an action cannot change a desired body
+  — the operation grain drives the reconciler and hands it the stored body, never the action's name —
+  so `powerState` as a property would have had no way to be moved by `POST …/stop`. The state is
+  `spec.runStrategy` on the KubeVirt object: the power handler applies the **whole** render with the
+  field changed, under the reconciler's own field manager, and `VirtualMachineReconciler` reads the
+  object before it renders and writes back what it found. Two other designs were built on paper and
+  rejected in `VirtualMachines`' class remarks: a partial apply under the same manager prunes every
+  other field, and a second manager conflicts on the reconcile-hash annotation `KubeCommandBuilder`
+  injects non-overridably. What it costs — a one-apply-wide window in which a power action landing
+  between a pass's read and its apply is overwritten — is
+  `charts/managed/virtual-machine/conformance.yaml § owed`, `power-state-can-lose-a-race`.
+  `VirtualMachinePowerTests` drives stop → PUT → still halted → start; sabotaging the read turns three
+  tests red.
+- **⚠ THE FIRST HANDLERS THAT WRITE A CLUSTER.** Every earlier `IResourceActionHandler` read — a
+  status, a Secret, a constant. The three power actions apply and delete objects through the same
+  `KubeCommand` seam the reconciler uses, and the shared suite's action assertion now drives a stop
+  through the manager and validates the answer against `VirtualMachines.PowerResponse`.
+- **⚠ THE FIRST TYPE THAT RESOLVES A VAULT PATH A TENANT SPELLED, AND THE PATH IS CHECKED AGAINST
+  THE TENANT BEFORE THE VAULT IS ASKED.** Every earlier consumer of `ISecretResolver` resolves a
+  path the platform built — `tenants/{tenantId}/{provider}/{type}/{id}`, five families — or keeps
+  the value server-side. `cloudInit.userData` is written by the tenant, and its value lands in a
+  Secret the tenant's own guest mounts; the resolver holds one platform-wide token in one namespace
+  (`OpenBaoSecretResolver`), so the path is the only thing that scopes the read. The adversarial
+  review of #28 found that a body naming
+  `tenants/<other>/CyberCloud.ContainerRegistry/registries/<id>#password` would have handed another
+  tenant's credential to a guest. `VirtualMachines.ParseCloudInitRef` now takes the tenant and
+  refuses a path outside `VirtualMachines.TenantVaultPrefix` with `AuthorizationFailed` — on the
+  first reconcile pass, because the write path validates a body against its schema and nothing
+  else, and naming the tenant's own prefix rather than whether the other path exists.
+  `VirtualMachineReconcilerTests.AHandleOutsideTheTenantsOwnVaultPrefixIsRefusedBeforeItIsResolved`
+  seeds the foreign path with a value and asserts the resolver is never asked.
+- **⚠ THE FIRST FAMILY WHOSE WEBHOOK HALF IS MEASURED RATHER THAN OWED — FOR THE THREE RENDERS ONE
+  TEST APPLIES, AND NO WIDER.** Every `.Cluster.Conformance` suite records that a derived CRD stub
+  admits anything; `charts/managed/kubernetes/conformance.yaml` calls it
+  `a-green-cluster-suite-proves-the-apply-path-only`.
+  `CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance § KubeVirtOnAnEmptyCluster` installs
+  openebs-localpv, CDI and KubeVirt through `install.sh` — the
+  first `manifest:` rows a test has ever installed — and puts one render of each chart in front of
+  the real `cdi.kubevirt.io` and `kubevirt.io` webhooks: an image from a `docker://` url through
+  `charts/managed/image`, a blank disk through `charts/managed/disk`, and a machine through
+  `charts/managed/virtual-machine` that names the disk in `dataDisks`. The guest boots — `Running`
+  under KVM, 46 seconds after the apply — the disk CDI had left waiting for a consumer is
+  populated once the machine consumes it and the launcher mounts the claim, and
+  `VirtualMachines.Matches` holds against the admitted object. ⚠ What that sentence does NOT cover,
+  because the class never applies it: a catalogue image (several hundred megabytes; cirros is the
+  import), an `http(s)://` source, a cloud-init Secret on a real guest, a machine on a tenant
+  subnet, and every stop/start/restart against a real KubeVirt. The review of #28 found the first
+  version of this bullet claiming the family when it had measured two charts and no attached disk;
+  the disk half was measured in answer, and the rest is named here so the claim cannot grow by
+  being repeated. ⚠ The test was written to assert `ErrorUnschedulable`, because issue #95 and
+  `charts/bundle/bundle.yaml § owed` said Docker Desktop's VM lends no `/dev/kvm`; the first run
+  past CDI turned that red the other way, and `docker run --privileged alpine ls -l /dev/kvm` is the
+  one-line measurement nobody had taken. What is still owed is the guest itself — nothing reaches a
+  console or an agent — `charts/managed/virtual-machine/conformance.yaml § owed`,
+  `the-guest-is-not-reached`. ⚠ And the class runs on every merge, not on every PR: it costs eight
+  minutes on a serial chain the runner had already spent 26 m 16 s on against a 25-minute budget,
+  which is the measurement #25 had split off the PR as the `Cluster` lane of `Test`
+  (`docs/plan/23 § CI shape`); the review of #28 put the class in a `.Cluster.Conformance` project
+  of its own, named for the operator it installs the way the seventeenth family's
+  `Cnpg.Cluster.Conformance` is, rather than open a second lane whose failures a merge cannot see.
+- **⚠ THE SIZE TABLE IS WHAT THE GUEST GETS, WHICH THE NODE POOL'S IS NOT.** `AgentPools` renders an
+  instancetype name the bundle does not install and records its sizing table as a belief; this family
+  renders `domain.cpu.cores` and `domain.memory.guest` from `VirtualMachines.Sizes`, so the number
+  quota reserves is the number the guest boots with. The chart carries the same four rows in a
+  template dictionary and `ComputeChartDriftTests` compares them.
+- **⚠ THE IMAGE CATALOGUE IS A TABLE, NOT A PIPELINE.** #28 predicted this row would get stuck on
+  building images, on the evidence of the CAPK node-image repository; a plain cloud image carries no
+  kubelet, and `quay.io/containerdisks` publishes Ubuntu and Debian rebuilt from the distributions'
+  own images. `Images.Catalogue` pins four of them by digest — the checksum the puller verifies —
+  and the chart's copy could not be a value block because a catalogue name carries a dot the values
+  subset has no key for, so it is a template dictionary like the sizes.
+- **⚠ THE FIRST CONSUMER OF THE NETWORK FAMILY, THROUGH THE ROUTE `module-layering.txt` WROTE DOWN
+  FOR IT.** A machine joins a subnet through `ovn.kubernetes.io/logical_switch:
+  {namespace}-{network}-{subnet}`, which is `NetworkSubnets.ObjectNameOf`'s rule spelled a second time
+  in `VirtualMachines.LogicalSwitchOf` because rule 2 forbids the reference that would spell it once.
+  `ComputeNetworkJoinTests` is the first test project to cross a family boundary — legal, because
+  rule 2 is over the shipped graph — and is the only thing holding the two spellings together.
+- **⚠ Three of doc 13's rows are deliberately not types, and each has an id.** Scale sets
+  (`scale-sets-are-not-landed`: KubeVirt's alpha `VirtualMachinePool`, or a fan-out that needs the
+  reader every family owes), container instances (`container-instances-are-not-landed`: a different
+  namespace, waiting for a log-streaming path), and `deallocate` (`deallocate-is-stop`: a halted
+  KubeVirt machine already holds no compute and keeps every disk).
+
 ## Namespaces
 
 Every namespaced object this platform applies lands in `{subscriptionId:N}-{resourceGroup}`, derived

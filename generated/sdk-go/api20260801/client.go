@@ -31,6 +31,7 @@ type Client struct {
 	Analytics         *AnalyticsProvider
 	Cache             *CacheProvider
 	Communication     *CommunicationProvider
+	Compute           *ComputeProvider
 	ContainerRegistry *ContainerRegistryProvider
 	ContainerService  *ContainerServiceProvider
 	DBforMySQL        *DBforMySQLProvider
@@ -59,6 +60,7 @@ func NewClient(transport Transport) *Client {
 		Analytics:         newAnalyticsProvider(transport),
 		Cache:             newCacheProvider(transport),
 		Communication:     newCommunicationProvider(transport),
+		Compute:           newComputeProvider(transport),
 		ContainerRegistry: newContainerRegistryProvider(transport),
 		ContainerService:  newContainerServiceProvider(transport),
 		DBforMySQL:        newDBforMySQLProvider(transport),
@@ -544,6 +546,169 @@ func (c *MessageTemplateClient) Render(ctx context.Context, tenantID, subscripti
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Communication/services/" + segment(servicesName) + "/templates/" + segment(resourceName) + "/render"
 	var result MessageTemplateRenderResult
 	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ComputeProvider holds the resource types of CyberCloud.Compute.
+type ComputeProvider struct {
+	Disks           *ManagedDiskClient
+	Images          *ImageClient
+	VirtualMachines *VirtualMachineClient
+}
+
+// newComputeProvider builds the group's clients over one transport.
+func newComputeProvider(transport Transport) *ComputeProvider {
+	return &ComputeProvider{
+		Disks:           &ManagedDiskClient{transport: transport},
+		Images:          &ImageClient{transport: transport},
+		VirtualMachines: &VirtualMachineClient{transport: transport},
+	}
+}
+
+// ManagedDiskClient is managed disks — CyberCloud.Compute/disks. A blank data disk of a size and a storage class, provisioned on its own and attached to a virtual machine by name. It outlives the machine.
+type ManagedDiskClient struct {
+	transport Transport
+}
+
+// Get reads one Managed disk.
+func (c *ManagedDiskClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*ManagedDiskResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/disks/" + segment(resourceName)
+	var result ManagedDiskResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Managed disk. ⚠ Long-running: Wait on the result.
+func (c *ManagedDiskClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data ManagedDiskData) (*Operation[ManagedDiskResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/disks/" + segment(resourceName)
+	return begin[ManagedDiskResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Managed disk. A merge patch: what is not set is not changed.
+func (c *ManagedDiskClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data ManagedDiskData) (*Operation[ManagedDiskResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/disks/" + segment(resourceName)
+	return begin[ManagedDiskResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Managed disk. ⚠ Permanent: this type declares no soft-delete window.
+func (c *ManagedDiskClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/disks/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Managed disks in a resource group. ⚠ A short page never means "that is all there is".
+func (c *ManagedDiskClient) List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[ManagedDiskResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/disks"
+	return newPager[ManagedDiskResource](c.transport, path, options)
+}
+
+// ImageClient is images — CyberCloud.Compute/images. A bootable disk image imported once into your resource group — one of the platform's Ubuntu and Debian cloud images, pinned by digest, or a container disk or HTTP address you supply — and cloned by every machine that boots from it.
+type ImageClient struct {
+	transport Transport
+}
+
+// Get reads one Image.
+func (c *ImageClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*ImageResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/images/" + segment(resourceName)
+	var result ImageResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Image. ⚠ Long-running: Wait on the result.
+func (c *ImageClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data ImageData) (*Operation[ImageResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/images/" + segment(resourceName)
+	return begin[ImageResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Image. A merge patch: what is not set is not changed.
+func (c *ImageClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data ImageData) (*Operation[ImageResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/images/" + segment(resourceName)
+	return begin[ImageResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Image. ⚠ Permanent: this type declares no soft-delete window.
+func (c *ImageClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/images/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Images in a resource group. ⚠ A short page never means "that is all there is".
+func (c *ImageClient) List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[ImageResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/images"
+	return newPager[ImageResource](c.transport, path, options)
+}
+
+// VirtualMachineClient is virtual machines — CyberCloud.Compute/virtualMachines. A virtual machine on KubeVirt: a size from the platform catalogue, a root disk cloned from an image, managed disks by name, a tenant subnet, and cloud-init from a vault handle. Start, stop and restart are actions; stop releases compute and keeps every disk.
+type VirtualMachineClient struct {
+	transport Transport
+}
+
+// Get reads one Virtual machine.
+func (c *VirtualMachineClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*VirtualMachineResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachines/" + segment(resourceName)
+	var result VirtualMachineResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Virtual machine. ⚠ Long-running: Wait on the result.
+func (c *VirtualMachineClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data VirtualMachineData) (*Operation[VirtualMachineResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachines/" + segment(resourceName)
+	return begin[VirtualMachineResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Virtual machine. A merge patch: what is not set is not changed.
+func (c *VirtualMachineClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data VirtualMachineData) (*Operation[VirtualMachineResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachines/" + segment(resourceName)
+	return begin[VirtualMachineResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Virtual machine. ⚠ Permanent: this type declares no soft-delete window.
+func (c *VirtualMachineClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachines/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Virtual machines in a resource group. ⚠ A short page never means "that is all there is".
+func (c *VirtualMachineClient) List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[VirtualMachineResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachines"
+	return newPager[VirtualMachineResource](c.transport, path, options)
+}
+
+// Restart runs restart — permission 'write'.
+func (c *VirtualMachineClient) Restart(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*VirtualMachineRestartResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachines/" + segment(resourceName) + "/restart"
+	var result VirtualMachineRestartResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Start runs start — permission 'write'.
+func (c *VirtualMachineClient) Start(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*VirtualMachineStartResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachines/" + segment(resourceName) + "/start"
+	var result VirtualMachineStartResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Stop runs stop — permission 'write'.
+func (c *VirtualMachineClient) Stop(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*VirtualMachineStopResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachines/" + segment(resourceName) + "/stop"
+	var result VirtualMachineStopResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil

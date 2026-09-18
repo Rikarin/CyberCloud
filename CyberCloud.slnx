@@ -566,6 +566,42 @@
           break the other. ClusterSlot serialises processes; that is the boundary.
         -->
         <Project Path="src/Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance/CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance.csproj" />
+
+        <!--
+          The eighteenth provider family — CyberCloud.Compute/virtualMachines, disks and images, on
+          KubeVirt and CDI. docs/plan/13 § Virtual Machines, "M2 · 3.0 EM"; the core of #28, whose scale
+          sets and container instances are recorded as owed in
+          charts/managed/virtual-machine/conformance.yaml rather than implied by the type list.
+
+          ⚠ THE FIRST FAMILY WITH A POWER STATE, AND IT IS NOT IN THE BODY. A machine is on or off
+          through `spec.runStrategy` on the VirtualMachine object; the start/stop/restart actions move
+          it — the first handlers in the tree that WRITE a cluster — and the reconciler reads it back
+          before every render so a tag change does not boot a stopped machine. VirtualMachines' class
+          remarks carry the argument and what it costs.
+
+          ⚠ THE FIRST FAMILY WHOSE WEBHOOK HALF IS MEASURED, FOR ONE RENDER OF EACH CHART. Every
+          earlier .Cluster.Conformance suite proves the apply path against a derived CRD stub and
+          records that no operator ever admitted its render; the KubeVirt lane below installs CDI and
+          KubeVirt through install.sh and applies a url image, a blank disk and a machine attaching it
+          against the real webhooks. src/Providers/README.md names what it does not apply.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Contracts/CyberCloud.Providers.Compute.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Application/CyberCloud.Providers.Compute.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Tests/CyberCloud.Providers.Compute.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Conformance/CyberCloud.Providers.Compute.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Cluster.Conformance/CyberCloud.Providers.Compute.Cluster.Conformance.csproj" />
+        <!--
+          ⚠ A SECOND k3s LANE, IN ITS OWN PROCESS, the RecoveryServices shape above: the family's
+          three charts against the CDI and KubeVirt that charts/bundle/install.sh installs.
+          KubeVirtOnAnEmptyCluster boots a guest under KVM in about eight minutes, which the review
+          of #28 measured against a per-PR chain already past its budget — so it rides the Cluster
+          lane of Test that #25 opened (every merge, every night, never a PR; build/Build.Test.cs
+          § TestLane) under the suffix that lane reads, rather than a lane of its own. It references
+          test/CyberCloud.Bundle.Cluster.Conformance
+          for its fixture and installer rather than copying them.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance/CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance.csproj" />
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj" />
