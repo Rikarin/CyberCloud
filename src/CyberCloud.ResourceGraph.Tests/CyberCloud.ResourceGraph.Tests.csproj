@@ -18,6 +18,27 @@
                                       row back; replay the same version and a lower one and hold one
                                       row; a Deleted event tombstones; a retried publish is one message
 
+      The query half (Query/):
+
+        KqlTranslationGoldenTests   — every Query/Golden/*.kql translated against one tenant, one
+                                      caller and one page, compared byte for byte to the .sql beside
+                                      it; CYBERCLOUD_UPDATE_GOLDEN=1 rewrites and the diff is the review
+        KqlRefusalTests             — everything outside the subset is refused by the token it names,
+                                      with the supported list in the message; and the four sizes that
+                                      would overflow a stack — tokens, bracket nesting, operators,
+                                      expression depth — are refused by their number before the
+                                      parser runs
+        ResourceGraphQueryFailureTests — what a caller reads when the store refuses the statement:
+                                      one sentence and never ClickHouse's, which quotes the statement
+                                      and the caller's usersets back; a budget refusal is a 400 that
+                                      names the budget; the detail is in the log
+        KqlInjectionTests           — a string literal is a parameter whatever it holds: a payload
+                                      with a quote, a semicolon and a DROP is bound and never SQL text
+        ResourceGraphContinuationTests — the $skipToken is an offset tied to one query's text
+        ResourceGraphQueryServiceTests — the query API over the REAL projection: rows the real
+                                      projector wrote, the caller's usersets from the real membership
+                                      index, every translator shape accepted by ClickHouse 25.3
+
       ⚠ The container suite needs a Docker daemon, like CyberCloud.ObjectStorage.Tests' SeaweedFS. It
       is the only evidence in the tree that the subject grammar, the JetStream declaration, the
       ClickHouse DDL and the JSONEachRow spelling agree with the real servers; the Docker-free tests

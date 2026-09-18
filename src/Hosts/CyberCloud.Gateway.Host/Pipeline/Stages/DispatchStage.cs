@@ -38,6 +38,7 @@ sealed class DispatchStage(
     IResourceManager manager,
     IScopeManager scopes,
     IRoleAssignmentManager roles,
+    IResourceGraphQuery graph,
     IOperationReader operations,
     IHubTicketStore tickets,
     GatewayOptions options
@@ -62,6 +63,7 @@ sealed class DispatchStage(
             RouteKind.ScopeCollection => await ScopeCollectionAsync(context, path, cancellationToken),
             RouteKind.RoleAssignment => await RoleAssignmentAsync(context, path, cancellationToken),
             RouteKind.RoleAssignmentCollection => await RoleAssignmentCollectionAsync(context, path, cancellationToken),
+            RouteKind.ResourceGraphQuery => await ResourceGraphQueryAsync(context, path, cancellationToken),
             RouteKind.Collection => await CollectionAsync(context, path, cancellationToken),
             RouteKind.Action => await ActionAsync(context, path, cancellationToken),
             // A hub request leaves the pipeline here and is served by SignalR's own middleware; the
@@ -430,6 +432,91 @@ sealed class DispatchStage(
                     context.Route.CollectionPath,
                     context.ApiVersion.Value,
                     top,
+                    page.Continuation
+                )
+            )
+        };
+    }
+
+    /// <summary>
+    ///     The resource graph query <c>POST</c> — <c>{ "query": "resources | …", "$top": n,
+    ///     "$skipToken": "…" }</c> to <c>IResourceGraphQuery</c>, answered in the collection
+    ///     envelope. docs/plan/08 § The resource-graph projection, the query half of #54.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The page parameters are read from the body first and the query string second,
+    ///         and the <c>nextLink</c> carries them in the query string.</b> A <c>POST</c> has a body
+    ///         to put <c>$top</c> in, and Azure Resource Graph's clients put it there; but a
+    ///         <c>nextLink</c> is a URL, and the collection rule of this API — the link is the whole
+    ///         next request (#76) — means the offset has to survive in it. So a client follows the
+    ///         link by <c>POST</c>ing the same body to it, and a body that repeats <c>$skipToken</c>
+    ///         wins over the URL's, which lets a client that tracks the token itself ignore the link.
+    ///         <c>ResourceGraphQueryRoutingTests</c> pins both readings.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>No check here, and no filter here.</b> What the caller may read is inside the
+    ///         query the service builds — the access column ANDed in — behind the one seam; this
+    ///         stage hands over the caller and the text and renders what comes back.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A <c>GET</c> on the address is <c>405</c> with <c>Allow: POST</c>.</b> The scope
+    ///         and the role assignment are the other addresses that answer <c>405</c>, and for the
+    ///         same reason: the address exists and the verb is the wrong one. A query is a program,
+    ///         and <c>ResourceGraphAddress</c>'s remarks say why a URL is not where one goes.
+    ///     </para>
+    /// </remarks>
+    async Task<GatewayOutcome> ResourceGraphQueryAsync(
+        GatewayRequestContext context,
+        string path,
+        CancellationToken cancellationToken
+    ) {
+        if (!HttpMethods.IsPost(context.Http.Request.Method)) {
+            return new GatewayOutcome {
+                StatusCode = StatusCodes.Status405MethodNotAllowed,
+                Error = new(
+                    ErrorCode.InvalidRequestBody,
+                    $"{context.Http.Request.Method} is not supported on the resource graph. A query is a POST with "
+                    + "{ \"query\": \"resources | …\" } as the body — docs/plan/08 § The resource-graph projection."
+                )
+            }.WithHeader(GatewayHeaders.Allow, "POST");
+        }
+
+        var parsed = ResourceGraphQueryBody.Parse(context.Body, context.Http.Request.Query);
+
+        if (parsed.TryGetError(out var bodyError)) {
+            return ResultShaper.Shape(bodyError, path);
+        }
+
+        var body = parsed.GetValueOrThrow();
+
+        var answered = await graph.QueryAsync(
+            new() {
+                Query = body.Query,
+                // ⚠ The caller as stage 2 and 3 established it, tenant included. The address carries
+                // nothing else, and the token's tenant is the one the service queries.
+                Caller = context.Caller,
+                Top = body.Top,
+                Continuation = body.Continuation
+            },
+            cancellationToken
+        );
+
+        if (answered.TryGetError(out var error)) {
+            return ResultShaper.Shape(error, path);
+        }
+
+        var page = answered.GetValueOrThrow();
+
+        return new() {
+            StatusCode = StatusCodes.Status200OK,
+            Json = ResponseBodies.ResourceGraphPage(
+                page,
+                GatewayRouterPaths.NextLink(
+                    options.PublicBaseUri,
+                    context.Route.CollectionPath,
+                    context.ApiVersion.Value,
+                    body.Top,
                     page.Continuation
                 )
             )

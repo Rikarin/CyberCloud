@@ -1,0 +1,3 @@
+resources
+| summarize count() by type, location
+| order by count_ desc

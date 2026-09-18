@@ -85,11 +85,36 @@ public sealed class ResourceGraphOptions {
     /// <summary>The timeout on one ClickHouse request.</summary>
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    ///     The most ClickHouse may spend on one caller's query — <c>max_execution_time</c>, set on
+    ///     every query the resource graph API runs.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Per query and server-side, which <see cref="RequestTimeout" /> is not: a client that
+    ///     gives up leaves the server finishing the statement, and a query API is the one place a
+    ///     caller chooses how expensive a statement is. ClickHouse stops the statement and answers an
+    ///     error the caller sees as a <c>500</c>; the whole seconds are what the setting takes.
+    /// </remarks>
+    public TimeSpan QueryTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    ///     The most rows one caller's query may read — <c>max_rows_to_read</c>, set on every query the
+    ///     resource graph API runs. A tenant's table is one row per resource, so a million is a
+    ///     tenant no one has.
+    /// </summary>
+    public long QueryMaxRowsToRead { get; set; } = 1_000_000;
+
     /// <summary>Whether this host can publish — the gateway's question.</summary>
     public bool IsPublisherConfigured => NatsUrl.Length > 0;
 
     /// <summary>Whether this host can project — the silo's question.</summary>
     public bool IsProjectorConfigured => IsPublisherConfigured && ClickHouseEndpoint.Length > 0;
+
+    /// <summary>
+    ///     Whether this host can answer resource graph queries — the gateway's other question. A
+    ///     ClickHouse endpoint is all it takes; the stream is the writer's concern.
+    /// </summary>
+    public bool IsQueryConfigured => ClickHouseEndpoint.Length > 0;
 
     /// <summary>
     ///     Binds the section, then fills an empty <see cref="NatsUrl" /> from

@@ -61,11 +61,21 @@ public sealed class ProjectionFixture : IAsyncLifetime {
         .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Server is ready"))
         .Build();
 
+    /// <summary>
+    ///     The server's time zone, deliberately not UTC. ⚠ ClickHouse parses a zoneless
+    ///     <c>DateTime64(3)</c> parameter in the server's zone, and the first cut of the translator
+    ///     bound its datetimes that way; every suite passed because the container ran in UTC, and
+    ///     the two-hour error was found by a review (#54). Prague is two hours off UTC in September,
+    ///     so a comparison that ignores the column's zone lands a row two hours away.
+    /// </summary>
+    public const string ClickHouseTimeZone = "Europe/Prague";
+
     readonly IContainer clickHouse = new ContainerBuilder(ClickHouseImage)
         .WithPortBinding(8123, true)
         .WithEnvironment("CLICKHOUSE_USER", ClickHouseUser)
         .WithEnvironment("CLICKHOUSE_PASSWORD", ClickHousePassword)
         .WithEnvironment("CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT", "1")
+        .WithEnvironment("TZ", ClickHouseTimeZone)
         // ⚠ /ping, and not a query. The server reads CLICKHOUSE_USER from its environment before
         // it listens, so a 200 from /ping is a server whose user exists — and a path with a query
         // string in it does not work here: the wait strategy builds its URI from a path, so the
@@ -77,6 +87,7 @@ public sealed class ProjectionFixture : IAsyncLifetime {
     TestCluster cluster = null!;
     NatsResourceChangedSink sink = null!;
     ClickHouseResourceGraphStore reader = null!;
+    ClickHouseClient clickHouseClient = null!;
 
     /// <summary>The bound section both ends share.</summary>
     public ResourceGraphOptions Options { get; private set; } = null!;
@@ -86,6 +97,12 @@ public sealed class ProjectionFixture : IAsyncLifetime {
 
     /// <summary>A reader over the same ClickHouse, in the test's process.</summary>
     public ClickHouseResourceGraphStore Reader => reader;
+
+    /// <summary>The same ClickHouse, as the query API speaks to it — the client the gateway would hold.</summary>
+    public ClickHouseClient ClickHouse => clickHouseClient;
+
+    /// <summary>The cluster's grain factory, tenant not yet applied — what the gateway's query service is handed.</summary>
+    public IGrainFactory Grains => cluster.GrainFactory;
 
     /// <summary>The silo's grain factory, tenant applied.</summary>
     public TenantGrainFactory For(Guid tenant) => cluster.GrainFactory.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
@@ -121,7 +138,8 @@ public sealed class ProjectionFixture : IAsyncLifetime {
         await cluster.DeployAsync();
 
         sink = new(Options, NullLogger<NatsResourceChangedSink>.Instance);
-        reader = new(new ClickHouseClient(new HttpClient { Timeout = Options.RequestTimeout }, Options));
+        clickHouseClient = new(new HttpClient { Timeout = Options.RequestTimeout }, Options);
+        reader = new(clickHouseClient);
 
         connection = ResourceChangedLog.Connect(Options, "cybercloud-resource-graph-tests");
         JetStream = new(connection);

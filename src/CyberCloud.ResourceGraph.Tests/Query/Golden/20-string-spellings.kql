@@ -1,0 +1,3 @@
+resources
+| where name == "double-quoted" or name == 'it''s' or name == 'back\\slash' or resourceGroup == ''
+| summarize by type

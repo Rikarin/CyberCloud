@@ -130,6 +130,32 @@ checks and revokes without waiting on the emitter — and is the one page a rege
 every resource path as a sub-path — and it is owed rather than done because it touches all five
 surfaces at once; when it lands, the portal's three methods become delegations.
 
+**The resource graph is a fourth component behind the same door, at one address under the second
+reserved namespace (#54):** `POST /tenants/{t}/providers/CyberCloud.ResourceGraph/resources` with
+`{ "query": "resources | …", "$top": n, "$skipToken": "…" }` reaches `IResourceGraphQuery`
+([08 § The resource-graph projection](08-resource-manager.md)), which translates a KQL subset into
+one parameterised ClickHouse statement with the caller's access ANDed in and answers `{ "columns":
+[ … ], "value": [ … ], "nextLink": … }`. Routed as `RouteKind.ResourceGraphQuery`, asked before
+the scope grammars and before the `POST` branch: the address is five segments with `providers`
+third, which parses as nothing else, but `ResolveAction` would otherwise have read it as the action
+`resources` on a malformed resource id. Under the namespace the router asks this one grammar and no
+other, so `…/resources/main` or `…/queries` is a `400` naming the one address, as a malformed role
+assignment path is under its namespace. It is the one `POST` in this API that is not an action —
+a query is a program, and a URL is not where one goes — and a `GET` on it is a `405` with
+`Allow: POST`, the third address to answer `405` after the scope and the role assignment. Stage 5
+counts it as a read: a `POST` charged to the subscription-write bucket would spend the small one on
+a portal's list page. The page parameters are read from the body and, for a `nextLink`, from the
+query string, because the link is the whole next request; a client follows it by `POST`ing the same
+body.
+
+⚠ **The resource graph's address is not in the generated document either, and that is #63's
+question asked a fourth time.** The reserved namespace keeps it out of the registry the emitters
+read, exactly as `CyberCloud.Authorization`'s does, so `openapi/`, the three SDKs and the portal's
+generated client are silent about it and `cyc graph query` — hand-written beside `cyc rest`,
+[21 § Grammar](21-cli-and-sdks.md) — is the CLI's whole knowledge of it. The fix is the same third
+non-registry source the role assignment API waits on, one path rather than a sub-path of every
+scope, and it is owed with that one because it touches the same five surfaces.
+
 ## Request pipeline
 
 Order matters and each step is here for a named reason.

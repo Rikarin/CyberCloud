@@ -1,0 +1,3 @@
+resources
+| where tags has 'prod'
+| project name, tags

@@ -1,11 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <!--
-      docs/plan/08 § The resource-graph projection, docs/plan/04 § Streams — issue #54's stream and
-      projection half. Two things live here and nothing else: the IResourceChangedSink that puts a
-      resource-changed event on NATS JetStream under the subject grammar docs/plan/04 names, and the
-      projector that consumes the stream on a silo and writes the flattened row into the tenant's
-      ClickHouse database.
+      docs/plan/08 § The resource-graph projection, docs/plan/04 § Streams — issue #54, both halves.
+      Three things live here and nothing else: the IResourceChangedSink that puts a resource-changed
+      event on NATS JetStream under the subject grammar docs/plan/04 names; the projector that
+      consumes the stream on a silo and writes the flattened row into the tenant's ClickHouse
+      database; and the query API (Query/) that takes a tenant's KQL, translates the subset
+      KqlSubset names into one parameterised ClickHouse statement with the caller's access ANDed in,
+      and answers it from the same table on the gateway.
+
+      ⚠ Microsoft.Azure.Kusto.Language IS THE PARSER AND BINDER, NOT THE ENGINE. It parses the KQL,
+      binds every name against the one `resources` table ResourceGraphSchema declares and types
+      every expression; KqlTranslator walks the bound tree and emits ClickHouse SQL for the node
+      kinds it admits, refusing every other by name. The package's licence row is on
+      Directory.Packages.props — the NuGet artefact carries a Microsoft EULA and not the Apache-2.0
+      of its source, and passes ADR-011 for the reason written there.
 
       ⚠ NATS.Client.JetStream DIRECTLY, AND NOT Microsoft.Orleans.Streaming.NATS, AND THE REASON IS
       MEASURED RATHER THAN PREFERRED. Directory.Packages.props § Orleans pins the Orleans provider at
@@ -51,6 +60,8 @@
     <ItemGroup>
         <PackageReference Include="NATS.Client.Core"/>
         <PackageReference Include="NATS.Client.JetStream"/>
+        <!-- The KQL parser and binder — see the header, and Directory.Packages.props for the licence row. -->
+        <PackageReference Include="Microsoft.Azure.Kusto.Language"/>
         <!--
           IGrainFactory.ForTenant — the projector reads the tenant's ICheckGrain for the access column.
           BackgroundService, IConfiguration binding and ILogger arrive through it, as they do for

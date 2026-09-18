@@ -1,0 +1,3 @@
+resources
+| where name has 'db' or name contains 'cache' or name startswith 'pg-' or name endswith '-prod' or type !~ 'cybercloud.sample/widgets'
+| project name

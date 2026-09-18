@@ -221,6 +221,65 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
         round.StreamNamespace.ShouldBe("cc.11111111111141118111111111111111.res");
     }
 
+    /// <summary>
+    ///     The three types the query half of #54 added — a request, a column and a page. Nothing
+    ///     carries them over a wire today (<c>IResourceGraphQuery</c> is in-process at the gateway),
+    ///     so the suite is what keeps them serializable until something does; the page's two
+    ///     <see cref="ImmutableArray{T}" /> members, one of them of a record struct, are the exact
+    ///     shape this suite exists to catch (#54 review).
+    /// </summary>
+    [Fact]
+    public void AResourceGraphQueryRequestRoundTrips() {
+        var value = new ResourceGraphQueryRequest {
+            Query = "resources | where tags has 'prod' | project name",
+            Caller = new() { TenantId = Guid.Parse("11111111-1111-4111-8111-111111111111"), SubjectType = "user", SubjectId = "alice" },
+            Top = 25,
+            Continuation = "25.0123456789abcdef"
+        };
+
+        var round = RoundTrip(value);
+
+        round.Query.ShouldBe(value.Query);
+        round.Caller.TenantId.ShouldBe(value.Caller.TenantId);
+        round.Caller.SubjectId.ShouldBe("alice");
+        round.Top.ShouldBe(25);
+        round.Continuation.ShouldBe("25.0123456789abcdef");
+        round.PageSize.ShouldBe(25);
+    }
+
+    [Fact]
+    public void AResourceGraphQueryPageRoundTripsWithItsColumnsAndRows() {
+        var value = new ResourceGraphQueryPage {
+            Columns = [new("name", "string"), new("n", "long"), new("tags", "dynamic")],
+            Rows = ["""{"name":"pg-main","n":1,"tags":{"env":"prod"}}""", """{"name":"pg-replica","n":2,"tags":{}}"""],
+            Continuation = "2.0123456789abcdef"
+        };
+
+        var round = RoundTrip(value);
+
+        round.Columns.IsDefault.ShouldBeFalse("an ImmutableArray that comes back default is the failure this suite is for");
+        round.Columns.ShouldBe(value.Columns);
+        round.Rows.IsDefault.ShouldBeFalse();
+        round.Rows.ShouldBe(value.Rows);
+        round.Continuation.ShouldBe("2.0123456789abcdef");
+        round.HasMore.ShouldBeTrue();
+
+        // And an empty last page, whose arrays must come back empty and not default.
+        var last = RoundTrip(new ResourceGraphQueryPage());
+        last.Columns.IsDefaultOrEmpty.ShouldBeTrue();
+        last.Columns.IsDefault.ShouldBeFalse();
+        last.Rows.IsDefault.ShouldBeFalse();
+        last.HasMore.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void AResourceGraphColumnRoundTripsOnItsOwn() {
+        var round = RoundTrip(new ResourceGraphColumn("createdAt", "datetime"));
+
+        round.Name.ShouldBe("createdAt");
+        round.Type.ShouldBe("datetime");
+    }
+
     [Fact]
     public void AWriteTraceRoundTripsAndStaysCanonical() {
         var value = new WriteTrace { Reached = WriteTrace.Canonical };

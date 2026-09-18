@@ -105,6 +105,26 @@ enum RouteKind {
     /// </remarks>
     RoleAssignmentCollection,
 
+    /// <summary>
+    ///     The resource graph's query —
+    ///     <c>POST /tenants/{t}/providers/CyberCloud.ResourceGraph/resources</c> with a KQL body.
+    ///     docs/plan/08 § The resource-graph projection, the query half of #54.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The tenth kind, and the one <c>POST</c> that is not an action.</b> Under the second
+    ///     reserved namespace (<c>ResourceGraphAddress.ProviderNamespace</c>) the router asks this
+    ///     one grammar before the scope and resource grammars and before the <c>POST</c> branch, so
+    ///     docs/plan/08's "<c>POST</c> appears only for actions on an existing resource" stays true
+    ///     of every path that reaches the resource manager. <c>ResourceGraphQueryRoutingTests</c>
+    ///     pins the shape, the verb and the <c>400</c>s under the namespace.
+    ///     <para>
+    ///         ⚠ <b>Separate from <see cref="Action" /> for the reason every other kind is separate:
+    ///         the dispatch target differs.</b> A query goes to <c>IResourceGraphQuery</c>, a
+    ///         service that reads the projection and no grain.
+    ///     </para>
+    /// </remarks>
+    ResourceGraphQuery,
+
     /// <summary>A <c>POST</c> action on an existing resource — <c>restart</c>, <c>rotateKeys</c>.</summary>
     Action,
 
@@ -211,6 +231,10 @@ enum RouteKind {
 ///     The collection, for <see cref="RouteKind.ScopeCollection" />. ⚠ Its tenant is the
 ///     <i>token's</i> too, rebuilt through the parent scope.
 /// </param>
+/// <param name="ResourceGraph">
+///     The query address, for <see cref="RouteKind.ResourceGraphQuery" />. ⚠ Its tenant is the
+///     <i>token's</i> too — the address carries nothing but a tenant, and that one is rebuilt.
+/// </param>
 readonly record struct GatewayRoute(
     RouteKind Kind,
     ResourceId Resource,
@@ -221,7 +245,8 @@ readonly record struct GatewayRoute(
     ResourceCollectionId Collection = default,
     RoleAssignmentId RoleAssignment = default,
     RoleAssignmentCollectionId RoleAssignments = default,
-    ScopeCollectionId Scopes = default
+    ScopeCollectionId Scopes = default,
+    ResourceGraphAddress ResourceGraph = default
 ) {
     /// <summary>Nothing matched.</summary>
     public static GatewayRoute None { get; } = new(RouteKind.Unknown, default, "", Guid.Empty, "");
@@ -252,6 +277,8 @@ readonly record struct GatewayRoute(
             RouteKind.Collection => Collection.Path,
             RouteKind.RoleAssignmentCollection => RoleAssignments.Path,
             RouteKind.ScopeCollection => Scopes.Path,
+            // The query answers a collection envelope and pages with a nextLink built from this.
+            RouteKind.ResourceGraphQuery => ResourceGraph.Path,
             _ => ""
         };
 }
@@ -428,6 +455,42 @@ static class GatewayRouter {
                     // ⚠ NAMED, for the reason Collection is below — four optional address kinds
                     // now, and the positional form would put an assignment into Scope and compile.
                     RoleAssignment: assignment.GetValueOrThrow().WithTenant(tenantId)
+                )
+            );
+        }
+
+        // ── The resource graph's query, under the second reserved namespace (#54). ──────────────
+        //
+        // ⚠ THE SAME ARRANGEMENT AS THE ROLE ASSIGNMENT'S, ONE GRAMMAR INSTEAD OF TWO. Under
+        // /providers/CyberCloud.ResourceGraph/ only ResourceGraphAddress.ParsePath is asked: a route
+        // for the one address, a 400 that names it for anything else, and never a fall-through into
+        // the scope or resource grammars — which would answer 404 to `…/resources/main` and send a
+        // caller looking for a missing resource when their URL is wrong. The order against the
+        // grammars below is free (five segments with `providers` third parse as nothing else;
+        // ResourceGraphAddressTests sweeps it); the order against the POST branch is not, because
+        // ResolveAction would read the address as the action `resources` on a five-segment path
+        // and refuse it as a malformed resource id.
+        //
+        // ⚠ POST ONLY. A GET on the address is a 405 that names the verb rather than a 400 that
+        // names the grammar: the address exists, its one verb is the one the body needs, and RFC
+        // 9110 wants the Allow header a 405 carries. A query is a program and a URL is not the place
+        // for one — ResourceGraphAddress's remarks.
+        if (ResourceGraphAddress.IsUnderNamespace(path)) {
+            var query = ResourceGraphAddress.ParsePath(path);
+
+            if (query.TryGetError(out var queryError)) {
+                return Result<GatewayRoute>.Failure(queryError);
+            }
+
+            return Result<GatewayRoute>.Success(
+                new(
+                    RouteKind.ResourceGraphQuery,
+                    default,
+                    "",
+                    Guid.Empty,
+                    "",
+                    // NAMED, for the reason the other optional address kinds are; the token's tenant.
+                    ResourceGraph: new(tenantId)
                 )
             );
         }
@@ -655,6 +718,13 @@ static class GatewayRouter {
         // 5-minute window is how you accidentally rate-limit your own portal."
         if (path.StartsWith(OperationsPrefix, StringComparison.Ordinal) && query.ContainsKey("wait")) {
             return RequestClass.LongPoll;
+        }
+
+        // ⚠ A resource graph query is a POST and a read. Counted as a write it would spend the
+        // subscription-write bucket — the smaller one, sized for creates — on a portal's list page.
+        // A suffix test, for the reason the two above are prefix tests: no registry on this path.
+        if (path.EndsWith(ResourceGraphAddress.Suffix, StringComparison.OrdinalIgnoreCase)) {
+            return RequestClass.Read;
         }
 
         return HttpMethods.IsGet(method) || HttpMethods.IsHead(method)

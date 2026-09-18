@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace CyberCloud.ResourceGraph;
 
@@ -26,8 +28,52 @@ namespace CyberCloud.ResourceGraph;
 ///     </para>
 /// </remarks>
 public sealed class ClickHouseClient {
+    /// <summary>The response header ClickHouse puts its exception's number in, beside the body's <c>Code: N.</c></summary>
+    public const string ExceptionCodeHeader = "X-ClickHouse-Exception-Code";
+
+    /// <summary><c>TIMEOUT_EXCEEDED</c>: the statement ran past <c>max_execution_time</c>.</summary>
+    public const int TimeoutExceeded = 159;
+
+    /// <summary><c>TOO_MANY_ROWS</c>: the statement would read past <c>max_rows_to_read</c>.</summary>
+    public const int TooManyRows = 158;
+
+    /// <summary><c>TOO_MANY_ROWS_OR_BYTES</c>: the same limit, reported by a newer code path.</summary>
+    public const int TooManyRowsOrBytes = 396;
+
+    static readonly Regex ExceptionCodePattern = new(
+        "\\(" + ExceptionCodeHeader + ": (?<code>[0-9]+)\\)",
+        RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
+        TimeSpan.FromSeconds(1)
+    );
+
     readonly HttpClient http;
     readonly Uri endpoint;
+
+    /// <summary>
+    ///     The ClickHouse exception number a failure from <see cref="ExecuteAsync(string, IReadOnlyDictionary{string, string}?, IReadOnlyDictionary{string, string}?, CancellationToken)" />
+    ///     carries, or <c>0</c> for a failure that is not the server's answer — unreachable, timed
+    ///     out on this side, or a failure some other component wrote.
+    /// </summary>
+    /// <param name="failure">The error a call returned.</param>
+    /// <remarks>
+    ///     Read back out of the message, because <see cref="Error" /> has no field for a foreign
+    ///     code and deliberately so; the spelling is this class's own and the pattern is anchored to
+    ///     it, so a body that happens to contain the header's name does not match.
+    /// </remarks>
+    public static int ExceptionCode(Error failure) {
+        ArgumentNullException.ThrowIfNull(failure);
+
+        var match = ExceptionCodePattern.Match(failure.Message);
+
+        return match.Success && int.TryParse(match.Groups["code"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var code)
+            ? code
+            : 0;
+    }
+
+    /// <summary>Whether a failure is ClickHouse refusing the statement for exceeding its per-query budget.</summary>
+    /// <param name="failure">The error a call returned.</param>
+    public static bool IsBudgetExceeded(Error failure) =>
+        ExceptionCode(failure) is TimeoutExceeded or TooManyRows or TooManyRowsOrBytes;
 
     /// <summary>Creates a client over one <see cref="HttpClient" /> it does not own.</summary>
     /// <param name="http">The client. One per store, long-lived.</param>
@@ -88,15 +134,43 @@ public sealed class ClickHouseClient {
     /// <param name="sql">The statement, with <c>{name:Type}</c> placeholders for values.</param>
     /// <param name="parameters">The placeholders' values, by name.</param>
     /// <param name="cancellationToken">Cancels the request.</param>
-    /// <returns>The body, or a failure carrying ClickHouse's own error text.</returns>
-    public async Task<Result<string>> ExecuteAsync(
+    /// <returns>The body, or a failure carrying ClickHouse's own error text — for the log, not for a caller; see <see cref="ExceptionCode" />.</returns>
+    public Task<Result<string>> ExecuteAsync(
         string sql,
         IReadOnlyDictionary<string, string>? parameters = null,
         CancellationToken cancellationToken = default
+    ) =>
+        ExecuteAsync(sql, parameters, null, cancellationToken);
+
+    /// <summary>
+    ///     <see cref="ExecuteAsync(string, IReadOnlyDictionary{string, string}?, CancellationToken)" />
+    ///     with per-request ClickHouse settings — the query API's <c>max_execution_time</c>,
+    ///     <c>max_rows_to_read</c> and <c>readonly</c>.
+    /// </summary>
+    /// <param name="sql">The statement, with <c>{name:Type}</c> placeholders for values.</param>
+    /// <param name="parameters">The placeholders' values, by name.</param>
+    /// <param name="settings">
+    ///     Settings for this one request, each sent as a query-string key. ⚠ A setting name is
+    ///     interpolated into the URL, so this takes names the caller spelled in code and never one
+    ///     from a request; the values are escaped like a parameter's.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the request.</param>
+    /// <returns>The body, or a failure carrying ClickHouse's own error text — for the log, not for a caller; see <see cref="ExceptionCode" />.</returns>
+    public async Task<Result<string>> ExecuteAsync(
+        string sql,
+        IReadOnlyDictionary<string, string>? parameters,
+        IReadOnlyDictionary<string, string>? settings,
+        CancellationToken cancellationToken
     ) {
         ArgumentNullException.ThrowIfNull(sql);
 
         var query = new StringBuilder("?date_time_input_format=best_effort&output_format_json_quote_64bit_integers=0");
+
+        if (settings is not null) {
+            foreach (var (name, value) in settings) {
+                query.Append('&').Append(Uri.EscapeDataString(name)).Append('=').Append(Uri.EscapeDataString(value));
+            }
+        }
 
         if (parameters is not null) {
             foreach (var (name, value) in parameters) {
@@ -116,9 +190,18 @@ public sealed class ClickHouseClient {
                 // ⚠ The body IS the diagnosis: ClickHouse answers a bad statement with its own
                 // exception text (`Code: 62. DB::Exception: Syntax error …`), and that text names
                 // the column or the token. A status code alone would send a reader to the server log.
+                // ⚠ And the diagnosis is for the LOG, never for a caller: the text quotes the whole
+                // statement — the tenant database, every column, the access filter with the
+                // caller's usersets in it — so whoever turns this failure into a response replaces
+                // the message and keeps the code (ExceptionCode) to decide what to say.
+                var code = response.Headers.TryGetValues(ExceptionCodeHeader, out var values)
+                           && int.TryParse(values.FirstOrDefault(), NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
+                    ? parsed
+                    : 0;
+
                 return Result<string>.Failure(
                     ErrorCode.InternalError,
-                    $"ClickHouse at {endpoint} answered {(int)response.StatusCode} {response.ReasonPhrase}: {body.Trim()}"
+                    $"ClickHouse at {endpoint} answered {(int)response.StatusCode} {response.ReasonPhrase} ({ExceptionCodeHeader}: {code}): {body.Trim()}"
                 );
             }
 

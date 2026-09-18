@@ -1,0 +1,5 @@
+resources
+| where location == 'eu-central'
+| project name, loc = tolower(location), resourceGroup
+| order by name asc
+| take 5

@@ -1,0 +1,3 @@
+resources
+| where isempty(tags.env) and isnotempty(tags['owner']) and not(isempty(tags)) and isnotempty(location)
+| project name, tags

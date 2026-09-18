@@ -86,6 +86,12 @@ sealed class GatewayHarness {
     /// <summary>The recording role assignment manager stage 8 dispatches an assignment route to.</summary>
     public RecordingRoleAssignmentManager Roles { get; } = new();
 
+    /// <summary>
+    ///     The recording resource graph query stage 8 dispatches a query route to — unless the
+    ///     harness was built over a real one (<see cref="GatewayHarness(IResourceGraphQuery)" />).
+    /// </summary>
+    public RecordingResourceGraphQuery Graph { get; } = new();
+
     /// <summary>The operation reader, scripted so an LRO poll needs no cluster.</summary>
     public ScriptedOperationReader Operations { get; } = new();
 
@@ -101,6 +107,14 @@ sealed class GatewayHarness {
     /// <summary>The region this gateway claims to be in.</summary>
     public GatewayOptions Options { get; }
 
+    /// <summary>
+    ///     Composes the pipeline over a real <see cref="IResourceGraphQuery" /> — the one
+    ///     substitution the end-to-end query test undoes, so a KQL body typed at the gateway reaches
+    ///     the real translator, the real access filter and a real ClickHouse.
+    /// </summary>
+    /// <param name="graph">The real query service.</param>
+    public GatewayHarness(IResourceGraphQuery graph) : this(graph, "", "", TenantStatus.Active) { }
+
     /// <summary>Composes the pipeline.</summary>
     /// <param name="region">This pod's region. Empty means "serve everything here".</param>
     /// <param name="tenantARegion">Tenant A's home region in the seeded directory.</param>
@@ -109,6 +123,13 @@ sealed class GatewayHarness {
         string region = "",
         string tenantARegion = "",
         TenantStatus status = TenantStatus.Active
+    ) : this(null, region, tenantARegion, status) { }
+
+    GatewayHarness(
+        IResourceGraphQuery? graph,
+        string region,
+        string tenantARegion,
+        TenantStatus status
     ) {
         Counters = new InMemoryRateLimitCounters(Clock);
         Tickets = new InMemoryHubTicketStore(Clock);
@@ -145,7 +166,7 @@ sealed class GatewayHarness {
             new RateLimitStage(new GatewayRateLimiter(Counters)),
             new RouteStage(new OneTypeRegistry(), Options),
             new ValidateStage(Options),
-            new DispatchStage(Manager, Scopes, Roles, Operations, Tickets, Options)
+            new DispatchStage(Manager, Scopes, Roles, graph ?? Graph, Operations, Tickets, Options)
         ];
 
         pipeline = new(Stages, NullLogger<GatewayPipeline>.Instance);

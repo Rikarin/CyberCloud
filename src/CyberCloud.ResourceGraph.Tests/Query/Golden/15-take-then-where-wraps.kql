@@ -1,0 +1,4 @@
+resources
+| order by createdAt
+| take 100
+| where location == 'eu-central'

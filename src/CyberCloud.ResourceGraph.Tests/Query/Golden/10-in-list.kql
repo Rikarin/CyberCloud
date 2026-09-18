@@ -1,0 +1,3 @@
+resources
+| where location in ('eu-central', 'eu-west') and version in (1, 2, 3)
+| project name, location, version

@@ -24,12 +24,24 @@ cyc aks create --name prod --node-count 3 --node-size c1.large --wait
 cyc vault secret set --vault v1 --name db-password --value-from-stdin
 cyc shell                                  # attach to the cloud terminal
 cyc resource list --tag env=prod --output json
+cyc graph query "resources | where type =~ 'cybercloud.dbforpostgresql/servers' | project name" --all
 cyc rest --method GET --uri /tenants/…     # the escape hatch for anything not yet a verb
 ```
 
 **Groups are generated from the provider registry**, with an alias table for the short forms people
 expect (`aks` → `containerservice managed-cluster`, `postgres` → `dbforpostgresql server`). The alias
 table is the *only* hand-maintained part of the CLI's surface and it is small.
+
+⚠ **`cyc graph query` is hand-written (#54), beside `cyc rest` and for the reason
+[10 § Shape](10-gateway-and-api.md) gives under "#63's question asked a fourth time":** the
+resource graph's address lives under a reserved namespace no provider declares, so the generated
+document does not carry it and no generated group can. The command `POST`s
+`{ "query", "$top", "$skipToken" }` to `/tenants/{t}/providers/CyberCloud.ResourceGraph/resources`
+through the same pipeline as every generated verb, and `--all` follows the `nextLink` by `POST`ing
+the same query with the link's `$skipToken` — not with a `GET`, which is what the generated
+`--all` sends and what every other collection takes. `graph` is on `CommandTree.ReservedGroups`
+with the nine host-owned names, so a provider called `CyberCloud.Graph` fails the build of the
+tree rather than meaning two things by `cyc graph`.
 
 ### Decisions
 

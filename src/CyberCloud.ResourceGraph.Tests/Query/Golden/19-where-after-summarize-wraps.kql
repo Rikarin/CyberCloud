@@ -1,0 +1,4 @@
+resources
+| summarize n = count() by resourceGroup
+| where n > 10
+| order by n

@@ -150,12 +150,18 @@
         -->
         <ProjectReference Include="../../CyberCloud.Vault/CyberCloud.Vault.csproj"/>
         <!--
-          docs/plan/08 § The resource-graph projection (#54) — the resource-changed PUBLISHER, and
-          only the publisher. ResourceManagerService emits step 11's event in THIS process, so the
-          NATS sink has to be registered here for any event to reach the stream; the projector that
-          consumes it runs on the silos, because it reads a tenant's check grain for every row.
-          GatewayComposition calls AddResourceChangedPublisher only when CyberCloud:ResourceGraph
-          (or Aspire's ConnectionStrings:nats) is configured.
+          docs/plan/08 § The resource-graph projection (#54) — the resource-changed PUBLISHER and
+          the QUERY API, and never the projector. ResourceManagerService emits step 11's event in
+          THIS process, so the NATS sink has to be registered here for any event to reach the
+          stream; stage 8 dispatches POST /tenants/{t}/providers/CyberCloud.ResourceGraph/resources
+          to the ClickHouse-backed IResourceGraphQuery, which reads the projection from this process
+          too. The projector that fills the table runs on the silos, because it reads a tenant's
+          check grain for every row. GatewayComposition calls AddResourceChangedPublisher when
+          CyberCloud:ResourceGraph (or Aspire's ConnectionStrings:nats) carries a NATS URL and
+          AddResourceGraphQuery when it carries a ClickHouse endpoint; either alone is a supported
+          shape. ⚠ No Kusto.Language or ClickHouse type is bound here — the module holds both —
+          and no CyberCloud.Authorization.Contracts type either: the caller's usersets are read
+          inside the module, behind IResourceGraphQuery, which keeps the ABSENT list below true.
         -->
         <ProjectReference Include="../../CyberCloud.ResourceGraph/CyberCloud.ResourceGraph.csproj"/>
         <!--

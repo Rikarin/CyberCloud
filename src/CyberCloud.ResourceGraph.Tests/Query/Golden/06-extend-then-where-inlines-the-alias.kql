@@ -1,0 +1,4 @@
+resources
+| extend owner = tags.owner, shortName = tolower(name)
+| where owner == 'platform-team' and shortName startswith 'pg-'
+| project shortName, owner

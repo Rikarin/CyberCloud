@@ -1,0 +1,2 @@
+resources
+| where type =~ 'CyberCloud.DBforPostgreSQL/servers' and tags.env == 'prod'

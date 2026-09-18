@@ -1,0 +1,5 @@
+resources
+| where createdAt >= datetime(2026-09-17T10:00:00Z) and modifiedAt < datetime(2026-09-18) and version > 2 and version <= 10 and version != 1.5 and version >= -1
+| extend live = provisioningState == 'Succeeded'
+| where live == true
+| project name, live

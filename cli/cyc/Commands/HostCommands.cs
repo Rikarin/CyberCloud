@@ -26,6 +26,7 @@ static class HostCommands {
             LogoutCommand(host),
             AccountCommands.Build(host, globals, tree),
             RestCommand.Build(host, globals, tree),
+            GraphCommands.Build(host, globals, tree),
             ConfigCommands.Build(host, globals, tree),
             ExtensionCommands.Build(host, globals, tree),
             CompletionCommand.Build(host),
