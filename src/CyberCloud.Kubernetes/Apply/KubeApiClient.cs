@@ -181,6 +181,47 @@ public sealed class KubeApiClient(
         var priorVersion = existing.ValueOrDefault?.ResourceVersion ?? string.Empty;
         var priorJson = existing.ValueOrDefault?.Json;
 
+        if (command.IsCoOwned) {
+            // ⚠ THE CLAIM IS CHECKED HERE, AGAINST THE OBJECT, BECAUSE THIS IS THE ONE PLACE THAT HAS
+            // READ IT. OwnerResourceId switches the seven-label guard off for the command — the labels
+            // are the owner's — and a command that merely SAID it was co-owned would otherwise be an
+            // unlabelled body under any manager onto any object. The shape check is the agent's too
+            // (KubeCommandJson.FromJson) and costs nothing to repeat; the live check is only possible
+            // here: the object's resource-id label is the owner, the command's manager has to be the
+            // one derived from it, and the tenant on the object has to be the command's. A name taken
+            // by another resource between a co-writer's read and its apply is what it catches.
+            var shape = command.CheckCoOwnedShape();
+            if (shape.TryGetError(out var shapeError)) {
+                return Result<ApplyOutcome>.Failure(shapeError);
+            }
+
+            if (existedBefore) {
+                var owner = command.CheckCoOwnedAgainst(existing.GetValueOrThrow());
+                if (owner.TryGetError(out var ownerError)) {
+                    return Result<ApplyOutcome>.Failure(ownerError);
+                }
+            }
+        }
+
+        if (command.IsCoOwned && !existedBefore) {
+            // ⚠ A CO-WRITER NEVER CREATES THE OWNER'S OBJECT, AND THE API SERVER WOULD LET IT.
+            // Measured against rancher/k3s:v1.35.7-k3s1 in CoOwnedApplyTests: an apply patch whose
+            // body carries a metadata.resourceVersion against an object that is not there does NOT
+            // fail the optimistic lock — the create-on-update path clears the version and creates.
+            // What it would create is the owner's object, under the owner's name, with none of the
+            // seven labels and none of the owner's spec: an unlabelled object the drift scan cannot
+            // attribute and the owner's next apply then conflicts with. So absence is refused here,
+            // in the one place that has read the object a moment before writing it. The window
+            // between this read and the PATCH remains, and is named in the co-owned mode's remarks.
+            return Result<ApplyOutcome>.Failure(
+                ErrorCode.ResourceNotFound,
+                $"'{target}' is not in cluster {clusterId:D}, and the command is a co-writer's fragment "
+                + $"for resource {command.OwnerResourceId:D}'s object. A co-writer never creates the "
+                + "owner's object — the create would carry none of the owner's labels or spec — so the "
+                + "owner has to have converged first. The owner's delete wins."
+            );
+        }
+
         object body;
         try {
             body = new V1Patch(
@@ -247,6 +288,24 @@ public sealed class KubeApiClient(
             // portal, and a tenant editing their own cluster is not a provisioning failure. It is
             // drift, it has a name, and docs/plan/08's drift detection is what consumes it.
             var conflicts = ConflictParser.Parse(ex.Response.Content);
+
+            if (conflicts.Count == 0 && ConflictParser.IsOptimisticLock(ex.Response.Content)) {
+                // ⚠ THE OTHER 409, AND IT IS NOT DRIFT. The body carried a metadata.resourceVersion —
+                // a co-owned apply always does — and the object has moved since. Nobody owns anything
+                // wrongly and nothing was written; the repair is to read again, which KubeCoWriter
+                // does. Reporting this as Conflict would hand the reconciler a drift event with no
+                // fields in it and tell it to wait for a tenant to undo an edit that never happened.
+                return Result<ApplyOutcome>.Success(
+                    new() {
+                        Result = ApplyResult.Stale,
+                        Target = target,
+                        ResourceVersion = priorVersion,
+                        ReconcileHash = command.ReconcileHash,
+                        Message = $"'{target}' moved between the read the command was built from and the "
+                            + "apply; nothing was written. Read it again and apply again."
+                    }
+                );
+            }
 
             return Result<ApplyOutcome>.Success(
                 new() {

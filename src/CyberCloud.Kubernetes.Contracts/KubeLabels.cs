@@ -117,6 +117,169 @@ public static class KubeLabels {
     public static ImmutableArray<string> MandatoryAnnotations { get; } =
         [ResourcePathAnnotation, ReconcileHashAnnotation];
 
+    // ── A second writer on an object — the co-owned apply, issue #89 ─────────────────────────────
+
+    /// <summary>
+    ///     <c>cybercloud.io/fragment.{writerId}</c> — the fragment one co-writer has applied onto an
+    ///     object another resource owns, as canonical JSON. An <b>annotation</b>, one per co-writer.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <b>Why a co-writer's fragment is written down on the object.</b> Every co-writer of one
+    ///         object applies under <i>one</i> shared field manager
+    ///         (<see cref="CoWriterFieldManager" />), because the fields a peering has to reach —
+    ///         <c>Vpc.spec.vpcPeerings</c>, <c>Vpc.spec.staticRoutes</c> — are atomic lists, and two
+    ///         managers cannot each own part of an atomic list: the second apply is a conflict on the
+    ///         whole. One manager's apply is the whole set of fields it owns, so each co-writer's apply
+    ///         has to carry every <i>other</i> co-writer's fragment too, or it prunes them. This
+    ///         annotation is how the builder knows what the others applied without asking them: it
+    ///         merges every stored fragment with the caller's and applies the union. It is the same
+    ///         bookkeeping <c>metadata.managedFields</c> keeps per manager, kept per co-writer because
+    ///         the co-writers share a manager.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Bookkeeping, not desired state.</b> The grain holds the co-writer's desired body;
+    ///         this records what was last applied, and the next apply overwrites it. ADR-001's rule
+    ///         that desired state does not live in the target cluster's etcd is about where the truth
+    ///         is, and the truth stays in the grain.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Two costs of keeping it on the object, named so nobody discovers them in
+    ///         production.</b> First, size: the API server caps an object's annotations at 256 KiB in
+    ///         total, and every co-writer's whole fragment sits there — a peering's is a few hundred
+    ///         bytes, so a <c>Vpc</c> holds hundreds before the cap bites, but a co-writer that stored
+    ///         a large slice would be refused by the API server on the <i>next</i> co-writer's apply,
+    ///         which is the one that carries the union. Second, lifetime: a fragment is withdrawn by
+    ///         its co-writer and by nothing else. The builder refuses a corrupt one rather than
+    ///         pruning it and never drops a stale one, so a fragment left by a co-writer whose grain
+    ///         vanished without withdrawing is re-applied by every other co-writer of that object,
+    ///         forever. <c>DriftScanner</c> is the one thing that finds it — a fragment whose writer
+    ///         no grain owns is an orphan finding naming the slice — and removing it is a person's
+    ///         call, as an orphan object's is.
+    ///     </para>
+    /// </remarks>
+    public const string FragmentAnnotationPrefix = Prefix + "/fragment.";
+
+    /// <summary>
+    ///     <c>cybercloud.io/fragment-hash.{writerId}</c> — <c>sha256:…</c> over one co-writer's
+    ///     fragment. The co-owned mode's <see cref="ReconcileHashAnnotation" />, keyed per fragment so
+    ///     two co-writers' hashes never overwrite each other and never touch the owner's.
+    /// </summary>
+    public const string FragmentHashAnnotationPrefix = Prefix + "/fragment-hash.";
+
+    /// <summary>
+    ///     <c>cybercloud.io/fragment-path.{writerId}</c> — the co-writing resource's path. The
+    ///     co-owned mode's <see cref="ResourcePathAnnotation" />, so a support engineer reading the
+    ///     object can answer "whose is this slice" as well as "whose is this object".
+    /// </summary>
+    public const string FragmentPathAnnotationPrefix = Prefix + "/fragment-path.";
+
+    /// <summary>The <see cref="FragmentAnnotationPrefix" /> key for one co-writer.</summary>
+    /// <param name="writer">The co-writing resource's GUID.</param>
+    public static string FragmentAnnotation(Guid writer) => FragmentAnnotationPrefix + GuidValue(writer);
+
+    /// <summary>The <see cref="FragmentHashAnnotationPrefix" /> key for one co-writer.</summary>
+    /// <param name="writer">The co-writing resource's GUID.</param>
+    public static string FragmentHashAnnotation(Guid writer) => FragmentHashAnnotationPrefix + GuidValue(writer);
+
+    /// <summary>The <see cref="FragmentPathAnnotationPrefix" /> key for one co-writer.</summary>
+    /// <param name="writer">The co-writing resource's GUID.</param>
+    public static string FragmentPathAnnotation(Guid writer) => FragmentPathAnnotationPrefix + GuidValue(writer);
+
+    /// <summary>
+    ///     Whether <paramref name="key" /> is one of the three per-fragment annotations, which a
+    ///     caller may not set by hand in either mode because the builder writes them.
+    /// </summary>
+    /// <param name="key">An annotation key.</param>
+    public static bool IsFragmentAnnotation(string? key) =>
+        key is not null
+        && (key.StartsWith(FragmentAnnotationPrefix, StringComparison.Ordinal)
+            || key.StartsWith(FragmentHashAnnotationPrefix, StringComparison.Ordinal)
+            || key.StartsWith(FragmentPathAnnotationPrefix, StringComparison.Ordinal));
+
+    /// <summary>Reads the co-writer's GUID off a <see cref="FragmentAnnotationPrefix" /> key.</summary>
+    /// <param name="key">An annotation key.</param>
+    /// <param name="writer">The GUID the key carries, when it is a fragment key.</param>
+    /// <returns><c>true</c> when the key is <c>cybercloud.io/fragment.{guid}</c> with a parseable GUID.</returns>
+    public static bool TryReadFragmentWriter(string? key, out Guid writer) {
+        writer = Guid.Empty;
+
+        return key is not null
+            && key.StartsWith(FragmentAnnotationPrefix, StringComparison.Ordinal)
+            && Guid.TryParseExact(key.AsSpan(FragmentAnnotationPrefix.Length), "D", out writer);
+    }
+
+    /// <summary>
+    ///     <c>cybercloud/{ownerType}/{ownerId}</c> — the one field manager every co-writer of one
+    ///     object applies under, named for the object's <b>owning</b> resource.
+    /// </summary>
+    /// <param name="ownerTypeValue">The owner's <see cref="ResourceType" /> label value, as read off the object.</param>
+    /// <param name="ownerIdValue">The owner's <see cref="ResourceId" /> label value, as read off the object.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             Named for the owner and not for the co-writer, and that is the design decision
+    ///             of the co-owned mode.
+    ///         </b> A manager per co-writer reads as the obvious shape and it does
+    ///         not converge on the fields a peering has to reach: <c>Vpc.spec.vpcPeerings</c> and
+    ///         <c>Vpc.spec.staticRoutes</c> declare no <c>x-kubernetes-list-type</c>, so each is one
+    ///         atomic value with one set of owners, and a second manager applying the list with its
+    ///         own entry added is a <c>FieldManagerConflict</c> on the whole list — forever, because
+    ///         <c>KubeCommand.Force</c> is unreachable on purpose. One manager per co-owned object,
+    ///         applying the union of every fragment, is the shape that converges; the per-fragment
+    ///         annotations above are what let each co-writer know the others' fragments to include.
+    ///     </para>
+    ///     <para>
+    ///         Distinct from the owner's own <c>cybercloud/{provider}</c>, so the owner's apply never
+    ///         prunes a co-writer's fields and a co-writer's apply never prunes the owner's. Both
+    ///         values come off the live object's labels rather than from the caller, so a co-writer
+    ///         cannot name an owner the object does not have. Bounded by construction: 11 characters
+    ///         of prefix, a label value of at most 63, a slash, and a 36-character GUID is at most
+    ///         111 of the API server's 128.
+    ///     </para>
+    /// </remarks>
+    public static string CoWriterFieldManager(string ownerTypeValue, string ownerIdValue) =>
+        "cybercloud/" + ownerTypeValue + "/" + ownerIdValue;
+
+    /// <summary>
+    ///     Reads the owner back out of a <see cref="CoWriterFieldManager" /> name — the inverse, for
+    ///     the checks that ask whether a command's manager names the owner the command claims.
+    /// </summary>
+    /// <param name="manager">A field manager name.</param>
+    /// <param name="ownerTypeValue">The owner's <see cref="ResourceType" /> label value the name carries.</param>
+    /// <param name="ownerId">The owner's GUID the name carries.</param>
+    /// <returns>
+    ///     <c>true</c> when the name is <c>cybercloud/{ownerType}/{ownerId}</c> with a non-empty type
+    ///     and a parseable, non-empty GUID. An owner's own <c>cybercloud/{provider}</c> has one segment
+    ///     after the prefix and is <c>false</c>.
+    /// </returns>
+    public static bool TryReadCoWriterFieldManager(string? manager, out string ownerTypeValue, out Guid ownerId) {
+        ownerTypeValue = string.Empty;
+        ownerId = Guid.Empty;
+
+        const string prefix = "cybercloud/";
+
+        if (manager is null || !manager.StartsWith(prefix, StringComparison.Ordinal)) {
+            return false;
+        }
+
+        var rest = manager.AsSpan(prefix.Length);
+        var slash = rest.IndexOf('/');
+
+        if (slash <= 0 || rest[(slash + 1)..].IndexOf('/') >= 0) {
+            return false;
+        }
+
+        if (!Guid.TryParseExact(rest[(slash + 1)..], "D", out ownerId) || ownerId == Guid.Empty) {
+            ownerId = Guid.Empty;
+            return false;
+        }
+
+        ownerTypeValue = rest[..slash].ToString();
+        return true;
+    }
+
     /// <summary>
     ///     The six of <see cref="Mandatory" /> whose value cannot change for the life of a resource
     ///     — everything except <see cref="ApiVersion" />.

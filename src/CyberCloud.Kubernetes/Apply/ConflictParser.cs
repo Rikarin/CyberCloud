@@ -91,6 +91,39 @@ public static class ConflictParser {
     }
 
     /// <summary>
+    ///     The prose the API server puts on its optimistic-lock refusal —
+    ///     <c>registry.OptimisticLockErrorMsg</c> in <c>k8s.io/apiserver</c>, verbatim.
+    /// </summary>
+    public const string OptimisticLockMessage = "the object has been modified; please apply your changes to the latest version and try again";
+
+    /// <summary>
+    ///     Whether a 409 is the API server's optimistic lock — the apply carried a
+    ///     <c>metadata.resourceVersion</c> that is no longer the object's — rather than a field
+    ///     manager conflict.
+    /// </summary>
+    /// <param name="statusJson">The 409 response body.</param>
+    /// <remarks>
+    ///     ⚠ <b>The two 409s want opposite responses, and only the prose tells them apart.</b> A field
+    ///     manager conflict carries <c>details.causes[].reason: FieldManagerConflict</c> and is drift
+    ///     with a name; the optimistic lock carries no causes at all and <c>message</c> ending in the
+    ///     sentence above, and is the co-owned mode's "read again". Keyed on the sentence because the
+    ///     <c>reason</c> is <c>Conflict</c> for both. Asserted against a real k3s in
+    ///     <c>CoOwnedApplyTests</c>, not against a string this file invented.
+    /// </remarks>
+    public static bool IsOptimisticLock(string? statusJson) {
+        if (string.IsNullOrWhiteSpace(statusJson) || Parse(statusJson).Count > 0) {
+            return false;
+        }
+
+        try {
+            using var document = JsonDocument.Parse(statusJson);
+            return Text(document.RootElement, "message").Contains(OptimisticLockMessage, StringComparison.Ordinal);
+        } catch (JsonException) {
+            return false;
+        }
+    }
+
+    /// <summary>
     ///     Pulls the manager out of <c>conflict with "rival" using apps/v1</c>.
     /// </summary>
     /// <param name="message">The cause's message.</param>

@@ -848,4 +848,34 @@ public readonly record struct ClusterObjectRecord {
     ///     <c>KubeLabels.IsGroupScoped</c> is the test.
     /// </remarks>
     public required string ResourceType { get; init; }
+
+    /// <summary>
+    ///     The fragments other resources have co-written onto this object — one per
+    ///     <c>cybercloud.io/fragment.{writer}</c> annotation — with the hash and path recorded beside
+    ///     each. Empty for the object every resource owned alone before issue #89.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Not <see langword="required" />, unlike everything above, and that is right:</b> an
+    ///     unset value reads as "nobody co-writes this object", which is true of every object but a
+    ///     peered <c>Vpc</c>, whereas an unset <see cref="ResourceType" /> read as the wrong answer.
+    ///     What the scan does with it: a co-writing resource owns no object carrying its resource-id
+    ///     label, so without this the scan would report every converged peering as a stray forever;
+    ///     with it, the co-writer joins to the objects carrying its fragment, its hash is compared
+    ///     against the fragment's, and a fragment whose writer no grain owns is an orphan the scan
+    ///     names — the one way a fragment left by a co-writer that vanished without withdrawing is
+    ///     ever found. <c>DriftScanner</c>'s remarks say what it does with each.
+    /// </remarks>
+    public ImmutableArray<FragmentRecord> Fragments { get; init; } = [];
+
+    // A struct with a member initializer has to declare a constructor for it to run, and this one
+    // is what makes an unset Fragments an EMPTY array rather than a default one. The `required`
+    // members above are still enforced at every object initializer.
+    /// <summary>Starts an object initializer; every <see langword="required" /> member must follow.</summary>
+    public ClusterObjectRecord() { }
 }
+
+/// <summary>One co-writer's fragment as the drift scan sees it on an object it does not own.</summary>
+/// <param name="Writer">The co-writing resource's GUID, from the annotation key.</param>
+/// <param name="Hash">The <c>cybercloud.io/fragment-hash.{writer}</c> annotation, or empty when it is missing.</param>
+/// <param name="Path">The <c>cybercloud.io/fragment-path.{writer}</c> annotation, or empty when it is missing.</param>
+public readonly record struct FragmentRecord(Guid Writer, string Hash, string Path);

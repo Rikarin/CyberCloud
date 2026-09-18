@@ -447,6 +447,107 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
             AncestorPath
         );
 
+    /// <summary>
+    ///     The sibling resources the source declares, checked against the type under test's own
+    ///     provider and ancestor chain.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    ///     A sibling is from another provider, is nested deeper than the case's ancestor chain
+    ///     reaches, sits under ancestors that are not the case's own, or is named like the harness's
+    ///     ancestor at its level.
+    /// </exception>
+    /// <remarks>
+    ///     ⚠ <b>The first thing anything touching a sibling goes through, for the reason
+    ///     <see cref="Ancestors" /> is.</b> Without it a sibling from another provider fails inside
+    ///     <c>ResourceManagerService</c> with the registry's message about an unknown type, on the
+    ///     fixture's first create, naming neither the case nor the member; and a sibling nested past
+    ///     the chain fails inside <c>ResourceId</c>'s constructor about parent-name counts. Each
+    ///     refusal here names <c>Siblings</c> and the sibling, which is the difference between a
+    ///     provider author reading it once and bisecting the fixture start.
+    /// </remarks>
+    public static ImmutableArray<SiblingResource> Siblings {
+        get {
+            var declared = TSource.Siblings;
+            var ancestors = Ancestors;
+
+            foreach (var sibling in declared) {
+                var type = sibling.Case.Type;
+                var member = typeof(TSource).Name + ".Siblings";
+
+                if (!string.Equals(type.Namespace, Case.Type.Namespace, StringComparison.Ordinal)) {
+                    throw new InvalidOperationException(
+                        $"'{Case.DisplayName}' declares '{sibling.Name}' of type '{type}' as a sibling in "
+                        + $"{member}, and that type belongs to another provider. The suite registers ONE "
+                        + "provider, so a sibling from another would be a resource this run's registry "
+                        + "cannot address, and its create would fail with the registry's message rather "
+                        + "than this one. A sibling is a resource the type's body names within its own "
+                        + "provider — see IProviderCaseSource.Siblings."
+                    );
+                }
+
+                var levels = type.Depth - 1;
+
+                if (levels > ancestors.Length) {
+                    throw new InvalidOperationException(
+                        $"'{Case.DisplayName}' declares '{sibling.Name}' of type '{type}' as a sibling in "
+                        + $"{member}, which nests {type.Depth.ToString(CultureInfo.InvariantCulture)} level(s) "
+                        + $"deep, and the case's ancestor chain is {ancestors.Length.ToString(CultureInfo.InvariantCulture)} "
+                        + "long. A sibling lives under the harness's own ancestors, so it can nest no "
+                        + "deeper than the type under test does — see IProviderCaseSource.Siblings."
+                    );
+                }
+
+                for (var level = 0; level < levels; level++) {
+                    if (AncestorTypeAt(type, level) != ancestors[level].Type) {
+                        throw new InvalidOperationException(
+                            $"'{Case.DisplayName}' declares '{sibling.Name}' of type '{type}' as a sibling in "
+                            + $"{member}, and its ancestor at level {level.ToString(CultureInfo.InvariantCulture)} "
+                            + $"is '{AncestorTypeAt(type, level)}' where the case's is '{ancestors[level].Type}'. "
+                            + "A sibling is created under the harness's OWN ancestors, so its chain has to "
+                            + "be a prefix of the case's — see IProviderCaseSource.Siblings."
+                        );
+                    }
+                }
+
+                if (levels < ancestors.Length
+                    && string.Equals(sibling.Name, ConformanceIds.AncestorName(levels), StringComparison.Ordinal)) {
+                    throw new InvalidOperationException(
+                        $"'{Case.DisplayName}' declares a sibling named '{sibling.Name}' in {member}, which is "
+                        + $"the harness's own ancestor name at level {levels.ToString(CultureInfo.InvariantCulture)}. "
+                        + "The sibling would be the ancestor, created twice — pick another name."
+                    );
+                }
+            }
+
+            return declared;
+        }
+    }
+
+    /// <summary>Builds the address of a declared sibling — under the harness's ancestors, at its own depth.</summary>
+    /// <param name="sibling">The sibling, as <see cref="IProviderCaseSource.Siblings" /> declares it.</param>
+    /// <param name="tenant">The tenant, defaulting to <see cref="ConformanceIds.Tenant" />.</param>
+    /// <param name="subscription">The subscription, defaulting to <see cref="ConformanceIds.Subscription" />.</param>
+    /// <remarks>
+    ///     The one place the sibling arithmetic is done, as <see cref="Address" /> is for the type
+    ///     under test: the sibling's ancestor path is the harness's ancestor names for the levels its
+    ///     type nests below, which <see cref="Siblings" /> has already checked are the case's own.
+    /// </remarks>
+    public static ResourceId SiblingAddress(SiblingResource sibling, Guid? tenant = null, Guid? subscription = null) {
+        ArgumentNullException.ThrowIfNull(sibling);
+
+        var levels = sibling.Case.Type.Depth - 1;
+
+        return new(
+            tenant ?? ConformanceIds.Tenant,
+            subscription ?? ConformanceIds.Subscription,
+            ConformanceIds.ResourceGroup,
+            sibling.Case.Type,
+            sibling.Name,
+            Guid.Empty,
+            string.Join('/', Enumerable.Range(0, levels).Select(ConformanceIds.AncestorName))
+        );
+    }
+
     /// <summary>The type of the ancestor at <paramref name="level" />, outermost being 0.</summary>
     /// <param name="type">The nested type.</param>
     /// <param name="level">The nesting level.</param>
@@ -561,6 +662,14 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
         // parent check, before the caller's tenant is ever compared — so the test would pass while
         // testing nothing. This is what keeps the assertion about the tenant boundary.
         await CreateAncestorsAsync(ConformanceIds.OtherTenant, ConformanceIds.OtherSubscription);
+
+        // ⚠ AND THE SIBLINGS, AFTER THE ANCESTORS THEY MAY SIT UNDER, AND IN THE PRIMARY TENANT ONLY.
+        // A peering's body names a second network, and a peering to a network that does not exist
+        // cannot converge — see IProviderCaseSource.Siblings. The other tenant gets none: the
+        // ancestors are created there because the write path checks a parent's binding before it
+        // compares tenants, so the 404 assertion needed a parent to get past; nothing on the write
+        // path reads a sibling, so a copy over there would keep no assertion honest.
+        await CreateSiblingsAsync(ConformanceIds.Tenant, ConformanceIds.Subscription);
     }
 
     /// <summary>Puts every quota meter out of the way for one subscription.</summary>
@@ -647,6 +756,55 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
         }
     }
 
+    /// <summary>Creates the siblings the source declares, each driven to <c>Succeeded</c>.</summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="subscription">The subscription.</param>
+    /// <remarks>
+    ///     ⚠ <b>Driven to <c>Succeeded</c>, not merely to a confirmed binding, and asserted.</b> An
+    ///     ancestor only has to <i>exist</i> for a child's create to pass the parent check. A sibling
+    ///     exists so the type under test can relate to it — a peering onto a network that is still
+    ///     <c>Creating</c> has no <c>Vpc</c> to write onto — so a sibling that did not converge is the
+    ///     harness's failure, named here, rather than the case's failure a test later.
+    /// </remarks>
+    async Task CreateSiblingsAsync(Guid tenant, Guid subscription) {
+        foreach (var sibling in Siblings) {
+            var address = SiblingAddress(sibling, tenant, subscription);
+
+            var accepted = await Manager.WriteAsync(
+                new() {
+                    Path = address.Path,
+                    ApiVersion = sibling.Case.ApiVersion,
+                    Verb = WriteVerb.Put,
+                    Body = sibling.Case.Body(ConformanceIds.Cluster),
+                    Caller = Caller(tenant)
+                },
+                CancellationToken.None
+            );
+
+            accepted.IsSuccess.ShouldBeTrue(
+                $"the harness could not create the sibling '{address.Path}', which '{Case.Type}' relates "
+                + $"to: {accepted.Error?.Message}"
+            );
+
+            var operation = Operation(tenant, accepted.GetValueOrThrow().OperationId);
+            OperationStatus? last = null;
+
+            for (var drive = 0; drive < 8; drive++) {
+                last = (await operation.DriveAsync()).GetValueOrThrow();
+                if (last.IsTerminal) {
+                    break;
+                }
+            }
+
+            last.ShouldNotBeNull();
+            last.State.ShouldBe(
+                OperationState.Succeeded,
+                $"the sibling '{address.Path}' ended {last.State} rather than Succeeded, so a type that "
+                + $"relates to it has nothing converged to relate to: {last.Error?.Message}"
+            );
+        }
+    }
+
     /// <inheritdoc />
     public async ValueTask DisposeAsync() {
         if (cluster is not null) {
@@ -718,8 +876,13 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     // parent, so registering only the case's own reconciler leaves the parent's
                     // create failing inside the silo — as a resolution error nothing on the request
                     // path can attribute to the harness.
+                    //
+                    // ⚠ AND EVERY SIBLING'S, for the same reason: the harness creates the siblings
+                    // too, and a sibling of a different type than the case's — a network beside a
+                    // peering — is driven by a reconciler nothing else here registers.
                     foreach (var reconciler in TSource.Ancestors
                                  .Select(x => x.ReconcilerType)
+                                 .Concat(TSource.Siblings.Select(x => x.Case.ReconcilerType))
                                  .Where(x => x != TSource.ProviderCase.ReconcilerType)
                                  .Distinct()) {
                         services.AddSingleton(reconciler);

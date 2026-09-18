@@ -49,6 +49,9 @@ public static class KubeCommandJson {
 
         [JsonPropertyName("resourcePath")]
         public string ResourcePath { get; init; } = string.Empty;
+
+        [JsonPropertyName("ownerResourceId")]
+        public Guid OwnerResourceId { get; init; }
     }
 
     /// <summary>Serializes a built command.</summary>
@@ -68,7 +71,8 @@ public static class KubeCommandJson {
                 Annotations = new(command.Annotations, StringComparer.Ordinal),
                 ReconcileHash = command.ReconcileHash,
                 Force = command.Force,
-                ResourcePath = command.ResourcePath
+                ResourcePath = command.ResourcePath,
+                OwnerResourceId = command.OwnerResourceId
             }
         );
     }
@@ -77,10 +81,25 @@ public static class KubeCommandJson {
     /// <param name="json">What <see cref="ToJson" /> produced.</param>
     /// <returns>The command, or a failure naming what was wrong with the JSON.</returns>
     /// <remarks>
-    ///     ⚠ The seven mandatory labels are checked again here, on the agent's side. The platform
-    ///     injected them, but the agent is the last thing between a frame and a tenant's API server,
-    ///     and a frame that lost its labels in transit would be an unlabelled object — the one
-    ///     thing ADR-013 makes impossible to build.
+    ///     <para>
+    ///         ⚠ The seven mandatory labels are checked again here, on the agent's side. The platform
+    ///         injected them, but the agent is the last thing between a frame and a tenant's API
+    ///         server, and a frame that lost its labels in transit would be an unlabelled object — the
+    ///         one thing ADR-013 makes impossible to build.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A co-owned command carries no labels by design, and the check does not
+    ///         invert — it is replaced.</b> The seven are the owner's and stay on the object, so a
+    ///         co-owned command that did carry labels would be a co-writer claiming the owner's
+    ///         identity and is refused. But "no labels" alone is not a guard: a frame with
+    ///         <c>ownerResourceId</c> set and nothing else right would be an unlabelled body applied
+    ///         under any manager onto any object, with the label check switched off for it. So the
+    ///         agent runs <see cref="KubeCommand.CheckCoOwnedShape" /> instead — the manager derived
+    ///         from the owner it names, the live <c>resourceVersion</c> in the body, the fragment
+    ///         bookkeeping present on an apply and absent on a withdrawal — and the client it hands
+    ///         the command to checks the owner against the object it reads
+    ///         (<see cref="KubeCommand.CheckCoOwnedAgainst" />).
+    ///     </para>
     /// </remarks>
     public static Result<KubeCommand> FromJson(string json) {
         var wire = TunnelCodec.Deserialize<Wire>(json);
@@ -91,31 +110,41 @@ public static class KubeCommandJson {
 
         var value = wire.GetValueOrThrow();
 
-        foreach (var label in KubeLabels.Mandatory) {
-            if (!value.Labels.ContainsKey(label)) {
-                return Result<KubeCommand>.Failure(
-                    ErrorCode.InvalidRequestBody,
-                    $"A command arrived over the tunnel without the '{label}' label. Every object "
-                    + "the platform applies carries the seven cybercloud.io/* labels (ADR-013), and "
-                    + "the agent refuses one that does not rather than applying it."
-                );
+        if (value.OwnerResourceId == Guid.Empty) {
+            foreach (var label in KubeLabels.Mandatory) {
+                if (!value.Labels.ContainsKey(label)) {
+                    return Result<KubeCommand>.Failure(
+                        ErrorCode.InvalidRequestBody,
+                        $"A command arrived over the tunnel without the '{label}' label. Every object "
+                        + "the platform applies carries the seven cybercloud.io/* labels (ADR-013), and "
+                        + "the agent refuses one that does not rather than applying it."
+                    );
+                }
             }
         }
 
-        return Result<KubeCommand>.Success(
-            new KubeCommand {
-                TenantId = value.TenantId,
-                SubscriptionId = value.SubscriptionId,
-                ResourceId = value.ResourceId,
-                Target = value.Target,
-                Body = value.Body,
-                FieldManager = value.FieldManager,
-                Labels = value.Labels,
-                Annotations = value.Annotations,
-                ReconcileHash = value.ReconcileHash,
-                Force = value.Force,
-                ResourcePath = value.ResourcePath
-            }
-        );
+        var command = new KubeCommand {
+            TenantId = value.TenantId,
+            SubscriptionId = value.SubscriptionId,
+            ResourceId = value.ResourceId,
+            Target = value.Target,
+            Body = value.Body,
+            FieldManager = value.FieldManager,
+            Labels = value.Labels,
+            Annotations = value.Annotations,
+            ReconcileHash = value.ReconcileHash,
+            Force = value.Force,
+            ResourcePath = value.ResourcePath,
+            OwnerResourceId = value.OwnerResourceId
+        };
+
+        var shape = command.CheckCoOwnedShape();
+
+        return shape.TryGetError(out var shapeError)
+            ? Result<KubeCommand>.Failure(
+                shapeError.Code,
+                shapeError.Message + " The agent refuses the shape over the tunnel rather than applying it."
+            )
+            : Result<KubeCommand>.Success(command);
     }
 }

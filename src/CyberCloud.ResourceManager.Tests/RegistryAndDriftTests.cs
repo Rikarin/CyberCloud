@@ -374,6 +374,98 @@ public sealed class DriftScannerTests {
         report.Findings[0].Objects.Length.ShouldBe(1);
     }
 
+    // ── A second writer on an object — issue #89 ────────────────────────────────────────────────
+
+    static readonly Guid Vpc = Guid.Parse("3a8f0c22-5e6d-4a7b-8c9d-0e1f2a3b4c5d");
+    static readonly Guid PeeringA = Guid.Parse("aaaaaaaa-0000-4000-8000-00000000000a");
+
+    /// <summary>The owner's object with <paramref name="writer" />'s fragment on it.</summary>
+    static ClusterObjectRecord CoWritten(Guid writer, string fragmentHash) =>
+        Object(Vpc, "sha256:owner") with {
+            Fragments = [new(writer, fragmentHash, "/tenants/…/virtualNetworks/hub/peerings/to-spoke")]
+        };
+
+    [Fact]
+    public void AConvergedCoWriterIsNotAStrayThoughItOwnsNoObject() {
+        // ⚠ THE FINDING THE #89 REVIEW MADE. A peering owns no object carrying its resource-id
+        // label — its slice rides on the parent's Vpc under a fragment annotation — so a scan that
+        // joined on the label alone reported every Succeeded peering as a permanent stray, "its
+        // objects were deleted outside the platform", about a slice that was right there.
+        var report = Scanner.Scan(
+            ClusterId,
+            [CoWritten(PeeringA, "sha256:fragment-a")],
+            [
+                new(Vpc, "/tenants/…/virtualNetworks/hub", "sha256:owner", ProvisioningState.Succeeded),
+                new(PeeringA, "/tenants/…/virtualNetworks/hub/peerings/to-spoke", "sha256:fragment-a", ProvisioningState.Succeeded)
+            ]
+        );
+
+        report.Findings.ShouldBeEmpty("the owner's hash matches the object's and the peering's matches its fragment's");
+    }
+
+    [Fact]
+    public void ACoWriterWhoseFragmentIsGoneIsAStray() {
+        // The owner's object is there and carries no fragment of the peering's: somebody removed
+        // the annotation, or another co-writer's apply pruned it — the slice is gone either way.
+        var report = Scanner.Scan(
+            ClusterId,
+            [Object(Vpc, "sha256:owner")],
+            [
+                new(Vpc, "/hub", "sha256:owner", ProvisioningState.Succeeded),
+                new(PeeringA, "/hub/peerings/to-spoke", "sha256:fragment-a", ProvisioningState.Succeeded)
+            ]
+        );
+
+        report.Strays.Count().ShouldBe(1);
+        report.Strays.Single().ResourceId.ShouldBe(PeeringA);
+        report.Strays.Single().Detail.ShouldContain("fragment");
+    }
+
+    [Fact]
+    public void ACoWriterIsJudgedByItsFragmentHashAndNotByTheOwners() {
+        // ⚠ The Vpc's reconcile-hash is the owner's, over the owner's body. Comparing the peering
+        // against it would report every peering as diverged the moment its parent re-rendered.
+        var matches = Scanner.Scan(
+            ClusterId,
+            [CoWritten(PeeringA, "sha256:fragment-a")],
+            [new(PeeringA, "/hub/peerings/to-spoke", "sha256:fragment-a", ProvisioningState.Succeeded)]
+        );
+
+        matches.Findings.Where(x => x.Kind == DriftKind.Diverged).ShouldBeEmpty();
+
+        var changed = Scanner.Scan(
+            ClusterId,
+            [CoWritten(PeeringA, "sha256:fragment-a-as-applied")],
+            [new(PeeringA, "/hub/peerings/to-spoke", "sha256:fragment-a-desired", ProvisioningState.Succeeded)]
+        );
+
+        var diverged = changed.Findings.Single(x => x.Kind == DriftKind.Diverged);
+        diverged.ResourceId.ShouldBe(PeeringA);
+        diverged.Objects.Length.ShouldBe(1);
+        diverged.Detail.ShouldContain("fragment-hash");
+    }
+
+    [Fact]
+    public void AFragmentWhoseWriterHasNoGrainIsAnOrphanNamingTheSliceAndNotTheObject() {
+        // ⚠ The fragment nothing else ever finds: a co-writer that vanished without withdrawing
+        // leaves a slice every other co-writer's apply carries forward verbatim, forever. The
+        // object is the owner's and is not orphaned; the finding names the writer and the path
+        // its fragment-path annotation recorded, which is where a person starts.
+        var report = Scanner.Scan(
+            ClusterId,
+            [CoWritten(PeeringA, "sha256:fragment-a")],
+            [new(Vpc, "/hub", "sha256:owner", ProvisioningState.Succeeded)]
+        );
+
+        var orphan = report.Orphans.ShouldHaveSingleItem();
+        orphan.ResourceId.ShouldBe(PeeringA);
+        orphan.ResourcePath.ShouldBe("/tenants/…/virtualNetworks/hub/peerings/to-spoke");
+        orphan.Objects.Length.ShouldBe(1);
+        orphan.Detail.ShouldContain("no co-writer will ever withdraw");
+
+        report.Findings.Where(x => x.ResourceId == Vpc).ShouldBeEmpty("the owner is converged and its object is its own");
+    }
+
     [Fact]
     public async Task TheShippedInventoryRefusesRatherThanReportingAnEmptyCluster() {
         // ⚠ THE SAFETY PROPERTY OF THE STUB. An empty inventory says every resource on this cluster is

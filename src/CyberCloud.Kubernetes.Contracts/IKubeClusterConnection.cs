@@ -35,7 +35,11 @@ public interface IKubeClusterConnection {
     ///     <see cref="ApplyResult.Conflict" /> when another field manager owns a field. Neither is a
     ///     failure: docs/plan/09 § Cluster connections requires an unreachable cluster to suspend
     ///     reconciles rather than fail them, and ADR-013 requires a conflict to become a drift event
-    ///     rather than an error. A failed <see cref="Result" /> means <i>we</i> got it wrong.
+    ///     rather than an error. A co-owned command (<see cref="KubeCommand.IsCoOwned" />) can also
+    ///     come back <see cref="ApplyResult.Stale" /> — the object moved since the read it was built
+    ///     from; read again — and is a <b>failure</b> carrying <see cref="ErrorCode.ResourceNotFound" />
+    ///     when the owner's object is absent, because a co-writer never creates it. A failed
+    ///     <see cref="Result" /> otherwise means <i>we</i> got it wrong.
     /// </returns>
     Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default);
 

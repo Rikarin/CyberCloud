@@ -37,18 +37,24 @@ virtualNetworks/{name}
   └─ peerings/{name}         → VPC-to-VPC within a tenant (M3)
 ```
 
-> ⚠ **`peerings` is blocked inside this repository, and by the platform rather than by Kube-OVN
-> alone** (#31). A Kube-OVN peering has no object of its own: it is an entry in each network's
-> `Vpc.spec.vpcPeerings` plus a static route per exchanged range in each network's
-> `Vpc.spec.staticRoutes` — both arrays carry no `x-kubernetes-list-type`, so both are atomic under
-> server-side apply, which is the `routeTables` refusal twice over and across two parents. The
-> platform then closes the merge-and-apply way out: `KubeCommandBuilder` stamps every apply with the
-> *applying* resource's ADR-013 labels and reconcile hash, non-overridably, so a `peerings` child
-> applying its parent's `Vpc` is a `FieldManagerConflict` on `cybercloud.io/resource-id`,
-> `resource-type` and `reconcile-hash` by construction. Two resources cannot own one Kubernetes object
-> on this platform today. What would close it — a co-owned apply on the builder and a conformance case
-> that can create a sibling network — is recorded in `NetworkProvider` and at
-> `charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `peerings-need-a-second-writer-on-the-vpc`.
+> ⚠ **`peerings` is owed, and the platform half of what blocked it is built** (#31, #89). A Kube-OVN
+> peering has no object of its own: it is an entry in each network's `Vpc.spec.vpcPeerings` plus a
+> static route per exchanged range in each network's `Vpc.spec.staticRoutes` — both arrays carry no
+> `x-kubernetes-list-type`, so both are atomic under server-side apply, which is the `routeTables`
+> refusal twice over and across two parents. Until #89 the platform closed the merge-and-apply way
+> out too: `KubeCommandBuilder` stamped every apply with the *applying* resource's ADR-013 labels and
+> reconcile hash, so a `peerings` child applying its parent's `Vpc` was a `FieldManagerConflict` on
+> `cybercloud.io/resource-id`, `resource-type` and `reconcile-hash` by construction. The builder now
+> has a **co-owned mode** — [09 § A second writer on an object](09-kubernetes-fabric.md): the owner's
+> labels stay, every co-writer of one `Vpc` applies under one manager named for the owner (because
+> the lists are atomic, a manager per peering conflicts forever — measured), each peering's fragment
+> is merged with the others' and carried with its own hash, the live `resourceVersion` makes two
+> peerings racing onto one `Vpc` lose loudly, and a peering's teardown withdraws its fragment rather
+> than deleting the network's object. `ReconcileContext.CoWriter` is the seam, and
+> `IProviderCaseSource.Siblings` lets the conformance harness create the second network. What
+> remains is the type itself and two harness gaps — the Docker-free fake refuses a co-owned command
+> rather than modelling one, and the harness empties the fake cluster between assertions — recorded
+> at `charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `peerings-need-a-second-writer-on-the-vpc`.
 
 **Address space is the tenant's problem and the platform's constraint.** Overlapping CIDRs between a
 tenant's VPCs is fine; overlapping with the platform's underlay is not. The API validates against a

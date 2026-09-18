@@ -1835,20 +1835,28 @@ platform.
   renders binds to a tenant `Vpc` on purpose. The property stays (the api-version is published), its
   description now says so, and `charts/managed/kube-ovn-subnet/conformance.yaml § owed` records what
   removing it would take. A tenant subnet's only egress is a NAT gateway.
-- ⚠ **Two resources cannot own one Kubernetes object on this platform, and that is what blocks
-  `peerings`.** A Kube-OVN peering has no object: it is an entry in `Vpc.spec.vpcPeerings` plus a
-  static route per exchanged range, on **both** networks' objects, in two arrays with no
-  `x-kubernetes-list-type` — the `routeTables` refusal twice over. The repair a reader expects — a
-  child that reads each `Vpc`, merges its entries and applies under its own field manager — cannot
-  land: `KubeCommandBuilder` injects ADR-013's labels and the reconcile hash from the *applying*
-  resource, non-overridably, so a peering applying its parent's `Vpc` is a `FieldManagerConflict` on
-  `resource-id`, `resource-type` and `reconcile-hash`, with `Force` unreachable by design. Under the
-  parent's manager instead, each apply prunes the other's slice. The parent cannot fold in children it
-  cannot list, and a sidecar the parent would fold in never converges because `DriftScanner` reports
-  and does not repair. What would close it is platform surface — a co-owned apply on the builder and
-  a conformance-case member that creates a sibling network — and it is recorded at
-  `charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `peerings-need-a-second-writer-on-the-vpc`,
-  rather than shipped as a type that erases itself.
+- ⚠ **Two resources could not own one Kubernetes object on this platform, and that is what blocked
+  `peerings` until #89 built the co-owned apply.** A Kube-OVN peering has no object: it is an entry
+  in `Vpc.spec.vpcPeerings` plus a static route per exchanged range, on **both** networks' objects, in
+  two arrays with no `x-kubernetes-list-type` — the `routeTables` refusal twice over. The repair a
+  reader expects — a child that reads each `Vpc`, merges its entries and applies them — could not
+  land while `KubeCommandBuilder` injected ADR-013's labels and the reconcile hash from the
+  *applying* resource, non-overridably: a peering applying its parent's `Vpc` was a
+  `FieldManagerConflict` on `resource-id`, `resource-type` and `reconcile-hash`, with `Force`
+  unreachable by design, and under the parent's manager instead each apply pruned the other's slice.
+  `IKubeCommandBuilder.CoWriting` is the mode that lands it (docs/plan/09 § A second writer on an
+  object): the owner's labels stay, every co-writer of one `Vpc` applies under one manager named for
+  the owner — ⚠ *not* a manager per peering, which conflicts on the atomic lists forever, measured
+  against k3s — each peering's fragment is merged with the others' and carried with its own hash, the
+  live `resourceVersion` makes two peerings racing onto one `Vpc` lose loudly, teardown withdraws the
+  fragment, and `DriftScanner` joins a co-writer to its fragment rather than calling it a stray.
+  `ReconcileContext.CoWriter` is the seam a peering reconciler reaches it through, and
+  `IProviderCaseSource.Siblings` lets the shared harness create the second network. What is still
+  this provider's to build — the `peerings` type itself — and the two Docker-free harness gaps a case
+  would hit first are recorded at `charts/managed/kube-ovn-vpc/conformance.yaml § owed`,
+  `peerings-need-a-second-writer-on-the-vpc`. ⚠ The mode is provider-blind on purpose and checked
+  against #30's cross-provider vault in that section of docs/plan/09: it answers a second *writer*
+  on an object this tenant owns, and does not build the cross-provider *reader* a vault needs.
 - **The immutable-once-ready finding is the address type's, on a second kind.** `handleUpdateOvnSnatRule`
   refuses every effective change by name, so `ChangedBody` varies the subnet and proves the renderer
   reaches the cluster without proving the update takes effect —

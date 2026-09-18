@@ -212,6 +212,31 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         ArgumentNullException.ThrowIfNull(command);
         Applied.Enqueue(command);
 
+        if (command.IsCoOwned) {
+            // ⚠ REFUSED BY NAME, BECAUSE THIS FAKE STORES THE BODY VERBATIM AND A CO-OWNED APPLY IS
+            // THE ONE SHAPE THAT WOULD MAKE THAT A LIE. A co-writer's command carries a fragment, no
+            // labels and the live resourceVersion, and a real API server merges it into the owner's
+            // object under a manager of its own. Stored verbatim it would REPLACE the owner's object
+            // with an unlabelled slice, and a peering case would go green over exactly the object
+            // the co-owned mode exists never to produce. Modelling it means per-manager field
+            // ownership, which is the property CoOwnedApplyTests holds against a real k3s; until
+            // this fake has it, a case that co-writes fails here with the reason rather than
+            // passing over a replacement. charts/managed/kube-ovn-vpc/conformance.yaml § owed.
+            // Calibrated by SuiteRejectionTests.TheFakeRefusesACoOwnedCommandRatherThanReplacingTheOwnersObjectWithTheFragment,
+            // so removing this branch turns a test red rather than a peering case quietly green.
+            return Task.FromResult(
+                Result<ApplyOutcome>.Failure(
+                    ErrorCode.InternalError,
+                    $"FakeKubeCluster does not model a second writer on an object: {command.Target} was "
+                    + $"applied as a fragment of resource {command.ResourceId:D} onto resource "
+                    + $"{command.OwnerResourceId:D}'s object, and this fake stores a body verbatim, which "
+                    + "would replace the owner's object with the fragment. A co-owned apply is proven "
+                    + "against a real API server in CoOwnedApplyTests; a Docker-free case that "
+                    + "co-writes needs the fake to keep per-manager field ownership first."
+                )
+            );
+        }
+
         if (RefuseWith is { } refusal) {
             // The tenant-facing half of a KubeRefusal, phrased the way KubeFailures.Classify phrases
             // an admission decision: the cluster's own words, and "the object was not written".

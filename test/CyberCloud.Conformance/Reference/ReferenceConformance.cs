@@ -97,6 +97,122 @@ public sealed class ReferenceChildCase : IProviderCaseSource {
 
     /// <inheritdoc />
     public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [ReferenceCase.ProviderCase];
+
+    /// <summary>
+    ///     A second probe beside the one the samples hang off — the shape of a peering's second
+    ///     network: a sibling of the <i>parent</i>, one level up from the type under test.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Declared on the child so that the depth arithmetic in
+    ///     <c>ProviderTestCluster.SiblingAddress</c> runs for real at fixture start: a depth-1
+    ///     sibling of a depth-2 case sits at the root, beside <c>ancestor-0</c>, and a mistake there
+    ///     fails every test in <see cref="ReferenceChildProviderConformance" /> with the harness's
+    ///     own message. The 28 assertions do not read it; that it converged is asserted by the
+    ///     harness, before the first of them runs.
+    /// </remarks>
+    public static ImmutableArray<SiblingResource> Siblings { get; } = [
+        new() { Case = ReferenceCase.ProviderCase, Name = "sibling-0" }
+    ];
+}
+
+/// <summary>
+///     The reference provider's top-level type again, with a <b>sibling</b> beside it — the
+///     registration a type whose body names another resource of its own kind writes.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>This is the whole cost of a sibling, and it is one member.</b> The case object is
+///         <see cref="ReferenceCase" />'s own — a sibling changes nothing about how the type under
+///         test is described — and <see cref="Siblings" /> names the sibling type's case and what to
+///         call it. <see cref="ReferenceSiblingProviderConformance" /> then runs the same 28
+///         assertions over a world with one more resource in it, plus the three that say the sibling
+///         is there.
+///     </para>
+///     <para>
+///         Issue #89: <c>CyberCloud.Network/virtualNetworks/peerings</c> writes
+///         <c>[new() { Case = VirtualNetworksCase.ProviderCase, Name = "spoke" }]</c> here, and its
+///         body names <c>spoke</c>.
+///     </para>
+/// </remarks>
+public sealed class ReferenceWithSiblingCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase => ReferenceCase.ProviderCase;
+
+    /// <inheritdoc />
+    public static ImmutableArray<SiblingResource> Siblings { get; } = [
+        new() { Case = ReferenceCase.ProviderCase, Name = "sibling-0" }
+    ];
+}
+
+/// <summary>
+///     A source whose sibling is another provider's type — the copy-paste across providers, so the
+///     guard can be shown to catch it.
+/// </summary>
+/// <remarks>⚠ Deliberately wrong, and it must never be given a test class of its own.</remarks>
+public sealed class ForeignSiblingCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase => ReferenceCase.ProviderCase;
+
+    /// <inheritdoc />
+    public static ImmutableArray<SiblingResource> Siblings { get; } = [
+        new() {
+            Case = ReferenceCase.ProviderCase with { Type = new("CyberCloud.Elsewhere", "things") }, Name = "theirs"
+        }
+    ];
+}
+
+/// <summary>
+///     A depth-1 source whose sibling nests deeper than its own ancestor chain — a sample beside a
+///     probe, when there is no <c>ancestor-0</c> for the sample to sit under.
+/// </summary>
+/// <remarks>⚠ Deliberately wrong, and it must never be given a test class of its own.</remarks>
+public sealed class TooDeepSiblingCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase => ReferenceCase.ProviderCase;
+
+    /// <inheritdoc />
+    public static ImmutableArray<SiblingResource> Siblings { get; } = [
+        new() { Case = ReferenceChildCase.ProviderCase, Name = "too-deep" }
+    ];
+}
+
+/// <summary>
+///     A depth-2 source whose sibling's parent type is not the case's own — a sample under a type
+///     that is not <c>probes</c>.
+/// </summary>
+/// <remarks>⚠ Deliberately wrong, and it must never be given a test class of its own.</remarks>
+public sealed class WrongChainSiblingCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase => ReferenceChildCase.ProviderCase;
+
+    /// <inheritdoc />
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [ReferenceCase.ProviderCase];
+
+    /// <inheritdoc />
+    public static ImmutableArray<SiblingResource> Siblings { get; } = [
+        new() {
+            Case = ReferenceChildCase.ProviderCase with { Type = new(Probes.Type.Namespace, "gauges/samples") },
+            Name = "under-a-gauge"
+        }
+    ];
+}
+
+/// <summary>
+///     A depth-2 source whose sibling is named like the harness's own ancestor — the sibling that
+///     would be the parent, created twice.
+/// </summary>
+/// <remarks>⚠ Deliberately wrong, and it must never be given a test class of its own.</remarks>
+public sealed class AncestorNamedSiblingCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase => ReferenceChildCase.ProviderCase;
+
+    /// <inheritdoc />
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [ReferenceCase.ProviderCase];
+
+    /// <inheritdoc />
+    public static ImmutableArray<SiblingResource> Siblings { get; } = [
+        new() { Case = ReferenceCase.ProviderCase, Name = ConformanceIds.AncestorName(0) }
+    ];
 }
 
 /// <summary>
@@ -147,6 +263,103 @@ public sealed class ReferenceProviderConformance(ProviderTestCluster<ReferenceCa
 public sealed class ReferenceChildProviderConformance(ProviderTestCluster<ReferenceChildCase> cluster)
     : ProviderConformanceTests<ReferenceChildCase>(cluster),
     IClassFixture<ProviderTestCluster<ReferenceChildCase>>;
+
+/// <summary>
+///     The <b>same</b> suite, run against the reference provider with a sibling beside the type
+///     under test — plus the three assertions that say what the sibling member bought.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>The 28 inherited assertions are the point, and the three added ones are the
+///         receipt.</b> A sibling in the world must change nothing about how the type under test
+///         behaves — the suite runs unchanged — and the three facts below are the only place the
+///         harness's claim "the sibling exists, converged, at this address" is read back rather than
+///         trusted. They are on this class rather than on the shared suite because a sibling is
+///         optional and an assertion about an absent sibling would be vacuous for every other case.
+///     </para>
+///     <para>
+///         ⚠ <b>Not compared against the parent's fact set.</b>
+///         <c>SuiteRejectionTests.TheChildRunsEveryAssertionTheParentDoesRatherThanASubset</c> pins
+///         the child at exactly the parent's count; this class has three more on purpose, and
+///         <c>SuiteRejectionTests.TheSiblingSuiteRunsEveryAssertionTheParentDoesAndThreeMore</c>
+///         pins that it dropped none.
+///     </para>
+/// </remarks>
+/// <param name="cluster">The harness.</param>
+public sealed class ReferenceSiblingProviderConformance(ProviderTestCluster<ReferenceWithSiblingCase> cluster)
+    : ProviderConformanceTests<ReferenceWithSiblingCase>(cluster),
+    IClassFixture<ProviderTestCluster<ReferenceWithSiblingCase>> {
+    static SiblingResource Sibling => ReferenceWithSiblingCase.Siblings[0];
+
+    [Fact]
+    public async Task TheSiblingExistsAndConvergedBeforeTheFirstAssertion() {
+        // ⚠ Read through the manager, as a peering's reconciler would find its second network: not
+        // through the fixture's own bookkeeping.
+        ProviderTestCluster<ReferenceWithSiblingCase>.Reset();
+
+        var address = ProviderTestCluster<ReferenceWithSiblingCase>.SiblingAddress(Sibling);
+
+        var snapshot = await Cluster.Manager.ReadAsync(
+            new() {
+                Path = address.Path,
+                ApiVersion = Sibling.Case.ApiVersion,
+                Caller = ProviderTestCluster<ReferenceWithSiblingCase>.Caller()
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        snapshot.IsSuccess.ShouldBeTrue(snapshot.Error?.Message);
+        snapshot.GetValueOrThrow().ProvisioningState.ShouldBe(ProvisioningState.Succeeded);
+
+        var bound = await Cluster.Index(address).GetAsync();
+        bound.GetValueOrThrow().State.ShouldBe(IndexEntryState.Confirmed);
+    }
+
+    [Fact]
+    public void TheSiblingSitsBesideTheTypeUnderTestUnderTheSameAncestors() {
+        // A sibling of the same type as the case is addressable through Address too: the two
+        // spellings must agree, or a body naming "sibling-0" would name something the harness did
+        // not create.
+        var sibling = ProviderTestCluster<ReferenceWithSiblingCase>.SiblingAddress(Sibling);
+        var asCase = ProviderTestCluster<ReferenceWithSiblingCase>.Address(Sibling.Name);
+
+        sibling.Path.ShouldBe(asCase.Path);
+        sibling.ParentNames.ShouldBe(ProviderTestCluster<ReferenceWithSiblingCase>.AncestorPath);
+        sibling.Type.ShouldBe(Sibling.Case.Type);
+    }
+
+    [Fact]
+    public async Task TheSiblingSurvivesAResetAsAResourceAndNotAsObjects() {
+        // ⚠ THE LIMIT, PINNED SO IT IS A FACT RATHER THAN A SURPRISE. Reset empties the fake cluster,
+        // so the sibling's objects are gone between assertions and only the resource persists. A
+        // type that co-writes onto a sibling's OBJECT needs it back first — recorded at
+        // charts/managed/kube-ovn-vpc/conformance.yaml § owed, peerings-need-a-second-writer-on-the-vpc.
+        // The day the harness re-materialises the world after a Reset, this assertion flips and the
+        // owed row is closed with it.
+        ProviderTestCluster<ReferenceWithSiblingCase>.Reset();
+
+        var address = ProviderTestCluster<ReferenceWithSiblingCase>.SiblingAddress(Sibling);
+        var snapshot = (await Cluster.Manager.ReadAsync(
+            new() {
+                Path = address.Path,
+                ApiVersion = Sibling.Case.ApiVersion,
+                Caller = ProviderTestCluster<ReferenceWithSiblingCase>.Caller()
+            },
+            TestContext.Current.CancellationToken
+        )).GetValueOrThrow();
+
+        snapshot.ProvisioningState.ShouldBe(ProvisioningState.Succeeded, "the resource persists");
+
+        var resolved = address.WithId(snapshot.Id);
+
+        foreach (var target in Sibling.Case.Objects(resolved, ReconcileDriver.NamespaceFor(resolved))) {
+            Cluster.World.Holds(target).ShouldBeFalse(
+                $"'{target}' is in the fake cluster after a Reset — the harness now re-materialises "
+                + "the world, so the owed row about a co-writing case can be revisited"
+            );
+        }
+    }
+}
 
 /// <summary>
 ///     The signpost to the container-backed half, which runs in <c>CyberCloud.Cluster.Conformance</c>.
@@ -243,6 +456,66 @@ public sealed class SuiteRejectionTests {
         (spec["ingress"] is JsonArray { Count: 0 }).ShouldBeFalse(
             "`is JsonArray { Count: 0 }` is the shape that passed this harness and hung against k3s"
         );
+    }
+
+    [Fact]
+    public async Task TheFakeRefusesACoOwnedCommandRatherThanReplacingTheOwnersObjectWithTheFragment() {
+        // ⚠ THE CALIBRATION FOR THE FAKE'S ONE REFUSAL, so that the guard the comment in
+        // FakeKubeCluster describes is a guard a test would miss. The fake stores a body verbatim.
+        // A co-writer's command is a fragment, no labels, the live resourceVersion — and stored
+        // verbatim it would REPLACE the owner's labelled object with an unlabelled slice, over which
+        // a Docker-free peering case would then go green. Until the fake keeps per-manager field
+        // ownership (charts/managed/kube-ovn-vpc/conformance.yaml § owed), the case has to fail
+        // here, with the reason, and the owner's object has to be exactly what it was.
+        var world = new FakeKubeCluster(ConformanceIds.Cluster);
+
+        var owner = new ResourceId(
+            ConformanceIds.Tenant,
+            ConformanceIds.Subscription,
+            ConformanceIds.ResourceGroup,
+            Probes.Type,
+            "hub",
+            Guid.Parse("f0f0f0f0-0000-4000-8000-0000000000f1")
+        );
+
+        var coWriter = new ResourceId(
+            ConformanceIds.Tenant,
+            ConformanceIds.Subscription,
+            ConformanceIds.ResourceGroup,
+            Probes.Type,
+            "to-spoke",
+            Guid.Parse("f0f0f0f0-0000-4000-8000-0000000000f2")
+        );
+
+        var ns = ReconcileDriver.NamespaceFor(owner);
+        var target = new ObjectRef { Kind = Probes.Kind, Namespace = ns, Name = owner.Name };
+
+        (await KubeCommand.For(world)
+            .WithTenantId(owner.TenantId)
+            .WithResourceId(owner)
+            .InNamespace(ns)
+            .WithKind(Probes.Kind)
+            .WithApiVersion(Probes.V2026)
+            .ObjectJson("""{ "spec": { "egress": [ { "to": "anywhere" } ] } }""")
+            .ApplyAsync(TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+
+        var before = world.Read(target).ShouldNotBeNull();
+        var live = (await world.GetAsync(target, TestContext.Current.CancellationToken)).GetValueOrThrow();
+
+        var refused = await KubeCommand.For(world)
+            .WithTenantId(coWriter.TenantId)
+            .WithResourceId(coWriter)
+            .InNamespace(ns)
+            .WithKind(Probes.Kind)
+            .CoWriting(live)
+            .ObjectJson("""{ "spec": { "peerings": [ { "remote": "spoke" } ] } }""")
+            .ApplyAsync(TestContext.Current.CancellationToken);
+
+        refused.IsFailure.ShouldBeTrue("the fake cannot model a second writer and must say so rather than store the fragment");
+        refused.Error!.Message.ShouldContain("does not model a second writer");
+        refused.Error.Message.ShouldContain("CoOwnedApplyTests");
+
+        world.Read(target).ShouldBe(before, "the owner's object is exactly what it was — nothing was replaced");
     }
 
     [Fact]
@@ -456,6 +729,79 @@ public sealed class SuiteRejectionTests {
 
         thrown.Message.ShouldContain(Probes.ChildTypePath);
         thrown.Message.ShouldContain("the same provider by construction");
+    }
+
+    [Fact]
+    public void ASiblingFromAnotherProviderIsRefusedByName() {
+        // ⚠ THE CALIBRATION FOR IProviderCaseSource.Siblings' DEFAULT, from the wrong side: the
+        // harness registers ONE provider, and a sibling from another would fail its create with the
+        // registry's message about an unknown type, at fixture start, naming neither the case nor
+        // the member.
+        var thrown = Should.Throw<InvalidOperationException>(() => ProviderTestCluster<ForeignSiblingCase>.Siblings);
+
+        thrown.Message.ShouldContain("Siblings");
+        thrown.Message.ShouldContain("CyberCloud.Elsewhere");
+        thrown.Message.ShouldContain("another provider");
+    }
+
+    [Fact]
+    public void ASiblingNestedDeeperThanTheCasesAncestorChainIsRefusedByName() {
+        // A sample beside a probe, with no ancestor-0 for the sample to sit under: without the guard
+        // it is ResourceId's constructor throwing about parent-name counts from SiblingAddress.
+        var thrown = Should.Throw<InvalidOperationException>(() => ProviderTestCluster<TooDeepSiblingCase>.Siblings);
+
+        thrown.Message.ShouldContain("Siblings");
+        thrown.Message.ShouldContain("too-deep");
+        thrown.Message.ShouldContain("no deeper than the type under test");
+    }
+
+    [Fact]
+    public void ASiblingUnderAncestorsThatAreNotTheCasesOwnIsRefusedByName() {
+        var thrown = Should.Throw<InvalidOperationException>(() => ProviderTestCluster<WrongChainSiblingCase>.Siblings);
+
+        thrown.Message.ShouldContain("Siblings");
+        thrown.Message.ShouldContain("gauges");
+        thrown.Message.ShouldContain("prefix of the case's");
+    }
+
+    [Fact]
+    public void ASiblingNamedLikeTheHarnessesOwnAncestorIsRefusedByName() {
+        // The sibling that would be the parent, created twice — and the second create would answer
+        // 409 or, worse, converge as the parent and leave the case relating to itself.
+        var thrown = Should.Throw<InvalidOperationException>(() => ProviderTestCluster<AncestorNamedSiblingCase>.Siblings);
+
+        thrown.Message.ShouldContain("Siblings");
+        thrown.Message.ShouldContain(ConformanceIds.AncestorName(0));
+        thrown.Message.ShouldContain("created twice");
+    }
+
+    [Fact]
+    public void ASiblingOfTheParentSitsAtTheRootAndASiblingOfTheCaseSitsBesideIt() {
+        // The depth arithmetic, read off the two well-formed sources: the child's sibling is a probe
+        // at the root, beside ancestor-0; the top-level source's sibling is a probe at the root too,
+        // which is where the case's own address lives.
+        var ofChild = ProviderTestCluster<ReferenceChildCase>.SiblingAddress(ReferenceChildCase.Siblings[0]);
+        var ofTopLevel = ProviderTestCluster<ReferenceWithSiblingCase>.SiblingAddress(ReferenceWithSiblingCase.Siblings[0]);
+
+        ofChild.ParentNames.ShouldBeEmpty("a depth-1 sibling of a depth-2 case has no ancestors of its own");
+        ofChild.Type.ShouldBe(Probes.Type);
+        ofChild.Path.ShouldBe(ofTopLevel.Path, "both sources declare the same probe at the same address");
+
+        ProviderTestCluster<ReferenceChildCase>.Address("x").ParentNames.ShouldBe(
+            ConformanceIds.AncestorName(0),
+            "and the case's own addresses still interleave the ancestor"
+        );
+    }
+
+    [Fact]
+    public void TheSiblingSuiteRunsEveryAssertionTheParentDoesAndThreeMore() {
+        // The sibling class adds three facts of its own; what this pins is that it dropped none of
+        // the parent's while doing so — the failure class TheChildRunsEveryAssertion… names.
+        var parent = RunnableFactsOf(typeof(ReferenceProviderConformance));
+        var withSibling = RunnableFactsOf(typeof(ReferenceSiblingProviderConformance));
+
+        parent.Except(withSibling, StringComparer.Ordinal).ShouldBeEmpty("the sibling suite dropped an inherited assertion");
+        (withSibling.Length - parent.Length).ShouldBe(3);
     }
 
     [Fact]
