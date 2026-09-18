@@ -1836,7 +1836,8 @@ platform.
   description now says so, and `charts/managed/kube-ovn-subnet/conformance.yaml § owed` records what
   removing it would take. A tenant subnet's only egress is a NAT gateway.
 - ⚠ **Two resources could not own one Kubernetes object on this platform, and that is what blocked
-  `peerings` until #89 built the co-owned apply.** A Kube-OVN peering has no object: it is an entry
+  `peerings` until #89 built the co-owned apply — on which `virtualNetworks/peerings` then shipped
+  (#31), the first type in the tree that owns no object.** A Kube-OVN peering has no object: it is an entry
   in `Vpc.spec.vpcPeerings` plus a static route per exchanged range, on **both** networks' objects, in
   two arrays with no `x-kubernetes-list-type` — the `routeTables` refusal twice over. The repair a
   reader expects — a child that reads each `Vpc`, merges its entries and applies them — could not
@@ -1850,11 +1851,12 @@ platform.
   against k3s — each peering's fragment is merged with the others' and carried with its own hash, the
   live `resourceVersion` makes two peerings racing onto one `Vpc` lose loudly, teardown withdraws the
   fragment, and `DriftScanner` joins a co-writer to its fragment rather than calling it a stray.
-  `ReconcileContext.CoWriter` is the seam a peering reconciler reaches it through, and
-  `IProviderCaseSource.Siblings` lets the shared harness create the second network. What is still
-  this provider's to build — the `peerings` type itself — and the two Docker-free harness gaps a case
-  would hit first are recorded at `charts/managed/kube-ovn-vpc/conformance.yaml § owed`,
-  `peerings-need-a-second-writer-on-the-vpc`. ⚠ The mode is provider-blind on purpose and checked
+  `ReconcileContext.CoWriter` is the seam `VirtualNetworkPeeringReconciler` reaches it through, and
+  `IProviderCaseSource.Siblings` is how the shared harness creates the second network. The type is
+  one name and three ranges, refused terminally when any two overlap; the remote is a name in the
+  same resource group rather than a resource id, for an authorization reason and not a schema one;
+  and what is proven is the write rather than the routing, which waits for the VM lane —
+  `charts/managed/kube-ovn-vpc-peering/conformance.yaml § owed`. ⚠ The mode is provider-blind on purpose and checked
   against #30's cross-provider vault in that section of docs/plan/09: it answers a second *writer*
   on an object this tenant owns, and does not build the cross-provider *reader* a vault needs.
 - **The immutable-once-ready finding is the address type's, on a second kind.** `handleUpdateOvnSnatRule`

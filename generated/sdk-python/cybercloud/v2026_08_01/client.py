@@ -82,6 +82,9 @@ from .models import (
     OpenSearchServiceListKeysResult,
     OpenSearchServiceResource,
     OperationStatus,
+    PeeringData,
+    PeeringResource,
+    PeeringShowRoutesResult,
     PostgreSQLServerData,
     PostgreSQLServerListKeysResult,
     PostgreSQLServerResource,
@@ -1366,6 +1369,49 @@ class NATGatewayClient:
         return NATGatewayShowEgressResult.from_wire(wire_of(response))
 
 
+class PeeringClient:
+    """Peerings — CyberCloud.Network/virtualNetworks/peerings. A route exchange between this virtual network and another in the same resource group, so workloads in either reach the other's range by private address. Both networks stay separately owned."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, resource_name: str) -> PeeringResource:
+        """Reads one Peering."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/peerings/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return PeeringResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, resource_name: str, data: PeeringData) -> Operation[PeeringResource]:
+        """Creates or replaces one Peering. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/peerings/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, PeeringResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, resource_name: str, data: PeeringData) -> Operation[PeeringResource]:
+        """Amends one Peering. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/peerings/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, PeeringResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Peering. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/peerings/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, *, top: Optional[int] = None) -> Pager[PeeringResource]:
+        """Lists the Peerings in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/peerings", top, PeeringResource.from_wire)
+
+    def show_routes(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, resource_name: str) -> PeeringShowRoutesResult:
+        """showRoutes — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/peerings/{_segment(resource_name)}/showRoutes"))
+        raise_for_status(response)
+        return PeeringShowRoutesResult.from_wire(wire_of(response))
+
+
 class SecurityGroupClient:
     """Security groups — CyberCloud.Network/virtualNetworks/securityGroups. A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several."""
 
@@ -1460,6 +1506,7 @@ class NetworkProvider:
         self.virtual_networks = VirtualNetworkClient(transport)
         self.virtual_networks_load_balancers = LoadBalancerClient(transport)
         self.virtual_networks_nat_gateways = NATGatewayClient(transport)
+        self.virtual_networks_peerings = PeeringClient(transport)
         self.virtual_networks_security_groups = SecurityGroupClient(transport)
         self.virtual_networks_subnets = SubnetClient(transport)
 

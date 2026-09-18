@@ -682,12 +682,13 @@ public static class VirtualNetworks {
     ///             <b>
     ///                 <c>vpcPeerings</c>
     ///             </b> — a peering is an entry here <i>and</i> a static route per exchanged
-    ///             range, on both networks' objects, in two atomic arrays. A <c>peerings</c> child
-    ///             would have to write into its parent's object, and <c>KubeCommandBuilder</c> stamps
-    ///             every apply with the applying resource's own ADR-013 labels, so the write is a
-    ///             <c>FieldManagerConflict</c> by construction. The whole finding is on
-    ///             <c>NetworkProvider</c> and at <c>charts/managed/kube-ovn-vpc/conformance.yaml
-    ///             § owed</c>, <c>peerings-need-a-second-writer-on-the-vpc</c> (#31).
+    ///             range, on both networks' objects, in two atomic arrays. <b>This type renders
+    ///             neither</b>: the <c>peerings</c> child writes both as a fragment of this object
+    ///             through the co-owned apply (docs/plan/09 § A second writer on an object), under a
+    ///             manager named for this network and beside these labels, and the network's own
+    ///             apply never touches the two arrays. A network that rendered an empty
+    ///             <c>vpcPeerings: []</c> here would be the owner and the co-writers disagreeing on one
+    ///             atomic list, forever. <see cref="VirtualNetworkPeerings" /> carries the shape.
     ///         </item>
     ///         <item>
     ///             <b>

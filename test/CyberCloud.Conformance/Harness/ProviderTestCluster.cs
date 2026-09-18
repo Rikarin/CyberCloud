@@ -670,6 +670,16 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
         // compares tenants, so the 404 assertion needed a parent to get past; nothing on the write
         // path reads a sibling, so a copy over there would keep no assertion honest.
         await CreateSiblingsAsync(ConformanceIds.Tenant, ConformanceIds.Subscription);
+
+        // ⚠ AND THE WORLD IS REMEMBERED, SO THAT A RESET PUTS IT BACK RATHER THAN EMPTYING IT. Every
+        // assertion begins with Reset, and until CyberCloud.Network/virtualNetworks/peerings that
+        // emptied the fake cluster and nothing minded — every type re-created what it owns from its
+        // body. A co-writing type owns nothing: it writes onto the ancestors' and siblings' objects,
+        // which have to be there when a test starts. What is remembered is exactly what the fixture
+        // created; a test's own objects are still gone at the next Reset. See
+        // FakeKubeCluster.Baseline, and ReferenceSiblingProviderConformance
+        // .TheSiblingSurvivesAResetAsAResourceAndAsObjects for the assertion that flipped.
+        World.Baseline();
     }
 
     /// <summary>Puts every quota meter out of the way for one subscription.</summary>

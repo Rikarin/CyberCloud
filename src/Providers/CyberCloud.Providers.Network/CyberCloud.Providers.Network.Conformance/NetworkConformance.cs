@@ -509,6 +509,107 @@ public sealed class NatGatewayCase : IProviderCaseSource {
     public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [VirtualNetworkCase.ProviderCase];
 }
 
+/// <summary>
+///     <c>CyberCloud.Network/virtualNetworks/peerings</c> — the first case in the tree whose type owns
+///     none of the objects it names.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b><see cref="ProviderConformanceCase.Objects" /> NAMES TWO OTHER RESOURCES' <c>Vpc</c>s,
+///         AND THE SUITE READS THAT OFF THE WORLD RATHER THAN OFF THIS CASE.</b> Every case before
+///         this one named what its type applies and owns. A peering applies nothing of its own: it
+///         writes a fragment onto its parent network's <c>Vpc</c> and onto the remote's — the harness's
+///         <c>ancestor-0</c> and the sibling <see cref="Siblings" /> declares — so those two are what
+///         a converged peering has changed and what the suite has to read. The suite tells them apart
+///         from owned objects by the <c>cybercloud.io/resource-id</c> label the fake's copy carries
+///         (<c>ProviderConformanceTests.IsCoOwned</c>), which is the builder's and never a case's to
+///         set, and runs the co-writer's reading of each ownership assertion: no labels on the command
+///         and the owner's on the object, teardown by withdrawal with the <c>Vpc</c>s left standing,
+///         drift as a slice stripped by hand and put back, and the owner's delete winning.
+///     </para>
+///     <para>
+///         ⚠ <b>The changed body moves the remote's range</b>, which changes the route the local
+///         <c>Vpc</c> carries and the range the remote's route points at — both readable off the
+///         objects. A changed body that moved only the link would change every entry too, but a
+///         changed <c>remoteNetwork</c> would leave a fragment on the old remote
+///         (<c>VirtualNetworkPeerings</c>' remarks), which is not what an update test should exercise.
+///     </para>
+///     <para>
+///         ⚠ <b>The invalid body is a malformed link</b>, refused at the API at
+///         <c>/properties/link/v4</c> by <c>Cidr.V4Pattern</c>. The cross-property refusals —
+///         overlapping ranges, a link too narrow, a network peering with itself — run after the
+///         <c>202</c> and are <c>NetworkPeeringTests</c>' to assert, for the family's recorded reason.
+///     </para>
+/// </remarks>
+public sealed class VirtualNetworkPeeringCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase { get; } =
+        new() {
+            DisplayName = "CyberCloud.Network/virtualNetworks/peerings",
+            CreateProvider = () => new NetworkProvider(),
+            ReconcilerType = typeof(VirtualNetworkPeeringReconciler),
+            CreateReconciler = clock => new VirtualNetworkPeeringReconciler(clock),
+            Type = VirtualNetworkPeerings.Type,
+            ApiVersion = VirtualNetworkPeerings.V2026,
+            // ⚠ The remote is the sibling below, by name — the harness creates it before the first
+            // assertion and drives it to Succeeded, so its Vpc is there to write onto.
+            Body = cluster => VirtualNetworkPeerings.Body(cluster, remoteNetwork: RemoteNetworkName),
+            ChangedBody = cluster => VirtualNetworkPeerings.Body(
+                cluster,
+                remoteNetwork: RemoteNetworkName,
+                remoteAddressSpaceV4: "10.31.0.0/16"
+            ),
+            InvalidBody = cluster => VirtualNetworkPeerings.Body(cluster, remoteNetwork: RemoteNetworkName, linkV4: "not-a-prefix"),
+            InvalidBodyTarget = "/properties/link/v4",
+            ActionName = VirtualNetworkPeerings.RoutesAction,
+            // ⚠ BOTH Vpcs, NEITHER OWNED. The local one is the parent's — rendered off the address,
+            // whose parent is the harness's ancestor-0 — and the remote's is the sibling's, rendered
+            // off the body's default remote, which is the sibling's name.
+            Objects = (id, ns) => [
+                VirtualNetworkPeerings.LocalVpcRef(ns, id),
+                VirtualNetworks.VpcRef(ns, RemoteNetworkName)
+            ],
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
+            // ⚠ Empty, and it is a statement: a Vpc carries no credential, and what `showRoutes`
+            // reads is the two objects' own spec and status.
+            OperatorWritten = static (_, _) => [],
+            // ⚠ Dispatches on WHICH Vpc it was handed, because the two fragments are mirror images
+            // and a predicate that checked the local one's shape on the remote's object would be
+            // checking that the remote routes to itself.
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+
+                var side = match.Target.Name == VirtualNetworkPeerings.LocalVpcNameOf(match.Namespace, match.Id)
+                    ? VirtualNetworkPeerings.Side.Local
+                    : VirtualNetworkPeerings.Side.Remote;
+
+                return VirtualNetworkPeerings.Matches(match.ObjectJson, match.Namespace, match.Id, desired.RootElement, side);
+            }
+        };
+
+    /// <summary>What the harness calls the remote network — the default the body names.</summary>
+    public const string RemoteNetworkName = VirtualNetworkPeerings.DefaultRemoteNetwork;
+
+    /// <inheritdoc />
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [VirtualNetworkCase.ProviderCase];
+
+    /// <summary>
+    ///     The second network — <c>IProviderCaseSource.Siblings</c>' first real use, and the reason
+    ///     the member exists.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The network's own case object, not a second description of one, for the reason
+    ///     <see cref="Ancestors" /> is: the sibling's body has to validate against the network's
+    ///     schema, and one description cannot drift from itself. It sits at the root beside
+    ///     <c>ancestor-0</c>, because a <c>virtualNetworks</c> sibling of a depth-2 case is depth 1.
+    /// </remarks>
+    public static ImmutableArray<SiblingResource> Siblings { get; } = [
+        new() { Case = VirtualNetworkCase.ProviderCase, Name = RemoteNetworkName }
+    ];
+}
+
 /// <summary>The shared suite, run against the virtual-network provider.</summary>
 /// <param name="cluster">The harness.</param>
 public sealed class VirtualNetworkConformance(ProviderTestCluster<VirtualNetworkCase> cluster)
@@ -562,6 +663,21 @@ public sealed class NatGatewayConformance(ProviderTestCluster<NatGatewayCase> cl
     : ProviderConformanceTests<NatGatewayCase>(cluster),
     IClassFixture<ProviderTestCluster<NatGatewayCase>>;
 
+/// <summary>
+///     The <b>same</b> suite again, run against the peering — the family's fourth child-shaped
+///     addition and the first type in the tree that owns none of the objects it applies to.
+/// </summary>
+/// <remarks>
+///     ⚠ The same class, and the same assertion count as the network's. What differs is inside the
+///     suite: each ownership assertion reads whether an object is co-owned off the fake's copy and
+///     takes the co-writer's branch — see <c>ProviderConformanceTests.IsCoOwned</c>. A separate
+///     peering-shaped suite would have been free to assert less.
+/// </remarks>
+/// <param name="cluster">The harness.</param>
+public sealed class VirtualNetworkPeeringConformance(ProviderTestCluster<VirtualNetworkPeeringCase> cluster)
+    : ProviderConformanceTests<VirtualNetworkPeeringCase>(cluster),
+    IClassFixture<ProviderTestCluster<VirtualNetworkPeeringCase>>;
+
 /// <summary>The container-backed half, skipped loudly, against the virtual-network type.</summary>
 public sealed class VirtualNetworkClusterBackedConformance()
     : ClusterBackedConformanceTests(VirtualNetworkCase.ProviderCase);
@@ -605,6 +721,10 @@ public sealed class LoadBalancerClusterBackedConformance()
 public sealed class NatGatewayClusterBackedConformance()
     : ClusterBackedConformanceTests(NatGatewayCase.ProviderCase);
 
+/// <summary>The container-backed half, skipped loudly, against the peering.</summary>
+public sealed class VirtualNetworkPeeringClusterBackedConformance()
+    : ClusterBackedConformanceTests(VirtualNetworkPeeringCase.ProviderCase);
+
 /// <summary>
 ///     What this provider's two registrations into the shared suite are <b>shaped</b> like.
 /// </summary>
@@ -646,6 +766,14 @@ public sealed class NetworkSuiteShapeTests {
             "the NAT gateway runs a different set of assertions than the virtual network does."
         );
 
+        RunnableFactsOf(typeof(VirtualNetworkPeeringConformance)).ShouldBe(
+            parent,
+            "the peering runs a different set of assertions than the virtual network does. It is the "
+            + "first type that owns none of the objects it applies to, and the temptation to give it a "
+            + "suite of its own is exactly what this line refuses: the co-writer's branches live INSIDE "
+            + "the shared suite, per object, so the count stays the network's."
+        );
+
         parent.Length.ShouldBeGreaterThan(20);
     }
 
@@ -675,7 +803,10 @@ public sealed class NetworkSuiteShapeTests {
                      AncestorsOf<LoadBalancerCase>(),
                      // ⚠ And the NAT gateway, for the load balancer's reason: its rule names a subnet
                      // of one VPC, so the harness must create the network first.
-                     AncestorsOf<NatGatewayCase>()
+                     AncestorsOf<NatGatewayCase>(),
+                     // ⚠ And the peering, whose parent is the LOCAL side of the exchange; the remote is
+                     // a sibling, asserted separately below.
+                     AncestorsOf<VirtualNetworkPeeringCase>()
                  ]) {
             ancestors.Length.ShouldBe(1);
 
@@ -687,6 +818,53 @@ public sealed class NetworkSuiteShapeTests {
 
             ancestors[0].Type.ShouldBe(VirtualNetworks.Type);
         }
+    }
+
+    [Fact]
+    public void OnlyThePeeringDeclaresASiblingAndItIsTheNetworksOwnCaseObject() {
+        // ⚠ THE FIRST REAL USE OF IProviderCaseSource.Siblings, and the assertion is the same shape as
+        // the ancestors': the network's OWN case object, so the sibling's body cannot drift from the
+        // network's schema, and the name the body defaults to, so a body naming "spoke" names the
+        // network the harness created.
+        foreach (var siblings in
+                 (ReadOnlySpan<ImmutableArray<SiblingResource>>)[
+                     SiblingsOf<VirtualNetworkCase>(),
+                     SiblingsOf<NetworkSubnetCase>(),
+                     SiblingsOf<NetworkSecurityGroupCase>(),
+                     SiblingsOf<PublicIpAddressCase>(),
+                     SiblingsOf<LoadBalancerCase>(),
+                     SiblingsOf<NatGatewayCase>()
+                 ]) {
+            siblings.ShouldBeEmpty("only a type whose body names another resource of this family declares a sibling");
+        }
+
+        var peering = SiblingsOf<VirtualNetworkPeeringCase>();
+
+        peering.Length.ShouldBe(1);
+        peering[0].Case.ShouldBeSameAs(VirtualNetworkCase.ProviderCase);
+        peering[0].Name.ShouldBe(VirtualNetworkPeerings.DefaultRemoteNetwork);
+
+        var address = new ResourceId(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "rg",
+            VirtualNetworkPeerings.Type,
+            "to-spoke",
+            Guid.NewGuid(),
+            "net"
+        );
+
+        using var body = JsonDocument.Parse(VirtualNetworkPeeringCase.ProviderCase.Body(Guid.NewGuid()));
+
+        VirtualNetworkPeerings.RemoteNetwork(body.RootElement).ShouldBe(peering[0].Name, "the case's body names the sibling");
+
+        // And the two objects the case names are the two Vpcs the fragments land on, cluster-scoped.
+        var objects = VirtualNetworkPeeringCase.ProviderCase.Objects(address, "ns");
+
+        objects.Length.ShouldBe(2);
+        objects.ShouldAllBe(x => x.IsClusterScoped);
+        objects[0].Name.ShouldBe("ns-net");
+        objects[1].Name.ShouldBe("ns-" + peering[0].Name);
     }
 
     [Fact]
@@ -799,6 +977,9 @@ public sealed class NetworkSuiteShapeTests {
 
     static ImmutableArray<ProviderConformanceCase> AncestorsOf<TSource>()
         where TSource : IProviderCaseSource => TSource.Ancestors;
+
+    static ImmutableArray<SiblingResource> SiblingsOf<TSource>()
+        where TSource : IProviderCaseSource => TSource.Siblings;
 
     /// <summary>Every <c>[Fact]</c> a test class runs, by name, ordered.</summary>
     /// <param name="suite">The closed test class.</param>

@@ -1910,6 +1910,63 @@ export interface NetworkVirtualNetworksNatGatewaysShowEgressResult {
   sourceV6?: string;
 }
 
+/** Peering. A route exchange between this virtual network and another in the same resource group, so workloads in either reach the other's range by private address. Both networks stay separately owned. */
+export interface NetworkVirtualNetworksPeeringsData {
+  /** The region the peering is billed in. ⚠ It must be the region both virtual networks are in — nothing checks that, because neither network's own region is readable from here. */
+  location: string;
+  /** The peering's own settings. */
+  properties?: {
+    /** The cluster whose fabric holds both networks. ⚠ Two networks in two clusters cannot be peered: a Kube-OVN peering is two ports on one OVN northbound database. */
+    clusterId: string;
+    /** The point-to-point range the two routers address each other on. */
+    link?: {
+      /** A small IPv4 range, /30 or wider, that is in neither network. This network's peer port takes its first host address and the remote's takes the second. ⚠ It is checked against the platform's reserved ranges like any other, so link-local space cannot be used. */
+      v4: string;
+    };
+    /** The range this network advertises to the remote — the remote's router gets one static route to it. */
+    localAddressSpace?: {
+      /** This network's IPv4 range, in CIDR form — normally its address space. ⚠ It may not overlap the remote range or the link, and the refusal names both. */
+      v4: string;
+    };
+    /** The range the remote advertises to this network — this network's router gets one static route to it. */
+    remoteAddressSpace?: {
+      /** The remote network's IPv4 range, in CIDR form — normally its address space. ⚠ Two networks with overlapping ranges cannot be peered, which is the one place this platform's 'overlapping your own networks is fine' stops applying: a route to a range you also hold has nowhere to go. */
+      v4: string;
+    };
+    /** The name of the virtualNetworks resource in the same resource group to peer this network with. ⚠ A name, not a resource id: the remote must be in this subscription and resource group, and a network in another cannot be named — write on the peering has to imply write on both networks. A remote that does not exist keeps the peering in progress until it does. Cannot be changed once created; delete the peering and create another. */
+    remoteNetwork: string;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Peering, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface NetworkVirtualNetworksPeeringsResource extends Resource, NetworkVirtualNetworksPeeringsData {
+  readonly type: 'CyberCloud.Network/virtualNetworks/peerings';
+}
+
+/** What showRoutes returns. */
+export interface NetworkVirtualNetworksPeeringsShowRoutesResult {
+  /** The address, with the link's prefix, this network's peer port carries. */
+  localConnectIP: string;
+  /** Whether the fabric lists the remote in the local Vpc's status.vpcPeerings — the peer port exists. False on a cluster without the Kube-OVN controller. */
+  localConnected: boolean;
+  /** The local network's Vpc object name. */
+  localVpc: string;
+  /** Whether the local Vpc carries this peering's entry and route. */
+  localWritten: boolean;
+  /** The address, with the link's prefix, the remote's peer port carries. */
+  remoteConnectIP: string;
+  /** The same, read off the remote Vpc. */
+  remoteConnected: boolean;
+  /** The remote network's Vpc object name. */
+  remoteVpc: string;
+  /** Whether the remote Vpc carries this peering's entry and route. ⚠ False with localWritten true is a remote network that was deleted or never existed. */
+  remoteWritten: boolean;
+  /** When the platform read the objects, RFC 3339. */
+  sampledAt: string;
+}
+
 /** Security group. A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several. */
 export interface NetworkVirtualNetworksSecurityGroupsData {
   /** The region the security group lives in. It must be the network's own region — nothing checks that. */

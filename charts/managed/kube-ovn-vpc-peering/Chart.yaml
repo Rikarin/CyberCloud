@@ -1,0 +1,49 @@
+# A route exchange between two of a tenant's virtual networks — docs/plan/14 § Virtual networks,
+# `peerings/{name} → VPC-to-VPC within a tenant`.
+#
+# ⚠ THIS CHART RENDERS NO OBJECT OF ITS OWN, AND THAT IS THE TYPE RATHER THAN A GAP IN THE CHART. A
+# Kube-OVN peering has no kind: it is one entry in EACH network's `Vpc.spec.vpcPeerings` and one
+# static route in EACH network's `Vpc.spec.staticRoutes` — two arrays that are atomic under
+# server-side apply, on two objects two `virtualNetworks` resources own. The reconciler writes both as
+# FRAGMENTS through the co-owned apply (docs/plan/09 § A second writer on an object), under a field
+# manager named for each network, beside each network's own labels. Helm cannot express a fragment of
+# another release's object, so templates/ carries the two fragments as documentation and installs
+# nothing; the configuration surface — values.yaml and values.schema.json — is what this chart is.
+#
+# ⚠ A DIRECTORY OF ITS OWN, for the reason charts/managed/kube-ovn-subnet gives: `Build.Charts` pairs
+# a chart with a resource type through ONE `cybercloud.io/resource-type` annotation per Chart.yaml.
+apiVersion: v2
+name: kube-ovn-vpc-peering
+description: A route exchange between this virtual network and another in the same resource group, so workloads in either reach the other's range by private address. Both networks stay separately owned.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ The Kube-OVN version the fragment shape was reviewed against — the same release the rest of the
+# family pins. VpcPeering, StaticRoute, handleAddOrUpdateVpc and CreatePeerRouterPort were read at
+# this tag; see SOURCE.
+appVersion: "1.16.2"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - kube-ovn
+  - vpc
+  - peering
+  - routing
+  - networking
+
+home: https://kubeovn.github.io/docs/
+sources:
+  - https://github.com/kubeovn/kube-ovn
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ TWO segments — docs/plan/14 spells the child `peerings/{name}` under `virtualNetworks`, and the
+# network the peering hangs off is the LOCAL side of the exchange. The api-version is the family's.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Network/virtualNetworks/peerings
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: kube-ovn

@@ -379,11 +379,40 @@ public sealed class DriftScannerTests {
     static readonly Guid Vpc = Guid.Parse("3a8f0c22-5e6d-4a7b-8c9d-0e1f2a3b4c5d");
     static readonly Guid PeeringA = Guid.Parse("aaaaaaaa-0000-4000-8000-00000000000a");
 
+    static readonly Guid SpokeVpc = Guid.Parse("4b9a1d33-6f7e-4b8c-9dae-1f2a3b4c5d6e");
+
     /// <summary>The owner's object with <paramref name="writer" />'s fragment on it.</summary>
     static ClusterObjectRecord CoWritten(Guid writer, string fragmentHash) =>
         Object(Vpc, "sha256:owner") with {
             Fragments = [new(writer, fragmentHash, "/tenants/…/virtualNetworks/hub/peerings/to-spoke")]
         };
+
+    /// <summary>The other network's object — the remote side — with <paramref name="writer" />'s mirror-image fragment on it.</summary>
+    static ClusterObjectRecord CoWrittenRemote(Guid writer, string fragmentHash) =>
+        Object(SpokeVpc, "sha256:spoke-owner") with {
+            Target = new() {
+                Kind = new() { Group = "apps", Version = "v1", Kind = "Deployment", Plural = "deployments" },
+                Namespace = "ns",
+                Name = "spoke"
+            },
+            Fragments = [new(writer, fragmentHash, "/tenants/…/virtualNetworks/hub/peerings/to-spoke")]
+        };
+
+    /// <summary>The peering as the manager expects it: one fragment per object, each with its own hash.</summary>
+    static ExpectedResource Peering(params (ClusterObjectRecord On, string Hash)[] fragments) =>
+        new(
+            PeeringA,
+            "/tenants/…/virtualNetworks/hub/peerings/to-spoke",
+            "sha256:peering-body",
+            ProvisioningState.Succeeded,
+            [.. fragments.Select(x => new ExpectedFragment(x.On.Target, x.Hash))]
+        );
+
+    /// <summary>Both networks, converged, so that their objects are nobody's orphans.</summary>
+    static ImmutableArray<ExpectedResource> BothOwners { get; } = [
+        new(Vpc, "/tenants/…/virtualNetworks/hub", "sha256:owner", ProvisioningState.Succeeded),
+        new(SpokeVpc, "/tenants/…/virtualNetworks/spoke", "sha256:spoke-owner", ProvisioningState.Succeeded)
+    ];
 
     [Fact]
     public void AConvergedCoWriterIsNotAStrayThoughItOwnsNoObject() {
@@ -391,12 +420,14 @@ public sealed class DriftScannerTests {
         // label — its slice rides on the parent's Vpc under a fragment annotation — so a scan that
         // joined on the label alone reported every Succeeded peering as a permanent stray, "its
         // objects were deleted outside the platform", about a slice that was right there.
+        var local = CoWritten(PeeringA, "sha256:fragment-a");
+
         var report = Scanner.Scan(
             ClusterId,
-            [CoWritten(PeeringA, "sha256:fragment-a")],
+            [local],
             [
                 new(Vpc, "/tenants/…/virtualNetworks/hub", "sha256:owner", ProvisioningState.Succeeded),
-                new(PeeringA, "/tenants/…/virtualNetworks/hub/peerings/to-spoke", "sha256:fragment-a", ProvisioningState.Succeeded)
+                Peering((local, "sha256:fragment-a"))
             ]
         );
 
@@ -412,7 +443,7 @@ public sealed class DriftScannerTests {
             [Object(Vpc, "sha256:owner")],
             [
                 new(Vpc, "/hub", "sha256:owner", ProvisioningState.Succeeded),
-                new(PeeringA, "/hub/peerings/to-spoke", "sha256:fragment-a", ProvisioningState.Succeeded)
+                Peering((CoWritten(PeeringA, "sha256:fragment-a"), "sha256:fragment-a"))
             ]
         );
 
@@ -425,24 +456,100 @@ public sealed class DriftScannerTests {
     public void ACoWriterIsJudgedByItsFragmentHashAndNotByTheOwners() {
         // ⚠ The Vpc's reconcile-hash is the owner's, over the owner's body. Comparing the peering
         // against it would report every peering as diverged the moment its parent re-rendered.
-        var matches = Scanner.Scan(
-            ClusterId,
-            [CoWritten(PeeringA, "sha256:fragment-a")],
-            [new(PeeringA, "/hub/peerings/to-spoke", "sha256:fragment-a", ProvisioningState.Succeeded)]
-        );
+        var local = CoWritten(PeeringA, "sha256:fragment-a");
 
-        matches.Findings.Where(x => x.Kind == DriftKind.Diverged).ShouldBeEmpty();
+        var matches = Scanner.Scan(ClusterId, [local], [Peering((local, "sha256:fragment-a"))]);
+
+        matches.Diverged.ShouldBeEmpty();
 
         var changed = Scanner.Scan(
             ClusterId,
             [CoWritten(PeeringA, "sha256:fragment-a-as-applied")],
-            [new(PeeringA, "/hub/peerings/to-spoke", "sha256:fragment-a-desired", ProvisioningState.Succeeded)]
+            [Peering((local, "sha256:fragment-a-desired"))]
         );
 
-        var diverged = changed.Findings.Single(x => x.Kind == DriftKind.Diverged);
+        var diverged = changed.Diverged.ShouldHaveSingleItem();
         diverged.ResourceId.ShouldBe(PeeringA);
         diverged.Objects.Length.ShouldBe(1);
         diverged.Detail.ShouldContain("fragment-hash");
+    }
+
+    [Fact]
+    public void ACoWriterOfTwoObjectsIsJudgedPerObjectBecauseItsTwoFragmentsHashDifferently() {
+        // ⚠ THE #31 REVIEW'S FINDING. A peering writes mirror images onto two Vpcs — each names the
+        // OTHER network, each route points at the other end of the link — so the two fragments
+        // never hash the same, and one desired hash held against both reported every converged
+        // peering as diverged on every scan ("1 of 2 objects carry … other than …"). The expected
+        // shape is now one hash per object.
+        var local = CoWritten(PeeringA, "sha256:local-fragment");
+        var remote = CoWrittenRemote(PeeringA, "sha256:remote-fragment");
+
+        var converged = Scanner.Scan(
+            ClusterId,
+            [local, remote],
+            [.. BothOwners, Peering((local, "sha256:local-fragment"), (remote, "sha256:remote-fragment"))]
+        );
+
+        converged.Findings.ShouldBeEmpty("two fragments with two hashes on two objects, each the one expected there: " + converged);
+
+        // And the hashes are held against the OBJECT, not merely against the set: the remote's
+        // hash on the local object is the wrong slice on the wrong router.
+        var swapped = Scanner.Scan(
+            ClusterId,
+            [CoWritten(PeeringA, "sha256:remote-fragment"), CoWrittenRemote(PeeringA, "sha256:local-fragment")],
+            [.. BothOwners, Peering((local, "sha256:local-fragment"), (remote, "sha256:remote-fragment"))]
+        );
+
+        swapped.Diverged.ShouldHaveSingleItem().Objects.Length.ShouldBe(2);
+    }
+
+    [Fact]
+    public void ACoWriterWhoseSliceIsGoneFromOneOfItsObjectsIsDivergedNamingThatObject() {
+        // The remote network's Vpc lost the peering's fragment — a hand edit, or the owner's
+        // re-create — while the local one kept it. Not a stray: a slice is still there. Diverged,
+        // naming the object the slice went missing from.
+        var local = CoWritten(PeeringA, "sha256:local-fragment");
+        var remote = CoWrittenRemote(PeeringA, "sha256:remote-fragment");
+
+        var report = Scanner.Scan(
+            ClusterId,
+            [local, Object(SpokeVpc, "sha256:spoke-owner") with { Target = remote.Target }],
+            [.. BothOwners, Peering((local, "sha256:local-fragment"), (remote, "sha256:remote-fragment"))]
+        );
+
+        report.Strays.ShouldBeEmpty();
+
+        var diverged = report.Diverged.ShouldHaveSingleItem();
+        diverged.Objects.ShouldBe([remote.Target]);
+        diverged.Detail.ShouldContain("went missing");
+    }
+
+    [Fact]
+    public void AFragmentLeftOnAnObjectTheWriterNoLongerPlacesItOnIsDivergedNotOrphaned() {
+        // ⚠ The changed-remote case, charts/managed/kube-ovn-vpc-peering/conformance.yaml § owed,
+        // `a-changed-remote-leaves-a-fragment-behind`: a PUT naming a different remote applies onto
+        // the new remote's Vpc and never withdraws from the old one. The grain still exists, so the
+        // orphan pass — which skips every known writer — never sees it; before this test the owed
+        // row claimed it would. It is a Diverged finding naming the old object, and this is the
+        // only place the leftover is ever named.
+        var local = CoWritten(PeeringA, "sha256:local-fragment");
+        var newRemote = CoWrittenRemote(PeeringA, "sha256:remote-fragment");
+        var oldRemote = CoWrittenRemote(PeeringA, "sha256:old-remote-fragment") with {
+            Target = newRemote.Target with { Name = "old-spoke" }
+        };
+
+        var report = Scanner.Scan(
+            ClusterId,
+            [local, newRemote, oldRemote],
+            [.. BothOwners, Peering((local, "sha256:local-fragment"), (newRemote, "sha256:remote-fragment"))]
+        );
+
+        report.Orphans.ShouldBeEmpty("the peering's grain exists; the orphan pass skips every known writer");
+
+        var diverged = report.Diverged.ShouldHaveSingleItem();
+        diverged.ResourceId.ShouldBe(PeeringA);
+        diverged.Objects.ShouldBe([oldRemote.Target]);
+        diverged.Detail.ShouldContain("left behind");
     }
 
     [Fact]

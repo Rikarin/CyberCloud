@@ -329,13 +329,14 @@ public sealed class ReferenceSiblingProviderConformance(ProviderTestCluster<Refe
     }
 
     [Fact]
-    public async Task TheSiblingSurvivesAResetAsAResourceAndNotAsObjects() {
-        // ⚠ THE LIMIT, PINNED SO IT IS A FACT RATHER THAN A SURPRISE. Reset empties the fake cluster,
-        // so the sibling's objects are gone between assertions and only the resource persists. A
-        // type that co-writes onto a sibling's OBJECT needs it back first — recorded at
-        // charts/managed/kube-ovn-vpc/conformance.yaml § owed, peerings-need-a-second-writer-on-the-vpc.
-        // The day the harness re-materialises the world after a Reset, this assertion flips and the
-        // owed row is closed with it.
+    public async Task TheSiblingSurvivesAResetAsAResourceAndAsObjects() {
+        // ⚠ THE ASSERTION THAT FLIPPED. Until CyberCloud.Network/virtualNetworks/peerings, Reset
+        // emptied the fake cluster, so the sibling's objects were gone between assertions and only
+        // the resource persisted — this test pinned that as a limit, and the owed row it named said a
+        // co-writing type would need the world back first. The harness now takes a baseline of the
+        // world after the fixture creates it (FakeKubeCluster.Baseline) and Reset restores it, so a
+        // peering finds its two Vpcs where its reconciler expects them. Both halves are asserted: the
+        // resource persists as before, and the objects do too.
         ProviderTestCluster<ReferenceWithSiblingCase>.Reset();
 
         var address = ProviderTestCluster<ReferenceWithSiblingCase>.SiblingAddress(Sibling);
@@ -353,11 +354,44 @@ public sealed class ReferenceSiblingProviderConformance(ProviderTestCluster<Refe
         var resolved = address.WithId(snapshot.Id);
 
         foreach (var target in Sibling.Case.Objects(resolved, ReconcileDriver.NamespaceFor(resolved))) {
-            Cluster.World.Holds(target).ShouldBeFalse(
-                $"'{target}' is in the fake cluster after a Reset — the harness now re-materialises "
-                + "the world, so the owed row about a co-writing case can be revisited"
+            Cluster.World.Holds(target).ShouldBeTrue(
+                $"'{target}' is not in the fake cluster after a Reset. The harness puts the fixture's "
+                + "world back on every Reset so that a co-writing type has an object to write onto — "
+                + "see FakeKubeCluster.Baseline and ProviderTestCluster.InitializeAsync"
+            );
+
+            Cluster.World.OwnerOf(target).ShouldBe(
+                snapshot.Id,
+                $"'{target}' came back from the baseline carrying labels that are not the sibling's own"
             );
         }
+
+        // ⚠ AND A TEST'S OWN OBJECTS DO NOT COME BACK, which is the half that keeps tests independent.
+        var own = (await Cluster.Manager.WriteAsync(
+            new() {
+                Path = ProviderTestCluster<ReferenceWithSiblingCase>.Address("not-in-the-baseline").Path,
+                ApiVersion = Case.ApiVersion,
+                Verb = WriteVerb.Put,
+                Body = Case.Body(ProviderTestCluster<ReferenceWithSiblingCase>.ClusterId),
+                Caller = ProviderTestCluster<ReferenceWithSiblingCase>.Caller()
+            },
+            TestContext.Current.CancellationToken
+        )).GetValueOrThrow();
+
+        var operation = Cluster.Operation(ConformanceIds.Tenant, own.OperationId);
+        for (var drive = 0; drive < 8 && !(await operation.DriveAsync()).GetValueOrThrow().IsTerminal; drive++) { }
+
+        var ownAddress = ProviderTestCluster<ReferenceWithSiblingCase>.Address("not-in-the-baseline").WithId(own.Resource.Id);
+        var ownObjects = Case.Objects(ownAddress, ReconcileDriver.NamespaceFor(ownAddress));
+        ownObjects.All(Cluster.World.Holds).ShouldBeTrue("the test's own resource converged and its objects are there");
+
+        ProviderTestCluster<ReferenceWithSiblingCase>.Reset();
+
+        ownObjects.Any(Cluster.World.Holds).ShouldBeFalse(
+            "an object a TEST created survived a Reset. The baseline is the fixture's world and nothing "
+            + "later; a world that accumulated every test's leftovers would make the twenty-eighth "
+            + "assertion depend on the first"
+        );
     }
 }
 
@@ -459,14 +493,17 @@ public sealed class SuiteRejectionTests {
     }
 
     [Fact]
-    public async Task TheFakeRefusesACoOwnedCommandRatherThanReplacingTheOwnersObjectWithTheFragment() {
-        // ⚠ THE CALIBRATION FOR THE FAKE'S ONE REFUSAL, so that the guard the comment in
-        // FakeKubeCluster describes is a guard a test would miss. The fake stores a body verbatim.
-        // A co-writer's command is a fragment, no labels, the live resourceVersion — and stored
-        // verbatim it would REPLACE the owner's labelled object with an unlabelled slice, over which
-        // a Docker-free peering case would then go green. Until the fake keeps per-manager field
-        // ownership (charts/managed/kube-ovn-vpc/conformance.yaml § owed), the case has to fail
-        // here, with the reason, and the owner's object has to be exactly what it was.
+    public async Task TheFakeModelsASecondWriterWithoutLosingTheOwnersObject() {
+        // ⚠ THE CALIBRATION FOR THE FAKE'S ONE MODELLED SECOND MANAGER, and it replaced a refusal.
+        // The fake stored a body verbatim, and a co-writer's command — a fragment, no labels, the
+        // live resourceVersion — stored verbatim would have REPLACED the owner's labelled object
+        // with an unlabelled slice; so until CyberCloud.Network/virtualNetworks/peerings the fake
+        // refused a co-owned command by name. It now keeps per-manager ownership one manager deep
+        // (FakeKubeCluster.ApplyCoOwned), and what this pins is the property the refusal protected:
+        // after a co-owned apply the owner's labels, spec and uid are exactly what they were, the
+        // fragment's fields and bookkeeping sit beside them, a second co-writer's slice is added
+        // rather than replacing the first's, a stale version is Stale, an absent owner is a refusal,
+        // and a withdrawal takes one slice off and leaves the object standing.
         var world = new FakeKubeCluster(ConformanceIds.Cluster);
 
         var owner = new ResourceId(
@@ -499,10 +536,10 @@ public sealed class SuiteRejectionTests {
             .ObjectJson("""{ "spec": { "egress": [ { "to": "anywhere" } ] } }""")
             .ApplyAsync(TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
 
-        var before = world.Read(target).ShouldNotBeNull();
+        var before = JsonNode.Parse(world.Read(target).ShouldNotBeNull())!.AsObject();
         var live = (await world.GetAsync(target, TestContext.Current.CancellationToken)).GetValueOrThrow();
 
-        var refused = await KubeCommand.For(world)
+        var applied = await KubeCommand.For(world)
             .WithTenantId(coWriter.TenantId)
             .WithResourceId(coWriter)
             .InNamespace(ns)
@@ -511,11 +548,85 @@ public sealed class SuiteRejectionTests {
             .ObjectJson("""{ "spec": { "peerings": [ { "remote": "spoke" } ] } }""")
             .ApplyAsync(TestContext.Current.CancellationToken);
 
-        refused.IsFailure.ShouldBeTrue("the fake cannot model a second writer and must say so rather than store the fragment");
-        refused.Error!.Message.ShouldContain("does not model a second writer");
-        refused.Error.Message.ShouldContain("CoOwnedApplyTests");
+        applied.IsSuccess.ShouldBeTrue(applied.Error?.Message);
+        applied.GetValueOrThrow().Result.ShouldBe(ApplyResult.Updated);
 
-        world.Read(target).ShouldBe(before, "the owner's object is exactly what it was — nothing was replaced");
+        var after = JsonNode.Parse(world.Read(target)!)!.AsObject();
+
+        // The owner's half is untouched: labels, uid, its own spec field.
+        after["metadata"]!["labels"]!.ToJsonString().ShouldBe(before["metadata"]!["labels"]!.ToJsonString());
+        after["metadata"]!["uid"]!.GetValue<string>().ShouldBe(before["metadata"]!["uid"]!.GetValue<string>());
+        after["spec"]!["egress"]!.ToJsonString().ShouldBe(before["spec"]!["egress"]!.ToJsonString());
+        after["metadata"]!["annotations"]![KubeLabels.ReconcileHashAnnotation].ShouldNotBeNull("the owner's own annotations stay");
+
+        // The co-writer's half is beside it.
+        after["spec"]!["peerings"]!.AsArray().Count.ShouldBe(1);
+        after["metadata"]!["annotations"]![KubeLabels.FragmentAnnotation(coWriter.Id)].ShouldNotBeNull();
+        world.OwnerOf(target).ShouldBe(owner.Id, "the owner is still the owner");
+
+        // The version moved, so the command built from the earlier read is now stale rather than a
+        // second write over the first.
+        var stale = await KubeCommand.For(world)
+            .WithTenantId(coWriter.TenantId)
+            .WithResourceId(coWriter)
+            .InNamespace(ns)
+            .WithKind(Probes.Kind)
+            .CoWriting(live)
+            .ObjectJson("""{ "spec": { "peerings": [ { "remote": "elsewhere" } ] } }""")
+            .ApplyAsync(TestContext.Current.CancellationToken);
+
+        stale.GetValueOrThrow().Result.ShouldBe(ApplyResult.Stale, "a command carrying a version the object has moved past is not applied");
+        JsonNode.Parse(world.Read(target)!)!["spec"]!["peerings"]![0]!["remote"]!.GetValue<string>().ShouldBe("spoke");
+
+        // A second co-writer's slice is ADDED — the atomic list is the union — and the first's stays.
+        var second = coWriter with { Name = "to-elsewhere", Id = Guid.Parse("f0f0f0f0-0000-4000-8000-0000000000f3") };
+        var fresh = (await world.GetAsync(target, TestContext.Current.CancellationToken)).GetValueOrThrow();
+
+        (await KubeCommand.For(world)
+            .WithTenantId(second.TenantId)
+            .WithResourceId(second)
+            .InNamespace(ns)
+            .WithKind(Probes.Kind)
+            .CoWriting(fresh)
+            .ObjectJson("""{ "spec": { "peerings": [ { "remote": "elsewhere" } ] } }""")
+            .ApplyAsync(TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+
+        JsonNode.Parse(world.Read(target)!)!["spec"]!["peerings"]!.AsArray().Count.ShouldBe(2, "two co-writers, two entries");
+
+        // Withdrawing the first takes exactly its slice and its bookkeeping off, and the object stays.
+        var current = (await world.GetAsync(target, TestContext.Current.CancellationToken)).GetValueOrThrow();
+
+        (await KubeCommand.For(world)
+            .WithTenantId(coWriter.TenantId)
+            .WithResourceId(coWriter)
+            .InNamespace(ns)
+            .WithKind(Probes.Kind)
+            .CoWriting(current)
+            .DeleteAsync(CascadePolicy.Background, TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+
+        var withdrawn = JsonNode.Parse(world.Read(target).ShouldNotBeNull("a withdrawal never deletes the owner's object"))!.AsObject();
+        withdrawn["spec"]!["peerings"]!.AsArray().Count.ShouldBe(1);
+        withdrawn["spec"]!["peerings"]![0]!["remote"]!.GetValue<string>().ShouldBe("elsewhere");
+        (withdrawn["metadata"]!["annotations"] as JsonObject)!.ContainsKey(KubeLabels.FragmentAnnotation(coWriter.Id)).ShouldBeFalse();
+        (withdrawn["metadata"]!["annotations"] as JsonObject)!.ContainsKey(KubeLabels.FragmentAnnotation(second.Id)).ShouldBeTrue();
+        withdrawn["spec"]!["egress"]!.ToJsonString().ShouldBe(before["spec"]!["egress"]!.ToJsonString());
+        world.Deleted.ShouldBeEmpty("a withdrawal is not a delete, and the fake's log must not say it was");
+
+        // And an owner's object that is gone is refused, never created.
+        world.RemoveBehindTheirBack(target).ShouldBeTrue();
+
+        var refused = await KubeCommand.For(world)
+            .WithTenantId(second.TenantId)
+            .WithResourceId(second)
+            .InNamespace(ns)
+            .WithKind(Probes.Kind)
+            .CoWriting(current)
+            .ObjectJson("""{ "spec": { "peerings": [ { "remote": "elsewhere" } ] } }""")
+            .ApplyAsync(TestContext.Current.CancellationToken);
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+        world.Holds(target).ShouldBeFalse("a co-writer never creates the owner's object");
     }
 
     [Fact]

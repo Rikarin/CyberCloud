@@ -247,9 +247,9 @@ namespace CyberCloud.Providers.Network;
 ///             is on <see cref="NatGateways" />.
 ///         </item>
 ///         <item>
-///             ⚠ <b><c>virtualNetworks/peerings</c> — OWED (#31), AND THE BLOCKER WAS THIS PLATFORM'S
-///             OWN APPLY PATH RATHER THAN THE SUBSTRATE ALONE, UNTIL #89 BUILT THE WAY OUT.</b> Three
-///             facts, each measured:
+///             <b><c>virtualNetworks/peerings</c> — SHIPPED (#31), AS THE FIRST TYPE THAT OWNS NO
+///             OBJECT, AND THE BLOCKER WAS THIS PLATFORM'S OWN APPLY PATH RATHER THAN THE SUBSTRATE
+///             ALONE, UNTIL #89 BUILT THE WAY OUT.</b> Three facts, each measured:
 ///             <list type="number">
 ///                 <item>
 ///                     <b>A Kube-OVN peering has no object of its own.</b> Read firsthand in
@@ -291,12 +291,17 @@ namespace CyberCloud.Providers.Network;
 ///             What the platform half needed — the co-owned apply, <c>ReconcileContext.CoWriter</c> as
 ///             the seam a peering reconciler reaches it through, and
 ///             <c>IProviderCaseSource.Siblings</c> so the shared harness can create the second network
-///             — landed with #89. What remains is this provider's: the <c>peerings</c> type itself,
-///             and two harness gaps a Docker-free case would hit first — <c>FakeKubeCluster</c> refuses
-///             a co-owned command by name rather than modelling a second writer, and the harness
-///             empties the fake cluster between assertions so a sibling's <c>Vpc</c> is not there to
-///             write onto. Recorded at <c>charts/managed/kube-ovn-vpc/conformance.yaml § owed</c>,
-///             <c>peerings-need-a-second-writer-on-the-vpc</c>.
+///             — landed with #89, and the type landed on it: <see cref="VirtualNetworkPeerings" />
+///             renders one fragment per network, <c>VirtualNetworkPeeringReconciler</c> co-writes both
+///             and withdraws both, and the shared suite grew the co-writer branch its ownership
+///             assertions needed — a fake that models per-manager ownership, a world the harness puts
+///             back after a reset, and a hand edit that strips the fragment rather than the object.
+///             ⚠ <b>What is proven is the write, and not the routing</b>: no harness here has a
+///             Kube-OVN controller, so the peer ports and the routes are reasoned from the source and
+///             wait for the VM lane (#95) — <c>charts/managed/kube-ovn-vpc-peering/conformance.yaml
+///             § owed</c>, <c>routing-is-unproven-until-the-vm-lane</c>. The remote is a name in the
+///             same resource group, and the full argument for why a resource id was not offered is on
+///             <see cref="VirtualNetworkPeerings" />.
 ///         </item>
 ///     </list>
 ///     <para>
@@ -634,7 +639,44 @@ public sealed class NetworkProvider : IResourceProvider {
             )
             .Chart(NatGateways.ChartName)
             .SupportsTags()
-            .RequiresCluster(NatGateways.ClusterIdPointer);
+            .RequiresCluster(NatGateways.ClusterIdPointer)
+            // ── The seventh type — docs/plan/14 § Virtual networks' `peerings/{name}` ──────────
+            //
+            // ⚠ THE FIRST TYPE IN THE TREE THAT OWNS NO OBJECT. Every capability below is one the
+            // shared suite asserts, and for this type the suite's cluster-facing half runs its
+            // co-writer branch: the objects the case names are two OTHER resources' Vpcs, judged by
+            // the fragment this peering leaves on them rather than by the labels it never writes.
+            // A child of virtualNetworks on the load balancer's argument — the network the peering
+            // hangs off is the LOCAL side and comes from the address — and its body names the remote.
+            .ResourceType(VirtualNetworkPeerings.TypePath)
+            .ApiVersion(VirtualNetworkPeerings.V2026, VirtualNetworkPeerings.Schema2026)
+            .Reconciler<VirtualNetworkPeeringReconciler>()
+            // ⚠ `Resources` ALONE. A peering is two logical router ports and two route rows in OVN's
+            // northbound database: no pod, no disk, no address — the link range is the tenant's own
+            // private space. What limits how many a tenant may have is the count.
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .Action(
+                VirtualNetworkPeerings.RoutesAction,
+                ActionKind.Post,
+                VirtualNetworkPeerings.RoutesPermission,
+                response: VirtualNetworkPeerings.RoutesResponse,
+                handler: typeof(ShowRoutesHandler)
+            )
+            // ⚠ `peering`, AND NOT `peer`: four characters is a token somebody else will reach for,
+            // and docs/plan/21 § Grammar spells the type `peerings`. CliTokens carries what the word
+            // has to stay clear of and ProviderRegistry.Build enforces it.
+            .Display(
+                "Peering",
+                "Peerings",
+                shortName: "peering",
+                summary: "A route exchange between this virtual network and another in the same "
+                + "resource group, so workloads in either reach the other's range by private "
+                + "address. Both networks stay separately owned."
+            )
+            .Chart(VirtualNetworkPeerings.ChartName)
+            .SupportsTags()
+            .RequiresCluster(VirtualNetworkPeerings.ClusterIdPointer);
     }
 
     // ── What a load balancer draws ─────────────────────────────────────────────────────────────

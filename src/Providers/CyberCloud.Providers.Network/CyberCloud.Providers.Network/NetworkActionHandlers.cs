@@ -656,3 +656,136 @@ public sealed class ShowEgressHandler(IClock clock) : IResourceActionHandler {
             ? value.GetValue<string>()
             : string.Empty;
 }
+
+/// <summary>
+///     Serves <c>POST …/peerings/{name}/showRoutes</c>: what each network's <c>Vpc</c> carries for
+///     this peering, and whether the fabric has connected them.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>TWO OBJECTS AND NEITHER IS THIS RESOURCE'S, WHICH IS WHY "WRITTEN" IS A COLUMN AT
+///         ALL.</b> Every other action in this family reads one object the resource owns, and the
+///         object existing is the resource existing. A peering is a slice of two networks' objects,
+///         either of which can lose the slice without the peering resource changing state — a remote
+///         network deleted, a hand edit, a co-writer's apply that carried the other peerings' fragments
+///         forward without this one's. <c>localWritten</c> and <c>remoteWritten</c> are
+///         <see cref="VirtualNetworkPeerings.Matches" /> per side, read now.
+///     </para>
+///     <para>
+///         ⚠ <b>"CONNECTED" IS THE CONTROLLER'S WORD AND NOT THE PLATFORM'S.</b>
+///         <c>handleAddOrUpdateVpc</c> writes the remote names it has built peer ports for into
+///         <c>Vpc.status.vpcPeerings</c>. A cluster with no Kube-OVN controller — every harness this
+///         repository runs — reports both <c>written</c> columns true and both <c>connected</c>
+///         columns false for the life of the resource, and that is the honest reading rather than a
+///         defect: <c>charts/managed/kube-ovn-vpc-peering/conformance.yaml § owed</c>,
+///         <c>routing-is-unproven-until-the-vm-lane</c>.
+///     </para>
+///     <para>
+///         An absent object is reported as neither written nor connected rather than as a failure:
+///         the question this action answers is exactly "is my peering there", and a 404 would answer
+///         it about the wrong resource.
+///     </para>
+/// </remarks>
+/// <param name="clock">Stamps <c>sampledAt</c>.</param>
+public sealed class ShowRoutesHandler(IClock clock) : IResourceActionHandler {
+    /// <inheritdoc />
+    public ResourceTypeName Type => VirtualNetworkPeerings.Type;
+
+    /// <inheritdoc />
+    public string Action => VirtualNetworkPeerings.RoutesAction;
+
+    /// <inheritdoc />
+    public async Task<Result<string>> InvokeAsync(
+        ActionContext context,
+        CancellationToken cancellationToken = default
+    ) {
+        if (context.Cluster is not { } cluster) {
+            return Result<string>.Failure(
+                ErrorCode.InternalError,
+                $"'{context.Id.Path}' has no cluster connection, and what a peering has written is read "
+                + "from two Vpc objects in a cluster."
+            );
+        }
+
+        var localVpc = VirtualNetworkPeerings.LocalVpcNameOf(context.Namespace, context.Id);
+        var remoteVpc = VirtualNetworkPeerings.RemoteVpcNameOf(context.Namespace, context.Desired);
+
+        var local = await ReadAsync(
+            cluster,
+            VirtualNetworkPeerings.LocalVpcRef(context.Namespace, context.Id),
+            cancellationToken
+        );
+
+        if (local.TryGetError(out var localError)) {
+            return Result<string>.Failure(localError);
+        }
+
+        var remote = await ReadAsync(
+            cluster,
+            VirtualNetworkPeerings.RemoteVpcRef(context.Namespace, context.Desired),
+            cancellationToken
+        );
+
+        if (remote.TryGetError(out var remoteError)) {
+            return Result<string>.Failure(remoteError);
+        }
+
+        var localJson = local.GetValueOrThrow();
+        var remoteJson = remote.GetValueOrThrow();
+
+        return Result<string>.Success(
+            new JsonObject {
+                ["localVpc"] = localVpc,
+                ["remoteVpc"] = remoteVpc,
+                ["localConnectIP"] = VirtualNetworkPeerings.LocalConnectIP(context.Desired),
+                ["remoteConnectIP"] = VirtualNetworkPeerings.RemoteConnectIP(context.Desired),
+                ["localWritten"] = localJson.Length > 0
+                    && VirtualNetworkPeerings.Matches(
+                        localJson,
+                        context.Namespace,
+                        context.Id,
+                        context.Desired,
+                        VirtualNetworkPeerings.Side.Local
+                    ),
+                ["remoteWritten"] = remoteJson.Length > 0
+                    && VirtualNetworkPeerings.Matches(
+                        remoteJson,
+                        context.Namespace,
+                        context.Id,
+                        context.Desired,
+                        VirtualNetworkPeerings.Side.Remote
+                    ),
+                ["localConnected"] = localJson.Length > 0
+                    && VirtualNetworkPeerings.ConnectedPeers(localJson).Contains(remoteVpc, StringComparer.Ordinal),
+                ["remoteConnected"] = remoteJson.Length > 0
+                    && VirtualNetworkPeerings.ConnectedPeers(remoteJson).Contains(localVpc, StringComparer.Ordinal),
+                ["sampledAt"] = clock.UtcNow.ToString("O", CultureInfo.InvariantCulture)
+            }.ToJsonString()
+        );
+    }
+
+    /// <summary>One object's JSON, empty when it is not there, or the read's own failure.</summary>
+    /// <param name="cluster">The cluster both objects are in.</param>
+    /// <param name="target">Which object.</param>
+    /// <param name="cancellationToken">The action's token.</param>
+    /// <remarks>
+    ///     Empty rather than <see langword="null" /> because <c>Result&lt;T&gt;</c> refuses a nullable
+    ///     argument; an empty string parses as no <c>Vpc</c> in every reader above, which is the
+    ///     answer an absent object should give.
+    /// </remarks>
+    static async Task<Result<string>> ReadAsync(
+        IKubeClusterConnection cluster,
+        ObjectRef target,
+        CancellationToken cancellationToken
+    ) {
+        var read = await cluster.GetAsync(target, cancellationToken);
+
+        if (read.TryGetError(out var error)) {
+            return error.Code == ErrorCode.ResourceNotFound
+                ? Result<string>.Success(string.Empty)
+                : Result<string>.Failure(error);
+        }
+
+        return Result<string>.Success(read.GetValueOrThrow().Json);
+    }
+}

@@ -1,0 +1,106 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here — Kube-OVN is
+# platform infrastructure installed once per cluster (ADR-019), and what this type writes is two
+# slices of two tenant rows in that installation — and `vendored: none` is an answer to "where did
+# this come from" where a missing file is not.
+
+vendored: none
+upstream: https://github.com/kubeovn/kube-ovn
+
+# The upstream API the fragments target. ⚠ An API group/version, not a commit: nothing is vendored,
+# so there is no upstream tree to pin.
+upstream-api: kubeovn.io/v1
+
+engine: https://github.com/ovn-org/ovn
+
+Kube-OVN — what was read, where, and on what date.
+
+⚠ EVERY FACT BELOW COMES FROM THE GO SOURCE AT TAG v1.16.2, NOT FROM THE DOCUMENTATION SITE.
+charts/managed/kube-ovn-vpc/SOURCE records why that rule exists for this family. Read on 2026-09-18.
+
+  https://github.com/kubeovn/kube-ovn/tree/v1.16.2
+    pkg/apis/kubeovn/v1/vpc.go
+    pkg/controller/vpc.go
+    pkg/ovs/ovn-nb-logical_router_port.go
+
+── The two entries a peering is ─────────────────────────────────────────────────────────────────
+
+pkg/apis/kubeovn/v1/vpc.go, verbatim:
+
+    type VpcPeering struct {
+        RemoteVpc      string `json:"remoteVpc,omitempty"`
+        LocalConnectIP string `json:"localConnectIP,omitempty"`
+    }
+
+    type StaticRoute struct {
+        Policy     RoutePolicy `json:"policy,omitempty"`
+        CIDR       string      `json:"cidr"`
+        NextHopIP  string      `json:"nextHopIP"`
+        ECMPMode   string      `json:"ecmpMode"`
+        BfdID      string      `json:"bfdId"`
+        RouteTable string      `json:"routeTable"`
+    }
+
+    const (
+        PolicySrc RoutePolicy = "policySrc"
+        PolicyDst RoutePolicy = "policyDst"
+    )
+
+    // in VpcSpec
+    StaticRoutes []*StaticRoute `json:"staticRoutes,omitempty"`
+    VpcPeerings  []*VpcPeering  `json:"vpcPeerings,omitempty"`
+
+    // in VpcStatus
+    VpcPeerings []string `json:"vpcPeerings"`
+
+⚠ NEITHER ARRAY CARRIES AN x-kubernetes-list-type MARKER, so both are ATOMIC under server-side apply
+and the last applier owns the whole list — the finding charts/managed/kube-ovn-vpc/SOURCE records
+under "every array here is ATOMIC", and the reason a peering is a FRAGMENT under the network's
+co-writer manager rather than an object of its own (docs/plan/09 § A second writer on an object).
+
+── What the controller does with them ───────────────────────────────────────────────────────────
+
+pkg/controller/vpc.go, handleAddOrUpdateVpc:
+
+    for _, peering := range vpc.Spec.VpcPeerings {
+        if err = util.CheckCidrs(peering.LocalConnectIP); err != nil { ... return err }
+        newPeers = append(newPeers, peering.RemoteVpc)
+        if err := c.OVNNbClient.CreatePeerRouterPort(vpc.Name, peering.RemoteVpc, peering.LocalConnectIP); err != nil { ... }
+    }
+    for _, oldPeer := range vpc.Status.VpcPeerings {
+        if !slices.Contains(newPeers, oldPeer) {
+            if err = c.OVNNbClient.DeleteLogicalRouterPort(fmt.Sprintf("%s-%s", vpc.Name, oldPeer)); err != nil { ... }
+        }
+    }
+    vpc.Status.VpcPeerings = newPeers
+
+So `status.vpcPeerings` is the list of remote names the controller has built a port for — which is
+what `POST …/showRoutes` reports as `localConnected`/`remoteConnected` — and an entry REMOVED from the
+spec has its port deleted on the next pass, which is what a peering's withdrawal relies on.
+
+pkg/ovs/ovn-nb-logical_router_port.go:
+
+    func (c *OVNNbClient) CreatePeerRouterPort(localRouter, remoteRouter, localRouterPortIP string) error
+
+The local port is named `{localRouter}-{remoteRouter}`, its peer `{remoteRouter}-{localRouter}`, and
+its `networks` are `strings.Split(localRouterPortIP, ",")` — so `localConnectIP` is `address/prefix`,
+and a comma-separated pair is a dual-stack port. This type sends one v4 address per side; the v6 half
+is conformance.yaml § owed, `peering-is-ipv4-only`.
+
+⚠ formatVpc fills an empty StaticRoute.Policy with PolicyDst and issues a full Update, which makes the
+controller a manager of the list the co-writers also manage. The fragment therefore carries
+`policy: policyDst` explicitly, so the two agree — reasoned here, unproven on a live controller:
+conformance.yaml § owed, `routing-is-unproven-until-the-vm-lane`.
+
+⚠ Static routes are validated for shape only — `net.ParseCIDR(item.CIDR)` and `net.ParseIP(item.NextHopIP)`
+— and never for reachability. A route whose next hop is the wrong end of the link is accepted and
+routes nothing; NetworkPeeringTests asserts the arithmetic that keeps the two ends straight.
+
+── Scope ────────────────────────────────────────────────────────────────────────────────────────
+
+Vpc is `+kubebuilder:resource:scope="Cluster",shortName="vpc",path="vpcs"`, so both objects a peering
+writes onto are cluster-scoped and the subscription and group separation is in their NAMES —
+VirtualNetworks.ObjectNameOf — which is why the remote's name is qualified with THIS resource's
+namespace and a body cannot reach a network outside its resource group.

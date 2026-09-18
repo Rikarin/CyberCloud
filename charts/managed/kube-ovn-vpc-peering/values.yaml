@@ -1,0 +1,83 @@
+# A route exchange between two virtual networks — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from VirtualNetworkPeerings.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# ⚠ ONE NAME AND THREE RANGES, AND NONE OF THEM IS RENDERED INTO AN OBJECT THIS CHART INSTALLS. The
+# reconciler turns them into two FRAGMENTS — one entry and one route on the local network's Vpc, the
+# mirror image on the remote's — and writes each through the co-owned apply onto an object another
+# resource owns. templates/fragments.yaml shows the two shapes; nothing in this chart applies them.
+#
+# ⚠ THE RANGES ARE THE TENANT'S CLAIM ABOUT THE TWO NETWORKS, NOT A READING OF THEM. A Vpc carries no
+# CIDR and a reconciler cannot read another resource's body, so a peering says which range each side
+# advertises. What is checked, after the 202, is that the three do not overlap each other and that
+# none overlaps a reserved range; that they are the networks' actual address spaces is not checked —
+# conformance.yaml § owed, `the-ranges-are-not-checked-against-the-networks`.
+
+## @param remoteNetwork {string} The name of the virtualNetworks resource in the same resource group to peer this network with. ⚠ A name, not a resource id: the remote must be in this subscription and resource group, and a network in another cannot be named — write on the peering has to imply write on both networks. A remote that does not exist keeps the peering in progress until it does. Cannot be changed once created; delete the peering and create another.
+## @required
+## @immutable
+## @length ..63
+## @pattern [a-z0-9]([-a-z0-9]*[a-z0-9])?
+## @example "spoke"
+remoteNetwork: spoke
+
+## @param localAddressSpace {object} The range this network advertises to the remote — the remote's router gets one static route to it.
+localAddressSpace:
+  ## @param v4 {string} This network's IPv4 range, in CIDR form — normally its address space. ⚠ It may not overlap the remote range or the link, and the refusal names both.
+  ## @required
+  ## @pattern (\d{1,3}\.){3}\d{1,3}/\d{1,2}
+  ## @example "10.20.0.0/16"
+  ## @widget cidr
+  v4: "10.20.0.0/16"
+
+## @param remoteAddressSpace {object} The range the remote advertises to this network — this network's router gets one static route to it.
+remoteAddressSpace:
+  ## @param v4 {string} The remote network's IPv4 range, in CIDR form — normally its address space. ⚠ Two networks with overlapping ranges cannot be peered, which is the one place this platform's 'overlapping your own networks is fine' stops applying: a route to a range you also hold has nowhere to go.
+  ## @required
+  ## @pattern (\d{1,3}\.){3}\d{1,3}/\d{1,2}
+  ## @example "10.30.0.0/16"
+  ## @widget cidr
+  v4: "10.30.0.0/16"
+
+## @param link {object} The point-to-point range the two routers address each other on.
+link:
+  ## @param v4 {string} A small IPv4 range, /30 or wider, that is in neither network. This network's peer port takes its first host address and the remote's takes the second. ⚠ It is checked against the platform's reserved ranges like any other, so link-local space cannot be used.
+  ## @required
+  ## @pattern (\d{1,3}\.){3}\d{1,3}/\d{1,2}
+  ## @example "10.255.255.0/30"
+  ## @widget cidr
+  v4: "10.255.255.0/30"
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID. ⚠ On this type it is CHECKED rather than rendered: a co-writer writes no labels, and the co-owned apply refuses an object whose cybercloud.io/tenant-id is not this one.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID. Not rendered — the labels on both Vpcs are their owners'.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name. Not rendered, for the same reason.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID. Keys the three per-fragment annotations the builder writes on each Vpc — cybercloud.io/fragment.{resourceId}, fragment-hash.{resourceId}, fragment-path.{resourceId}.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type. Not rendered as a label; recorded here so the surface says what it is the surface of.
+  resourceType: CyberCloud.Network/virtualNetworks/peerings
+  ## @param apiVersion {string} The api-version the resource was last written at. Not rendered, for the labels' reason.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label the co-owned apply requires on BOTH live objects before it writes.
+  managedBy: cybercloud
+  ## @param localVpc {string} The local network's Vpc object name — VirtualNetworks.ObjectNameOf(namespace, the parent network read off the ADDRESS). The remote's fragment names it as `remoteVpc`.
+  localVpc: ""
+  ## @param remoteVpc {string} The remote network's Vpc object name — VirtualNetworks.ObjectNameOf(namespace, the tenant's `remoteNetwork` value). ⚠ Qualified with THIS resource's namespace, which is what keeps a body inside its own resource group. The local fragment names it as `remoteVpc`.
+  remoteVpc: ""
+  ## @param localConnectIP {string} The link's first host address with the link's prefix — the local peer port's `localConnectIP`, and the remote route's `nextHopIP` without the prefix.
+  localConnectIP: ""
+  ## @param remoteConnectIP {string} The link's second host address with the link's prefix — the remote peer port's `localConnectIP`, and the local route's `nextHopIP` without the prefix.
+  remoteConnectIP: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

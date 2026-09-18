@@ -123,6 +123,22 @@ public sealed record KubeCommand {
     /// <summary>Whether this command writes a fragment onto an object another resource owns.</summary>
     public bool IsCoOwned => OwnerResourceId != Guid.Empty;
 
+    /// <summary>The resource group the writing resource is in.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Carried for the co-owned check, where it is a boundary.</b> An ordinary command
+    ///     writes the group as the <c>cybercloud.io/resource-group</c> label and this member repeats
+    ///     it; a co-owned command writes no labels, and this is what
+    ///     <see cref="CheckCoOwnedAgainst" /> holds the live object's label against. The write path
+    ///     authorized the caller on the co-writer's own address and nothing else, and roles are
+    ///     granted on subscriptions and groups (docs/plan/07), so one group is the smallest scope on
+    ///     which write on the co-writer implies write on the owner's object. Without this, two groups
+    ///     that differ by a hyphen — <c>prod</c>'s network <c>a-b</c> and <c>prod-a</c>'s network
+    ///     <c>b</c> render one <c>Vpc</c> name — would let a peering in one group write a route into
+    ///     a router in the other.
+    /// </remarks>
+    [Id(12)]
+    public string ResourceGroup { get; init; } = string.Empty;
+
     /// <summary>
     ///     Checks that a co-owned command has the shape <see cref="IKubeCommandBuilder.CoWriting" />
     ///     builds and nothing else: no labels, the manager derived from the owner it names, the live
@@ -151,8 +167,8 @@ public sealed record KubeCommand {
     ///         body carries a non-empty <c>metadata.resourceVersion</c>; every annotation is one of the
     ///         three per-fragment keys; an apply — <see cref="ReconcileHash" /> set — carries its own
     ///         fragment, hash and path with the hash annotation equal to <see cref="ReconcileHash" />,
-    ///         and a withdrawal carries none of its own; <see cref="Force" /> is off; and the owner
-    ///         is not the applying resource.
+    ///         and a withdrawal carries none of its own; <see cref="Force" /> is off;
+    ///         <see cref="ResourceGroup" /> is set; and the owner is not the applying resource.
     ///     </para>
     /// </remarks>
     public Result CheckCoOwnedShape() {
@@ -174,6 +190,14 @@ public sealed record KubeCommand {
 
         if (Force) {
             return Refuse("has Force set. A co-writer never forces: a conflict with the owner's fields is drift with a name.");
+        }
+
+        if (ResourceGroup.Length == 0) {
+            return Refuse(
+                "names no resource group. A co-writer writes no labels, so the group it is in rides on the "
+                + "command (KubeCommand.ResourceGroup) for the live check to hold the owner's label against; "
+                + "a command without one was not built by the builder."
+            );
         }
 
         if (!KubeLabels.TryReadCoWriterFieldManager(FieldManager, out _, out var managerOwner) || managerOwner != OwnerResourceId) {
@@ -273,8 +297,9 @@ public sealed record KubeCommand {
 
     /// <summary>
     ///     Checks a co-owned command against the object it is about to be applied onto: the object
-    ///     is owned by the resource the command claims, in the command's tenant, by this platform,
-    ///     and the command's manager is the one derived from that owner.
+    ///     is owned by the resource the command claims, in the command's tenant, subscription and
+    ///     resource group, by this platform, and the command's manager is the one derived from that
+    ///     owner.
     /// </summary>
     /// <param name="live">The object, as the cluster connection read it a moment before the write.</param>
     /// <returns>
@@ -283,17 +308,31 @@ public sealed record KubeCommand {
     ///     one the object carries.
     /// </returns>
     /// <remarks>
-    ///     ⚠ <b>The second half of the check, and the one the shape alone cannot make.</b> A command
-    ///     whose shape is right still names its owner as a claim. The object is the only thing that
-    ///     can confirm it, and <c>KubeApiClient</c> has read the object a moment before the
-    ///     <c>PATCH</c> — for the Created/Updated/Unchanged distinction — so the comparison costs no
-    ///     extra request. What it catches: an owner's object deleted and the name taken by another
-    ///     resource between a co-writer's read and its apply, and a command whose
-    ///     <see cref="OwnerResourceId" /> was set by anything other than the builder reading the
-    ///     live labels. The answer is <see cref="ErrorCode.Conflict" /> rather than
-    ///     <see cref="ApplyResult.Stale" /> because reading again does not repair it: a co-writer's
-    ///     next pass reads the new owner and decides, in its own reconciler, whether that is the
-    ///     object it means.
+    ///     <para>
+    ///         ⚠ <b>The second half of the check, and the one the shape alone cannot make.</b> A
+    ///         command whose shape is right still names its owner as a claim. The object is the only
+    ///         thing that can confirm it, and <c>KubeApiClient</c> has read the object a moment before
+    ///         the <c>PATCH</c> — for the Created/Updated/Unchanged distinction — so the comparison
+    ///         costs no extra request. What it catches: an owner's object deleted and the name taken
+    ///         by another resource between a co-writer's read and its apply, and a command whose
+    ///         <see cref="OwnerResourceId" /> was set by anything other than the builder reading the
+    ///         live labels. The answer is <see cref="ErrorCode.Conflict" /> rather than
+    ///         <see cref="ApplyResult.Stale" /> because reading again does not repair it: a
+    ///         co-writer's next pass reads the new owner and decides, in its own reconciler, whether
+    ///         that is the object it means.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The subscription and the group are boundaries, and the object's labels draw
+    ///         them.</b> A co-writer's caller was authorized on the co-writer's address alone, so what
+    ///         lets it change the owner's object is that write on one implies write on the other —
+    ///         which holds inside one resource group and nowhere wider (docs/plan/07 grants roles on
+    ///         subscriptions and groups). The builder held the same labels against the writer when it
+    ///         read the object; this is the read a moment before the <c>PATCH</c>. What made it a
+    ///         check rather than a naming argument: a <c>Vpc</c>'s name is
+    ///         <c>{sub}-{group}-{network}</c> and both halves admit hyphens, so <c>prod</c>'s
+    ///         <c>a-b</c> and <c>prod-a</c>'s <c>b</c> are one object name, and a peering in
+    ///         <c>prod</c> naming <c>a-b</c> would otherwise write a route into <c>prod-a</c>'s router.
+    ///     </para>
     /// </remarks>
     public Result CheckCoOwnedAgainst(KubeObject live) {
         ArgumentNullException.ThrowIfNull(live);
@@ -335,6 +374,26 @@ public sealed record KubeCommand {
         var tenant = Label(KubeLabels.TenantId);
         if (!string.Equals(tenant, KubeLabels.GuidValue(TenantId), StringComparison.Ordinal)) {
             return Refuse($"belongs to tenant {tenant} and the co-writer is in tenant {TenantId:D}. A co-writer never reaches across a tenant.");
+        }
+
+        var subscription = Label(KubeLabels.SubscriptionId);
+        if (!string.Equals(subscription, KubeLabels.GuidValue(SubscriptionId), StringComparison.Ordinal)) {
+            return Refuse(
+                $"belongs to subscription {subscription} and the co-writer is in subscription {SubscriptionId:D}. "
+                + "A co-writer never reaches across a subscription: write on the co-writer was checked on its own "
+                + "address, and it implies write on the owner's object inside one resource group only."
+            );
+        }
+
+        var group = Label(KubeLabels.ResourceGroup);
+        if (!string.Equals(group, ResourceGroup, StringComparison.Ordinal)) {
+            return Refuse(
+                $"belongs to resource group '{group}' and the co-writer is in resource group '{ResourceGroup}'. "
+                + "A co-writer never reaches across a resource group: write on the co-writer was checked on its "
+                + "own address, and one group is the smallest scope on which that implies write on the owner's "
+                + "object. Two groups that differ by a hyphen can render one object name, which is how a "
+                + "co-writer arrives here."
+            );
         }
 
         var expectedManager = KubeLabels.CoWriterFieldManager(Label(KubeLabels.ResourceType), ownerValue);
@@ -561,7 +620,12 @@ public interface IKubeCommandBuilder {
     ///             only its own fragment, and an annotation applied beside a fragment would ride under
     ///             the shared manager without being in the fragment the next co-writer merges, which
     ///             prunes it. The live object must carry the seven — a co-writer writes only onto
-    ///             objects this platform owns — and its <c>tenant-id</c> must be the co-writer's own.
+    ///             objects this platform owns — and its <c>tenant-id</c>, <c>subscription-id</c>
+    ///             and <c>resource-group</c> must be the co-writer's own: the caller was authorized
+    ///             on the co-writer's address alone, and one resource group is the smallest scope on
+    ///             which write there implies write on the owner's object
+    ///             (<see cref="KubeCommand.CheckCoOwnedAgainst" /> holds the same three on the read
+    ///             before the <c>PATCH</c>).
     ///         </item>
     ///         <item>
     ///             <b>One field manager per co-owned object</b>,

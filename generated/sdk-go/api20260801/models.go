@@ -2609,6 +2609,85 @@ type NATGatewayShowEgressResult struct {
 	SourceV6 *string `json:"sourceV6,omitempty"`
 }
 
+// PeeringData is Peering: the body a caller writes. A route exchange between this virtual network and another in the same resource group, so workloads in either reach the other's range by private address. Both networks stay separately owned.
+type PeeringData struct {
+	// The region the peering is billed in. ⚠ It must be the region both virtual networks are in — nothing checks that, because neither network's own region is readable from here.
+	Location string `json:"location"`
+	// The peering's own settings.
+	Properties *PeeringProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// PeeringProperties is The peering's own settings.
+type PeeringProperties struct {
+	// The cluster whose fabric holds both networks. ⚠ Two networks in two clusters cannot be peered: a Kube-OVN peering is two ports on one OVN northbound database.
+	ClusterID string `json:"clusterId"`
+	// The point-to-point range the two routers address each other on.
+	Link *PeeringPropertiesLink `json:"link,omitempty"`
+	// The range this network advertises to the remote — the remote's router gets one static route to it.
+	LocalAddressSpace *PeeringPropertiesLocalAddressSpace `json:"localAddressSpace,omitempty"`
+	// The range the remote advertises to this network — this network's router gets one static route to it.
+	RemoteAddressSpace *PeeringPropertiesRemoteAddressSpace `json:"remoteAddressSpace,omitempty"`
+	// The name of the virtualNetworks resource in the same resource group to peer this network with. ⚠ A name, not a resource id: the remote must be in this subscription and resource group, and a network in another cannot be named — write on the peering has to imply write on both networks. A remote that does not exist keeps the peering in progress until it does. Cannot be changed once created; delete the peering and create another.
+	RemoteNetwork string `json:"remoteNetwork"`
+}
+
+// PeeringPropertiesLink is The point-to-point range the two routers address each other on.
+type PeeringPropertiesLink struct {
+	// A small IPv4 range, /30 or wider, that is in neither network. This network's peer port takes its first host address and the remote's takes the second. ⚠ It is checked against the platform's reserved ranges like any other, so link-local space cannot be used.
+	V4 string `json:"v4"`
+}
+
+// PeeringPropertiesLocalAddressSpace is The range this network advertises to the remote — the remote's router gets one static route to it.
+type PeeringPropertiesLocalAddressSpace struct {
+	// This network's IPv4 range, in CIDR form — normally its address space. ⚠ It may not overlap the remote range or the link, and the refusal names both.
+	V4 string `json:"v4"`
+}
+
+// PeeringPropertiesRemoteAddressSpace is The range the remote advertises to this network — this network's router gets one static route to it.
+type PeeringPropertiesRemoteAddressSpace struct {
+	// The remote network's IPv4 range, in CIDR form — normally its address space. ⚠ Two networks with overlapping ranges cannot be peered, which is the one place this platform's 'overlapping your own networks is fine' stops applying: a route to a range you also hold has nowhere to go.
+	V4 string `json:"v4"`
+}
+
+// PeeringResource is one Peering, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type PeeringResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data PeeringData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *PeeringResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// PeeringShowRoutesResult is what showRoutes returns.
+type PeeringShowRoutesResult struct {
+	// The address, with the link's prefix, this network's peer port carries.
+	LocalConnectIP string `json:"localConnectIP"`
+	// Whether the fabric lists the remote in the local Vpc's status.vpcPeerings — the peer port exists. False on a cluster without the Kube-OVN controller.
+	LocalConnected bool `json:"localConnected"`
+	// The local network's Vpc object name.
+	LocalVpc string `json:"localVpc"`
+	// Whether the local Vpc carries this peering's entry and route.
+	LocalWritten bool `json:"localWritten"`
+	// The address, with the link's prefix, the remote's peer port carries.
+	RemoteConnectIP string `json:"remoteConnectIP"`
+	// The same, read off the remote Vpc.
+	RemoteConnected bool `json:"remoteConnected"`
+	// The remote network's Vpc object name.
+	RemoteVpc string `json:"remoteVpc"`
+	// Whether the remote Vpc carries this peering's entry and route. ⚠ False with localWritten true is a remote network that was deleted or never existed.
+	RemoteWritten bool `json:"remoteWritten"`
+	// When the platform read the objects, RFC 3339.
+	SampledAt string `json:"sampledAt"`
+}
+
 // SecurityGroupData is Security group: the body a caller writes. A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several.
 type SecurityGroupData struct {
 	// The region the security group lives in. It must be the network's own region — nothing checks that.
