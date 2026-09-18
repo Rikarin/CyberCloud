@@ -60,9 +60,6 @@ public sealed class Invariant3ShardFailoverTests(ChaosTopology topology) {
         }
 
         // ── The outage. ───────────────────────────────────────────────────────────────────────
-        await topology.StopShardAsync(ChaosTopology.ShardA, token);
-        var outage = Stopwatch.StartNew();
-
         var bystanderAccepted = new List<Guid>();
         var bystanderRefused = new List<string>();
         var affectedAccepted = new List<string>();
@@ -70,57 +67,64 @@ public sealed class Invariant3ShardFailoverTests(ChaosTopology topology) {
         var affectedReadsOk = 0;
         var affectedReadsFailed = 0;
         var round = 0;
+        TimeSpan outageLength;
 
-        while (outage.Elapsed < Outage) {
-            round++;
+        await topology.StopShardAsync(ChaosTopology.ShardA, token);
+        var outage = Stopwatch.StartNew();
 
-            // The bystander's write, which must land.
-            try {
-                var write = await topology.PutWidgetAsync(bystander, $"during-{round}", "during", token);
+        try {
+            while (outage.Elapsed < Outage) {
+                round++;
 
-                if (write.IsSuccess) {
-                    bystanderAccepted.Add(write.GetValueOrThrow().OperationId);
-                } else {
-                    bystanderRefused.Add($"{write.Error!.Code} — {write.Error.Message}");
+                // The bystander's write, which must land.
+                try {
+                    var write = await topology.PutWidgetAsync(bystander, $"during-{round}", "during", token);
+
+                    if (write.IsSuccess) {
+                        bystanderAccepted.Add(write.GetValueOrThrow().OperationId);
+                    } else {
+                        bystanderRefused.Add($"{write.Error!.Code} — {write.Error.Message}");
+                    }
+                } catch (Exception ex) when (ex is not OperationCanceledException) {
+                    bystanderRefused.Add($"{ex.GetType().Name}: {ex.Message}");
                 }
-            } catch (Exception ex) when (ex is not OperationCanceledException) {
-                bystanderRefused.Add($"{ex.GetType().Name}: {ex.Message}");
-            }
 
-            // The affected tenant's write, which must pause — refused or thrown, and quickly.
-            var attempt = Stopwatch.StartNew();
+                // The affected tenant's write, which must pause — refused or thrown, and quickly.
+                var attempt = Stopwatch.StartNew();
 
-            try {
-                var write = await topology.PutWidgetAsync(affected, $"during-{round}", "during", token);
+                try {
+                    var write = await topology.PutWidgetAsync(affected, $"during-{round}", "during", token);
 
-                if (write.IsSuccess) {
-                    affectedAccepted.Add($"during-{round}");
-                } else {
-                    affectedRefused.Add(($"{write.Error!.Code}", attempt.Elapsed));
+                    if (write.IsSuccess) {
+                        affectedAccepted.Add($"during-{round}");
+                    } else {
+                        affectedRefused.Add(($"{write.Error!.Code}", attempt.Elapsed));
+                    }
+                } catch (Exception ex) when (ex is not OperationCanceledException) {
+                    affectedRefused.Add((ex.GetType().Name, attempt.Elapsed));
                 }
-            } catch (Exception ex) when (ex is not OperationCanceledException) {
-                affectedRefused.Add((ex.GetType().Name, attempt.Elapsed));
+
+                // And a read of the affected tenant's existing state, for the record: an activation
+                // still in memory may well answer, and that is worth knowing rather than assuming.
+                try {
+                    var read = await topology.ReadWidgetAsync(affected, "seed-0", token);
+                    _ = read.IsSuccess ? affectedReadsOk++ : affectedReadsFailed++;
+                } catch (Exception ex) when (ex is not OperationCanceledException) {
+                    affectedReadsFailed++;
+                }
             }
 
-            // And a read of the affected tenant's existing state, for the record: an activation
-            // still in memory may well answer, and that is worth knowing rather than assuming.
-            try {
-                var read = await topology.ReadWidgetAsync(affected, "seed-0", token);
-                _ = read.IsSuccess ? affectedReadsOk++ : affectedReadsFailed++;
-            } catch (Exception ex) when (ex is not OperationCanceledException) {
-                affectedReadsFailed++;
-            }
+            outageLength = outage.Elapsed;
+            output?.WriteLine(
+                $"outage {outageLength.TotalSeconds:F0} s: bystander {bystanderAccepted.Count} accepted/{bystanderRefused.Count} refused; "
+                + $"affected {affectedAccepted.Count} accepted/{affectedRefused.Count} refused (slowest refusal "
+                + $"{(affectedRefused.Count == 0 ? 0 : affectedRefused.Max(x => x.Took.TotalSeconds)):F1} s), reads {affectedReadsOk} ok/{affectedReadsFailed} failed"
+            );
+        } finally {
+            // ── Resume — in a finally, so the shard comes back whatever the outage did to this test. ──
+            await topology.StartShardAsync(ChaosTopology.ShardA, token);
         }
 
-        var outageLength = outage.Elapsed;
-        output?.WriteLine(
-            $"outage {outageLength.TotalSeconds:F0} s: bystander {bystanderAccepted.Count} accepted/{bystanderRefused.Count} refused; "
-            + $"affected {affectedAccepted.Count} accepted/{affectedRefused.Count} refused (slowest refusal "
-            + $"{(affectedRefused.Count == 0 ? 0 : affectedRefused.Max(x => x.Took.TotalSeconds)):F1} s), reads {affectedReadsOk} ok/{affectedReadsFailed} failed"
-        );
-
-        // ── Resume. ───────────────────────────────────────────────────────────────────────────
-        await topology.StartShardAsync(ChaosTopology.ShardA, token);
         var resume = Stopwatch.StartNew();
         Guid? resumed = null;
         var resumeAttempts = 0;

@@ -5,6 +5,7 @@ using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.Sample;
 using CyberCloud.Providers.Sample.Contracts;
 using CyberCloud.ResourceManager;
+using CyberCloud.ResourceManager.Grains;
 using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ServiceDefaults;
 using CyberCloud.ServiceDefaults.Storage;
@@ -94,6 +95,9 @@ public sealed class ChaosTopology : IAsyncLifetime {
     /// <summary>The operator every tenant here is created by — a service principal holding <c>platform:root#operator</c>.</summary>
     public const string OperatorId = "chaos-operator";
 
+    /// <summary>The durable tier's Npgsql pool per shard — a deployment knob turned, and named in the results file's topology block.</summary>
+    public const int PoolSize = 20;
+
     const string Region = "eu-central";
 
     readonly RedisContainer redis = new RedisBuilder(ClusterInfrastructure.RedisImage)
@@ -176,7 +180,9 @@ public sealed class ChaosTopology : IAsyncLifetime {
             ["cluster"] = ClusterInfrastructure.K3sImage,
             ["clusterHealthWindow"] = ChaosSiloConfigurator.HealthStalenessWindow.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) + " s",
             ["clusterPingInterval"] = ChaosSiloConfigurator.PingInterval.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) + " s",
-            ["membershipProbes"] = "shipped defaults"
+            ["membershipProbes"] = "shipped defaults",
+            ["npgsqlPoolSize"] = PoolSize.ToString(CultureInfo.InvariantCulture),
+            ["reminderPeriod"] = OperationGrain.ReminderPeriod.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) + " s"
         };
 
     /// <inheritdoc />
@@ -197,7 +203,7 @@ public sealed class ChaosTopology : IAsyncLifetime {
 
         var storage = new CyberCloudStorageOptions {
             Hot = { ConnectionString = redis.GetConnectionString() },
-            Durable = { NullTenantShard = PlatformShard, BootstrapShard = ShardA, MaxPoolSize = 20 }
+            Durable = { NullTenantShard = PlatformShard, BootstrapShard = ShardA, MaxPoolSize = PoolSize }
         };
 
         foreach (var (name, shard) in shards) {
@@ -533,6 +539,70 @@ public sealed class ChaosTopology : IAsyncLifetime {
         return (last, faults);
     }
 
+    /// <summary>
+    ///     Watches an operation until the platform's own driver — its reminder — has taken it to a
+    ///     terminal state, or the budget runs out, without touching the grain.
+    /// </summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="operationId">The operation.</param>
+    /// <param name="budget">How long to watch. ⚠ At least two of <see cref="OperationGrain.ReminderPeriod" />; the first pass is a reminder tick away.</param>
+    /// <param name="cancellationToken">The test's token.</param>
+    /// <returns>The state, attempt count, and activation count the durable row last showed, and when it turned terminal.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Passive, and that is the point.</b> <see cref="DriveUntilTerminalAsync" /> proves
+    ///         what an operation does <i>when driven</i>; the rows about whether an acknowledged write
+    ///         survives a fault are about whether anything drives it at all once the test's hands are
+    ///         off it. So this reads the operation's durable row straight out of its PostgreSQL shard
+    ///         — the JSON the durable tier serializes — every two seconds. Neither the read nor the
+    ///         parse goes through a grain: a status call would activate the grain, and
+    ///         <c>OperationGrain.OnActivateAsync</c> re-registers the reminder on activation, so a
+    ///         poll through the grain would be the test arming the very driver it is watching for.
+    ///     </para>
+    ///     <para>
+    ///         The attempt count is the grain's <c>Attempts</c>, which only <c>DriveAsync</c> moves.
+    ///         Every attempt this returns is the platform's.
+    ///     </para>
+    /// </remarks>
+    public async Task<(OperationState State, int Attempts, int Activations, TimeSpan? TerminalAt)> ObserveUntilTerminalAsync(
+        Guid tenant,
+        Guid operationId,
+        TimeSpan budget,
+        CancellationToken cancellationToken
+    ) {
+        var clock = Stopwatch.StartNew();
+        var shard = ShardOf(tenant);
+        var fragment = N(operationId);
+        var state = OperationState.Unknown;
+        var attempts = 0;
+        var activations = 0;
+
+        while (clock.Elapsed < budget) {
+            foreach (var row in await DurableRowsAsync(shard, fragment, cancellationToken)) {
+                // The operation's own row is the one whose payload is an OperationGrainState — a
+                // Spec and an attempt count; nothing else keyed by this GUID has both.
+                if (row.Payload.Length == 0
+                    || System.Text.Json.Nodes.JsonNode.Parse(row.Payload) is not System.Text.Json.Nodes.JsonObject payload
+                    || payload["Spec"] is null
+                    || payload["Attempts"] is null) {
+                    continue;
+                }
+
+                state = (OperationState)(payload["Status"]?.GetValue<int>() ?? 0);
+                attempts = payload["Attempts"]?.GetValue<int>() ?? 0;
+                activations = payload["Activations"]?.GetValue<int>() ?? 0;
+            }
+
+            if (state is OperationState.Succeeded or OperationState.Failed or OperationState.Canceled) {
+                return (state, attempts, activations, clock.Elapsed);
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+        }
+
+        return (state, attempts, activations, null);
+    }
+
     /// <summary>Whether a widget's ConfigMap is in the k3s, read with the raw client around every line of our code.</summary>
     /// <param name="world">The tenant.</param>
     /// <param name="name">The widget's name, which is the ConfigMap's.</param>
@@ -628,6 +698,7 @@ public sealed class ChaosTopology : IAsyncLifetime {
     public async Task<SiloAddress> KillASecondarySiloAsync() {
         var victim = Cluster.SecondarySilos[0];
         var address = victim.SiloAddress;
+        ChaosSiloLog.Mark($"killing {address}");
         await Cluster.KillSiloAsync(victim);
         return address;
     }
@@ -635,7 +706,25 @@ public sealed class ChaosTopology : IAsyncLifetime {
     /// <summary>Starts a replacement silo, wired like the others, on a port nothing has used.</summary>
     public async Task<SiloAddress> StartASiloAsync() {
         var handle = await Cluster.StartAdditionalSiloAsync(startAdditionalSiloOnNewPort: true);
+        ChaosSiloLog.Mark($"started {handle.SiloAddress}");
         return handle.SiloAddress;
+    }
+
+    /// <summary>
+    ///     Brings the cluster back to <see cref="InitialSilos" /> silos — the restore step of every
+    ///     test that kills or stops one, in its <c>finally</c>, so a test that threw mid-storm does
+    ///     not hand the next one a two-silo cluster.
+    /// </summary>
+    /// <returns>How many silos were started.</returns>
+    public async Task<int> RestoreClusterStrengthAsync() {
+        var started = 0;
+
+        while (Cluster.Silos.Count < InitialSilos) {
+            await StartASiloAsync();
+            started++;
+        }
+
+        return started;
     }
 
     /// <summary>Restarts one silo gracefully — stop, then start — the shape of one step of a rolling upgrade.</summary>
@@ -663,6 +752,7 @@ public sealed class ChaosTopology : IAsyncLifetime {
     public async Task<(SiloAddress Replacement, TimeSpan StopTook)> RestartSiloAsync(SiloAddress silo) {
         var handle = Cluster.SecondarySilos.Single(x => x.SiloAddress.Equals(silo));
         var stopping = Stopwatch.StartNew();
+        ChaosSiloLog.Mark($"stopping {silo} gracefully");
         await Cluster.StopSiloAsync(handle);
 
         while (stopping.Elapsed < TimeSpan.FromMinutes(2) && (await Management.GetHosts(true)).ContainsKey(silo)) {
@@ -683,23 +773,32 @@ public sealed class ChaosTopology : IAsyncLifetime {
     /// <summary>Stops a PostgreSQL shard's container. Its port mapping survives, so a restart is the same shard.</summary>
     /// <param name="shard">The shard's name.</param>
     /// <param name="cancellationToken">The test's token.</param>
-    public Task StopShardAsync(string shard, CancellationToken cancellationToken) => shards[shard].StopAsync(cancellationToken);
+    public Task StopShardAsync(string shard, CancellationToken cancellationToken) {
+        ChaosSiloLog.Mark($"stopping shard {shard}");
+        return shards[shard].StopAsync(cancellationToken);
+    }
 
     /// <summary>Starts a stopped shard again and waits until it accepts a connection.</summary>
     /// <param name="shard">The shard's name.</param>
     /// <param name="cancellationToken">The test's token.</param>
     public async Task StartShardAsync(string shard, CancellationToken cancellationToken) {
+        ChaosSiloLog.Mark($"starting shard {shard}");
         await shards[shard].StartAsync(cancellationToken);
         await WaitForShardAsync(ChaosState.Storage.Durable.Shards[shard], cancellationToken);
+        ChaosSiloLog.Mark($"shard {shard} accepts connections again");
     }
 
     /// <summary>Stops the k3s container — the managed cluster goes away.</summary>
     /// <param name="cancellationToken">The test's token.</param>
-    public Task StopClusterAsync(CancellationToken cancellationToken) => k3s.StopAsync(cancellationToken);
+    public Task StopClusterAsync(CancellationToken cancellationToken) {
+        ChaosSiloLog.Mark("stopping k3s");
+        return k3s.StopAsync(cancellationToken);
+    }
 
     /// <summary>Starts the k3s again and waits until its API server answers.</summary>
     /// <param name="cancellationToken">The test's token.</param>
     public async Task StartClusterAsync(CancellationToken cancellationToken) {
+        ChaosSiloLog.Mark("starting k3s");
         await k3s.StartAsync(cancellationToken);
 
         var clock = Stopwatch.StartNew();
@@ -728,6 +827,7 @@ public sealed class ChaosTopology : IAsyncLifetime {
         var server = multiplexer.GetServers()[0];
         var keys = await server.DatabaseSizeAsync();
         cancellationToken.ThrowIfCancellationRequested();
+        ChaosSiloLog.Mark($"FLUSHALL ({keys} keys)");
         await server.FlushAllDatabasesAsync();
 
         return keys;

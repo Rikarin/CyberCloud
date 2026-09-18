@@ -232,9 +232,11 @@ public sealed class OperationGrain(
         // ghost above, so the create is cancelled instead and the existing cancel path tears down
         // whatever a previous pass applied, returns the quota and stamps the member Canceled.
         //
-        // ⚠ A transient failure to reach the index grain leaves the flag unset and the pass runs;
-        // the next pass tries again. Refusing to reconcile because the index is momentarily
-        // unreachable would turn every index-shard blip into a stalled create.
+        // ⚠ An index shard that cannot be reached THROWS out of this call — the index grain's
+        // PersistAsync propagates the storage failure rather than returning a Result — so the pass
+        // below does not run, the flag stays unset, and the next reminder tick retries the whole
+        // pass, confirm included. That is the same shape every other storage failure in this pass
+        // has, and it is what keeps an unreachable index from being mistaken for a lost claim.
         await ConfirmClaimAsync(spec);
 
         // ── A SOFT DELETE TEARS THE DATA PLANE DOWN, AND EVERY OTHER PART OF IT IS WHAT MAKES THE
@@ -1123,11 +1125,19 @@ public sealed class OperationGrain(
         var error = confirmed.Error!;
 
         if (error.Code != ErrorCode.Conflict) {
-            // Transient: the index grain could not be reached. The pass runs and the next one retries.
+            // ⚠ NOT A TRANSIENT-FAILURE BRANCH, AND THE FIRST VERSION OF THIS METHOD SAID IT WAS.
+            // IndexClaimMachine.Confirm returns Conflict and nothing else, and an index shard that
+            // cannot be reached does not come back as a Result at all: the index grain's
+            // PersistAsync throws, the exception leaves DriveAsync before the pass, and the next
+            // reminder tick is the retry — the pass does NOT run in that case. So a non-Conflict
+            // failure here is a contract change in the index grain, not a blip, and the safe answer
+            // to a contract change is to leave the flag unset, say so, and let the next pass ask
+            // again rather than cancel a create over a code nobody has defined the meaning of.
             logger.LogWarning(
-                "Operation {Operation} could not confirm the index claim for {Path} and will retry on its next pass: {Message}",
+                "Operation {Operation} could not confirm the index claim for {Path} and will ask again on its next pass: {Code} — {Message}",
                 operationId,
                 spec.ResourcePath,
+                error.Code,
                 error.Message
             );
 

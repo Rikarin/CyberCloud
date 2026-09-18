@@ -12,9 +12,11 @@
 #
 # ── ⚠ SECRETS THIS WORKFLOW REQUIRES ─────────────────────────────────────────────────────────────
 #
-#   E2E_BASE_URL   an environment that can be driven to 10 000 tenants, 5 000 rps and 2 000 000
-#                  resident grains. Build.Load.cs is explicit that a smaller one "does not produce a
-#                  smaller version of these answers, it produces different ones".
+#   None for `load` (issue #44): test/CyberCloud.Load starts the chaos suite's topology in the
+#   runner's Docker and puts the real gateway in front of it, at a tenth of docs/plan/23's rates.
+#   Build.Load REFUSES an --e2e-base-url rather than ignoring one, because the suite has no mode
+#   that drives a deployment; the full-scale run against staging is owed under docs/plan/23 § The
+#   load scenarios, and it will need E2E_BASE_URL and a token source back here when it lands.
 
 name: weekly
 
@@ -43,28 +45,32 @@ env:
 
 jobs:
   # ── docs/plan/23 § Test layers, row Load; the budgets are § The load scenarios ───────────────────
+  #
+  # ⚠ A TENTH OF THE ROWS' RATES, ON A RUNNER, AND THE LOG SAYS SO ON EVERY LINE. The suite drives
+  # 500 rps of reads, 50 writes/s and 2 000 checks/s through the real gateway over a topology it
+  # starts in Docker; the budgets are not scaled, so a p99 met here is necessary for the row and not
+  # sufficient. The committed load-baseline.json is provisional — one laptop run, no release — so
+  # Build.Load prints the deltas against it and blocks on none of them until a release stamps the
+  # file (Build.Load.cs § LoadBaselineFile). A runner's numbers are a runner's; docs/plan/23's
+  # finding 3 is what a machine other tenants share does to a p99, and a shared GitHub runner is
+  # one. The job is red while a budget row is ✘, which the write p99 and the queue slope are.
   load:
     name: load
     runs-on: ubuntu-24.04
     timeout-minutes: 180
-    env:
-      E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/dotnet
 
-      - name: Preconditions
+      - name: Prove Docker can host the topology
         run: |
-          .github/scripts/require-secrets.sh load \
-            "docs/plan/23 § Test layers, row Load: the docs/plan/00 quality bar at scale, gating 'budgets met' before a release." \
-            "E2E_BASE_URL=create the secret with an environment that can actually be driven to the numbers in docs/plan/23 § The load scenarios"
+          docker version --format 'client {{.Client.Version}}, server {{.Server.Version}}'
+          docker info --format 'cgroup {{.CgroupVersion}}'
+          docker run --rm hello-world > /dev/null
+          echo "Docker works — the suite can start its Redis, shards, k3s, silos and the gateway."
 
-      # ⚠ Expected to fail on three preconditions today: no test/CyberCloud.Load, and no committed
-      # load baseline — without which the 20 %-regression rule in docs/plan/23 § The load scenarios
-      # is unenforceable and "the budgets alone would pass a release that got five times slower
-      # while staying under them".
       - name: ./build.sh Load
-        run: .github/scripts/run-build.sh "$RUNNER_TEMP/load.log" Load --e2e-base-url "$E2E_BASE_URL"
+        run: .github/scripts/run-build.sh "$RUNNER_TEMP/load.log" Load
 
       - name: Upload the load results
         if: always()

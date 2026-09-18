@@ -98,6 +98,15 @@ partial class Build {
     ///     exact failure this whole half of the target exists to prevent. Updating it is a reviewed
     ///     diff at release time, and the review is the point: somebody has to look at a p99 moving
     ///     from 4 ms to 19 ms and agree to it.
+    ///     <para>
+    ///         ⚠ <b>The file's <c>release</c> is what arms the rule.</b> docs/plan/23's sentence is
+    ///         about a regression <i>between releases</i>, and there has been none: the committed
+    ///         numbers are one run on one laptop, with a cold p99 over a few hundred samples that
+    ///         moved 50 % between two runs of the same code (the branch's review measured it). A
+    ///         baseline with no <c>release</c> is provisional — the deltas against it are printed
+    ///         so the trend is visible from the first run, and none of them blocks. The first
+    ///         release stamps the file with its tag, and from then on the 20 % rule fails the build.
+    ///     </para>
     /// </remarks>
     AbsolutePath LoadBaselineFile => RootDirectory / "load-baseline.json";
 
@@ -121,7 +130,8 @@ partial class Build {
     /// <param name="Numbers">Metric name to what was measured.</param>
     /// <param name="Vacuous">Metric name to why it was not measured here.</param>
     /// <param name="Scale">The fraction of docs/plan/23's rates the numbers were driven at; 1 for a baseline with no <c>scale</c>.</param>
-    sealed record LoadNumbers(Dictionary<string, double> Numbers, Dictionary<string, string> Vacuous, double Scale);
+    /// <param name="Release">The release tag a baseline was stamped with, or <see langword="null" /> for a provisional one — see <see cref="LoadBaselineFile" />.</param>
+    sealed record LoadNumbers(Dictionary<string, double> Numbers, Dictionary<string, string> Vacuous, double Scale, string? Release);
 
     /// <summary>
     ///     ⚠ The deployment is an input rather than a dependency — see the note beside the target
@@ -223,7 +233,7 @@ partial class Build {
     void Gate(LoadNumbers results) {
         var baseline = LoadBaselineFile.FileExists()
             ? ReadLoadNumbers(LoadBaselineFile, $"the previous release, from {LoadBaselineFile.Name}")
-            : new LoadNumbers(new Dictionary<string, double>(StringComparer.Ordinal), new Dictionary<string, string>(StringComparer.Ordinal), 1);
+            : new LoadNumbers(new Dictionary<string, double>(StringComparer.Ordinal), new Dictionary<string, string>(StringComparer.Ordinal), 1, null);
 
         if (results.Scale < 1) {
             Log.Warning(
@@ -238,6 +248,18 @@ partial class Build {
         // the 20 % rule is not applied across scales — and the log says so rather than printing a
         // regression that is a change of population.
         var trendApplies = Math.Abs(baseline.Scale - results.Scale) < 0.001;
+
+        // ⚠ Armed by a release, not by the file's existence — LoadBaselineFile's remarks.
+        var trendEnforced = trendApplies && baseline.Release is not null;
+
+        if (trendApplies && !trendEnforced && baseline.Numbers.Count > 0) {
+            Log.Warning(
+                "Load: {Baseline} carries no release, so it is a provisional baseline — one run, not a release. The deltas "
+                + "against it are printed below and none of them blocks; the 20 % rule of docs/plan/23 § The load scenarios "
+                + "arms when a release stamps the file with its tag.",
+                LoadBaselineFile.Name
+            );
+        }
 
         if (!trendApplies && baseline.Numbers.Count > 0) {
             Log.Warning(
@@ -312,6 +334,23 @@ partial class Build {
 
             var limit = previous * (1 + RegressionLimit);
 
+            if (measured > limit && !trendEnforced) {
+                Log.Warning(
+                    "  {Marker} {Metric,-40} {Measured,8} {Unit,-15} budget {Budget}, provisional {Previous} ({Delta}) — past the "
+                    + "{Limit:P0} limit against a run that is not a release, so it does not block",
+                    measured > metric.Budget ? "✘" : "✔",
+                    metric.Metric,
+                    Number(measured),
+                    metric.Unit,
+                    Number(metric.Budget),
+                    Number(previous),
+                    Percent(previous, measured),
+                    RegressionLimit
+                );
+
+                continue;
+            }
+
             if (measured > limit) {
                 violations.Add(
                     $"{metric.Metric} regressed {Percent(previous, measured)} against the previous "
@@ -349,7 +388,9 @@ partial class Build {
 
         if (violations.Count == 0) {
             Log.Information(
-                "Load: {Count} metric(s) within budget and within {Limit:P0} of the previous release, {Vacuous} ○",
+                trendEnforced
+                    ? "Load: {Count} metric(s) within budget and within {Limit:P0} of the previous release, {Vacuous} ○"
+                    : "Load: {Count} metric(s) within budget; the {Limit:P0} rule is not armed, no release baseline yet; {Vacuous} ○",
                 LoadMetrics.Length - vacuous.Count,
                 RegressionLimit,
                 vacuous.Count
@@ -425,9 +466,17 @@ partial class Build {
         }
 
         var scale = root["scale"] is { } s && s.GetValueKind() == System.Text.Json.JsonValueKind.Number ? s.GetValue<double>() : 1;
+        var release = root["release"] is { } r && r.GetValueKind() == System.Text.Json.JsonValueKind.String ? r.GetValue<string>() : null;
 
-        Log.Information("Load: read {Count} number(s) and {Vacuous} vacuous row(s) at scale {Scale} — {What}", numbers.Count, vacuous.Count, scale, what);
+        Log.Information(
+            "Load: read {Count} number(s) and {Vacuous} vacuous row(s) at scale {Scale}, release {Release} — {What}",
+            numbers.Count,
+            vacuous.Count,
+            scale,
+            release ?? "none (provisional)",
+            what
+        );
 
-        return new(numbers, vacuous, scale);
+        return new(numbers, vacuous, scale, release);
     }
 }

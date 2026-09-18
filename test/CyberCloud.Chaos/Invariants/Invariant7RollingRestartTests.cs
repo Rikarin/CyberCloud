@@ -93,17 +93,24 @@ public sealed class Invariant7RollingRestartTests(ChaosTopology topology) {
         var rolling = Stopwatch.StartNew();
         var restarts = new List<(SiloAddress Old, SiloAddress New, TimeSpan Took, TimeSpan StopTook)>();
 
-        foreach (var silo in topology.SecondarySilos) {
-            var step = Stopwatch.StartNew();
-            var (replacement, stopTook) = await topology.RestartSiloAsync(silo);
-            restarts.Add((silo, replacement, step.Elapsed, stopTook));
-            output?.WriteLine($"[{rolling.Elapsed.TotalSeconds:F1}s] {silo} → {replacement} in {step.Elapsed.TotalSeconds:F1} s (graceful stop {stopTook.TotalSeconds:F1} s)");
+        try {
+            foreach (var silo in topology.SecondarySilos) {
+                var step = Stopwatch.StartNew();
+                var (replacement, stopTook) = await topology.RestartSiloAsync(silo);
+                restarts.Add((silo, replacement, step.Elapsed, stopTook));
+                output?.WriteLine($"[{rolling.Elapsed.TotalSeconds:F1}s] {silo} → {replacement} in {step.Elapsed.TotalSeconds:F1} s (graceful stop {stopTook.TotalSeconds:F1} s)");
 
-            // Traffic keeps flowing on the new membership before the next one goes.
-            await Task.Delay(TimeSpan.FromSeconds(5), token);
+                // Traffic keeps flowing on the new membership before the next one goes.
+                await Task.Delay(TimeSpan.FromSeconds(5), token);
+            }
+        } finally {
+            // The readers stop and the cluster is back to strength whatever the restart did —
+            // a stop that threw between StopSiloAsync and the replacement would otherwise hand the
+            // next invariant a two-silo cluster and four readers still hammering it.
+            await stop.CancelAsync();
+            await topology.RestoreClusterStrengthAsync();
         }
 
-        await stop.CancelAsync();
         await Task.WhenAll(load);
         var loadLength = rolling.Elapsed;
 

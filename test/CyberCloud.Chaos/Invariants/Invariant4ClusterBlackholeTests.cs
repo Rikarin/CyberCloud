@@ -25,7 +25,9 @@ namespace CyberCloud.Chaos.Invariants;
 ///         (<c>ResourceGrain.CompleteAsync</c>) while the operation keeps running, so a tenant
 ///         reading the resource in the seconds before the health window closes may see "Failed"
 ///         for a network outage, which is exactly the sentence docs/plan/09 says must not appear.
-///         The count of such reads is reported.
+///         ⚠ Such a read is a violation of the clause, not a footnote to it: the count is in the
+///         verdict, and the row is ✘ while it is nonzero. The first version of this test reported
+///         the count and printed ✔ beside it, which the review of the branch called what it was.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Clean resumption includes the object deleted behind the reconciler's back.</b> After
@@ -52,15 +54,6 @@ public sealed class Invariant4ClusterBlackholeTests(ChaosTopology topology) {
         (await topology.DriveUntilTerminalAsync(world.Tenant, first.OperationId, ConvergeBudget, token)).Last?.State.ShouldBe(OperationState.Succeeded);
 
         // ── The blackhole, with a create and an update in flight. ─────────────────────────────
-        await topology.StopClusterAsync(token);
-        var blackhole = Stopwatch.StartNew();
-
-        var create = (await topology.PutWidgetAsync(world, "bh-second", "v1", token)).GetValueOrThrow();
-        var update = (await topology.PutWidgetAsync(world, "bh-first", "v2", token)).GetValueOrThrow();
-        update.NoOp.ShouldBeFalse("the update was a no-op, so nothing is mid-provision against the dead cluster.");
-
-        var inFlight = new[] { (Name: "bh-second", create.OperationId), (Name: "bh-first", update.OperationId) };
-
         TimeSpan? degradedAfter = null;
         var passesDriven = 0;
         var suspendedPasses = 0;
@@ -69,64 +62,79 @@ public sealed class Invariant4ClusterBlackholeTests(ChaosTopology topology) {
         var resourceReadFailedDuringBlackhole = 0;
         var resourceReads = 0;
         var lastProgress = string.Empty;
+        (string Name, Guid OperationId)[] inFlight;
+        Stopwatch restore;
 
-        // ⚠ Degraded is read off the operations, not off the connection grain. The grain refuses a
-        // caller that is neither the owning tenant nor a null-tenant silo service —
-        // ClusterConnectionGrain.EnsureCallerMayReach answers a cluster client with the canonical
-        // 404, and the first run of this test asked it anyway. What a tenant can see is the pass:
-        // a Degraded connection answers every apply with ApplyResult.Suspended, the reconciler
-        // reports the "waiting-for-cluster" step with the health message in it, and the operation
-        // stays Running. Before the window closes the same pass reports "retrying" — a transport
-        // failure, retryable — which is the window in which the resource itself reads Failed.
-        while (blackhole.Elapsed < DegradeBudget) {
-            foreach (var (name, operationId) in inFlight) {
-                var driven = await topology.Operation(world.Tenant, operationId).DriveAsync();
-                passesDriven++;
+        await topology.StopClusterAsync(token);
+        var blackhole = Stopwatch.StartNew();
 
-                if (driven.IsSuccess) {
-                    var status = driven.GetValueOrThrow();
-                    lastProgress = $"{status.LastProgress?.Step}: {status.LastProgress?.Detail}";
+        try {
+            var create = (await topology.PutWidgetAsync(world, "bh-second", "v1", token)).GetValueOrThrow();
+            var update = (await topology.PutWidgetAsync(world, "bh-first", "v2", token)).GetValueOrThrow();
+            update.NoOp.ShouldBeFalse("the update was a no-op, so nothing is mid-provision against the dead cluster.");
 
-                    if (status.State == OperationState.Failed) {
-                        failedOperations.Add($"{name}: {status.Error?.Message}");
+            inFlight = [(Name: "bh-second", create.OperationId), (Name: "bh-first", update.OperationId)];
+
+            // ⚠ Degraded is read off the operations, not off the connection grain. The grain refuses a
+            // caller that is neither the owning tenant nor a null-tenant silo service —
+            // ClusterConnectionGrain.EnsureCallerMayReach answers a cluster client with the canonical
+            // 404, and the first run of this test asked it anyway. What a tenant can see is the pass:
+            // a Degraded connection answers every apply with ApplyResult.Suspended, the reconciler
+            // reports the "waiting-for-cluster" step with the health message in it, and the operation
+            // stays Running. Before the window closes the same pass reports "retrying" — a transport
+            // failure, retryable — which is the window in which the resource itself reads Failed.
+            while (blackhole.Elapsed < DegradeBudget) {
+                foreach (var (name, operationId) in inFlight) {
+                    var driven = await topology.Operation(world.Tenant, operationId).DriveAsync();
+                    passesDriven++;
+
+                    if (driven.IsSuccess) {
+                        var status = driven.GetValueOrThrow();
+                        lastProgress = $"{status.LastProgress?.Step}: {status.LastProgress?.Detail}";
+
+                        if (status.State == OperationState.Failed) {
+                            failedOperations.Add($"{name}: {status.Error?.Message}");
+                        }
+
+                        // ⚠ The reconciler reports "waiting-for-cluster" and OperationGrain.ScheduleAsync
+                        // then appends its own "waiting" entry carrying the outcome's reason, so the LAST
+                        // entry after a suspended pass is "waiting" with docs/plan/09's sentence in it.
+                        // The sentence is what a tenant reads, so it is what is matched.
+                        if (IsSuspended(status)) {
+                            suspendedPasses++;
+                            degradedAfter ??= blackhole.Elapsed;
+                        } else if (string.Equals(status.LastProgress?.Step, "retrying", StringComparison.Ordinal)) {
+                            retryingPasses++;
+                        }
                     }
 
-                    // ⚠ The reconciler reports "waiting-for-cluster" and OperationGrain.ScheduleAsync
-                    // then appends its own "waiting" entry carrying the outcome's reason, so the LAST
-                    // entry after a suspended pass is "waiting" with docs/plan/09's sentence in it.
-                    // The sentence is what a tenant reads, so it is what is matched.
-                    if (IsSuspended(status)) {
-                        suspendedPasses++;
-                        degradedAfter ??= blackhole.Elapsed;
-                    } else if (string.Equals(status.LastProgress?.Step, "retrying", StringComparison.Ordinal)) {
-                        retryingPasses++;
+                    var read = await topology.ReadWidgetAsync(world, name, token);
+                    resourceReads++;
+
+                    if (read.IsSuccess && read.GetValueOrThrow().ProvisioningState == ProvisioningState.Failed) {
+                        resourceReadFailedDuringBlackhole++;
                     }
                 }
 
-                var read = await topology.ReadWidgetAsync(world, name, token);
-                resourceReads++;
-
-                if (read.IsSuccess && read.GetValueOrThrow().ProvisioningState == ProvisioningState.Failed) {
-                    resourceReadFailedDuringBlackhole++;
+                // Both operations have been seen suspended: "reconciles suspend" is observed, not inferred.
+                if (suspendedPasses >= inFlight.Length) {
+                    break;
                 }
+
+                await Task.Delay(TimeSpan.FromSeconds(3), token);
             }
 
-            // Both operations have been seen suspended: "reconciles suspend" is observed, not inferred.
-            if (suspendedPasses >= inFlight.Length) {
-                break;
-            }
-
-            await Task.Delay(TimeSpan.FromSeconds(3), token);
+            output?.WriteLine(
+                $"degraded after {(degradedAfter is { } d ? $"{d.TotalSeconds:F1} s" : "never")}; {passesDriven} passes, {retryingPasses} retrying, {suspendedPasses} suspended, "
+                + $"{failedOperations.Count} operations failed; {resourceReadFailedDuringBlackhole}/{resourceReads} resource reads showed Failed. Last: {lastProgress}"
+            );
+        } finally {
+            // ── Restore — in a finally, so the k3s comes back whatever the blackhole did to this test.
+            //    Timed from the container's start, k3s boot included. ───────────────────────────
+            restore = Stopwatch.StartNew();
+            await topology.StartClusterAsync(token);
         }
 
-        output?.WriteLine(
-            $"degraded after {(degradedAfter is { } d ? $"{d.TotalSeconds:F1} s" : "never")}; {passesDriven} passes, {retryingPasses} retrying, {suspendedPasses} suspended, "
-            + $"{failedOperations.Count} operations failed; {resourceReadFailedDuringBlackhole}/{resourceReads} resource reads showed Failed. Last: {lastProgress}"
-        );
-
-        // ── Restore. Timed from the container's start, k3s boot included. ─────────────────────
-        var restore = Stopwatch.StartNew();
-        await topology.StartClusterAsync(token);
         var apiAnsweredAfter = restore.Elapsed;
         TimeSpan? healthyAfter = null;
 
@@ -192,9 +200,14 @@ public sealed class Invariant4ClusterBlackholeTests(ChaosTopology topology) {
             + $"by {resumedAfter.TotalSeconds:F0} s (second widget present: {secondPresent}, first says '{firstMessage}'); the ConfigMap deleted behind "
             + $"the reconciler's back {(driftCorrected ? "was" : "was NOT")} put back by the next update.";
 
+        // ⚠ "Its resources go Degraded" is the invariant's first clause, and a resource that reads
+        // Failed during the window is the opposite of it — so it is in `held`, and the row is ✘
+        // until ResourceGrain stops recording a retryable pass as Failed (docs/plan/23 finding 3).
+        // The first version of this test counted the reads and left them out of the verdict.
         var held = degradedAfter is not null
             && suspendedPasses > 0
             && failedOperations.Count == 0
+            && resourceReadFailedDuringBlackhole == 0
             && healthyAfter is not null
             && resumed.Count == 0
             && secondPresent
@@ -210,6 +223,13 @@ public sealed class Invariant4ClusterBlackholeTests(ChaosTopology topology) {
         degradedAfter.ShouldNotBeNull($"no pass was suspended within {DegradeBudget} of the cluster going away, so the connection never went Degraded. Last: {lastProgress}");
         suspendedPasses.ShouldBeGreaterThan(0, "no pass was suspended after the cluster went Degraded — docs/plan/09 § Connection health: reconciles are suspended, not failed.");
         failedOperations.ShouldBeEmpty("docs/plan/23 § The chaos invariants, 4: no operations fail. Failed: " + string.Join("; ", failedOperations));
+
+        resourceReadFailedDuringBlackhole.ShouldBe(
+            0,
+            $"docs/plan/23 § The chaos invariants, 4: its resources go Degraded. {resourceReadFailedDuringBlackhole} of {resourceReads} reads of the "
+            + "resources during the blackhole answered ProvisioningState.Failed while their operations were Running and suspended — a tenant "
+            + "reading the resource sees 'provisioning failed' for a network outage, which docs/plan/09 § Connection health says must not appear."
+        );
         healthyAfter.ShouldNotBeNull($"every pass was still suspended {HealthyBudget} after the cluster came back, so the connection never went Healthy again.");
         resumed.ShouldBeEmpty("clean resumption: " + string.Join("; ", resumed));
         secondPresent.ShouldBeTrue("the create that was in flight during the blackhole says Succeeded and its ConfigMap is not in the cluster.");

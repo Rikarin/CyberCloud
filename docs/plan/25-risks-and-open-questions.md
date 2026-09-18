@@ -32,11 +32,15 @@ Redis and real PostgreSQL shards; [23 § The chaos invariants](23-build-ci-and-t
 dated numbers. What it found beyond the invariant is worth this row's attention: the reminder table
 lives in the same Redis as the hot tier (`SiloComposition.ConfigureStorage` points
 `UseRedisReminderService` at the hot connection string), so a flush of the hot tier empties every
-operation's safety net too. An operation in flight gets its reminder back on its next pass, and the
-reminder service's local copy ticks until its table refresh — so nothing was lost in the run — but
-"the hot tier is disposable" is not a sentence about the reminder table, and a Redis that is flushed
-*and* stays flushed past a refresh would be. Separating the two, or making the reminder table durable,
-is a decision this row now owes.
+operation's safety net too. What brought the in-flight operation back was *observed* in the run
+that followed the branch's review, with the test's hands off it: the reminder service's local copy
+ticked from memory 58 s after the flush (its table refresh is every 5 min), the tick activated the
+grain, and `OperationGrain.OnActivateAsync` re-registered the row — so nothing was lost in that
+run. ⚠ The ordering the suite does not induce is a list refresh landing between the flush and the
+next tick, after which the operation has no driver until something activates it; "the hot tier is
+disposable" is not a sentence about the reminder table, and a Redis that is flushed *and* stays
+flushed past a refresh would be. Separating the two, or making the reminder table durable, is a
+decision this row now owes.
 
 ⚠ **Open question:** should the durable tier be Postgres at all, or should it be a per-tenant
 event journal in NATS JetStream with Redis as a pure projection? The journal design is more Orleans-native,

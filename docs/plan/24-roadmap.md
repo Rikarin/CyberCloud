@@ -171,8 +171,10 @@ target scale.
 > `test/CyberCloud.Chaos` and `./build.sh Load` runs `test/CyberCloud.Load` at exactly the 10 %
 > this clause names; [23 § The chaos invariants](23-build-ci-and-testing.md) and
 > [23 § The load scenarios](23-build-ci-and-testing.md) carry the dated tables. Neither clause is
-> met: chaos rows 5 and 7 are ✘ (a gone shard surfaces as a serializer exception; a rolling restart
-> drops requests the gateway does not retry) and row 6 is ○ (no NATS client exists); load rows
+> met: chaos rows 4 and 5 are ✘ (a resource whose cluster is unreachable reads `Failed`; a gone
+> shard surfaces as a serializer exception), row 7 is ○ on a zero that a rolling restart does not
+> always produce (the gateway does not retry a request that lands on a leaving silo), and row 6 is
+> ○ (no NATS client exists); load rows
 > `control-plane-write-p99-ms` (a stall inside the first reminder wave) and
 > `reconcile-queue-depth-slope-per-minute` (a queue whose floor is one reminder period deep) are ✘,
 > and the two unhosted rows are ○. What each needs is written beside it.

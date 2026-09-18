@@ -1,15 +1,16 @@
 {
-  "_comment": "The first load run, at a tenth of docs/plan/23 s rates on a laptop; Build.Load compares the next run at the same scale against these under the 20 % rule (docs/plan/23 § The load scenarios). Updated by a reviewed diff at release time, never by the build.",
-  "measuredAt": "2026-09-18T01:44:47.5516483+00:00",
+  "_comment": "The load run after the branch review of issue #44, at a tenth of docs/plan/23 s rates on a laptop. PROVISIONAL: there is no release, so Build.Load prints every delta against these numbers and blocks on none of them; the first release stamps this file with its tag under \"release\", which is what arms the 20 % rule (Build.Load.cs § LoadBaselineFile, docs/plan/23 § The load scenarios). Updated by a reviewed diff at release time, never by the build.",
+  "measuredAt": "2026-09-18T03:58:50.7725303+00:00",
+  "release": null,
   "scale": 0.1,
   "metrics": {
-    "control-plane-read-p99-ms": 23.9237,
-    "control-plane-write-p99-ms": 636.69,
+    "control-plane-read-p99-ms": 6.5595,
+    "control-plane-write-p99-ms": 45.6588,
     "grain-activation-churn-per-minute": 0,
-    "rebac-check-p99-cold-ms": 9.7207,
-    "rebac-check-p99-warm-ms": 1.7569,
-    "reconcile-queue-depth-slope-per-minute": 9.11,
-    "silo-working-set-gb": 1.486
+    "rebac-check-p99-cold-ms": 34.6769,
+    "rebac-check-p99-warm-ms": 1.3784,
+    "reconcile-queue-depth-slope-per-minute": 2.36,
+    "silo-working-set-gb": 1.528
   },
   "vacuous": {
     "span-ingest-drops": "there is no span-ingest path in this repository to drive: the collector and VictoriaMetrics are charts/bundle/ components (docs/plan/16 § Observability) that nothing in a silo or gateway feeds spans into, so 'no drops below quota' and 'ingest pods scale linearly' have no pipeline to be true of. The row needs the observability stack installed and an ingest client written.",

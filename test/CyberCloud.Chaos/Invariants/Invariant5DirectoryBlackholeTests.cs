@@ -63,100 +63,107 @@ public sealed class Invariant5DirectoryBlackholeTests(ChaosTopology topology) {
         }
 
         // ── The blackhole. ────────────────────────────────────────────────────────────────────
-        await topology.StopShardAsync(ChaosTopology.PlatformShard, token);
-        await topology.DeactivateEverythingAsync();
-        var blackhole = Stopwatch.StartNew();
-
         var reads = 0;
         var writes = 0;
         var drives = 0;
         var errors = new List<string>();
         var accepted = new List<(TenantWorld World, Guid OperationId)>();
         var round = 0;
-
-        while (round < Rounds) {
-            round++;
-
-            foreach (var world in new[] { a, b }) {
-                try {
-                    reads++;
-                    var read = await topology.ReadWidgetAsync(world, "existing", token).WaitAsync(CallBudget, token);
-
-                    if (read.IsFailure) {
-                        errors.Add($"read {world.Group}/existing: {read.Error!.Code} — {read.Error.Message}");
-                    }
-
-                    reads++;
-                    var group = await topology.ReadGroupAsync(world, token).WaitAsync(CallBudget, token);
-
-                    if (group.IsFailure) {
-                        errors.Add($"read {world.Group}: {group.Error!.Code} — {group.Error.Message}");
-                    }
-
-                    writes++;
-                    var write = await topology.PutWidgetAsync(world, $"during-{round}", "during", token).WaitAsync(CallBudget, token);
-
-                    if (write.IsFailure) {
-                        errors.Add($"write {world.Group}/during-{round}: {write.Error!.Code} — {write.Error.Message}");
-                    } else {
-                        accepted.Add((world, write.GetValueOrThrow().OperationId));
-                    }
-                } catch (Exception ex) when (ex is not OperationCanceledException || ex is TimeoutException) {
-                    errors.Add($"{world.Group} round {round}: {ex.GetType().Name}: {Shorten(ex.Message)}");
-                }
-            }
-
-            Console.WriteLine($"[CyberCloud.Chaos] invariant 5 round {round}/{Rounds} at {blackhole.Elapsed.TotalSeconds:F0} s: {errors.Count} errors so far");
-            await Task.Delay(TimeSpan.FromSeconds(2), token);
-        }
-
-        // The accepted writes are driven while the directory is still gone: a reconcile needs the
-        // cluster connection, which is a null-tenant grain on the stopped shard — so this measures
-        // whether "tenant-facing" reaches the data plane. Driven together, under one budget.
-        var duringBlackhole = await Task.WhenAll(
-            accepted.Select(async x => {
-                    var (last, faults) = await topology.DriveUntilTerminalAsync(x.World.Tenant, x.OperationId, TimeSpan.FromSeconds(40), token);
-                    return (x.World, x.OperationId, Last: last, Faults: faults);
-                }
-            )
-        );
-
-        drives = duringBlackhole.Length;
-
-        var notConverged = duringBlackhole
-            .Where(x => x.Last?.State != OperationState.Succeeded)
-            .Select(x => $"{x.World.Group}/{x.OperationId:N} → {x.Last?.State.ToString() ?? "never answered"} after {x.Faults} faults: {x.Last?.Error?.Message ?? x.Last?.LastProgress?.Detail}")
-            .ToList();
-
-        Console.WriteLine($"[CyberCloud.Chaos] invariant 5: {accepted.Count - notConverged.Count}/{accepted.Count} accepted writes converged while the directory was gone");
-
-        // ── New tenant creation, through the platform path. ───────────────────────────────────
-        var attempt = Stopwatch.StartNew();
+        List<string> notConverged;
         string newTenantOutcome;
         var cleanAndRetryable = false;
+        TimeSpan newTenantTook;
+
+        await topology.StopShardAsync(ChaosTopology.PlatformShard, token);
+        var blackhole = Stopwatch.StartNew();
 
         try {
-            var created = await topology.TryCreateTenantAsync(Guid.NewGuid(), "dir-new", token).WaitAsync(TimeSpan.FromSeconds(90), token);
+            await topology.DeactivateEverythingAsync();
 
-            if (created.IsSuccess) {
-                newTenantOutcome = "ACCEPTED — a tenant was created with no directory to register it in";
-            } else {
-                var error = created.Error!;
-                var status = error.Code.HttpStatus;
-                cleanAndRetryable = status is >= 500 and < 600 or 429;
-                newTenantOutcome = $"Result failure {error.Code} (HTTP {status}): {error.Message}";
+            while (round < Rounds) {
+                round++;
+
+                foreach (var world in new[] { a, b }) {
+                    try {
+                        reads++;
+                        var read = await topology.ReadWidgetAsync(world, "existing", token).WaitAsync(CallBudget, token);
+
+                        if (read.IsFailure) {
+                            errors.Add($"read {world.Group}/existing: {read.Error!.Code} — {read.Error.Message}");
+                        }
+
+                        reads++;
+                        var group = await topology.ReadGroupAsync(world, token).WaitAsync(CallBudget, token);
+
+                        if (group.IsFailure) {
+                            errors.Add($"read {world.Group}: {group.Error!.Code} — {group.Error.Message}");
+                        }
+
+                        writes++;
+                        var write = await topology.PutWidgetAsync(world, $"during-{round}", "during", token).WaitAsync(CallBudget, token);
+
+                        if (write.IsFailure) {
+                            errors.Add($"write {world.Group}/during-{round}: {write.Error!.Code} — {write.Error.Message}");
+                        } else {
+                            accepted.Add((world, write.GetValueOrThrow().OperationId));
+                        }
+                    } catch (Exception ex) when (ex is not OperationCanceledException || ex is TimeoutException) {
+                        errors.Add($"{world.Group} round {round}: {ex.GetType().Name}: {Shorten(ex.Message)}");
+                    }
+                }
+
+                Console.WriteLine($"[CyberCloud.Chaos] invariant 5 round {round}/{Rounds} at {blackhole.Elapsed.TotalSeconds:F0} s: {errors.Count} errors so far");
+                await Task.Delay(TimeSpan.FromSeconds(2), token);
             }
-        } catch (TimeoutException) {
-            newTenantOutcome = "NO ANSWER within 90 s — the call hung rather than failing";
-        } catch (Exception ex) when (ex is not OperationCanceledException) {
-            newTenantOutcome = $"EXCEPTION {ex.GetType().Name}: {Shorten(ex.Message)}";
+
+            // The accepted writes are driven while the directory is still gone: a reconcile needs the
+            // cluster connection, which is a null-tenant grain on the stopped shard — so this measures
+            // whether "tenant-facing" reaches the data plane. Driven together, under one budget.
+            var duringBlackhole = await Task.WhenAll(
+                accepted.Select(async x => {
+                        var (last, faults) = await topology.DriveUntilTerminalAsync(x.World.Tenant, x.OperationId, TimeSpan.FromSeconds(40), token);
+                        return (x.World, x.OperationId, Last: last, Faults: faults);
+                    }
+                )
+            );
+
+            drives = duringBlackhole.Length;
+
+            notConverged = duringBlackhole
+                .Where(x => x.Last?.State != OperationState.Succeeded)
+                .Select(x => $"{x.World.Group}/{x.OperationId:N} → {x.Last?.State.ToString() ?? "never answered"} after {x.Faults} faults: {x.Last?.Error?.Message ?? x.Last?.LastProgress?.Detail}")
+                .ToList();
+
+            Console.WriteLine($"[CyberCloud.Chaos] invariant 5: {accepted.Count - notConverged.Count}/{accepted.Count} accepted writes converged while the directory was gone");
+
+            // ── New tenant creation, through the platform path. ───────────────────────────────────
+            var attempt = Stopwatch.StartNew();
+
+            try {
+                var created = await topology.TryCreateTenantAsync(Guid.NewGuid(), "dir-new", token).WaitAsync(TimeSpan.FromSeconds(90), token);
+
+                if (created.IsSuccess) {
+                    newTenantOutcome = "ACCEPTED — a tenant was created with no directory to register it in";
+                } else {
+                    var error = created.Error!;
+                    var status = error.Code.HttpStatus;
+                    cleanAndRetryable = status is >= 500 and < 600 or 429;
+                    newTenantOutcome = $"Result failure {error.Code} (HTTP {status}): {error.Message}";
+                }
+            } catch (TimeoutException) {
+                newTenantOutcome = "NO ANSWER within 90 s — the call hung rather than failing";
+            } catch (Exception ex) when (ex is not OperationCanceledException) {
+                newTenantOutcome = $"EXCEPTION {ex.GetType().Name}: {Shorten(ex.Message)}";
+            }
+
+            newTenantTook = attempt.Elapsed;
+            output?.WriteLine($"new tenant during blackhole: {newTenantOutcome} ({newTenantTook.TotalSeconds:F1} s)");
+        } finally {
+            // ── Restore — in a finally, so the platform shard comes back whatever the blackhole did to this test. ──
+            await topology.StartShardAsync(ChaosTopology.PlatformShard, token);
         }
 
-        var newTenantTook = attempt.Elapsed;
-        output?.WriteLine($"new tenant during blackhole: {newTenantOutcome} ({newTenantTook.TotalSeconds:F1} s)");
-
-        // ── Restore, and a new tenant is possible again. ──────────────────────────────────────
-        await topology.StartShardAsync(ChaosTopology.PlatformShard, token);
+        // ── A new tenant is possible again. ───────────────────────────────────────────────────
         var restore = Stopwatch.StartNew();
         TimeSpan? newTenantAfter = null;
 

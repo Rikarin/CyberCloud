@@ -1,12 +1,16 @@
 # docs/plan/23 § CI shape, row `nightly.yml`: "02:00 | E2E, cluster e2e, hostile BYO, chaos,
 # security".
 #
-# ── ⚠ THREE OF THESE FIVE ARE RED TODAY, AND EACH SAYS WHY ───────────────────────────────────────
+# ── ⚠ TWO OF THESE FIVE ARE BLOCKED TODAY, ONE IS RED ON ITS OWN FINDINGS, AND EACH SAYS WHY ────
 #
-# `E2E`, `Chaos` and the tenant-cluster half of `cluster-e2e` are BLOCKED, in build/'s sense of the
-# word: written, discovering their work, and then failing while naming every input they do not have.
+# `E2E` and the tenant-cluster half of `cluster-e2e` are BLOCKED, in build/'s sense of the word:
+# written, discovering their work, and then failing while naming every input they do not have.
 # Build.cs § target graph argues that case at length and it applies exactly here — "answering
 # 'nothing was pushed, and here is why' with exit 0 is how a release goes out with no images in it".
+#
+# `Chaos` is not blocked any more (issue #44): test/CyberCloud.Chaos starts the topology it breaks
+# in the runner's own Docker, and the job below runs it. It is red while docs/plan/23 § The chaos
+# invariants carries a ✘ row, which it does — the rows say what each one owes.
 #
 # What is NOT blocked, and runs every night starting tonight:
 #
@@ -25,7 +29,8 @@
 #   E2E_BASE_URL         base URL of staging, e.g. https://api.staging.cybercloud.example.
 #                        Build.E2E.cs § E2EBaseUrl has no fallback on purpose: "an E2E run against a
 #                        local process is a different test wearing this one's name".
-#   STAGING_KUBECONFIG   kubeconfig for staging, for the bootstrap dry-run and for Chaos.
+#   STAGING_KUBECONFIG   kubeconfig for staging, for the bootstrap dry-run. ⚠ Not for Chaos any more:
+#                        the suite starts its own topology and Build.Chaos refuses a --kube-context.
 #   STAGING_KUBE_CONTEXT the context name inside it. Optional; defaults to the current-context.
 #   CONTAINER_REGISTRY   registry prefix, so Trivy knows what to scan.
 #   REGISTRY_USERNAME    a principal that can pull from it.
@@ -224,38 +229,50 @@ jobs:
           echo "All four hostilities ran."
 
   # ── docs/plan/23 § Test layers, row Chaos; the assertions are § The chaos invariants ─────────────
+  #
+  # ⚠ NO SECRETS AND NO STAGING. The suite starts what it breaks — a Redis, three PostgreSQL shards
+  # and a k3s in Docker, three silos in the test process — so the one input is a Docker daemon on a
+  # cgroup v2 host, which ubuntu-24.04 is. Build.Chaos REFUSES a --kube-context rather than
+  # ignoring one: there is no mode that breaks somebody else's cluster, and the staging run at the
+  # doc's scale (30 silos, two versions, a real NATS) is owed under docs/plan/23 § The chaos
+  # invariants. Until it lands, this job IS the nightly chaos run, and its ✔ ○ ✘ table is the one
+  # docs/plan/23 dates.
+  #
+  # ⚠ RED WHILE A ROW IS ✘. The first run found rows 5 and 7 violated and the review of the branch
+  # made row 4 honest about its Failed reads; each says what it owes in docs/plan/23 § The chaos
+  # invariants, and Build.Chaos fails the target on any ✘ row. That is a red job with a diagnosis,
+  # which is the right colour — and the results file and the silos' log are uploaded whatever the
+  # outcome, so the diagnosis survives the runner.
   chaos:
     name: chaos
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    env:
-      STAGING_KUBECONFIG: ${{ secrets.STAGING_KUBECONFIG }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/dotnet
 
-      - name: Preconditions
+      # The same proof gate.yml makes before the container-backed suites: one loud failure rather
+      # than seven invariants failing at their fixture with connection errors.
+      - name: Prove Docker can host the topology
         run: |
-          .github/scripts/require-secrets.sh chaos \
-            "docs/plan/23 § The chaos invariants: 'Each is an assertion, not an observation.' An assertion needs something to assert against." \
-            "STAGING_KUBECONFIG=create the secret with a kubeconfig for a cluster that can lose a silo, a shard and a NATS node without anybody minding"
+          docker version --format 'client {{.Client.Version}}, server {{.Server.Version}}'
+          docker info --format 'cgroup {{.CgroupVersion}}'
+          docker run --rm hello-world > /dev/null
+          echo "Docker works — the suite can start its Redis, shards, k3s and silos."
 
-      - name: Point kubectl at staging
-        run: |
-          umask 077
-          mkdir -p "$HOME/.kube"
-          printf '%s' "$STAGING_KUBECONFIG" > "$HOME/.kube/config"
-          kubectl config current-context
-
-      # ⚠ Expected to fail on three preconditions today, and the third is the interesting one:
-      # Build.Chaos.cs reports the environment's SIZE as unverifiable — invariant 7 needs 30 silos
-      # and nothing can count them. A green chaos run against a three-silo staging would be worse
-      # than this red one.
       - name: ./build.sh Chaos
-        run: |
-          context="${{ secrets.STAGING_KUBE_CONTEXT }}"
-          [ -n "$context" ] || context="$(kubectl config current-context)"
-          ./build.sh Chaos --kube-context "$context"
+        run: .github/scripts/run-build.sh "$RUNNER_TEMP/chaos.log" Chaos
+
+      - name: Upload the chaos results and the silos' log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: chaos-results
+          path: artifacts/chaos/
+          # `warn`, for the reason weekly.yml gives its load results: a run that never reached its
+          # fixture has no file, and the job is already red for the real reason.
+          if-no-files-found: warn
+          retention-days: 90
 
   # ── docs/plan/23 § Test layers, row Security: the nightly half ───────────────────────────────────
   #

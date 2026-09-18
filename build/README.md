@@ -13,9 +13,9 @@ build/
 ├── Build.Licence.cs          # ADR-011 scan over charts + images — the artefacts' licences, and syft over every image
 ├── OciRegistry.cs            # the OCI distribution API: manifests and configs, for Build.Licence
 ├── Build.Portal.cs           # pnpm install/lint/test/build, performance budget, axe
-├── Build.E2E.cs              # ─┐
-├── Build.Chaos.cs            #  ├ against a real deployment; nightly and weekly, not per-PR
-├── Build.Load.cs             # ─┘
+├── Build.E2E.cs              # against a real deployment; nightly, not per-PR
+├── Build.Chaos.cs            # the seven invariants of docs/plan/23, on a topology the suite starts in Docker; nightly
+├── Build.Load.cs             # the docs/plan/00 quality-bar budgets and the 20 % trend, on that topology; weekly
 ├── Build.Publish.cs          # NuGet, npm, charts, `cyc` binaries per RID
 ├── ArchitectureFacts.cs      # ⚠ not a Build partial — see below
 ├── CodeSurface.cs            # ⚠ likewise: every type and member this repository compiles
@@ -124,7 +124,8 @@ targets that runs on every PR and so the only one positioned to notice.
 
 `Directory.Build.props` § Project role detection decides what builds as an MTP host. It does **not**
 decide what runs per-PR: docs/plan/23 § Test layers puts E2E and Chaos on nightly and Load on
-weekly, against a real deployment. `Build.Test.cs` § `SuiteOwning` maps each project to its owning
+weekly — E2E against a real deployment, Chaos and Load on a topology each suite starts in Docker.
+`Build.Test.cs` § `SuiteOwning` maps each project to its owning
 target, with one arm per props rule so a rule cannot be added without naming the target that runs
 it.
 

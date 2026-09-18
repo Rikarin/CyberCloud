@@ -16,14 +16,17 @@ namespace CyberCloud.Chaos.Topology;
 /// <summary>
 ///     A silo wired as <c>CyberCloud.Silo.Host</c> wires one — both storage tiers real, reminders in
 ///     Redis, the real authorization engine, the real cluster-connection grain over k3s, the Sample
-///     provider — with the three knobs a chaos run has to turn set where a deployment would set them.
+///     provider — with the two knobs a chaos run has to turn set where a deployment would set them.
 /// </summary>
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>Two deployment knobs are turned — the cluster health window here, the pool size in
 ///         <see cref="ChaosTopology" /> — and they are the only deviations from the shipped
-///         defaults. Both are named in the results file's topology block so a reader of the dated
-///         table in docs/plan/23 knows what the numbers were measured under.</b>
+///         defaults. Both are named in the results file's topology block
+///         (<c>ChaosTopology.Facts</c>: <c>clusterHealthWindow</c>, <c>clusterPingInterval</c>,
+///         <c>npgsqlPoolSize</c>) so a reader of the dated table in docs/plan/23 knows what the
+///         numbers were measured under. ⚠ The pool size was not in the block until the review of
+///         the branch read this sentence against the file.</b>
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The membership probes are the shipped defaults, and the first version of this file
@@ -68,7 +71,32 @@ public sealed class ChaosSiloConfigurator : ISiloConfigurator {
         ArgumentNullException.ThrowIfNull(siloBuilder);
         var silo = siloBuilder;
 
-        silo.ConfigureLogging(logging => logging.SetMinimumLevel(LogLevel.Warning));
+        // ⚠ A provider, not only a level. Every silo appends to ChaosSiloLog.Path — CyberCloud.*
+        // at Information, Orleans and Microsoft at Warning — because a run whose silos log nowhere
+        // is a run that cannot say why an operation stayed Running after its shard came back, which
+        // is the question the review of the first version of this suite could not get answered.
+        //
+        // ⚠ The silo's name is stamped on the provider by a startup task, NOT resolved from the
+        // container inside the provider's factory. The first draft resolved IOptions<EndpointOptions>
+        // there, and anything resolved from inside a logger provider that itself wants a logger comes
+        // back through the provider list — an unbounded recursion the DI container runs on fresh
+        // stacks forever, and the silos never start. By the time a startup task runs, the logger
+        // factory exists and ILocalSiloDetails is safe to ask.
+        var log = new ChaosSiloLog();
+
+        silo.ConfigureLogging(logging => {
+                logging.SetMinimumLevel(LogLevel.Information);
+                logging.AddFilter("Orleans", LogLevel.Warning);
+                logging.AddFilter("Microsoft", LogLevel.Warning);
+                logging.AddProvider(log);
+            }
+        );
+
+        silo.AddStartupTask((provider, _) => {
+                log.Silo = provider.GetRequiredService<ILocalSiloDetails>().SiloAddress.ToString();
+                return Task.CompletedTask;
+            }
+        );
 
         // ── Both storage tiers, the shard map, the tenant directory and the separation filter —
         //    docs/plan/05 § The two tiers, through the one call CyberCloud.Silo.Host makes. ─────────
