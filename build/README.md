@@ -75,8 +75,8 @@ Restore ──► Compile ──┬──► Test
                       ├──► Generate       (stub)
                       ├──► Architecture   (stub)
                       ├──► E2E            (stub)
-                      ├──► Chaos          (stub)
-                      ├──► Load           (stub)
+                      ├──► Chaos          (needs Docker: the suite starts what it breaks)
+                      ├──► Load           (needs Docker and load-baseline.json)
                       └──► Images ────────┐ (stub)
 Charts ───────────────────────────────────┴──► Licence
 Portal (stub)
@@ -92,7 +92,7 @@ Three of those edges are missing on purpose, and each is the first thing a reade
 
 | Missing edge | Why |
 |---|---|
-| `E2E` `Chaos` `Load` → a deploy | There is no `Deploy` target. They run "against a real deployment" (docs/plan/23 § Build) — standing staging nightly, a deployed candidate pre-release. The deployment is an input to the run, not something the graph produces, and as an edge it would mean every local `./build.sh E2E` tried to deploy something. They depend on `Compile`, which builds the suites in `test/` and the `cyc` they drive. |
+| `E2E` `Chaos` `Load` → a deploy | There is no `Deploy` target. `E2E` runs "against a real deployment" (docs/plan/23 § Build) — standing staging nightly, a deployed candidate pre-release. The deployment is an input to the run, not something the graph produces, and as an edge it would mean every local `./build.sh E2E` tried to deploy something. They depend on `Compile`, which builds the suites in `test/` and the `cyc` they drive. ⚠ `Chaos` and `Load` no longer take a deployment at all (issue #44): each suite starts its own topology in Docker — three silos over a real Redis, three PostgreSQL shards and a k3s — and the target reads a results file the suite writes, printing ✔ ○ ✘ per invariant or metric. A `--kube-context` or `--e2e-base-url` passed to them is refused rather than ignored, because neither suite has a mode that drives somebody else's deployment yet; docs/plan/23 § The chaos invariants and § The load scenarios say what that mode owes. `Load` also needs the committed `load-baseline.json` for its 20 % trend rule. |
 | `Portal` → `Generate` | `Generate` emits `portal/libs/api` and the resource forms, but those are generated **and committed**, and `Generate`'s job in the graph is to fail on drift rather than to feed a later target. The edge would drag `Compile` in behind it and make the .NET SDK a prerequisite for running `eslint`. |
 | `Publish` → `E2E` `Chaos` `Load` | A release *is* gated on all three (docs/plan/23 § Test layers, "green before release"), but they run against the deployed candidate. The order is gate → deploy → suites → publish, the deploy in the middle is not a target, so `release.yml` owns that sequencing and this edge would invert it. |
 

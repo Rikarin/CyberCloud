@@ -9,14 +9,31 @@ providers, or that need a deployed platform, live here.
 | `CyberCloud.E2E` | drives the public REST API against a real deployment |
 | `CyberCloud.Conformance` | the shared provider suite, parameterised — referenced by every provider |
 | `CyberCloud.Cluster.Conformance` | the same suite's cluster-backed half: k3s, PostgreSQL, Redis — referenced by every provider's `.Cluster.Conformance` |
-| `CyberCloud.Chaos` | silo kills, Redis flush, cluster-connection loss, network partition |
-| `CyberCloud.Load` | the docs/plan/00 § quality-bar numbers, as a gate |
+| `CyberCloud.Chaos` | the seven invariants of docs/plan/23 § The chaos invariants, each inducing its fault against a topology the suite starts |
+| `CyberCloud.Load` | the docs/plan/00 § quality-bar numbers at a tenth of docs/plan/23's rates, through the real gateway, as a gate |
 | `CyberCloud.Isolation` | the cross-tenant suite: every provider, every verb, wrong tenant → 404 |
 
 ## What exists, and what is deferred
 
-`CyberCloud.Conformance`, `CyberCloud.Cluster.Conformance` and `CyberCloud.Isolation` are built.
-`CyberCloud.E2E`, `CyberCloud.Chaos` and `CyberCloud.Load` are not.
+`CyberCloud.Conformance`, `CyberCloud.Cluster.Conformance`, `CyberCloud.Isolation`, `CyberCloud.Chaos`
+and `CyberCloud.Load` are built. `CyberCloud.E2E` is not.
+
+⚠ **`CyberCloud.Chaos` and `CyberCloud.Load` start what they break and drive, and say what they could
+not.** Both run on one topology — a Redis hot tier, three PostgreSQL shards (`durable-00`,
+`durable-01`, `platform-00` for the null-tenant grains) and a k3s in Docker, under three silos wired
+through the same extension methods `CyberCloud.Silo.Host` composes — and each writes a results file
+the build target reads rather than trusting the exit code: an invariant the machine cannot host
+(a NATS cluster, thirty silos) or a scenario it cannot run (a thousand terminal pods, a span-ingest
+path) is a `Vacuous` row with a sentence, printed ○ by `./build.sh Chaos` and `./build.sh Load`,
+never a ✔. The first run's numbers, and what they found, are the dated tables in
+[docs/plan/23 § The chaos invariants](../docs/plan/23-build-ci-and-testing.md) and § The load
+scenarios. The load suite's chief instrument is the real gateway: `GatewayComposition.BuildAsync` on
+a free port, JWKS validation against a stand-in issuer the suite hosts, and `HttpClient` — so a p99
+there is what a tenant's client would see on loopback, not what a stage would see in-process.
+
+⚠ **The first chaos storm found a defect the two-phase create's own document had wrong**, and
+`OperationGrain.ConfirmClaimAsync` is the repair — docs/plan/06 § Two-phase create carries the
+corrected story and `ClaimConfirmedByTheOperationTests` pins it.
 
 ⚠ **The conformance suite is split by what it needs, and both halves run.**
 `ProviderConformanceTests` runs against `Orleans.TestingHost` with in-memory storage and an in-memory

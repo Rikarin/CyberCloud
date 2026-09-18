@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/23 § The load scenarios, as a runnable: it drives the gateway pipeline and the write
+      path at the rates the chapter names — at 10 % of target scale, which is what issue #44 and
+      docs/plan/24 § Phase 2 ask for — and writes p50/p95/p99 against each budget where
+      build/Build.Load.cs reads them.
+
+      ⚠ THE TOPOLOGY IS CyberCloud.Chaos's, AND THE GATEWAY IS THE REAL ONE OVER HTTP. The silos are
+      the three-silo, two-tenant-shard, real-Redis, real-k3s cluster the chaos suite breaks (this project
+      references that one for the fixture and nothing else runs from it: xunit discovers tests in the
+      entry assembly only). On top of it this suite starts CyberCloud.Gateway.Host through
+      GatewayComposition.BuildAsync — Kestrel on a free port, the eight-stage pipeline, JWKS bearer
+      validation against a stand-in issuer this suite hosts — and drives it with HttpClient. A read
+      that goes through a DefaultHttpContext in-process measures the pipeline; a read over the wire
+      measures what a tenant gets, and the budget is written about the second.
+
+      ⚠ 10 % OF TARGET SCALE IS THE RATE, NOT THE BUDGET. 500 rps of reads, 50 writes/s, 2 000 checks/s,
+      200 000 resident grains — one tenth of the row in docs/plan/23 — against the same p99 ceilings,
+      because a latency budget does not scale with load: meeting 25 ms at 500 rps is necessary for
+      meeting it at 5 000 and not sufficient. The results file says which scale it was measured at
+      and the build prints it beside every number.
+
+      ⚠ TWO SCENARIOS ARE NOT HOSTED HERE AND SAY SO IN THE FILE RATHER THAN BY ABSENCE. A thousand
+      terminal sessions are a thousand exec streams into a thousand pods, and a span-ingest pipeline
+      is a bundle component with no ingest path in this repository; both rows are written as vacuous
+      with the reason, and Build.Load prints ○ for them instead of failing on a missing number.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The topology: containers, silos, tenants, widgets. -->
+        <ProjectReference Include="../CyberCloud.Chaos/CyberCloud.Chaos.csproj"/>
+        <!-- The gateway, composed as its Program composes it, on a free port. -->
+        <ProjectReference Include="../../src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
+        <ProjectReference Include="../../src/CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj"/>
+        <ProjectReference Include="../../src/CyberCloud.Identity.Contracts/CyberCloud.Identity.Contracts.csproj"/>
+        <ProjectReference Include="../../src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Contracts/CyberCloud.Providers.Sample.Contracts.csproj"/>
+    </ItemGroup>
+
+</Project>

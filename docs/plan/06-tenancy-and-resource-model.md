@@ -220,11 +220,28 @@ transaction. The order is fixed and the failure modes are enumerated:
    binding.
 4. Return `202` with the operation URL.
 
-If the silo dies between 1 and 3, the claim expires and the name is free again, and the orphaned
-resource grain (durable state, no confirmed index) is swept by a per-subscription reaper reminder.
-If it dies between 3 and 4, the resource exists and the caller retries the `PUT` — which is idempotent
-because `PUT` with the same body on an existing resource is a no-op, which is exactly why the API is
-`PUT` and not `POST`.
+If the silo dies between 1 and 2, the claim expires and the name is free again. If it dies inside
+2 — after the resource grain and the group member exist, before the operation starts — the orphaned
+resource grain (durable state in `Creating`, no confirmed index, no operation) is swept by a
+per-subscription reaper reminder. If it dies between 3 and 4, the resource exists and the caller
+retries the `PUT` — which is idempotent because `PUT` with the same body on an existing resource is a
+no-op, which is exactly why the API is `PUT` and not `POST`.
+
+⚠ **There is a fourth window, and the first chaos storm (issue #44, 2026-09-17) found it before this
+paragraph did.** Step 2 ends by *starting the operation*, which registers a durable reminder; step 3
+confirms the claim. A silo that dies between the two leaves an operation that the reminder drives to
+`Succeeded` on its own and a claim that is still a lease. This paragraph used to say the orphan "is
+swept by the reaper" — it is not, because the reaper looks at members in `Creating` and this one
+converged. Measured: two names left claimed by a dead write, both driven to `Succeeded` by their
+reminders, both leases expired after 301 s, both names re-created by the tenant's retried `PUT`, and
+the sweep found 26 `Succeeded` members and 26 ConfigMaps for 24 creates — two resources billed,
+running, and addressable by nobody. **The operation now finishes step 3 itself**: on its first driven
+pass a create confirms its own claim (`OperationGrain.ConfirmClaimAsync`), which is idempotent when
+the write path got there first; if the claim is gone — the lease expired, or another create holds the
+name — the create cancels through the existing cancel path rather than converging into a ghost. The
+reminder fires within a minute and the lease is five, so in practice the confirm lands while the claim
+is still the operation's. `ClaimConfirmedByTheOperationTests` pins both halves, and the chaos suite's
+sweep asserts no two members share a name.
 
 **Deletion is the same in reverse and it is the harder half**: release the index first (so the name
 is immediately reusable), then tear down the data plane, then delete the grain state. A resource whose

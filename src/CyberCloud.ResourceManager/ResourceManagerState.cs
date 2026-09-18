@@ -206,6 +206,19 @@ public sealed class OperationGrainState {
     /// <summary>Whether the delete path has finished running for a cancellation.</summary>
     [Id(14)]
     public bool CancelTeardownDone { get; set; }
+
+    /// <summary>
+    ///     Whether this operation has seen the resource's index claim confirmed — by the write path's
+    ///     step 3, or by its own first pass when that step never ran.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Set by <c>OperationGrain.DriveAsync</c> and not by the write path, because the write path
+    ///     cannot reach this state after the silo it was running on has died — which is the one case
+    ///     the field exists for. See <c>OperationGrain.ConfirmClaimAsync</c>; issue #44's first storm
+    ///     is where the gap it closes was found.
+    /// </remarks>
+    [Id(15)]
+    public bool IndexConfirmed { get; set; }
 }
 
 /// <summary>

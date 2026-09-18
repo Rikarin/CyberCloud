@@ -567,7 +567,7 @@
     </Folder>
 
     <!--
-      docs/plan/03 § test/ — the cross-cutting suites. Two of the five exist.
+      docs/plan/03 § test/ — the cross-cutting suites. Four of the five exist; CyberCloud.E2E does not.
 
       ⚠ CyberCloud.Conformance is a test project AND a library other test projects reference — that is
       docs/plan/03's own description of it, "parameterised, referenced by providers". Both roles are
@@ -602,5 +602,19 @@
         -->
         <Project Path="test/CyberCloud.Bundle.Cluster.Conformance/CyberCloud.Bundle.Cluster.Conformance.csproj" />
         <Project Path="test/CyberCloud.Isolation/CyberCloud.Isolation.csproj" />
+        <!--
+          The seven chaos invariants of docs/plan/23, each inducing its fault against a topology the
+          suite starts in Docker — a Redis hot tier, three PostgreSQL shards, a k3s, three silos wired
+          as CyberCloud.Silo.Host wires one. `./build.sh Chaos` runs it and prints ✔ ○ ✘ per row from
+          the file it writes. Issue #44.
+        -->
+        <Project Path="test/CyberCloud.Chaos/CyberCloud.Chaos.csproj" />
+        <!--
+          The load scenarios of docs/plan/23 at a tenth of their rates, through the real gateway over
+          HTTP on the chaos suite's topology; `./build.sh Load` gates its numbers against the budgets
+          and the committed load-baseline.json. References CyberCloud.Chaos for the topology and runs
+          none of its tests. Issue #44.
+        -->
+        <Project Path="test/CyberCloud.Load/CyberCloud.Load.csproj" />
     </Folder>
 </Solution>

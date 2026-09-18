@@ -167,6 +167,16 @@ Plus: three design-partner tenants running for four weeks with no cross-tenant i
 invariants green; the load suite meeting the [00](00-vision-and-principles.md) budgets at 10 % of
 target scale.
 
+> **2026-09-18 — the last two clauses have suites and first numbers.** `./build.sh Chaos` runs
+> `test/CyberCloud.Chaos` and `./build.sh Load` runs `test/CyberCloud.Load` at exactly the 10 %
+> this clause names; [23 § The chaos invariants](23-build-ci-and-testing.md) and
+> [23 § The load scenarios](23-build-ci-and-testing.md) carry the dated tables. Neither clause is
+> met: chaos rows 5 and 7 are ✘ (a gone shard surfaces as a serializer exception; a rolling restart
+> drops requests the gateway does not retry) and row 6 is ○ (no NATS client exists); load rows
+> `control-plane-write-p99-ms` (a stall inside the first reminder wave) and
+> `reconcile-queue-depth-slope-per-minute` (a queue whose floor is one reminder period deep) are ✘,
+> and the two unhosted rows are ○. What each needs is written beside it.
+
 ---
 
 ## Phase 3 — M2: a catalogue that is a business · 28 EM

@@ -11,6 +11,18 @@
 // and the drop is invisible: every run is green, and the p99 that walked from 4 ms to 24 ms over six
 // releases is still "under 25 ms". Both checks are here, and the trend one is the reason
 // LoadBaselineFile is a committed file rather than a build artefact.
+//
+// ── ⚠ THE DEPLOYMENT IS ONE THE SUITE STARTS, AT A TENTH OF THE ROW'S SCALE — issue #44 ────────
+//
+// test/CyberCloud.Load starts the chaos suite's topology — three silos over a real Redis, three
+// PostgreSQL shards and a k3s in Docker — puts the real CyberCloud.Gateway.Host in front of it on a
+// free port, and drives it over HTTP at one tenth of the rates docs/plan/23 names: 500 rps of reads,
+// 50 writes/s, 2 000 ReBAC checks/s, 200 000 resident grains. The budgets are NOT scaled: a p99
+// ceiling does not move with load, so meeting 25 ms at 500 rps is necessary for meeting it at 5 000
+// and not sufficient, and every line this target prints says which scale the number is from. The
+// one budget that IS about population — the silo working set at two million grains — is reported ○
+// with the tenth-scale number beside it rather than ticked against a ceiling written for ten times
+// the population.
 
 using Nuke.Common;
 using Nuke.Common.IO;
@@ -29,7 +41,12 @@ partial class Build {
     /// <param name="Metric">The key in the results file.</param>
     /// <param name="Budget">The absolute ceiling. ⚠ Lower is better for every metric here.</param>
     /// <param name="Unit">For the message; a bare number in a failure is a number somebody misreads.</param>
-    sealed record LoadMetric(string Scenario, string Metric, double Budget, string Unit);
+    /// <param name="ScalesWithPopulation">
+    ///     Whether the budget is about how much there is rather than how fast it answers. A working
+    ///     set measured over a tenth of the grains says nothing about the ceiling for all of them, so
+    ///     such a metric is ○ at any scale below 1 rather than ✔ — see <see cref="Gate" />.
+    /// </param>
+    sealed record LoadMetric(string Scenario, string Metric, double Budget, string Unit, bool ScalesWithPopulation = false);
 
     /// <summary>
     ///     The six scenarios of docs/plan/23 § The load scenarios, as the numbers they assert.
@@ -58,7 +75,7 @@ partial class Build {
         new("500 writes/s sustained", "reconcile-queue-depth-slope-per-minute", 0, "items/min"),
         new("ReBAC: 5-deep groups, 10 000 members, 20 000 checks/s", "rebac-check-p99-warm-ms", 10, "ms"),
         new("ReBAC: 5-deep groups, 10 000 members, 20 000 checks/s", "rebac-check-p99-cold-ms", 50, "ms"),
-        new("2 000 000 resident grains", "silo-working-set-gb", 12, "GB"),
+        new("2 000 000 resident grains", "silo-working-set-gb", 12, "GB", ScalesWithPopulation: true),
         new("2 000 000 resident grains", "grain-activation-churn-per-minute", 0, "activations/min"),
         new("1 000 concurrent terminal sessions", "terminal-stream-p99-ms", 80, "ms"),
         new("500 000 spans/s ingest", "span-ingest-drops", 0, "spans")
@@ -100,9 +117,15 @@ partial class Build {
     )]
     readonly string? LoadResults;
 
+    /// <summary>What a results file says: the numbers, the rows that could not be measured, and the scale.</summary>
+    /// <param name="Numbers">Metric name to what was measured.</param>
+    /// <param name="Vacuous">Metric name to why it was not measured here.</param>
+    /// <param name="Scale">The fraction of docs/plan/23's rates the numbers were driven at; 1 for a baseline with no <c>scale</c>.</param>
+    sealed record LoadNumbers(Dictionary<string, double> Numbers, Dictionary<string, string> Vacuous, double Scale);
+
     /// <summary>
     ///     ⚠ The deployment is an input rather than a dependency — see the note beside the target
-    ///     graph in <c>Build.cs</c>.
+    ///     graph in <c>Build.cs</c>. Here the input is a Docker daemon: the suite starts what it drives.
     /// </summary>
     void RunLoadTests() {
         Log.Information(
@@ -126,9 +149,9 @@ partial class Build {
     }
 
     /// <summary>
-    ///     Runs the suite against a real deployment, returning what it measured.
+    ///     Runs the suite against the topology it starts, returning what it measured.
     /// </summary>
-    Dictionary<string, double> DriveScenarios() {
+    LoadNumbers DriveScenarios() {
         var suites = ProjectsIn(TestSuite.Load);
         var resultsFile = ArtifactsDirectory / "load" / "results.json";
         var preconditions = new TargetPreconditions(nameof(Load));
@@ -141,13 +164,23 @@ partial class Build {
             + "Build.Test.cs § SuiteOwning already routes that name here"
         );
 
+        // ⚠ Resolved, not run — TargetPreconditions.Tool's remarks. The suite's fixture is what
+        // finds out whether the daemon answers; this checks there is one to ask.
+        preconditions.Tool(
+            "docker",
+            "install Docker Desktop on a cgroup v2 host — docs/plan/23 § The lane that needs a kubelet"
+        );
+
+        // ⚠ A base URL is REFUSED rather than ignored, for the reason Build.Chaos gives its kube
+        // context: the suite has no mode that drives a deployment, and a --e2e-base-url that was
+        // quietly dropped would leave the person who passed it believing staging had been measured.
         preconditions.Require(
-            !string.IsNullOrWhiteSpace(E2EBaseUrl),
-            "no deployment is configured to drive",
-            "pass --e2e-base-url for an environment that can actually be driven to the numbers — "
-            + "10 000 tenants, 5 000 rps, 2 000 000 resident grains. docs/plan/23 § Environments and "
-            + "rollout puts the weekly suite on staging, and a smaller environment does not produce a "
-            + "smaller version of these answers, it produces different ones"
+            string.IsNullOrWhiteSpace(E2EBaseUrl),
+            "--e2e-base-url was passed, and the load suite has no mode that drives an existing "
+            + "deployment — it starts the topology it drives, at a tenth of docs/plan/23's scale",
+            "drop --e2e-base-url. The full-scale weekly run against staging is owed under "
+            + "docs/plan/23 § The load scenarios, and a suite mode that takes a base URL and a token "
+            + "source is what it needs"
         );
 
         preconditions.Require(
@@ -165,12 +198,13 @@ partial class Build {
             + "\"budgets met\" before a release."
         );
 
+        resultsFile.Parent.CreateDirectory();
+        resultsFile.DeleteFile();
+
         RunSuites(
             nameof(Load),
             suites,
-            new Dictionary<string, string> {
-                ["CYBERCLOUD_LOAD_BASE_URL"] = E2EBaseUrl!, ["CYBERCLOUD_LOAD_RESULTS"] = resultsFile
-            }
+            new Dictionary<string, string> { ["CYBERCLOUD_LOAD_RESULTS"] = resultsFile }
         );
 
         return ReadLoadNumbers(
@@ -180,21 +214,78 @@ partial class Build {
     }
 
     /// <summary>Both halves of the gate: the six budgets, and the 20 % trend.</summary>
-    void Gate(Dictionary<string, double> results) {
+    /// <remarks>
+    ///     ⚠ A metric the results file lists under <c>vacuous</c> is ○ with its reason and fails
+    ///     nothing; a metric under neither <c>metrics</c> nor <c>vacuous</c> is an unrun scenario and
+    ///     fails. The difference is the suite having said, in a sentence, why it could not measure
+    ///     the row — which is the only thing that separates "not hosted here" from "forgotten".
+    /// </remarks>
+    void Gate(LoadNumbers results) {
         var baseline = LoadBaselineFile.FileExists()
             ? ReadLoadNumbers(LoadBaselineFile, $"the previous release, from {LoadBaselineFile.Name}")
-            : new Dictionary<string, double>();
+            : new LoadNumbers(new Dictionary<string, double>(StringComparer.Ordinal), new Dictionary<string, string>(StringComparer.Ordinal), 1);
+
+        if (results.Scale < 1) {
+            Log.Warning(
+                "Load: measured at {Scale:P0} of docs/plan/23 § The load scenarios' rates. A budget met here "
+                + "is necessary for the row and not sufficient; the full-scale run is the staging environment's.",
+                results.Scale
+            );
+        }
+
+        // ⚠ The trend rule compares like with like. A baseline driven at a tenth of the rates and a
+        // run driven at all of them differ in what they measured, not in how the platform did, so
+        // the 20 % rule is not applied across scales — and the log says so rather than printing a
+        // regression that is a change of population.
+        var trendApplies = Math.Abs(baseline.Scale - results.Scale) < 0.001;
+
+        if (!trendApplies && baseline.Numbers.Count > 0) {
+            Log.Warning(
+                "Load: {Baseline} was measured at {BaselineScale:P0} and this run at {Scale:P0}; the 20 % rule "
+                + "does not apply across scales, so this run's numbers are compared to the budgets only. "
+                + "Commit this run's results as the baseline at its scale to arm the rule for the next one.",
+                LoadBaselineFile.Name,
+                baseline.Scale,
+                results.Scale
+            );
+        }
 
         var violations = new List<string>();
+        var vacuous = new List<string>();
 
         foreach (var metric in LoadMetrics) {
-            if (!results.TryGetValue(metric.Metric, out var measured)) {
+            if (results.Vacuous.TryGetValue(metric.Metric, out var reason)) {
+                Log.Warning("  ○ {Metric,-40} VACUOUS — {Reason}", metric.Metric, reason);
+                vacuous.Add(metric.Metric);
+                continue;
+            }
+
+            if (!results.Numbers.TryGetValue(metric.Metric, out var measured)) {
                 violations.Add(
                     $"{metric.Metric} is not in the results. docs/plan/23 § The load scenarios asserts "
                     + $"it for \"{metric.Scenario}\", and a missing number is an unrun scenario, not a "
                     + "pass"
                 );
 
+                continue;
+            }
+
+            if (metric.ScalesWithPopulation && results.Scale < 1) {
+                // ⚠ ○, not ✔. 1.9 GB over 200 000 grains against a 12 GB budget for 2 000 000 is
+                // a number about a different population, and printing a tick beside it would be
+                // the false reassurance GateStatus.Vacuous exists to refuse.
+                Log.Warning(
+                    "  ○ {Metric,-40} {Measured,8} {Unit,-15} measured at {Scale:P0} of the population — the "
+                    + "{Budget} {Unit} budget is written for all of it and is not compared",
+                    metric.Metric,
+                    Number(measured),
+                    metric.Unit,
+                    results.Scale,
+                    Number(metric.Budget),
+                    metric.Unit
+                );
+
+                vacuous.Add(metric.Metric);
                 continue;
             }
 
@@ -205,13 +296,15 @@ partial class Build {
                 );
             }
 
-            if (!baseline.TryGetValue(metric.Metric, out var previous)) {
+            if (!trendApplies || !baseline.Numbers.TryGetValue(metric.Metric, out var previous)) {
                 Log.Warning(
-                    "  ○ {Metric} = {Measured} {Unit} — no previous release recorded, so the 20 % "
-                    + "rule did not apply to it",
+                    "  {Marker} {Metric} = {Measured} {Unit} — budget {Budget}; no previous release at this scale, "
+                    + "so the 20 % rule did not apply to it",
+                    measured > metric.Budget ? "✘" : "✔",
                     metric.Metric,
                     Number(measured),
-                    metric.Unit
+                    metric.Unit,
+                    Number(metric.Budget)
                 );
 
                 continue;
@@ -234,7 +327,8 @@ partial class Build {
             }
 
             Log.Information(
-                "  ✔ {Metric,-40} {Measured,8} {Unit,-15} budget {Budget}, previous {Previous} ({Delta})",
+                "  {Marker} {Metric,-40} {Measured,8} {Unit,-15} budget {Budget}, previous {Previous} ({Delta})",
+                measured > metric.Budget ? "✘" : "✔",
                 metric.Metric,
                 Number(measured),
                 metric.Unit,
@@ -244,11 +338,21 @@ partial class Build {
             );
         }
 
+        if (vacuous.Count > 0) {
+            Log.Warning(
+                "Load: {Count} metric(s) are ○, not ✔: {Metrics}. Each row above says why; docs/plan/23 "
+                + "§ The load scenarios carries the dated table.",
+                vacuous.Count,
+                string.Join(", ", vacuous)
+            );
+        }
+
         if (violations.Count == 0) {
             Log.Information(
-                "Load: {Count} metric(s) within budget and within {Limit:P0} of the previous release",
-                LoadMetrics.Length,
-                RegressionLimit
+                "Load: {Count} metric(s) within budget and within {Limit:P0} of the previous release, {Vacuous} ○",
+                LoadMetrics.Length - vacuous.Count,
+                RegressionLimit,
+                vacuous.Count
             );
 
             return;
@@ -273,16 +377,17 @@ partial class Build {
             : ((measured - previous) / previous).ToString("+0.#%;-0.#%;0%", CultureInfo.InvariantCulture);
 
     /// <summary>
-    ///     A flat <c>{ "metric": number }</c> map out of a results or baseline file.
+    ///     A results or baseline file: the <c>{ "metric": number }</c> map, the <c>vacuous</c> map,
+    ///     and the <c>scale</c>.
     /// </summary>
     /// <remarks>
     ///     ⚠ Fails on a non-numeric value rather than skipping it. A results file whose p99 is the
     ///     string <c>"n/a"</c> is a run that did not measure that scenario, and treating it as absent
     ///     would turn it into a warning; treating it as an error is how a broken harness stops being
-    ///     mistaken for a clean release.
+    ///     mistaken for a clean release. The place for "could not measure" is the <c>vacuous</c>
+    ///     map, with a sentence.
     /// </remarks>
-    // Dictionary rather than IReadOnlyDictionary: CA1859 is an error here and this is a private helper.
-    static Dictionary<string, double> ReadLoadNumbers(AbsolutePath file, string what) {
+    static LoadNumbers ReadLoadNumbers(AbsolutePath file, string what) {
         Assert.FileExists(
             file,
             $"{file} does not exist, and it is where this target reads {what}."
@@ -292,7 +397,7 @@ partial class Build {
             ?? throw new System.Text.Json.JsonException($"{file} is not a JSON object.");
 
         // "metrics" if it is there, the root object otherwise — the baseline is a bare map and a
-        // results file may want to carry a release name beside its numbers.
+        // results file carries a scale, the vacuous rows and the distributions beside its numbers.
         var metrics = root["metrics"]?.AsObject() ?? root;
         var numbers = new Dictionary<string, double>(StringComparer.Ordinal);
 
@@ -311,8 +416,18 @@ partial class Build {
             numbers[key] = value!.GetValue<double>();
         }
 
-        Log.Information("Load: read {Count} number(s) — {What}", numbers.Count, what);
+        var vacuous = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        return numbers;
+        if (root["vacuous"] is JsonObject unmeasured) {
+            foreach (var (key, value) in unmeasured) {
+                vacuous[key] = value?.GetValue<string>() ?? "no reason given";
+            }
+        }
+
+        var scale = root["scale"] is { } s && s.GetValueKind() == System.Text.Json.JsonValueKind.Number ? s.GetValue<double>() : 1;
+
+        Log.Information("Load: read {Count} number(s) and {Vacuous} vacuous row(s) at scale {Scale} — {What}", numbers.Count, vacuous.Count, scale, what);
+
+        return new(numbers, vacuous, scale);
     }
 }
