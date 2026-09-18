@@ -45,7 +45,10 @@ sealed class RouteStage(IProviderRegistry registry, GatewayOptions options) : IG
         // A hub handshake carries no api-version — SignalR's negotiate is not a versioned API
         // surface, and the messages on the hub are versioned by the hub's own contract. Neither does
         // security.txt: its shape is RFC 9116's, not this platform's, and a scanner sends no query.
-        if (route.Kind is RouteKind.Hub or RouteKind.SecurityTxt or RouteKind.AgentTunnel) {
+        // The hub ticket is the hub's own credential and carries none for the hub's reason; one
+        // sent anyway is ignored rather than refused, so the portal's one transport can add it to
+        // every request without a special case.
+        if (route.Kind is RouteKind.Hub or RouteKind.HubTicket or RouteKind.SecurityTxt or RouteKind.AgentTunnel) {
             return Stop(null);
         }
 

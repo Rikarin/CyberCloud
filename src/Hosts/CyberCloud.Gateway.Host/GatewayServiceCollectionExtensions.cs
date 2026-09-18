@@ -1,6 +1,7 @@
 using CyberCloud.Communication;
 using CyberCloud.Core.Time;
 using CyberCloud.Gateway.Host.Authentication;
+using CyberCloud.Gateway.Host.Hubs;
 using CyberCloud.Gateway.Host.Operations;
 using CyberCloud.Gateway.Host.Pipeline;
 using CyberCloud.Gateway.Host.Pipeline.Stages;
@@ -81,6 +82,16 @@ static class GatewayServiceCollectionExtensions {
         services.TryAddSingleton<GatewayRateLimiter>();
         services.TryAddSingleton(new ConcurrencyLimits());
         services.TryAddSingleton<IConcurrencyLimiter, ProcessConcurrencyLimiter>();
+
+        // ── The hub ticket a browser opens a WebSocket with — docs/plan/10 § SignalR, HubTickets.
+        //    Redis when configured and in-process otherwise, by the rule stage 5's counters use and
+        //    for the same reason: a ticket minted on one pod must be redeemable on the pod the
+        //    upgrade lands on, and only a shared store makes that true. ──
+        if (services.Any(x => x.ServiceType == typeof(IConnectionMultiplexer))) {
+            services.TryAddSingleton<IHubTicketStore, RedisHubTicketStore>();
+        } else {
+            services.TryAddSingleton<IHubTicketStore, InMemoryHubTicketStore>();
+        }
 
         // ── Stage 4's seam. docs/plan/10 § Request pipeline — the decision is implemented; the hop
         //    needs two regions and is configuration. ──

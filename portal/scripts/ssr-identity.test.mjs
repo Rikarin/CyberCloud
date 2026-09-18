@@ -28,6 +28,12 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { missingClassRules, missingClassRulesMessage } from './rendered-class-coverage.mjs';
+import {
+  captureProxyHeaderWarnings,
+  hostileProxyHeaders,
+  proxyHeaderMarkers,
+  renderWithTrustedForwardedHost
+} from './ssr-proxy-headers.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const serverBundle = join(here, '..', 'dist', 'identity', 'server', 'server.mjs');
@@ -65,6 +71,9 @@ const check = (name, fn) => {
   }
 };
 
+/** Hooked before the bundle is imported — `scripts/ssr-proxy-headers.mjs` says which warning and why. */
+const proxyHeaderWarnings = captureProxyHeaderWarnings();
+
 const { reqHandler } = await import(pathToFileURL(serverBundle).href);
 const { createServer } = await import('node:http');
 
@@ -73,22 +82,23 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
 
 /**
- * Every request carries credential-shaped material in every place a browser could put it.
+ * Every request carries credential-shaped material in every place a browser could put it, and every
+ * proxy header the engine knows, each with a value that would show in the render if it were
+ * honoured.
  *
  * ⚠ The point is that NONE of it may influence the render or appear in it. A page that echoed any
  * of these into the document would be handing them to the next thing that reads the HTML.
  *
- * ⚠ `x-forwarded-for` makes @angular/ssr 22.1 print `Received "x-forwarded-for" header but
- * "trustProxyHeaders" was not set up to allow it` on stderr. Since 22.1 the engine strips every
- * `Forwarded` and `X-Forwarded-*` header it was not told to trust, and warns as it does, so the
- * line is the engine agreeing with this file — neither server.ts sets `trustProxyHeaders`. If one
- * ever does, this header stops being stripped and the checks below are what catch it reaching
- * the document.
+ * ⚠ The proxy headers used to be a lure — `x-forwarded-for` alone, sent so that @angular/ssr 22.1's
+ * `Received "x-forwarded-for" header but "trustProxyHeaders" was not set up to allow it` on stderr
+ * confirmed the engine was stripping it. `server.ts` decides the trust list now and drops every
+ * header not on it before the engine looks, so the warning is a failure below rather than the
+ * expected noise, and the six headers are a check: none of their values may reach the document.
  */
 const hostileHeaders = {
   cookie: '__Host-cyc-session=SESSIONVALUE9f3a; other=OTHERVALUE7b21',
   authorization: 'Bearer eyJhbGciOiJFUzI1NiJ9.PAYLOADMARKER.SIGNATUREMARKER',
-  'x-forwarded-for': '203.0.113.9'
+  ...hostileProxyHeaders
 };
 
 const fetchPage = path =>
@@ -139,7 +149,7 @@ check('no credential material reaches the rendered document', () => {
       'PAYLOADMARKER',
       'SIGNATUREMARKER',
       'QUERYPASSWORD',
-      '203.0.113.9'
+      ...proxyHeaderMarkers
     ]) {
       assert.ok(
         !page.body.includes(marker),
@@ -220,6 +230,38 @@ check('the credential form cannot be framed', () => {
   }
 });
 
+check('untrusted proxy headers make the engine warn about nothing', () => {
+  // Every page above was requested with all six proxy headers. The values are checked against the
+  // document by the credential check; this is the other half — the engine had nothing to strip,
+  // because server.ts had already removed everything it was not told to trust.
+  assert.deepEqual(
+    proxyHeaderWarnings.seen,
+    [],
+    'the engine warned about a proxy header — server.ts is meant to drop every untrusted one before the engine sees it, so behind an ingress this is a line on stderr per request'
+  );
+});
+
+/**
+ * The trust list, exercised: a child process with `NG_TRUST_PROXY_HEADERS=x-forwarded-host` asks
+ * for the sign-in page as `evil.example`. ⚠ On this origin that is the attack — a proxy header
+ * naming a host the sign-in page then renders under — and the engine's allowed-hosts check is what
+ * refuses it, which only happens if the list reached the engine.
+ */
+const trustedHost = renderWithTrustedForwardedHost(serverBundle, '/signin');
+
+check('a trusted x-forwarded-host outside the allowed hosts is refused, not rendered', () => {
+  assert.equal(
+    trustedHost.status,
+    400,
+    `with x-forwarded-host trusted, the sign-in page rendered as "evil.example" (HTTP ${trustedHost.status}) instead of failing the allowed-hosts check`
+  );
+  assert.deepEqual(
+    trustedHost.warnings,
+    [],
+    'the engine warned while x-forwarded-host was trusted, so the middleware and the engine are working from different lists'
+  );
+});
+
 const hostile = await fetchPage('/signin?returnUrl=https%3A%2F%2Fevil.example%2Fharvest');
 
 /**
@@ -259,6 +301,7 @@ check('every class the rendered page uses has a rule behind it', () => {
 });
 
 server.close();
+proxyHeaderWarnings.restore();
 
 const failures = results.filter(r => !r.ok);
 for (const result of results) {

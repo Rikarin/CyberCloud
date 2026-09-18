@@ -3,6 +3,7 @@
     "target": "http://localhost:5100",
     "secure": false,
     "changeOrigin": false,
+    "ws": true,
     "pathRewrite": { "^/api": "" }
   }
 }

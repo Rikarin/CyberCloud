@@ -190,8 +190,9 @@ Six, all settled, kept here because each changed what gets built.
    free within Angular 22.x. ⚠ That last clause was false at 2.2.x — five packages peered
    `@angular/common: 22.0.8` exactly — and is true again at 3.0.0, taken 2026-09-15, on which
    #87 moved the framework to 22.1.4, the version the 3.0.0 bundles were compiled with, and the
-   tooling to 22.1.6, the version xUI's tag pins for its own; ADR-017 carries the corrections and
-   portal/README.md § The Angular pin the measured table. ADR-017's
+   tooling to 22.1.6, the version xUI's tag pins for its own (#92 re-measured the tooling on
+   2026-09-17 and configured the one behaviour it brought, `@angular/ssr`'s proxy-header trust);
+   ADR-017 carries the corrections and portal/README.md § The Angular pin the measured table. ADR-017's
    substance stands; its version numbers were a snapshot of the wrong source. [20](20-portal.md).
 
 Plus one thing the brief did not raise and that the audit made unavoidable: **the licence review**

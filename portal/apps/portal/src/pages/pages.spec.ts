@@ -9,6 +9,9 @@ import axe from 'axe-core';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { appRoutes } from '../app/app.routes';
+import { TERMINAL_HUB_FACTORY, TerminalHubConnection } from '../app/terminal/terminal-hub';
+import { TERMINAL_SCREEN_FACTORY, TerminalScreen } from '../app/terminal/terminal-pane';
+import { toBase64 } from '../app/terminal/terminal-session';
 import { OPERATION_POLL_MS } from './operations/operation-view';
 
 /**
@@ -18,11 +21,12 @@ import { OPERATION_POLL_MS } from './operations/operation-view';
  * the real form document served at `/forms/{apiVersion}.json`, and `HttpTestingController`
  * playing the gateway — and exercises what each page does: the create blade's `PUT` and its
  * hand-off to the operation view, the operation view's poll to `Succeeded`, the blade's read and
- * its two-step delete, the list's `skipToken` paging, the two scope creates, and the access page's
- * grant, check and revoke over the one hand-written address. Each request is asserted by method,
- * path and body, because a page that sends the right verb to the wrong path is the failure the
- * generated client's per-type methods exist to prevent — and, for the access page, the failure
- * nothing generated can prevent.
+ * its two-step delete, the list's `skipToken` paging, the two scope creates, the access page's
+ * grant, check and revoke over the one hand-written address, and the cloud shell's list → connect
+ * → ticket → hub, with a scripted hub and a recording screen in place of SignalR and xterm. Each
+ * request is asserted by method, path and body, because a page that sends the right verb to the
+ * wrong path is the failure the generated client's per-type methods exist to prevent — and, for
+ * the access page and the ticket, the failure nothing generated can prevent.
  */
 const TENANT = 't-acme';
 const SUBSCRIPTION = '0f9a1c2e-4b7d-4e3a-9c1d-2b6f8a7e5d43';
@@ -50,20 +54,106 @@ const WCAG_22_AA = {
 })
 class Host {}
 
+/** The hub the terminal page reaches, scripted: every method is recorded, and answered as told. */
+class ScriptedHub implements TerminalHubConnection {
+  readonly invocations: { method: string; args: unknown[] }[] = [];
+  private readonly handlers = new Map<string, (...args: unknown[]) => void>();
+  stopped = false;
+
+  constructor(
+    readonly url: string,
+    readonly refuse: string | null
+  ) {}
+
+  start(): Promise<void> {
+    return Promise.resolve();
+  }
+  stop(): Promise<void> {
+    this.stopped = true;
+    return Promise.resolve();
+  }
+  invoke(method: string, ...args: unknown[]): Promise<unknown> {
+    this.invocations.push({ method, args });
+    return this.refuse === null ? Promise.resolve(undefined) : Promise.reject(new Error(this.refuse));
+  }
+  on(method: string, handler: (...args: unknown[]) => void): void {
+    this.handlers.set(method, handler);
+  }
+  onclose(): void {
+    // The scripted socket never drops; `terminal-session.spec.ts` covers the ladder.
+  }
+  output(text: string): void {
+    this.handlers.get('Output')?.(toBase64(new TextEncoder().encode(text)));
+  }
+}
+
+/** The screen the pane mounts, recording what it is told to paint and typing on request. */
+class RecordingScreen implements TerminalScreen {
+  readonly painted: string[] = [];
+  private typed: ((data: string) => void) | null = null;
+  open(): void {
+    // Nothing to lay out in jsdom.
+  }
+  write(data: Uint8Array | string): void {
+    this.painted.push(typeof data === 'string' ? data : new TextDecoder().decode(data));
+  }
+  notice(text: string): void {
+    this.painted.push(`— ${text} —`);
+  }
+  onData(handler: (data: string) => void): void {
+    this.typed = handler;
+  }
+  fit(): { cols: number; rows: number } {
+    return { cols: 132, rows: 43 };
+  }
+  focus(): void {
+    // Nothing to focus in jsdom.
+  }
+  dispose(): void {
+    this.typed = null;
+  }
+  type(data: string): void {
+    this.typed?.(data);
+  }
+}
+
 describe('the portal pages, signed in', () => {
   let fixture: ComponentFixture<Host>;
   let router: Router;
   let http: HttpTestingController;
   let context: TenantContextStore;
+  let hubs: ScriptedHub[];
+  let hubRefusal: string | null;
+  let screens: RecordingScreen[];
 
   beforeEach(() => {
+    hubs = [];
+    hubRefusal = null;
+    screens = [];
+
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
         provideRouter(appRoutes, withComponentInputBinding()),
         provideHttpClient(),
         provideHttpClientTesting(),
-        { provide: OPERATION_POLL_MS, useValue: 5 }
+        { provide: OPERATION_POLL_MS, useValue: 5 },
+        {
+          provide: TERMINAL_HUB_FACTORY,
+          useValue: (url: string) => {
+            const hub = new ScriptedHub(url, hubRefusal);
+            hubs.push(hub);
+            return Promise.resolve(hub);
+          }
+        },
+        {
+          provide: TERMINAL_SCREEN_FACTORY,
+          useValue: () => {
+            const screen = new RecordingScreen();
+            screens.push(screen);
+            return Promise.resolve(screen);
+          }
+        }
       ]
     });
 
@@ -905,6 +995,206 @@ describe('the portal pages, signed in', () => {
       const offered = [...host().querySelectorAll('li span')].map(s => s.textContent?.trim());
       expect(offered).toContain('CyberCloud.Sample/widgets');
       expect(offered).not.toContain('CyberCloud.ContainerService/managedClusters/agentPools');
+    });
+  });
+  describe('the cloud shell', () => {
+    const CONSOLES = `/api/tenants/${TENANT}/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/providers/CyberCloud.Terminal/consoles`;
+    const TICKET = '/api/hubs/terminal/ticket';
+    const PAGE = `/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/terminal`;
+
+    const aConsole = (name: string) => ({
+      id: `${CONSOLES.slice(4)}/${name}`,
+      name,
+      type: 'CyberCloud.Terminal/consoles',
+      provisioningState: 'Succeeded',
+      etag: '"1"',
+      location: 'eu-central',
+      properties: { clusterId: SUBSCRIPTION, home: { size: '5Gi' }, identity: { principalId: RITA } }
+    });
+
+    const connected = (sessionId: string, recording = false) => ({
+      sessionId,
+      hub: '/hubs/terminal',
+      state: 'Ready',
+      idleTimeoutSeconds: 1200,
+      maxDurationSeconds: 28_800,
+      recording
+    });
+
+    const sessionState = (): string | null =>
+      host().querySelector('[data-session-state]')?.getAttribute('data-session-state') ?? null;
+
+    /** Lists the group's consoles, then answers the connect and the ticket the page sends for one. */
+    async function openWith(consoles: object[], session = connected('pod-uid-1'), page = PAGE): Promise<void> {
+      await open(page);
+      http.expectOne(r => r.method === 'GET' && r.url === CONSOLES).flush({ value: consoles });
+      await settle();
+
+      if (consoles.length === 0) return;
+
+      const connect = http.expectOne(r => r.method === 'POST' && r.url.endsWith('/connect'));
+      connect.flush(session);
+      await settle();
+      const ticket = http.expectOne(r => r.method === 'POST' && r.url === TICKET);
+      // ⚠ The mint is authenticated the way every call is — the interceptor is not in this
+      // TestBed, so what is asserted is that nothing else carries a credential: the socket URL.
+      ticket.flush({ ticket: 'tk-1', hub: '/hubs/terminal', expiresAt: '2026-08-11T12:00:30Z' });
+      await settle();
+      await settle();
+    }
+
+    it('lists the consoles, opens the first, and reaches the hub with a ticket rather than the token', async () => {
+      await openWith([aConsole('shell'), aConsole('other')]);
+
+      expect([...host().querySelectorAll('[data-console]')].map(b => b.getAttribute('data-console'))).toEqual([
+        'shell',
+        'other'
+      ]);
+      expect(host().querySelector('[data-console="shell"]')?.getAttribute('aria-pressed')).toBe('true');
+
+      expect(hubs).toHaveLength(1);
+      expect(hubs[0].url).toBe('ws://localhost/api/hubs/terminal?ticket=tk-1');
+      expect(hubs[0].url).not.toContain('signed-in');
+      // The pane's size, as the screen reported it after mount.
+      expect(hubs[0].invocations).toEqual([{ method: 'Attach', args: ['pod-uid-1', 132, 43] }]);
+      expect(sessionState()).toBe('attached');
+      expect(host().textContent).toContain('Connected');
+      expect(host().textContent).toContain('Reclaimed after 20 min idle');
+      expect(host().querySelector('[data-recording]')).toBeNull();
+
+      // Output lands on the screen; keystrokes go to the hub.
+      hubs[0].output('$ ');
+      expect(screens[0].painted).toContain('$ ');
+      screens[0].type('ls\r');
+      expect(hubs[0].invocations[1]).toEqual({
+        method: 'Send',
+        args: ['pod-uid-1', toBase64(new TextEncoder().encode('ls\r'))]
+      });
+
+      const results = await axe.run(host(), WCAG_22_AA);
+      expect(results.violations.map(v => `${v.id}: ${v.help}`)).toEqual([]);
+    });
+
+    it('opens the console the URL names, and switching consoles is a new connect', async () => {
+      await openWith([aConsole('shell'), aConsole('other')], connected('pod-other'), `${PAGE}?console=other`);
+
+      expect(host().querySelector('[data-console="other"]')?.getAttribute('aria-pressed')).toBe('true');
+      expect(hubs[0].invocations[0]).toEqual({ method: 'Attach', args: ['pod-other', 132, 43] });
+
+      click('shell');
+      await settle();
+      expect(router.url).toBe(`${PAGE}?console=shell`);
+      http.expectOne(r => r.method === 'POST' && r.url === `${CONSOLES}/shell/connect`).flush(connected('pod-shell'));
+      await settle();
+      http
+        .expectOne(r => r.method === 'POST' && r.url === TICKET)
+        .flush({ ticket: 'tk-2', hub: '/hubs/terminal', expiresAt: '' });
+      await settle();
+      await settle();
+
+      expect(hubs).toHaveLength(2);
+      expect(hubs[0].stopped).toBe(true);
+      expect(hubs[1].url).toBe('ws://localhost/api/hubs/terminal?ticket=tk-2');
+    });
+
+    it('is loud about a recorded session — docs/plan/19 § Auditing', async () => {
+      await openWith([aConsole('shell')], connected('pod-uid-1', true));
+
+      expect(host().querySelector('[data-recording]')?.textContent).toContain('being recorded');
+    });
+
+    it('shows the hub refusing the session in place, with Reconnect, and retries nothing on its own', async () => {
+      hubRefusal = "The cloud terminal's session grain is docs/plan/19 and is not implemented.";
+      await openWith([aConsole('shell')]);
+
+      expect(sessionState()).toBe('refused');
+      expect(host().querySelector('[data-problem]')?.textContent).toContain('session grain is docs/plan/19');
+      expect(hubs[0].stopped).toBe(true);
+      expect([...host().querySelectorAll('button')].map(b => b.textContent?.trim())).toContain('Reconnect');
+
+      // Reconnect is a whole new connect and a whole new ticket.
+      hubRefusal = null;
+      click('Reconnect');
+      await settle();
+      http.expectOne(r => r.method === 'POST' && r.url === `${CONSOLES}/shell/connect`).flush(connected('pod-uid-1'));
+      await settle();
+      http
+        .expectOne(r => r.method === 'POST' && r.url === TICKET)
+        .flush({ ticket: 'tk-2', hub: '/hubs/terminal', expiresAt: '' });
+      await settle();
+      await settle();
+      expect(sessionState()).toBe('attached');
+    });
+
+    it('terminates in two clicks, through the terminate action, and closes the pane', async () => {
+      await openWith([aConsole('shell')]);
+
+      click('Terminate');
+      await settle();
+      http.expectNone(r => r.url.endsWith('/terminate'));
+      expect(host().textContent).toContain('Stop the shell?');
+
+      click('Stop it');
+      await settle();
+      http.expectOne(r => r.method === 'POST' && r.url === `${CONSOLES}/shell/terminate`).flush({ terminated: true });
+      await settle();
+
+      expect(host().querySelector('[data-outcome]')?.getAttribute('data-outcome')).toBe('terminated');
+      expect(hubs[0].stopped).toBe(true);
+      expect(sessionState()).toBe('closed');
+    });
+
+    it('renders the generated form when the group has no console, and creates one through the PUT', async () => {
+      await openWith([]);
+      await serveForms();
+
+      expect(host().textContent).toContain('No console in this group');
+      expect(host().querySelector('[data-pointer="/properties/clusterId"] input')).not.toBeNull();
+      expect(hubs).toHaveLength(0);
+
+      type('#cc-terminal-name', 'shell');
+      type('[data-pointer="/location"] input', 'eu-central');
+      type('[data-pointer="/properties/clusterId"] input', SUBSCRIPTION);
+      type('[data-pointer="/properties/identity/principalId"] input', '0f9a1c2e-4b7d-4e3a-9c1d-2b6f8a7e5d43');
+      host().querySelector('cc-resource-form form')?.dispatchEvent(new Event('submit'));
+      await settle();
+
+      const put = http.expectOne(r => r.method === 'PUT' && r.url === `${CONSOLES}/shell`);
+      const body = put.request.body as { location: string; properties: { clusterId: string; home: { size: string } } };
+      expect(body.location).toBe('eu-central');
+      expect(body.properties.clusterId).toBe(SUBSCRIPTION);
+      expect(body.properties.home.size).toBe('5Gi');
+
+      put.flush(null, {
+        status: 202,
+        statusText: 'Accepted',
+        headers: { 'Azure-AsyncOperation': `https://api.example/operations/${OPERATION}?${V}`, 'Retry-After': '2' }
+      });
+      await settle();
+
+      // The operation view, then back here with the new console named.
+      expect(router.url).toBe(`/operations/${OPERATION}?then=${encodeURIComponent(`${PAGE}?console=shell`)}`);
+      await answerPoll({ status: 'Succeeded' });
+
+      const results = await axe.run(host(), WCAG_22_AA);
+      expect(results.violations.map(v => `${v.id}: ${v.help}`)).toEqual([]);
+    });
+
+    it('is reached from the resource group blade', async () => {
+      await open(`/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}`);
+      await serveForms();
+      http
+        .expectOne(r => r.method === 'GET')
+        .flush({ id: 'x', name: GROUP, type: 'CyberCloud.Resources/subscriptions/resourceGroups' });
+      await settle();
+
+      click('Cloud shell');
+      await settle();
+      expect(router.url).toBe(PAGE);
+      http.expectOne(r => r.method === 'GET' && r.url === CONSOLES).flush({ value: [] });
+      await settle();
+      await serveForms();
+      expect(host().querySelector('h1')?.textContent?.trim()).toBe('Cloud shell');
     });
   });
 });

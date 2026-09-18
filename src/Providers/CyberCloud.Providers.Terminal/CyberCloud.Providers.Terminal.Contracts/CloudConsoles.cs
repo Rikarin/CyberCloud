@@ -129,9 +129,11 @@ namespace CyberCloud.Providers.Terminal.Contracts;
 ///         </b> docs/plan/20 § The pages that are not generated budgets 0.4 EM for
 ///         <c>xterm.js</c> in a dockable panel and nobody had written down what it talks to. It is:
 ///         <c>POST …/connect</c> → the five fields of <see cref="ConnectResponse" />, then
-///         <c>/hubs/terminal</c> with the returned <see cref="SessionIdField" />. The hub is already
-///         mapped and already refuses by name (<c>TerminalHub.SendAsync</c>); the byte path behind it
-///         is docs/plan/19's session grain and is owed.
+///         <c>/hubs/terminal</c> with the returned <see cref="SessionIdField" /> — opened with a
+///         ticket the gateway mints (<c>POST /hubs/terminal/ticket</c>), never with the bearer token
+///         in the URL. The portal's terminal blade does exactly that now. The hub is mapped and
+///         refuses every method by name (<c>TerminalHub.Attach</c>, <c>Send</c>, <c>Resize</c>); the
+///         byte path behind it is docs/plan/19's session grain and is owed.
 ///     </para>
 /// </remarks>
 public static class CloudConsoles {

@@ -1,4 +1,5 @@
 using CyberCloud.Gateway.Host.Authentication;
+using CyberCloud.Gateway.Host.Hubs;
 using CyberCloud.Gateway.Host.Operations;
 using CyberCloud.Gateway.Host.Pipeline;
 using CyberCloud.Gateway.Host.Pipeline.Stages;
@@ -18,11 +19,17 @@ namespace CyberCloud.Gateway.Host.Tests.Infrastructure;
 /// <param name="Body">The response body, as text.</param>
 /// <param name="Headers">Every response header.</param>
 /// <param name="Trace">The stages the pipeline entered, in order.</param>
+/// <param name="Caller">
+///     The caller stage 3 built — the object <c>GatewayComposition.MapGateway</c> parks for a hub to
+///     read, so on a hub route this <i>is</i> what the hub sees. A request refused before stage 3
+///     has the empty default: <c>Guid.Empty</c> for the tenant and no subject.
+/// </param>
 sealed record GatewayResponse(
     int Status,
     string Body,
     IHeaderDictionary Headers,
-    IReadOnlyList<string> Trace
+    IReadOnlyList<string> Trace,
+    CallerContext Caller
 ) {
     /// <summary>One header, or empty.</summary>
     public string Header(string name) => Headers.TryGetValue(name, out var value) ? value.ToString() : "";
@@ -87,6 +94,9 @@ sealed class GatewayHarness {
     /// <summary>The concurrency limiter the hubs share.</summary>
     public ProcessConcurrencyLimiter Concurrency { get; } = new(new());
 
+    /// <summary>The hub tickets stage 8 mints and stage 2 redeems, in memory and driven by <see cref="Clock" />.</summary>
+    public InMemoryHubTicketStore Tickets { get; }
+
     /// <summary>The region this gateway claims to be in.</summary>
     public GatewayOptions Options { get; }
 
@@ -100,6 +110,7 @@ sealed class GatewayHarness {
         TenantStatus status = TenantStatus.Active
     ) {
         Counters = new InMemoryRateLimitCounters(Clock);
+        Tickets = new InMemoryHubTicketStore(Clock);
         tokens = new(Clock);
 
         Options = new() {
@@ -125,20 +136,26 @@ sealed class GatewayHarness {
             }
         );
 
-        pipeline = new(
-            [
-                new CorrelationStage(),
-                new AuthenticateStage(tokens),
-                new ResolveTenantStage(directory, NullLogger<ResolveTenantStage>.Instance),
-                new RegionRoutingStage(Options, new UnconfiguredRegionProxy()),
-                new RateLimitStage(new GatewayRateLimiter(Counters)),
-                new RouteStage(new OneTypeRegistry(), Options),
-                new ValidateStage(Options),
-                new DispatchStage(Manager, Scopes, Roles, Operations, Options)
-            ],
-            NullLogger<GatewayPipeline>.Instance
-        );
+        Stages = [
+            new CorrelationStage(),
+            new AuthenticateStage(tokens, Tickets),
+            new ResolveTenantStage(directory, NullLogger<ResolveTenantStage>.Instance),
+            new RegionRoutingStage(Options, new UnconfiguredRegionProxy()),
+            new RateLimitStage(new GatewayRateLimiter(Counters)),
+            new RouteStage(new OneTypeRegistry(), Options),
+            new ValidateStage(Options),
+            new DispatchStage(Manager, Scopes, Roles, Operations, Tickets, Options)
+        ];
+
+        pipeline = new(Stages, NullLogger<GatewayPipeline>.Instance);
     }
+
+    /// <summary>
+    ///     The eight stage objects, in document order — the same instances <see cref="SendAsync" /> runs,
+    ///     so a suite that puts them behind a real listener (<see cref="OverHttpGateway" />) drives the
+    ///     same fakes this harness seeded.
+    /// </summary>
+    public IReadOnlyList<IGatewayStage> Stages { get; }
 
     /// <summary>Issues a token. The only way a caller gets a tenant.</summary>
     /// <param name="tenantId">The <c>tid</c> claim.</param>
@@ -225,7 +242,8 @@ sealed class GatewayHarness {
             http.Response.StatusCode,
             Encoding.UTF8.GetString(response.ToArray()),
             http.Response.Headers,
-            [.. context.Snapshot().Reached.Select(x => x.ToString())]
+            [.. context.Snapshot().Reached.Select(x => x.ToString())],
+            context.Caller
         );
     }
 }

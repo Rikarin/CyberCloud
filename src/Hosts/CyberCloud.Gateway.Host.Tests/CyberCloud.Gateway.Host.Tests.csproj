@@ -3,8 +3,12 @@
     <!--
       The gateway's suite. docs/plan/10.
 
-      ⚠ NO TestServer, NO WebApplicationFactory, NO CONTAINER — and that is a choice with a reason
-      rather than a limitation being worked around.
+      ⚠ NO TestServer, NO WebApplicationFactory — and that is a choice with a reason rather than a
+      limitation being worked around. Two suites step outside it, each for one property the shape
+      below cannot express, and each says so in its header: HubTicketOverHttpTests starts Kestrel
+      on a loopback port because a WebSocket upgrade is decided after the pipeline by Kestrel and
+      SignalR, and RedisHubTicketStoreTests starts a Redis container because the store's one claim
+      is that two processes see one ticket.
 
       The gateway's nine stages are composed by GatewayPipeline out of eight IGatewayStage objects
       that take an HttpContext and return an outcome. DefaultHttpContext is in the ASP.NET Core
@@ -34,6 +38,8 @@
         <PackageReference Include="NSubstitute"/>
         <PackageReference Include="Orleans.Multitenant"/>
         <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!-- RedisHubTicketStoreTests. The same image and package every other Redis-backed suite uses. -->
+        <PackageReference Include="Testcontainers.Redis"/>
     </ItemGroup>
 
     <ItemGroup Label="Global usings">

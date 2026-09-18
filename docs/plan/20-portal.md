@@ -67,6 +67,13 @@ in portal code is a code-review failure.
 that creates, deletes or costs money does not — it shows the operation's real progress. An optimistic
 "deleted!" that later fails is how trust is lost.
 
+⚠ **A hub is opened with a ticket, and the bearer token is never in a URL.** The portal holds its
+token in memory and puts it in a header; a WebSocket has no header, so every hub connection starts
+with `POST /hubs/{hub}/ticket` and opens the socket with the thirty-second, single-use value that comes
+back — [10 § SignalR](10-gateway-and-api.md#signalr). `HubTicketsApi` is the one place the portal
+builds a socket address, and its spec sabotages the property. The cloud terminal is the first hub the
+portal opens this way; the three live-update hubs will use the same call.
+
 ## SSR
 
 Server-side rendered with hydration, for three reasons and not for SEO:
@@ -81,6 +88,15 @@ token. Getting this wrong leaks one tenant's data to another through a CDN cache
 bug this document can prevent. It is an explicit test: two concurrent SSR requests with different
 tenants, asserting no shared state.
 
+⚠ **The SSR process trusts no proxy header unless the deployment names it.** The render never reads
+the request's origin — the identity issuer is a `<meta>` in the document, redirects are relative, and
+the shell is the same for every scheme and host — so `Forwarded` and `X-Forwarded-*` are removed at
+the process's edge and `@angular/ssr` is handed the trust list explicitly (`NG_TRUST_PROXY_HEADERS`,
+empty by default). A deployment behind an ingress that terminates TLS or serves a prefix names exactly
+the headers that ingress sets, and sets `NG_ALLOWED_HOSTS` to the names it serves, because the built
+bundle allows `localhost` alone. The same two SSR gates assert the engine warns about nothing —
+portal/README.md § The Angular pin and § SSR isolation.
+
 ## The pages that are not generated
 
 | Area | Why it is bespoke | EM |
@@ -90,7 +106,7 @@ tenants, asserting no shared state.
 | Metrics explorer | Query builder, chart types, pinning to dashboards | 0.6 |
 | Log search | `@xui/code-block` + a results grid over ClickHouse. ⚠ Needs a query cost preview or someone will run a 400-day scan | 0.6 |
 | Network topology | `@xui/node-graph` — VPCs, subnets, endpoints, peerings. The one view that is genuinely better than a list | 0.5 |
-| Cloud terminal | `xterm.js` in a dockable panel ([19](19-cloud-terminal-and-virtual-desktop.md)) | 0.4 |
+| Cloud terminal | `xterm.js` over a console's `connect` ([19](19-cloud-terminal-and-virtual-desktop.md)). ⚠ Landed as a routed page under the resource group — `subscriptions/{s}/resourceGroups/{g}/terminal`, `portal/apps/portal/src/pages/terminal` — not the dockable panel this row first said: a shell runs in a console resource, and a console has a group, so the page has a scope and a link can name a console. A dockable pane over the same `TerminalSession` is a later affordance, not a second terminal | 0.4 |
 | Access (ReBAC) | Role assignments, the effective-permissions explorer, "why does this user have access" | 0.6 |
 | Identity admin | Users, groups, apps, MFA, sign-in logs | 0.5 |
 | Onboarding | Sign-up → tenant → first cluster → first resource, as a guided flow | 0.4 |

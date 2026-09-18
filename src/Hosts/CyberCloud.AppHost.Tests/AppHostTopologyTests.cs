@@ -242,6 +242,14 @@ public sealed class AppHostTopologyTests {
         proxy["/api"].GetProperty("pathRewrite").GetProperty("^/api").GetString()
             .ShouldBe("", "the gateway serves its routes at the root, so /api has to come off");
 
+        // ⚠ The terminal's socket is `ws://localhost:4200/api/hubs/terminal?ticket=…`, on this same
+        // entry — and Vite forwards an Upgrade only for an entry that says `ws: true` (or whose
+        // target is `ws:`), which @angular/build's proxy loader never adds. Without it every HTTP
+        // request reaches the gateway and the one WebSocket does not, with the symptom a pane that
+        // reconnects five times and gives up. The entry has to say it.
+        proxy["/api"].TryGetProperty("ws", out var ws).ShouldBeTrue("the /api entry has no `ws`, so the dev server drops the terminal hub's Upgrade");
+        ws.GetBoolean().ShouldBeTrue("`ws` is false, so the dev server drops the terminal hub's Upgrade");
+
         ServePortOf("portal").ShouldBe(CyberCloudResources.PortalPort);
     }
 

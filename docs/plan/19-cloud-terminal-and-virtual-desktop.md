@@ -23,6 +23,22 @@ Pod  cybercloud-shell   in the tenant's namespace, in the tenant's cluster
    └─ PVC  home-{userId}   5 GB, retained 90 days after last use
 ```
 
+⚠ **How the browser gets onto the hub.** A WebSocket carries no `Authorization` header, and the
+portal's token never goes in a URL. `connect` returns the session id and the hub path; the portal then
+asks the gateway for a short-lived ticket for that hub (`POST /hubs/terminal/ticket`, with the token in
+the header), opens `/hubs/terminal?ticket=…`, and calls `Attach` with the session id and the pane's
+size — [10 § SignalR](10-gateway-and-api.md#signalr) has the ticket's rules. The three hub methods
+are `Attach`, `Send` and `Resize`; the one callback is `Output`; bytes travel as base64 on the JSON hub
+protocol. **Reconnect from the portal's side is the same `connect` again with a fresh ticket** — the
+handler applies the pod rather than creating it, so a live shell answers with the same session id and
+the hub replays; a different id means the pod was reclaimed in between, and the pane says so.
+
+⚠ **What exists of this diagram today, stated so the picture is not read as a status.** The pod, the
+`connect` and `terminate` actions, the hub with its client contract, the ticket, and the portal's pane
+(`portal/apps/portal/src/pages/terminal`) are built. **The session grain in the middle is not**, and
+every hub method refuses by name until it is — `charts/managed/cloud-shell/conformance.yaml § owed`,
+`the-session-grain-does-not-exist`, says what the grain will find waiting on both sides of it.
+
 > ⚠ **The brief says "SignalR endpoint which spins up grain with ssh client to the docker".** SSH is
 > the wrong transport here and it is worth saying why: it means running `sshd` in the shell image
 > (another network listener, another credential, another attack surface), managing host keys and

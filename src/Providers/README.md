@@ -1233,7 +1233,9 @@ that single sentence is what every finding below is downstream of.
 **What landed:** the resource, its four rendered objects, the `connect` and `terminate` actions, the
 chart and the auditing surface. **What is owed** is led by `the-session-grain-does-not-exist`:
 docs/plan/19's exec stream, resize channel, ring buffer and idle timer are not built, `TerminalHub`
-still refuses by name, and **nothing in this repository builds the shell image** —
+still refuses by name — now to a real pane: the portal's cloud shell (#22) reaches it with a gateway
+ticket and shows the refusal where the prompt would be — and **nothing in this repository builds the
+shell image** —
 `build/Build.Images.cs` publishes .NET hosts and its header forbids a Dockerfile, and this is the
 first image in the tree that is not a .NET application. All of it is at
 `charts/managed/cloud-shell/conformance.yaml § owed`.
