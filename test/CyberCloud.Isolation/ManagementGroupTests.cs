@@ -233,9 +233,96 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
         refused.IsFailure.ShouldBeTrue("a contributor granted a role on a management group");
     }
 
+    /// <summary>
+    ///     ⚠ <b>A deleted group's grants do not survive under its name.</b> The group's ReBAC object is
+    ///     <c>managementGroup:{name}</c> — the bare name — so a group re-created under a deleted
+    ///     group's name has the deleted group's object, and every tuple left on it would be a grant on
+    ///     the new group that nobody made, reaching every subscription placed under it. The review of
+    ///     issue #39 found the delete swept the edge and the listings and not the grants;
+    ///     <c>IScopeRelationWriter.ClearAsync</c> is the sweep this drives through the real schema.
+    /// </summary>
+    [Fact]
+    public async Task ADeletedGroupRecreatedUnderTheSameNameCarriesNoneOfItsOldGrants() {
+        await SeedTenantAsync();
+        var owner = IsolationCluster.Caller(Tree, TenantOwner);
+        var group = ScopeId.ManagementGroupOf(Tree, "phoenix");
+        var subscription = Guid.Parse("99999999-0000-4000-8000-0000000000d1");
+
+        (await Put(group.Path, "{}", owner)).IsSuccess.ShouldBeTrue();
+
+        var ivy = await UserAsync("ivy");
+        (await cluster.Roles.AssignAsync(
+                new() {
+                    Path = RoleAssignmentId.OnScope(group, new(Relations.Owner, SubjectTypes.User, ivy)).Path,
+                    Body = "{}",
+                    Caller = owner
+                },
+                TestContext.Current.CancellationToken
+            )).IsSuccess.ShouldBeTrue();
+
+        (await CheckAsync(ObjectTypes.ManagementGroup, "phoenix", ivy)).ShouldBeTrue("the fixture's grant did not reach");
+
+        // ── The delete, by the tenant owner, of an empty group ───────────────────────────────────
+        var deleted = await cluster.Scopes.DeleteAsync(
+            new() { Path = group.Path, Caller = owner },
+            TestContext.Current.CancellationToken
+        );
+
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+
+        // Nothing is left on the object — not the parent edge, not ivy's owner tuple.
+        (await RelationsOnAsync(ObjectTypes.ManagementGroup, "phoenix")).ShouldBeEmpty(
+            "a deleted group's object still carries tuples, and the next group of that name inherits them"
+        );
+
+        // ── Re-created under the same name by the tenant owner, with a subscription placed in it ─
+        (await Put(group.Path, """{"displayName":"Phoenix, again"}""", owner)).IsSuccess.ShouldBeTrue();
+        (await Put(ScopeId.Subscription(Tree, subscription).Path, """{"displayName":"Reborn","managementGroup":"phoenix"}""", owner))
+            .IsSuccess.ShouldBeTrue();
+
+        // ivy holds nothing on the new group and reaches nothing under it — a fully consistent check
+        // on the tuple store, and the canonical 404 on the write path.
+        (await CheckAsync(ObjectTypes.ManagementGroup, "phoenix", ivy))
+            .ShouldBeFalse("a grant on a deleted group revived on the group that took its name");
+
+        var refused = await Put(ScopeId.Group(Tree, subscription, "ivy-rg").Path, """{"location":"eu-west-1"}""", Gwen(ivy));
+        refused.IsFailure.ShouldBeTrue("a deleted group's owner created a resource group under the group that took its name");
+        refused.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound, "404, never 403: " + refused.Error.Message);
+
+        // The new group is a whole group: its edge is to the tenant and the tenant owner reaches it.
+        var parents = await ParentsOfAsync(ObjectTypes.ManagementGroup, "phoenix");
+        parents.ShouldHaveSingleItem();
+        parents[0].Object.Type.ShouldBe(ObjectTypes.Tenant);
+        (await RelationsOnAsync(ObjectTypes.ManagementGroup, "phoenix")).ShouldBe([Relations.Parent]);
+        (await Put(ScopeId.Group(Tree, subscription, "theo-rg").Path, """{"location":"eu-west-1"}""", owner)).IsSuccess.ShouldBeTrue();
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
     static CallerContext Gwen(string user) => IsolationCluster.Caller(Tree, user);
+
+    async Task<bool> CheckAsync(string type, string id, string user) {
+        var check = await cluster.For(Tree)
+            .GetGrain<ICheckGrain>(GrainKeys.CheckCache(type, id))
+            .CheckAsync(Permissions.Write, SubjectRef.Of(ObjectTypes.User, user), Consistency.FullyConsistent);
+
+        return check.GetValueOrThrow().Allowed;
+    }
+
+    /// <summary>The relations that have at least one tuple on the object, ordered.</summary>
+    async Task<IReadOnlyList<string>> RelationsOnAsync(string type, string id) {
+        var snapshot = await cluster.For(Tree)
+            .GetGrain<IObjectRelationsGrain>(GrainKeys.ObjectRelations(type, id))
+            .ReadDurableAsync();
+
+        return snapshot.IsSuccess
+            ? snapshot.GetValueOrThrow().ByRelation
+                .Where(x => x.Value.Count > 0)
+                .Select(x => x.Key)
+                .Order(StringComparer.Ordinal)
+                .ToList()
+            : [];
+    }
 
     Task<Result<ScopeSnapshot>> Put(string path, string body, CallerContext caller) =>
         cluster.Scopes.CreateAsync(new() { Path = path, Body = body, Caller = caller }, TestContext.Current.CancellationToken);

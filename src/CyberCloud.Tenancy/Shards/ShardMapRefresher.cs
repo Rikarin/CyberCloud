@@ -28,12 +28,25 @@ namespace CyberCloud.Tenancy.Shards;
 ///         convert a global-cluster outage into a silo that cannot serve the tenants it already
 ///         knows about, which is the opposite of the intended blast radius.
 ///     </para>
+///     <para>
+///         ⚠ <b>It is also the silo's <see cref="IShardMapMirror" />, and that is the one time the
+///         refresh is pulled rather than polled.</b> A tenant create records its assignment and then
+///         needs every silo to have it before the tenant's first durable row — a pinned tenant's
+///         record is not the hash the un-refreshed cache would fall back to, and a silo activating
+///         the tenant's first grain on the hash would split the tenant across two shards.
+///         <c>ShardMapPropagation.ConfirmAsync</c> reaches every silo through
+///         <c>IManagementGrain.SendControlCommandToProvider</c> and <c>ShardMapMirrorController</c>,
+///         which lands on <see cref="RefreshAndResolveAsync" /> here: one refresh, then the cache's
+///         own answer for the tenant, so the caller compares what the storage layer on this silo
+///         would actually do.
+///     </para>
 /// </remarks>
 public sealed class ShardMapRefresher(
     GrainBackedShardMapCache cache,
     IGrainFactory grains,
     ILogger<ShardMapRefresher> logger
-) {
+)
+    : IShardMapMirror {
     /// <summary>How many refreshes have failed since the process started.</summary>
     public long Failures { get; private set; }
 
@@ -74,6 +87,25 @@ public sealed class ShardMapRefresher(
 
             return false;
         }
+    }
+
+    /// <summary>How many times the fan-out has asked this silo to refresh and resolve.</summary>
+    public long Commands { get; private set; }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ Answers with the cache's answer even when the refresh failed, on purpose: the caller is
+    ///     asking what THIS silo's storage layer would do for the tenant right now, and a stale
+    ///     mirror's hash fallback is that answer. Hiding it behind an exception would let the caller
+    ///     treat "did not confirm" as something other than "would write to the wrong shard".
+    /// </remarks>
+    public async Task<string> RefreshAndResolveAsync(string tenantId) {
+        ArgumentException.ThrowIfNullOrEmpty(tenantId);
+
+        Commands++;
+        await RefreshAsync();
+
+        return cache.DurableShardFor(tenantId);
     }
 }
 

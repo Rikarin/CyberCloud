@@ -31,9 +31,14 @@ namespace CyberCloud.Tenancy;
 ///         property worth having: for a tenant that has been assigned but whose assignment has not
 ///         yet reached a silo's cache, the cache's fallback and the recorded answer are the
 ///         <i>same</i> shard, so there is no window in which one silo writes to shard P while
-///         another reads from shard Q. When they must differ — a full or draining shard — the
-///         recording happens at tenant creation, before the tenant has any state, and the recorded
-///         value wins everywhere from then on.
+///         another reads from shard Q. When they must differ — a draining shard, or a pin
+///         (<see cref="PinAsync" />, issue #39) — the recording happens at tenant creation, before
+///         the tenant has any state, and ⚠ <b>that alone is not enough</b>: the silo that activates
+///         the tenant's first grain builds its storage provider from its own cache, and if the record
+///         has not reached that cache the first rows go to the hash-chosen shard. The create
+///         therefore waits for <c>ShardMapPropagation.ConfirmAsync</c> — every silo refreshed and
+///         answering with the recorded shard — before the tenant grain is touched; the review of
+///         issue #39 found the split that ran without it.
 ///     </para>
 /// </remarks>
 public sealed class ShardMapGrain(

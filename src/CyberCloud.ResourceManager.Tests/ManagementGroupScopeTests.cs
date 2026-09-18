@@ -1,6 +1,7 @@
 using CyberCloud.ResourceManager.Reconcile;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Globalization;
+using System.Text.Json;
 
 namespace CyberCloud.ResourceManager.Tests;
 
@@ -170,6 +171,76 @@ public sealed class ManagementGroupScopeTests {
         refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
     }
 
+    /// <summary>
+    ///     ⚠ <b>A group name that arrives in the BODY is validated before it becomes an address.</b>
+    ///     The URL's group name goes through <c>ScopeId.ParsePath</c>; the body's went straight into
+    ///     <c>ScopeId.ManagementGroupOf</c>, and the first reader of the name after that —
+    ///     <c>GrainKeys.ManagementGroup</c>, behind the authorizer's cache key and the grain lookup —
+    ///     throws <see cref="ArgumentException" /> for anything that is not DNS-1123. Out of
+    ///     <c>IScopeManager.CreateAsync</c> that was the gateway's <c>500</c>, for a body the caller
+    ///     can fix. Found by the review of issue #39; every case here threw before the fix.
+    /// </summary>
+    [Theory]
+    [InlineData("Bad Name")]
+    [InlineData("a#b@c")]
+    [InlineData("has/slash")]
+    [InlineData("pipe|d")]
+    [InlineData("-leading")]
+    public async Task AGroupNamedInTheBodyThatIsNotADns1123NameIsA400AndNotAThrow(string name) {
+        Reset();
+        var tenant = await NewTenantAsync();
+        var body = JsonSerializer.Serialize(new Dictionary<string, string> { ["displayName"] = "Prod", ["managementGroup"] = name });
+
+        // The subscription PUT, assigning to a group that cannot be named.
+        var subscription = await PutSubscriptionAsync(ScopeId.Subscription(tenant, Guid.NewGuid()), body);
+
+        subscription.IsFailure.ShouldBeTrue("a subscription was placed under a group whose name cannot be a grain key");
+        subscription.Error!.Code.ShouldBe(ErrorCode.InvalidResourceName, subscription.Error.Message);
+        subscription.Error.Target.ShouldBe("/managementGroup", "the portal cannot point at the field");
+        subscription.Error.Message.ShouldContain("management group name");
+
+        // The management group PUT, naming a parent that cannot be named.
+        var group = await CreateGroupAsync(ScopeId.ManagementGroupOf(tenant, "child"), body);
+
+        group.IsFailure.ShouldBeTrue("a group was created under a parent whose name cannot be a grain key");
+        group.Error!.Code.ShouldBe(ErrorCode.InvalidResourceName, group.Error.Message);
+        group.Error.Target.ShouldBe("/managementGroup");
+
+        // Refused before the authorizer was asked about anything and before any edge was written.
+        SwitchableScopeAuthorizer.Asked.ShouldNotContain(x => x.Kind == ScopeKind.ManagementGroup);
+        NoOpScopeRelationWriter.Edges.ShouldBeEmpty();
+    }
+
+    /// <summary>
+    ///     ⚠ The seventh level is refused by the service BEFORE the parent edge is written, not only
+    ///     by the grain after it — the review of issue #39 found the tuple a grain-only refusal left.
+    /// </summary>
+    [Fact]
+    public async Task TheSeventhLevelIsRefusedBeforeAnyEdgeIsWritten() {
+        Reset();
+        var tenant = await NewTenantAsync();
+
+        var parent = "";
+        for (var level = 1; level <= IManagementGroupGrain.MaxDepth; level++) {
+            var name = "level-" + level.ToString(CultureInfo.InvariantCulture);
+            var body = parent.Length == 0 ? "{}" : $$$"""{"managementGroup":"{{{parent}}}"}""";
+            (await CreateGroupAsync(ScopeId.ManagementGroupOf(tenant, name), body)).IsSuccess.ShouldBeTrue(name);
+            parent = name;
+        }
+
+        NoOpScopeRelationWriter.Edges.Clear();
+
+        var seventh = ScopeId.ManagementGroupOf(tenant, "level-7");
+        var refused = await CreateGroupAsync(seventh, $$$"""{"managementGroup":"{{{parent}}}"}""");
+
+        refused.IsFailure.ShouldBeTrue("a seventh level was created");
+        refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        refused.Error.Message.ShouldContain("capped");
+        NoOpScopeRelationWriter.Edges.ShouldBeEmpty("an edge was written for a group the depth cap refused");
+        (await cluster.For(tenant).GetGrain<IManagementGroupGrain>(GrainKeys.ManagementGroup("level-7")).GetAsync())
+            .IsFailure.ShouldBeTrue();
+    }
+
     // ── The subscription assignment ────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -333,19 +404,20 @@ public sealed class ManagementGroupScopeTests {
         held.Error!.Code.ShouldBe(ErrorCode.Conflict);
         held.Error.Message.ShouldContain("child");
 
-        NoOpScopeRelationWriter.Edges.Clear();
+        NoOpScopeRelationWriter.Cleared.Clear();
 
         (await DeleteGroupAsync(child)).IsSuccess.ShouldBeTrue();
 
-        // The edge to the parent group is gone, the parent no longer lists it, the tenant neither.
-        NoOpScopeRelationWriter.Edges.ShouldContain((child, (ScopeId?)root, (ScopeId?)null));
+        // Every tuple on the group's object is swept — the edge and the grants alike — the parent
+        // no longer lists it, the tenant neither.
+        NoOpScopeRelationWriter.Cleared.ShouldContain(child);
         (await Group(tenant, "root")).Children.ShouldBeEmpty();
         (await ListAsync(tenant, ScopeKind.ManagementGroup)).Items.Select(x => x.Path).ShouldBe([root.Path]);
 
-        // Idempotent, and the sweep still knows the parent.
-        NoOpScopeRelationWriter.Edges.Clear();
+        // Idempotent, and the re-driven DELETE sweeps again.
+        NoOpScopeRelationWriter.Cleared.Clear();
         (await DeleteGroupAsync(child)).IsSuccess.ShouldBeTrue();
-        NoOpScopeRelationWriter.Edges.ShouldContain((child, (ScopeId?)root, (ScopeId?)null));
+        NoOpScopeRelationWriter.Cleared.ShouldContain(child);
 
         (await DeleteGroupAsync(root)).IsSuccess.ShouldBeTrue();
         (await ListAsync(tenant, ScopeKind.ManagementGroup)).Items.ShouldBeEmpty();
@@ -356,6 +428,7 @@ public sealed class ManagementGroupScopeTests {
     static void Reset() {
         ResourceManagerCluster.ResetDoubles();
         NoOpScopeRelationWriter.Edges.Clear();
+        NoOpScopeRelationWriter.Cleared.Clear();
     }
 
     async Task<Guid> NewTenantAsync() {

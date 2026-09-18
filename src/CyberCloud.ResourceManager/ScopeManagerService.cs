@@ -204,8 +204,9 @@ public sealed class ScopeManagerService(
             // ⚠ Success rather than 404, and this is the one place the two differ from a read's. The
             // goal of a delete is the absence of the thing, so a group that is already gone has
             // reached it — and a re-driven DELETE after a network timeout must not report a failure
-            // for work that succeeded.
-            return Result.Success;
+            // for work that succeeded. The sweep runs again, because the way this branch is reached
+            // with the caller authorized is through a tuple the first delete did not get to.
+            return await SweepResourceGroupTuplesAsync(scope, cancellationToken);
         }
 
         // ── The locks. Both links of the chain, and the group's own is not enough. ───────────────
@@ -233,7 +234,39 @@ public sealed class ScopeManagerService(
             );
         }
 
-        return await reclaimer.DeleteAsync(scope, cancellationToken);
+        var reclaimed = await reclaimer.DeleteAsync(scope, cancellationToken);
+        if (reclaimed.IsFailure) {
+            return reclaimed;
+        }
+
+        return await SweepResourceGroupTuplesAsync(scope, cancellationToken);
+    }
+
+    /// <summary>
+    ///     The last step of a resource group's delete: every tuple on its object, after the record
+    ///     and the namespace are gone. Logged and never returned — the caller's delete has succeeded.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The group's object is <c>resourceGroup:{sub}-{rg}</c>, a name, so a group re-created
+    ///     under the same name in the same subscription would inherit every grant the deleted one
+    ///     carried — <see cref="IScopeRelationWriter.ClearAsync" />. The first version of this delete
+    ///     left the tuples and said so in <c>ResourceGroupReclaimer</c>'s remarks, when the writer had
+    ///     no way to remove them; the review of issue #39 found the same residue on a management
+    ///     group, where a grant reaches every subscription under it, and the sweep now runs for both.
+    /// </remarks>
+    async Task<Result> SweepResourceGroupTuplesAsync(ScopeId scope, CancellationToken cancellationToken) {
+        var cleared = await relations.ClearAsync(scope, cancellationToken);
+        if (cleared.TryGetError(out var clearError)) {
+            logger.LogError(
+                "Resource group '{Group}' is deleted but tuples remain on its object: {Message}. They "
+                + "are inert while no group has the name and the next DELETE sweeps them. Do not "
+                + "re-create a group under this name until one succeeds: the tuples are its grants.",
+                scope.Path,
+                clearError.Message
+            );
+        }
+
+        return Result.Success;
     }
 
     /// <inheritdoc />
@@ -410,6 +443,23 @@ public sealed class ScopeManagerService(
 
         var assignment = assigned.GetValueOrThrow();
 
+        // ── The record on EVERY silo, before the first durable row. ──────────────────────────────
+        //
+        // ⚠ THE SPLIT THE REVIEW OF ISSUE #39 FOUND. The tenant grain below activates on some silo,
+        // and that silo builds the tenant's storage provider from ITS shard map mirror — a cache a
+        // timer refreshes every fifteen seconds, read on a path that cannot fetch. For a tenant it
+        // has not heard of, the mirror falls back to the hash; a pin exists to make the record
+        // differ from the hash, and a drained shard makes them differ too. Without this step the
+        // first rows went to the hash-chosen shard and every silo that refreshed afterwards read the
+        // recorded, empty one. ShardMapPropagation.ConfirmAsync asks every silo to refresh and to
+        // answer with what its mirror now resolves the tenant to, and a create that cannot get the
+        // recorded shard from every silo stops here, with nothing written for the tenant.
+        var propagated = await ShardMapPropagation.ConfirmAsync(grains, assignment);
+
+        if (propagated.TryGetError(out var propagationError)) {
+            return Result<ScopeSnapshot>.Failure(propagationError);
+        }
+
         // ── The tenant's own record. Validates the slug and the region; idempotent on a re-drive. ─
         var created = await grains
             .ForTenant(request.TenantId.ToString("D", CultureInfo.InvariantCulture))
@@ -561,6 +611,11 @@ public sealed class ScopeManagerService(
         var targetParent = ScopeId.Tenant(scope.TenantId);
 
         if (requestedGroup.Length > 0) {
+            var named = EnsureGroupName(requestedGroup);
+            if (named.IsFailure) {
+                return Result<ScopeSnapshot>.Failure(named.Error!);
+            }
+
             var placed = await EnsureGroupAcceptsAsync(
                 ScopeId.ManagementGroupOf(scope.TenantId, requestedGroup),
                 caller,
@@ -774,7 +829,9 @@ public sealed class ScopeManagerService(
     ///         exist. For a nested group the parent's record is also where the depth comes from:
     ///         <c>IManagementGroupGrain.CreateAsync</c> takes the parent's depth as an argument
     ///         because a grain cannot read another grain inside its own turn, and the cap it enforces
-    ///         is what keeps a legal tree inside docs/plan/07 § Check's twelve hops.
+    ///         is what keeps a legal tree inside docs/plan/07 § Check's twelve hops. This service
+    ///         applies the same cap first, before the <c>parent</c> edge is written, so a refused
+    ///         seventh level leaves no tuple behind — as the move refusal below does.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Idempotent on the same parent, refused on a different one.</b> A group's parent
@@ -799,6 +856,13 @@ public sealed class ScopeManagerService(
         }
 
         var parentName = OptionalText(body, ManagementGroupProperty) ?? "";
+
+        if (parentName.Length > 0) {
+            var named = EnsureGroupName(parentName);
+            if (named.IsFailure) {
+                return Result<ScopeSnapshot>.Failure(named.Error!);
+            }
+        }
 
         if (string.Equals(parentName, scope.ManagementGroup, StringComparison.Ordinal)) {
             return Result<ScopeSnapshot>.Failure(
@@ -869,6 +933,24 @@ public sealed class ScopeManagerService(
             );
         }
 
+        if (!existed && parentDepth + 1 > IManagementGroupGrain.MaxDepth) {
+            // ⚠ The depth cap, also BEFORE the edge and for the same reason as the move above: the
+            // grain refuses the seventh level, but by then LinkToParentAsync would have written
+            // `managementGroup:{name}#parent@managementGroup:{parent}` for a group that does not
+            // exist — inert, and the same residue class the codebase tolerates for a create that
+            // fails after the edge, but this refusal is knowable from the parent's record, so it is
+            // not paid for. The grain keeps its own check for callers that are not this service.
+            return Result<ScopeSnapshot>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"'{scope.Path}' would sit at depth "
+                + (parentDepth + 1).ToString(CultureInfo.InvariantCulture)
+                + " and the tree is capped at "
+                + IManagementGroupGrain.MaxDepth.ToString(CultureInfo.InvariantCulture)
+                + " levels. Every level is a hop in every permission check beneath it, and "
+                + "docs/plan/07 § Check caps the walk at twelve — see IManagementGroupGrain."
+            );
+        }
+
         // ── The parent edge, before the durable write. See the type's remarks. ──────────────────
         var linked = await relations.LinkToParentAsync(scope, parent, cancellationToken);
         if (linked.TryGetError(out var linkError)) {
@@ -929,16 +1011,26 @@ public sealed class ScopeManagerService(
 
     /// <summary>
     ///     Deletes an empty management group: the record in one turn with the emptiness check, then
-    ///     the listings, then the <c>parent</c> edge.
+    ///     the listings, then every tuple on its object — the <c>parent</c> edge and the roles
+    ///     assigned at it.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The record goes first and the edge goes last, which is the create reversed</b> —
-    ///     docs/plan/06 § Two-phase create, "deletion is the same in reverse". The grain's own delete
-    ///     refuses while anything hangs off the group, so nothing after it runs for a group that is
-    ///     not empty; and once the record is gone the edge points at an object that resolves to
-    ///     nothing, so a crash before the last step leaves an inert tuple the next <c>DELETE</c>
-    ///     removes. The other order would leave, for a moment, a group with a record and no edge —
-    ///     visible in the listing and readable by nobody.
+    ///     <para>
+    ///         ⚠ <b>The record goes first and the tuples go last, which is the create reversed</b> —
+    ///         docs/plan/06 § Two-phase create, "deletion is the same in reverse". The grain's own
+    ///         delete refuses while anything hangs off the group, so nothing after it runs for a
+    ///         group that is not empty; and once the record is gone the tuples sit on an object that
+    ///         resolves to nothing, so a crash before the last step leaves inert tuples the next
+    ///         <c>DELETE</c> removes. The other order would leave, for a moment, a group with a
+    ///         record and no edge — visible in the listing and readable by nobody.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The roles go too, and the first version of this delete left them.</b> The
+    ///         object id is the bare name (<c>ReBacScopeAuthorizer.ObjectOf</c>), so a group
+    ///         re-created under a deleted group's name inherits every grant the deleted one had, and
+    ///         a group grant reaches every subscription placed under it — the review of issue #39
+    ///         found it. <see cref="IScopeRelationWriter.ClearAsync" /> is the sweep.
+    ///     </para>
     /// </remarks>
     async Task<Result> DeleteManagementGroupAsync(ScopeId scope, CallerContext caller, CancellationToken cancellationToken) {
         // ⚠ On the group itself, as for a resource group's delete — it exists, so it has an object.
@@ -1004,19 +1096,19 @@ public sealed class ScopeManagerService(
             }
         }
 
-        var parent = parentName.Length > 0
-            ? ScopeId.ManagementGroupOf(scope.TenantId, parentName)
-            : ScopeId.Tenant(scope.TenantId);
-
-        var unlinked = await relations.UnlinkFromParentAsync(scope, parent, cancellationToken);
-        if (unlinked.TryGetError(out var unlinkError)) {
+        // ⚠ EVERY tuple on the object and not only the parent edge — IScopeRelationWriter.ClearAsync
+        // says why: the object id is the bare name, so a grant left on `managementGroup:{name}`
+        // would be a grant on the next group created under that name, reaching every subscription
+        // placed under it. The parent edge goes with them.
+        var cleared = await relations.ClearAsync(scope, cancellationToken);
+        if (cleared.TryGetError(out var clearError)) {
             logger.LogError(
-                "Management group '{Group}' is deleted but its parent edge to '{Parent}' remains: "
-                + "{Message}. The edge is inert — the object it is on resolves to nothing — and the "
-                + "next DELETE removes it.",
+                "Management group '{Group}' is deleted but tuples remain on its object: {Message}. "
+                + "They are inert while no group has the name — the object resolves to nothing — and "
+                + "the next DELETE sweeps them. Do not re-create a group under this name until one "
+                + "succeeds: the tuples are its grants.",
                 scope.ManagementGroup,
-                parent.Path,
-                unlinkError.Message
+                clearError.Message
             );
         }
     }
@@ -1037,8 +1129,8 @@ public sealed class ScopeManagerService(
     ///     yet, so the only link of that chain that exists is the subscription's. Calling the resolver
     ///     would mean inventing a <c>ResourceId</c> for an address that is not a resource, and reading
     ///     the same field one hop further away. The management group is not walked here for the reason
-    ///     it is not walked there: docs/plan/06 § Tags, locks — a lock at that level cannot be set at
-    ///     all.
+    ///     it is not walked there: docs/plan/06 § Tags, locks — the group exists since issue #39, its
+    ///     record carries no lock, so a lock at that level cannot be set at all.
     /// </remarks>
     async Task<Result<ScopeSnapshot>> CreateGroupAsync(
         ScopeId scope,
@@ -1499,6 +1591,25 @@ public sealed class ScopeManagerService(
         body.TryGetProperty(property, out var value)
             ? value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : ""
             : null;
+
+    /// <summary>
+    ///     Whether a management group name that arrived in a BODY is one the platform can address,
+    ///     answered as the <c>400</c> every other body problem gets.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Before the name is turned into a <see cref="ScopeId" />, and that is the whole
+    ///     point.</b> A group named in the URL is validated by <see cref="ScopeId.ParsePath" />; a group
+    ///     named in <see cref="ScopeBodyProperties.ManagementGroup" /> reaches
+    ///     <see cref="ScopeId.ManagementGroupOf" /> unparsed, and the first thing to look at the name
+    ///     after that is <c>GrainKeys.ManagementGroup</c> — through the authorizer's cache key or the
+    ///     grain lookup — which throws <see cref="ArgumentException" /> for anything that is not
+    ///     DNS-1123. Out of <see cref="IScopeManager.CreateAsync" /> that exception is the gateway's
+    ///     <c>500</c>, for a body the caller can fix. The message is
+    ///     <see cref="ResourceNaming.Validate" />'s, so the offending character is named, and the
+    ///     target is the property's JSON pointer, so the portal can point at the field.
+    /// </remarks>
+    static Result EnsureGroupName(string name) =>
+        ResourceNaming.Validate(name, "management group name", "/" + ManagementGroupProperty);
 
     static Result<ScopeSnapshot> NotFound(ScopeId scope) =>
         Result<ScopeSnapshot>.Failure(

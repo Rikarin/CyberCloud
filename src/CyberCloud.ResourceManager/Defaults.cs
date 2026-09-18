@@ -75,18 +75,19 @@ public sealed class LoggingResourceChangedSink(ILogger<LoggingResourceChangedSin
 ///     <para>
 ///         ⚠
 ///         <b>
-///             The management group is the one scope that is still missing, and it is missing
-///             because it does not exist.
-///         </b> docs/plan/06 § The hierarchy makes the management-group tree
-///         optional and docs/plan/01 puts it at M2: there is no <c>IManagementGroupGrain</c>, no
-///         grain key for one and no parent pointer from a subscription to one. So this walk stops at
-///         the subscription, and
+///             The management group is the one scope that is still missing, and since issue #39 the
+///             reason is the lock and not the group.
+///         </b> The tree exists — <c>IManagementGroupGrain</c>, <c>GrainKeys.ManagementGroup</c>
+///         and <c>SubscriptionDescriptor.ManagementGroup</c> all landed with #39 — but
+///         <c>ManagementGroupDescriptor</c> carries no <c>Lock</c> and the grain has no
+///         <c>SetLockAsync</c>, so this walk stops at the subscription and
 ///         <b>
 ///             a lock set on a management group is not merely unread — it cannot
 ///             be set at all.
-///         </b> Stated here so that the day the tree lands, the missing link is a known
-///         one line rather than a discovered incident. Adding it is one more <c>Strongest</c> above
-///         the subscription read; nothing else about this class changes.
+///         </b> docs/plan/06 § Tags, locks records it as owed and says what closing it costs: one
+///         member on the record, one method on the grain, and one more <c>Strongest</c> above the
+///         subscription read — the first time this walk would cross from the subscription into a
+///         record the subscription does not own, which is why it is a decision rather than a line.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>A create walks too.</b> A resource that does not exist yet has no lock of its own,

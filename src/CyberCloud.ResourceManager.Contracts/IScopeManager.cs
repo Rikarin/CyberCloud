@@ -459,13 +459,35 @@ public interface IScopeRelationWriter {
     Task<Result> RelinkParentAsync(ScopeId scope, ScopeId currentParent, ScopeId newParent, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Deletes <c>{scope}#parent@{parent}</c>. Idempotent — a tuple already gone is a success.
-    ///     The last step of a management group's delete, after its record is gone.
+    ///     Deletes every tuple on a scope's object — its <c>parent</c> edge and every role written at
+    ///     it. Idempotent: an object with nothing on it is a success. The last step of a scope's
+    ///     delete, after its record is gone.
     /// </summary>
-    /// <param name="scope">The scope.</param>
-    /// <param name="parent">The parent the edge names.</param>
-    /// <param name="cancellationToken">Cancels the write.</param>
-    Task<Result> UnlinkFromParentAsync(ScopeId scope, ScopeId parent, CancellationToken cancellationToken = default);
+    /// <param name="scope">The scope whose record is already gone.</param>
+    /// <param name="cancellationToken">Cancels the sweep.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The grants and not only the edge, because the object id is the NAME.</b> A
+    ///         management group's ReBAC object is <c>managementGroup:{name}</c> and a resource group's
+    ///         is <c>resourceGroup:{sub}-{rg}</c>, so a scope re-created under the name of a deleted
+    ///         one has the deleted one's object. Every <c>#owner</c>, <c>#contributor</c>,
+    ///         <c>#reader</c> and <c>#suspended</c> tuple left on it would be a grant on the new scope
+    ///         that nobody made — and a grant at a group reaches every subscription placed under it.
+    ///         Anyone holding <c>write</c> on the tenant can create the group, so the residue is a
+    ///         way to revive grants without <c>assignRole</c>. Found by the review of issue #39;
+    ///         <c>ManagementGroupTests.ADeletedGroupRecreatedUnderTheSameNameCarriesNoneOfItsOldGrants</c>
+    ///         drives it through the real schema.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Only after the record is gone.</b> Between the record's delete and this sweep the
+    ///         object has tuples and no record — inert, because every read resolves the record first
+    ///         and finds nothing — and a crash in between leaves the tuples for the next
+    ///         <c>DELETE</c>, which succeeds for a scope that is already gone and sweeps again. Run
+    ///         before the record's delete it would strip a group that the grain then refuses to
+    ///         delete because it is not empty, leaving a live scope with no owner.
+    ///     </para>
+    /// </remarks>
+    Task<Result> ClearAsync(ScopeId scope, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Records a direct <c>#owner</c> tuple on a scope. Idempotent.

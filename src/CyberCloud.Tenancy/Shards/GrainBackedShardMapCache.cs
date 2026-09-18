@@ -37,26 +37,34 @@ namespace CyberCloud.Tenancy.Shards;
 ///             actually loaded, and it advances.
 ///         </item>
 ///         <item>
-///             <b>"<c>PinAsync</c> is read-only."</b> Still true, and now explicit rather than
-///             implicit: <see cref="IShardMapGrain.PinAsync" /> throws
-///             <see cref="NotSupportedException" />, and configured pins (the read-only half) are
-///             still honoured here and still win over everything.
+///             <b>"<c>PinAsync</c> is read-only."</b> No longer: since issue #39
+///             <see cref="IShardMapGrain.PinAsync" /> places a tenant that has never been placed on
+///             the shard the operator names, and this cache reads that placement as it reads any
+///             other recorded assignment. Configured pins — <c>Durable:Pins</c>, the read-only half
+///             that always worked — are still honoured here and still win over everything, the map
+///             included.
 ///         </item>
 ///     </list>
 ///     <para>
 ///         ⚠
 ///         <b>
-///             The fallback for an unrecorded tenant is the deterministic hash, and that is safe for
-///             a reason worth stating.
+///             The fallback for an unrecorded tenant is the deterministic hash, and it is safe only
+///             while nothing of the tenant is written before its record reaches this cache.
 ///         </b>
-///         A tenant with no recorded assignment has never been created,
-///         so it has no durable state anywhere and there is nothing to move. The moment it <i>is</i>
-///         created, <see cref="IShardMapGrain.AssignAsync" /> records the shard this same hash names
-///         (see <c>ShardMapGrain.Place</c>) unless that shard is out of the rotation — so in the
-///         ordinary case the fallback and the record agree, and in the exceptional case the record is
-///         written before the tenant has any state. What is <i>not</i> safe, and is the stub's
-///         limit 2, is recomputing the hash for a tenant that already has state; that cannot happen
-///         here because a recorded assignment is always preferred.
+///         A tenant with no recorded assignment has never been created, so it has no durable state
+///         anywhere and there is nothing to move. The moment it <i>is</i> created,
+///         <see cref="IShardMapGrain.AssignAsync" /> records the shard this same hash names (see
+///         <c>ShardMapGrain.Place</c>) unless that shard is out of the rotation, and a pin records
+///         whatever the operator named — so the record and the fallback agree in the ordinary case
+///         and disagree for a pin or a drained shard. For the disagreeing cases the record has to be
+///         <i>here</i> before the tenant's first grain activates on this silo, or the storage
+///         provider is built for the hash-chosen shard and the tenant is split;
+///         <c>ShardMapPropagation.ConfirmAsync</c> is what a tenant create runs to make that true on
+///         every silo, through <see cref="ShardMapRefresher" />'s <see cref="IShardMapMirror" />, and
+///         <c>ShardMapTests.APinnedTenantIsPlacedOnItsPinOnceTheMirrorHasConfirmedIt</c> proves the
+///         rows land on the pin. What is <i>not</i> safe, and is the stub's limit 2, is recomputing
+///         the hash for a tenant that already has state; that cannot happen here because a recorded
+///         assignment is always preferred.
 ///     </para>
 /// </remarks>
 public sealed class GrainBackedShardMapCache : IShardMapCache {

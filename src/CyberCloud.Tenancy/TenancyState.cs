@@ -77,9 +77,10 @@ public sealed class ManagementGroupState {
     /// <summary>
     ///     The parent the record named when it was deleted, kept after <see cref="Descriptor" /> is
     ///     cleared. ⚠ It is what lets a re-driven <c>DELETE</c> of a group that is already gone still
-    ///     take the group out of its parent's child list and delete its <c>parent</c> edge — without
-    ///     it, a crash between the record's delete and that sweep would leave a parent that lists a
-    ///     child nothing can name again, and so a parent nothing can ever delete.
+    ///     take the group out of its parent's child list — without it, a crash between the record's
+    ///     delete and that sweep would leave a parent that lists a child nothing can name again, and
+    ///     so a parent nothing can ever delete. The group's own tuples, the <c>parent</c> edge among
+    ///     them, need no remembered parent: the sweep reads them off the object and clears them all.
     /// </summary>
     [Id(3)]
     public string LastParent { get; set; } = string.Empty;

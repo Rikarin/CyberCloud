@@ -175,6 +175,24 @@ the map is refused, because `IShardMapCache.HotHashTagFor` reads `Hot:HashTagOve
 and never the map, so an override recorded in the map would be a fact nothing acts on. The configured
 read-only pin, `DurableTierOptions.Pins`, is unchanged and still beats the map.
 
+⚠ **A pin in the map is not a pin in any silo until the silo's mirror has it, and the create waits for
+that.** Every silo routes a tenant's durable state through `GrainBackedShardMapCache`, refreshed from
+the grain every `TenancyRefreshOptions.ShardMapInterval` (fifteen seconds) and read inside
+`configureTenantOptions` — under a per-tenant lock, at first activation, on a path that cannot fetch.
+For a tenant it has not heard of, the mirror falls back to the deterministic hash. That fallback is safe
+exactly because `ShardMapGrain.Place` records the hash-chosen shard for an ordinary placement, so the
+record and the fallback agree; a pin exists to make them disagree, and a drained shard makes them
+disagree too. A tenant grain activated milliseconds after the pin, before the mirror caught up, had its
+storage provider built for the hash-chosen shard and wrote the tenant's first rows there, while every
+silo that refreshed afterwards read the pinned, empty one — the review of #39 found it. So
+`IScopeManager.CreateTenantAsync` runs `ShardMapPropagation.ConfirmAsync` between the assignment and
+the first durable write: `IManagementGrain.SendControlCommandToProvider` reaches every active silo's
+`ShardMapRefresher` (registered as the keyed `IShardMapMirror`), each refreshes and answers with the
+shard its mirror now resolves the tenant to, and the create proceeds only when every answer is the
+recorded shard — otherwise it refuses with nothing written, and a retry is cheap. What that does not
+cover is a silo that joins after the fan-out and activates one of the tenant's grains before its own
+first refresh; `ShardMapRefreshService` refreshes once at start, so the window is that startup gap.
+
 ## Storage provider wiring
 
 `Orleans.Multitenant`'s `configureTenantOptions` callback is where the sharding actually happens, and

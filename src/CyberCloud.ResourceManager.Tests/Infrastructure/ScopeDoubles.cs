@@ -107,9 +107,9 @@ public sealed class SwitchableScopeAuthorizer : IScopeAuthorizer {
 /// </remarks>
 public sealed class NoOpScopeRelationWriter : IScopeRelationWriter {
     /// <summary>
-    ///     Every parent edge the manager asked for, in order — <c>(scope, parent)</c> for a link,
-    ///     with the previous parent for a relink and <c>null</c> for the new one on an unlink.
-    ///     What a test reads to assert the manager moved the edge before the record.
+    ///     Every parent edge the manager asked for, in order — <c>(scope, null, parent)</c> for a
+    ///     link and <c>(scope, previous, next)</c> for a relink. What a test reads to assert the
+    ///     manager moved the edge before the record. A delete's sweep is <see cref="Cleared" />.
     /// </summary>
     public static ConcurrentQueue<(ScopeId Scope, ScopeId? From, ScopeId? To)> Edges { get; } = new();
 
@@ -136,9 +136,12 @@ public sealed class NoOpScopeRelationWriter : IScopeRelationWriter {
         return Task.FromResult(Result.Success);
     }
 
+    /// <summary>Every scope the manager asked to have every tuple cleared from, in order.</summary>
+    public static ConcurrentQueue<ScopeId> Cleared { get; } = new();
+
     /// <inheritdoc />
-    public Task<Result> UnlinkFromParentAsync(ScopeId scope, ScopeId parent, CancellationToken cancellationToken = default) {
-        Edges.Enqueue((scope, parent, null));
+    public Task<Result> ClearAsync(ScopeId scope, CancellationToken cancellationToken = default) {
+        Cleared.Enqueue(scope);
         return Task.FromResult(Result.Success);
     }
 

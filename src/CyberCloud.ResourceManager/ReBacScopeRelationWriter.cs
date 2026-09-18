@@ -124,14 +124,50 @@ public sealed class ReBacScopeRelationWriter(IGrainFactory grains, ILogger<ReBac
     }
 
     /// <inheritdoc />
-    public async Task<Result> UnlinkFromParentAsync(
-        ScopeId scope,
-        ScopeId parent,
-        CancellationToken cancellationToken = default
-    ) {
-        var (parentType, parentId) = ReBacScopeAuthorizer.ObjectOf(parent);
+    public async Task<Result> ClearAsync(ScopeId scope, CancellationToken cancellationToken = default) {
+        var (type, id) = ReBacScopeAuthorizer.ObjectOf(scope);
 
-        return await ApplyAsync(scope, ParentRelation, SubjectRef.Of(parentType, parentId), delete: true);
+        if (type.Length == 0) {
+            return Result.Failure(
+                ErrorCode.InvalidResourceId,
+                "A scope with no kind names no ReBAC object, so there is nothing to clear."
+            );
+        }
+
+        var tenant = grains.ForTenant(scope.TenantId.ToString("D", CultureInfo.InvariantCulture));
+
+        // ⚠ The durable read, because this is a destructive path and the row is the authority —
+        // docs/plan/07 § Consistency's "read durable". An activation's memory is what the two-grain
+        // write keeps current; the case this guards is a tuple that reached the row by a repair or a
+        // replayed journal and not this activation, which a memory read would leave standing.
+        var snapshot = await tenant
+            .GetGrain<IObjectRelationsGrain>(GrainKeys.ObjectRelations(type, id))
+            .ReadDurableAsync();
+
+        if (snapshot.TryGetError(out var readError)) {
+            logger.LogError(
+                "Reading the tuples on scope {Path} to clear them failed: {Message}.",
+                scope.Path,
+                readError.Message
+            );
+
+            return Result.Failure(readError);
+        }
+
+        // ⚠ One tuple at a time through the store, and not a bulk truncate on the object grain: each
+        // delete is the two-grain write in reverse, so the reverse index forgets the subject too and
+        // the tenant's relation version moves, which is what invalidates every cached check that
+        // was answered through a grant on this object.
+        foreach (var (relation, subjects) in snapshot.GetValueOrThrow().ByRelation) {
+            foreach (var subject in subjects) {
+                var removed = await ApplyAsync(scope, relation, subject, delete: true);
+                if (removed.IsFailure) {
+                    return removed;
+                }
+            }
+        }
+
+        return Result.Success;
     }
 
     /// <inheritdoc />

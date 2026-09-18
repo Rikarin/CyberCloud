@@ -195,6 +195,15 @@ public interface IShardMapGrain : IGrainWithStringKey {
     ///         the region filled in. The configured read-only pin — <c>DurableTierOptions.Pins</c>,
     ///         honoured at wiring time — is unchanged and still beats the map.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A pin in the map is not yet a pin in any silo.</b> Each silo routes durable state
+    ///         through its own mirror of this map, refreshed on a timer, and the mirror's fallback for
+    ///         a tenant it has not heard of is the hash — which a pin exists to disagree with. So the
+    ///         create does not touch the tenant's grains until
+    ///         <see cref="ShardMapPropagation.ConfirmAsync" /> has every silo answering with the
+    ///         pinned shard; a record written here and a grain activated a millisecond later would
+    ///         put the tenant's first rows on the hash-chosen shard and its later ones on this one.
+    ///     </para>
     /// </remarks>
     Task<Result> PinAsync(Guid tenantId, string durableShard, string? hotOverride);
 

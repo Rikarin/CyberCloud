@@ -264,6 +264,25 @@ public sealed class TenancyCluster : IAsyncLifetime {
     }
 
     /// <summary>
+    ///     How many <c>OrleansStorage</c> rows one shard holds for a grain key — the plain-SQL answer
+    ///     to "where did this grain's state actually land".
+    /// </summary>
+    /// <param name="shard">The shard id.</param>
+    /// <param name="keyWithinTenant">The grain key as <c>GrainKeys</c> builds it, without the tenant prefix.</param>
+    /// <param name="cancellationToken">The test's cancellation token.</param>
+    public async Task<long> CountRowsAsync(string shard, string keyWithinTenant, CancellationToken cancellationToken) {
+        await using var connection = await OpenShardAsync(shard, cancellationToken);
+        await using var command = new NpgsqlCommand(
+            "SELECT count(*) FROM orleansstorage WHERE grainidextensionstring = @key",
+            connection
+        );
+
+        command.Parameters.AddWithValue("key", keyWithinTenant);
+
+        return (long)(await command.ExecuteScalarAsync(cancellationToken))!;
+    }
+
+    /// <summary>
     ///     Stops the PostgreSQL server that carries every null-tenant platform grain — the
     ///     "blackhole the global cluster" of docs/plan/23's chaos-invariant 5.
     /// </summary>

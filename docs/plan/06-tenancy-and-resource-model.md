@@ -53,11 +53,23 @@ are ([24 § What the type list cannot say](24-roadmap.md), the tenancy case) and
   the new scope through `RoleAssignmentId.OnScope`. `test/CyberCloud.Isolation`'s
   `ManagementGroupTests` drives a grant at a group down to a resource group two levels below, through
   the real schema, and drives a move to prove the old group's reach ends in the same call.
+- **A delete sweeps the group's grants, not only its edge, because the object id is the name.** The
+  group's ReBAC object is `managementGroup:{name}`, so a group re-created under a deleted group's name
+  *is* the deleted group's object, and any `#owner`/`#contributor`/`#reader`/`#suspended` tuple left on it
+  would be a grant on the new group that nobody made — reaching every subscription placed under it, and
+  revivable by anyone with `write` on the tenant. The review of #39 found the first delete swept the
+  tenant listing, the parent's child list and the `parent` edge and left the grants;
+  `IScopeRelationWriter.ClearAsync` now removes every tuple on the object as the delete's last step,
+  after the record, through the tuple store so the reverse index and the relation version follow. A
+  resource group's delete gets the same sweep — `resourceGroup:{sub}-{rg}` is a name too — where the
+  residue had been called inert. `ManagementGroupTests.ADeletedGroupRecreatedUnderTheSameNameCarriesNoneOfItsOldGrants`
+  drives it through the real schema.
 - **Depth is capped at six, and the cap is the evaluator's budget rather than Azure's number copied.**
   A resource is resource → group → subscription → *n* groups → tenant, and
   [07 § Check](07-rebac-authorization.md) caps the walk at twelve hops; six levels puts the deepest
   resource at nine and leaves room for the userset hop a group grant adds. `IManagementGroupGrain`
-  refuses the seventh.
+  refuses the seventh, and `ScopeManagerService` refuses it first — before the `parent` edge is written,
+  so the refusal leaves no tuple.
 
 ⚠ **Owed, and recorded here rather than only in a commit message.** *Moving a group* — a `PUT` naming
 a different parent for an existing group is a `409`, because a safe move re-checks the depth of every

@@ -1,4 +1,6 @@
+using CyberCloud.Core.Resources;
 using CyberCloud.ServiceDefaults.Storage;
+using CyberCloud.Tenancy.Contracts;
 using CyberCloud.Tenancy.Shards;
 using CyberCloud.Tenancy.Tests.Infrastructure;
 using Shouldly;
@@ -252,6 +254,68 @@ public sealed class ShardMapTests(TenancyCluster cluster) {
         refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
         refused.Error.Message.ShouldContain("HashTagOverrides");
         (await map.GetAssignmentAsync(Tenant(530))).IsFailure.ShouldBeTrue("a refused pin left an assignment");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>THE SPLIT THE REVIEW OF ISSUE #39 FOUND, AND THE STEP THAT CLOSES IT.</b> A pin is a
+    ///     record in the map; the silo that activates the tenant's first grain routes its state
+    ///     through its own mirror, which for a tenant it has not heard of falls back to the hash — the
+    ///     shard the pin exists to disagree with. This drives the real storage layer: the mirror's
+    ///     answer before and after <c>ShardMapPropagation.ConfirmAsync</c>, and then which PostgreSQL
+    ///     server the tenant grain's row actually landed in.
+    /// </summary>
+    /// <remarks>
+    ///     One silo, so "every silo" is this one; what the multi-silo case adds is Orleans'
+    ///     <c>IManagementGrain</c> fan-out, which is the runtime's and not this repository's to
+    ///     prove. The pin is to a REAL shard because the test reads rows back; the hash fallback may
+    ///     name one of the shard ids other tests added to the map without a server behind it, which
+    ///     is why the "not here" assertion is against the other real shard rather than the hashed one.
+    /// </remarks>
+    [Fact]
+    public async Task APinnedTenantIsPlacedOnItsPinOnceTheMirrorHasConfirmedIt() {
+        var token = TestContext.Current.CancellationToken;
+        var map = cluster.ShardMapGrain();
+        var tenant = Tenant(540);
+        var id = TenancyCluster.Id(tenant);
+
+        // What this silo's storage layer would do for the tenant right now, with no record: the hash.
+        var hashed = cluster.ShardMap.DurableShardFor(id);
+        var pinned = hashed == TenancyCluster.ShardA ? TenancyCluster.ShardB : TenancyCluster.ShardA;
+        var other = pinned == TenancyCluster.ShardA ? TenancyCluster.ShardB : TenancyCluster.ShardA;
+
+        (await map.PinAsync(tenant, pinned, null)).IsSuccess.ShouldBeTrue();
+        var assigned = (await map.AssignAsync(tenant, "eu-central")).GetValueOrThrow();
+        assigned.DurableShard.ShouldBe(pinned);
+
+        // The record is in the map and NOT in this silo's mirror — the gap the timer would close in
+        // fifteen seconds, and the gap a tenant grain activated now would write its first row into.
+        cluster.ShardMap.DurableShardFor(id).ShouldBe(
+            hashed,
+            "the mirror learned the pin without a refresh, so this test no longer exercises the gap"
+        );
+
+        var before = cluster.ShardMapRefresher.Commands;
+        var confirmed = await ShardMapPropagation.ConfirmAsync(cluster.Grains, assigned);
+
+        confirmed.IsSuccess.ShouldBeTrue(confirmed.Error?.Message);
+        cluster.ShardMapRefresher.Commands.ShouldBe(before + 1, "the fan-out did not reach this silo's mirror");
+        cluster.ShardMap.DurableShardFor(id).ShouldBe(pinned, "the mirror was refreshed and still does not resolve the pin");
+
+        // And the rows land on the pin — the storage provider for this tenant is built on this silo
+        // now, for the first time, from the mirror that has the record.
+        var grain = cluster.For(tenant).GetGrain<ITenantGrain>(GrainKeys.Tenant(tenant));
+        var created = await grain.CreateAsync("pinned-540", "Pinned", "eu-central");
+
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+
+        // ⚠ The PHYSICAL key: Orleans.Multitenant prefixes the tenant, so GrainKeys.Tenant alone
+        // matches no row — the same read CrossTenantAuthorizationTests makes.
+        var physicalKey = grain.GetGrainId().Key.ToString()!;
+
+        (await cluster.CountRowsAsync(pinned, physicalKey, token))
+            .ShouldBe(1L, $"the pinned tenant's row is not on '{pinned}'");
+        (await cluster.CountRowsAsync(other, physicalKey, token))
+            .ShouldBe(0L, $"the pinned tenant has a row on '{other}' as well — the split");
     }
 
     [Fact]
