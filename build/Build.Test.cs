@@ -53,8 +53,11 @@ partial class Build {
     /// </summary>
     enum TestSuite {
         /// <summary>
-        ///     <c>Test</c>, every PR: the unit, grain, reconciler, conformance, isolation and
-        ///     contract layers of docs/plan/23 § Test layers.
+        ///     <c>Test</c>: the unit, grain, reconciler, conformance, isolation and contract layers
+        ///     of docs/plan/23 § Test layers. "Per pull request" names the TARGET that owns them, not
+        ///     how often each runs: since #25 <see cref="TestLane" /> splits this set, and the
+        ///     reconciler layer — the <c>*.Cluster.Conformance</c> assemblies — runs on every merge
+        ///     and every night rather than on every PR, for the measured reason given there.
         /// </summary>
         PerPullRequest,
 
@@ -121,6 +124,173 @@ partial class Build {
 
     /// <summary>The projects <c>Test</c> runs — the "Every PR" rows of docs/plan/23 § Test layers.</summary>
     IReadOnlyCollection<AbsolutePath> TestProjects => ProjectsIn(TestSuite.PerPullRequest);
+
+    /// <summary>
+    ///     Which of <see cref="TestProjects" /> one <c>Test</c> run covers: everything, the
+    ///     <c>*.Cluster.Conformance</c> suites, or everything but them.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The split exists because the cluster-conformance suites are a serial chain longer
+    ///             than the PR budget, and that was measured rather than feared.
+    ///         </b> docs/plan/23 § CI shape gives a PR 25 minutes. On the GitHub-hosted
+    ///         <c>ubuntu-24.04</c> runner — 4 vCPUs, so <see cref="ClusterBackedSuiteDegree" /> = 1
+    ///         and every suite that holds a k3s runs after the one before it — main.yml run
+    ///         35027771880 (2026-09-15, commit 736ba6e) spent 22:18:26 → 22:42:18 on that chain,
+    ///         <b>24 minutes</b>, before most of the other 63 suites were allowed to start, and the
+    ///         <c>gate / test</c> job took 29 m 14 s end to end. Of those 24 minutes the sixteen
+    ///         <c>*.Cluster.Conformance</c> assemblies were about nineteen and a half. The doc's own
+    ///         remedy for a pipeline over budget is "parallelism or moving a test to nightly — with a
+    ///         written reason"; this is the written reason, and the move is to a lane on main and
+    ///         nightly rather than to nightly alone, because a suite that only runs at 02:00 is a
+    ///         suite whose failure a merge cannot see (#25's account of
+    ///         <c>BundleInstallSelection</c>, ten days red).
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The lane is decided by NAME, and that is a measured exception to this file's own
+    ///             rule.
+    ///         </b> § StartsContainers argues at length that "holds a cluster" must be read off
+    ///         the build output and never off a name, and the semaphores obey that. The first cut of
+    ///         this lane obeyed it too — <see cref="StartsCluster" /> as the partition — and running
+    ///         it on 2026-09-18 answered why it cannot: <c>CyberCloud.Kubernetes.Tests</c> and
+    ///         <c>CyberCloud.AppHost.Tests</c> hold a k3s, so they left the fast lane with the
+    ///         conformance suites, and the coverage floor over the 63 suites that remained came back
+    ///         <c>CyberCloud.Kubernetes 10.1 % (270 of 2678 lines)</c> and
+    ///         <c>CyberCloud.AppHost does not appear in the coverage report at all</c>. Those two
+    ///         suites are the only tests of their assemblies; a PR lane without them is a PR lane
+    ///         whose floor has two holes in it, and coverage-below-floor.txt refuses to be the file
+    ///         that papers them over. So the partition is the sixteen suites whose name ends in
+    ///         <c>.Cluster.Conformance</c> — the row of docs/plan/23 § Test layers that says "real
+    ///         API server, real SSA", named the way <see cref="SuiteOwning" /> already names its
+    ///         rows — and the two suites that hold a cluster for a different reason stay on the PR,
+    ///         costing it one k3s of roughly half a minute and one Aspire topology of roughly four
+    ///         (the same run's timings). The semaphore still caps them; only the lane reads the name.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The coverage floor follows the lane, and only two of the three enforce it.</b>
+    ///         <see cref="TestLane.Fast" /> collects and enforces over the suites it ran, which is what a PR
+    ///         gate can measure; <see cref="TestLane.All" /> collects and enforces over everything, and is the
+    ///         one run in which the floor sees every suite; <see cref="TestLane.Cluster" /> collects nothing,
+    ///         because a floor measured over sixteen suites that instrument the reconcilers and
+    ///         nothing else would fail every project the other 65 cover, and a floor that is known to
+    ///         fail is a floor nobody reads. It says so in its log line rather than printing a ○ the
+    ///         gate.yml guard would read as a skipped measurement.
+    ///     </para>
+    /// </remarks>
+    enum TestLane {
+        /// <summary>Every per-PR suite in one process. The default, and what nightly.yml runs.</summary>
+        All,
+
+        /// <summary>Every suite that is not a <c>*.Cluster.Conformance</c> assembly. What pr.yml runs.</summary>
+        Fast,
+
+        /// <summary>Only the <c>*.Cluster.Conformance</c> assemblies. What main.yml runs beside <see cref="TestLane.Fast" />.</summary>
+        Cluster
+    }
+
+    // ⚠ A STRING, PARSED BELOW, AND NOT A `TestLane` FIELD — because Nuke does not fail on a value it
+    // cannot convert. Measured 2026-09-17 with `--test-lane Bogus`: the injector logged
+    // `[WRN] Could not inject value for Build.Lane … Value 'Bogus' could not be converted` and then
+    // ran the target with the field's DEFAULT, which is every suite. A typo in a workflow file would
+    // therefore run the full 29-minute lane under the name of the fast one and report success. The
+    // property below turns that warning into the failure it should have been.
+    //
+    // The field is `LaneName` and the parameter is `--test-lane`: C# will not let a nested type and a
+    // field share the name TestLane, and the parameter name is the one a workflow file reads, so
+    // that is the one kept.
+    [Parameter(
+        "Which per-PR suites Test runs: All (default; nightly.yml), Fast (every suite that is not a "
+        + "*.Cluster.Conformance assembly; pr.yml), or Cluster (only those; main.yml). Build.Test.cs § TestLane.",
+        Name = "TestLane"
+    )]
+    readonly string? LaneName;
+
+    /// <summary>The <see cref="TestLane" /> this run was asked for, or a failure naming the value it could not read.</summary>
+    /// <remarks>
+    ///     ⚠ Matched against the NAMES, not parsed. <c>Enum.TryParse</c> accepts <c>"1"</c> as
+    ///     <see cref="TestLane.Fast" /> and <c>"2"</c> as <see cref="TestLane.Cluster" />, and
+    ///     <c>Enum.IsDefined</c> agrees with it, so the first version of this property refused
+    ///     <c>Bogus</c> and accepted a digit — a numeric typo in a workflow file would have run a lane
+    ///     other than the one the step was named for, which is the failure the comment above
+    ///     <see cref="LaneName" /> promises cannot happen. #25's review found it.
+    /// </remarks>
+    TestLane Lane {
+        get {
+            if (string.IsNullOrWhiteSpace(LaneName)) {
+                return TestLane.All;
+            }
+
+            var name = Enum.GetNames<TestLane>()
+                .SingleOrDefault(candidate => candidate.Equals(LaneName.Trim(), StringComparison.OrdinalIgnoreCase));
+
+            Assert.True(
+                name is not null,
+                $"--test-lane '{LaneName}' is not a lane. It is one of {string.Join(", ", Enum.GetNames<TestLane>())}, "
+                + "spelled out — not a number, which Enum.TryParse would accept — and a value that is "
+                + "none of them must not fall back to All: that would run every suite under the name "
+                + "of the lane that was asked for. Build.Test.cs § TestLane."
+            );
+
+            return Enum.Parse<TestLane>(name!);
+        }
+    }
+
+    /// <summary>
+    ///     Whether a suite is one of the <c>*.Cluster.Conformance</c> assemblies — the partition
+    ///     <see cref="TestLane" /> uses, and nothing else does.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Not <see cref="StartsCluster" />, on purpose; the remarks on <see cref="TestLane" /> have
+    ///     the measurement. The two answer different questions — "may this suite hold a k3s right
+    ///     now" and "does this suite belong to the row that runs against a real API server" — and
+    ///     the day they are conflated the fast lane loses the coverage of two assemblies.
+    /// </remarks>
+    static bool IsClusterConformance(AbsolutePath project) =>
+        project.NameWithoutExtension.EndsWith(".Cluster.Conformance", StringComparison.Ordinal);
+
+    /// <summary>
+    ///     The suites the current <see cref="TestLane" /> runs, out of the per-PR set.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>An empty lane is a failure.</b> <c>Test</c> passes on zero projects when the
+    ///     repository has no suites at all (see <see cref="RunTests" />), but a lane that selects
+    ///     zero out of eighty-one is a classification that has broken — every
+    ///     <c>*.Cluster.Conformance</c> assembly renamed, or every suite so named — and a pr.yml that
+    ///     ran nothing while reporting success is the failure the whole file is written against.
+    /// </remarks>
+    IReadOnlyCollection<AbsolutePath> ProjectsInLane(IReadOnlyCollection<AbsolutePath> projects) {
+        if (Lane == TestLane.All) {
+            return projects;
+        }
+
+        var wantCluster = Lane == TestLane.Cluster;
+        var lane = projects.Where(project => IsClusterConformance(project) == wantCluster).ToList();
+
+        Assert.NotEmpty(
+            lane,
+            $"--test-lane {Lane} selected 0 of {projects.Count} suite(s). Every per-PR suite "
+            + (wantCluster ? "would have to lack" : "would have to carry")
+            + " the .Cluster.Conformance suffix for that to be right, and on this tree it is not: "
+            + "Build.Test.cs § IsClusterConformance stopped matching what it is meant to. A lane that "
+            + "runs nothing is not a pass."
+        );
+
+        Log.Information(
+            "Test: lane {Lane} — {Count} of {Total} suite(s); the other {Rest} "
+            + (wantCluster ? "are not" : "are")
+            + " *.Cluster.Conformance assemblies and belong to the other lane. Build.Test.cs § TestLane.",
+            Lane,
+            lane.Count,
+            projects.Count,
+            projects.Count - lane.Count
+        );
+
+        return lane;
+    }
 
     /// <summary>
     ///     Fails if <c>test/</c> holds a project that no suite claims.
@@ -244,9 +414,32 @@ partial class Build {
         // it removes is the whole gate.
         var baseline = CoverageBaseline();
 
+        // ⚠ After the empty check and the baseline parse, both of which are about the whole set,
+        // and before the log line, which is about what this process is going to run.
+        projects = ProjectsInLane(projects);
+
         Log.Information("Test: running {Count} test project(s)", projects.Count);
 
-        RunSuites(nameof(Test), projects, environment: null, collectCoverage: true);
+        // The Cluster lane collects no coverage — see TestLane's remarks for why a floor over
+        // sixteen suites would fail every project the other lane covers.
+        var measuresCoverage = Lane != TestLane.Cluster;
+
+        RunSuites(nameof(Test), projects, environment: null, collectCoverage: measuresCoverage);
+
+        if (!measuresCoverage) {
+            // ⚠ Worded so that neither of gate.yml's two floor guards matches it: this is not the ○
+            // "NOT ENFORCED" case, which is a measurement that failed, and it is not the "at or above
+            // the floor" line, which is a measurement that passed. It is a lane that does not
+            // measure, and the job that runs it does not run those guards.
+            Log.Information(
+                "Test: lane {Lane} collects no coverage, by design — the floor is enforced by the "
+                + "Fast lane on every PR and by the full run nightly, each over the suites it ran. "
+                + "Build.Test.cs § TestLane.",
+                Lane
+            );
+
+            return;
+        }
 
         EnforceCoverageFloor(baseline);
     }

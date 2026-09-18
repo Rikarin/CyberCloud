@@ -13,6 +13,7 @@ build/
 ├── Build.Licence.cs          # ADR-011 scan over charts + images — the artefacts' licences, and syft over every image
 ├── OciRegistry.cs            # the OCI distribution API: manifests and configs, for Build.Licence
 ├── Build.Portal.cs           # pnpm install/lint/test/build, performance budget, axe
+├── Build.Bootstrap.cs        # deploy/bootstrap/bootstrap.sh preflight and --dry-run; the first phase of E2E, and nightly.yml's kind and hostile-BYO jobs (#25)
 ├── Build.E2E.cs              # ─┐
 ├── Build.Chaos.cs            #  ├ against a real deployment; nightly and weekly, not per-PR
 ├── Build.Load.cs             # ─┘
@@ -80,6 +81,7 @@ Restore ──► Compile ──┬──► Test
                       └──► Images ────────┐ (stub)
 Charts ───────────────────────────────────┴──► Licence
 Portal (stub)
+Bootstrap                                  (no dependency: bash and kubectl — Build.Bootstrap.cs)
 
 Publish (stub) ──► Test, Generate, Architecture, Portal, Licence
 ```
@@ -130,7 +132,7 @@ it.
 
 | Project | Target | Runs |
 |---|---|---|
-| `*.Tests`, `*.Conformance`, `CyberCloud.Isolation` | `Test` | Every PR |
+| `*.Tests`, `*.Conformance`, `CyberCloud.Isolation` | `Test` | Every PR (`--test-lane Fast`), every merge (`Cluster`, the `*.Cluster.Conformance` suites), nightly (all) — Build.Test.cs § TestLane |
 | `CyberCloud.E2E` | `E2E` | Nightly + pre-release |
 | `CyberCloud.Chaos` | `Chaos` | Nightly |
 | `CyberCloud.Load` | `Load` | Weekly + pre-release |

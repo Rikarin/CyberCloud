@@ -37,6 +37,13 @@ permissions:
 jobs:
   # The "Every PR" rows, shared verbatim with main.yml and release.yml so a merge cannot pass a
   # gate the PR ran and main did not.
+  #
+  # ⚠ The one thing main runs that a PR does not is NOT in the gate: main.yml's own `test-cluster`
+  # job, the sixteen *.Cluster.Conformance suites, a serial chain of about twenty minutes on a
+  # 4-vCPU runner (Build.Test.cs § TestLane has the measurement). They are longer than the budget
+  # below, so they run on the merge and nightly instead — docs/plan/23 § Test layers, row
+  # Reconciler, records the same decision from the doc's side, and gate.yml's header says why the
+  # job is not a conditional one here.
   gate:
     uses: ./.github/workflows/gate.yml
 
@@ -112,7 +119,45 @@ jobs:
           # ⚠ No `--fail` here either — the action passes it itself and trufflehog refuses a
           # repeated flag. nightly.yml's copy of this step is where that was found, because this
           # workflow has never run: there has been no pull request and no merge group.
-          extra_args: --results=verified,unknown
+          #
+          # ⚠ `verified,unknown`, WITH FOUR FIXTURE FILES EXCLUDED BY PATH — the same in nightly.yml.
+          # `unknown` is a credential-shaped string whose host the runner could not reach, and that
+          # is the shape of every connection string this platform has: a Postgres on a private
+          # address is `unknown` to a GitHub runner forever, and push protection does not see it
+          # either (partner token formats only). The nightly history scan exited 183 every night on
+          # thirteen `unknown` results, all of them fixtures in four test files that have to hold
+          # secret-shaped strings to do their job; #25's first draft dropped `unknown` tree-wide to
+          # silence them, and its review measured what that gave up — a private-address Postgres
+          # string committed into another suite passed `--results=verified` and failed this
+          # setting. .github/trufflehog-exclude-paths.txt names the four files and what each tests,
+          # and is the only place a file is exempted from either scan.
+          extra_args: --results=verified,unknown --exclude-paths=.github/trufflehog-exclude-paths.txt
+
+      # ── docs/plan/18 § Platform security, row Supply chain, applied to the code that builds it ────
+      #
+      # A tag is a pointer somebody else moves. Every `uses:` in .github/ is a 40-hex commit with the
+      # release it stands for written beside it, and this is what keeps it so — the script's header
+      # has the account. Runs here, on every PR, because a pin is loosened in a PR.
+      # ⚠ Every `run: .github/scripts/x.sh` in these workflows execs the file directly, so a script
+      # committed as 100644 dies with `Permission denied` (exit 126) before its first line — on every
+      # workflow that calls it, at once. #25's two new scripts were committed that way and the
+      # review caught it, not a run: on this repository's Windows checkouts `core.filemode` is false,
+      # the bit is invisible in `git status`, and `bash script.sh` runs a 100644 file happily. This
+      # is the Linux checkout, so `-x` here reads the bit the index actually carries.
+      - name: Every script under .github/scripts is executable
+        run: |
+          missing=0
+          for script in .github/scripts/*.sh; do
+            if [ ! -x "$script" ]; then
+              echo "::error file=$script,title=Script mode::$script is not executable in the checkout, so every 'run: $script' step exits 126 before it runs. Fix: git update-index --chmod=+x $script"
+              missing=$((missing + 1))
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          echo "$(ls .github/scripts/*.sh | wc -l | tr -d ' ') script(s), every one executable."
+
+      - name: Every action is pinned to a commit SHA
+        run: .github/scripts/assert-actions-pinned.sh
 
       # ⚠ docs/plan/23 § CI shape lists dependency review under `weekly.yml`. It cannot live there:
       # actions/dependency-review-action compares a pull request's dependency graph against its

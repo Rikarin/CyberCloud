@@ -1,26 +1,32 @@
 # docs/plan/23 § CI shape, row `nightly.yml`: "02:00 | E2E, cluster e2e, hostile BYO, chaos,
 # security".
 #
-# ── ⚠ THREE OF THESE FIVE ARE RED TODAY, AND EACH SAYS WHY ───────────────────────────────────────
+# ── ⚠ WHAT RUNS TONIGHT, WHAT SKIPS, AND WHAT IS STILL RED — EACH FOR A REASON IT SAYS ITSELF ────
 #
-# `E2E`, `Chaos` and the tenant-cluster half of `cluster-e2e` are BLOCKED, in build/'s sense of the
-# word: written, discovering their work, and then failing while naming every input they do not have.
-# Build.cs § target graph argues that case at length and it applies exactly here — "answering
-# 'nothing was pushed, and here is why' with exit 0 is how a release goes out with no images in it".
+# Until issue #25 every job here was red on every run, and for three different reasons that a red
+# tick cannot tell apart: a secret that does not exist, a suite that does not exist, and a real
+# finding. This file now keeps them apart, because a job that is red for a reason nobody can act on
+# hides the red somebody could.
 #
-# What is NOT blocked, and runs every night starting tonight:
-#
-#   * the bootstrap preflight. Build.E2E.cs § ExerciseBootstrap runs on EVERY invocation of `E2E`,
-#     including the ones that go on to block, and docs/plan/09 § The platform's own cluster is the
-#     sentence it makes true: deploy/bootstrap/ "is exercised by every e2e run, so it cannot rot".
-#   * the bootstrap dry-run against a real API server, in `cluster-e2e` and in all four `hostile-byo`
-#     legs. That is manifest rendering, RBAC namespacing and the schema Job's shape, validated by a
+# RUNS, and is green when the tree is:
+#   * `test-full` — `./build.sh Test` over every suite in one process, the only run in which the
+#     coverage floor sees all of them (gate.yml splits them into two lanes; Build.Test.cs § TestLane).
+#   * `bootstrap-kind` and the four `hostile-byo` legs — `./build.sh Bootstrap` against a real API
+#     server: manifest rendering, RBAC namespacing and the schema Job's shape, validated by a
 #     Kubernetes four minors old, by restricted Pod Security, by a cluster with no default storage
-#     class, and by a cluster with a webhook that says no. docs/plan/23 § Test layers calls that row
-#     "the brief's core premise".
-#   * the whole security row that does not need a deployment.
+#     class, and by a cluster with a webhook that says no. docs/plan/23 § Test layers calls that
+#     row "the brief's core premise". Since #25 these call `Bootstrap`, a target of its own, rather
+#     than `E2E` — which did the same dry-run and then failed on a suite that does not exist, so a
+#     dry-run that passed and one that failed were the same red (Build.Bootstrap.cs' header).
+#   * `security-history` — the whole-history secret scan and the closure audit.
 #
-# ── ⚠ SECRETS THIS WORKFLOW REQUIRES ─────────────────────────────────────────────────────────────
+# SKIPS, with a step named for the secret and docs/plan/23 § CI secrets naming who sets it:
+#   * `e2e` and `chaos` — E2E_BASE_URL and STAGING_KUBECONFIG. ⚠ Both are also BLOCKED on suites
+#     that do not exist (test/CyberCloud.E2E, test/CyberCloud.Chaos); with the secrets set they fail
+#     on that, by design (Build.cs § target graph), so the skip step says so.
+#   * `security-runtime` — a registry for Trivy to scan and a staging for ZAP to baseline.
+#
+# ── ⚠ SECRETS THIS WORKFLOW USES ─────────────────────────────────────────────────────────────────
 #
 #   E2E_BASE_URL         base URL of staging, e.g. https://api.staging.cybercloud.example.
 #                        Build.E2E.cs § E2EBaseUrl has no fallback on purpose: "an E2E run against a
@@ -58,6 +64,58 @@ env:
   NUKE_TELEMETRY_OPTOUT: 1
 
 jobs:
+  # ── docs/plan/23 § Test layers, every "Every PR" row, in one process ─────────────────────────────
+  #
+  # gate.yml runs the same suites as two lanes — `test` on every PR, `test-cluster` on every merge —
+  # and neither lane's coverage floor sees every suite. This job is the one that does: the same
+  # `./build.sh Test` a developer runs, with no `--test-lane`, and the same three guards gate.yml's
+  # `test` job has. There is no budget here, which is what lets it be one process.
+  test-full:
+    name: test-full
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/dotnet
+
+      - name: Prove Docker can run the container-backed suites
+        run: |
+          docker version --format 'client {{.Client.Version}}, server {{.Server.Version}}'
+          docker run --rm hello-world > /dev/null
+          echo "cgroup version: $(docker info --format '{{.CgroupVersion}}')"
+
+      - name: ./build.sh Test
+        run: .github/scripts/run-build.sh "$RUNNER_TEMP/test.log" Test
+
+      - name: Prove the suites actually ran
+        if: always()
+        run: .github/scripts/assert-suites-ran.sh artifacts/test-results "$RUNNER_TEMP/test.log"
+
+      # The same two greps as gate.yml's `test` job, for the same reason it gives: Nuke's host
+      # detection is load-bearing for the floor, so the log gets a second reader.
+      - name: The coverage floor was measured, not skipped
+        run: |
+          if grep -q 'coverage floor was NOT ENFORCED' "$RUNNER_TEMP/test.log"; then
+            echo "::error title=Coverage floor::./build.sh Test came back with ○ — it measured no coverage at all — and CI still saw a zero exit code. Build.Test.cs § EnforceCoverageFloor is supposed to make that a hard failure whenever IsServerBuild. docs/plan/23 § Test layers."
+            exit 1
+          fi
+          if ! grep -q 'shipping project(s) at or above the' "$RUNNER_TEMP/test.log"; then
+            echo "::error title=Coverage floor::./build.sh Test exited 0 without printing the line that says the floor was applied. docs/plan/23 § Test layers."
+            exit 1
+          fi
+          grep -E 'Test: coverage floor|shipping project\(s\) at or above|  (✔|✘|○|▪) CyberCloud' "$RUNNER_TEMP/test.log"
+
+      - name: Upload test results and coverage
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-results-full
+          path: |
+            artifacts/test-results/
+            artifacts/coverage/
+          if-no-files-found: error
+          retention-days: 14
+
   # ── docs/plan/23 § Test layers, row E2E: "Playwright + `cyc` against a real staging deployment" ──
   e2e:
     name: e2e
@@ -68,16 +126,25 @@ jobs:
       STAGING_KUBECONFIG: ${{ secrets.STAGING_KUBECONFIG }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/dotnet
 
-      - name: Preconditions
+      - name: Are the staging secrets configured?
+        id: secrets
         run: |
-          .github/scripts/require-secrets.sh e2e \
-            "docs/plan/23 § Test layers, row E2E, gating 'green before release'." \
+          .github/scripts/gate-on-secrets.sh e2e \
+            "docs/plan/23 § Test layers, row E2E, gating 'green before release'. No journey ran against anything." \
             "E2E_BASE_URL=create the secret with staging's base URL" \
             "STAGING_KUBECONFIG=create the secret with a kubeconfig for staging"
 
+      - name: "skipped: E2E_BASE_URL / STAGING_KUBECONFIG are not configured — docs/plan/23 § CI secrets"
+        if: steps.secrets.outputs.configured != 'true'
+        run: |
+          echo "::warning title=e2e::e2e is also BLOCKED on a suite that does not exist — test/CyberCloud.E2E — and on a cyc CLI under cli/. With the secrets set, ./build.sh E2E fails naming both (Build.E2E.cs). docs/plan/23 § CI secrets, 'Blocked on work, not on a secret'."
+
+      - uses: ./.github/actions/dotnet
+        if: steps.secrets.outputs.configured == 'true'
+
       - name: Point kubectl at staging
+        if: steps.secrets.outputs.configured == 'true'
         run: |
           umask 077
           mkdir -p "$HOME/.kube"
@@ -86,9 +153,11 @@ jobs:
 
       # ⚠ Expected to fail on its preconditions today — `test/CyberCloud.E2E` does not exist and
       # `cli/` holds no project, both confirmed by running it. What runs BEFORE that failure is the
-      # bootstrap preflight and dry-run, which is real and is the reason this job is not simply
-      # deleted until the suite lands.
+      # bootstrap preflight and dry-run against staging, which is why the job is not `Bootstrap`
+      # alone: against staging the row is the E2E row, and a red here is the honest answer until
+      # the suite exists.
       - name: ./build.sh E2E
+        if: steps.secrets.outputs.configured == 'true'
         run: |
           context="${{ secrets.STAGING_KUBE_CONTEXT }}"
           [ -n "$context" ] || context="$(kubectl config current-context)"
@@ -97,31 +166,32 @@ jobs:
             --kube-context "$context"
 
       - name: The bootstrap half ran, whatever the suite did
-        if: always()
+        if: always() && steps.secrets.outputs.configured == 'true'
         run: .github/scripts/assert-bootstrap-exercised.sh "$RUNNER_TEMP/e2e.log" cluster
 
-  # ── docs/plan/23 § Test layers, row Cluster e2e ──────────────────────────────────────────────────
+  # ── docs/plan/23 § Test layers, row Cluster e2e — the part of it that exists ─────────────────────
   #
   # "kind + CAPI + Kamaji + KubeVirt: create and destroy a real tenant cluster | Nightly, ~20 min |
   # ⚠ The highest-value test in the suite — the one that catches operator drift".
   #
-  # ⚠ WHAT IS IMPLEMENTED AND WHAT IS NOT, PRECISELY.
-  #
-  # The kind half is here and runs: a real cluster, a real API server, and bootstrap.sh --dry-run
-  # against it, which is the only way to exercise the manifests themselves (Build.E2E.cs
-  # § BootstrapDryRun). That is not the row, but it is not nothing, and it catches the class of
-  # operator drift that is "the manifests no longer apply".
+  # ⚠ THIS JOB IS NOT THAT ROW, AND ITS NAME SAYS SO. It was called `cluster-e2e` and ran `E2E`,
+  # which did a bootstrap dry-run against the kind cluster and then failed on the missing suite —
+  # every night, for the same reason, with the dry-run's pass buried in the log. What is here is
+  # what exists: a real cluster, a real API server, and bootstrap.sh --dry-run against it, which is
+  # the only way to exercise the manifests themselves (Build.Bootstrap.cs § BootstrapDryRun). That
+  # catches the class of operator drift that is "the manifests no longer apply".
   #
   # CAPI, Kamaji and KubeVirt are NOT installed, and the reason is not runner capacity. There is
   # nothing to drive them with: the row's assertion is "create and destroy a real tenant cluster",
   # test/CyberCloud.E2E does not exist, and installing three operators so that a job can then report
-  # it has no test to run would be an expensive way to stay exactly as covered as this is.
-  # ⚠ So this job is BLOCKED on the same missing suite as `e2e`, and unblocking it means writing
-  # test/CyberCloud.E2E first — after which the operator installs belong here, in that order.
-  cluster-e2e:
-    name: cluster-e2e
+  # it has no test to run would be an expensive way to stay exactly as covered as this is. And a
+  # KubeVirt guest needs /dev/kvm, which a GitHub-hosted runner does not lend — docs/plan/23 § The
+  # lane that needs a kubelet puts the row on the VM lane. Unblocking the row means writing the
+  # suite first; docs/plan/23 § CI secrets lists it under "Blocked on work, not on a secret".
+  bootstrap-kind:
+    name: bootstrap-kind
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/dotnet
@@ -129,39 +199,37 @@ jobs:
       - name: Create the kind cluster
         uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
         with:
-          cluster_name: cluster-e2e
+          cluster_name: bootstrap-kind
           node_image: kindest/node:v1.35.0
           wait: 180s
 
       - name: The cluster is real
         run: |
-          kubectl --context kind-cluster-e2e get nodes -o wide
-          nodes=$(kubectl --context kind-cluster-e2e get nodes --no-headers | wc -l | tr -d ' ')
+          kubectl --context kind-bootstrap-kind get nodes -o wide
+          nodes=$(kubectl --context kind-bootstrap-kind get nodes --no-headers | wc -l | tr -d ' ')
           if [ "$nodes" -eq 0 ]; then
-            echo "::error title=cluster-e2e::the kind cluster reports 0 nodes, so the dry-run below would validate nothing."
+            echo "::error title=bootstrap-kind::the kind cluster reports 0 nodes, so the dry-run below would validate nothing."
             exit 1
           fi
           echo "$nodes node(s)."
 
-      - name: ./build.sh E2E against the kind cluster
+      - name: ./build.sh Bootstrap against the kind cluster
         run: |
-          .github/scripts/run-build.sh "$RUNNER_TEMP/cluster-e2e.log" E2E \
-            --e2e-base-url "http://cluster-e2e.invalid" \
-            --kube-context kind-cluster-e2e
+          .github/scripts/run-build.sh "$RUNNER_TEMP/bootstrap-kind.log" Bootstrap \
+            --kube-context kind-bootstrap-kind
 
-      # ⚠ The step that stops this job from being a cluster nobody talked to. `./build.sh E2E` above
-      # is expected to end red on its missing-suite precondition, so without this the log would be
-      # the only evidence that the dry-run happened at all, and nobody reads the log of a job that
-      # always fails.
+      # ⚠ Kept even though the job now fails on its own when the dry-run does. The day somebody drops
+      # --kube-context from the step above, Build.Bootstrap.cs warns and exits 0 — the manifests
+      # were never rendered, the job stays green — and this is what notices.
       - name: The dry-run reached the API server
         if: always()
-        run: .github/scripts/assert-bootstrap-exercised.sh "$RUNNER_TEMP/cluster-e2e.log" cluster
+        run: .github/scripts/assert-bootstrap-exercised.sh "$RUNNER_TEMP/bootstrap-kind.log" cluster
 
   # ── docs/plan/23 § Test layers, row Hostile BYO: "The brief's core premise" ──────────────────────
   hostile-byo:
     name: hostile-byo
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
     strategy:
       # Every leg runs even when one fails: "old minor breaks and PSA also breaks" and "only old
       # minor breaks" are different bugs, and finding out one per night is four nights.
@@ -185,10 +253,9 @@ jobs:
       - name: Create a ${{ matrix.leg }} cluster and prove it is hostile
         run: .github/scripts/make-hostile-cluster.sh "${{ matrix.leg }}" "hostile-${{ matrix.leg }}"
 
-      - name: ./build.sh E2E against the ${{ matrix.leg }} cluster
+      - name: ./build.sh Bootstrap against the ${{ matrix.leg }} cluster
         run: |
-          .github/scripts/run-build.sh "$RUNNER_TEMP/hostile.log" E2E \
-            --e2e-base-url "http://hostile-${{ matrix.leg }}.invalid" \
+          .github/scripts/run-build.sh "$RUNNER_TEMP/hostile.log" Bootstrap \
             --kube-context "kind-hostile-${{ matrix.leg }}"
 
       - name: The dry-run reached the hostile API server
@@ -232,15 +299,24 @@ jobs:
       STAGING_KUBECONFIG: ${{ secrets.STAGING_KUBECONFIG }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/dotnet
 
-      - name: Preconditions
+      - name: Is the staging kubeconfig configured?
+        id: secrets
         run: |
-          .github/scripts/require-secrets.sh chaos \
-            "docs/plan/23 § The chaos invariants: 'Each is an assertion, not an observation.' An assertion needs something to assert against." \
+          .github/scripts/gate-on-secrets.sh chaos \
+            "docs/plan/23 § The chaos invariants: 'Each is an assertion, not an observation.' An assertion needs something to assert against, and nothing was asserted." \
             "STAGING_KUBECONFIG=create the secret with a kubeconfig for a cluster that can lose a silo, a shard and a NATS node without anybody minding"
 
+      - name: "skipped: STAGING_KUBECONFIG is not configured — docs/plan/23 § CI secrets"
+        if: steps.secrets.outputs.configured != 'true'
+        run: |
+          echo "::warning title=chaos::chaos is also BLOCKED on a suite that does not exist — test/CyberCloud.Chaos — and on an environment whose size can be verified (Build.Chaos.cs). With the secret set, ./build.sh Chaos fails naming both. docs/plan/23 § CI secrets, 'Blocked on work, not on a secret'."
+
+      - uses: ./.github/actions/dotnet
+        if: steps.secrets.outputs.configured == 'true'
+
       - name: Point kubectl at staging
+        if: steps.secrets.outputs.configured == 'true'
         run: |
           umask 077
           mkdir -p "$HOME/.kube"
@@ -252,6 +328,7 @@ jobs:
       # and nothing can count them. A green chaos run against a three-silo staging would be worse
       # than this red one.
       - name: ./build.sh Chaos
+        if: steps.secrets.outputs.configured == 'true'
         run: |
           context="${{ secrets.STAGING_KUBE_CONTEXT }}"
           [ -n "$context" ] || context="$(kubectl config current-context)"
@@ -259,9 +336,9 @@ jobs:
 
   # ── docs/plan/23 § Test layers, row Security: the nightly half ───────────────────────────────────
   #
-  # The PR half (CodeQL, NuGetAudit, secret-scan-the-diff, dependency review) is in pr.yml. What is
-  # here is the two that need something a PR does not have — a pushed image and a running staging —
-  # plus a secret scan of the whole history rather than of one diff.
+  # The PR half (CodeQL, NuGetAudit, secret-scan-the-diff, dependency review, action pins) is in
+  # pr.yml. What is here is the two that need something a PR does not have — a pushed image and a
+  # running staging — plus a secret scan of the whole history rather than of one diff.
   security-history:
     name: security-history
     runs-on: ubuntu-24.04
@@ -280,10 +357,22 @@ jobs:
       # rejects the repeat outright — "error: flag 'fail' cannot be repeated" — which is how this
       # step failed every night: not on a finding, but before scanning anything at all. The failing
       # behaviour the flag asks for is the action's default and is unchanged by dropping it.
+      # ⚠ `verified,unknown` WITH FOUR FIXTURE FILES EXCLUDED BY PATH, since issue #25's review. The
+      # scan exited 183 every night on the same thirteen `unknown` results — connection strings in
+      # SecretScrubbingSinkTests, OrleansAdoNetSchemaTests, HashTagAndShardMapTests and
+      # DocumentDbReconcilerTests, each naming a fixture host a runner cannot reach, so verification
+      # never finished — `verified_secrets: 0` in its own summary. A test of a secret scrubber has to
+      # contain a secret-shaped string. The first fix was `--results=verified`, tree-wide, and that
+      # gave up the one finding this repository is most likely to produce: a REAL connection string
+      # to a private address is `unknown` to a runner too. So the four files are excluded by path in
+      # .github/trufflehog-exclude-paths.txt, which says what each one tests, and `unknown` stays on
+      # for everything else. Measured 2026-09-18 over the full history with trufflehog 3.96.0:
+      # thirteen results without the file, zero with it, and a sabotage commit outside the four
+      # files reported. pr.yml's diff scan has the same setting and the same paragraph.
       - name: Secret scan, full history
         uses: trufflesecurity/trufflehog@6f3c981e7b77f235fd2702dd74af25fc4b72bf11 # v3.96.0
         with:
-          extra_args: --results=verified,unknown
+          extra_args: --results=verified,unknown --exclude-paths=.github/trufflehog-exclude-paths.txt
 
       # Re-run nightly as well as per-PR: advisories are published against packages nobody touched,
       # so a repository with no PRs for a week is a repository whose audit is a week old.
@@ -307,28 +396,36 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Preconditions
+      - name: Are the registry and staging secrets configured?
+        id: secrets
         run: |
-          .github/scripts/require-secrets.sh security-runtime \
-            "docs/plan/23 § Test layers, row Security: 'Trivy on images … ZAP against staging', gated on 'No criticals'." \
+          .github/scripts/gate-on-secrets.sh security-runtime \
+            "docs/plan/23 § Test layers, row Security: 'Trivy on images … ZAP against staging', gated on 'No criticals'. No image was scanned and no host was baselined." \
             "CONTAINER_REGISTRY=create the secret so Trivy knows which repository to scan" \
             "REGISTRY_USERNAME=create the secret with a principal that can pull from it" \
             "REGISTRY_PASSWORD=create the secret with its password or token" \
             "ZAP_TARGET_URL=create the secret with staging's base URL for the ZAP baseline"
 
+      - name: "skipped: CONTAINER_REGISTRY / REGISTRY_USERNAME / REGISTRY_PASSWORD / ZAP_TARGET_URL are not configured — docs/plan/23 § CI secrets"
+        if: steps.secrets.outputs.configured != 'true'
+        run: echo "Trivy scanned no image and ZAP baselined no host tonight. docs/plan/23 § CI secrets says which secret unlocks each and who sets it."
+
       - name: Install trivy
+        if: steps.secrets.outputs.configured == 'true'
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
 
       # ⚠ Scans the digests main.yml actually pushed, taken from the `images` artifact it uploads —
       # not a `:latest` tag. docs/plan/18 § Platform security: "A pinned digest, never a tag", and a
       # scan of a tag is a scan of whatever that tag pointed at this minute.
       - name: Trivy over every image main.yml pushed
+        if: steps.secrets.outputs.configured == 'true'
         run: .github/scripts/scan-images.sh
 
       # ZAP writes its findings into repository issues by default. Turned off: an unattended nightly
       # that opens issues turns a scanner into a spammer, and the report is uploaded as an artifact
       # instead.
       - name: ZAP baseline against staging
+        if: steps.secrets.outputs.configured == 'true'
         uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
         with:
           target: ${{ secrets.ZAP_TARGET_URL }}

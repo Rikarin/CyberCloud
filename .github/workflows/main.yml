@@ -3,9 +3,19 @@
 #
 # The "+" is doing real work in that sentence: main runs everything a PR runs and then four more
 # things. `gate` below is the same reusable workflow pr.yml calls, so "everything a PR runs" cannot
-# quietly become "most of what a PR runs".
+# quietly become "most of what a PR runs" — and it runs one thing more than a PR does, the
+# *.Cluster.Conformance lane as `test-cluster`, because a merge has no 25-minute budget (gate.yml's
+# header says why that job is here and not there).
 #
-# ── ⚠ SECRETS THIS WORKFLOW REQUIRES ─────────────────────────────────────────────────────────────
+# ── ⚠ SECRETS THIS WORKFLOW USES, AND WHAT IT DOES WITHOUT THEM ──────────────────────────────────
+#
+# docs/plan/23 § CI secrets is the list — every name, what it unlocks, who sets it. Until issue #25
+# a missing secret was a red job on every merge, for a year of merges, and a red job cannot get
+# redder: a suite went red on Linux with #75 and nobody saw it for ten days, because the only place
+# it ran was a workflow that was red anyway. So a job whose secrets are all absent now SKIPS, with a
+# step named `skipped: … not configured — docs/plan/23 § CI secrets` in its step list and a notice
+# on the run page, and a job with some of them set still FAILS naming the rest
+# (.github/scripts/gate-on-secrets.sh has the three reasons that is allowed).
 #
 #   CONTAINER_REGISTRY   registry and repository prefix, e.g. ghcr.io/acme/cybercloud.
 #                        Build.Images.cs § ContainerRegistry: required, no default, because an unset
@@ -44,12 +54,100 @@ jobs:
   gate:
     uses: ./.github/workflows/gate.yml
 
+  # ── docs/plan/23 § Test layers, row Reconciler: "k3s in Testcontainers, real API server, real SSA"
+  #
+  # The sixteen *.Cluster.Conformance suites, and nothing else — `--test-lane Cluster`. Each holds a
+  # k3s, they run one at a time (Build.Test.cs § ClusterBackedSuiteDegree), and on a 4-vCPU runner the
+  # chain is about twenty minutes, which is why this is a job of its own, here and not in gate.yml: a
+  # PR has a 25-minute budget and a merge does not (gate.yml's header has the rest of that argument).
+  #
+  # ⚠ NO COVERAGE FLOOR GUARD HERE, AND THAT IS NOT AN OVERSIGHT. The Cluster lane collects no
+  # coverage — sixteen suites that instrument the reconcilers and nothing else would put every other
+  # project under the floor — so the two guards `test` runs would read the absence as a skipped
+  # measurement. The floor is `test`'s on every PR and nightly.yml's full run once a night.
+  #
+  # ⚠ WHAT THE FIRST RUN OF THIS JOB WILL SHOW, RECORDED BEFORE IT RUNS. main.yml run 35027771880
+  # (2026-09-15, commit 736ba6e) had three failing tests in this lane — ClusterConformanceTests
+  # § TheClaimsAStatefulSetLeavesBehindOutliveTheTeardownAndThePurgeRemovesThem for ContainerRegistry
+  # (three claims survived, one expected) and § ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt
+  # for both Network types — all three against a REAL kubelet, which the machine that wrote them did
+  # not have until 2026-09-15 (docs/plan/23 § The lane that needs a kubelet). This job is expected to
+  # be red on those until they are fixed, and that red is now attributable to a suite by name rather
+  # than buried in a 29-minute job that was red for other reasons.
+  test-cluster:
+    name: test-cluster
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/dotnet
+
+      - name: Prove Docker can hold a k3s
+        run: |
+          docker version --format 'client {{.Client.Version}}, server {{.Server.Version}}'
+          docker run --rm hello-world > /dev/null
+          # ⚠ Kubernetes 1.35's kubelet refuses cgroup v1 (docs/plan/23 § The lane that needs a
+          # kubelet), so a v1 runner would give every suite an API server with no node and every
+          # test a skip. Checked here so the answer is one line rather than sixteen skip reports.
+          cgroup=$(docker info --format '{{.CgroupVersion}}')
+          echo "cgroup version: $cgroup"
+          if [ "$cgroup" != "2" ]; then
+            echo "::error title=test-cluster::the Docker daemon is on cgroup v$cgroup and k3s v1.35 will not schedule a pod on it. Every suite in this lane would skip its cluster-backed tests and report success. docs/plan/23 § The lane that needs a kubelet."
+            exit 1
+          fi
+
+      - name: ./build.sh Test --test-lane Cluster
+        run: .github/scripts/run-build.sh "$RUNNER_TEMP/test-cluster.log" Test --test-lane Cluster
+
+      - name: Prove the suites actually ran
+        if: always()
+        run: .github/scripts/assert-suites-ran.sh artifacts/test-results "$RUNNER_TEMP/test-cluster.log"
+
+      # ⚠ The guard this lane has instead of the floor. A cluster suite whose k3s never scheduled a
+      # pod skips its cluster-backed tests and exits 0 (Build.Test.cs § ReportSkippedTests), so a run
+      # that skipped in every suite is a run that proved nothing about the reconcilers. Some skips
+      # are honest — a test inapplicable to a type says so — which is why this is a count over the
+      # whole lane and not a zero.
+      - name: The suites ran against a kubelet, not only an API server
+        run: |
+          if grep -q 'no test was skipped in this run' "$RUNNER_TEMP/test-cluster.log"; then
+            echo "No skips at all: every cluster-backed test ran."
+            exit 0
+          fi
+          skipped=$(grep -oE 'Test: [0-9]+ test\(s\) skipped' "$RUNNER_TEMP/test-cluster.log" | grep -oE '[0-9]+' | head -1)
+          # `executed` from the reports, the way assert-suites-ran.sh reads it: TRX's counter of
+          # tests that ran, which excludes the skipped ones.
+          executed=0
+          for report in artifacts/test-results/*.trx; do
+            n=$(grep -o 'executed="[0-9]*"' "$report" | head -1 | grep -o '[0-9]*' || true)
+            executed=$((executed + ${n:-0}))
+          done
+          echo "skipped: ${skipped:-0}, executed: $executed"
+          if [ "${skipped:-0}" -ge "$executed" ]; then
+            echo "::error title=test-cluster::as many tests skipped as executed. That is the shape of sixteen suites whose k3s came up without a kubelet — docs/plan/23 § The lane that needs a kubelet — and a green tick over it would be the skip-reads-as-pass failure Build.Test.cs § ReportSkippedTests describes."
+            exit 1
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-results-cluster
+          path: artifacts/test-results/
+          if-no-files-found: error
+          retention-days: 14
+
+
   # ── docs/plan/23 § Build, row `Images`; docs/plan/18 § Platform security, row Supply chain ───────
   images:
     name: images
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    needs: gate
+    # ⚠ Both lanes, not only the shared gate. An image is the thing somebody deploys, and a tree whose
+    # reconciler suites are red against a real API server is not a tree to push images from — even
+    # though, today, that makes this job wait about twenty minutes longer and then skip for want of
+    # a registry. When `test-cluster` is green the wait is the price of the sentence above.
+    needs: [gate, test-cluster]
     permissions:
       contents: read
       # cosign keyless. Build.Images.cs § CosignKey: "Absent means keyless signing, which needs an
@@ -61,36 +159,48 @@ jobs:
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/dotnet
 
-      # ⚠ FIRST, and unconditional. The tempting shape is `if: secrets.CONTAINER_REGISTRY != ''` on
-      # the push step, and it produces a green `images` job that pushed nothing — see
-      # .github/scripts/require-secrets.sh for why that is the one thing this job must not do.
-      - name: Preconditions
+      # ⚠ FIRST, and unconditional. Every step below is conditioned on its answer, in one direction
+      # or the other, so the job's step list reads as what happened.
+      - name: Are the registry secrets configured?
+        id: secrets
         run: |
-          .github/scripts/require-secrets.sh images \
-            "docs/plan/18 § Platform security, row Supply chain: 'Every image built in CI, SBOM generated, signed with cosign, verified at admission. A pinned digest, never a tag.'" \
+          .github/scripts/gate-on-secrets.sh images \
+            "docs/plan/18 § Platform security, row Supply chain: 'Every image built in CI, SBOM generated, signed with cosign, verified at admission. A pinned digest, never a tag.' Nothing was built, signed or pushed." \
             "CONTAINER_REGISTRY=create the secret with the registry and repository prefix, e.g. ghcr.io/acme/cybercloud" \
             "REGISTRY_USERNAME=create the secret with a principal that can push there" \
             "REGISTRY_PASSWORD=create the secret with its password or token"
 
+      # The visible half of the skip: a step whose name says what did not happen and where the
+      # secrets are documented. Green when it runs, grey when the job ran for real.
+      - name: "skipped: CONTAINER_REGISTRY / REGISTRY_USERNAME / REGISTRY_PASSWORD are not configured — docs/plan/23 § CI secrets"
+        if: steps.secrets.outputs.configured != 'true'
+        run: echo "No image was built, signed or pushed on this merge. docs/plan/23 § CI secrets says which secret unlocks this job and who sets it."
+
+      - uses: ./.github/actions/dotnet
+        if: steps.secrets.outputs.configured == 'true'
+
       # Build.Images.cs § TargetPreconditions resolves both off PATH and fails naming them, so this
       # is the install that makes those checks pass rather than a second copy of them.
       - name: Install syft
+        if: steps.secrets.outputs.configured == 'true'
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
 
       - name: Install cosign
+        if: steps.secrets.outputs.configured == 'true'
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       # The SDK's container tooling speaks the registry API directly (Build.Images.cs § there is no
       # Dockerfile) and reads credentials from ~/.docker/config.json, which is what this writes.
       - name: Log in to the registry
+        if: steps.secrets.outputs.configured == 'true'
         run: |
           registry="${CONTAINER_REGISTRY%%/*}"
           echo "$REGISTRY_PASSWORD" | docker login "$registry" --username "$REGISTRY_USERNAME" --password-stdin
           echo "Logged in to $registry."
 
       - name: ./build.sh Images
+        if: steps.secrets.outputs.configured == 'true'
         run: |
           .github/scripts/run-build.sh "$RUNNER_TEMP/images.log" Images \
             --container-registry "$CONTAINER_REGISTRY" \
@@ -101,6 +211,7 @@ jobs:
       # them, so zero here means discovery broke — and a merge that pushed no images while reporting
       # success is a release with nothing in it, found later.
       - name: Images were actually built
+        if: steps.secrets.outputs.configured == 'true'
         run: |
           if grep -q 'inspected 0 host project' "$RUNNER_TEMP/images.log"; then
             echo "::error title=Images::./build.sh Images inspected 0 host projects and exited 0. src/Hosts holds publishable hosts here, so zero means discovery broke."
@@ -119,6 +230,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the digest manifest and SBOMs
+        if: steps.secrets.outputs.configured == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: images
@@ -130,16 +242,21 @@ jobs:
 
   # ── docs/plan/23 § Environments and rollout, row `dev`: "Every merge to main" ────────────────────
   #
-  # ⚠ THIS JOB IS BLOCKED, AND ON MORE THAN A SECRET. Both blockers are named because installing the
-  # kubeconfig alone would not unblock it:
+  # ⚠ THIS JOB IS BLOCKED ON MORE THAN A SECRET, AND THE TWO KINDS OF BLOCKER ARE HANDLED APART.
+  #
+  # Without DEV_KUBECONFIG the job skips, the same way `images` does. WITH it, the job fails, because
+  # a kubeconfig alone would not unblock it:
   #
   #   1. There is no `Deploy` target. Build.cs § target graph says so outright — "There is no
   #      `Deploy` target" — and gives the reason: the deployment is an input to E2E/Chaos/Load, not
   #      something the graph produces. Writing the install here in YAML instead would put the one
   #      thing docs/plan/23 § Build says must live in the build outside it.
   #   2. `charts/platform` does not exist. deploy/README.md § What an operator actually types ends
-  #      with `helm install cybercloud charts/platform --set image=…`, and charts/ currently holds
-  #      only `managed/postgres`.
+  #      with `helm install cybercloud charts/platform --set image=…`, and charts/ holds agent,
+  #      bundle and managed.
+  #
+  # Both are printed on the skip too, as a warning annotation, so nobody creates the secret expecting
+  # a deploy. docs/plan/23 § CI secrets lists them under "Blocked on work, not on a secret".
   deploy-dev:
     name: deploy-dev
     runs-on: ubuntu-24.04
@@ -151,13 +268,20 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Preconditions
+      - name: Is the dev kubeconfig configured?
+        id: secrets
         run: |
-          .github/scripts/require-secrets.sh deploy-dev \
-            "docs/plan/23 § Environments and rollout puts dev on every merge to main, with synthetic data." \
-            "DEV_KUBECONFIG=create the secret with a kubeconfig for the dev cluster"
+          .github/scripts/gate-on-secrets.sh deploy-dev \
+            "docs/plan/23 § Environments and rollout puts dev on every merge to main, with synthetic data. Nothing was deployed." \
+            "DEV_KUBECONFIG=create the secret with a kubeconfig for the dev cluster — after the two blockers below are gone, not before"
+
+      - name: "skipped: DEV_KUBECONFIG is not configured — docs/plan/23 § CI secrets"
+        if: steps.secrets.outputs.configured != 'true'
+        run: |
+          echo "::warning title=deploy-dev::deploy-dev is also BLOCKED on 2 input(s) that are not secrets — no Deploy target in build/, no charts/platform. Creating DEV_KUBECONFIG would turn this skip into a failure, not into a deploy. docs/plan/23 § CI secrets, 'Blocked on work, not on a secret'."
 
       - name: The build has nothing to deploy with
+        if: steps.secrets.outputs.configured == 'true'
         run: |
           cat <<'BLOCKED'
           ::error title=deploy-dev::deploy-dev is BLOCKED on 2 input(s) that are not secrets.
@@ -174,9 +298,9 @@ jobs:
             ✘ charts/platform does not exist.
               To unblock: add it. deploy/README.md § What an operator actually types documents
               `helm install cybercloud charts/platform --namespace cybercloud --set image=…` as the
-              step after bootstrap.sh, and charts/ holds only managed/postgres.
+              step after bootstrap.sh, and charts/ holds agent, bundle and managed.
 
           Both are real work, not configuration. Until they land, a merge to master builds, signs and
-          pushes images — that part works — and stops here.
+          pushes images — that part works when the registry is configured — and stops here.
           BLOCKED
           exit 1

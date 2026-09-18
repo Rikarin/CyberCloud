@@ -256,6 +256,20 @@
         <PackageVersion Include="Testcontainers.Redis" Version="4.13.0"/>
         <PackageVersion Include="Testcontainers.PostgreSql" Version="4.13.0"/>
         <PackageVersion Include="Testcontainers.K3s" Version="4.13.0"/>
+        <!--
+          ⚠ NOT A DIRECT REFERENCE — a transitive pin, and it is what keeps the security gate green.
+          Testcontainers 4.13.0 depends on SSH.NET 2025.1.0, which carries two High advisories
+          (GHSA-q939-rpr3-3284, GHSA-mggc-4xg6-vcxf — both fixed in 2026.0.0), so every one of the 22
+          suites that ships Testcontainers failed `.github/scripts/audit-packages.sh` at
+          NuGetAuditMode=all — the weekly `dependencies` job and the per-PR `security` job alike.
+          Nothing here opens an SSH connection; the package is in the closure because Testcontainers
+          can tunnel to a remote Docker host. CentralPackageTransitivePinningEnabled (Directory.Build.props)
+          lifts it because this line exists. Delete the line once Testcontainers itself depends on
+          2026.0.0 or later; `dotnet list CyberCloud.slnx package` with the include-transitive switch
+          shows which version it asks for. (The switch is not spelled out here: two hyphens end an
+          XML comment early, and a props file that fails to parse takes every restore down with it.)
+        -->
+        <PackageVersion Include="SSH.NET" Version="2026.0.0"/>
         <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1"/>
         <!--
           ⚠ For ONE test class, and it is the only honest way to assert what ADR-013 claims.
