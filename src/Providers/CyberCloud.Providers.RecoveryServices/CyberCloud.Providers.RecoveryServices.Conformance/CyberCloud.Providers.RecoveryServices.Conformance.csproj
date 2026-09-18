@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fifth project: "the shared provider conformance suite,
+      parameterised".
+
+      ⚠ IT CONTAINS NO ASSERTIONS, AND IT IS THE FIRST NAMESPACE WHOSE CASE NEEDS A SECOND PROVIDER
+      IN THE HARNESS. A vault protects a PostgreSQL server, and its reconciler reads that server
+      through the cross-resource view — which answers 404 for a type the silo does not serve. So this
+      case declares a COMPANION (IProviderCaseSource.Companions): the PostgreSQL family's own case
+      object, created through the real write path before the first assertion, whose Cluster the
+      vault's schedules name. test/CyberCloud.Conformance grew that member for this case and nothing
+      else changed in it.
+
+      ⚠ IT REFERENCES CyberCloud.Providers.DBforPostgreSQL.Conformance, ANOTHER FAMILY'S PROJECT.
+      docs/plan/03 § Assembly graph rules is about the shipped graph and excludes test projects by
+      construction, and a .Conformance project is a test project (Directory.Build.props § Project
+      role detection). The shipping vault assemblies reference nothing of the PostgreSQL family's;
+      rule 2 checks that, and this project is outside its scope on purpose — the companion is reused
+      rather than described a second time, for the reason IProviderCaseSource.Ancestors gives.
+
+      ⚠ THIS PROJECT IS ONE OF THE SUITES THE Labels ARCHITECTURE GATE COUNTS. Build.Architecture
+      § LabelsGate runs EveryAppliedObjectCarriesTheSevenMandatoryLabelsAndBothAnnotations in every
+      *.Conformance project under src/Providers.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.csproj"/>
+        <ProjectReference Include="../../CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Conformance/CyberCloud.Providers.DBforPostgreSQL.Conformance.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

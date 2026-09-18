@@ -48,13 +48,14 @@ namespace CyberCloud.Hosts.Tests;
 /// </remarks>
 public sealed class HostCompositionTests {
     /// <summary>
-    ///     The sixteen provider namespaces both hosts must serve, spelled out rather than counted.
+    ///     The seventeen provider namespaces both hosts must serve, spelled out rather than counted.
     /// </summary>
     /// <remarks>
     ///     ⚠
     ///     <b>
     ///         The prose said "twelve" over a list of fourteen until <c>CyberCloud.Mail</c> made it
-    ///         fifteen, and <c>CyberCloud.Communication</c> made it sixteen.
+    ///         fifteen, <c>CyberCloud.Communication</c> made it sixteen, and
+    ///         <c>CyberCloud.RecoveryServices</c> seventeen.
     ///     </b> The list is what the test reads and the list was right; the number beside it
     ///     was three behind, which is the ordinary fate of a count written next to the thing it
     ///     counts. It is corrected rather than deleted because a reader who sees a number can tell at
@@ -79,6 +80,7 @@ public sealed class HostCompositionTests {
         "CyberCloud.Messaging",
         "CyberCloud.Monitor",
         "CyberCloud.Network",
+        "CyberCloud.RecoveryServices",
         "CyberCloud.Sample",
         "CyberCloud.Search",
         "CyberCloud.Storage",

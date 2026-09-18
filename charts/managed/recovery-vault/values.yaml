@@ -1,0 +1,57 @@
+# A backup vault — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from RecoveryVaults.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# ⚠ THE CHART RENDERS ONE ScheduledBackup AND THE BODY NAMES MANY ITEMS. A Helm template cannot ask
+# the resource manager which CloudNativePG Cluster a protected item rendered — that is the
+# cross-resource view's answer, one grain hop and one authorization check per item — so the
+# reconciler renders one document per item and projects the answer in through `platform.clusterName`
+# and `platform.protectedItem`. A `helm template` of this chart against the defaults renders one
+# schedule for a placeholder cluster, which is what the lint lane sees.
+
+## @param policy {object} The one policy every protected item follows: when a recovery point is taken and how long it is kept.
+policy:
+  ## @param schedule {string} When a recovery point is taken, as a five-field cron expression in UTC: minute, hour, day of month, month, day of week. Numbers, `*`, `,`, `-` and `/` only. Rendered to CloudNativePG with the seconds field it requires prepended.
+  ## @required
+  ## @pattern ^([0-9*,/-]+ ){4}[0-9*,/-]+$
+  ## @example "0 2 * * *"
+  schedule: "0 2 * * *"
+  ## @param retentionDays {integer} How many days a recovery point is kept before the vault prunes it. ⚠ The bytes behind a PostgreSQL recovery point live in the server's own backup store under the server's backup.retentionDays; a server whose retention is shorter than this is refused, because the store would forget what the vault still lists.
+  ## @range 1..3650
+  ## @example 14
+  retentionDays: 14
+
+## @param protectedItems {array} The resources this vault protects, as full resource id paths. Each must be a CyberCloud.DBforPostgreSQL/servers resource in this vault's resource group, on this vault's cluster, with backups enabled, that the vault has been granted read on. At most 16; anything else is refused by name at its own index when the vault is reconciled.
+## @required
+## @example ["/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.DBforPostgreSQL/servers/main"]
+protectedItems: []
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.RecoveryServices/vaults
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+  ## @param protectedItem {string} The resource name of the protected item this document schedules backups of. Rendered into the recoveryservices.cybercloud.io/protected-item label and the object name; one document per item.
+  protectedItem: ""
+  ## @param clusterName {string} The CloudNativePG Cluster the protected item rendered, as the cross-resource view returned it. Never predicted from the item's name. Empty means a placeholder, for a lint run.
+  clusterName: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

@@ -6506,6 +6506,194 @@ public sealed partial class SubnetCollection {
     public partial AsyncPageable<SubnetResource> GetAllAsync(string virtualNetworksName, CancellationToken cancellationToken = default);
 }
 
+/// <summary>The body of a CyberCloud.RecoveryServices/vaults.</summary>
+/// <remarks>A backup policy — a schedule and a retention — over the PostgreSQL servers in a resource group, with the recovery points it produces and a restore into a new cluster.</remarks>
+public sealed partial class BackupVaultData {
+
+    /// <summary>The region the vault is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The vault's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The vault's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster the vault's protected items are placed on. Every protected item must be on this cluster; one placed elsewhere is refused by name when the vault is reconciled.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>The one policy every protected item follows: when a recovery point is taken and how long it is kept.</summary>
+        [JsonPropertyName("policy")]
+        public PolicyData? Policy { get; set; }
+
+        /// <summary>The resources this vault protects, as full resource id paths. Each must be a CyberCloud.DBforPostgreSQL/servers resource in this vault's resource group, on this vault's cluster, with backups enabled, that the vault has been granted read on. At most 16; anything else is refused by name at its own index when the vault is reconciled.</summary>
+        /// <remarks>Required on a create.</remarks>
+        [JsonPropertyName("protectedItems")]
+        public IList<string> ProtectedItems { get; set; } = new List<string>();
+
+        /// <summary>The one policy every protected item follows: when a recovery point is taken and how long it is kept.</summary>
+        public sealed partial class PolicyData {
+
+            /// <summary>How many days a recovery point is kept before the vault prunes it. ⚠ The bytes behind a PostgreSQL recovery point live in the server's own backup store under the server's backup.retentionDays; a server whose retention is shorter than this is refused, because the store would forget what the vault still lists.</summary>
+            /// <remarks>Defaults to 14 when left unset.</remarks>
+            [JsonPropertyName("retentionDays")]
+            public long? RetentionDays { get; set; }
+
+            /// <summary>When a recovery point is taken, as a five-field cron expression in UTC: minute, hour, day of month, month, day of week. Numbers, `*`, `,`, `-` and `/` only. Rendered to CloudNativePG with the seconds field it requires prepended.</summary>
+            /// <remarks>Required on a create. Defaults to "0 2 * * *" when left unset.</remarks>
+            [JsonPropertyName("schedule")]
+            public required string Schedule { get; set; }
+        }
+    }
+}
+
+/// <summary>One Backup vault, as the API returns it, and the operations on it.</summary>
+public sealed partial class BackupVaultResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required BackupVaultData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<BackupVaultResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<BackupVaultResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        BackupVaultData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listRecoveryPoints returns.</summary>
+    public sealed partial class ListRecoveryPointsResult {
+
+        /// <summary>How many of them are restorable — CloudNativePG phase `completed`.</summary>
+        [JsonPropertyName("completed")]
+        public required long Completed { get; set; }
+
+        /// <summary>How many recovery points the vault holds, across every protected item.</summary>
+        [JsonPropertyName("count")]
+        public required long Count { get; set; }
+
+        /// <summary>One line per recovery point, newest first: '{item} {name} {phase} started {startedAt} stopped {stoppedAt} method {method}', followed by ': {error}' when the operator recorded one. The name is what recover takes.</summary>
+        [JsonPropertyName("recoveryPoints")]
+        public IList<string> RecoveryPoints { get; set; } = new List<string>();
+    }
+
+    /// <summary>ListRecoveryPoints. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListRecoveryPointsResult>> ListRecoveryPointsAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of recover.</summary>
+    public sealed partial class RecoverContent {
+
+        /// <summary>The recovery point to restore, by the name listRecoveryPoints gives it. It must be one of this vault's and its phase must be `completed`.</summary>
+        [JsonPropertyName("recoveryPoint")]
+        public required string RecoveryPoint { get; set; }
+
+        /// <summary>The name of the NEW cluster the recovery point is restored into, in the vault's resource group. Refused when a cluster of that name already exists — a restore never overwrites.</summary>
+        [JsonPropertyName("targetName")]
+        public required string TargetName { get; set; }
+    }
+
+    /// <summary>What recover returns.</summary>
+    public sealed partial class RecoverResult {
+
+        /// <summary>What was created. Always `Cluster` — a CloudNativePG cluster object.</summary>
+        [JsonPropertyName("kind")]
+        public required string Kind { get; set; }
+
+        /// <summary>The restored cluster's name, as asked for.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>The namespace it was created in — the vault's resource group's.</summary>
+        [JsonPropertyName("namespace")]
+        public required string Namespace { get; set; }
+
+        /// <summary>The recovery point it was bootstrapped from.</summary>
+        [JsonPropertyName("recoveryPoint")]
+        public required string RecoveryPoint { get; set; }
+
+        /// <summary>The protected item the recovery point was taken of, as its resource id path.</summary>
+        [JsonPropertyName("source")]
+        public required string Source { get; set; }
+    }
+
+    /// <summary>Recover. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<RecoverResult>> RecoverAsync(
+        RecoverContent content,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Backup vaults in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class BackupVaultCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.RecoveryServices/vaults";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.RecoveryServices/vaults/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.RecoveryServices/vaults";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Backup vault.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<BackupVaultResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        BackupVaultData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Backup vault by name.</summary>
+    public partial Task<Response<BackupVaultResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Backup vaults in this group, paged.</summary>
+    public partial AsyncPageable<BackupVaultResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/tier accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum WidgetTier {
     /// <summary>Never assigned. Not a value the API accepts.</summary>

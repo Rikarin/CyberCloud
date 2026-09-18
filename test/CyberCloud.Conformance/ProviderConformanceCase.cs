@@ -557,4 +557,102 @@ public interface IProviderCaseSource {
     ///     </para>
     /// </remarks>
     static virtual void ConfigureSilo(ISiloBuilder silo) { }
+
+    /// <summary>
+    ///     Resources of <b>other</b> providers that must exist before this case's own resource can
+    ///     converge — what a backup vault protects. Nothing, for every case before
+    ///     <c>CyberCloud.RecoveryServices/vaults</c>.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             WHY THIS EXISTS, AND WHY NEITHER <see cref="Ancestors" /> NOR
+    ///             <see cref="ProviderConformanceCase.OperatorWritten" /> COULD CARRY IT.
+    ///         </b> The suite registers ONE provider, and until the vault that was a fact about every
+    ///         type rather than a limit: a nested type and its parent are one provider by
+    ///         construction, and an operator-written object is placed behind the reconciler's back
+    ///         into the fake cluster. A vault's reconciler does neither. It hands a protected item's
+    ///         path to <c>ReconcileContext.View</c>, and the view answers <c>ResourceNotFound</c> for a
+    ///         type the silo's registry does not serve and for a path the tenant's index has never
+    ///         bound — so a planted <c>Cluster</c> object is invisible to it, and a harness that
+    ///         registered the vault alone would refuse every item and fail every create. A companion
+    ///         is a real resource of a real second provider, created through the same write path as
+    ///         an ancestor, whose objects the companion's <i>own</i> reconciler applied.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Composed rather than restated, for the reason <see cref="Ancestors" /> is</b>: the
+    ///         companion's <see cref="ProviderConformanceCase" /> is the other family's own case object,
+    ///         referenced from its <c>.Conformance</c> project. A <c>.Conformance</c> project is a test
+    ///         project, which docs/plan/03 § Assembly graph rules excludes from rule 2 by construction —
+    ///         the shipping vault assembly still names nothing of the other family's.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A companion's objects survive the per-test <c>Reset</c>.</b> Every assertion empties
+    ///         the fake cluster before it runs, and a vault whose companion's <c>Cluster</c> vanished
+    ///         would refuse the item on every assertion after the first. The harness marks the world
+    ///         after the companions converge and <c>Reset</c> restores that baseline — see
+    ///         <c>FakeKubeCluster.MarkBaseline</c>. Nothing about the case's own objects is kept.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A <c>static virtual</c> with an empty default, and omitting it is not silent.</b> A
+    ///         vault case that left this empty does not run a smaller suite; every convergence
+    ///         assertion fails with the reconciler's own refusal naming the item's pointer. Depth-1
+    ///         companions only: a companion with ancestors of its own is refused by name in
+    ///         <c>ProviderTestCluster.Companions</c>, because nothing has needed one and a
+    ///         half-built ancestor chain would fail as a 404 naming the wrong path.
+    ///     </para>
+    /// </remarks>
+    static virtual ImmutableArray<CompanionCase> Companions => [];
+}
+
+/// <summary>
+///     One resource of another provider the harness creates before the case under test runs — see
+///     <see cref="IProviderCaseSource.Companions" />.
+/// </summary>
+public sealed record CompanionCase {
+    /// <summary>The other family's own case object.</summary>
+    public required ProviderConformanceCase ProviderCase { get; init; }
+
+    /// <summary>The name the harness creates it under. DNS-1123, per docs/plan/06 § Identifiers.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    ///     The body the harness creates the companion with, or <see langword="null" /> for the other
+    ///     family's own <see cref="ProviderConformanceCase.Body" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Exists because the other family's default body can be one a real operator refuses.</b>
+    ///     <c>PostgresServers.Body</c> renders a backup section with an empty <c>destinationPath</c>
+    ///     and no credentials, which the fake admits, the harness's CRD stub admits, and
+    ///     CloudNativePG's real definition refuses — found the first time a companion met the operator
+    ///     the bundle installs (<c>charts/managed/postgres/conformance.yaml § owed</c>,
+    ///     <c>the-default-bucket-is-not-filled-in</c>). A lane that runs against the real operator
+    ///     gives its companion a body the operator admits — backups off — and asserts what the case
+    ///     under test then says about it; the override is a function of the same cluster id, so the two
+    ///     bodies differ in what the lane says and nothing else.
+    /// </remarks>
+    public Func<Guid, string>? Body { get; init; }
+
+    /// <summary>The body the harness writes: <see cref="Body" /> when set, the family's own otherwise.</summary>
+    /// <param name="clusterId">The harness's cluster.</param>
+    public string BodyFor(Guid clusterId) => (Body ?? ProviderCase.Body)(clusterId);
+
+    /// <summary>The address the harness creates the companion at, in the run's tenant and subscription.</summary>
+    /// <param name="tenant">The tenant, defaulting to <see cref="ConformanceIds.Tenant" />.</param>
+    /// <param name="subscription">The subscription, defaulting to <see cref="ConformanceIds.Subscription" />.</param>
+    /// <remarks>
+    ///     ⚠ A pure function of the ids the harness fixes, so a case's <c>Body</c> can name the
+    ///     companion's path without being handed anything: <c>Body</c> takes a cluster id and nothing
+    ///     else, and widening it would touch sixteen families for one.
+    /// </remarks>
+    public ResourceId Address(Guid? tenant = null, Guid? subscription = null) =>
+        new(
+            tenant ?? ConformanceIds.Tenant,
+            subscription ?? ConformanceIds.Subscription,
+            ConformanceIds.ResourceGroup,
+            ProviderCase.Type,
+            Name,
+            Guid.Empty
+        );
 }

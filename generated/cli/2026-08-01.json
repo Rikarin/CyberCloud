@@ -13870,6 +13870,458 @@
         }
       }
     },
+    "recoveryservices": {
+      "name": "recoveryservices",
+      "summary": "Commands for the CyberCloud.RecoveryServices provider.",
+      "commands": {
+        "vaults": {
+          "name": "vaults",
+          "resourceType": "CyberCloud.RecoveryServices/vaults",
+          "title": "Backup vault",
+          "plural": "Backup vaults",
+          "summary": "A backup policy — a schedule and a retention — over the PostgreSQL servers in a resource group, with the recovery points it produces and a restore into a new cluster.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Backup vault.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.RecoveryServices/vaults/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster the vault's protected items are placed on. Every protected item must be on this cluster; one placed elsewhere is refused by name when the vault is reconciled.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the vault is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--protected-items",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resources this vault protects, as full resource id paths. Each must be a CyberCloud.DBforPostgreSQL/servers resource in this vault's resource group, on this vault's cluster, with backups enabled, that the vault has been granted read on. At most 16; anything else is refused by name at its own index when the vault is reconciled.",
+                  "jsonPointer": "/properties/protectedItems",
+                  "repeated": true,
+                  "example": [
+                    "/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.DBforPostgreSQL/servers/main"
+                  ]
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--retention-days",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many days a recovery point is kept before the vault prunes it. ⚠ The bytes behind a PostgreSQL recovery point live in the server's own backup store under the server's backup.retentionDays; a server whose retention is shorter than this is refused, because the store would forget what the vault still lists.",
+                  "jsonPointer": "/properties/policy/retentionDays",
+                  "default": 14,
+                  "example": 14
+                },
+                {
+                  "name": "--schedule",
+                  "type": "string",
+                  "required": true,
+                  "summary": "When a recovery point is taken, as a five-field cron expression in UTC: minute, hour, day of month, month, day of week. Numbers, `*`, `,`, `-` and `/` only. Rendered to CloudNativePG with the seconds field it requires prepended.",
+                  "jsonPointer": "/properties/policy/schedule",
+                  "default": "0 2 * * *",
+                  "example": "0 2 * * *"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Backup vault. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.RecoveryServices/vaults/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the Backup vaults in a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.RecoveryServices/vaults",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "list-recovery-points": {
+              "name": "list-recovery-points",
+              "summary": "listRecoveryPoints a Backup vault.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.RecoveryServices/vaults/{resourceName}/listRecoveryPoints",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "listRecoveryPoints",
+              "permission": "read",
+              "rawBody": true
+            },
+            "recover": {
+              "name": "recover",
+              "summary": "recover a Backup vault.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.RecoveryServices/vaults/{resourceName}/recover",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--recovery-point",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The recovery point to restore, by the name listRecoveryPoints gives it. It must be one of this vault's and its phase must be `completed`.",
+                  "jsonPointer": "/recoveryPoint"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--target-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the NEW cluster the recovery point is restored into, in the vault's resource group. Refused when a cluster of that name already exists — a restore never overwrites.",
+                  "jsonPointer": "/targetName"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "recover",
+              "permission": "write"
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Backup vault.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.RecoveryServices/vaults/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Backup vault. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.RecoveryServices/vaults/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster the vault's protected items are placed on. Every protected item must be on this cluster; one placed elsewhere is refused by name when the vault is reconciled.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the vault is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--protected-items",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The resources this vault protects, as full resource id paths. Each must be a CyberCloud.DBforPostgreSQL/servers resource in this vault's resource group, on this vault's cluster, with backups enabled, that the vault has been granted read on. At most 16; anything else is refused by name at its own index when the vault is reconciled.",
+                  "jsonPointer": "/properties/protectedItems",
+                  "repeated": true,
+                  "example": [
+                    "/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.DBforPostgreSQL/servers/main"
+                  ]
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--retention-days",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many days a recovery point is kept before the vault prunes it. ⚠ The bytes behind a PostgreSQL recovery point live in the server's own backup store under the server's backup.retentionDays; a server whose retention is shorter than this is refused, because the store would forget what the vault still lists.",
+                  "jsonPointer": "/properties/policy/retentionDays",
+                  "default": 14,
+                  "example": 14
+                },
+                {
+                  "name": "--schedule",
+                  "type": "string",
+                  "required": false,
+                  "summary": "When a recovery point is taken, as a five-field cron expression in UTC: minute, hour, day of month, month, day of week. Numbers, `*`, `,`, `-` and `/` only. Rendered to CloudNativePG with the seconds field it requires prepended.",
+                  "jsonPointer": "/properties/policy/schedule",
+                  "default": "0 2 * * *",
+                  "example": "0 2 * * *"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "backupvault"
+        }
+      }
+    },
     "sample": {
       "name": "sample",
       "summary": "Commands for the CyberCloud.Sample provider.",

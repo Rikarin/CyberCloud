@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The vault against the REAL CloudNativePG — installed onto the shared k3s by
+      charts/bundle/install.sh before anything else in this process runs.
+
+      ⚠ THE FIRST TEST PROJECT UNDER src/Providers THAT INSTALLS A BUNDLE COMPONENT, AND A PROCESS OF
+      ITS OWN. Every *.Cluster.Conformance lane applies its custom resources against a CRD stub the
+      harness derives; this one runs `install.sh` for cloudnative-pg and openebs-localpv first, so the
+      harness finds postgresql.cnpg.io/v1 served and derives no stub. It cannot share a process with
+      CyberCloud.Providers.RecoveryServices.Cluster.Conformance: whichever class ran first would leave
+      the other either with stubs helm refuses to install over, or with a real definition that refuses
+      the PostgreSQL family's default body (charts/managed/postgres/conformance.yaml § owed,
+      `the-default-bucket-is-not-filled-in`). One k3s per process — ClusterSlot — is the boundary.
+
+      ⚠ WHAT IT PROVES IS BOUNDED BY THAT REFUSAL, AND THE BOUND IS THE FINDING. No PostgreSQL server
+      with backups on can be admitted by the operator the bundle installs today, so the companion here
+      has backups OFF and the vault is asserted to REFUSE it at its pointer — the honest platform
+      state. The vault's rendering is then applied by hand and the operator's half is asserted: the
+      real webhook admits the six-field schedule, the controller creates a Backup labelled
+      cnpg.io/scheduled-backup, and listRecoveryPoints lists it with the operator's own reason.
+
+      ⚠ IT REFERENCES test/CyberCloud.Bundle.Cluster.Conformance FOR BundleInstaller — the one place
+      install.sh is run from managed code. A second runner here would be a second reading of
+      install.sh's arguments.
+
+      ⚠ NAMED `.Cnpg.Cluster.Conformance`: the `.Cluster.Conformance` suffix is what keeps it out of
+      the Labels gate's per-project run and classifies it as a test host.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.RecoveryServices.Conformance/CyberCloud.Providers.RecoveryServices.Conformance.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Bundle.Cluster.Conformance/CyberCloud.Bundle.Cluster.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

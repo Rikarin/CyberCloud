@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fourth project: "TestCluster + k3s".
+
+      ⚠ NEITHER, HERE. The TestCluster half is test/CyberCloud.Conformance's and the k3s half is
+      CyberCloud.Providers.RecoveryServices.Cluster.Conformance's. What is left is what only THIS
+      provider can be wrong about, and on this type most of it is about the view: which answers
+      from another provider's resource are acted on, which refuse the item and at which pointer,
+      and that the Cluster the schedule names is the one the view returned rather than one the
+      vault predicted. The shared suite drives one companion and cannot reach an ungranted item, a
+      server with backups off, a server on another cluster or a retention shorter than the vault's;
+      RecoveryVaultReconcilerTests scripts each.
+
+      ⚠ IT REFERENCES CyberCloud.Providers.DBforPostgreSQL.Contracts, ANOTHER FAMILY'S ASSEMBLY, FOR
+      ONE TEST. RecoveryVaults spells two pointers of the PostgreSQL server's contract and their
+      published defaults by hand — the Hard rule forbids the shipping assembly the reference — and
+      RecoveryVaultDeclarationTests.TheServerContractDefaultsAreTheOnesThePublishedDocumentGives
+      holds the hand-spelled copies against that family's own schema. docs/plan/03 § Assembly graph
+      rules excludes test projects from rule 2 by construction, and a test that compares two
+      families' readings of one contract is the reading the rule wants.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup Label="The half generation does not reach — a Helm template is not a schema">
+        <!--
+          ⚠ THE CHART'S TEMPLATE RENDERS THE SAME ScheduledBackup THE RECONCILER DOES, BY HAND. The
+          seconds field, the owner reference and the method are three literals in two places, and
+          RecoveryVaultChartPairTests holds the template against the C#.
+        -->
+        <EmbeddedResource Include="../../../../charts/managed/recovery-vault/templates/scheduledbackup.yaml"
+                          LogicalName="recovery-vault.scheduledbackup.yaml"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.csproj"/>
+        <ProjectReference Include="../../CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Contracts/CyberCloud.Providers.DBforPostgreSQL.Contracts.csproj"/>
+        <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>

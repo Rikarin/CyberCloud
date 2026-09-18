@@ -117,6 +117,13 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
     /// <summary>The registry the write path validates against.</summary>
     public IProviderRegistry Registry { get; private set; } = null!;
 
+    /// <summary>
+    ///     The cross-resource seam, built the way <c>ReconcileDriver</c> builds it and over this
+    ///     harness's real connection — for the passes the suite drives by hand. See
+    ///     <c>ProviderTestCluster.Views</c> for why a hand-built context needs it.
+    /// </summary>
+    public ResourceViews Views { get; private set; } = null!;
+
     /// <summary>A container holding every action handler the case's provider declares.</summary>
     /// <remarks>
     ///     ⚠ Built from the registry rather than from a member on the case — the provider already
@@ -302,7 +309,10 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         harness.cluster = builder.Build();
         await harness.cluster.DeployAsync().ConfigureAwait(false);
 
-        harness.Registry = ProviderRegistry.Build([Case.CreateProvider()]);
+        // ⚠ The companions' providers too — the vault's PostgreSQL server — for the reason
+        // ProviderTestCluster.Providers gives: a type the client can create and the silo cannot serve
+        // is invisible to the view.
+        harness.Registry = ProviderRegistry.Build(ProviderTestCluster<TSource>.Providers());
 
         await harness.CreateSubscriptionAsync(ConformanceIds.Tenant, ConformanceIds.Subscription)
             .ConfigureAwait(false);
@@ -314,6 +324,15 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         // suite asserts a quota limit either.
         await harness.LiftQuotaAsync(ConformanceIds.Tenant, ConformanceIds.Subscription)
             .ConfigureAwait(false);
+
+        harness.Views = new ResourceViews(
+            harness.Registry,
+            harness.cluster.GrainFactory,
+            ClusterConformanceState<TSource>.Authorizer,
+            new RealClusterConnectionFactory(harness.Connection),
+            ClusterConformanceState<TSource>.Clock,
+            NullLogger<ResourceViews>.Instance
+        );
 
         harness.Manager = new ResourceManagerService(
             harness.Registry,
@@ -341,7 +360,67 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         // create.
         await harness.CreateAncestorsAsync(cancellationToken).ConfigureAwait(false);
 
+        // ⚠ AND THE COMPANIONS — a resource of ANOTHER provider the case's own reconciler reads through
+        // the view. Against a real API server the companion's Cluster is a real object the real
+        // operator (when the bundle installed one) acts on, which is the one thing the Docker-free
+        // half cannot show. See IProviderCaseSource.Companions.
+        await harness.CreateCompanionsAsync(cancellationToken).ConfigureAwait(false);
+
         return harness;
+    }
+
+    /// <summary>Creates the companions, each driven to a confirmed binding — idempotent by the index, like the ancestors.</summary>
+    /// <param name="cancellationToken">The harness's token.</param>
+    async Task CreateCompanionsAsync(CancellationToken cancellationToken) {
+        foreach (var companion in ProviderTestCluster<TSource>.Companions) {
+            var address = companion.Address();
+
+            var index = For(ConformanceIds.Tenant)
+                .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(address));
+
+            if ((await index.ResolveAsync().ConfigureAwait(false)).IsSuccess) {
+                continue;
+            }
+
+            var accepted = await Manager.WriteAsync(
+                new() {
+                    Path = address.Path,
+                    ApiVersion = companion.ProviderCase.ApiVersion,
+                    Verb = WriteVerb.Put,
+                    Body = companion.BodyFor(ClusterId),
+                    Caller = Caller()
+                },
+                cancellationToken
+            )
+                .ConfigureAwait(false);
+
+            if (accepted.TryGetError(out var error)) {
+                throw new InvalidOperationException(
+                    $"the harness could not create companion '{address.Path}', which '{Case.Type}' protects: {error.Message}"
+                );
+            }
+
+            var operation = Operation(ConformanceIds.Tenant, accepted.GetValueOrThrow().OperationId);
+
+            // ⚠ Longer than an ancestor's forty drives: with a real operator installed the companion is a
+            // real Cluster whose webhook takes a moment to serve and admits the object a drive or two
+            // late. The PostgreSQL reconciler converges on the object's spec rather than on Ready, so
+            // the image pull is not in this budget.
+            for (var drive = 0; drive < 60; drive++) {
+                if ((await operation.DriveAsync().ConfigureAwait(false)).GetValueOrThrow().IsTerminal) {
+                    break;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
+            }
+
+            if ((await index.ResolveAsync().ConfigureAwait(false)).IsFailure) {
+                throw new InvalidOperationException(
+                    $"companion '{address.Path}' never reached a confirmed binding against the real API server, "
+                    + $"so every read of it through the view answers 404 and '{Case.Type}' refuses it by name."
+                );
+            }
+        }
     }
 
     /// <summary>Creates the ancestors the type under test hangs off, outermost first.</summary>
@@ -643,6 +722,22 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                 Case.Objects(Address("crd-discovery").WithId(Guid.NewGuid()), Namespace).AsEnumerable(),
                 (all, next) => all.Concat(next)
             )
+            // ⚠ AND THE COMPANIONS' KINDS, for the same reason as the ancestors': the harness creates
+            // them before the first assertion. Against a k3s where the bundle installed the operator
+            // the kind is already served and IsServedAsync below skips the stub.
+            .Concat(
+                ProviderTestCluster<TSource>.Companions
+                    .SelectMany(companion => companion.ProviderCase.Objects(companion.Address().WithId(Guid.NewGuid()), Namespace))
+            )
+            // ⚠ AND THE KINDS THE CASE SAYS AN OPERATOR WRITES, which the reconciler reads without ever
+            // applying. CyberCloud.RecoveryServices/vaults renders a ScheduledBackup and LISTS the
+            // Backups its operator makes — a kind CloudNativePG's one definition chart serves beside
+            // the other, so a real cluster never has one without the other, and a stub world that
+            // served the rendered kind alone made every pass fail on the prune's listing with the
+            // unserved-kind refusal. OperatorWritten is where the case names the kinds an operator
+            // puts there, and a stub for each is what makes a real API server as complete as the
+            // fake in exactly the way the case declared. Core kinds fall out below like every other.
+            .Concat(Case.OperatorWritten(Address("crd-discovery").WithId(Guid.NewGuid()), Namespace).Select(x => x.Target))
             // ⚠ THE SCOPE COMES ALONG WITH THE KIND, AND IT IS DERIVED FOR THE REASON THIS METHOD
             // DERIVES EVERYTHING ELSE. Until CyberCloud.Network/virtualNetworks there was no
             // cluster-scoped object in the tree and this projection was `.Select(x => x.Kind)` with a
@@ -912,10 +1007,24 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                         services.AddSingleton(reconciler);
                     }
 
+                    // ⚠ AND EVERY COMPANION'S PROVIDER AND RECONCILER, for the reason ProviderTestCluster's
+                    // configurator gives: the silo's registry is what the view resolves a protected
+                    // item's type against.
+                    foreach (var provider in ProviderTestCluster<TSource>.Providers().Skip(1)) {
+                        services.AddSingleton<IResourceProvider>(provider);
+                    }
+
+                    foreach (var reconciler in ProviderTestCluster<TSource>.Companions
+                                 .Select(x => x.ProviderCase.ReconcilerType)
+                                 .Where(x => x != TSource.ProviderCase.ReconcilerType)
+                                 .Distinct()) {
+                        services.AddSingleton(reconciler);
+                    }
+
                     services.AddSingleton<ISecretResolver>(ClusterConformanceState<TSource>.Vault);
                     services.AddSingleton<ISecretWriter>(ClusterConformanceState<TSource>.Vault);
 
-                    foreach (var handler in ProviderRegistry.Build([TSource.ProviderCase.CreateProvider()])
+                    foreach (var handler in ProviderRegistry.Build(ProviderTestCluster<TSource>.Providers())
                                  .Types
                                      .SelectMany(x => x.Actions)
                                      .Select(x => x.HandlerType)

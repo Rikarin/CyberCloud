@@ -111,7 +111,13 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     /// </remarks>
     public ErrorCode? RefuseWith { get; set; }
 
-    /// <summary>Forgets everything, including the levers.</summary>
+    /// <summary>Forgets everything, including the levers — everything but the baseline.</summary>
+    /// <remarks>
+    ///     ⚠ A baseline, once <see cref="MarkBaseline" /> has taken one, is put back after the clear.
+    ///     Nothing about it enters <see cref="Applied" />: the objects were applied by a companion's
+    ///     reconciler before the first test, and the labels assertion over <see cref="Applied" /> is
+    ///     about what the case under test wrote.
+    /// </remarks>
     public void Reset() {
         objects.Clear();
         hashes.Clear();
@@ -121,7 +127,42 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         Suspended = false;
         ConflictOn = string.Empty;
         RefuseWith = null;
+
+        if (baseline is not { } kept) {
+            return;
+        }
+
+        foreach (var (key, json, hash, address) in kept) {
+            objects[key] = json;
+            addresses[key] = address;
+            if (hash is not null) {
+                hashes[key] = hash;
+            }
+        }
     }
+
+    ImmutableArray<(string Key, string Json, string? Hash, ObjectRef Address)>? baseline;
+
+    /// <summary>
+    ///     Remembers everything the cluster holds now as the world every <see cref="Reset" /> puts
+    ///     back — the objects a case's companions rendered, which its own reconciler reads and must
+    ///     not lose between assertions.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Taken once, by the harness, after the companions converge and before the first test.</b>
+    ///     A baseline taken later would carry a test's own leftovers into every test after it, which
+    ///     is the ordering coupling <c>ConformanceState.Namespaces</c>' remarks describe. See
+    ///     <see cref="IProviderCaseSource.Companions" />.
+    /// </remarks>
+    public void MarkBaseline() =>
+        baseline = [
+            .. addresses.Select(x => (
+                x.Key,
+                objects.TryGetValue(x.Key, out var json) ? json : "{}",
+                hashes.TryGetValue(x.Key, out var hash) ? hash : null,
+                x.Value
+            ))
+        ];
 
     /// <summary>Whether an object is present.</summary>
     /// <param name="target">Which object.</param>

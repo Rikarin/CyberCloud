@@ -1182,6 +1182,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     ) {
         var address = ClusterConformanceHarness<TSource>.Address(name).WithId(resourceId);
         using var desired = JsonDocument.Parse(Body());
+        var (view, watch) = harness.Views.For(address);
 
         return await Case.CreateReconciler(harness.Clock)
             .ReconcileAsync(
@@ -1200,7 +1201,10 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
                     // pass finds.
                     ClusterConformanceState<TSource>.Vault,
                     new RecordingLog()
-                ) { SecretWriter = ClusterConformanceState<TSource>.Vault },
+                    // ⚠ And the cross-resource seam, bound to this address the way the driver binds it —
+                    // a type that reads another resource would otherwise fail every hand-driven pass
+                    // against RefusingResourceView, for the harness's reason and not its own.
+                ) { SecretWriter = ClusterConformanceState<TSource>.Vault, View = view, Watch = watch },
                 TestContext.Current.CancellationToken
             );
     }

@@ -10,6 +10,7 @@ using CyberCloud.Providers.Mail.Application;
 using CyberCloud.Providers.Messaging.Application;
 using CyberCloud.Providers.Monitor.Application;
 using CyberCloud.Providers.Network.Application;
+using CyberCloud.Providers.RecoveryServices.Application;
 using CyberCloud.Providers.Sample.Application;
 using CyberCloud.Providers.Search.Application;
 using CyberCloud.Providers.Storage.Application;
@@ -65,5 +66,6 @@ namespace CyberCloud.Silo.Host;
 [DependsOn(typeof(SampleApplicationModule))]
 [DependsOn(typeof(SearchApplicationModule))]
 [DependsOn(typeof(StorageApplicationModule))]
+[DependsOn(typeof(RecoveryServicesApplicationModule))]
 [DependsOn(typeof(TerminalApplicationModule))]
 public sealed class SiloHostModule : AbpModule;

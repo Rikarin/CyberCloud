@@ -1,0 +1,55 @@
+{{/*
+CloudNativePG `ScheduledBackup` — one per protected item, in the protected server's namespace, under
+the vault's ownership.
+
+⚠ This renders a custom resource; it does not install the operator, which is charts/bundle/'s job
+(charts/bundle/cloudnative-pg). The operator's ScheduledBackup controller creates a Backup on every
+tick, labels it `cnpg.io/scheduled-backup: <this object's name>` and `cnpg.io/cluster: <cluster>`,
+and — with backupOwnerReference self — makes this object its owner, so the recovery points go when
+the schedule goes. The Backup carries NONE of the labels below: CreateBackup copies annotations
+only, and only the ones the operator was configured to inherit. The operator's own label is the
+join listRecoveryPoints selects on; conformance.yaml § assertions, `recovery-points-are-the-operators`.
+
+⚠ THE STORE IS THE SERVER'S. A ScheduledBackup names a cluster, a cron and a method and nothing
+about where the bytes go; that is the Cluster's spec.backup.barmanObjectStore, which
+charts/managed/postgres renders and the vault reads through the view to refuse a server with
+backups off. conformance.yaml § owed, `the-store-is-the-servers`.
+*/}}
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: {{ include "recovery-vault.scheduleName" . }}
+  labels:
+    {{- include "recovery-vault.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ SIX FIELDS, AND THE TENANT WROTE FIVE. api/v1/scheduledbackup_types.go: "The schedule does not
+    follow the same format used in Kubernetes CronJobs as it includes an additional seconds
+    specifier" — robfig/cron's grammar. RecoveryVaults.SixFieldSchedule prepends the `0`, and so does
+    this line; RecoveryVaultChartPairTests holds the two together.
+  */}}
+  schedule: {{ printf "0 %s" .Values.policy.schedule | quote }}
+
+  cluster:
+    name: {{ include "recovery-vault.clusterName" . | quote }}
+
+  {{/*
+    ⚠ `self`: the Backup objects are owned by this schedule, so deleting the vault deletes its recovery
+    points through the garbage collector. `none` would orphan them under nobody's address; `cluster`
+    would tie them to the server's life rather than the vault's. conformance.yaml § owed,
+    `deleting-the-vault-deletes-its-recovery-points`, records what that costs.
+  */}}
+  backupOwnerReference: self
+
+  {{/*
+    ⚠ barmanObjectStore, the server's own store. volumeSnapshot would need spec.backup.volumeSnapshot
+    on the Cluster — the server's to write — and a snapshot-capable class the bundle does not install.
+  */}}
+  method: barmanObjectStore
+
+  {{/*
+    ⚠ Protection begins with a recovery point. A vault created at 09:00 with the default schedule would
+    otherwise hold nothing until 02:00 the next day, and the first Backup is also what surfaces a store
+    that cannot take one within minutes rather than the next morning.
+  */}}
+  immediate: true

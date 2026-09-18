@@ -6810,6 +6810,164 @@
         }
       ]
     },
+    "CyberCloud.RecoveryServices/vaults": {
+      "resourceType": "CyberCloud.RecoveryServices/vaults",
+      "apiVersion": "2026-08-01",
+      "title": "Backup vault",
+      "plural": "Backup vaults",
+      "summary": "A backup policy — a schedule and a retention — over the PostgreSQL servers in a resource group, with the recovery points it produces and a restore into a new cluster.",
+      "overrideKey": "CyberCloud.RecoveryServices/vaults@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/policy",
+        "/properties/policy/retentionDays",
+        "/properties/policy/schedule",
+        "/properties/protectedItems",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the vault is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Backup vault to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The vault's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster the vault's protected items are placed on. Every protected item must be on this cluster; one placed elsewhere is refused by name when the vault is reconciled.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Backup vault to change it."
+        },
+        {
+          "jsonPointer": "/properties/policy",
+          "name": "policy",
+          "label": "Policy",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The one policy every protected item follows: when a recovery point is taken and how long it is kept."
+        },
+        {
+          "jsonPointer": "/properties/policy/retentionDays",
+          "name": "retentionDays",
+          "label": "Retention days",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "policy",
+          "hint": "How many days a recovery point is kept before the vault prunes it. ⚠ The bytes behind a PostgreSQL recovery point live in the server's own backup store under the server's backup.retentionDays; a server whose retention is shorter than this is refused, because the store would forget what the vault still lists.",
+          "minimum": 1,
+          "maximum": 3650,
+          "default": 14,
+          "placeholder": 14
+        },
+        {
+          "jsonPointer": "/properties/policy/schedule",
+          "name": "schedule",
+          "label": "Schedule",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "policy",
+          "hint": "When a recovery point is taken, as a five-field cron expression in UTC: minute, hour, day of month, month, day of week. Numbers, `*`, `,`, `-` and `/` only. Rendered to CloudNativePG with the seconds field it requires prepended.",
+          "pattern": "^(?:^([0-9*,/-]+ ){4}[0-9*,/-]+$)$",
+          "default": "0 2 * * *",
+          "placeholder": "0 2 * * *"
+        },
+        {
+          "jsonPointer": "/properties/protectedItems",
+          "name": "protectedItems",
+          "label": "Protected items",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": true,
+          "section": "general",
+          "hint": "The resources this vault protects, as full resource id paths. Each must be a CyberCloud.DBforPostgreSQL/servers resource in this vault's resource group, on this vault's cluster, with backups enabled, that the vault has been granted read on. At most 16; anything else is refused by name at its own index when the vault is reconciled.",
+          "placeholder": [
+            "/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.DBforPostgreSQL/servers/main"
+          ]
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listRecoveryPoints",
+          "label": "List recovery points",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "recover",
+          "label": "Recover",
+          "permission": "write",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/recoveryPoint",
+              "name": "recoveryPoint",
+              "label": "Recovery point",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/targetName",
+              "name": "targetName",
+              "label": "Target name",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        }
+      ]
+    },
     "CyberCloud.Sample/widgets": {
       "resourceType": "CyberCloud.Sample/widgets",
       "apiVersion": "2026-08-01",

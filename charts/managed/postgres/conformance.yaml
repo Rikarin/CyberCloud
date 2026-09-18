@@ -247,3 +247,31 @@ owed:
       SupportsSoftDelete(7) from this type until one of the two exists, on the same argument
       PostgresProvider already makes in its own remarks: "a recovery window the platform does not
       honour is a promise made" to a tenant who will find out when they use it.
+  - id: the-default-bucket-is-not-filled-in
+    says: >
+      values.yaml on backup.destinationPath: "Empty means the platform fills it in from the tenant's
+      default bucket." NOTHING FILLS IT IN, AND THE REAL DEFINITION REFUSES THE RESULT. With
+      backup.enabled true — the default — the Cluster carries spec.backup.barmanObjectStore with
+      destinationPath "" and no s3Credentials. CloudNativePG 1.30.0's CRD answers `spec.backup.barmanObjectStore.destinationPath:
+      Invalid value: "": ... should be at least 1 chars long` — measured with `kubectl apply
+      --dry-run=server` against the bundle's own install on 2026-09-18 — so A SERVER CREATED FROM THE
+      DEFAULT BODY NEVER COMES UP ON A REAL CLUSTER: the apply is a 422, the operation fails, and no
+      pod is ever scheduled. AND A DESTINATION ALONE DOES NOT RESCUE IT: with `destinationPath:
+      s3://tenant-bucket/x` the same dry run answers `spec.backup.barmanObjectStore: Invalid value:
+      ...: missing credentials. One and only one of azureCredentials, s3Credentials and
+      googleCredentials are required`, and this chart renders no credentials block at all — while
+      the operator warns that native barmanObjectStore "is deprecated and will be completely removed
+      in CloudNativePG 1.31.0" in favour of the Barman Cloud plugin. So there is NO body with
+      backup.enabled true that the real operator admits from this family today. The fake cluster and
+      the harness's open-schema CRD stub both admit it, which is why the Docker-free suite and this
+      family's own k3s lane are green over it. Found by CyberCloud.RecoveryServices/vaults (#30), the
+      first suite to put a Cluster in front of the operator the bundle installs; its operator lane
+      creates the companion server with backups OFF — the one body the operator admits — and asserts
+      the vault's refusal of it (charts/managed/recovery-vault/conformance.yaml § owed,
+      `the-store-is-the-servers`). Closing it
+      is the sentence the values row already promises — a default destination in a tenant bucket the
+      Storage provider mints, with `s3Credentials` naming a Secret the reconciler writes from listKeys
+      — rendered as the Barman Cloud plugin rather than the native block the next operator removes —
+      or the honest alternative until then, `backup.enabled` defaulting to false so the section is
+      absent rather than refused. Either is a decision about docs/plan/12 § Backups' "to the tenant's
+      bucket", and it is this row's and not the vault's.

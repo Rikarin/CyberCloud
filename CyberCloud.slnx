@@ -531,6 +531,32 @@
         <Project Path="src/Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Application/CyberCloud.Providers.Communication.Application.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Tests/CyberCloud.Providers.Communication.Tests.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Conformance/CyberCloud.Providers.Communication.Conformance.csproj" />
+
+        <!--
+          The seventeenth provider family — CyberCloud.RecoveryServices/vaults, docs/plan/15 § Backup as
+          a service: "Not a storage type; a policy resource that binds protected resources to schedules
+          and retention." docs/plan/24 § Phase 3's Storage row, second noun (#30).
+
+          ⚠ THE FIRST FAMILY WHOSE RESOURCE IS ABOUT OTHER PROVIDERS' RESOURCES. Its reconciler reads a
+          CyberCloud.DBforPostgreSQL/servers through ReconcileContext.View — issue #90's seam, built for
+          this type and used by nothing until it — and renders a CloudNativePG ScheduledBackup beside
+          the server's Cluster. The shipping assemblies reference nothing of the PostgreSQL family's
+          (rule 2); the .Conformance and .Tests projects do, as test projects may, to reuse that family's
+          case object as a COMPANION and to pin the two contract pointers the vault reads by hand.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.Contracts/CyberCloud.Providers.RecoveryServices.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.Application/CyberCloud.Providers.RecoveryServices.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.Tests/CyberCloud.Providers.RecoveryServices.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.Conformance/CyberCloud.Providers.RecoveryServices.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.Cluster.Conformance/CyberCloud.Providers.RecoveryServices.Cluster.Conformance.csproj" />
+        <!--
+          ⚠ A SECOND k3s LANE, IN ITS OWN PROCESS: the vault against the CloudNativePG that
+          charts/bundle/install.sh installs. It cannot share a process with the lane above — one
+          installs the real definitions, the other derives stubs, and whichever ran first would
+          break the other. ClusterSlot serialises processes; that is the boundary.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance/CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance.csproj" />
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj" />
