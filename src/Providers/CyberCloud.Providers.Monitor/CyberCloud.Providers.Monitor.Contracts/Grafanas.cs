@@ -143,20 +143,47 @@ public static class Grafanas {
     public const int Port = 3000;
 
     /// <summary>
-    ///     The ClickHouse datasource plugin, and the version <c>GF_INSTALL_PLUGINS</c> asks for.
+    ///     The ClickHouse datasource plugin, which <c>GF_PLUGINS_PREINSTALL_SYNC</c> installs before
+    ///     Grafana starts serving.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Fetched by <c>grafana-cli</c> at pod start, from grafana.com, and not pinned by
-    ///     digest.</b> Grafana OSS has no built-in ClickHouse datasource; the plugin is Grafana Labs'
-    ///     own, Apache-2.0 (its LICENSE read on 2026-09-17), and the image installs it on first
-    ///     start into the writable plugins directory. A cluster with no egress starts a Grafana with
-    ///     one datasource of two. Both halves are <c>conformance.yaml § owed</c>,
-    ///     <c>clickhouse-plugin-is-fetched-at-start</c>.
+    ///     <para>
+    ///         ⚠ <b>Fetched by Grafana's own in-process installer, from grafana.com, before the HTTP
+    ///         server comes up, and not pinned by digest.</b> Grafana OSS has no built-in ClickHouse
+    ///         datasource; the plugin is Grafana Labs' own, Apache-2.0 (its LICENSE read on
+    ///         2026-09-17), and the installer unpacks it into the writable plugins directory on every
+    ///         start. Not <c>GF_INSTALL_PLUGINS</c>: at 13.2.2 the image's <c>run.sh</c> logs that
+    ///         variable as deprecated and does nothing with it unless <c>GF_INSTALL_PLUGINS_FORCE</c>
+    ///         is set; the server reads it and folds it into the same preinstall mechanism this
+    ///         variable names directly. <c>_SYNC</c> rather than the background list so the plugin is
+    ///         registered before the provisioning file that names it is read.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A cluster with no egress has no Grafana at all, and that is the measured behaviour
+    ///         rather than a guess.</b> A synchronous preinstall that cannot reach grafana.com fails
+    ///         the <c>plugin.backgroundinstaller</c> module, every module depending on it, and the
+    ///         process exits <c>1</c> before it listens — <c>charts/managed/grafana/SOURCE</c> carries
+    ///         the transcript. So the pod crash-loops naming grafana.com instead of coming up Ready with
+    ///         one datasource of two, which is the louder and the better of the two failures. The
+    ///         download itself, and the version-not-digest pin, are <c>conformance.yaml § owed</c>,
+    ///         <c>clickhouse-plugin-is-fetched-at-start</c>.
+    ///     </para>
     /// </remarks>
     public const string ClickHousePlugin = "grafana-clickhouse-datasource";
 
     /// <summary>See <see cref="ClickHousePlugin" />.</summary>
     public const string ClickHousePluginVersion = "4.21.3";
+
+    /// <summary>
+    ///     What <c>GF_PLUGINS_PREINSTALL_SYNC</c> is set to: the plugin at its version, in Grafana's
+    ///     <c>id@version</c> spelling.
+    /// </summary>
+    /// <remarks>
+    ///     The version is load-bearing. Grafana's installer treats a preinstall entry without one as
+    ///     "latest, and keep it updated", which is a different plugin on every pod start under an
+    ///     image pinned by digest.
+    /// </remarks>
+    public const string ClickHousePreinstall = ClickHousePlugin + "@" + ClickHousePluginVersion;
 
     /// <summary>Where Grafana's provisioning tree lives, and where the datasources file is mounted.</summary>
     public const string ProvisioningDirectory = "/etc/grafana/provisioning/datasources";
@@ -599,6 +626,26 @@ public static class Grafanas {
     ///         image is read at start. An image rebuilt to write elsewhere fails to start, loudly,
     ///         rather than writing somewhere this spec did not anticipate.
     ///     </para>
+    ///     <para>
+    ///         ⚠⚠ <b><c>GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false</c> IS WHAT KEEPS THE PROMETHEUS
+    ///         DATASOURCE ALIVE ON THAT READ-ONLY ROOT, AND THE POD IS READY EITHER WAY.</b> At
+    ///         13.2.2 the Prometheus datasource is not compiled into the server; it is a bundled
+    ///         plugin under <c>/usr/share/grafana/data/plugins-bundled</c>, and the installer's
+    ///         default is to update every preinstalled plugin without a pinned version on start —
+    ///         bundled ones included. Measured on the image before this line existed: the installer
+    ///         logged <c>Updating plugin pluginId=prometheus from=13.1.7 to=13.1.9</c>, stopped the
+    ///         plugin's backend process, then failed to reinstall it with <c>unlinkat
+    ///         /usr/share/grafana/data/plugins-bundled/prometheus: read-only file system</c>. From then
+    ///         on <c>/api/health</c> answered <c>200</c> — so the readiness probe, the reconciler and a
+    ///         pod-start test that stopped at Ready all called it good — while the provisioned
+    ///         <c>Metrics</c> datasource, the default one, answered <c>Plugin not registered</c>.
+    ///         Disabling preinstall altogether restores Prometheus and loses the ClickHouse plugin,
+    ///         which rides on the same mechanism; turning off the auto-update alone keeps both, and
+    ///         <c>GrafanaClusterBackedConformance.TheGrafanaPodStartsAndBothDatasourcesAnswer</c> asks
+    ///         each datasource's health rather than the server's, because the server's is the answer
+    ///         that lied. A pinned image whose plugins update themselves at start was not a pin
+    ///         anyway.
+    ///     </para>
     /// </remarks>
     public static string DeploymentJson(string name, string workspace, JsonElement desired) {
         var objectName = ObjectNameOf(name);
@@ -611,7 +658,8 @@ public static class Grafanas {
         env.Add(new JsonObject { ["name"] = "GF_SECURITY_ALLOW_EMBEDDING", ["value"] = "true" });
         env.Add(new JsonObject { ["name"] = "GF_AUTH_ANONYMOUS_ENABLED", ["value"] = AnonymousViewers(desired) ? "true" : "false" });
         env.Add(new JsonObject { ["name"] = "GF_AUTH_ANONYMOUS_ORG_ROLE", ["value"] = "Viewer" });
-        env.Add(new JsonObject { ["name"] = "GF_INSTALL_PLUGINS", ["value"] = ClickHousePlugin + " " + ClickHousePluginVersion });
+        env.Add(new JsonObject { ["name"] = "GF_PLUGINS_PREINSTALL_SYNC", ["value"] = ClickHousePreinstall });
+        env.Add(new JsonObject { ["name"] = "GF_PLUGINS_PREINSTALL_AUTO_UPDATE", ["value"] = "false" });
         env.Add(new JsonObject { ["name"] = "GF_PATHS_DATA", ["value"] = DataDirectory });
         env.Add(new JsonObject { ["name"] = "GF_PATHS_PLUGINS", ["value"] = DataDirectory + "/plugins" });
 
@@ -710,8 +758,14 @@ public static class Grafanas {
     ///     Dispatches on <c>kind</c> and answers <see langword="false" /> for one it does not know —
     ///     this family's rule. The Secret is checked for the presence of both fields and not for the
     ///     password's value, for <see cref="MonitorWorkspaces.Matches" />' reason; the ConfigMap
-    ///     exactly; the Deployment on the image, the hash and the anonymous-access switch, which are
-    ///     the three things a body change can move; the Service on its one port.
+    ///     exactly; the Deployment on the image, the hash, the anonymous-access switch and the
+    ///     container's resource limits, which are the four things a body change can move — the
+    ///     limits because the preset is what the meters bill for, and a drift the observer cannot see
+    ///     is a tenant billed for a size the pod does not have; the Service on its one port. ⚠ The
+    ///     limits are compared as the strings <see cref="Presets" /> spells, which is safe only while
+    ///     every entry is already in the API server's canonical form (<c>250m</c>, <c>1</c>,
+    ///     <c>512Mi</c>); a preset written <c>0.25</c> or <c>1024Mi</c> would read back as
+    ///     <c>250m</c> and <c>1Gi</c> and never match.
     /// </remarks>
     public static bool Matches(string objectJson, string workspace, JsonElement desired) {
         ArgumentException.ThrowIfNullOrEmpty(objectJson);
@@ -747,9 +801,13 @@ public static class Grafanas {
             .FirstOrDefault(x => x["name"]?.GetValue<string>() == "GF_AUTH_ANONYMOUS_ENABLED")?["value"]
             ?.GetValue<string>();
 
+        var (cpu, memory) = Resources(desired);
+
         return container["image"]?.GetValue<string>() == Image
             && template["metadata"]?["annotations"]?[ConfigChecksumAnnotation]?.GetValue<string>() == ConfigHash(workspace)
-            && anonymous == (AnonymousViewers(desired) ? "true" : "false");
+            && anonymous == (AnonymousViewers(desired) ? "true" : "false")
+            && container["resources"]?["limits"]?["cpu"]?.GetValue<string>() == cpu
+            && container["resources"]?["limits"]?["memory"]?.GetValue<string>() == memory;
     }
 
     // ── The URL ───────────────────────────────────────────────────────────────────────────────

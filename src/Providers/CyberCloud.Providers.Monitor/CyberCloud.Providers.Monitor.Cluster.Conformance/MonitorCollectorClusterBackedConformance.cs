@@ -18,7 +18,9 @@ namespace CyberCloud.Providers.Monitor.ClusterConformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE FIRST TEST IN ANY <c>.Cluster.Conformance</c> PROJECT THAT WAITS FOR A POD.</b>
+///         ⚠ <b>THE FIRST TEST IN ANY <c>.Cluster.Conformance</c> PROJECT THAT WAITS FOR A POD</b>
+///         — <c>GrafanaClusterBackedConformance</c> beside it is the second, and it goes one step
+///         further into the pod for a reason its remarks give.
 ///         Every shared criterion reads objects back off the API server, and every family before this
 ///         one was content with that: a <c>StatefulSet</c> an operator would have reconciled, a
 ///         <c>VMUser</c> vmauth would have resolved, none of which runs on the harness's k3s. This
@@ -112,7 +114,7 @@ public sealed class MonitorCollectorClusterBackedConformance(ClusterConformanceF
         available.ShouldBeGreaterThanOrEqualTo(
             1,
             $"no pod behind '{objectName}' became available within {PodStartBudget.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s. "
-            + await DescribePodsAsync(harness, ns, objectName, token)
+            + await PodDiagnostics.DescribeAsync(harness.Raw, ns, MonitorCollectors.InstanceLabel, objectName, token)
         );
 
         // ── The collector's half: an export answered 200 through the API server's proxy ───────
@@ -138,47 +140,7 @@ public sealed class MonitorCollectorClusterBackedConformance(ClusterConformanceF
 
         await TearDownAsync(harness, name);
     }
-
-    /// <summary>The pods behind a Deployment, with each container's waiting reason — the diagnosis when none is Ready.</summary>
-    static async Task<string> DescribePodsAsync(ClusterConformanceHarness<MonitorCollectorCase> harness, string ns, string objectName, CancellationToken token) {
-        var pods = await harness.Raw.CoreV1.ListNamespacedPodAsync(
-            ns,
-            labelSelector: $"{MonitorCollectors.InstanceLabel}={objectName}",
-            cancellationToken: token
-        );
-
-        if (pods.Items.Count == 0) {
-            return "The Deployment has no pods at all, which is a ReplicaSet the controller never made — read the Deployment's conditions.";
-        }
-
-        var lines = pods.Items.Select(pod => {
-            var waiting = pod.Status?.ContainerStatuses?
-                .Select(x => x.State?.Waiting is { } w ? $"{x.Name}: {w.Reason} — {w.Message}" : x.State?.Terminated is { } t ? $"{x.Name}: terminated {t.Reason} ({t.ExitCode})" : $"{x.Name}: running, ready={x.Ready}")
-                ?? ["no container statuses yet"];
-
-            return $"{pod.Metadata.Name} phase={pod.Status?.Phase}: {string.Join("; ", waiting)}";
-        });
-
-        return "Pods: " + string.Join(" | ", lines);
-    }
 }
 
 /// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the collector type.</summary>
 public sealed class MonitorCollectorSiloKillConformance : SiloKillConformanceTests<MonitorCollectorCase>;
-
-/// <summary>
-///     The cluster-backed suite, run against the managed Grafana type.
-/// </summary>
-/// <remarks>
-///     ⚠ <b>Four objects against a real API server, and nothing about the pod — by record.</b> The
-///     Grafana pod's start needs a plugin download from grafana.com and a workspace whose row exists
-///     in the namespace; the harness has the second and a test should not depend on the first.
-///     <c>charts/managed/grafana/conformance.yaml § owed</c>, <c>the-pod-start-is-unproved-on-a-kubelet</c>.
-///     The collector beside it is where a pod is proved to start.
-/// </remarks>
-/// <param name="fixture">The harness.</param>
-public sealed class GrafanaClusterBackedConformance(ClusterConformanceFixture<GrafanaCase> fixture)
-    : ClusterConformanceTests<GrafanaCase>(fixture), IClassFixture<ClusterConformanceFixture<GrafanaCase>>;
-
-/// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the managed Grafana type.</summary>
-public sealed class GrafanaSiloKillConformance : SiloKillConformanceTests<GrafanaCase>;

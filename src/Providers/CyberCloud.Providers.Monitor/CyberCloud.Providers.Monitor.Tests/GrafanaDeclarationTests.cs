@@ -99,8 +99,22 @@ public sealed partial class GrafanaDeclarationTests {
         var values = Embedded("grafana.values.yaml").Split('\n');
 
         values.Single(x => x.StartsWith("image: ", StringComparison.Ordinal))["image: ".Length..].Trim().ShouldBe(Grafanas.Image);
-        values.Single(x => x.StartsWith("plugins: ", StringComparison.Ordinal))["plugins: ".Length..].Trim()
-            .ShouldBe(Grafanas.ClickHousePlugin + " " + Grafanas.ClickHousePluginVersion);
+        values.Single(x => x.StartsWith("preinstall: ", StringComparison.Ordinal))["preinstall: ".Length..].Trim()
+            .ShouldBe(Grafanas.ClickHousePreinstall);
+    }
+
+    [Fact]
+    public void TheChartsDeploymentCarriesTheSamePluginSettingsAsTheContract() {
+        // ⚠ The chart is a Helm template and generation does not reach its env block, so this is the
+        // only comparison of the two plugin settings between the chart and Grafanas.DeploymentJson.
+        // A chart that drifted back to GF_INSTALL_PLUGINS, or lost the auto-update switch, renders a
+        // pod that goes Ready with its default datasource dead — the shape the review of #32 found.
+        var env = LiteralEnvironment(Embedded("grafana.deployment.yaml"));
+
+        env["GF_PLUGINS_PREINSTALL_SYNC"].ShouldBe("{{ .Values.preinstall | quote }}");
+        env["GF_PLUGINS_PREINSTALL_AUTO_UPDATE"].ShouldBe("\"false\"");
+        env.ShouldNotContainKey("GF_INSTALL_PLUGINS");
+        env.ShouldNotContainKey("GF_PLUGINS_PREINSTALL_DISABLED");
     }
 
     [Fact]
@@ -144,7 +158,21 @@ public sealed partial class GrafanaDeclarationTests {
         // ⚠ The one integration ADR-011 permits, spelled as Grafana spells it.
         env["GF_SECURITY_ALLOW_EMBEDDING"]["value"]!.GetValue<string>().ShouldBe("true");
         env["GF_AUTH_ANONYMOUS_ENABLED"]["value"]!.GetValue<string>().ShouldBe("false");
-        env["GF_INSTALL_PLUGINS"]["value"]!.GetValue<string>().ShouldBe(Grafanas.ClickHousePlugin + " " + Grafanas.ClickHousePluginVersion);
+
+        // ⚠ THE TWO PLUGIN SETTINGS, AND WHAT EACH ONE IS FOR. The synchronous preinstall names the
+        // ClickHouse plugin with its version — an entry without one means "latest, kept updated",
+        // which is a different plugin on every start under an image pinned by digest. The auto-update
+        // switch is off because at 13.2.2 the installer otherwise tries to update the BUNDLED
+        // Prometheus plugin in place, stops its process, and fails on the read-only root — leaving a
+        // Ready pod whose default datasource answers "Plugin not registered". Measured on the image;
+        // Grafanas.DeploymentJson's remarks carry the transcript, and the cluster-backed suite asks
+        // each datasource's health so the assertion is not on this env set alone. GF_INSTALL_PLUGINS
+        // is not here: the image's run.sh logs it as deprecated and ignores it without a FORCE flag.
+        env["GF_PLUGINS_PREINSTALL_SYNC"]["value"]!.GetValue<string>().ShouldBe(Grafanas.ClickHousePreinstall);
+        Grafanas.ClickHousePreinstall.ShouldBe(Grafanas.ClickHousePlugin + "@" + Grafanas.ClickHousePluginVersion);
+        env["GF_PLUGINS_PREINSTALL_AUTO_UPDATE"]["value"]!.GetValue<string>().ShouldBe("false");
+        env.ShouldNotContainKey("GF_INSTALL_PLUGINS");
+        env.ShouldNotContainKey("GF_PLUGINS_PREINSTALL_DISABLED", "preinstall_disabled also disables preinstall_sync — measured — so the ClickHouse plugin would never install");
 
         // The workspace's three, by reference, plus the admin credential's two.
         env[MonitorWorkspaces.EnvAccountId]["valueFrom"]!["configMapKeyRef"]!["name"]!.GetValue<string>().ShouldBe(MonitorWorkspaces.RowName("prod"));
@@ -242,6 +270,23 @@ public sealed partial class GrafanaDeclarationTests {
 
     static string WorkspacePath(string name, Guid? tenant = null, Guid? subscription = null, string resourceGroup = "prod") =>
         new ResourceId(tenant ?? Tenant, subscription ?? Subscription, resourceGroup, MonitorWorkspaces.Type, name, Guid.Empty).Path;
+
+    /// <summary>
+    ///     The template's <c>env</c> entries that carry a literal <c>value</c> line, by name — the
+    ///     <c>valueFrom</c> references are not in it.
+    /// </summary>
+    static Dictionary<string, string> LiteralEnvironment(string template) {
+        var lines = template.Split('\n').Select(x => x.Trim()).ToArray();
+        var env = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        for (var i = 0; i + 1 < lines.Length; i++) {
+            if (lines[i].StartsWith("- name: ", StringComparison.Ordinal) && lines[i + 1].StartsWith("value: ", StringComparison.Ordinal)) {
+                env[lines[i]["- name: ".Length..]] = lines[i + 1]["value: ".Length..];
+            }
+        }
+
+        return env;
+    }
 
     static string Embedded(string logicalName) {
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(logicalName)

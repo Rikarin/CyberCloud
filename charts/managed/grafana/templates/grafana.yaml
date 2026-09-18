@@ -110,8 +110,22 @@ spec:
               value: {{ .Values.anonymousViewers | quote }}
             - name: GF_AUTH_ANONYMOUS_ORG_ROLE
               value: Viewer
-            - name: GF_INSTALL_PLUGINS
-              value: {{ .Values.plugins | quote }}
+            {{/*
+              ⚠ THE TWO PLUGIN SETTINGS, AND THE POD IS READY WITH OR WITHOUT THE SECOND. The
+              synchronous preinstall fetches the ClickHouse plugin at its pinned version before the
+              server listens — not GF_INSTALL_PLUGINS, which the image's run.sh logs as deprecated and
+              ignores without a FORCE flag. The auto-update switch is off because at 13.2.2 Grafana's
+              installer otherwise tries to update the BUNDLED Prometheus plugin in place, stops its
+              process, and fails on the read-only root below — /api/health keeps answering 200 while
+              the provisioned Metrics datasource answers "Plugin not registered". Measured on the image;
+              SOURCE has the transcript, Grafanas.DeploymentJson the reasoning, and
+              GrafanaDeclarationTests.TheChartsDeploymentCarriesTheSamePluginSettingsAsTheContract keeps
+              this block and the C# from parting.
+            */}}
+            - name: GF_PLUGINS_PREINSTALL_SYNC
+              value: {{ .Values.preinstall | quote }}
+            - name: GF_PLUGINS_PREINSTALL_AUTO_UPDATE
+              value: "false"
             - name: GF_PATHS_DATA
               value: /var/lib/grafana
             - name: GF_PATHS_PLUGINS

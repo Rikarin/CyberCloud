@@ -60,6 +60,15 @@
         <EmbeddedResource Include="../../../../charts/managed/grafana/values.yaml"
                           LogicalName="grafana.values.yaml"/>
         <!--
+          ⚠ AND GRAFANA'S DEPLOYMENT TEMPLATE, for the two plugin settings the adversarial review of
+          #32 found the pod's life depends on: GF_PLUGINS_PREINSTALL_SYNC at a pinned version and
+          GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false. Grafanas.DeploymentJson's remarks say what happens
+          without the second; a chart that drifted back to GF_INSTALL_PLUGINS would render a Ready pod
+          whose default datasource is dead, and nothing but GrafanaDeclarationTests compares the two.
+        -->
+        <EmbeddedResource Include="../../../../charts/managed/grafana/templates/grafana.yaml"
+                          LogicalName="grafana.deployment.yaml"/>
+        <!--
           ⚠ AND ONE FILE FROM build/, WHICH NO TEST PROJECT HAD EMBEDDED BEFORE. ADR-011 § Enforcement
           asks for "an allow-list with a written reason"; Build.Licence.cs § LicenceExceptions is that
           list, and Grafanas' remarks are the reason. GrafanaDeclarationTests.TheLicenceGateCarriesTheGrafanaExceptionBesideTheImage

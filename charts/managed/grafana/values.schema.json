@@ -112,14 +112,14 @@
       "x-cybercloud-order": 3,
       "x-cybercloud-pointer": "/properties/platform"
     },
-    "plugins": {
-      "default": "grafana-clickhouse-datasource 4.21.3",
-      "description": "What GF_INSTALL_PLUGINS asks grafana-cli to install at pod start.",
+    "preinstall": {
+      "default": "grafana-clickhouse-datasource@4.21.3",
+      "description": "What GF_PLUGINS_PREINSTALL_SYNC installs before Grafana starts serving, as `id@version`.",
       "type": "string",
       "x-cybercloud-api": false,
-      "x-cybercloud-internal-reason": "The ClickHouse datasource plugin at a pinned version — Grafanas.ClickHousePlugin and Grafanas.ClickHousePluginVersion. ⚠ Fetched from grafana.com at start and not pinned by digest; conformance.yaml § owed, `clickhouse-plugin-is-fetched-at-start`.",
+      "x-cybercloud-internal-reason": "The ClickHouse datasource plugin at a pinned version — Grafanas.ClickHousePreinstall, and GrafanaDeclarationTests compares the two. ⚠ The version is load-bearing: an entry without one means \"latest, kept updated\". Fetched from grafana.com on every start by Grafana's own installer and not pinned by digest; a cluster with no egress gets a pod that exits 1 before it listens. conformance.yaml § owed, `clickhouse-plugin-is-fetched-at-start`.",
       "x-cybercloud-order": 5,
-      "x-cybercloud-pointer": "/properties/plugins"
+      "x-cybercloud-pointer": "/properties/preinstall"
     },
     "sizing": {
       "additionalProperties": false,

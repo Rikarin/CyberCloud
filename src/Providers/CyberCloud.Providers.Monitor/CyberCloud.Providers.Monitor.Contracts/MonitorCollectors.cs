@@ -707,9 +707,13 @@ public static class MonitorCollectors {
     ///         ⚠ <b>The configuration is compared exactly and the Deployment by containment</b>, for
     ///         <c>LoadBalancers.Matches</c>' reason: nothing rewrites a <c>ConfigMap</c>'s data, and
     ///         the API server defaults a <c>Deployment</c> heavily. The fields compared on the
-    ///         Deployment are the ones that decide what runs: the image, the replica count, and the
-    ///         config hash — the one an obvious implementation leaves out, without which every
-    ///         receiver change converges instantly and changes nothing. The Service is compared on its
+    ///         Deployment are the ones that decide what runs and what is billed: the image, the replica
+    ///         count, the container's resource limits — the preset is what the vCPU and memory meters
+    ///         charge for, so a drift the observer cannot see is a tenant billed for a size the pod does
+    ///         not have; compared as the strings <see cref="Presets" /> spells, which holds while every
+    ///         entry is already in the API server's canonical form — and the config hash, the one an
+    ///         obvious implementation leaves out, without which every receiver change converges
+    ///         instantly and changes nothing. The Service is compared on its
     ///         port set, because a receiver switched off that left its port behind is a connection
     ///         refused a tenant would report as an outage.
     ///     </para>
@@ -739,10 +743,13 @@ public static class MonitorCollectors {
         }
 
         var hash = template["metadata"]?["annotations"]?[ConfigChecksumAnnotation]?.GetValue<string>();
+        var (cpu, memory) = Resources(desired);
 
         return spec["replicas"]?.GetValue<int>() == Replicas(desired)
             && container["image"]?.GetValue<string>() == Image
             && hash == ConfigHash(id, desired)
+            && container["resources"]?["limits"]?["cpu"]?.GetValue<string>() == cpu
+            && container["resources"]?["limits"]?["memory"]?.GetValue<string>() == memory
             && container["env"] is JsonArray env
             && env.Count == 3;
     }

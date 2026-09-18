@@ -70,6 +70,23 @@ assertions:
     says: >
       Two `url` calls return the same admin password, and the password the pod holds is the one they
       return. A restart of the silo does not rotate it.
+  - id: the-pod-starts-and-both-datasources-answer
+    says: >
+      On a real kubelet, with the named workspace's row and ingest-key Secret in the namespace, the
+      rendered Deployment becomes a Ready pod, and BOTH provisioned datasources answer a health check
+      from their own plugin — the Prometheus one with a request to `/select/{accountID}/prometheus`
+      and the ClickHouse one with a request to `/sql/{database}` — where accountID and database are
+      the row's values, substituted by the kubelet into the pod and by Grafana into the provisioning
+      file. ⚠ NOT `/api/health`, which is the readiness probe and which answered 200 for a pod whose
+      default datasource was dead: the adversarial review of #32 found Grafana 13.2.2's installer
+      updating the BUNDLED Prometheus plugin in place on the read-only root, stopping it, and failing
+      to put it back, and the server reporting itself healthy throughout. SOURCE § What was run has
+      the transcript; GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false is the fix, and this assertion is what
+      would have caught it. What a datasource answers about its STORE is not asserted here — the
+      harness's k3s has no VictoriaMetrics and no ClickHouse, so each request fails on DNS after the
+      plugin made it, and the assertion is on the request's shape and on neither datasource answering
+      `plugin.notRegistered`. ✅ ASSERTED:
+      GrafanaClusterBackedConformance.TheGrafanaPodStartsAndBothDatasourcesAnswer.
   - id: a-delete-takes-the-instance-down
     says: >
       After DELETE the old address answers the canonical 404, the Service is gone before the pod is,
@@ -137,11 +154,19 @@ owed:
     closes: An ingress with a source-range list and TLS, once the exposure axis exists platform-wide.
   - id: clickhouse-plugin-is-fetched-at-start
     says: >
-      Grafana OSS has no built-in ClickHouse datasource. GF_INSTALL_PLUGINS asks grafana-cli to fetch
-      grafana-clickhouse-datasource at a pinned version from grafana.com on every pod start, into
-      the emptyDir. A cluster with no egress starts a Grafana with one datasource of two and a
-      provisioning error naming the plugin; and the plugin's bytes are pinned by version, not by
-      digest, which is weaker than the image's pin beside it.
+      Grafana OSS has no built-in ClickHouse datasource. GF_PLUGINS_PREINSTALL_SYNC has Grafana's own
+      in-process installer fetch grafana-clickhouse-datasource@4.21.3 from grafana.com on every pod
+      start, into the emptyDir, before the server listens. ⚠ Two facts here were recorded from
+      documentation until the review of #32 ran the image, and both were wrong: it is not grafana-cli
+      (the image's run.sh logs GF_INSTALL_PLUGINS as deprecated and ignores it without a FORCE flag),
+      and a cluster with no egress does NOT start a Grafana with one datasource of two — the
+      synchronous install fails the installer module, the modules depending on it, and the process
+      exits 1 before it listens, so the pod crash-loops naming grafana.com. That is the louder failure
+      and the one kept; SOURCE § What was run, step 6. What remains owed: every start depends on
+      grafana.com, and the plugin's bytes are pinned by version, not by digest, which is weaker than
+      the image's pin beside it. The bundled plugins are pinned the other way — auto-update off — so a
+      fix to the Prometheus datasource arrives with an image digest bump, which is how everything else
+      in this tree takes one.
     closes: An image the platform builds with the plugin baked in — which build/Build.Images.cs cannot do today, for the reason charts/managed/cloud-shell records as `no-image-pipeline` — or a plugin archive served from the platform's own registry.
   - id: one-instance-is-a-single-point-of-failure
     says: >
@@ -149,14 +174,20 @@ owed:
       would be a second instance; a node loss is an outage until the pod is rescheduled, and a
       configuration change restarts it.
     closes: A Postgres behind Grafana — a CyberCloud.DBforPostgreSQL/servers the instance names — and then a replica count.
-  - id: the-pod-start-is-unproved-on-a-kubelet
+  - id: the-workspace-in-the-kubelet-test-is-the-harness-standing-in
     says: >
-      The collector beside this type has a cluster-backed assertion that its pod starts and answers;
-      this type does not. Its cluster-backed suite converges the four objects against a real API
-      server and asserts nothing about the pod, because the pod's start needs a plugin download from
-      grafana.com and a workspace whose row exists in the namespace — the second of which the
-      harness has, the first of which a test should not depend on.
-    closes: The plugin baked into an image (above), and then the same assertion the collector has.
+      GrafanaClusterBackedConformance.TheGrafanaPodStartsAndBothDatasourcesAnswer needs the named
+      workspace's row and ingest-key Secret in the namespace, and the suite registers ONE provider —
+      CyberCloud.Dashboard — so no workspace reconciler runs there and the workspace is not an
+      ancestor (it is a body property, not a parent). The test applies the two objects itself, from
+      MonitorWorkspaces.RowJson and MonitorWorkspaces.KeySecretJson with a fresh GUID, which are the
+      documents MonitorWorkspaceReconciler applies; what it does not prove is that a real
+      workspace's reconcile pass and a Grafana's compose in one cluster. ⚠ The first version of this
+      file said the harness "has" such a workspace; it did not, and the pod would have sat in
+      CreateContainerConfigError naming `monitor-telemetry` — which the test now does observe before
+      it applies the two objects, as the shape "a Grafana created before its workspace" is documented
+      to take.
+    closes: A conformance harness that registers two providers, or a workspace and a Grafana converged in one silo by the dev-run smoke.
 
 # Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
 meters:

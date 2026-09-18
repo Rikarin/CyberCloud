@@ -141,6 +141,11 @@ public sealed class GrafanaReconcilerTests {
         Grafanas.Matches(deployment, "telemetry", closed.RootElement).ShouldBeTrue();
         Grafanas.Matches(deployment, "telemetry", open.RootElement).ShouldBeFalse("a Deployment with anonymous access off matched a body asking for it on");
 
+        // ⚠ A changed preset is a drift too: the limits are what the vCPU and memory meters bill for,
+        // and the review of #32 noted the observer could not see them move.
+        using var large = JsonDocument.Parse(Grafanas.Body(ClusterId, Workspace("telemetry"), preset: "c1.large"));
+        Grafanas.Matches(deployment, "telemetry", large.RootElement).ShouldBeFalse("a c1.small Deployment matched a body asking for c1.large");
+
         (await reconciler.ReconcileAsync(Context(connection, open.RootElement, vault), TestContext.Current.CancellationToken)).Kind.ShouldBe(ReconcileOutcomeKind.Converged);
         Grafanas.Matches(connection.Objects[RecordingConnection.Key(Grafanas.DeploymentRef(ReconcileDriver.NamespaceFor(Address()), "team"))], "telemetry", open.RootElement).ShouldBeTrue();
     }

@@ -1596,8 +1596,23 @@ pinned by digest, with a rendered OTLP configuration exporting into the workspac
   `PersistentVolumeClaim` would make dashboards survive a restart and look versioned while being
   neither, and a tenant would trust it. `dashboards-are-not-a-sub-resource`, `not-grafana-operator`,
   `oidc-against-identity-is-not-wired` and `clickhouse-plugin-is-fetched-at-start` are the row's
-  debts, each at `charts/managed/grafana/conformance.yaml § owed`; the pod's start is unproved on a
-  kubelet for the last of those reasons, and the file says so.
+  debts, each at `charts/managed/grafana/conformance.yaml § owed`.
+- **⚠ THE POD IS PROVED ON A KUBELET BY EACH DATASOURCE'S HEALTH, BECAUSE THE SERVER'S HEALTH LIED.**
+  The first version of the branch left the Grafana pod unproved by record and the adversarial review
+  ran the image: Grafana 13.2.2's installer updates the *bundled* Prometheus plugin in place on start,
+  which on the read-only root stopped the plugin and could not put it back, while `/api/health` — the
+  readiness probe — answered `200` and the provisioned default datasource answered `Plugin not
+  registered`. `GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false` keeps the bundled plugins as the image
+  shipped them and `GF_PLUGINS_PREINSTALL_SYNC=grafana-clickhouse-datasource@4.21.3` installs the one
+  plugin the image lacks (not `GF_INSTALL_PLUGINS`, which the image's `run.sh` logs as deprecated and
+  ignores without a `FORCE` flag).
+  `GrafanaClusterBackedConformance.TheGrafanaPodStartsAndBothDatasourcesAnswer` watches the kubelet
+  hold the pod in `CreateContainerConfigError` naming the workspace's row, writes the row and
+  ingest-key `Secret` from the workspace contract's own documents — the suite registers one provider,
+  so no workspace reconciler runs there (`the-workspace-in-the-kubelet-test-is-the-harness-standing-in`)
+  — waits for Ready, and asks both datasources' health through the API server's service proxy,
+  asserting each request carried the workspace's accountID or database and neither answer was
+  `plugin.notRegistered`. `charts/managed/grafana/SOURCE § What was run` is the transcript.
 - **⚠ SABOTAGE-VERIFIED.** The ingest-key reference made `optional: true` in
   `MonitorWorkspaces.WorkspaceEnv` turned
   `CollectorDeclarationTests.TheDeploymentReadsTheWorkspacesRowAndSecretByReferenceAndNoneIsOptional`

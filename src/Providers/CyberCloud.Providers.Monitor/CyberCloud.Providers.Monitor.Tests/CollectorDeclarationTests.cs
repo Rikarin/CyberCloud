@@ -297,6 +297,13 @@ public sealed partial class CollectorDeclarationTests {
         // A changed replica count is a Deployment that no longer matches — the hash alone would not see it.
         using var two = JsonDocument.Parse(MonitorCollectors.Body(ClusterId, replicas: 2));
         MonitorCollectors.Matches(MonitorCollectors.DeploymentJson(id, body.RootElement), id, two.RootElement).ShouldBeFalse();
+
+        // ⚠ And so is a changed preset: the limits are what the vCPU and memory meters bill for, and a
+        // drift the observer cannot see is a tenant billed for a size the pod does not have. The
+        // review of #32 noted both pod-shaped types ignored it.
+        using var large = JsonDocument.Parse(MonitorCollectors.Body(ClusterId, preset: "c1.large"));
+        MonitorCollectors.Matches(MonitorCollectors.DeploymentJson(id, body.RootElement), id, large.RootElement).ShouldBeFalse();
+        MonitorCollectors.Matches(MonitorCollectors.DeploymentJson(id, large.RootElement), id, large.RootElement).ShouldBeTrue();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────

@@ -257,9 +257,24 @@ and `Secret`. That is why the workspace must be in the instance's resource group
 a `Secret` from another namespace — and the reconciler refuses a pointer that is another tenant's,
 another group's or another type's before it mints anything. **OIDC against our identity system is not
 wired** (`oidc-against-identity-is-not-wired`); the URL is in-cluster (`no-external-endpoint`); the
-ClickHouse plugin is fetched from grafana.com at pod start rather than baked into an image
-(`clickhouse-plugin-is-fetched-at-start`); and, unlike the collector, the pod's start is not proved on
-the cluster-backed suite's kubelet, for that last reason (`the-pod-start-is-unproved-on-a-kubelet`).
+ClickHouse plugin is fetched from grafana.com on every pod start by Grafana's own installer rather than
+baked into an image (`clickhouse-plugin-is-fetched-at-start`).
+
+⚠ **The pod is proved on a kubelet, and the proof is each datasource's health rather than the
+server's.** The first version of this branch left the Grafana pod's start unproved by record, and the
+adversarial review ran the image: at 13.2.2 the Prometheus datasource is a *bundled plugin* on the
+root filesystem, Grafana's installer updates preinstalled plugins in place on start by default, and
+on the read-only root the update stopped the plugin and could not put it back — while `/api/health`,
+the readiness probe, answered `200` throughout and the provisioned `Metrics` datasource answered
+`Plugin not registered`. `GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false` is the fix, and
+`GF_PLUGINS_PREINSTALL_SYNC` at a pinned `id@version` is how the ClickHouse plugin is installed;
+`GrafanaClusterBackedConformance.TheGrafanaPodStartsAndBothDatasourcesAnswer` watches the kubelet hold
+the pod for a workspace row that is not there yet, writes the workspace's row and `Secret` as the
+workspace's reconciler would, waits for Ready, and then asks both datasources' health through the API
+server's proxy — asserting each answered with a request at the workspace's own accountID and database
+and neither with `plugin.notRegistered`. `charts/managed/grafana/SOURCE § What was run` carries the
+transcript, including the finding that a cluster with no egress gets a pod that exits `1` before it
+listens rather than a Grafana with one datasource of two.
 
 ## What the platform monitors about itself
 

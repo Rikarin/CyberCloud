@@ -41,11 +41,15 @@ image-source: https://github.com/grafana/grafana
 # GrafanaReconciler would fail every pass naming the ADR. The row does not refuse.
 licence: AGPL-3.0, run as an unmodified upstream image in its own container; ADR-011 § Grafana
 
-# The one plugin, installed by grafana-cli at pod start.
-plugin: grafana-clickhouse-datasource 4.21.3
+# The one plugin, installed by Grafana's own in-process installer (GF_PLUGINS_PREINSTALL_SYNC) before the
+# server listens. ⚠ NOT by grafana-cli, which is what this file said until the adversarial review of #32
+# ran the image: at 13.2.2 run.sh logs GF_INSTALL_PLUGINS as deprecated and does nothing with it unless
+# GF_INSTALL_PLUGINS_FORCE=true; the server reads the variable itself and folds it into the same
+# preinstall list. § What was run, below, is the transcript.
+plugin: grafana-clickhouse-datasource@4.21.3
 plugin-source: https://github.com/grafana/clickhouse-datasource
-# ⚠ Apache-2.0 — its LICENSE at v4.21.3 read on 2026-09-17. Fetched from grafana.com at pod start and
-# not pinned by digest; conformance.yaml § owed, `clickhouse-plugin-is-fetched-at-start`.
+# ⚠ Apache-2.0 — its LICENSE at v4.21.3 read on 2026-09-17. Fetched from grafana.com on every pod start
+# and not pinned by digest; conformance.yaml § owed, `clickhouse-plugin-is-fetched-at-start`.
 plugin-licence: Apache-2.0
 
 # ── The pin, and how it was resolved ─────────────────────────────────────────────────────────────
@@ -65,10 +69,99 @@ plugin-licence: Apache-2.0
 #
 #   * `User: 472` — numeric. Written into the pod's securityContext as runAsUser, runAsGroup and
 #     fsGroup (Grafanas.GrafanaUid), the last so the emptyDir under /var/lib/grafana is writable.
-#   * `Entrypoint: /run.sh`, `ExposedPorts: 3000/tcp`. Grafana's own entrypoint reads GF_* variables
-#     and GF_INSTALL_PLUGINS; nothing is overridden.
+#   * `Entrypoint: /run.sh`, `ExposedPorts: 3000/tcp`. Grafana's own entrypoint; nothing is overridden.
 #   * No `org.opencontainers.image.licenses` label — only `org.opencontainers.image.source`. The
 #     licence is read off the repository's LICENSE (AGPL-3.0) and not off the image.
+#
+# ── What was RUN, and what it decided ────────────────────────────────────────────────────────────
+#
+# ⚠ THE FIRST VERSION OF THIS CHART READ THE IMAGE'S CONFIG AND GRAFANA'S DOCUMENTATION AND NEVER RAN
+# THE IMAGE. The adversarial review of #32 did, and found a pod that goes Ready with its default
+# datasource dead. Every fact below is from `docker run` of the pinned digest on 2026-09-18, under the
+# rendered Deployment's constraints (`--read-only`, tmpfs on /tmp and /var/lib/grafana, `--user 472:472`,
+# `--cap-drop ALL`, the rendered datasources.yaml mounted read-only, the three CYBERCLOUD_* variables set).
+#
+#   1. /run.sh, read out of the image: GF_INSTALL_PLUGINS is deprecated and inert.
+#
+#        >&2 echo "WARN: GF_INSTALL_PLUGINS is deprecated. Use GF_PLUGINS_PREINSTALL or
+#                  GF_PLUGINS_PREINSTALL_SYNC instead. ..."
+#        if [ "${GF_INSTALL_PLUGINS_FORCE}" = "true" ]; then ... grafana cli ... plugins install ...
+#
+#      grafana-cli runs only under the FORCE flag. Without it the SERVER reads the variable and puts the
+#      plugin on its own preinstall list, so "installed by grafana-cli at pod start" was false.
+#
+#   2. conf/defaults.ini § [plugins]: `preinstall_auto_update = true` — "preinstalled plugins without a
+#      pinned version will be updated to the latest version" — and `bundled_plugins = data/plugins-bundled`.
+#      /usr/share/grafana/data/plugins-bundled/ holds prometheus, loki, tempo, elasticsearch, influxdb,
+#      jaeger, zipkin, mysql, mssql, grafana-postgresql-datasource, opentsdb, stackdriver and
+#      grafana-pyroscope-datasource: at 13.x the Prometheus datasource is a bundled PLUGIN on the root
+#      filesystem, not code compiled into the server.
+#
+#   3. With GF_INSTALL_PLUGINS="grafana-clickhouse-datasource 4.21.3" and nothing else (the first
+#      version of this chart), on the read-only root:
+#
+#        logger=plugin.installer msg="Updating plugin" pluginId=prometheus from=13.1.7 to=13.1.9
+#        logger=plugin.prometheus msg="plugin process exited"
+#        level=error msg="Failed to install plugin" pluginId=prometheus
+#          error="unlinkat /usr/share/grafana/data/plugins-bundled/prometheus: read-only file system"
+#
+#        GET /api/health                                   → 200 {"database":"ok","version":"13.2.2"}
+#        GET /api/datasources/uid/cybercloud-metrics/health → 404 {"messageId":"plugin.notRegistered",
+#                                                                 "message":"Plugin not registered"}
+#        GET /api/plugins?type=datasource                  → no "prometheus" in the list
+#
+#      The readiness probe is /api/health. It answered 200 the whole time.
+#
+#   4. With GF_PLUGINS_PREINSTALL_DISABLED=true instead: Prometheus alive, ClickHouse never installed —
+#      "It has the same effect as setting preinstall to an empty list", and that list is where the
+#      synchronous entry goes too:
+#
+#        GET /api/datasources/uid/cybercloud-logs/health → 404 plugin.notRegistered
+#
+#   5. What the chart renders now — GF_PLUGINS_PREINSTALL_SYNC=grafana-clickhouse-datasource@4.21.3 and
+#      GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false — on the read-only root, 25 s after /api/health:
+#
+#        logger=plugin.backgroundinstaller msg="Installing plugins"
+#          plugins="[{ID:grafana-clickhouse-datasource Version:4.21.3 URL:}]"
+#        logger=installer.fs msg="Downloaded and extracted grafana-clickhouse-datasource v4.21.3 zip
+#          successfully to /var/lib/grafana/plugins/grafana-clickhouse-datasource"
+#        (no "Updating plugin" line for any bundled plugin)
+#
+#        GET /api/datasources/uid/cybercloud-metrics/health → 400 {"message":"Post
+#          \"https://telemetry.cybercloud.svc/select/123/prometheus/api/v1/query\": dial tcp: lookup
+#          telemetry.cybercloud.svc ... no such host - There was an error returned querying the
+#          Prometheus API.","status":"ERROR"}
+#        GET /api/datasources/uid/cybercloud-logs/health    → 400 {"message":"[network] failed to query
+#          server hello: ... Post \"https://telemetry.cybercloud.svc:443/sql/ws_abc?...&database=ws_abc
+#          ...\": dial tcp: lookup telemetry.cybercloud.svc ... no such host","status":"ERROR"}
+#
+#      Both plugins alive, both requests carrying the substituted accountID (123) and database (ws_abc),
+#      both failing on DNS because the probe has no VictoriaMetrics and no ClickHouse — which is the
+#      failure a working datasource has in that container. The same two questions, at a workspace's
+#      real coordinates, are GrafanaClusterBackedConformance.TheGrafanaPodStartsAndBothDatasourcesAnswer.
+#      ⚠ Grafana's default preinstall list (grafana-lokiexplore-app, grafana-pyroscope-app,
+#      grafana-exploretraces-app, grafana-metricsdrilldown-app, grafana-advisor-app) still downloads in
+#      the background into /var/lib/grafana/plugins; none of them is a datasource and none is this
+#      product.
+#
+#   6. The same env set with `--network none`: exit 1 in three seconds, before the server listens.
+#
+#        logger=plugin.backgroundinstaller level=error msg="Failed to install plugins"
+#          error="failed to install plugin grafana-clickhouse-datasource@4.21.3: Get
+#          \"https://grafana.com/api/plugins/grafana-clickhouse-datasource/versions\": ... network is
+#          unreachable"
+#        logger=backgroundsvcs.managerAdapter level=error msg="Module failed"
+#          module=*authimpl.UserAuthTokenService err="... depends on module plugin.backgroundinstaller,
+#          which has failed ..."
+#
+#      So "a cluster with no egress starts a Grafana with one datasource of two", which the first version
+#      of conformance.yaml asserted from documentation, is also false: it starts nothing, and the pod
+#      crash-loops naming grafana.com. The louder failure is the one kept.
+#
+#   7. GET /api/datasources/uid/{uid}/health with GF_AUTH_ANONYMOUS_ENABLED=true and no credential: 400
+#      for both, the same bodies as 5 — an anonymous Viewer may ask a datasource's health. That is how
+#      the cluster-backed test asks through the API server's service proxy, which strips the
+#      Authorization header it authenticated this process with before forwarding.
 #
 # Read from Grafana's documentation (Provisioning § Data sources, Configuration § security and
 # auth.anonymous) at 13.x:

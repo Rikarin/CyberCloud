@@ -26,10 +26,11 @@ namespace CyberCloud.Providers.Monitor.Conformance;
 ///         ⚠ <b>WHAT A GREEN RUN HERE PROVES AND WHAT IT DOES NOT.</b> The write path, the verb
 ///         grammar, the four reconciler clauses over four objects, the mint-once admin credential
 ///         through the harness's vault, the cross-tenant <c>404</c> and the delete-read-back. It
-///         proves nothing about Grafana starting or about a datasource answering; the cluster-backed
-///         suite converges the same four objects against a real API server and, by record, asserts
-///         nothing about the pod either — <c>charts/managed/grafana/conformance.yaml § owed</c>,
-///         <c>the-pod-start-is-unproved-on-a-kubelet</c>.
+///         proves nothing about Grafana starting or about a datasource answering: the fake cluster
+///         schedules nothing. That is
+///         <c>GrafanaClusterBackedConformance.TheGrafanaPodStartsAndBothDatasourcesAnswer</c>'s, on a
+///         real kubelet, which puts the workspace's two objects into the namespace itself because this
+///         case has no ancestor to do it — <see cref="HarnessWorkspace" />.
 ///     </para>
 /// </remarks>
 public sealed class GrafanaCase : IProviderCaseSource {
@@ -61,23 +62,40 @@ public sealed class GrafanaCase : IProviderCaseSource {
             }
         };
 
+    /// <summary>The name of the workspace the harness's instances point at.</summary>
+    public const string HarnessWorkspaceName = "telemetry";
+
     /// <summary>
     ///     The workspace the harness's instances point at: a <c>CyberCloud.Monitor/workspaces</c>
     ///     path in the harness's own tenant, subscription and resource group.
     /// </summary>
     /// <remarks>
-    ///     ⚠ The suite also writes this body into the OTHER tenant for the cross-tenant assertion,
-    ///     where it is refused with <c>404</c> before any pass runs — so the tenant check in
-    ///     <see cref="Grafanas.WorkspaceOf" /> never sees it here, and <c>GrafanaReconcilerTests</c> is
-    ///     where that check is exercised.
+    ///     <para>
+    ///         ⚠ <b>No resource exists at this path in either suite, and that is not the same
+    ///         statement in both.</b> On the fake cluster nothing reads the workspace's objects, so
+    ///         the pointer's shape is all that is checked. On the real k3s the pod's three <c>env</c>
+    ///         references name <c>monitor-telemetry</c> and its ingest-key <c>Secret</c>, neither of
+    ///         which any reconciler in a one-provider registry will write; the kubelet holds the pod
+    ///         in <c>CreateContainerConfigError</c> until they appear, and the cluster-backed test
+    ///         writes them itself from the workspace contract's own documents — the arrangement
+    ///         <c>charts/managed/grafana/conformance.yaml § owed</c>,
+    ///         <c>the-workspace-in-the-kubelet-test-is-the-harness-standing-in</c>, records. The first
+    ///         version of that file said the harness had such a workspace; it did not.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The suite also writes this body into the OTHER tenant for the cross-tenant assertion,
+    ///         where it is refused with <c>404</c> before any pass runs — so the tenant check in
+    ///         <see cref="Grafanas.WorkspaceOf" /> never sees it here, and <c>GrafanaReconcilerTests</c>
+    ///         is where that check is exercised.
+    ///     </para>
     /// </remarks>
-    static string HarnessWorkspace =>
+    public static string HarnessWorkspace =>
         new ResourceId(
             ConformanceIds.Tenant,
             ConformanceIds.Subscription,
             ConformanceIds.ResourceGroup,
             MonitorWorkspaces.Type,
-            "telemetry",
+            HarnessWorkspaceName,
             Guid.Empty
         ).Path;
 
