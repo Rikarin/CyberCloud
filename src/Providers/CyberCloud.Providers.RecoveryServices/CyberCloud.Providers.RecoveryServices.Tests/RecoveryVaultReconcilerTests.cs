@@ -43,7 +43,7 @@ public sealed class RecoveryVaultReconcilerTests {
         applied.Target.Kind.Kind.ShouldBe("ScheduledBackup");
         applied.Target.Kind.Group.ShouldBe("postgresql.cnpg.io");
         applied.Target.Namespace.ShouldBe(Ids.Namespace(vault), "the schedule goes into the protected server's namespace, which is the vault's own");
-        applied.Target.Name.ShouldBe("nightly-main");
+        applied.Target.Name.ShouldBe("nightly-main-19eac1a54fcd", "the vault, the item, and twelve hex digits of the pair's digest that keep `a`/`b-c` and `a-b`/`c` apart");
 
         var spec = Spec(applied.Body);
 
@@ -77,7 +77,7 @@ public sealed class RecoveryVaultReconcilerTests {
         (await Pass(connection, Ids.Vault("nightly"), nightly.RootElement, view)).ShouldBe(ReconcileOutcome.Converged);
         (await Pass(connection, Ids.Vault("hourly"), hourly.RootElement, view)).ShouldBe(ReconcileOutcome.Converged);
 
-        connection.Applied.Select(x => x.Target.Name).ShouldBe(["nightly-main", "hourly-main"]);
+        connection.Applied.Select(x => x.Target.Name).ShouldBe(["nightly-main-19eac1a54fcd", "hourly-main-35248febfccd"]);
         Spec(connection.Applied[0].Body)["schedule"]!.GetValue<string>().ShouldBe("0 0 2 * * *");
         Spec(connection.Applied[1].Body)["schedule"]!.GetValue<string>().ShouldBe("0 0 * * * *");
     }
@@ -315,7 +315,7 @@ public sealed class RecoveryVaultReconcilerTests {
 
         connection.Holds(RecoveryVaults.ScheduledBackupRef(ns, "nightly", "reports")).ShouldBeFalse("the schedule of an item that left the body was left standing");
         connection.Holds(RecoveryVaults.ScheduledBackupRef(ns, "nightly", "main")).ShouldBeTrue();
-        connection.Deleted.ShouldHaveSingleItem().Name.ShouldBe("nightly-reports");
+        connection.Deleted.ShouldHaveSingleItem().Name.ShouldBe("nightly-reports-59a7c713d1d3");
     }
 
     [Fact]

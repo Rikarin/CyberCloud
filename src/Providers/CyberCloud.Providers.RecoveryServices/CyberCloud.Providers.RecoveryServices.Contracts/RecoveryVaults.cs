@@ -165,7 +165,18 @@ public static class RecoveryVaults {
     /// </remarks>
     public const string RecoverAction = "recover";
 
-    /// <summary>The permission <see cref="RecoverAction" /> checks.</summary>
+    /// <summary>The permission <see cref="RecoverAction" /> checks — on the vault, and on nothing else.</summary>
+    /// <remarks>
+    ///     ⚠ <b>The vault's <c>write</c> is the whole gate, and the bytes are the server's.</b> The
+    ///     manager asks the authorizer for this permission on the vault's own id and nothing asks for
+    ///     any permission on the protected server, which the vault itself only needs <c>read</c> on.
+    ///     A contributor on the vault can therefore bring up a copy of any server it protects, with a
+    ///     fresh superuser secret, without holding anything on that server. The handler cannot check:
+    ///     <c>ActionContext</c> carries no caller and no authorizer. Recorded as
+    ///     <c>conformance.yaml § owed</c>, <c>recover-is-gated-by-the-vault-alone</c>, whose closing
+    ///     move is the server's <c>restoreFrom</c> — the same one <c>a-restore-is-not-yet-a-resource</c>
+    ///     waits on — or a related-resource clause on the action's declaration for the manager to gate.
+    /// </remarks>
     public const string RecoverPermission = "write";
 
     /// <summary>The type, namespace and path together.</summary>
@@ -236,10 +247,11 @@ public static class RecoveryVaults {
     /// </summary>
     /// <remarks>
     ///     ADR-013's seven name the <i>vault</i>; nothing among them says which of its items a
-    ///     ScheduledBackup serves, and the object name folds the two together in a way that cannot
-    ///     be split back when both carry hyphens (the same finding as
-    ///     <c>storage.cybercloud.io/account</c>). Carried through <c>WithLabels</c>, so it passes the
-    ///     same syntax check the seven do — a resource name is a legal label value by construction.
+    ///     ScheduledBackup serves, and the object name folds the two together with a digest that
+    ///     cannot be inverted (the same finding as <c>storage.cybercloud.io/account</c>, where the
+    ///     fold is a hyphen that cannot be split back). Carried through <c>WithLabels</c>, so it
+    ///     passes the same syntax check the seven do — a resource name is a legal label value by
+    ///     construction.
     /// </remarks>
     public const string ProtectedItemLabel = "recoveryservices.cybercloud.io/protected-item";
 
@@ -272,29 +284,45 @@ public static class RecoveryVaults {
     public const string BackupMethod = "barmanObjectStore";
 
     /// <summary>
-    ///     A ScheduledBackup's name: the vault's and the item's, joined — folded through a digest when
-    ///     the two do not fit.
+    ///     A ScheduledBackup's name: the vault's and the item's, joined, then twelve hex digits of
+    ///     the pair's digest that make the join unambiguous — the two stemmed to 24 characters each
+    ///     when the whole does not fit.
     /// </summary>
     /// <param name="vault">The vault's own name.</param>
     /// <param name="item">The protected item's resource name.</param>
     /// <remarks>
-    ///     ⚠ Two vaults in one resource group may protect the same server, and one vault protects
-    ///     many servers, so neither name alone is unique in the namespace. Both are at most
-    ///     <see cref="ResourceNaming.MaxLength" /> characters and a Kubernetes name is capped at the
-    ///     same 63, so the join can exceed the cap; when it does, the first 24 of each are kept so
-    ///     <c>kubectl get scheduledbackups</c> still reads as something a person can place, and the
-    ///     twelve hex digits after them are what make it unique.
+    ///     <para>
+    ///         ⚠ Two vaults in one resource group may protect the same server, and one vault protects
+    ///         many servers, so neither name alone is unique in the namespace. Both are at most
+    ///         <see cref="ResourceNaming.MaxLength" /> characters and a Kubernetes name is capped at
+    ///         the same 63, so the join can exceed the cap; when it does, the first 24 of each are
+    ///         kept so <c>kubectl get scheduledbackups</c> still reads as something a person can place.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The digest is there whether or not the names fit, because a hyphen join is not
+    ///         unique.</b> A resource name may carry hyphens, so vault <c>a</c> protecting <c>b-c</c>
+    ///         and vault <c>a-b</c> protecting <c>c</c> both spelled <c>a-b-c</c> in the first cut —
+    ///         and both vaults apply under one field manager,
+    ///         <c>cybercloud/cybercloud.recoveryservices</c>, so the API server would not even
+    ///         conflict: each pass would silently take <c>spec.cluster.name</c> and the resource-id
+    ///         label from the other, and each vault's retention would prune the other's points
+    ///         through <see cref="RecoveryPointSelector" />. The digest is over <c>{vault}/{item}</c>,
+    ///         and <c>/</c> is outside the name alphabet, so two different pairs never digest the
+    ///         same bytes. <c>RecoveryVaultDeclarationTests.TwoVaultsWhoseNamesJoinToOneSpellingOwnTwoSchedules</c>
+    ///         pins the pair above apart.
+    ///     </para>
     /// </remarks>
     public static string ScheduledBackupNameOf(string vault, string item) {
         ArgumentException.ThrowIfNullOrEmpty(vault);
         ArgumentException.ThrowIfNullOrEmpty(item);
 
-        var joined = vault + "-" + item;
+        var digest = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(vault + "/" + item)))[..12];
+
+        var joined = vault + "-" + item + "-" + digest;
         if (joined.Length <= ResourceNaming.MaxLength) {
             return joined;
         }
 
-        var digest = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(joined)))[..12];
         return Stem(vault) + "-" + Stem(item) + "-" + digest;
 
         static string Stem(string name) => (name.Length > 24 ? name[..24] : name).TrimEnd('-');

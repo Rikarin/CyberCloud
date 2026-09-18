@@ -1209,7 +1209,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             );
     }
 
-    /// <summary>The field manager the PROVIDER's commands carried.</summary>
+    /// <summary>The field manager the commands for the type UNDER TEST carried.</summary>
     /// <param name="harness">The harness.</param>
     /// <remarks>
     ///     <para>
@@ -1225,19 +1225,40 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     ///         like the apply was not an apply, and was really this helper naming the wrong manager.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Skipping group-scoped commands is exact rather than approximate.</b> Every command
-    ///         a provider renders carries <c>KubeCommandBuilder.FieldManagerFor(providerNamespace)</c>,
-    ///         one manager per provider, so the first non-group-scoped command's manager is the
-    ///         provider's — and <see cref="KubeLabels.IsGroupScoped(IReadOnlyDictionary{string,string})" />
-    ///         cannot be forged by a provider, because <c>cybercloud.io/resource-type</c> is injected
-    ///         and <c>ProviderRegistry.Build</c> refuses the reserved namespace.
+    ///         ⚠
+    ///         <b>
+    ///             And skipping the group-scoped commands stopped being enough the day a case brought
+    ///             a companion.
+    ///         </b> <see cref="ClusterConformanceHarness{TSource}" /> creates
+    ///         <c>IProviderCaseSource.Companions</c> — another provider's resource, applied through the
+    ///         same <see cref="RealClusterConnection" /> — before the first assertion, so the first
+    ///         non-group-scoped command in <see cref="RealClusterConnection.Applied" /> was the
+    ///         PostgreSQL server's Cluster under <c>cybercloud/cybercloud.dbforpostgresql</c>, and the
+    ///         vault's ScheduledBackup was checked against it. Only the conflict test resets the
+    ///         recording, so whether that failed depended on test ORDER — the run that shipped the
+    ///         companion was green by luck. The helper now selects by the case's own
+    ///         <c>cybercloud.io/resource-type</c> label, which no companion and no ancestor carries.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Selecting by the label is exact rather than approximate.</b> Every command a
+    ///         provider renders carries <c>KubeCommandBuilder.FieldManagerFor(providerNamespace)</c>,
+    ///         one manager per provider, and <see cref="KubeLabels.ResourceType" /> is injected by the
+    ///         builder from the resource's address rather than set by the provider, so the first
+    ///         command labelled with <see cref="ClusterConformanceHarness{TSource}.Case" />'s type is
+    ///         the type under test's, whatever else the run applied before it.
     ///     </para>
     /// </remarks>
     protected static string FieldManagerOf(ClusterConformanceHarness<TSource> harness) {
         ArgumentNullException.ThrowIfNull(harness);
 
-        return harness.Connection.Applied.FirstOrDefault(x => !KubeLabels.IsGroupScoped(x.Labels))
-            ?.FieldManager
+        var type = KubeLabels.ResourceTypeValue(ClusterConformanceHarness<TSource>.Case.Type);
+
+        return harness.Connection.Applied
+                .FirstOrDefault(
+                    x => x.Labels.TryGetValue(KubeLabels.ResourceType, out var value)
+                        && string.Equals(value, type, StringComparison.Ordinal)
+                )
+                ?.FieldManager
             ?? string.Empty;
     }
 

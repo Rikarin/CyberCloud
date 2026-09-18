@@ -39,6 +39,14 @@ namespace CyberCloud.Providers.RecoveryServices;
 ///         <c>CyberCloud.DBforPostgreSQL/servers</c> resource — is stated on
 ///         <see cref="RecoveryVaults.RecoverAction" /> and owed in the chart's manifest.
 ///     </para>
+///     <para>
+///         ⚠ <b>Four checks, and none of them is about the caller.</b> The manager gated this call
+///         with <see cref="RecoveryVaults.RecoverPermission" /> on the vault before it reached here,
+///         and nothing here or there asks whether the caller may read the protected server the
+///         point was taken from; <see cref="ActionContext" /> carries no caller to ask about. That
+///         gap is the vault's <c>recover-is-gated-by-the-vault-alone</c>, and the remarks on the
+///         permission say what closes it.
+///     </para>
 /// </remarks>
 public sealed class RecoveryVaultRecoverHandler : IResourceActionHandler {
     /// <inheritdoc />

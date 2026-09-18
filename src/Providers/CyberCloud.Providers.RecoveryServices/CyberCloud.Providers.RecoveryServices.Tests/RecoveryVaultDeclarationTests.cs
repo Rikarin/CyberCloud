@@ -159,7 +159,10 @@ public sealed class RecoveryVaultDeclarationTests {
 
     [Fact]
     public void TheScheduledBackupNameFitsAndStaysUniqueWhenTheTwoNamesDoNot() {
-        RecoveryVaults.ScheduledBackupNameOf("nightly", "main").ShouldBe("nightly-main");
+        // ⚠ A literal digest, not one computed here: the value is the first twelve hex digits of
+        // SHA-256 over `nightly/main`, and a test that recomputed it would compare the function to
+        // itself.
+        RecoveryVaults.ScheduledBackupNameOf("nightly", "main").ShouldBe("nightly-main-19eac1a54fcd");
 
         var longVault = new string('v', 40);
         var longItem = new string('i', 40);
@@ -169,6 +172,20 @@ public sealed class RecoveryVaultDeclarationTests {
         folded.ShouldMatch("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$");
         folded.ShouldStartWith(new string('v', 24) + "-" + new string('i', 24) + "-");
         folded.ShouldNotBe(RecoveryVaults.ScheduledBackupNameOf(longVault, new string('i', 39) + "j"), "two items that share a 24-character stem folded to one name");
+    }
+
+    [Fact]
+    public void TwoVaultsWhoseNamesJoinToOneSpellingOwnTwoSchedules() {
+        // ⚠ THE PAIR THE REVIEW OF THE FIRST CUT FOUND. Vault `a` protecting `b-c` and vault `a-b`
+        // protecting `c` both spelled `a-b-c` when the digest was only added past the cap — and under
+        // one field manager the API server would not have conflicted, so the two vaults would have
+        // silently taken the object from each other every pass and pruned each other's points.
+        var first = RecoveryVaults.ScheduledBackupNameOf("a", "b-c");
+        var second = RecoveryVaults.ScheduledBackupNameOf("a-b", "c");
+
+        first.ShouldNotBe(second, "a hyphen join is not unique, and the digest is what makes it so");
+        first.ShouldStartWith("a-b-c-");
+        second.ShouldStartWith("a-b-c-");
     }
 
     [Fact]

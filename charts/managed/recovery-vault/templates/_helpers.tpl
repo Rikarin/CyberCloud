@@ -1,11 +1,14 @@
 {{/*
-The ScheduledBackup's name: `{vault}-{item}`.
+The ScheduledBackup's name: `{vault}-{item}-{digest}`.
 
 ⚠ IT IS THE RELEASE NAME, AND THE JOINING THAT MAKES IT UNIQUE HAPPENS BEFORE THIS CHART SEES IT.
-`RecoveryVaults.ScheduledBackupNameOf` is `{vaultName}-{itemName}`, folded through a digest when the
-two do not fit in 63 characters, and the reconciler computes it from the vault's address and the
-item's. Two vaults in one resource group may protect one server, and one vault protects many, so
-neither name alone is unique in the namespace.
+`RecoveryVaults.ScheduledBackupNameOf` is `{vaultName}-{itemName}` and twelve hex digits of SHA-256
+over `{vaultName}/{itemName}`, the two names stemmed to 24 characters each when the whole does not fit
+in 63, and the reconciler computes it from the vault's address and the item's. Two vaults in one
+resource group may protect one server, and one vault protects many, so neither name alone is unique
+in the namespace — and the digest is there even when the names fit, because a hyphen join is not
+unique either: vault `a` protecting `b-c` and vault `a-b` protecting `c` would otherwise both own
+`a-b-c`, under one field manager, so the API server would let each take it from the other.
 */}}
 {{- define "recovery-vault.scheduleName" -}}
 {{- default .Release.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
@@ -31,7 +34,7 @@ The seven cybercloud.io/* labels — docs/plan/02 § ADR-013 — plus the eighth
 
 ⚠ `recoveryservices.cybercloud.io/protected-item` IS THE LABEL THE ACTIONS READ. listRecoveryPoints
 and recover find the vault's schedules by the seven and read which item each serves off this one;
-the object name cannot be split back when both halves carry hyphens.
+the object name folds the two halves through a digest and cannot be split back.
 */}}
 {{- define "recovery-vault.platformLabels" -}}
 cybercloud.io/tenant-id: {{ .Values.platform.tenantId | quote }}

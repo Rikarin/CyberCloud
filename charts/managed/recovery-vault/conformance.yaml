@@ -46,7 +46,7 @@ labels:
     - cybercloud.io/managed-by
     # ⚠ THE EIGHTH, AND THE ACTIONS DEPEND ON IT. ActionContext carries no view, so listRecoveryPoints
     # and recover find the vault's schedules by the seven and read which protected item each one
-    # serves off this label; `{vault}-{item}` cannot be split back when both halves carry hyphens.
+    # serves off this label; `{vault}-{item}-{digest}` cannot be split back.
     - recoveryservices.cybercloud.io/protected-item
   values:
     cybercloud.io/resource-type: cybercloud.recoveryservices_vaults
@@ -171,6 +171,24 @@ owed:
       another group is ReconcileDriver.NamespaceFor's rule, which lives in the manager and which rule 8
       keeps a provider from calling. Closing it is a view on ActionContext, or a namespace rule in a
       contracts assembly a provider may reference.
+  - id: recover-is-gated-by-the-vault-alone
+    says: >
+      `recover` is authorised the way every action is: ResourceManagerService.ActionAsync asks the
+      authorizer for the action's permission — `write` — on the VAULT, and nothing asks for anything on
+      the protected server whose bytes come back. The vault itself needs only `read` on the server to
+      schedule it. So a caller with `write` on a vault, and no permission at all on the server it
+      protects, can materialise the server's data as a new Cluster in the group's namespace, with a
+      fresh operator-generated superuser secret, and connect to it — a key export by another name.
+      The handler cannot check today: ActionContext carries no caller and no authorizer, by the same
+      design that keeps a view off it (`items-in-other-resource-groups`), and rule 8 keeps the
+      provider from reaching the manager's. Closing it is one of two things, and the first is the
+      honest one: `a-restore-is-not-yet-a-resource` — once a restore is a PUT of a
+      CyberCloud.DBforPostgreSQL/servers resource with a `restoreFrom`, the manager gates it with
+      `write` on THAT type in the caller's own resource group and this handler's apply goes away.
+      Until then, the shorter closing move is a `relatedTo` on the action's declaration — the
+      pointer(s) to the resources the action reads — and one more authorizer call in ActionAsync per
+      pointer, which is the manager's to make and not this provider's. Recorded by the review of the
+      first cut; nothing in the seven promises above asserts it.
   - id: a-restore-is-not-yet-a-resource
     says: >
       recover creates a CloudNativePG Cluster object — reachable from the tenant's pods, carrying the
@@ -221,6 +239,29 @@ owed:
       and deletes it." Nothing here does that; recover is the primitive it would call, and the
       scheduled pass it needs is the same manager-started pass `retention-is-enforced-on-passes` waits
       on.
+  - id: backup-storage-is-not-metered
+    says: >
+      `storage.backup.gb_month` above is the meter docs/plan/15 § Metering says this row emits —
+      "After compression" — and nothing emits it: the provider declares QuotaMeter.Resources and
+      nothing else, and nothing samples the server's barman store. The bytes live in the server's
+      spec.backup.barmanObjectStore, which is also where charts/managed/postgres's
+      `postgres.backup.gib.hours` would be read from and is not; when the store is real
+      (`the-store-is-the-servers`) the sample is one listing of the destination per protected item
+      per hour, from the vault's side because the vault is what promised a retention over it, into
+      docs/plan/22's usage pipeline. The same gap charts/managed/feeds records as
+      `storage-and-egress-are-not-metered`, one manifest over. ⚠ Until then a vault is billed as one
+      resource however many gigabytes its points hold.
+  - id: backup-status-is-not-on-the-servers-blade
+    says: >
+      docs/plan/15 § Backup as a service: "A protected resource shows its backup status on its own
+      blade — a backup system nobody can see the status of is a backup system that is quietly
+      broken." What exists is the VAULT's side: listRecoveryPoints, per vault, with a phase per point.
+      A CyberCloud.DBforPostgreSQL/servers resource has no property, action or portal panel that says
+      which vaults protect it and when the last point completed, and the portal's server blade
+      renders none. Two halves close it: a read on the server that answers "protected by {vault},
+      last point {phase} at {time}" — the server's provider listing ScheduledBackups by
+      cnpg.io/cluster in its own namespace, which needs no view because the objects are beside its
+      own — and a panel on portal/apps' server blade over that read. Neither is started.
   - id: customer-managed-keys
     says: >
       The third third of #30, and NOT this type's. docs/plan/15 § The resource model puts

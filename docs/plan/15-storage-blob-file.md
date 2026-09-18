@@ -237,6 +237,15 @@ retrieval latency in the object's metadata**, so an application can decide rathe
 > (`retention-is-enforced-on-passes`). One policy per vault where this section says "schedules and
 > retention", because an array of objects is not expressible in a `ResourceSchema`
 > (`one-policy-per-vault`); a vault carrying several is a `vaults/backupPolicies` child type.
+>
+> ⚠ What the review of the first cut added to the ledger: `recover` is gated by `write` on the
+> *vault* and by nothing on the server whose bytes it materialises, because `ActionContext` carries
+> no caller and no authorizer (`recover-is-gated-by-the-vault-alone` — the honest closing move is
+> the same `restoreFrom` on the server that closes `a-restore-is-not-yet-a-resource`, at which point
+> the manager gates the restore with `write` on the server's type); "shows its backup status on its
+> own blade" below has only the vault's side, `listRecoveryPoints`, and nothing on the server's
+> (`backup-status-is-not-on-the-servers-blade`); and `storage.backup.gb_month` is declared and not
+> emitted (`backup-storage-is-not-metered`).
 
 Not a storage type; a *policy* resource that binds protected resources to schedules and retention.
 
