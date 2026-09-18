@@ -1,0 +1,10 @@
+{{ .Chart.Name }}: this release installed no object, and that is the type.
+
+A peering is two fragments on two Vpc objects other releases own — one entry in each network's
+spec.vpcPeerings and one static route in each network's spec.staticRoutes. The platform's reconciler
+writes them through the co-owned apply (docs/plan/09 § A second writer on an object); Helm cannot.
+templates/fragments.yaml shows both shapes, and values.yaml is the surface they are rendered from.
+
+  local network's Vpc:  {{ .Values.platform.localVpc | default "<set by the reconciler>" }}
+  remote network's Vpc: {{ .Values.platform.remoteVpc | default "<set by the reconciler>" }}
+  link:                 {{ .Values.link.v4 }}

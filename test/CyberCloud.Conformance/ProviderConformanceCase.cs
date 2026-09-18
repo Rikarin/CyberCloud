@@ -536,14 +536,15 @@ public interface IProviderCaseSource {
     ///         own words. Nothing stops being asserted.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>What this does NOT do, stated so the next person does not look for it.</b> The
-    ///         harness empties the fake cluster between assertions (<c>ConformanceState.Reset</c>), so a
-    ///         sibling's <i>objects</i> are gone by the time a test runs and only the sibling
-    ///         <i>resource</i> — its grain, its index binding, its <c>Succeeded</c> state — persists. A
-    ///         type that co-writes onto a sibling's object needs that object back before it can
-    ///         converge, and this member does not put it back. Recorded at
-    ///         <c>charts/managed/kube-ovn-vpc/conformance.yaml § owed</c>,
-    ///         <c>peerings-need-a-second-writer-on-the-vpc</c>.
+    ///         ⚠ <b>The sibling's objects survive a reset, and until the first co-writing type they
+    ///         did not.</b> <c>ConformanceState.Reset</c> used to empty the fake cluster between
+    ///         assertions, so only the sibling <i>resource</i> — its grain, its index binding, its
+    ///         <c>Succeeded</c> state — persisted and its objects were gone. A type that co-writes
+    ///         onto a sibling's object needs that object there when a test starts, so the harness now
+    ///         takes a baseline of the world once the ancestors and siblings have converged
+    ///         (<c>FakeKubeCluster.Baseline</c>) and every reset restores it.
+    ///         <c>ReferenceSiblingProviderConformance.TheSiblingSurvivesAResetAsAResourceAndAsObjects</c>
+    ///         pins both halves, and that a test's own objects still do not survive.
     ///     </para>
     /// </remarks>
     static virtual ImmutableArray<SiblingResource> Siblings => [];

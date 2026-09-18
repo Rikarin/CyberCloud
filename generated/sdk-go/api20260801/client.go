@@ -1336,6 +1336,7 @@ type NetworkProvider struct {
 	VirtualNetworks               *VirtualNetworkClient
 	VirtualNetworksLoadBalancers  *LoadBalancerClient
 	VirtualNetworksNatGateways    *NATGatewayClient
+	VirtualNetworksPeerings       *PeeringClient
 	VirtualNetworksSecurityGroups *SecurityGroupClient
 	VirtualNetworksSubnets        *SubnetClient
 }
@@ -1347,6 +1348,7 @@ func newNetworkProvider(transport Transport) *NetworkProvider {
 		VirtualNetworks:               &VirtualNetworkClient{transport: transport},
 		VirtualNetworksLoadBalancers:  &LoadBalancerClient{transport: transport},
 		VirtualNetworksNatGateways:    &NATGatewayClient{transport: transport},
+		VirtualNetworksPeerings:       &PeeringClient{transport: transport},
 		VirtualNetworksSecurityGroups: &SecurityGroupClient{transport: transport},
 		VirtualNetworksSubnets:        &SubnetClient{transport: transport},
 	}
@@ -1542,6 +1544,55 @@ func (c *NATGatewayClient) List(tenantID, subscriptionID, resourceGroupName, vir
 func (c *NATGatewayClient) ShowEgress(ctx context.Context, tenantID, subscriptionID, resourceGroupName, virtualNetworksName, resourceName string) (*NATGatewayShowEgressResult, error) {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Network/virtualNetworks/" + segment(virtualNetworksName) + "/natGateways/" + segment(resourceName) + "/showEgress"
 	var result NATGatewayShowEgressResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// PeeringClient is peerings — CyberCloud.Network/virtualNetworks/peerings. A route exchange between this virtual network and another in the same resource group, so workloads in either reach the other's range by private address. Both networks stay separately owned.
+type PeeringClient struct {
+	transport Transport
+}
+
+// Get reads one Peering.
+func (c *PeeringClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, virtualNetworksName, resourceName string) (*PeeringResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Network/virtualNetworks/" + segment(virtualNetworksName) + "/peerings/" + segment(resourceName)
+	var result PeeringResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Peering. ⚠ Long-running: Wait on the result.
+func (c *PeeringClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, virtualNetworksName, resourceName string, data PeeringData) (*Operation[PeeringResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Network/virtualNetworks/" + segment(virtualNetworksName) + "/peerings/" + segment(resourceName)
+	return begin[PeeringResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Peering. A merge patch: what is not set is not changed.
+func (c *PeeringClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, virtualNetworksName, resourceName string, data PeeringData) (*Operation[PeeringResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Network/virtualNetworks/" + segment(virtualNetworksName) + "/peerings/" + segment(resourceName)
+	return begin[PeeringResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Peering. ⚠ Permanent: this type declares no soft-delete window.
+func (c *PeeringClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, virtualNetworksName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Network/virtualNetworks/" + segment(virtualNetworksName) + "/peerings/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Peerings in a resource group. ⚠ A short page never means "that is all there is".
+func (c *PeeringClient) List(tenantID, subscriptionID, resourceGroupName, virtualNetworksName string, options *ListOptions) *Pager[PeeringResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Network/virtualNetworks/" + segment(virtualNetworksName) + "/peerings"
+	return newPager[PeeringResource](c.transport, path, options)
+}
+
+// ShowRoutes runs showRoutes — permission 'read'.
+func (c *PeeringClient) ShowRoutes(ctx context.Context, tenantID, subscriptionID, resourceGroupName, virtualNetworksName, resourceName string) (*PeeringShowRoutesResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Network/virtualNetworks/" + segment(virtualNetworksName) + "/peerings/" + segment(resourceName) + "/showRoutes"
+	var result PeeringShowRoutesResult
 	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}

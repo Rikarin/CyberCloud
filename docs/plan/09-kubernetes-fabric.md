@@ -254,13 +254,20 @@ fragments, all three slices and the seven labels coexist, each withdraws only it
 re-apply is `Unchanged` — is `CoOwnedApplyTests.TwoCoWritersFragmentsCoexistWithTheOwnersAndEachRemovesOnlyItsOwn`
 against a real k3s; the rules without a cluster are `CoOwnedCommandBuilderTests`.
 
-⚠ **What the conformance harness can and cannot do with it yet.** `IProviderCaseSource.Siblings` lets
-a case create the second network a peering names, beside the ancestor chain, converged before the
-first assertion. Two gaps remain and are named where they bite: `FakeKubeCluster` stores a body
-verbatim and so *refuses* a co-owned command by name rather than replacing the owner's object with a
-fragment, and `ConformanceState.Reset` empties the fake cluster between assertions, so a sibling's
-*objects* are gone when a test starts. A Docker-free peering case needs both closed;
-`charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `peerings-need-a-second-writer-on-the-vpc`.
+⚠ **What the conformance harness does with it, since `virtualNetworks/peerings` landed on it.**
+`IProviderCaseSource.Siblings` lets a case create the second network a peering names, beside the
+ancestor chain, converged before the first assertion. Two gaps closed with the type: `FakeKubeCluster`
+models the co-writers' shared manager one manager deep — the same shape and owner checks the tunnel
+agent and `KubeApiClient` run, the version lock, the previous union taken back and the new one set,
+the fragment annotations replaced (`FakeKubeCluster.ApplyCoOwned`) — and `Reset` restores a
+**baseline** of the world the fixture created rather than emptying the store, so the two `Vpc`s are
+there when a test starts. The shared Docker-free suite reads, per object, whether the type owns it
+(`ProviderConformanceTests.IsCoOwned`, off the `resource-id` label the builder alone writes) and takes
+the co-writer's reading of each ownership assertion: no labels on the command and the owner's on the
+object, teardown by withdrawal with the object standing, drift as a slice stripped by hand and put
+back, the owner's delete winning. ⚠ The **cluster-backed** shared suite still presumes ownership and
+the peering runs a dedicated class there instead —
+`charts/managed/kube-ovn-vpc-peering/conformance.yaml § owed`, `the-shared-cluster-suite-presumes-ownership`.
 
 ⚠ **Checked against #30, which is the same shape from the other side — and it is a different seam.**
 Issue #89 asked that a design answering the cross-*object* case (a peering onto two `Vpc`s) be held

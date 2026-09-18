@@ -577,6 +577,19 @@
       }
     },
     {
+      "type": "CyberCloud.Network/virtualNetworks/peerings",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Peering",
+        "plural": "Peerings",
+        "alias": "peering",
+        "summary": "A route exchange between this virtual network and another in the same resource group, so workloads in either reach the other's range by private address. Both networks stay separately owned.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.Network/virtualNetworks/securityGroups",
       "apiVersions": [
         "2026-08-01"

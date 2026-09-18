@@ -78,6 +78,9 @@ import type {
   NetworkVirtualNetworksNatGatewaysData,
   NetworkVirtualNetworksNatGatewaysResource,
   NetworkVirtualNetworksNatGatewaysShowEgressResult,
+  NetworkVirtualNetworksPeeringsData,
+  NetworkVirtualNetworksPeeringsResource,
+  NetworkVirtualNetworksPeeringsShowRoutesResult,
   NetworkVirtualNetworksResource,
   NetworkVirtualNetworksSecurityGroupsData,
   NetworkVirtualNetworksSecurityGroupsResource,
@@ -928,6 +931,36 @@ export class CyberCloudApi {
   /** showEgress — permission 'read'. */
   showEgressNATGateway(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string): Promise<ApiResponse<NetworkVirtualNetworksNatGatewaysShowEgressResult>> {
     return this.transport.send<NetworkVirtualNetworksNatGatewaysShowEgressResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/natGateways/${CyberCloudApi.segment(resourceName)}/showEgress` });
+  }
+
+  /** Reads one Peering. */
+  getPeering(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string): Promise<ApiResponse<NetworkVirtualNetworksPeeringsResource>> {
+    return this.transport.send<NetworkVirtualNetworksPeeringsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/peerings/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Peering. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdatePeering(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string, data: NetworkVirtualNetworksPeeringsData): Promise<ApiResponse<NetworkVirtualNetworksPeeringsResource>> {
+    return this.transport.send<NetworkVirtualNetworksPeeringsResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/peerings/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Peering. A merge patch: what is not set is not changed. */
+  updatePeering(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string, data: Partial<NetworkVirtualNetworksPeeringsData>): Promise<ApiResponse<NetworkVirtualNetworksPeeringsResource>> {
+    return this.transport.send<NetworkVirtualNetworksPeeringsResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/peerings/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Peering. ⚠ Permanent: this type declares no soft-delete window. */
+  deletePeering(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/peerings/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Peerings in a resource group. ⚠ A short page never means "that is all there is". */
+  listPeering(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, page: PageRequest = {}): Promise<ApiResponse<Page<NetworkVirtualNetworksPeeringsResource>>> {
+    return this.transport.send<Page<NetworkVirtualNetworksPeeringsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/peerings`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** showRoutes — permission 'read'. */
+  showRoutesPeering(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string): Promise<ApiResponse<NetworkVirtualNetworksPeeringsShowRoutesResult>> {
+    return this.transport.send<NetworkVirtualNetworksPeeringsShowRoutesResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/peerings/${CyberCloudApi.segment(resourceName)}/showRoutes` });
   }
 
   /** Reads one Security group. */

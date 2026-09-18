@@ -6110,6 +6110,202 @@ public sealed partial class NATGatewayCollection {
     public partial AsyncPageable<NATGatewayResource> GetAllAsync(string virtualNetworksName, CancellationToken cancellationToken = default);
 }
 
+/// <summary>The body of a CyberCloud.Network/virtualNetworks/peerings.</summary>
+/// <remarks>A route exchange between this virtual network and another in the same resource group, so workloads in either reach the other's range by private address. Both networks stay separately owned.</remarks>
+public sealed partial class PeeringData {
+
+    /// <summary>The region the peering is billed in. ⚠ It must be the region both virtual networks are in — nothing checks that, because neither network's own region is readable from here.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The peering's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The peering's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster whose fabric holds both networks. ⚠ Two networks in two clusters cannot be peered: a Kube-OVN peering is two ports on one OVN northbound database.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>The point-to-point range the two routers address each other on.</summary>
+        [JsonPropertyName("link")]
+        public LinkData? Link { get; set; }
+
+        /// <summary>The range this network advertises to the remote — the remote's router gets one static route to it.</summary>
+        [JsonPropertyName("localAddressSpace")]
+        public LocalAddressSpaceData? LocalAddressSpace { get; set; }
+
+        /// <summary>The range the remote advertises to this network — this network's router gets one static route to it.</summary>
+        [JsonPropertyName("remoteAddressSpace")]
+        public RemoteAddressSpaceData? RemoteAddressSpace { get; set; }
+
+        /// <summary>The name of the virtualNetworks resource in the same resource group to peer this network with. ⚠ A name, not a resource id: the remote must be in this subscription and resource group, and a network in another cannot be named — write on the peering has to imply write on both networks. A remote that does not exist keeps the peering in progress until it does. Cannot be changed once created; delete the peering and create another.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "spoke" when left unset.</remarks>
+        [JsonPropertyName("remoteNetwork")]
+        public required string RemoteNetwork { get; set; }
+
+        /// <summary>The point-to-point range the two routers address each other on.</summary>
+        public sealed partial class LinkData {
+
+            /// <summary>A small IPv4 range, /30 or wider, that is in neither network. This network's peer port takes its first host address and the remote's takes the second. ⚠ It is checked against the platform's reserved ranges like any other, so link-local space cannot be used.</summary>
+            /// <remarks>Required on a create. Defaults to "10.255.255.0/30" when left unset.</remarks>
+            [JsonPropertyName("v4")]
+            public required string V4 { get; set; }
+        }
+
+        /// <summary>The range this network advertises to the remote — the remote's router gets one static route to it.</summary>
+        public sealed partial class LocalAddressSpaceData {
+
+            /// <summary>This network's IPv4 range, in CIDR form — normally its address space. ⚠ It may not overlap the remote range or the link, and the refusal names both.</summary>
+            /// <remarks>Required on a create. Defaults to "10.20.0.0/16" when left unset.</remarks>
+            [JsonPropertyName("v4")]
+            public required string V4 { get; set; }
+        }
+
+        /// <summary>The range the remote advertises to this network — this network's router gets one static route to it.</summary>
+        public sealed partial class RemoteAddressSpaceData {
+
+            /// <summary>The remote network's IPv4 range, in CIDR form — normally its address space. ⚠ Two networks with overlapping ranges cannot be peered, which is the one place this platform's 'overlapping your own networks is fine' stops applying: a route to a range you also hold has nowhere to go.</summary>
+            /// <remarks>Required on a create. Defaults to "10.30.0.0/16" when left unset.</remarks>
+            [JsonPropertyName("v4")]
+            public required string V4 { get; set; }
+        }
+    }
+}
+
+/// <summary>One Peering, as the API returns it, and the operations on it.</summary>
+public sealed partial class PeeringResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required PeeringData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<PeeringResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<PeeringResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        PeeringData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What showRoutes returns.</summary>
+    public sealed partial class ShowRoutesResult {
+
+        /// <summary>The address, with the link's prefix, this network's peer port carries.</summary>
+        [JsonPropertyName("localConnectIP")]
+        public required string LocalConnectIP { get; set; }
+
+        /// <summary>Whether the fabric lists the remote in the local Vpc's status.vpcPeerings — the peer port exists. False on a cluster without the Kube-OVN controller.</summary>
+        [JsonPropertyName("localConnected")]
+        public required bool LocalConnected { get; set; }
+
+        /// <summary>The local network's Vpc object name.</summary>
+        [JsonPropertyName("localVpc")]
+        public required string LocalVpc { get; set; }
+
+        /// <summary>Whether the local Vpc carries this peering's entry and route.</summary>
+        [JsonPropertyName("localWritten")]
+        public required bool LocalWritten { get; set; }
+
+        /// <summary>The address, with the link's prefix, the remote's peer port carries.</summary>
+        [JsonPropertyName("remoteConnectIP")]
+        public required string RemoteConnectIP { get; set; }
+
+        /// <summary>The same, read off the remote Vpc.</summary>
+        [JsonPropertyName("remoteConnected")]
+        public required bool RemoteConnected { get; set; }
+
+        /// <summary>The remote network's Vpc object name.</summary>
+        [JsonPropertyName("remoteVpc")]
+        public required string RemoteVpc { get; set; }
+
+        /// <summary>Whether the remote Vpc carries this peering's entry and route. ⚠ False with localWritten true is a remote network that was deleted or never existed.</summary>
+        [JsonPropertyName("remoteWritten")]
+        public required bool RemoteWritten { get; set; }
+
+        /// <summary>When the platform read the objects, RFC 3339.</summary>
+        [JsonPropertyName("sampledAt")]
+        public required DateTimeOffset SampledAt { get; set; }
+    }
+
+    /// <summary>ShowRoutes. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ShowRoutesResult>> ShowRoutesAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Peerings in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class PeeringCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Network/virtualNetworks/peerings";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/peerings/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/peerings";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Peering.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<PeeringResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string virtualNetworksName, string name,
+        PeeringData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Peering by name.</summary>
+    public partial Task<Response<PeeringResource>> GetAsync(string virtualNetworksName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Peerings in one parent, paged.</summary>
+    public partial AsyncPageable<PeeringResource> GetAllAsync(string virtualNetworksName, CancellationToken cancellationToken = default);
+}
+
 /// <summary>The body of a CyberCloud.Network/virtualNetworks/securityGroups.</summary>
 /// <remarks>A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several.</remarks>
 public sealed partial class SecurityGroupData {

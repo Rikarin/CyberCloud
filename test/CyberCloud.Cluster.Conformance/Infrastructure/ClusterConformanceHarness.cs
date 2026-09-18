@@ -341,7 +341,74 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         // create.
         await harness.CreateAncestorsAsync(cancellationToken).ConfigureAwait(false);
 
+        // ⚠ AND THE SIBLINGS, AFTER THE ANCESTORS THEY MAY SIT UNDER — the second network a peering
+        // writes onto, created against the same real API server so its Vpc is really there when the
+        // peering's co-owned apply reads it. See IProviderCaseSource.Siblings.
+        await harness.CreateSiblingsAsync(cancellationToken).ConfigureAwait(false);
+
         return harness;
+    }
+
+    /// <summary>Creates the siblings the source declares, each driven to <c>Succeeded</c>.</summary>
+    /// <param name="cancellationToken">The harness's token.</param>
+    /// <remarks>
+    ///     Idempotent by way of the index, for <see cref="CreateAncestorsAsync" />'s reason: two
+    ///     harnesses share one PostgreSQL under one service id, and the second finds the first's
+    ///     sibling already bound. ⚠ Driven to <c>Succeeded</c> and not merely bound, for
+    ///     <c>ProviderTestCluster.CreateSiblingsAsync</c>'s reason: a peering onto a network that is
+    ///     still <c>Creating</c> has no <c>Vpc</c> to write onto.
+    /// </remarks>
+    async Task CreateSiblingsAsync(CancellationToken cancellationToken) {
+        foreach (var sibling in ProviderTestCluster<TSource>.Siblings) {
+            var address = ProviderTestCluster<TSource>.SiblingAddress(sibling);
+
+            var index = For(ConformanceIds.Tenant)
+                .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(address));
+
+            if ((await index.ResolveAsync().ConfigureAwait(false)).IsSuccess) {
+                continue;
+            }
+
+            var accepted = await Manager.WriteAsync(
+                new() {
+                    Path = address.Path,
+                    ApiVersion = sibling.Case.ApiVersion,
+                    Verb = WriteVerb.Put,
+                    Body = sibling.Case.Body(ClusterId),
+                    Caller = Caller()
+                },
+                cancellationToken
+            )
+                .ConfigureAwait(false);
+
+            if (accepted.TryGetError(out var error)) {
+                throw new InvalidOperationException(
+                    $"the harness could not create the sibling '{address.Path}', which '{Case.Type}' "
+                    + $"relates to: {error.Message}"
+                );
+            }
+
+            var operation = Operation(ConformanceIds.Tenant, accepted.GetValueOrThrow().OperationId);
+            OperationStatus? last = null;
+
+            for (var drive = 0; drive < 40; drive++) {
+                last = (await operation.DriveAsync().ConfigureAwait(false)).GetValueOrThrow();
+
+                if (last.IsTerminal) {
+                    break;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
+            }
+
+            if (last is null || last.State != OperationState.Succeeded) {
+                throw new InvalidOperationException(
+                    $"the sibling '{address.Path}' ended {last?.State.ToString() ?? "undriven"} rather than "
+                    + $"Succeeded against the real API server, so '{Case.Type}' has nothing converged to "
+                    + $"relate to: {last?.Error?.Message}"
+                );
+            }
+        }
     }
 
     /// <summary>Creates the ancestors the type under test hangs off, outermost first.</summary>
@@ -639,6 +706,16 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                     Namespace
                 )
             )
+            // ⚠ AND THE SIBLINGS' KINDS, for the ancestors' reason: the harness creates them before
+            // the first assertion, and a sibling rendering a kind nobody else does would fail during
+            // setup with the nameless exception.
+            .Concat(
+                ProviderTestCluster<TSource>.Siblings.Select(sibling => sibling.Case.Objects(
+                        ProviderTestCluster<TSource>.SiblingAddress(sibling).WithId(Guid.NewGuid()),
+                        Namespace
+                    )
+                )
+            )
             .Aggregate(
                 Case.Objects(Address("crd-discovery").WithId(Guid.NewGuid()), Namespace).AsEnumerable(),
                 (all, next) => all.Concat(next)
@@ -905,8 +982,11 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                     // ⚠ AND EVERY ANCESTOR'S RECONCILER — ReconcileDriver resolves each type's from
                     // this container by the concrete type the registry stores, so a parent whose
                     // reconciler is missing fails inside the silo rather than on the request path.
+                    //
+                    // ⚠ AND EVERY SIBLING'S, for the same reason and as ProviderTestCluster does.
                     foreach (var reconciler in TSource.Ancestors
                                  .Select(x => x.ReconcilerType)
+                                 .Concat(TSource.Siblings.Select(x => x.Case.ReconcilerType))
                                  .Where(x => x != TSource.ProviderCase.ReconcilerType)
                                  .Distinct()) {
                         services.AddSingleton(reconciler);

@@ -57,8 +57,11 @@ spec:
     which SchemaProperty.ElementKind refuses outright — "an array element is a scalar" — so the body
     shape has nowhere to put one either.
 
-    ⚠ NO `vpcPeerings` — docs/plan/14 puts peerings at M3, and a peering names another VPC, which is a
-    cross-resource reference this provider has no reader for (rule 2).
+    ⚠ NO `vpcPeerings` AND NO PEERING ROUTES, AND NOT EVEN AN EMPTY LIST — the `peerings` child writes
+    both onto this object as a FRAGMENT under a second field manager (docs/plan/09 § A second writer
+    on an object; charts/managed/kube-ovn-vpc-peering). Both arrays are atomic under server-side
+    apply, so a network that rendered `vpcPeerings: []` here would be the owner and its peerings
+    disagreeing on one list, forever.
 
     ⚠ NO `enableBfd`, `bfdPort`, `extraExternalSubnets` OR `defaultSubnet`. Each is a property of how
     the PLATFORM wires a region's fabric rather than something a tenant chooses; `defaultSubnet` in

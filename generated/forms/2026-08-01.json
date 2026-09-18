@@ -6399,6 +6399,179 @@
         }
       ]
     },
+    "CyberCloud.Network/virtualNetworks/peerings": {
+      "resourceType": "CyberCloud.Network/virtualNetworks/peerings",
+      "apiVersion": "2026-08-01",
+      "title": "Peering",
+      "plural": "Peerings",
+      "summary": "A route exchange between this virtual network and another in the same resource group, so workloads in either reach the other's range by private address. Both networks stay separately owned.",
+      "overrideKey": "CyberCloud.Network/virtualNetworks/peerings@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/link",
+        "/properties/link/v4",
+        "/properties/localAddressSpace",
+        "/properties/localAddressSpace/v4",
+        "/properties/remoteAddressSpace",
+        "/properties/remoteAddressSpace/v4",
+        "/properties/remoteNetwork",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the peering is billed in. ⚠ It must be the region both virtual networks are in — nothing checks that, because neither network's own region is readable from here.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Peering to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The peering's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose fabric holds both networks. ⚠ Two networks in two clusters cannot be peered: a Kube-OVN peering is two ports on one OVN northbound database.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Peering to change it."
+        },
+        {
+          "jsonPointer": "/properties/link",
+          "name": "link",
+          "label": "Link",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The point-to-point range the two routers address each other on."
+        },
+        {
+          "jsonPointer": "/properties/link/v4",
+          "name": "v4",
+          "label": "V4",
+          "control": "xui-cidr",
+          "type": "string",
+          "required": true,
+          "section": "link",
+          "hint": "A small IPv4 range, /30 or wider, that is in neither network. This network's peer port takes its first host address and the remote's takes the second. ⚠ It is checked against the platform's reserved ranges like any other, so link-local space cannot be used.",
+          "pattern": "^(?:(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2})$",
+          "default": "10.255.255.0/30",
+          "placeholder": "10.255.255.0/30"
+        },
+        {
+          "jsonPointer": "/properties/localAddressSpace",
+          "name": "localAddressSpace",
+          "label": "Local address space",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The range this network advertises to the remote — the remote's router gets one static route to it."
+        },
+        {
+          "jsonPointer": "/properties/localAddressSpace/v4",
+          "name": "v4",
+          "label": "V4",
+          "control": "xui-cidr",
+          "type": "string",
+          "required": true,
+          "section": "localAddressSpace",
+          "hint": "This network's IPv4 range, in CIDR form — normally its address space. ⚠ It may not overlap the remote range or the link, and the refusal names both.",
+          "pattern": "^(?:(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2})$",
+          "default": "10.20.0.0/16",
+          "placeholder": "10.20.0.0/16"
+        },
+        {
+          "jsonPointer": "/properties/remoteAddressSpace",
+          "name": "remoteAddressSpace",
+          "label": "Remote address space",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The range the remote advertises to this network — this network's router gets one static route to it."
+        },
+        {
+          "jsonPointer": "/properties/remoteAddressSpace/v4",
+          "name": "v4",
+          "label": "V4",
+          "control": "xui-cidr",
+          "type": "string",
+          "required": true,
+          "section": "remoteAddressSpace",
+          "hint": "The remote network's IPv4 range, in CIDR form — normally its address space. ⚠ Two networks with overlapping ranges cannot be peered, which is the one place this platform's 'overlapping your own networks is fine' stops applying: a route to a range you also hold has nowhere to go.",
+          "pattern": "^(?:(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2})$",
+          "default": "10.30.0.0/16",
+          "placeholder": "10.30.0.0/16"
+        },
+        {
+          "jsonPointer": "/properties/remoteNetwork",
+          "name": "remoteNetwork",
+          "label": "Remote network",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The name of the virtualNetworks resource in the same resource group to peer this network with. ⚠ A name, not a resource id: the remote must be in this subscription and resource group, and a network in another cannot be named — write on the peering has to imply write on both networks. A remote that does not exist keeps the peering in progress until it does. Cannot be changed once created; delete the peering and create another.",
+          "maxLength": 63,
+          "pattern": "^(?:[a-z0-9]([-a-z0-9]*[a-z0-9])?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Peering to change it.",
+          "default": "spoke",
+          "placeholder": "spoke"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "showRoutes",
+          "label": "Show routes",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.Network/virtualNetworks/securityGroups": {
       "resourceType": "CyberCloud.Network/virtualNetworks/securityGroups",
       "apiVersion": "2026-08-01",

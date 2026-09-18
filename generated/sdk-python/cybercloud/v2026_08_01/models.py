@@ -5669,6 +5669,219 @@ class NATGatewayShowEgressResult:
 
 
 @dataclass
+class PeeringData:
+    """Peering. A route exchange between this virtual network and another in the same resource group, so workloads in either reach the other's range by private address. Both networks stay separately owned. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The peering's own settings."""
+
+        @dataclass
+        class Link:
+            """The point-to-point range the two routers address each other on."""
+
+            # A small IPv4 range, /30 or wider, that is in neither network. This network's peer port takes its first host address and the remote's takes the second. ⚠ It is checked against the platform's reserved ranges like any other, so link-local space cannot be used.
+            v4: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> PeeringData.Properties.Link:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    v4=wire["v4"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["v4"] = self.v4
+                return wire
+
+        @dataclass
+        class LocalAddressSpace:
+            """The range this network advertises to the remote — the remote's router gets one static route to it."""
+
+            # This network's IPv4 range, in CIDR form — normally its address space. ⚠ It may not overlap the remote range or the link, and the refusal names both.
+            v4: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> PeeringData.Properties.LocalAddressSpace:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    v4=wire["v4"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["v4"] = self.v4
+                return wire
+
+        @dataclass
+        class RemoteAddressSpace:
+            """The range the remote advertises to this network — this network's router gets one static route to it."""
+
+            # The remote network's IPv4 range, in CIDR form — normally its address space. ⚠ Two networks with overlapping ranges cannot be peered, which is the one place this platform's 'overlapping your own networks is fine' stops applying: a route to a range you also hold has nowhere to go.
+            v4: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> PeeringData.Properties.RemoteAddressSpace:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    v4=wire["v4"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["v4"] = self.v4
+                return wire
+
+        # The cluster whose fabric holds both networks. ⚠ Two networks in two clusters cannot be peered: a Kube-OVN peering is two ports on one OVN northbound database.
+        cluster_id: str
+        # The name of the virtualNetworks resource in the same resource group to peer this network with. ⚠ A name, not a resource id: the remote must be in this subscription and resource group, and a network in another cannot be named — write on the peering has to imply write on both networks. A remote that does not exist keeps the peering in progress until it does. Cannot be changed once created; delete the peering and create another.
+        remote_network: str
+        # The point-to-point range the two routers address each other on.
+        link: Optional[PeeringData.Properties.Link] = None
+        # The range this network advertises to the remote — the remote's router gets one static route to it.
+        local_address_space: Optional[PeeringData.Properties.LocalAddressSpace] = None
+        # The range the remote advertises to this network — this network's router gets one static route to it.
+        remote_address_space: Optional[PeeringData.Properties.RemoteAddressSpace] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> PeeringData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                cluster_id=wire["clusterId"],
+                remote_network=wire["remoteNetwork"],
+                link=_opt(wire, "link", PeeringData.Properties.Link.from_wire),
+                local_address_space=_opt(wire, "localAddressSpace", PeeringData.Properties.LocalAddressSpace.from_wire),
+                remote_address_space=_opt(wire, "remoteAddressSpace", PeeringData.Properties.RemoteAddressSpace.from_wire),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["clusterId"] = self.cluster_id
+            wire["remoteNetwork"] = self.remote_network
+            if self.link is not None:
+                wire["link"] = self.link.to_wire()
+            if self.local_address_space is not None:
+                wire["localAddressSpace"] = self.local_address_space.to_wire()
+            if self.remote_address_space is not None:
+                wire["remoteAddressSpace"] = self.remote_address_space.to_wire()
+            return wire
+
+    # The region the peering is billed in. ⚠ It must be the region both virtual networks are in — nothing checks that, because neither network's own region is readable from here.
+    location: str
+    # The peering's own settings.
+    properties: Optional[PeeringData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> PeeringData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", PeeringData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class PeeringResource:
+    """One Peering, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: PeeringData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> PeeringResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=PeeringData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class PeeringShowRoutesResult:
+    """What showRoutes returns."""
+
+    # The address, with the link's prefix, this network's peer port carries.
+    local_connect_ip: str
+    # Whether the fabric lists the remote in the local Vpc's status.vpcPeerings — the peer port exists. False on a cluster without the Kube-OVN controller.
+    local_connected: bool
+    # The local network's Vpc object name.
+    local_vpc: str
+    # Whether the local Vpc carries this peering's entry and route.
+    local_written: bool
+    # The address, with the link's prefix, the remote's peer port carries.
+    remote_connect_ip: str
+    # The same, read off the remote Vpc.
+    remote_connected: bool
+    # The remote network's Vpc object name.
+    remote_vpc: str
+    # Whether the remote Vpc carries this peering's entry and route. ⚠ False with localWritten true is a remote network that was deleted or never existed.
+    remote_written: bool
+    # When the platform read the objects, RFC 3339.
+    sampled_at: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> PeeringShowRoutesResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            local_connect_ip=wire["localConnectIP"],
+            local_connected=wire["localConnected"],
+            local_vpc=wire["localVpc"],
+            local_written=wire["localWritten"],
+            remote_connect_ip=wire["remoteConnectIP"],
+            remote_connected=wire["remoteConnected"],
+            remote_vpc=wire["remoteVpc"],
+            remote_written=wire["remoteWritten"],
+            sampled_at=wire["sampledAt"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["localConnectIP"] = self.local_connect_ip
+        wire["localConnected"] = self.local_connected
+        wire["localVpc"] = self.local_vpc
+        wire["localWritten"] = self.local_written
+        wire["remoteConnectIP"] = self.remote_connect_ip
+        wire["remoteConnected"] = self.remote_connected
+        wire["remoteVpc"] = self.remote_vpc
+        wire["remoteWritten"] = self.remote_written
+        wire["sampledAt"] = self.sampled_at
+        return wire
+
+
+@dataclass
 class SecurityGroupData:
     """Security group. A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several. The body a caller writes."""
 
@@ -7509,6 +7722,9 @@ __all__ = [
     "NATGatewayData",
     "NATGatewayResource",
     "NATGatewayShowEgressResult",
+    "PeeringData",
+    "PeeringResource",
+    "PeeringShowRoutesResult",
     "SecurityGroupData",
     "SecurityGroupResource",
     "SecurityGroupShowEffectiveRulesResult",

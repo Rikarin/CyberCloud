@@ -1,0 +1,191 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Network/virtualNetworks/peerings. This file is
+# data: `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet.
+
+resourceType: CyberCloud.Network/virtualNetworks/peerings
+apiVersion: "2026-08-01"
+chart: kube-ovn-vpc-peering
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ NONE, AND THAT IS THE FIRST TIME IN THE TREE. A peering owns no object: it is a FRAGMENT of two
+# Vpc objects two virtualNetworks resources own, written through the co-owned apply (docs/plan/09
+# § A second writer on an object). `coWrites` below is what a converged peering has changed, and
+# ProviderConformanceCase.Objects names those two Vpcs so the suite reads them — and tells them from
+# owned objects by the resource-id label the fake's copy carries, never by anything the case says.
+renders: []
+
+coWrites:
+  - group: kubeovn.io
+    version: v1
+    kind: Vpc
+    count: 2
+    clusterScoped: true
+    fragment: spec.vpcPeerings[1] + spec.staticRoutes[1], per object, mirror images
+    manager: cybercloud/cybercloud.network_virtualnetworks/{ownerId} — shared by every peering of one network
+
+# ADR-013 — every rendered object carries all seven labels.
+#
+# ⚠ THE LABELS ON BOTH OBJECTS ARE THE OWNERS', and a co-writer writes none. What the suite asserts
+# instead is that the seven survive the co-owned apply, that tenant-id is this tenant's, that
+# resource-id is NOT the peering's, and that cybercloud.io/fragment.{peeringId}, fragment-hash and
+# fragment-path sit beside the owner's two annotations — ProviderConformanceTests
+# .EveryAppliedObjectCarriesTheSevenMandatoryLabelsAndBothAnnotations, co-writer branch.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.network_virtualnetworks
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: both-networks-carry-the-peering-and-neither-is-owned-by-it
+    says: >
+      A converged peering has left one vpcPeerings entry and one staticRoutes entry on the local
+      network's Vpc and the mirror image on the remote's, each naming the OTHER network's Vpc object
+      name exactly as VirtualNetworks.ObjectNameOf renders it, each route pointing at the OTHER end of
+      the link — and both Vpcs still carry their own network's seven labels and their own
+      enableExternal. NetworkPeeringTests asserts the two shapes against the sibling type's naming;
+      the shared suite asserts them on the fake and VirtualNetworkPeeringClusterBackedConformance on a
+      real API server, where the co-writer manager is read back off managedFields as an Apply.
+  - id: teardown-withdraws-and-both-networks-stand
+    says: >
+      Deleting a peering removes its two entries and its three bookkeeping annotations from both Vpcs
+      and deletes neither Vpc. ⚠ A co-writer that deleted the owner's object would take a tenant's
+      network down with the peering, and the shared suite's teardown assertion has the opposite
+      reading for a co-owned object: the object is STILL THERE afterwards. Sabotaged into a delete,
+      it went red on "is gone after a converged teardown of a resource that did not own it".
+  - id: the-owners-delete-wins
+    says: >
+      A peering whose network's Vpc is gone does not re-create it. The API server WOULD create it —
+      an apply carrying a resourceVersion against an absent name goes down the create-on-update path,
+      measured in CoOwnedApplyTests — so KubeApiClient refuses on its read-before-write, and the
+      reconciler reports InProgress naming the side. ProviderConformanceTests
+      .DriftIsCorrectedWhenSomebodyDeletesTheObjectsByHand's co-writer branch removes the owner's
+      object and asserts the pass neither converges nor re-creates it.
+  - id: overlapping-ranges-are-refused-by-name
+    says: >
+      A body whose local range, remote range and link overlap in any pair is refused naming both
+      pointers and both values, terminally — Failed, not InProgress — because a route to a range the
+      network also holds has nowhere to go and no later pass makes it right. So is a link narrower
+      than /30, a link in a reserved range, and a network peering with itself. ⚠ AFTER THE 202, for
+      the family's recorded reason: charts/managed/kube-ovn-vpc/conformance.yaml § owed,
+      `address-space-is-validated-after-202`. NetworkPeeringTests walks each refusal.
+  - id: the-remote-cannot-reach-outside-the-resource-group
+    says: >
+      The remote's Vpc object name is qualified with THIS resource's namespace, so a body naming
+      `spoke` in subscription A writes onto A's `spoke` and never B's, whatever it says. The co-owned
+      apply checks the tenant on the live object as well; the resource group is this type's own
+      boundary, and § owed says why it is not the tenant's.
+  - id: two-peerings-of-one-network-share-one-manager
+    says: >
+      Two peerings hanging off one network write two entries into the same atomic lists under ONE
+      field manager named for the network, and withdrawing one leaves the other's entry and
+      bookkeeping standing. ⚠ A manager per peering would conflict on the whole list forever
+      (CoOwnedApplyTests.AManagerPerCoWriterWouldConflictOnTheAtomicListWhichIsWhyTheyShareOne);
+      VirtualNetworkPeeringClusterBackedConformance
+      .TwoPeeringsOnOneNetworkShareTheListAndWithdrawingOneLeavesTheOther holds it on k3s.
+
+# Meters the type must emit.
+#
+# ⚠ ONE. Two logical router ports and two route rows in OVN's northbound database: no pod, no disk,
+# no address of its own — the link range is the tenant's private space. The count is the limit.
+meters:
+  - resources
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────────
+owed:
+  - id: routing-is-unproven-until-the-vm-lane
+    says: >
+      ⚠ WHAT LANDED IS THE WRITE, AND NOT THE ROUTING. No harness this repository runs has a Kube-OVN
+      controller: the Docker-free suite's fake stores what the co-owned apply produced, and the k3s
+      the cluster-backed suite starts (rancher/k3s in Docker) has no OVS kernel modules and so no
+      Kube-OVN — docs/plan/23 § The lane that needs a kubelet. So on every cluster in this tree
+      `status.vpcPeerings` stays empty for the life of a peering, `POST …/showRoutes` reports both
+      `written` columns true and both `connected` columns false, and nothing here has ever built a
+      peer port or crossed a link. Three things are REASONED from pkg/controller/vpc.go at v1.16.2
+      and not measured: that CreatePeerRouterPort accepts the `address/30` this type sends as
+      `localConnectIP`; that `policy: policyDst` sent explicitly keeps the controller's formatVpc
+      Update and the co-writers' shared manager agreeing on the atomic list rather than conflicting;
+      and that handleDeleteVpcStaticRoute — which removes entries from `spec.staticRoutes` outright
+      when a route is no longer needed — leaves a peering's routes alone while both ports stand.
+      The third is the one that would bite silently: a controller that pruned a co-writer's route
+      would be drift the co-writer re-applies every pass, and the two would fight. ⚠ WHAT WOULD CLOSE
+      IT: the VM lane, #95 — a real node with OVS and Kube-OVN, two networks, one peering, and a
+      packet from a workload in one to an address in the other. Until then this type is a correctly
+      written pair of fragments and a claim about what OVN does with them.
+  - id: the-shared-cluster-suite-presumes-ownership
+    says: >
+      ClusterConformanceTests<TSource> — the cluster-backed half every other type in the tree runs
+      as one class declaration — asserts that cybercloud.io/resource-id equals the resource's on
+      every object, takes the tenant-id label with a rival manager to provoke a conflict on a field
+      "we own", kubectl-deletes the objects and expects the reconciler to put them back and the
+      DriftScanner to call the resource a stray. Every one of those is the OPPOSITE reading for a
+      co-writer. The Docker-free suite grew a per-object branch (ProviderConformanceTests.IsCoOwned)
+      so the peering runs the network's exact assertion set there; the cluster suite did not, and
+      VirtualNetworkPeeringClusterBackedConformance is a dedicated class over the same fixture
+      instead — the co-writer's contract against k3s, but not the network's count of assertions.
+      SiloKillConformanceTests presumes nothing about ownership and the peering runs it as the shared
+      class. ⚠ WHAT WOULD CLOSE IT: the same IsCoOwned branch in ClusterConformanceTests, read off
+      the raw client rather than the fake, so that the peering's cluster-backed class becomes one
+      line like its siblings'.
+  - id: the-remote-must-be-in-the-same-resource-group
+    says: >
+      `remoteNetwork` is a NAME in the same resource group, and the schema could have taken a
+      resource id: SchemaFormat.ResourceId exists and CyberCloud.Monitor's alert rules use it. Two
+      reasons it does not, neither the schema's. (1) AUTHORIZATION: the write path authorizes the
+      caller against the peering's own address and nothing else, and no seam lets a provider require
+      a permission on a second resource at reconcile time — the same absence
+      charts/managed/kube-ovn-vpc/conformance.yaml records for `Validates(...)`. The co-owned apply
+      checks the TENANT on the live object, so a cross-subscription body would inject routes into a
+      router its author may hold no role on; docs/plan/07's roles are granted on subscriptions and
+      groups, and one resource group is the smallest scope on which write on the peering implies
+      write on both networks. (2) THE NAMESPACE RULE: the remote's Vpc name is
+      VirtualNetworks.ObjectNameOf of the remote's namespace, and ReconcileDriver.NamespaceFor's own
+      remarks forbid a second spelling of that rule in a provider. ⚠ WHAT WOULD CLOSE IT: a
+      reconcile-time authorization seam (`IResourceAuthorizer` reachable from ReconcileContext, or a
+      write-path predicate that checks a second address), plus NamespaceFor lifted to a Contracts
+      assembly so a provider can qualify another group's object name from the one rule.
+  - id: peering-is-ipv4-only
+    says: >
+      The three ranges are v4 at this api-version, and docs/plan/14 § IPv6 says dual-stack from day
+      one. The substrate supports it — CreatePeerRouterPort splits localConnectIP on commas into the
+      port's networks — and what this side needs is a v6 link range and a v6 route per side with a
+      v6 next hop: three optional properties, a rule that all three arrive together or none does,
+      and the v6 arithmetic HostAt does not do. Recorded rather than half-done, because a body with a
+      v6 link and no v6 routes is a port with an address nothing routes to.
+  - id: the-ranges-are-not-checked-against-the-networks
+    says: >
+      `localAddressSpace` and `remoteAddressSpace` are the tenant's claim about the two networks'
+      ranges, and nothing compares them to the networks' declared `addressSpace`: a Vpc carries no
+      CIDR and a reconciler cannot read another resource's body — the reader this family is owed
+      four times now (loadBalancers, vpnGateways, natGateways, here). What IS checked is that the
+      three ranges are pairwise disjoint and reserved-free. The same shape, one level up, as
+      charts/managed/kube-ovn-vpc/conformance.yaml's `subnets-are-not-checked-against-the-address-space`.
+  - id: a-changed-remote-leaves-a-fragment-behind
+    says: >
+      `remoteNetwork` is declared Immutable and SchemaProperty.Immutable is a declaration the manager
+      does not enforce. A PUT naming a different remote applies a fragment onto the NEW remote's Vpc
+      and never withdraws the one on the old remote's, which then reads as an orphan slice to
+      DriftScanner — the one place a fragment left by a co-writer that never withdrew is found — and
+      to nothing else. The same shape as charts/managed/kube-ovn-snat's `a-nat-rule-cannot-be-changed`.
+      ⚠ WHAT WOULD CLOSE IT: the manager enforcing Immutable, or the reconciler reading
+      ReconcileContext.Observed's previous body and withdrawing from the remote it named before.
+  - id: an-absent-remote-waits-rather-than-failing
+    says: >
+      A body naming a network that does not exist is accepted with a 202 and the peering sits in
+      InProgress until the operation's ladder times it out, because the reconciler cannot tell a
+      network that is still Creating from a name that was mistyped — the co-writer answers
+      ResourceNotFound for both. The message names the side and the Vpc name, which is what a tenant
+      who mistyped has to read. The same shape as charts/managed/kube-ovn-snat's
+      `the-joins-are-not-resolved-before-202`; the reader that would resolve the name before the 202
+      is the one this family is owed.

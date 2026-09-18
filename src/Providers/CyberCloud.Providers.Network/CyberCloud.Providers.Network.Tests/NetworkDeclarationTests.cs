@@ -15,7 +15,7 @@ public sealed class NetworkDeclarationTests {
         // process that does not start. Running it here is what turns those into a test failure.
         var registry = Build();
 
-        registry.Types.Length.ShouldBe(6);
+        registry.Types.Length.ShouldBe(7);
 
         registry.Types.Select(x => x.Type.ToString())
             .ShouldBe(
@@ -34,7 +34,10 @@ public sealed class NetworkDeclarationTests {
                     "CyberCloud.Network/virtualNetworks/loadBalancers",
                     // ⚠ TWO SEGMENTS AGAIN, on the load balancer's argument: an OvnSnatRule names a
                     // subnet of one VPC, and the subnet's object name folds in the network's.
-                    "CyberCloud.Network/virtualNetworks/natGateways"
+                    "CyberCloud.Network/virtualNetworks/natGateways",
+                    // ⚠ TWO SEGMENTS, AND docs/plan/14 SPELLS IT THAT WAY: the network a peering hangs
+                    // off is the LOCAL side of the exchange, and the body names the remote.
+                    "CyberCloud.Network/virtualNetworks/peerings"
                 ],
                 ignoreOrder: true
             );
@@ -225,8 +228,9 @@ public sealed class NetworkDeclarationTests {
         // ⚠ `loadbalancer` AND NOT `lb`, WHICH IS `secgroup`'s ARGUMENT ONE MORE TIME. Two characters
         // is a token somebody else will reach for, and docs/plan/21 § Grammar spells the type
         // `loadBalancers` — a tenant who has never heard of HAProxy should be able to guess it.
+        // ⚠ `peering` AND NOT `peer`, for the same argument a fourth time.
         ShortNames().ShouldBe(
-            ["vnet", "subnet", "secgroup", "publicip", "loadbalancer", "natgateway"],
+            ["vnet", "subnet", "secgroup", "publicip", "loadbalancer", "natgateway", "peering"],
             ignoreOrder: true
         );
     }

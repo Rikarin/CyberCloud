@@ -1,0 +1,52 @@
+{{/*
+The two fragments a peering IS — docs/plan/14 § Virtual networks, `peerings/{name}`.
+
+⚠ THIS TEMPLATE RENDERS NOTHING, ON PURPOSE, AND THE REASON IS THE TYPE. A Kube-OVN peering has no
+object: it is one `vpcPeerings` entry and one `staticRoutes` entry on EACH network's Vpc, two arrays
+that are atomic under server-side apply, on two objects two `virtualNetworks` resources own. The
+reconciler writes each half as a FRAGMENT through the co-owned apply — docs/plan/09 § A second writer
+on an object — under a field manager named for that network, beside that network's own seven labels,
+with the fragment written down on the object under `cybercloud.io/fragment.{resourceId}` so the other
+peerings of the same network can carry it forward. Helm has no such mode: a chart that rendered a Vpc
+carrying only these two entries would REPLACE the network's object with an unlabelled slice, which is
+exactly what the co-owned mode exists never to produce. So this file documents the two shapes and
+installs nothing; charts/managed/kube-ovn-vpc is where a Vpc is rendered, and it renders neither list.
+
+What lands on the LOCAL network's Vpc — VirtualNetworkPeerings.LocalFragmentJson:
+
+    spec:
+      vpcPeerings:
+        - remoteVpc: {{ .Values.platform.remoteVpc }}          # the remote's Vpc object name
+          localConnectIP: {{ .Values.platform.localConnectIP }} # the link's first host, with prefix
+      staticRoutes:
+        - policy: policyDst
+          cidr: {{ .Values.remoteAddressSpace.v4 }}             # the remote's range …
+          nextHopIP: <remoteConnectIP without its prefix>       # … via the remote's peer port
+
+What lands on the REMOTE network's Vpc — VirtualNetworkPeerings.RemoteFragmentJson, the mirror image:
+
+    spec:
+      vpcPeerings:
+        - remoteVpc: {{ .Values.platform.localVpc }}
+          localConnectIP: {{ .Values.platform.remoteConnectIP }}
+      staticRoutes:
+        - policy: policyDst
+          cidr: {{ .Values.localAddressSpace.v4 }}
+          nextHopIP: <localConnectIP without its prefix>
+
+⚠ `policy: policyDst` IS SENT EXPLICITLY. formatVpc fills an empty policy with PolicyDst and issues an
+Update, which makes the controller a co-owner of the atomic list; applying the list without the policy
+afterwards would be a change to a field two managers own — a FieldManagerConflict forever. Sending the
+value the controller would write keeps the two agreeing. Reasoned from pkg/controller/vpc.go at
+v1.16.2 and unproven on a live controller: conformance.yaml § owed, `routing-is-unproven-until-the-vm-lane`.
+
+⚠ handleAddOrUpdateVpc turns each entry into CreatePeerRouterPort(vpc, remoteVpc, localConnectIP): a
+logical router port named `{vpc}-{remoteVpc}` peered with `{remoteVpc}-{vpc}`, its network the
+localConnectIP. The two ports meet on the link; the two routes send each network's traffic for the
+other's range across it. Removing the entry deletes the port (handleAddOrUpdateVpc diffs
+status.vpcPeerings against the spec), which is what a peering's withdrawal relies on.
+
+⚠ IPv4 ONLY at this api-version. CreatePeerRouterPort splits localConnectIP on commas, so a dual-stack
+link is expressible on the substrate; what it needs on this side is a v6 link and a v6 route per side.
+conformance.yaml § owed, `peering-is-ipv4-only`.
+*/}}

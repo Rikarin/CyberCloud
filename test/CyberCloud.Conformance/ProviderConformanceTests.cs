@@ -375,6 +375,30 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         var groupScoped = 0;
 
         foreach (var command in Cluster.World.Applied) {
+            if (command.IsCoOwned) {
+                // ⚠ THE CO-WRITER'S READING OF THE SAME GATE, AND IT ASSERTS MORE, NOT LESS. A
+                // co-owned command carries NO labels by construction — the seven are the owner's and
+                // stay on the object — so the assertion moves from the command to the object it
+                // landed on: the owner's seven are still there, the tenant is ours, the resource-id
+                // is NOT ours, and this resource's fragment, hash and path are beside the owner's two
+                // annotations. The command itself is held to the shape the tunnel agent holds it to.
+                //
+                // ⚠ NOT AN ESCAPE HATCH, for the reason the group fork below is not one: IsCoOwned is
+                // KubeCommand.OwnerResourceId, which only IKubeCommandBuilder.CoWriting sets, from the
+                // live object's own resource-id label — and FakeKubeCluster.ApplyCoOwned refuses a
+                // command whose shape or owner does not check out before anything lands.
+                command.Labels.ShouldBeEmpty($"'{command.Target}' is a co-writer's command and carries labels");
+                command.CheckCoOwnedShape().IsSuccess.ShouldBeTrue(command.CheckCoOwnedShape().Error?.Message);
+                command.OwnerResourceId.ShouldNotBe(accepted.Resource.Id, "a co-writer names another resource as the owner");
+                command.Annotations[KubeLabels.FragmentHashAnnotation(accepted.Resource.Id)].ShouldBe(command.ReconcileHash);
+
+                var landed = Cluster.World.Read(command.Target);
+                landed.ShouldNotBeNull($"'{command.Target}' was co-written and is not in the cluster");
+                AssertCoOwnedObject(accepted.Resource.Id, command.Target, landed);
+
+                continue;
+            }
+
             foreach (var label in KubeLabels.Mandatory) {
                 command.Labels.ShouldContainKey(label, $"'{command.Target}' is missing '{label}'");
                 command.Labels[label].ShouldNotBeNullOrEmpty();
@@ -428,6 +452,16 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             + "which makes this assertion's result depend on test order; more than one means "
             + "something else is writing objects under KubeLabels.ReservedNamespace."
         );
+
+        // ⚠ AND A TYPE THAT OWNS NONE OF ITS OBJECTS STILL HAS TO HAVE WRITTEN SOMETHING. The two
+        // counts together cover every command: a pass that applied only the namespace would be the
+        // vacuous green this whole assertion exists to refuse, on the one kind of type whose own
+        // commands carry no labels for the loop above to fail on.
+        (Cluster.World.Applied.Count - groupScoped).ShouldBeGreaterThan(
+            0,
+            $"{Case.DisplayName} converged and applied nothing but the resource group's namespace"
+        );
+
     }
 
     /// <summary>
@@ -1085,6 +1119,10 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
         var objects = ObjectsOf(accepted.Resource.Id, "goodbye");
 
+        // ⚠ Decided BEFORE the delete, from the converged world: afterwards a withdrawn fragment and
+        // a removed object both read as "not ours", and the two are opposite contracts.
+        var coOwned = objects.Where(target => IsCoOwned(accepted.Resource.Id, target)).ToImmutableArray();
+
         // ── A clusterless type's bytes, planted so the teardown has something to remove ─────────
         //
         // ⚠ The bytes are the tenant's and no reconciler writes them, so the suite writes one under
@@ -1145,6 +1183,26 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         // leaves the claims its volumeClaimTemplate made. Those four are asserted below and by the
         // restore round trip; the running half is asserted gone here, for every type.
         foreach (var target in objects) {
+            if (coOwned.Contains(target)) {
+                // ⚠ THE CO-WRITER'S TEARDOWN IS A WITHDRAWAL, AND THE OPPOSITE ASSERTION HOLDS: the
+                // owner's object is STILL THERE, still carries the owner's seven labels, and no longer
+                // carries this resource's fragment. A co-writer that deleted the owner's object would
+                // take a tenant's network down with the peering — docs/plan/09 § A second writer on
+                // an object, "Teardown withdraws".
+                var remaining = Cluster.World.Read(target);
+
+                remaining.ShouldNotBeNull(
+                    $"'{target}' is gone after a converged teardown of a resource that did not own it. A "
+                    + "co-writer withdraws its fragment; it never deletes the owner's object."
+                );
+
+                CarriesFragmentOf(accepted.Resource.Id, target)
+                    .ShouldBeFalse($"'{target}' still carries {accepted.Resource.Id:D}'s fragment after a converged teardown");
+
+                Cluster.World.OwnerOf(target).ShouldNotBeNull($"'{target}' lost its owner's labels to the withdrawal");
+                continue;
+            }
+
             Cluster.World.Holds(target)
                 .ShouldBeFalse(
                     $"'{target}' is still in the cluster after a converged teardown — docs/plan/06 "
@@ -1216,6 +1274,13 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                         + "recovery window. A restore re-applies the desired state the park kept — "
                         + "docs/plan/08 § Soft delete"
                     );
+
+                if (coOwned.Contains(target)) {
+                    // The co-writer's half of the same sentence: the object never went, so what has
+                    // to come back is the fragment.
+                    CarriesFragmentOf(accepted.Resource.Id, target)
+                        .ShouldBeTrue($"'{target}' does not carry {accepted.Resource.Id:D}'s fragment again after the restore");
+                }
             }
 
             (await ReadAsync("goodbye")).IsSuccess.ShouldBeTrue("and the old address answers again");
@@ -1590,8 +1655,17 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         var objects = ObjectsOf(accepted.Resource.Id, "drifting");
         objects.ShouldNotBeEmpty();
 
+        var coOwned = objects.Where(target => IsCoOwned(accepted.Resource.Id, target)).ToImmutableArray();
+
         foreach (var target in objects) {
-            Cluster.World.RemoveBehindTheirBack(target).ShouldBeTrue();
+            // A kubectl delete of an owned object; a kubectl edit stripping this resource's slice off a
+            // co-owned one — see BreakBehindTheirBack for why those are the same case.
+            BreakBehindTheirBack(accepted.Resource.Id, target);
+        }
+
+        foreach (var target in coOwned) {
+            MatchesDesired(accepted.Resource.Id, "drifting", target, Cluster.World.Read(target)!, Body())
+                .ShouldBeFalse($"stripping {accepted.Resource.Id:D}'s fragment off '{target}' left it matching the desired body, so the break measured nothing");
         }
 
         // A fresh write with the same body is a no-op at the grain, so the drift is corrected by the
@@ -1605,6 +1679,36 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             Cluster.World.Holds(target).ShouldBeTrue($"'{target}' was not put back");
             MatchesDesired(accepted.Resource.Id, "drifting", target, Cluster.World.Read(target)!, Body())
                 .ShouldBeTrue();
+        }
+
+        if (coOwned.IsEmpty) {
+            return;
+        }
+
+        // ── AND THE OWNER'S DELETE WINS, which is the co-writer's other drift case ──────────────
+        //
+        // ⚠ Somebody kubectl-deleted the OWNER's object. The reading that separates a co-writer from
+        // an owner is what happens next: an owner puts its object back; a co-writer must NOT, because
+        // what it would create is the owner's object under the owner's name with none of the owner's
+        // labels or spec — measured against a real API server in CoOwnedApplyTests
+        // .TheApiServerDoesNotHoldTheLockAgainstAnAbsentObjectWhichIsWhyTheClientRefuses. So the pass
+        // may wait, and may fail, and may not report Converged, and the object may not reappear.
+        foreach (var target in coOwned) {
+            Cluster.World.RemoveBehindTheirBack(target).ShouldBeTrue();
+        }
+
+        var refused = await ReconcileOnceAsync(accepted.Resource.Id, "drifting");
+
+        refused.IsConverged.ShouldBeFalse(
+            $"{Case.DisplayName} reported Converged while an object it co-writes onto was gone: {refused}"
+        );
+
+        foreach (var target in coOwned) {
+            Cluster.World.Holds(target)
+                .ShouldBeFalse(
+                    $"'{target}' was re-created by a resource that does not own it. A co-writer never "
+                    + "creates the owner's object — the owner's delete wins."
+                );
         }
     }
 
@@ -1644,6 +1748,23 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         }
 
         foreach (var target in ObjectsOf(accepted.Resource.Id, "hand-edited")) {
+            if (IsCoOwned(accepted.Resource.Id, target)) {
+                // ⚠ A HAND EDIT OF THE CO-WRITER'S ENTRIES, WITH THE OWNER'S IDENTITY LEFT ALONE. The
+                // owned branch below replaces the whole object, labels included — and a co-owned
+                // object with its owner's labels gone is one the co-writer must REFUSE to write onto
+                // (the seven are how it knows the object is this platform's), which is right and is
+                // not drift repair. What a tenant with kubectl edits is the values, and that is what
+                // is edited: every leaf this resource's fragment set, overwritten, the bookkeeping
+                // left in place so the edit reads as a tenant's rather than as a withdrawal.
+                Cluster.World.CorruptFragmentBehindTheirBack(target, accepted.Resource.Id, "hand-edited")
+                    .ShouldBeTrue($"'{target}' carried no fragment of {accepted.Resource.Id:D}'s to edit");
+
+                MatchesDesired(accepted.Resource.Id, "hand-edited", target, Cluster.World.Read(target)!, Body())
+                    .ShouldBeFalse($"the hand edit of '{target}' changed nothing the case compares, so the test would measure nothing");
+
+                continue;
+            }
+
             Cluster.World.MutateBehindTheirBack(target, """{"metadata":{"name":"hand-edited"},"data":{}}""");
         }
 
@@ -1705,7 +1826,10 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             ? new ConformanceWorld(
                 BreakAsync: () => {
                     foreach (var target in objects) {
-                        Cluster.World.RemoveBehindTheirBack(target);
+                        // ⚠ Decided when the break runs, not when the world is built: the run above
+                        // converges the reconciler first, and an object is co-owned by what it carries
+                        // once converged. See BreakBehindTheirBack.
+                        BreakBehindTheirBack(accepted.Resource.Id, target);
                     }
 
                     return Task.CompletedTask;
@@ -2233,6 +2357,108 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                 Namespace = ReconcileDriver.NamespaceFor(AddressOf(resourceId, name))
             }
         );
+
+    // ── A type that owns none of the objects it applies to — docs/plan/09 § A second writer on an object ──
+    //
+    // ⚠ THE SUITE BRANCHES ON THE WORLD, NEVER ON THE CASE. Every assertion that presumed a type OWNS
+    // what it applies — the seven labels on the command, teardown removing the objects, drift repaired
+    // by re-creating them — read that presumption off nothing; it was true of every type before
+    // CyberCloud.Network/virtualNetworks/peerings. A peering writes a fragment onto two Vpcs its
+    // parent and its sibling own, and for it each of those assertions has a co-writer's reading: the
+    // command carries NO labels and the object carries the OWNER's, teardown WITHDRAWS the fragment
+    // and the object stays, drift is a fragment stripped by hand and put back. Which reading applies
+    // is decided per OBJECT, from the fake's copy of it: an object whose cybercloud.io/resource-id is
+    // another resource's is one this resource co-writes. That label is the builder's — injected
+    // non-overridably on an owner's apply, refused by name on a co-writer's — so a case cannot elect
+    // the gentler branch by describing itself; only the platform's own apply path can put a resource
+    // there, and FakeKubeCluster.ApplyCoOwned runs the same two checks the tunnel agent and
+    // KubeApiClient run before it will merge a fragment.
+
+    /// <summary>
+    ///     Whether <paramref name="target" /> is an object <paramref name="resourceId" /> writes onto
+    ///     and does not own — read off the fake's copy of it.
+    /// </summary>
+    /// <param name="resourceId">The resource under test, with its GUID resolved.</param>
+    /// <param name="target">One of the objects the case names.</param>
+    protected bool IsCoOwned(Guid resourceId, ObjectRef target) =>
+        Cluster.World.OwnerOf(target) is { } owner && owner != resourceId;
+
+    /// <summary>
+    ///     Asserts what a co-writer's converged object must carry: the owner's seven labels, this
+    ///     resource's fragment bookkeeping, and the desired slice.
+    /// </summary>
+    /// <param name="resourceId">The co-writing resource.</param>
+    /// <param name="target">The owner's object.</param>
+    /// <param name="objectJson">The object as the fake holds it.</param>
+    protected void AssertCoOwnedObject(Guid resourceId, ObjectRef target, string objectJson) {
+        var root = JsonNode.Parse(objectJson)!.AsObject();
+        var metadata = root["metadata"]!.AsObject();
+        var labels = metadata["labels"]?.AsObject();
+        var annotations = metadata["annotations"]?.AsObject();
+
+        labels.ShouldNotBeNull($"'{target}' is co-written and carries no labels — its owner's have been lost");
+
+        foreach (var label in KubeLabels.Mandatory) {
+            labels[label]?.GetValue<string>().ShouldNotBeNullOrEmpty($"'{target}' lost its owner's '{label}' to a co-writer's apply");
+        }
+
+        labels[KubeLabels.TenantId]!.GetValue<string>().ShouldBe(KubeLabels.GuidValue(ConformanceIds.Tenant));
+        labels[KubeLabels.ResourceId]!.GetValue<string>()
+            .ShouldNotBe(
+                KubeLabels.GuidValue(resourceId),
+                $"'{target}' now carries the CO-WRITER's resource-id. A co-writer writes none of the seven, "
+                + "and an object re-labelled for the co-writer is one the owner's next apply conflicts on."
+            );
+
+        annotations.ShouldNotBeNull($"'{target}' carries no annotations, so no fragment of {resourceId:D}'s");
+
+        annotations[KubeLabels.FragmentAnnotation(resourceId)].ShouldNotBeNull(
+            $"'{target}' carries no cybercloud.io/fragment.{resourceId:D}. Without it the next co-writer's "
+            + "apply prunes this resource's slice — docs/plan/09 § A second writer on an object."
+        );
+
+        var hash = annotations[KubeLabels.FragmentHashAnnotation(resourceId)]?.GetValue<string>();
+        hash.ShouldNotBeNull($"'{target}' carries a fragment of {resourceId:D}'s and no hash of it");
+        hash.ShouldStartWith("sha256:");
+
+        annotations[KubeLabels.FragmentPathAnnotation(resourceId)].ShouldNotBeNull(
+            $"'{target}' carries a fragment of {resourceId:D}'s and no path — the drift scan names an orphan slice by it"
+        );
+    }
+
+    /// <summary>
+    ///     Whether an object still carries <paramref name="resourceId" />'s fragment annotation.
+    /// </summary>
+    /// <param name="resourceId">The co-writing resource.</param>
+    /// <param name="target">The owner's object.</param>
+    protected bool CarriesFragmentOf(Guid resourceId, ObjectRef target) =>
+        Cluster.World.Read(target) is { } json
+        && JsonNode.Parse(json) is JsonObject root
+        && (root["metadata"] as JsonObject)?["annotations"] is JsonObject annotations
+        && annotations.ContainsKey(KubeLabels.FragmentAnnotation(resourceId));
+
+    /// <summary>
+    ///     Breaks the world for one object the way its ownership calls for: a <c>kubectl delete</c>
+    ///     of an owned object, a hand edit that strips this resource's slice off a co-owned one.
+    /// </summary>
+    /// <param name="resourceId">The resource under test.</param>
+    /// <param name="target">The object.</param>
+    /// <remarks>
+    ///     ⚠ A co-writer's <c>kubectl delete</c> would be the <b>owner's</b> object going, and the
+    ///     co-writer's right answer to that is to refuse — a co-writer never creates the owner's
+    ///     object. What somebody deletes by hand on a co-owned object is the co-writer's entries, and
+    ///     that is what is stripped, read off the object's own fragment annotation.
+    /// </remarks>
+    protected void BreakBehindTheirBack(Guid resourceId, ObjectRef target) {
+        if (IsCoOwned(resourceId, target)) {
+            Cluster.World.StripFragmentBehindTheirBack(target, resourceId)
+                .ShouldBeTrue($"'{target}' is co-owned and carried no fragment of {resourceId:D}'s to strip — the break would have changed nothing");
+
+            return;
+        }
+
+        Cluster.World.RemoveBehindTheirBack(target).ShouldBeTrue();
+    }
 
     /// <summary>
     ///     Puts the objects this type's <b>operator</b> writes into the fake cluster.

@@ -12101,6 +12101,472 @@
       "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks/natGateways",
       "x-cybercloud-action": "showEgress"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/peerings": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "virtualNetworksName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Network_virtualNetworks_peerings_List",
+        "summary": "List the CyberCloud.Network/virtualNetworks/peerings in a resource group.",
+        "description": "Returns one page of the resources of this type in the resource group the path names, including any that are being deleted — docs/plan/06 § Two-phase create keeps a resource whose teardown has not converged visible with that state, because its pods still run and its meter still ticks.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.peerings.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks/peerings",
+      "x-cybercloud-collection": true
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/peerings/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "virtualNetworksName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Network_virtualNetworks_peerings_Get",
+        "summary": "Read a CyberCloud.Network/virtualNetworks/peerings.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.peerings"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Network_virtualNetworks_peerings_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Network/virtualNetworks/peerings.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.peerings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.peerings"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Network_virtualNetworks_peerings_Update",
+        "summary": "Merge-patch a CyberCloud.Network/virtualNetworks/peerings.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.peerings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.peerings"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Network_virtualNetworks_peerings_Delete",
+        "summary": "Delete a CyberCloud.Network/virtualNetworks/peerings.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.peerings"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks/peerings",
+      "x-cybercloud-display": {
+        "name": "Peering",
+        "plural": "Peerings",
+        "alias": "peering",
+        "summary": "A route exchange between this virtual network and another in the same resource group, so workloads in either reach the other's range by private address. Both networks stay separately owned.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": [
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/peerings/{resourceName}/showRoutes": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "virtualNetworksName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Network_virtualNetworks_peerings_ShowRoutes",
+        "summary": "showRoutes a CyberCloud.Network/virtualNetworks/peerings.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.peerings.ShowRoutesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks/peerings",
+      "x-cybercloud-action": "showRoutes"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/securityGroups": {
       "parameters": [
         {
@@ -21927,6 +22393,231 @@
         "title": "CyberCloud.Network.virtualNetworks.natGateways.ShowEgressResponse",
         "type": "object"
       },
+      "CyberCloud.Network.virtualNetworks.peerings": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Network/virtualNetworks/peerings: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
+          "location": {
+            "description": "The region the peering is billed in. ⚠ It must be the region both virtual networks are in — nothing checks that, because neither network's own region is readable from here.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The peering's own settings.",
+            "properties": {
+              "clusterId": {
+                "description": "The cluster whose fabric holds both networks. ⚠ Two networks in two clusters cannot be peered: a Kube-OVN peering is two ports on one OVN northbound database.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "link": {
+                "additionalProperties": false,
+                "description": "The point-to-point range the two routers address each other on.",
+                "properties": {
+                  "v4": {
+                    "default": "10.255.255.0/30",
+                    "description": "A small IPv4 range, /30 or wider, that is in neither network. This network's peer port takes its first host address and the remote's takes the second. ⚠ It is checked against the platform's reserved ranges like any other, so link-local space cannot be used.",
+                    "example": "10.255.255.0/30",
+                    "pattern": "^(?:(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2})$",
+                    "type": "string",
+                    "x-cybercloud-widget": "cidr"
+                  }
+                },
+                "required": [
+                  "v4"
+                ],
+                "type": "object"
+              },
+              "localAddressSpace": {
+                "additionalProperties": false,
+                "description": "The range this network advertises to the remote — the remote's router gets one static route to it.",
+                "properties": {
+                  "v4": {
+                    "default": "10.20.0.0/16",
+                    "description": "This network's IPv4 range, in CIDR form — normally its address space. ⚠ It may not overlap the remote range or the link, and the refusal names both.",
+                    "example": "10.20.0.0/16",
+                    "pattern": "^(?:(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2})$",
+                    "type": "string",
+                    "x-cybercloud-widget": "cidr"
+                  }
+                },
+                "required": [
+                  "v4"
+                ],
+                "type": "object"
+              },
+              "remoteAddressSpace": {
+                "additionalProperties": false,
+                "description": "The range the remote advertises to this network — this network's router gets one static route to it.",
+                "properties": {
+                  "v4": {
+                    "default": "10.30.0.0/16",
+                    "description": "The remote network's IPv4 range, in CIDR form — normally its address space. ⚠ Two networks with overlapping ranges cannot be peered, which is the one place this platform's 'overlapping your own networks is fine' stops applying: a route to a range you also hold has nowhere to go.",
+                    "example": "10.30.0.0/16",
+                    "pattern": "^(?:(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2})$",
+                    "type": "string",
+                    "x-cybercloud-widget": "cidr"
+                  }
+                },
+                "required": [
+                  "v4"
+                ],
+                "type": "object"
+              },
+              "remoteNetwork": {
+                "default": "spoke",
+                "description": "The name of the virtualNetworks resource in the same resource group to peer this network with. ⚠ A name, not a resource id: the remote must be in this subscription and resource group, and a network in another cannot be named — write on the peering has to imply write on both networks. A remote that does not exist keeps the peering in progress until it does. Cannot be changed once created; delete the peering and create another.",
+                "example": "spoke",
+                "maxLength": 63,
+                "pattern": "^(?:[a-z0-9]([-a-z0-9]*[a-z0-9])?)$",
+                "type": "string",
+                "x-cybercloud-immutable": true
+              }
+            },
+            "required": [
+              "clusterId",
+              "remoteNetwork"
+            ],
+            "type": "object"
+          },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Network/virtualNetworks/peerings",
+        "type": "object"
+      },
+      "CyberCloud.Network.virtualNetworks.peerings.List": {
+        "type": "object",
+        "title": "CyberCloud.Network.virtualNetworks.peerings.List",
+        "description": "One page of CyberCloud.Network/virtualNetworks/peerings. ⚠ The page holds what the caller may read: a listing runs a permission check per member (docs/plan/07 § The enforcement seam), so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page — there is no empty-string form, because an empty URL is one a polite client requests."
+          },
+          "value": {
+            "type": "array",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
+            "items": {
+              "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.peerings"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "CyberCloud.Network.virtualNetworks.peerings.ShowRoutesResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Network/virtualNetworks/peerings/showRoutes returns.",
+        "properties": {
+          "localConnectIP": {
+            "description": "The address, with the link's prefix, this network's peer port carries.",
+            "type": "string"
+          },
+          "localConnected": {
+            "description": "Whether the fabric lists the remote in the local Vpc's status.vpcPeerings — the peer port exists. False on a cluster without the Kube-OVN controller.",
+            "type": "boolean"
+          },
+          "localVpc": {
+            "description": "The local network's Vpc object name.",
+            "type": "string"
+          },
+          "localWritten": {
+            "description": "Whether the local Vpc carries this peering's entry and route.",
+            "type": "boolean"
+          },
+          "remoteConnectIP": {
+            "description": "The address, with the link's prefix, the remote's peer port carries.",
+            "type": "string"
+          },
+          "remoteConnected": {
+            "description": "The same, read off the remote Vpc.",
+            "type": "boolean"
+          },
+          "remoteVpc": {
+            "description": "The remote network's Vpc object name.",
+            "type": "string"
+          },
+          "remoteWritten": {
+            "description": "Whether the remote Vpc carries this peering's entry and route. ⚠ False with localWritten true is a remote network that was deleted or never existed.",
+            "type": "boolean"
+          },
+          "sampledAt": {
+            "description": "When the platform read the objects, RFC 3339.",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "localConnectIP",
+          "localConnected",
+          "localVpc",
+          "localWritten",
+          "remoteConnectIP",
+          "remoteConnected",
+          "remoteVpc",
+          "remoteWritten",
+          "sampledAt"
+        ],
+        "title": "CyberCloud.Network.virtualNetworks.peerings.ShowRoutesResponse",
+        "type": "object"
+      },
       "CyberCloud.Network.virtualNetworks.securityGroups": {
         "additionalProperties": false,
         "allOf": [
@@ -23968,5 +24659,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 32
+  "x-cybercloud-resource-type-count": 33
 }
