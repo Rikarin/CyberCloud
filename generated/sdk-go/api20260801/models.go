@@ -2842,6 +2842,81 @@ type SubnetListAddressUsageResultV6 struct {
 	Total *string `json:"total,omitempty"`
 }
 
+// BackupVaultData is Backup vault: the body a caller writes. A backup policy — a schedule and a retention — over the PostgreSQL servers in a resource group, with the recovery points it produces and a restore into a new cluster.
+type BackupVaultData struct {
+	// The region the vault is billed in.
+	Location string `json:"location"`
+	// The vault's own settings.
+	Properties *BackupVaultProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// BackupVaultProperties is The vault's own settings.
+type BackupVaultProperties struct {
+	// The cluster the vault's protected items are placed on. Every protected item must be on this cluster; one placed elsewhere is refused by name when the vault is reconciled.
+	ClusterID string `json:"clusterId"`
+	// The one policy every protected item follows: when a recovery point is taken and how long it is kept.
+	Policy *BackupVaultPropertiesPolicy `json:"policy,omitempty"`
+	// The resources this vault protects, as full resource id paths. Each must be a CyberCloud.DBforPostgreSQL/servers resource in this vault's resource group, on this vault's cluster, with backups enabled, that the vault has been granted read on. At most 16; anything else is refused by name at its own index when the vault is reconciled.
+	ProtectedItems []string `json:"protectedItems"`
+}
+
+// BackupVaultPropertiesPolicy is The one policy every protected item follows: when a recovery point is taken and how long it is kept.
+type BackupVaultPropertiesPolicy struct {
+	// How many days a recovery point is kept before the vault prunes it. ⚠ The bytes behind a PostgreSQL recovery point live in the server's own backup store under the server's backup.retentionDays; a server whose retention is shorter than this is refused, because the store would forget what the vault still lists.
+	RetentionDays *int64 `json:"retentionDays,omitempty"`
+	// When a recovery point is taken, as a five-field cron expression in UTC: minute, hour, day of month, month, day of week. Numbers, `*`, `,`, `-` and `/` only. Rendered to CloudNativePG with the seconds field it requires prepended.
+	Schedule string `json:"schedule"`
+}
+
+// BackupVaultResource is one Backup vault, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type BackupVaultResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data BackupVaultData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *BackupVaultResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// BackupVaultListRecoveryPointsResult is what listRecoveryPoints returns.
+type BackupVaultListRecoveryPointsResult struct {
+	// How many of them are restorable — CloudNativePG phase `completed`.
+	Completed int64 `json:"completed"`
+	// How many recovery points the vault holds, across every protected item.
+	Count int64 `json:"count"`
+	// One line per recovery point, newest first: '{item} {name} {phase} started {startedAt} stopped {stoppedAt} method {method}', followed by ': {error}' when the operator recorded one. The name is what recover takes.
+	RecoveryPoints []string `json:"recoveryPoints"`
+}
+
+// BackupVaultRecoverContent is the parameters of recover.
+type BackupVaultRecoverContent struct {
+	// The recovery point to restore, by the name listRecoveryPoints gives it. It must be one of this vault's and its phase must be `completed`.
+	RecoveryPoint string `json:"recoveryPoint"`
+	// The name of the NEW cluster the recovery point is restored into, in the vault's resource group. Refused when a cluster of that name already exists — a restore never overwrites.
+	TargetName string `json:"targetName"`
+}
+
+// BackupVaultRecoverResult is what recover returns.
+type BackupVaultRecoverResult struct {
+	// What was created. Always `Cluster` — a CloudNativePG cluster object.
+	Kind string `json:"kind"`
+	// The restored cluster's name, as asked for.
+	Name string `json:"name"`
+	// The namespace it was created in — the vault's resource group's.
+	Namespace string `json:"namespace"`
+	// The recovery point it was bootstrapped from.
+	RecoveryPoint string `json:"recoveryPoint"`
+	// The protected item the recovery point was taken of, as its resource id path.
+	Source string `json:"source"`
+}
+
 // WidgetTier is the values /properties/tier accepts. ⚠ Closed: the write path refuses anything else.
 type WidgetTier string
 

@@ -90,6 +90,11 @@ import type {
   NetworkVirtualNetworksSubnetsListAddressUsageResult,
   NetworkVirtualNetworksSubnetsResource,
   OperationStatus,
+  RecoveryServicesVaultsData,
+  RecoveryServicesVaultsListRecoveryPointsResult,
+  RecoveryServicesVaultsRecoverContent,
+  RecoveryServicesVaultsRecoverResult,
+  RecoveryServicesVaultsResource,
   ResourceGroupCreateContent,
   SampleWidgetsData,
   SampleWidgetsPingContent,
@@ -1021,6 +1026,41 @@ export class CyberCloudApi {
   /** listAddressUsage — permission 'read'. */
   listAddressUsageSubnet(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string): Promise<ApiResponse<NetworkVirtualNetworksSubnetsListAddressUsageResult>> {
     return this.transport.send<NetworkVirtualNetworksSubnetsListAddressUsageResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/subnets/${CyberCloudApi.segment(resourceName)}/listAddressUsage` });
+  }
+
+  /** Reads one Backup vault. */
+  getBackupVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<RecoveryServicesVaultsResource>> {
+    return this.transport.send<RecoveryServicesVaultsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.RecoveryServices/vaults/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Backup vault. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateBackupVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: RecoveryServicesVaultsData): Promise<ApiResponse<RecoveryServicesVaultsResource>> {
+    return this.transport.send<RecoveryServicesVaultsResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.RecoveryServices/vaults/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Backup vault. A merge patch: what is not set is not changed. */
+  updateBackupVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: Partial<RecoveryServicesVaultsData>): Promise<ApiResponse<RecoveryServicesVaultsResource>> {
+    return this.transport.send<RecoveryServicesVaultsResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.RecoveryServices/vaults/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Backup vault. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteBackupVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.RecoveryServices/vaults/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Backup vaults in a resource group. ⚠ A short page never means "that is all there is". */
+  listBackupVault(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<RecoveryServicesVaultsResource>>> {
+    return this.transport.send<Page<RecoveryServicesVaultsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.RecoveryServices/vaults`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** listRecoveryPoints — permission 'read'. */
+  listRecoveryPointsBackupVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<RecoveryServicesVaultsListRecoveryPointsResult>> {
+    return this.transport.send<RecoveryServicesVaultsListRecoveryPointsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.RecoveryServices/vaults/${CyberCloudApi.segment(resourceName)}/listRecoveryPoints` });
+  }
+
+  /** recover — permission 'write'. */
+  recoverBackupVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: RecoveryServicesVaultsRecoverContent): Promise<ApiResponse<RecoveryServicesVaultsRecoverResult>> {
+    return this.transport.send<RecoveryServicesVaultsRecoverResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.RecoveryServices/vaults/${CyberCloudApi.segment(resourceName)}/recover`, body: content });
   }
 
   /** Reads one Widget. */

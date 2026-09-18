@@ -1,0 +1,74 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here, and
+# `vendored: none` is an answer to "where did this come from" where a missing file is not.
+
+vendored: none
+upstream: https://github.com/cloudnative-pg/cloudnative-pg
+
+# The upstream API this chart's template targets. ⚠ An API group/version, not a commit: nothing is
+# vendored, so there is no upstream tree to pin. The same group charts/managed/postgres renders a
+# Cluster into; this chart renders the ScheduledBackup that names one.
+upstream-api: postgresql.cnpg.io/v1
+
+# Reviewed against upstream sources at the tag the bundle pins — charts/bundle/cloudnative-pg,
+# v1.30.0 — on this date. A tag rather than a SHA is a weaker claim and is labelled as one.
+#
+# ⚠ WHAT THIS REVIEW ESTABLISHED, because every one of these decided a line in the template or the
+# reconciler, or ruled a design out:
+#
+#   * `api/v1/scheduledbackup_types.go` — ScheduledBackupSpec is {suspend, immediate, schedule,
+#     cluster, backupOwnerReference, target, method, pluginConfiguration, online,
+#     onlineConfiguration}. `schedule`: "The schedule does not follow the same format used in
+#     Kubernetes CronJobs as it includes an additional seconds specifier" — so the API takes five
+#     fields and the template prepends the sixth. `backupOwnerReference`: "none: no owner reference
+#     … self: sets the Scheduled backup object as owner of the backup — cluster: set the cluster as
+#     owner"; `self` is what makes the vault's teardown reach its recovery points. `method`:
+#     barmanObjectStore, volumeSnapshot or plugin.
+#
+#   * `api/v1/scheduledbackup_funcs.go` — CreateBackup sets ObjectMeta {Name, Namespace} and calls
+#     utils.InheritAnnotations with the operator's configuration; IT COPIES NO LABELS from the
+#     ScheduledBackup onto the Backup. ADR-013's seven therefore never reach a recovery point, and a
+#     join on cybercloud.io/resource-id finds none.
+#
+#   * `internal/controller/scheduledbackup_controller.go` — the controller labels each Backup it
+#     creates with utils.ClusterLabelName = the cluster and utils.ParentScheduledBackupLabelName =
+#     the ScheduledBackup's name, and marks the first one utils.ImmediateBackupLabelName. The schedule
+#     is parsed with robfig/cron's `cron.Parse`. THAT LABEL IS THE JOIN: RecoveryVaults.RecoveryPointSelector
+#     lists Backups by `cnpg.io/scheduled-backup=<name>`.
+#
+#   * `pkg/utils/labels_annotations.go` — ClusterLabelName "cnpg.io/cluster",
+#     ParentScheduledBackupLabelName "cnpg.io/scheduled-backup", ImmediateBackupLabelName
+#     "cnpg.io/immediateBackup"; BackupStartTimeAnnotationName / BackupEndTimeAnnotationName are
+#     annotations, not status, and the reconciler reads status.startedAt/stoppedAt instead.
+#
+#   * `api/v1/backup_types.go` — BackupPhase: pending, started, running, finalizing, completed,
+#     failed, walArchivingFailing, "invalid backup definition". BackupStatus carries phase,
+#     startedAt, stoppedAt, error, backupId, backupName, method. `completed` is the one phase
+#     RecoveryVaults.RecoveryPoint.IsCompleted accepts for a recover.
+#
+#   * `internal/controller/backup_controller.go` — the Backup reconciler sets NO labels of its own,
+#     and its prerequisite check fails a Backup whose cluster has no spec.backup with "cannot proceed
+#     with the backup as the cluster has no backup section", and one whose method is
+#     barmanObjectStore against a cluster with no barmanObjectStore section with "no
+#     barmanObjectStore section defined on target cluster". The vault refuses a server with
+#     backup.enabled false for exactly this reason, before the operator has to.
+#
+#   * seaweedfs-csi-driver `pkg/driver/driver.go` at v1.4.20 — the controller capabilities are
+#     CREATE_DELETE_VOLUME, SINGLE_NODE_MULTI_WRITER, EXPAND_VOLUME and (with the attacher)
+#     PUBLISH_UNPUBLISH_VOLUME; NO CREATE_DELETE_SNAPSHOT, NO LIST_SNAPSHOTS. That is why this chart
+#     renders no VolumeSnapshot for a file share and the brief's second protected type is owed:
+#     conformance.yaml § owed, `file-shares-have-no-snapshot-story`.
+#
+# ⚠ WHAT WAS NOT REVIEWED, stated so nobody reads silence as coverage: the ScheduledBackup
+# validating webhook's exact rules beyond "the schedule parses" — a schedule the five-field pattern
+# admits and robfig/cron refuses (a day-of-month of 32, say) is refused by the operator at admission,
+# after the caller was told 202, and the operation reports the API server's message. And
+# `bootstrap.recovery.backup.name`'s behaviour when the Backup's status.barmanObjectStore is absent —
+# the recover handler refuses a point that is not `completed`, which is the case that would reach it.
+reviewed: 2026-09-18
+
+# ⚠ The mutating webhook defaults `target` and `online` on a ScheduledBackup, so RecoveryVaults.Matches
+# is containment over the three fields the vault owns rather than equality.
+upstream-webhook: mutating, defaults target and online

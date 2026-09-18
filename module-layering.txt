@@ -395,6 +395,15 @@ CyberCloud.Providers.Network -> CyberCloud.Core
 CyberCloud.Providers.Network -> CyberCloud.Kubernetes
 CyberCloud.Providers.Network -> CyberCloud.ResourceManager
 CyberCloud.Providers.Network -> CyberCloud.Tenancy
+# ⚠ THE FOUR AND NOT A FIFTH, AND THIS IS THE FAMILY THAT MOST WANTED ONE. CyberCloud.RecoveryServices/vaults
+# protects CyberCloud.DBforPostgreSQL/servers, and the shortcut is a line to CyberCloud.Providers.DBforPostgreSQL
+# — which rule 2 refuses whatever this file says (src/Providers/README.md § Hard rule). The vault reaches the
+# server through ReconcileContext.View instead, issue #90's seam, and knows nothing of the other family but
+# its published contract. Four lines, like every family that renders its own objects.
+CyberCloud.Providers.RecoveryServices -> CyberCloud.Core
+CyberCloud.Providers.RecoveryServices -> CyberCloud.Kubernetes
+CyberCloud.Providers.RecoveryServices -> CyberCloud.ResourceManager
+CyberCloud.Providers.RecoveryServices -> CyberCloud.Tenancy
 CyberCloud.Providers.Sample -> CyberCloud.Core
 CyberCloud.Providers.Sample -> CyberCloud.Kubernetes
 CyberCloud.Providers.Sample -> CyberCloud.ResourceManager

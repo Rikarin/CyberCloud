@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The cluster-backed half — the same case, against a real API server in k3s, with the CRD stubs
+      the harness derives from the case's and its companion's objects.
+
+      ⚠ IT CONTAINS NO ASSERTIONS AND NO INFRASTRUCTURE. Everything it runs comes from
+      test/CyberCloud.Cluster.Conformance; what lives here is two class declarations over the SAME
+      ProviderConformanceCase the Docker-free suite already uses. The harness creates the companion
+      PostgreSQL server before the vault's first assertion, so the vault's view lists a namespace a
+      real API server holds.
+
+      ⚠ THE OPERATOR IS NOT INSTALLED HERE, ON PURPOSE. CloudNativePG's real definition refuses the
+      PostgreSQL family's default body (charts/managed/postgres/conformance.yaml § owed,
+      `the-default-bucket-is-not-filled-in`), so a lane with the operator cannot create the server the
+      vault protects. What the operator does with the vault's rendering is
+      CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance's, in its own process — the
+      shared k3s is one per process, and two lanes installing over each other's definitions is the
+      failure that split them.
+
+      ⚠ IT IS NOT NAMED `.Conformance.Cluster`, for the reason CyberCloud.Providers.Storage.Cluster.Conformance
+      records: the suffix is what classifies it as a test host.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.RecoveryServices.Conformance/CyberCloud.Providers.RecoveryServices.Conformance.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

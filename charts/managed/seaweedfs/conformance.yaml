@@ -324,6 +324,17 @@ owed:
       And the `backup` row above records why this account cannot even be its own destination. The
       vault is a provider namespace of its own and it is not started; what changed is that the seam
       is no longer the blocker.
+      ✅ LANDED 2026-09-18 (#30), AND NOT FOR THIS ROW. `CyberCloud.RecoveryServices/vaults` is
+      published — charts/managed/recovery-vault, src/Providers/CyberCloud.Providers.RecoveryServices —
+      and it is the first reconciler through `ctx.View`. What it protects is CyberCloud.DBforPostgreSQL/servers,
+      by a CloudNativePG ScheduledBackup beside the server's Cluster: the engine-native backend of
+      docs/plan/15's four. It does NOT protect this account, its buckets or its shares — the
+      seaweedfs-csi-driver advertises no snapshot capability and every SeaweedFS backup route needs a
+      destination object store that is not the account itself, which is this row's `backup` item
+      unchanged — so `per-share-backup-policy` on the share chart and the object half of docs/plan/15
+      § Backup as a service are still owed, now at charts/managed/recovery-vault/conformance.yaml
+      § owed, `file-shares-have-no-snapshot-story`. Kept rather than deleted, for the record of what
+      the vault was expected to be before it was built.
   - id: customer-managed-keys
     says: >
       The third third of #30. docs/plan/15 § The resource model: "customer-managed keys from the

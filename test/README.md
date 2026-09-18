@@ -105,6 +105,21 @@ One xUnit theory every provider must pass: create → 202 → poll → Succeeded
 reconcile after a manual cluster mutation → drift corrected; kill the silo mid-create → resource
 still converges. **A provider is not registered in the platform bundle until it passes.**
 
+⚠ **The suite registers ONE provider, and since 2026-09-18 a case can ask for a companion from
+another.** `IProviderCaseSource.Companions` names resources of other providers that must exist before
+the case's own can converge — `CyberCloud.RecoveryServices/vaults` protects a
+`CyberCloud.DBforPostgreSQL/servers`, and its reconciler reads that server through
+`ReconcileContext.View`, which answers 404 for a type the silo does not serve and a path the index
+never bound, so a planted object could not stand in. Both harnesses register the companion's provider
+beside the case's, create it through the write path before the first assertion, and derive CRD stubs
+from its objects too — and from the kinds the case's `OperatorWritten` names, because a reconciler
+that lists what an operator makes (the vault prunes `Backup` objects) fails against a stub world that
+served only what it renders; the Docker-free one marks the fake cluster after the companions converge
+and `Reset` puts that baseline back. And every pass the suite drives by hand now carries the real view
+(`ProviderTestCluster.Views`, `ClusterConformanceHarness.Views`), bound to the address the way the
+driver binds it — the drift repair, the hand edit and the four-clause check each build their own
+`ReconcileContext`, and the refusing default failed all three for the first type that read through it.
+
 ## Conventions
 
 `Directory.Build.targets` detects these by name and applies the test-project profile (executable

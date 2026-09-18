@@ -15,6 +15,11 @@ from .models import (
     AlertRuleResource,
     ArtifactFeedData,
     ArtifactFeedResource,
+    BackupVaultData,
+    BackupVaultListRecoveryPointsResult,
+    BackupVaultRecoverContent,
+    BackupVaultRecoverResult,
+    BackupVaultResource,
     BucketData,
     BucketResource,
     BucketStatsResult,
@@ -1511,6 +1516,62 @@ class NetworkProvider:
         self.virtual_networks_subnets = SubnetClient(transport)
 
 
+class BackupVaultClient:
+    """Backup vaults — CyberCloud.RecoveryServices/vaults. A backup policy — a schedule and a retention — over the PostgreSQL servers in a resource group, with the recovery points it produces and a restore into a new cluster."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> BackupVaultResource:
+        """Reads one Backup vault."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.RecoveryServices/vaults/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return BackupVaultResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: BackupVaultData) -> Operation[BackupVaultResource]:
+        """Creates or replaces one Backup vault. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.RecoveryServices/vaults/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, BackupVaultResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: BackupVaultData) -> Operation[BackupVaultResource]:
+        """Amends one Backup vault. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.RecoveryServices/vaults/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, BackupVaultResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Backup vault. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.RecoveryServices/vaults/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[BackupVaultResource]:
+        """Lists the Backup vaults in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.RecoveryServices/vaults", top, BackupVaultResource.from_wire)
+
+    def list_recovery_points(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> BackupVaultListRecoveryPointsResult:
+        """listRecoveryPoints — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.RecoveryServices/vaults/{_segment(resource_name)}/listRecoveryPoints"))
+        raise_for_status(response)
+        return BackupVaultListRecoveryPointsResult.from_wire(wire_of(response))
+
+    def recover(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: BackupVaultRecoverContent) -> BackupVaultRecoverResult:
+        """recover — permission 'write'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.RecoveryServices/vaults/{_segment(resource_name)}/recover", body=content.to_wire()))
+        raise_for_status(response)
+        return BackupVaultRecoverResult.from_wire(wire_of(response))
+
+
+class RecoveryServicesProvider:
+    """The resource types of CyberCloud.RecoveryServices."""
+
+    def __init__(self, transport: Transport) -> None:
+        self.vaults = BackupVaultClient(transport)
+
+
 class WidgetClient:
     """Widgets — CyberCloud.Sample/widgets. A ConfigMap with two fields in it."""
 
@@ -1843,6 +1904,7 @@ class CyberCloudClient:
         self.messaging = MessagingProvider(transport)
         self.monitor = MonitorProvider(transport)
         self.network = NetworkProvider(transport)
+        self.recoveryservices = RecoveryServicesProvider(transport)
         self.sample = SampleProvider(transport)
         self.search = SearchProvider(transport)
         self.storage = StorageProvider(transport)

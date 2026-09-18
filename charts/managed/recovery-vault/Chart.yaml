@@ -1,0 +1,44 @@
+# A backup vault — docs/plan/15 § Backup as a service: "Not a storage type; a policy resource that
+# binds protected resources to schedules and retention."
+#
+# ⚠ THE FIRST CHART IN THE TREE WHOSE OBJECT NAMES ANOTHER CHART'S OBJECT. The ScheduledBackup in
+# templates/scheduledbackup.yaml points at a CloudNativePG Cluster that charts/managed/postgres
+# rendered for a CyberCloud.DBforPostgreSQL/servers resource in the same namespace. The vault owns
+# the schedule; the store, the retention policy on the bytes and the cluster itself are the server's.
+#
+# ⚠ ONE OBJECT PER PROTECTED ITEM, AND A CHART RENDERS ONE. `Build.Charts` pairs one chart with one
+# type through one annotation, and a Helm template has no view into the resource manager — the
+# reconciler learns each item's Cluster name through ReconcileContext.View and renders one document
+# per item; this chart is that document, for one item, with the cluster name projected in.
+apiVersion: v2
+name: recovery-vault
+description: A backup policy over the PostgreSQL servers in a resource group — a CloudNativePG ScheduledBackup per protected server, under the vault's ownership.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ The CloudNativePG version this chart's object shape was reviewed against — the same release
+# charts/bundle/cloudnative-pg pins, because the ScheduledBackup is that operator's kind.
+appVersion: "1.30.0"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - backup
+  - recovery
+  - cloudnative-pg
+  - scheduledbackup
+
+home: https://cloudnative-pg.io
+sources:
+  - https://github.com/cloudnative-pg/cloudnative-pg
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ Read by `Build.Charts` and written into values.schema.json as `x-cybercloud-*`.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.RecoveryServices/vaults
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: cloudnative-pg

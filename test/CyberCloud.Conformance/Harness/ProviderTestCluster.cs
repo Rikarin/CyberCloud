@@ -216,6 +216,21 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
     /// <summary>The registry the write path validates against.</summary>
     public IProviderRegistry Registry { get; private set; } = null!;
 
+    /// <summary>
+    ///     The cross-resource seam of docs/plan/08 § What the resource manager deliberately does not
+    ///     do, built the way <c>ReconcileDriver</c> builds it — over this harness's registry, grain
+    ///     factory, authorizer and fake cluster — for the passes the suite drives by hand.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A context built by hand carries <c>RefusingResourceView</c>, and a reconciler that reads
+    ///     another resource through it fails every hand-driven assertion for a wiring reason — the
+    ///     drift repair, the hand edit and the four-clause check all construct their own
+    ///     <c>ReconcileContext</c>. <c>Views.For(address)</c> is what the driver would have handed
+    ///     that pass, bound to the same owner, so a vault repairing drift reads its protected server
+    ///     exactly as it does inside the silo. Every other type never calls it and is unaffected.
+    /// </remarks>
+    public ResourceViews Views { get; private set; } = null!;
+
     /// <summary>The fake API server the reconciler applies into.</summary>
     public FakeKubeCluster World => ConformanceState<TSource>.Cluster;
 
@@ -597,7 +612,7 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
         // readings both have a client to reach the silo through. See IConvergedModule.Attach.
         Module?.Attach(cluster.GrainFactory);
 
-        Registry = ProviderRegistry.Build([Case.CreateProvider()]);
+        Registry = ProviderRegistry.Build(Providers());
 
         // ⚠ The subscriptions are created before anything is written into them. Step 1 of the write
         // path now reads ISubscriptionGrain and answers 404 for a subscription that does not exist,
@@ -625,6 +640,15 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
         // twenty-eighth assertion is as independent of the first as the second is.
         await LiftQuotaAsync(ConformanceIds.Tenant, ConformanceIds.Subscription);
         await LiftQuotaAsync(ConformanceIds.OtherTenant, ConformanceIds.OtherSubscription);
+
+        Views = new ResourceViews(
+            Registry,
+            cluster.GrainFactory,
+            Authorizer,
+            new FakeClusterConnectionFactory(World),
+            Clock,
+            NullLogger<ResourceViews>.Instance
+        );
 
         Manager = new ResourceManagerService(
             Registry,
@@ -663,23 +687,130 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
         // testing nothing. This is what keeps the assertion about the tenant boundary.
         await CreateAncestorsAsync(ConformanceIds.OtherTenant, ConformanceIds.OtherSubscription);
 
-        // ⚠ AND THE SIBLINGS, AFTER THE ANCESTORS THEY MAY SIT UNDER, AND IN THE PRIMARY TENANT ONLY.
-        // A peering's body names a second network, and a peering to a network that does not exist
-        // cannot converge — see IProviderCaseSource.Siblings. The other tenant gets none: the
-        // ancestors are created there because the write path checks a parent's binding before it
-        // compares tenants, so the 404 assertion needed a parent to get past; nothing on the write
-        // path reads a sibling, so a copy over there would keep no assertion honest.
+        // ⚠ AND THE SIBLINGS, THEN THE COMPANIONS — AFTER THE ANCESTORS, AND IN THE PRIMARY TENANT
+        // ONLY. Both are resources the case's BODY names rather than ones its address interleaves: a
+        // peering names a second network of its own provider (IProviderCaseSource.Siblings), a vault
+        // names a PostgreSQL server of ANOTHER provider (IProviderCaseSource.Companions), and neither
+        // can converge until what it names has. Siblings go first because they sit under the harness's
+        // own ancestors; a companion is top-level and depends on nothing the harness made. The other
+        // tenant gets neither: the ancestors are created there because the write path checks a
+        // parent's binding before it compares tenants, so the 404 assertion needed a parent to get
+        // past; nothing on the write path reads a sibling, and the other tenant's create is refused
+        // at step 1 before any reconciler asks the view for a companion, so a copy of either over
+        // there would keep no assertion honest.
         await CreateSiblingsAsync(ConformanceIds.Tenant, ConformanceIds.Subscription);
+        await CreateCompanionsAsync(ConformanceIds.Tenant, ConformanceIds.Subscription);
 
-        // ⚠ AND THE WORLD IS REMEMBERED, SO THAT A RESET PUTS IT BACK RATHER THAN EMPTYING IT. Every
-        // assertion begins with Reset, and until CyberCloud.Network/virtualNetworks/peerings that
-        // emptied the fake cluster and nothing minded — every type re-created what it owns from its
-        // body. A co-writing type owns nothing: it writes onto the ancestors' and siblings' objects,
-        // which have to be there when a test starts. What is remembered is exactly what the fixture
-        // created; a test's own objects are still gone at the next Reset. See
-        // FakeKubeCluster.Baseline, and ReferenceSiblingProviderConformance
+        // ⚠ AND THE WORLD IS REMEMBERED, ONCE, AFTER ALL OF THEM, SO THAT A RESET PUTS IT BACK RATHER
+        // THAN EMPTYING IT. Every assertion begins with Reset, and until the peering and the vault —
+        // merged the same day, each having hit this — that emptied the fake cluster and nothing minded:
+        // every type re-created what it owns from its body. A co-writing type owns nothing and writes
+        // onto the siblings' objects; a vault owns its schedule but reads the companion's Cluster
+        // through the view first. Both need those objects there when a test starts. What is remembered
+        // is exactly what the fixture created; a test's own objects are still gone at the next Reset.
+        // See FakeKubeCluster.Baseline, and ReferenceSiblingProviderConformance
         // .TheSiblingSurvivesAResetAsAResourceAndAsObjects for the assertion that flipped.
         World.Baseline();
+    }
+
+    /// <summary>
+    ///     The case's provider and every companion's, one instance per provider namespace.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Distinct by namespace: two companions from one family, or a companion from the case's own
+    ///     family, must not register that provider twice — <c>ProviderRegistry.Build</c> refuses a
+    ///     duplicate namespace by name, and the refusal would read as a provider bug.
+    /// </remarks>
+    public static List<IResourceProvider> Providers() {
+        var providers = new List<IResourceProvider> { Case.CreateProvider() };
+
+        foreach (var companion in Companions) {
+            var provider = companion.ProviderCase.CreateProvider();
+            if (providers.Any(x => string.Equals(x.ProviderNamespace, provider.ProviderNamespace, StringComparison.OrdinalIgnoreCase))) {
+                continue;
+            }
+
+            providers.Add(provider);
+        }
+
+        return providers;
+    }
+
+    /// <summary>
+    ///     The companion cases, checked to be top-level types of a provider this run can register.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    ///     A companion nests under a parent, or two companions share a name.
+    /// </exception>
+    public static ImmutableArray<CompanionCase> Companions {
+        get {
+            var declared = TSource.Companions;
+
+            foreach (var companion in declared) {
+                if (companion.ProviderCase.Type.Depth != 1) {
+                    throw new InvalidOperationException(
+                        $"'{Case.DisplayName}' declares companion '{companion.ProviderCase.DisplayName}' of type "
+                        + $"'{companion.ProviderCase.Type}', which nests under a parent. The harness creates a "
+                        + "companion by name in the run's resource group and builds no ancestor chain for it; "
+                        + "a top-level companion is the shape every case so far has needed. See "
+                        + "IProviderCaseSource.Companions."
+                    );
+                }
+            }
+
+            var duplicate = declared.GroupBy(x => x.Name, StringComparer.Ordinal).FirstOrDefault(x => x.Count() > 1);
+            if (duplicate is not null) {
+                throw new InvalidOperationException(
+                    $"'{Case.DisplayName}' declares two companions named '{duplicate.Key}'. Each is a resource in "
+                    + "one resource group, so the second create would be an update of the first."
+                );
+            }
+
+            return declared;
+        }
+    }
+
+    /// <summary>Creates the companions, each driven to a confirmed binding before the next.</summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="subscription">The subscription.</param>
+    async Task CreateCompanionsAsync(Guid tenant, Guid subscription) {
+        foreach (var companion in Companions) {
+            var address = companion.Address(tenant, subscription);
+
+            var accepted = await Manager.WriteAsync(
+                new() {
+                    Path = address.Path,
+                    ApiVersion = companion.ProviderCase.ApiVersion,
+                    Verb = WriteVerb.Put,
+                    Body = companion.BodyFor(ConformanceIds.Cluster),
+                    Caller = Caller(tenant)
+                },
+                CancellationToken.None
+            );
+
+            accepted.IsSuccess.ShouldBeTrue(
+                $"the harness could not create companion '{address.Path}', which '{Case.Type}' protects: "
+                + accepted.Error?.Message
+            );
+
+            var operation = Operation(tenant, accepted.GetValueOrThrow().OperationId);
+
+            for (var drive = 0; drive < 8; drive++) {
+                var status = await operation.DriveAsync();
+                if (status.GetValueOrThrow().IsTerminal) {
+                    break;
+                }
+            }
+
+            var bound = await Index(address).GetAsync();
+
+            bound.GetValueOrThrow()
+                .State.ShouldBe(
+                    IndexEntryState.Confirmed,
+                    $"companion '{address.Path}' did not reach a confirmed binding, so every read of it "
+                    + $"through the view answers 404 and '{Case.Type}' refuses it by name"
+                );
+        }
     }
 
     /// <summary>Puts every quota meter out of the way for one subscription.</summary>
@@ -880,6 +1011,22 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     services.AddSingleton<IResourceProvider>(_ => TSource.ProviderCase.CreateProvider());
                     services.AddSingleton(TSource.ProviderCase.ReconcilerType);
 
+                    // ⚠ AND EVERY COMPANION'S PROVIDER AND RECONCILER, because the silo's registry is
+                    // built from the IResourceProvider registrations it holds, and the view resolves a
+                    // protected item's type against THAT registry — a companion registered on the
+                    // client side alone would be creatable and invisible. One provider per namespace,
+                    // for the reason Providers() gives.
+                    foreach (var provider in Providers().Skip(1)) {
+                        services.AddSingleton<IResourceProvider>(provider);
+                    }
+
+                    foreach (var reconciler in Companions
+                                 .Select(x => x.ProviderCase.ReconcilerType)
+                                 .Where(x => x != TSource.ProviderCase.ReconcilerType)
+                                 .Distinct()) {
+                        services.AddSingleton(reconciler);
+                    }
+
                     // ⚠ AND EVERY ANCESTOR'S RECONCILER, because the harness creates the ancestors
                     // and ReconcileDriver resolves each type's reconciler FROM THIS CONTAINER by the
                     // concrete type the registry stores. One provider declares both a child and its
@@ -902,7 +1049,7 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     // registry stores a concrete Type and ActionDispatcher resolves it from a
                     // container. A LongRunning action driven inside the silo would otherwise refuse
                     // with a message about the container, naming the harness rather than the case.
-                    foreach (var handler in ProviderRegistry.Build([TSource.ProviderCase.CreateProvider()])
+                    foreach (var handler in ProviderRegistry.Build(Providers())
                                  .Types
                                      .SelectMany(x => x.Actions)
                                      .Select(x => x.HandlerType)

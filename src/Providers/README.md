@@ -2085,6 +2085,62 @@ the first type in the catalogue whose data plane is a platform host — `CyberCl
   `charts/managed/feeds/conformance.yaml § owed`, `no-real-client-is-driven`, beside the proxy and
   retention thirds of doc 13's scope and the two meters the host does not yet emit.
 
+### What the seventeenth provider measured
+
+`CyberCloud.RecoveryServices/vaults`, [15 § Backup as a service](../../docs/plan/15-storage-blob-file.md),
+M2 · 1.5 EM, #30's second noun, 2026-09-18. A backup policy — one schedule, one retention — over the
+PostgreSQL servers of a resource group, rendered as one CloudNativePG `ScheduledBackup` per protected
+server beside the server's own `Cluster`. **The first family whose resource is about other providers'
+resources**, and therefore the first reconciler through `ReconcileContext.View` — the seam #90 built
+for it (§ Hard rule above). What that measured:
+
+- **⚠ The seam held with nothing changed in the manager, and the cost landed in the test harness.**
+  The reconciler reads each item twice — `ReadAsync` for the server's contract, `RenderedObjectsAsync`
+  for the address of its `Cluster` — and renders from what came back; it never predicts the other
+  provider's object name, and `RecoveryVaultReconcilerTests.AProtectedServerBecomesAScheduledBackupNamingTheClusterTheViewReturned`
+  gives the view a name the item's is not to prove it. What no case before it had needed was a
+  *second provider in the harness*: the view answers 404 for a type the silo does not serve and for a
+  path the index never bound, so a planted `Cluster` is invisible and `OperatorWritten` could not
+  stand in. `IProviderCaseSource.Companions` is the answer — the other family's own case object,
+  created through the write path before the first assertion, its objects marked as the fake cluster's
+  baseline so `Reset` puts them back — and both harnesses' hand-driven passes now carry the real view
+  (`ProviderTestCluster.Views`), because a context built by hand carried `RefusingResourceView` and
+  three of the shared suite's assertions failed the first run for the harness's reason.
+- **⚠ The brief named two protected types and the sources allowed one.** "A PVC VolumeSnapshot" for
+  file shares: seaweedfs-csi-driver v1.4.20 advertises no `CREATE_DELETE_SNAPSHOT`, and the bundle has
+  no snapshot controller. A file-share item is refused by name at `/properties/protectedItems/{i}`,
+  and doc 15 is corrected in place. What ships is the engine-native backend, and the vault's dispatch
+  on the rendered object's *kind* is where a second backend goes.
+- **⚠ The store is the server's, and the server's store is not wired.** A `ScheduledBackup` names a
+  cluster, a cron and a method; the destination is `spec.backup.barmanObjectStore` on the `Cluster`,
+  which the view cannot write. The vault reads the server's *published* contract instead — two
+  pointers and their defaults spelled by hand, pinned against the PostgreSQL family's schema from the
+  test project, which may reference it — and refuses backups-off and a shorter retention. And it
+  found that `charts/managed/postgres` renders `destinationPath: ""` with no credentials, that nothing
+  fills it in, and that the real CloudNativePG refuses the result at admission — an empty destination
+  is *"should be at least 1 chars long"*, a filled-in one is *"missing credentials"* — so **no
+  PostgreSQL server with backups on can be created on a real cluster today**, which is now
+  `the-default-bucket-is-not-filled-in` on that chart. The fake and every harness stub admit it,
+  which is why no run before this one saw it.
+- **⚠ `restore` is a reserved action name.** `ProviderBuilder.Action` refuses it — soft delete's own
+  dispatch — and the first conformance run found the refusal. The action is `recover`, and the
+  restored cluster is a cluster object rather than a `DBforPostgreSQL/servers` resource, because the
+  seam has no member that writes and that type has no bootstrap property: `a-restore-is-not-yet-a-resource`.
+- **⚠ The chart surface cannot carry a per-element format**, so `protectedItems` declares none and the
+  reconciler checks the shape — the second sighting of `charts/managed/kafka`'s `cidr-shape-is-unenforced`.
+- **⚠ A second k3s lane installs the operator, in its own process.**
+  `CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance` runs `charts/bundle/install.sh`
+  for cloudnative-pg and openebs-localpv through an assembly fixture the class takes in its
+  constructor, so the harness finds `postgresql.cnpg.io/v1` served and derives no stub — the first
+  lane whose custom resources meet a real webhook and a real controller. What it can prove is bounded
+  by the refusal above, and the bound is the finding: the companion has backups *off*, the vault is
+  asserted to refuse it at its pointer, and the vault's own rendering — applied by hand under the
+  vault's labels — is admitted by the operator's webhook, acted on by its controller (a `Backup` the
+  platform never wrote, labelled `cnpg.io/scheduled-backup`, owned by the schedule, `failed` with
+  *"cannot proceed with the backup as the cluster has no backup section"*), and listed by
+  `listRecoveryPoints` with that reason. It cannot share a process with the stub lane: whichever ran
+  first would leave the other with definitions it cannot use, and one k3s per process is the boundary.
+
 ## Namespaces
 
 Every namespaced object this platform applies lands in `{subscriptionId:N}-{resourceGroup}`, derived

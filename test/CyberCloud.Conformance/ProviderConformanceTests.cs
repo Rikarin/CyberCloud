@@ -2012,6 +2012,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
         var reconciler = Reconciler();
         var log = new RecordingLog();
+        var (view, watch) = Cluster.Views.For(address);
 
         var context = new ReconcileContext(
             address,
@@ -2031,7 +2032,10 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             log
             // ⚠ AND THE HARNESS'S OBJECT STORE, for the same reason and the same way: a type whose
             // teardown empties a storage prefix cannot pass clause 3 against RefusingObjectStore.
-        ) { SecretWriter = Cluster.Vault, Objects = Cluster.Objects };
+            // ⚠ AND THE CROSS-RESOURCE SEAM, bound to this address the way the driver binds it. A
+            // type that reads another resource — the vault — would otherwise meet the refusing
+            // default and fail clause 4 for a reason that is the harness's. See ProviderTestCluster.Views.
+        ) { SecretWriter = Cluster.Vault, Objects = Cluster.Objects, View = view, Watch = watch };
 
         // ⚠ THE WORLD IS THE CLUSTER FOR A TYPE THAT DECLARED ONE AND THE CLUSTERLESS WORLD — the
         // module its case source registered, or the DataPlane its case built — FOR A TYPE THAT DID
@@ -2505,6 +2509,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     protected async Task<ReconcileOutcome> ReconcileOnceAsync(Guid resourceId, string name) {
         var address = ProviderTestCluster<TSource>.Address(name).WithId(resourceId);
         using var desired = JsonDocument.Parse(Body());
+        var (view, watch) = Cluster.Views.For(address);
 
         return await Reconciler()
             .ReconcileAsync(
@@ -2522,7 +2527,8 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                     // what a fresh store per call would hide.
                     Cluster.Vault,
                     new RecordingLog()
-                ) { SecretWriter = Cluster.Vault },
+                    // ⚠ And the cross-resource seam, for the reason TheReconcilerSatisfiesTheFourClauseContract gives.
+                ) { SecretWriter = Cluster.Vault, View = view, Watch = watch },
                 TestContext.Current.CancellationToken
             );
     }

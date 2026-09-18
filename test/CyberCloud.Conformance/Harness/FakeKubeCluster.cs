@@ -24,16 +24,24 @@ namespace CyberCloud.Conformance.Harness;
 ///         ⚠
 ///         <b>
 ///             It keeps a <see cref="Baseline" /> and <see cref="Reset" /> restores it rather than
-///             emptying the store, because a co-writing type needs the world it writes onto.
-///         </b> The harness creates a case's ancestors and siblings once, before the first assertion,
-///         and every assertion begins with a reset. Until <c>CyberCloud.Network/virtualNetworks/peerings</c>
-///         the reset emptied everything and nothing minded: every type owned the objects it applied
-///         and re-created them from its body. A peering applies nothing of its own — it writes a
-///         fragment onto two <c>Vpc</c>s other resources own — so a reset that removed those two
-///         objects left every one of its assertions failing on "the owner's object is not there",
-///         which is the co-writer refusing to create it (correctly) and not the case being wrong.
-///         The baseline is the store as it stood when the fixture finished creating the world; a
-///         reset puts exactly that back, and a test's own objects and edits go with it.
+///             emptying the store, because a type that writes onto or reads another resource's
+///             objects needs that world there when a test starts.
+///         </b> The harness creates a case's ancestors, siblings, and companions once, before the
+///         first assertion, and every assertion begins with a reset. Until
+///         <c>CyberCloud.Network/virtualNetworks/peerings</c> and <c>CyberCloud.RecoveryServices/vaults</c>
+///         — merged the same day, each having found the same gap — the reset emptied everything and
+///         nothing minded: every type owned the objects it applied and re-created them from its body.
+///         A peering applies nothing of its own — it writes a fragment onto two <c>Vpc</c>s other
+///         resources own — so a reset that removed those two objects left every one of its
+///         assertions failing on "the owner's object is not there", which is the co-writer refusing
+///         to create it (correctly) and not the case being wrong. A vault applies its own
+///         <c>ScheduledBackup</c> but reads the companion server's <c>Cluster</c> through the view
+///         first, so a reset that removed the companion's objects had it refusing the item on every
+///         assertion after the first. The baseline is the store as it stood when the fixture finished
+///         creating the world; a reset puts exactly that back, and a test's own objects and edits go
+///         with it. Nothing in the baseline enters <see cref="Applied" />: those objects were applied
+///         by the siblings' and companions' own reconcilers before the first test, and the labels
+///         assertion over <see cref="Applied" /> is about what the case under test wrote.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -176,6 +184,13 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     ///     Puts the store back to the <see cref="Baseline" /> — empty when none was taken — and
     ///     forgets the command log and the levers.
     /// </summary>
+    /// <remarks>
+    ///     ⚠ The baseline comes back as objects, hashes, addresses, versions, and co-owned unions,
+    ///     and as nothing else: it never enters <see cref="Applied" />, <see cref="Deleted" />, or
+    ///     <see cref="Refused" />. Those objects were applied by the siblings' and companions' own
+    ///     reconcilers before the first test, and the labels assertion over <see cref="Applied" />
+    ///     is about what the case under test wrote.
+    /// </remarks>
     public void Reset() {
         objects.Clear();
         hashes.Clear();
@@ -215,9 +230,12 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     ///     Remembers the store as it stands, so that every later <see cref="Reset" /> restores it.
     /// </summary>
     /// <remarks>
-    ///     ⚠ Taken by the harness once, after the ancestors and siblings converged and before the
-    ///     first test — see the class remarks. What is in it is the fixture's world; what a test
-    ///     creates afterwards is not, and is gone at the next reset exactly as before.
+    ///     ⚠ Taken by the harness once, after the ancestors, siblings, and companions have all
+    ///     converged and before the first test — see the class remarks. What is in it is the
+    ///     fixture's world; what a test creates afterwards is not, and is gone at the next reset
+    ///     exactly as before. A baseline taken later would carry a test's own leftovers into every
+    ///     test after it, which is the ordering coupling <c>ConformanceState.Namespaces</c>' remarks
+    ///     describe.
     /// </remarks>
     public void Baseline() =>
         baseline = new(

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". This one is the vault's schema, the ScheduledBackup projection, the
+      recovery-point line format, and the readers of ANOTHER provider's public contract — the two
+      properties of CyberCloud.DBforPostgreSQL/servers a vault has to know about (backup.enabled and
+      backup.retentionDays), spelled here as pointers into a body the cross-resource view returns.
+
+      ⚠ NO GRAIN INTERFACES, and this is the type with the strongest claim on one so far. A vault
+      lists recovery points, which sounds like state. It is not: every recovery point is a
+      CloudNativePG Backup object in the protected server's namespace, labelled by the operator with
+      the ScheduledBackup that made it, so the collection is a listing of the cluster and not a
+      record this platform keeps. The day a recovery point has to outlive its cluster object, this
+      project gains a grain interface; until then a grain would be a second copy of the truth.
+
+      ⚠ IT REFERENCES ONLY CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts —
+      the whole reference set docs/plan/03 § The .Contracts split allows a provider. ⚠ AND NOT
+      CyberCloud.Providers.DBforPostgreSQL.Contracts, whose `ClusterKind` this file spells again by
+      hand: src/Providers/README.md § Hard rule forbids the edge, and the Assembly graph gate's rule 2
+      fails the build on the ProjectReference alone. The duplication is the second reading of the
+      CloudNativePG API that rule buys (README § What the eighth provider measured).
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

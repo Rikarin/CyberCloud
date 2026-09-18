@@ -1116,6 +1116,22 @@ changes" becomes "run me when X changes" without a change to the provider seam. 
 themselves remain owed at `charts/managed/seaweedfs/conformance.yaml § owed` — what this decision
 removed is the sentence that said the seam was the blocker.
 
+> ⚠ **CORRECTED 2026-09-18, the same day: the vault is built, and it is the seam's first user.**
+> `CyberCloud.RecoveryServices/vaults` (#30, [15 § Backup as a service](15-storage-blob-file.md))
+> reads each protected PostgreSQL server through `View.ReadAsync` — its cluster id, its provisioning
+> state and two pointers of its published contract — and through `View.RenderedObjectsAsync` for the
+> *address* of the CloudNativePG `Cluster` it renders a `ScheduledBackup` beside; it subscribes to
+> `Watch` on every pass and treats a refusal as a log line rather than a failure. What using the seam
+> measured: nothing in this manager changed; the cost landed in the conformance harness, which
+> registers one provider and had to learn a *companion* (`IProviderCaseSource.Companions`) because the
+> view answers 404 for a type the silo does not serve and a path the index never bound — and every
+> pass the shared suite drives by hand had to be handed the real view, because a context built by
+> hand carries `RefusingResourceView`. "A vault denied once before its grant" above is now a refusal
+> the tenant reads at `/properties/protectedItems/{i}`, naming `resource:{vault}` and the role to
+> grant. The key remains owed where the sentence above says; the manager-started pass is what the
+> vault's retention now waits on (`charts/managed/recovery-vault/conformance.yaml § owed`,
+> `retention-is-enforced-on-passes`).
+
 ## Effort
 
 | Piece | EM |

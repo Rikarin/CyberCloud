@@ -39,6 +39,7 @@ type Client struct {
 	Messaging         *MessagingProvider
 	Monitor           *MonitorProvider
 	Network           *NetworkProvider
+	RecoveryServices  *RecoveryServicesProvider
 	Sample            *SampleProvider
 	Search            *SearchProvider
 	Storage           *StorageProvider
@@ -64,6 +65,7 @@ func NewClient(transport Transport) *Client {
 		Messaging:         newMessagingProvider(transport),
 		Monitor:           newMonitorProvider(transport),
 		Network:           newNetworkProvider(transport),
+		RecoveryServices:  newRecoveryServicesProvider(transport),
 		Sample:            newSampleProvider(transport),
 		Search:            newSearchProvider(transport),
 		Storage:           newStorageProvider(transport),
@@ -1692,6 +1694,77 @@ func (c *SubnetClient) ListAddressUsage(ctx context.Context, tenantID, subscript
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Network/virtualNetworks/" + segment(virtualNetworksName) + "/subnets/" + segment(resourceName) + "/listAddressUsage"
 	var result SubnetListAddressUsageResult
 	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RecoveryServicesProvider holds the resource types of CyberCloud.RecoveryServices.
+type RecoveryServicesProvider struct {
+	Vaults *BackupVaultClient
+}
+
+// newRecoveryServicesProvider builds the group's clients over one transport.
+func newRecoveryServicesProvider(transport Transport) *RecoveryServicesProvider {
+	return &RecoveryServicesProvider{
+		Vaults: &BackupVaultClient{transport: transport},
+	}
+}
+
+// BackupVaultClient is backup vaults — CyberCloud.RecoveryServices/vaults. A backup policy — a schedule and a retention — over the PostgreSQL servers in a resource group, with the recovery points it produces and a restore into a new cluster.
+type BackupVaultClient struct {
+	transport Transport
+}
+
+// Get reads one Backup vault.
+func (c *BackupVaultClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*BackupVaultResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.RecoveryServices/vaults/" + segment(resourceName)
+	var result BackupVaultResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Backup vault. ⚠ Long-running: Wait on the result.
+func (c *BackupVaultClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data BackupVaultData) (*Operation[BackupVaultResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.RecoveryServices/vaults/" + segment(resourceName)
+	return begin[BackupVaultResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Backup vault. A merge patch: what is not set is not changed.
+func (c *BackupVaultClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data BackupVaultData) (*Operation[BackupVaultResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.RecoveryServices/vaults/" + segment(resourceName)
+	return begin[BackupVaultResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Backup vault. ⚠ Permanent: this type declares no soft-delete window.
+func (c *BackupVaultClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.RecoveryServices/vaults/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Backup vaults in a resource group. ⚠ A short page never means "that is all there is".
+func (c *BackupVaultClient) List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[BackupVaultResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.RecoveryServices/vaults"
+	return newPager[BackupVaultResource](c.transport, path, options)
+}
+
+// ListRecoveryPoints runs listRecoveryPoints — permission 'read'.
+func (c *BackupVaultClient) ListRecoveryPoints(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*BackupVaultListRecoveryPointsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.RecoveryServices/vaults/" + segment(resourceName) + "/listRecoveryPoints"
+	var result BackupVaultListRecoveryPointsResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Recover runs recover — permission 'write'.
+func (c *BackupVaultClient) Recover(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content BackupVaultRecoverContent) (*BackupVaultRecoverResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.RecoveryServices/vaults/" + segment(resourceName) + "/recover"
+	var result BackupVaultRecoverResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil

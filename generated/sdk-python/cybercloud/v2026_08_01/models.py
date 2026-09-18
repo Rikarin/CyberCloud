@@ -6307,6 +6307,212 @@ class SubnetListAddressUsageResult:
         return wire
 
 
+@dataclass
+class BackupVaultData:
+    """Backup vault. A backup policy — a schedule and a retention — over the PostgreSQL servers in a resource group, with the recovery points it produces and a restore into a new cluster. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The vault's own settings."""
+
+        @dataclass
+        class Policy:
+            """The one policy every protected item follows: when a recovery point is taken and how long it is kept."""
+
+            # When a recovery point is taken, as a five-field cron expression in UTC: minute, hour, day of month, month, day of week. Numbers, `*`, `,`, `-` and `/` only. Rendered to CloudNativePG with the seconds field it requires prepended.
+            schedule: str
+            # How many days a recovery point is kept before the vault prunes it. ⚠ The bytes behind a PostgreSQL recovery point live in the server's own backup store under the server's backup.retentionDays; a server whose retention is shorter than this is refused, because the store would forget what the vault still lists.
+            retention_days: Optional[int] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> BackupVaultData.Properties.Policy:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    schedule=wire["schedule"],
+                    retention_days=wire.get("retentionDays"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["schedule"] = self.schedule
+                if self.retention_days is not None:
+                    wire["retentionDays"] = self.retention_days
+                return wire
+
+        # The cluster the vault's protected items are placed on. Every protected item must be on this cluster; one placed elsewhere is refused by name when the vault is reconciled.
+        cluster_id: str
+        # The resources this vault protects, as full resource id paths. Each must be a CyberCloud.DBforPostgreSQL/servers resource in this vault's resource group, on this vault's cluster, with backups enabled, that the vault has been granted read on. At most 16; anything else is refused by name at its own index when the vault is reconciled.
+        protected_items: List[str]
+        # The one policy every protected item follows: when a recovery point is taken and how long it is kept.
+        policy: Optional[BackupVaultData.Properties.Policy] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> BackupVaultData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                cluster_id=wire["clusterId"],
+                protected_items=wire["protectedItems"],
+                policy=_opt(wire, "policy", BackupVaultData.Properties.Policy.from_wire),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["clusterId"] = self.cluster_id
+            wire["protectedItems"] = self.protected_items
+            if self.policy is not None:
+                wire["policy"] = self.policy.to_wire()
+            return wire
+
+    # The region the vault is billed in.
+    location: str
+    # The vault's own settings.
+    properties: Optional[BackupVaultData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> BackupVaultData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", BackupVaultData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class BackupVaultResource:
+    """One Backup vault, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: BackupVaultData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> BackupVaultResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=BackupVaultData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class BackupVaultListRecoveryPointsResult:
+    """What listRecoveryPoints returns."""
+
+    # How many of them are restorable — CloudNativePG phase `completed`.
+    completed: int
+    # How many recovery points the vault holds, across every protected item.
+    count: int
+    # One line per recovery point, newest first: '{item} {name} {phase} started {startedAt} stopped {stoppedAt} method {method}', followed by ': {error}' when the operator recorded one. The name is what recover takes.
+    recovery_points: List[str]
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> BackupVaultListRecoveryPointsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            completed=wire["completed"],
+            count=wire["count"],
+            recovery_points=wire["recoveryPoints"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["completed"] = self.completed
+        wire["count"] = self.count
+        wire["recoveryPoints"] = self.recovery_points
+        return wire
+
+
+@dataclass
+class BackupVaultRecoverContent:
+    """The parameters of recover."""
+
+    # The recovery point to restore, by the name listRecoveryPoints gives it. It must be one of this vault's and its phase must be `completed`.
+    recovery_point: str
+    # The name of the NEW cluster the recovery point is restored into, in the vault's resource group. Refused when a cluster of that name already exists — a restore never overwrites.
+    target_name: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> BackupVaultRecoverContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            recovery_point=wire["recoveryPoint"],
+            target_name=wire["targetName"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["recoveryPoint"] = self.recovery_point
+        wire["targetName"] = self.target_name
+        return wire
+
+
+@dataclass
+class BackupVaultRecoverResult:
+    """What recover returns."""
+
+    # What was created. Always `Cluster` — a CloudNativePG cluster object.
+    kind: str
+    # The restored cluster's name, as asked for.
+    name: str
+    # The namespace it was created in — the vault's resource group's.
+    namespace: str
+    # The recovery point it was bootstrapped from.
+    recovery_point: str
+    # The protected item the recovery point was taken of, as its resource id path.
+    source: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> BackupVaultRecoverResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            kind=wire["kind"],
+            name=wire["name"],
+            namespace=wire["namespace"],
+            recovery_point=wire["recoveryPoint"],
+            source=wire["source"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["kind"] = self.kind
+        wire["name"] = self.name
+        wire["namespace"] = self.namespace
+        wire["recoveryPoint"] = self.recovery_point
+        wire["source"] = self.source
+        return wire
+
+
 WidgetTier = Literal["free", "basic", "standard", "premium"]
 """The values /properties/tier accepts. ⚠ Closed: the write path refuses anything else."""
 
@@ -7731,6 +7937,11 @@ __all__ = [
     "SubnetData",
     "SubnetResource",
     "SubnetListAddressUsageResult",
+    "BackupVaultData",
+    "BackupVaultResource",
+    "BackupVaultListRecoveryPointsResult",
+    "BackupVaultRecoverContent",
+    "BackupVaultRecoverResult",
     "WidgetTier",
     "WidgetData",
     "WidgetResource",

@@ -183,6 +183,70 @@ retrieval latency in the object's metadata**, so an application can decide rathe
 
 ## Backup as a service — `CyberCloud.RecoveryServices/vaults` · M2 · 1.5 EM
 
+> ⚠ **BUILT 2026-09-18, as `CyberCloud.RecoveryServices/vaults` (#30) — the first type whose
+> reconciler reads another provider's resource, and two of this section's sentences did not survive
+> the sources.** `charts/managed/recovery-vault` and `src/Providers/CyberCloud.Providers.RecoveryServices`
+> are the result; that chart's `conformance.yaml § owed` carries twelve named debts. What a vault is:
+> one policy — a five-field cron and a retention in days — over a list of protected items in its own
+> resource group, each a `CyberCloud.DBforPostgreSQL/servers` the vault has been granted `read` on.
+> The reconciler reads each item through `ReconcileContext.View` ([08 § What the resource manager
+> deliberately does not do](08-resource-manager.md), issue #90's seam, used by nothing until this
+> type), takes the *address* of the CloudNativePG `Cluster` that server's provider rendered, and
+> renders one `ScheduledBackup` beside it under the vault's own id. `listRecoveryPoints` lists the
+> `Backup` objects the operator's controller made, by the controller's own
+> `cnpg.io/scheduled-backup` label; `recover` bootstraps a **new** cluster from a completed one.
+> The two corrections that are this document's to own:
+>
+> * **⚠ "Volume snapshots for block" and the brief's "a PVC VolumeSnapshot" for file shares — the
+>   file-share half has no snapshot story on this platform.** seaweedfs-csi-driver v1.4.20's
+>   `pkg/driver/driver.go` advertises `CREATE_DELETE_VOLUME`, `EXPAND_VOLUME`,
+>   `SINGLE_NODE_MULTI_WRITER` and `PUBLISH_UNPUBLISH_VOLUME` and **no `CREATE_DELETE_SNAPSHOT`**;
+>   `charts/bundle/` installs no snapshot controller and no class that could serve one. A
+>   `VolumeSnapshot` rendered against a share's claim would never reach `readyToUse` anywhere this
+>   platform runs — the promise § File storage refused to make with `protocol: NFS`. So of the four
+>   backends listed below **one ships — engine-native backup for databases** — a file-share item is
+>   refused by name at its pointer, and the other three are `file-shares-have-no-snapshot-story` (the
+>   block half waits on LINSTOR and the external-snapshotter, [§ Block storage](#block-storage)),
+>   the account's `backup` row (Velero and bucket replication both need a destination object store
+>   that is not the account itself).
+> * **⚠ "Binds protected resources to schedules and retention" — the vault owns the schedule and the
+>   recovery-point record, and the *store* is the server's.** CloudNativePG keeps a cluster's backup
+>   destination and its `retentionPolicy` on the `Cluster` (`spec.backup.barmanObjectStore`), which
+>   is the protected server's to write and which the view — read-only, by design — cannot reach.
+>   The vault reads the server's published contract instead and refuses what it could not keep: a
+>   server with `backup.enabled: false` (CloudNativePG fails every Backup of it with *"cannot proceed
+>   with the backup as the cluster has no backup section"*) and a server whose `backup.retentionDays`
+>   is shorter than the vault's. ⚠ And on this platform today the server's store is not wired:
+>   `charts/managed/postgres` renders `destinationPath: ""` and no credentials, nothing fills the
+>   empty destination in, and CloudNativePG's real definition refuses the result outright — the
+>   empty string, and a filled-in one for *"missing credentials"* — so **no PostgreSQL server with
+>   backups on can be created on a real cluster today**, found the first time a suite put one in
+>   front of the operator the bundle installs, and recorded at `charts/managed/postgres/conformance.yaml
+>   § owed`, `the-default-bucket-is-not-filled-in`, by this pass. Until that row closes, the vault's
+>   operator lane asserts the only thing that is true: the server the operator admits is one the
+>   vault refuses, and the vault's own rendering is admitted, scheduled and failed by the operator
+>   with its own reason, which `listRecoveryPoints` reports per point (`the-store-is-the-servers`).
+>
+> What held: "Restore always creates a new resource" — `recover` refuses a target name a cluster
+> already holds, and a restored cluster carries no `backup` block so it cannot archive over the
+> source's WAL. What is a *cluster object* rather than a *resource* — nothing meters it, no
+> `listKeys` knows it — is `a-restore-is-not-yet-a-resource`, and the property that closes it is the
+> server's. "The platform runs an automated monthly restore" is `the-monthly-test-restore`: the
+> primitive exists and the scheduled pass it needs is the manager-started pass
+> [08](08-resource-manager.md) records as owed — which is also why retention is enforced on passes
+> (`retention-is-enforced-on-passes`). One policy per vault where this section says "schedules and
+> retention", because an array of objects is not expressible in a `ResourceSchema`
+> (`one-policy-per-vault`); a vault carrying several is a `vaults/backupPolicies` child type.
+>
+> ⚠ What the review of the first cut added to the ledger: `recover` is gated by `write` on the
+> *vault* and by nothing on the server whose bytes it materialises, because `ActionContext` carries
+> no caller and no authorizer (`recover-is-gated-by-the-vault-alone` — the honest closing move is
+> the same `restoreFrom` on the server that closes `a-restore-is-not-yet-a-resource`, at which point
+> the manager gates the restore with `write` on the server's type); "shows its backup status on its
+> own blade" below has only the vault's side, `listRecoveryPoints`, and nothing on the server's
+> (`backup-status-is-not-on-the-servers-blade`); and `storage.backup.gb_month` is declared and not
+> emitted (`backup-storage-is-not-metered`).
+
 Not a storage type; a *policy* resource that binds protected resources to schedules and retention.
 
 - Backends: Velero for namespace-scoped Kubernetes state, volume snapshots for block, engine-native
