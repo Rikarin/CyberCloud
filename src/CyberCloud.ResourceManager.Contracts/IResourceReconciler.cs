@@ -227,6 +227,7 @@ public readonly record struct ReconcileContext(
 
     readonly IKubeCoWriter? coWriter;
 
+    /// <summary>
     ///     The read-only, authorization-checked view of resources this reconciler does not own —
     ///     the one way a provider reaches another provider's resource.
     /// </summary>
