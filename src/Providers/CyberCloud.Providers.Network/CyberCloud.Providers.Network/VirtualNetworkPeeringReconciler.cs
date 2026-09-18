@@ -258,7 +258,8 @@ public sealed class VirtualNetworkPeeringReconciler(IClock clock) : IResourceRec
         var local = VirtualNetworkPeerings.LocalVpcRef(context.Namespace, context.Id);
 
         // ⚠ The remote is read off the body, which is the one place a changed remoteNetwork bites:
-        // the fragment on the OLD remote is not withdrawn by this pass. VirtualNetworkPeerings'
+        // the fragment on the OLD remote is not withdrawn by this pass, and DriftScanner names it
+        // as a slice left behind (Diverged, not Orphan — the grain exists). VirtualNetworkPeerings'
         // remarks record it as owed.
         var remote = VirtualNetworkPeerings.RemoteVpcRef(context.Namespace, context.Desired);
 

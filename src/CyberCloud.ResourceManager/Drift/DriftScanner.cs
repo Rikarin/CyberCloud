@@ -11,24 +11,50 @@ namespace CyberCloud.ResourceManager.Drift;
 /// <param name="ResourceId">The resource's GUID.</param>
 /// <param name="ResourcePath">Its address.</param>
 /// <param name="DesiredHash">
-///     The hash of its desired body, which is what the objects carry as
-///     <c>cybercloud.io/reconcile-hash</c> — docs/plan/09 § The command builder. ⚠ For a resource
-///     that co-writes rather than owns — a peering — it is the hash of its <i>fragment</i>, which is
-///     what <c>ApplyOutcome.ReconcileHash</c> reports from a co-owned apply and what the object
-///     carries as <c>cybercloud.io/fragment-hash.{writer}</c>; the owner's hash is over the owner's
-///     body and would never match. One member serves both because no resource in the tree does both:
-///     the day one owns objects and co-writes others, this gains a second hash.
+///     The hash of its desired body, which is what the objects it <b>owns</b> carry as
+///     <c>cybercloud.io/reconcile-hash</c> — docs/plan/09 § The command builder. ⚠ Judges owned
+///     objects only. What a resource co-writes is judged by <paramref name="Fragments" />, never by
+///     this: a co-writer's slice carries <c>fragment-hash.{writer}</c>, over that fragment alone, and
+///     the owner's <c>reconcile-hash</c> beside it is over the owner's body.
 /// </param>
 /// <param name="ProvisioningState">
 ///     ⚠ Load-bearing for the diff. A resource in <see cref="ProvisioningState.Creating" /> whose
 ///     objects are not there yet is not a stray — it is a resource being created.
 /// </param>
+/// <param name="Fragments">
+///     The fragments this resource is expected to hold on objects it does not own — one per object,
+///     each with the hash the co-owned apply reported for it. Empty for the resource that owns
+///     everything it applies, which is every type but a peering.
+///     <para>
+///         ⚠ <b>One hash per object, because the first co-writer in the tree writes two.</b> A
+///         peering's two fragments are mirror images — each names the <i>other</i> network's
+///         <c>Vpc</c>, each route points at the other end of the link — so they hash differently, and
+///         a single desired hash held against both called every converged peering diverged on every
+///         scan (the #31 review's finding; the real-cluster test had compared the last apply's hash
+///         and asserted only strays and orphans). Keyed by the object, the scan also tells the two
+///         states a single hash could not: an expected fragment whose object carries none of this
+///         writer's is a slice that went missing, and a fragment of this writer's on an object it is
+///         not expected on is a slice left behind — a peering whose <c>remoteNetwork</c> was changed
+///         under a declared-but-unenforced <c>Immutable</c> leaves one on the old remote, and this is
+///         the only place it is named. Both are <see cref="DriftKind.Diverged" />, since the grain
+///         exists and the objects are their owners'.
+///     </para>
+/// </param>
 public readonly record struct ExpectedResource(
     Guid ResourceId,
     string ResourcePath,
     string DesiredHash,
-    ProvisioningState ProvisioningState
+    ProvisioningState ProvisioningState,
+    ImmutableArray<ExpectedFragment> Fragments = default
 );
+
+/// <summary>One slice a co-writing resource is expected to hold on one object it does not own.</summary>
+/// <param name="Target">The owner's object. Compared as a value: kind, namespace and name.</param>
+/// <param name="Hash">
+///     The <c>cybercloud.io/fragment-hash.{writer}</c> the object should carry — what
+///     <c>ApplyOutcome.ReconcileHash</c> reported for the co-owned apply onto this object.
+/// </param>
+public readonly record struct ExpectedFragment(ObjectRef Target, string Hash);
 
 /// <summary>
 ///     The per-cluster drift diff. docs/plan/08 § The reconcile loop.
@@ -62,11 +88,15 @@ public readonly record struct ExpectedResource(
 ///         co-writing resource owns no object carrying its resource-id label. The join therefore
 ///         runs twice: the resource-id label finds what a resource owns, and
 ///         <see cref="ClusterObjectRecord.Fragments" /> finds what it co-writes. A co-writer with
-///         neither is a stray; one whose <c>fragment-hash.{writer}</c> differs from its desired
-///         hash is diverged; and a fragment whose writer no grain owns is an orphan naming the
-///         slice rather than the object — the objects are their owners' and stay — which is the one
-///         place a fragment left behind by a co-writer that never withdrew is found, because the
-///         apply path carries every stored fragment forward verbatim and prunes none.
+///         neither is a stray; one whose <c>fragment-hash.{writer}</c> on an object differs from
+///         the hash <see cref="ExpectedResource.Fragments" /> expects <i>on that object</i> is
+///         diverged, as is one expected on an object that carries none of its slices or found on
+///         an object it is not expected on; and a fragment whose writer no grain owns is an orphan
+///         naming the slice rather than the object — the objects are their owners' and stay. The
+///         apply path carries every stored fragment forward verbatim and prunes none, so the scan is
+///         the one place a fragment nobody will withdraw is found: as an orphan when its writer's
+///         grain is gone, as a diverged slice left behind when the grain is still there and no
+///         longer places it on that object.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The scan reports; it does not repair.</b> "Pokes only what diverged" is a second step
@@ -170,29 +200,80 @@ public sealed class DriftScanner(IClock clock) {
                 .Select(x => x.Target)
                 .ToList();
 
-            // ⚠ A co-writer's slice is judged by ITS hash, not the object's. The object's
-            // reconcile-hash is the owner's, over the owner's body; the co-writer's is
-            // fragment-hash.{writer}, over its fragment alone — which is what its ExpectedResource
-            // carries as DesiredHash. Comparing a peering against the Vpc's hash would report every
-            // peering as diverged the moment its parent re-rendered anything.
-            diverged.AddRange(
-                (coWritten ?? [])
-                    .Where(x => !string.Equals(x.Fragment.Hash, resource.DesiredHash, StringComparison.Ordinal))
-                    .Select(x => x.Record.Target)
-            );
+            var reasons = new List<string>();
 
             if (diverged.Count > 0) {
-                var total = (owned?.Count ?? 0) + (coWritten?.Count ?? 0);
+                reasons.Add(
+                    $"{diverged.Count.ToString(CultureInfo.InvariantCulture)} of "
+                    + $"{(owned?.Count ?? 0).ToString(CultureInfo.InvariantCulture)} owned objects carry a "
+                    + $"reconcile-hash other than '{resource.DesiredHash}'"
+                );
+            }
 
+            // ⚠ A co-writer's slice is judged by ITS hash ON THAT OBJECT, not by the object's and
+            // not by one hash for every object. The object's reconcile-hash is the owner's, over the
+            // owner's body; the co-writer's is fragment-hash.{writer}, over its fragment alone — and
+            // a peering's two fragments are mirror images with two hashes, so a single desired hash
+            // held against both called every converged peering diverged on every scan. The join is
+            // therefore per object, which also names the slice that went missing from an object it
+            // is expected on and the slice left behind on one it no longer is.
+            var expectedFragments = resource.Fragments.IsDefault ? [] : resource.Fragments;
+            var missing = new List<ObjectRef>();
+            var leftBehind = new List<ObjectRef>();
+            var changed = new List<ObjectRef>();
+
+            foreach (var (record, fragment) in coWritten ?? []) {
+                var onThisObject = expectedFragments.Where(x => x.Target == record.Target).ToList();
+
+                if (onThisObject.Count == 0) {
+                    leftBehind.Add(record.Target);
+                } else if (!onThisObject.Any(x => string.Equals(x.Hash, fragment.Hash, StringComparison.Ordinal))) {
+                    changed.Add(record.Target);
+                }
+            }
+
+            foreach (var slice in expectedFragments) {
+                if (!(coWritten ?? []).Any(x => x.Record.Target == slice.Target)) {
+                    missing.Add(slice.Target);
+                }
+            }
+
+            if (changed.Count > 0) {
+                reasons.Add(
+                    $"{changed.Count.ToString(CultureInfo.InvariantCulture)} of "
+                    + $"{expectedFragments.Length.ToString(CultureInfo.InvariantCulture)} co-written objects carry a "
+                    + "fragment-hash other than the one expected on that object"
+                );
+            }
+
+            if (missing.Count > 0) {
+                reasons.Add(
+                    $"{missing.Count.ToString(CultureInfo.InvariantCulture)} of "
+                    + $"{expectedFragments.Length.ToString(CultureInfo.InvariantCulture)} co-written objects carry no "
+                    + "fragment of this resource's — the slice went missing from an object it is expected on"
+                );
+            }
+
+            if (leftBehind.Count > 0) {
+                reasons.Add(
+                    $"{leftBehind.Count.ToString(CultureInfo.InvariantCulture)} object(s) carry a fragment of this "
+                    + "resource's that its desired state does not place there — a slice left behind, which no "
+                    + "co-writer will withdraw and every other co-writer's apply carries forward"
+                );
+            }
+
+            diverged.AddRange(changed);
+            diverged.AddRange(missing);
+            diverged.AddRange(leftBehind);
+
+            if (diverged.Count > 0) {
                 findings.Add(
                     new() {
                         Kind = DriftKind.Diverged,
                         ResourceId = resource.ResourceId,
                         ResourcePath = resource.ResourcePath,
                         Objects = [.. diverged],
-                        Detail = $"{diverged.Count.ToString(CultureInfo.InvariantCulture)} of "
-                            + $"{total.ToString(CultureInfo.InvariantCulture)} objects carry a "
-                            + $"reconcile-hash or fragment-hash other than '{resource.DesiredHash}'."
+                        Detail = string.Join("; ", reasons) + "."
                     }
                 );
             }

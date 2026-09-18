@@ -1053,4 +1053,7 @@ public sealed record DriftReport {
 
     /// <summary>The strays — resources whose objects vanished.</summary>
     public IEnumerable<DriftFinding> Strays => Findings.Where(x => x.Kind == DriftKind.Stray);
+
+    /// <summary>The divergences — resources whose objects, or whose slices of others' objects, differ from what the grain holds.</summary>
+    public IEnumerable<DriftFinding> Diverged => Findings.Where(x => x.Kind == DriftKind.Diverged);
 }

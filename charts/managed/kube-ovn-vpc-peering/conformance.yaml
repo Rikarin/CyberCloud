@@ -82,10 +82,17 @@ assertions:
       `address-space-is-validated-after-202`. NetworkPeeringTests walks each refusal.
   - id: the-remote-cannot-reach-outside-the-resource-group
     says: >
-      The remote's Vpc object name is qualified with THIS resource's namespace, so a body naming
-      `spoke` in subscription A writes onto A's `spoke` and never B's, whatever it says. The co-owned
-      apply checks the tenant on the live object as well; the resource group is this type's own
-      boundary, and § owed says why it is not the tenant's.
+      A peering writes onto no Vpc whose subscription-id and resource-group labels are not the
+      peering's own, whatever the body names. ⚠ The name qualifier is NOT what holds this, and the
+      first version of this row said it was: a Vpc's name is {sub}-{group}-{network} with hyphens
+      allowed in both halves, so `prod`'s network `a-b` and `prod-a`'s network `b` are ONE object
+      name, and a peering in `prod` naming `a-b` converged with a peer port and a route written into
+      `prod-a`'s router — a group its author may hold no role on (the #31 review's probe). The
+      co-owned apply now holds the live object's tenant, subscription AND group against the writer's,
+      in the builder and again on the read before the PATCH (KubeCommand.CheckCoOwnedAgainst), and the
+      reconciler reports the refusal as Failed naming both groups.
+      NetworkPeeringTests.ARemoteWhoseNameIsAnotherGroupsNetworkIsRefusedByGroupAndThatRouterIsUntouched
+      is the probe kept as the test; § owed says why the boundary is the group and not the tenant.
   - id: two-peerings-of-one-network-share-one-manager
     says: >
       Two peerings hanging off one network write two entries into the same atomic lists under ONE
@@ -145,11 +152,12 @@ owed:
       reasons it does not, neither the schema's. (1) AUTHORIZATION: the write path authorizes the
       caller against the peering's own address and nothing else, and no seam lets a provider require
       a permission on a second resource at reconcile time — the same absence
-      charts/managed/kube-ovn-vpc/conformance.yaml records for `Validates(...)`. The co-owned apply
-      checks the TENANT on the live object, so a cross-subscription body would inject routes into a
-      router its author may hold no role on; docs/plan/07's roles are granted on subscriptions and
-      groups, and one resource group is the smallest scope on which write on the peering implies
-      write on both networks. (2) THE NAMESPACE RULE: the remote's Vpc name is
+      charts/managed/kube-ovn-vpc/conformance.yaml records for `Validates(...)`. docs/plan/07's roles
+      are granted on subscriptions and groups, so one resource group is the smallest scope on which
+      write on the peering implies write on both networks, and a cross-subscription or cross-group
+      body would inject routes into a router its author may hold no role on. The co-owned apply
+      holds that boundary on the live object's labels — tenant, subscription and group — since the
+      #31 review (the-remote-cannot-reach-outside-the-resource-group). (2) THE NAMESPACE RULE: the remote's Vpc name is
       VirtualNetworks.ObjectNameOf of the remote's namespace, and ReconcileDriver.NamespaceFor's own
       remarks forbid a second spelling of that rule in a provider. ⚠ WHAT WOULD CLOSE IT: a
       reconcile-time authorization seam (`IResourceAuthorizer` reachable from ReconcileContext, or a
@@ -175,11 +183,16 @@ owed:
     says: >
       `remoteNetwork` is declared Immutable and SchemaProperty.Immutable is a declaration the manager
       does not enforce. A PUT naming a different remote applies a fragment onto the NEW remote's Vpc
-      and never withdraws the one on the old remote's, which then reads as an orphan slice to
-      DriftScanner — the one place a fragment left by a co-writer that never withdrew is found — and
-      to nothing else. The same shape as charts/managed/kube-ovn-snat's `a-nat-rule-cannot-be-changed`.
-      ⚠ WHAT WOULD CLOSE IT: the manager enforcing Immutable, or the reconciler reading
-      ReconcileContext.Observed's previous body and withdrawing from the remote it named before.
+      and never withdraws the one on the old remote's. ⚠ That leftover is NOT an orphan to
+      DriftScanner, as this row first claimed: the orphan pass skips every writer whose grain exists,
+      and the peering's does. Since the #31 review the scan holds a co-writer's fragments per OBJECT
+      (ExpectedResource.Fragments), and a fragment of the peering's on an object its desired state
+      does not place it on is a Diverged finding naming that object — "a slice left behind"
+      (DriftScannerTests.AFragmentLeftOnAnObjectTheWriterNoLongerPlacesItOnIsDivergedNotOrphaned).
+      That finding is the only place the leftover is named; nothing withdraws it. The same shape as
+      charts/managed/kube-ovn-snat's `a-nat-rule-cannot-be-changed`. ⚠ WHAT WOULD CLOSE IT: the
+      manager enforcing Immutable, or the reconciler reading ReconcileContext.Observed's previous
+      body and withdrawing from the remote it named before.
   - id: an-absent-remote-waits-rather-than-failing
     says: >
       A body naming a network that does not exist is accepted with a 202 and the peering sits in

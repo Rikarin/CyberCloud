@@ -40,19 +40,36 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         the API. It is not offered, for two reasons that are not the schema's. First, the write
 ///         path authorizes the caller against the <i>peering's</i> address and nothing else, and no
 ///         seam lets a provider require a permission on a second resource at reconcile time
-///         (<see cref="NetworkAddressing" /> records the same absence for <c>Validates</c>). The
-///         co-owned apply checks the <b>tenant</b> on the live object, so a body naming a network in
-///         another subscription of the same tenant would inject routes into a router its author may
-///         hold no role on — docs/plan/07's roles are granted on subscriptions and groups, and one
-///         resource group is the smallest scope on which write on the peering implies write on both
-///         networks. Second, the remote's object name is <see cref="VirtualNetworks.ObjectNameOf" />
-///         of the remote's <i>namespace</i>, and the namespace rule is
+///         (<see cref="NetworkAddressing" /> records the same absence for <c>Validates</c>). Roles
+///         are granted on subscriptions and groups (docs/plan/07), so one resource group is the
+///         smallest scope on which write on the peering implies write on both networks, and a body
+///         naming a network elsewhere would inject routes into a router its author may hold no role
+///         on. Second, the remote's object name is <see cref="VirtualNetworks.ObjectNameOf" /> of
+///         the remote's <i>namespace</i>, and the namespace rule is
 ///         <c>ReconcileDriver.NamespaceFor</c>'s, whose own remarks forbid a second spelling in a
-///         provider. So the remote's name is qualified with this resource's own namespace, which is
-///         what makes the join unable to reach outside the group — the <see cref="NatGateways" />
-///         argument, on the kind where reaching outside would be a route into somebody else's
-///         router. <c>charts/managed/kube-ovn-vpc-peering/conformance.yaml § owed</c>,
+///         provider. So the remote's name is qualified with this resource's own namespace.
+///         <c>charts/managed/kube-ovn-vpc-peering/conformance.yaml § owed</c>,
 ///         <c>the-remote-must-be-in-the-same-resource-group</c>.
+///     </para>
+///     <para>
+///         ⚠ <b>THE NAME QUALIFIER IS NOT THE BOUNDARY; THE CO-OWNED APPLY'S CHECK IS.</b> The
+///         first version of this class said the qualified name was "what makes the join unable to
+///         reach outside the group", and the #31 review showed it does not: a <c>Vpc</c> name is
+///         <c>{sub}-{group}-{network}</c> and <see cref="ResourceNaming.Pattern" /> admits hyphens
+///         in both halves, so <c>prod</c>'s network <c>a-b</c> and <c>prod-a</c>'s network
+///         <c>b</c> are <i>one object name</i>, and a peering in <c>prod</c> naming <c>a-b</c>
+///         converged with a peer port and a route written into <c>prod-a</c>'s router. What holds
+///         the boundary now is the co-owned apply itself: the builder and
+///         <c>KubeCommand.CheckCoOwnedAgainst</c> hold the live object's <c>subscription-id</c> and
+///         <c>resource-group</c> labels against the writer's, beside the tenant, and refuse by name
+///         (docs/plan/09 § A second writer on an object). The reconciler reports that refusal as
+///         <c>Failed</c>: a name another group's network occupies is not a wait.
+///         <c>NetworkPeeringTests.ARemoteWhoseNameIsAnotherGroupsNetworkIsRefusedByGroupAndThatRouterIsUntouched</c>
+///         is the review's probe kept as the test. ⚠ The collision itself is the network type's —
+///         two networks in two such groups render one object and overwrite each other under the
+///         family's one manager — and is recorded on the network's chart:
+///         <c>charts/managed/kube-ovn-vpc/conformance.yaml § owed</c>,
+///         <c>hyphenated-groups-can-render-one-object-name</c>.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THE BODY CARRIES THE RANGES, BECAUSE NEITHER NETWORK'S IS READABLE FROM HERE.</b> A
@@ -88,8 +105,12 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         ⚠ <b><c>remoteNetwork</c> IS <c>Immutable</c>, AND THE MANAGER DOES NOT ENFORCE THAT.</b>
 ///         <c>SchemaProperty.Immutable</c> is a declaration. A <c>PUT</c> that names a different
 ///         remote would apply a fragment onto the new remote's <c>Vpc</c> and never withdraw the
-///         one on the old remote's, which then reads as an orphan slice to <c>DriftScanner</c> and to
-///         nothing else. <c>§ owed</c>, <c>a-changed-remote-leaves-a-fragment-behind</c>.
+///         one on the old remote's. ⚠ Not an orphan to <c>DriftScanner</c>, as this paragraph once
+///         said: the orphan pass skips every writer whose grain exists, and the peering's does. It
+///         is a <c>Diverged</c> finding naming the old remote's object — a fragment of this
+///         resource's on an object its <c>ExpectedResource.Fragments</c> does not place it on, "a
+///         slice left behind" — and that finding is the only place the leftover is ever named.
+///         <c>§ owed</c>, <c>a-changed-remote-leaves-a-fragment-behind</c>.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>No <c>SupportsSoftDelete</c>, for the family's reason</b> — <c>RestoreAsync</c> and
@@ -169,9 +190,12 @@ public static class VirtualNetworkPeerings {
     /// <param name="ns">The resource's namespace, used as a name component.</param>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ Qualified with <b>this</b> resource's namespace, which is what keeps a body from naming a
-    ///     network in another subscription or group — see this class's remarks for why that is a
-    ///     decision rather than a limitation of the schema.
+    ///     ⚠ Qualified with <b>this</b> resource's namespace, so a body can only <i>name</i> a network
+    ///     in its own subscription and group — see this class's remarks for why that is a decision
+    ///     rather than a limitation of the schema. ⚠ The name alone is not what keeps the write inside
+    ///     the group: hyphenated group and network names can render one object name across two groups,
+    ///     and it is the co-owned apply's check of the live object's <c>resource-group</c> label that
+    ///     refuses the write. The class remarks say how that was found.
     /// </remarks>
     public static ObjectRef RemoteVpcRef(string ns, JsonElement desired) =>
         VirtualNetworks.VpcRef(ns, RemoteNetwork(desired));

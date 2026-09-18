@@ -137,16 +137,29 @@ public sealed class VirtualNetworkPeeringClusterBackedConformance(
 
         seen.ShouldContain(x => x.Fragments.Any(f => f.Writer == accepted.Resource.Id), "the real LIST did not surface the peering's fragment annotations");
 
-        var desiredHash = harness.Connection.Applied.Last(x => x.IsCoOwned).ReconcileHash;
+        // ⚠ ONE HASH PER OBJECT, off the last co-owned apply onto each. The two fragments are mirror
+        // images and hash differently; this test once took the LAST apply's hash for both and
+        // asserted only strays and orphans, which is how "every converged peering is Diverged on
+        // every scan" went unseen until the #31 review. The assertion is now the whole report.
+        var fragments = harness.Connection.Applied
+            .Where(x => x.IsCoOwned && x.ResourceId == accepted.Resource.Id)
+            .GroupBy(x => x.Target)
+            .Select(x => new ExpectedFragment(x.Key, x.Last().ReconcileHash))
+            .ToImmutableArray();
+
+        fragments.Length.ShouldBe(2, "a peering co-writes exactly two objects");
+        fragments.Select(x => x.Hash).Distinct().Count().ShouldBe(2, "the two fragments are mirror images and cannot hash the same");
 
         var report = new DriftScanner(harness.Clock).Scan(
             ClusterConformanceHarness<VirtualNetworkPeeringCase>.ClusterId,
             seen,
-            [new ExpectedResource(accepted.Resource.Id, address.Path, desiredHash, ProvisioningState.Succeeded)]
+            [new ExpectedResource(accepted.Resource.Id, address.Path, "sha256:not-what-a-fragment-is-judged-by", ProvisioningState.Succeeded, fragments)]
         );
 
-        report.Strays.ShouldNotContain(x => x.ResourceId == accepted.Resource.Id, "a converged peering owns no labelled object and must not read as a stray: " + report);
-        report.Orphans.ShouldNotContain(x => x.ResourceId == accepted.Resource.Id, "the peering's grain exists, so its fragment is not an orphan: " + report);
+        report.Findings.Where(x => x.ResourceId == accepted.Resource.Id).ShouldBeEmpty(
+            "a converged peering owns no labelled object, its grain exists, and each Vpc carries the fragment expected on it — "
+            + "so it is neither a stray, nor an orphan, nor diverged: " + string.Join(" | ", report.Findings)
+        );
 
         // ── delete → withdrawn, and both networks stand ──────────────────────────────────────
         var deleted = await harness.Manager.DeleteAsync(

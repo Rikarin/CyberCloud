@@ -241,6 +241,34 @@ public sealed class CoOwnedCommandBuilderTests {
     }
 
     [Fact]
+    public void AnotherResourceGroupsObjectIsRefusedByNameBecauseTwoGroupsCanRenderOneObjectName() {
+        // ⚠ THE #31 REVIEW'S FINDING. The tenant was the only boundary read off the object, and a
+        // Vpc's name is {sub}-{group}-{network} with hyphens allowed in both halves — so `prod`'s
+        // network `a-b` and `prod-a`'s network `b` are ONE object name, and a peering in `prod`
+        // naming `a-b` read `prod-a`'s router and wrote a route into it. The caller was authorized
+        // on the peering alone; one group is the smallest scope on which that implies write on the
+        // owner's object, so the group is held on the object's label, in both halves of the check.
+        var theirs = LiveVpc(group: "prod-a");
+
+        var refused = CoWrite(PeeringA, theirs).TryBuild();
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Message.ShouldContain("never reaches across a resource group");
+        refused.Error.Message.ShouldContain("'prod-a'");
+        refused.Error.Message.ShouldContain("'prod'");
+    }
+
+    [Fact]
+    public void AnotherSubscriptionsObjectIsRefused() {
+        var theirs = LiveVpc(subscription: Guid.Parse("cccccccc-0000-4000-8000-000000000003"));
+
+        var refused = CoWrite(PeeringA, theirs).TryBuild();
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Message.ShouldContain("never reaches across a subscription");
+    }
+
+    [Fact]
     public void AResourceCoWritingItsOwnObjectIsRefused() {
         var refused = Builder(Owner, LiveVpc()).ObjectJson("""{ "spec": { "x": 1 } }""").TryBuild();
 
@@ -833,6 +861,43 @@ public sealed class CoOwnedCommandBuilderTests {
     }
 
     [Fact]
+    public void AnObjectInAnotherResourceGroupFailsTheLiveCheckEvenWhenTheOwnerMatches() {
+        // The second half of the group boundary: the object the client reads a moment before the
+        // PATCH is held against the group the command carries, the same way the tenant is.
+        var command = CoWrite(PeeringA, LiveVpc()).Build();
+
+        command.ResourceGroup.ShouldBe("prod", "the co-writer's group rides on the command, since it writes no labels");
+
+        var elsewhere = LiveVpc(group: "prod-a");
+
+        var refused = command.CheckCoOwnedAgainst(elsewhere);
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Code.ShouldBe(ErrorCode.Conflict);
+        refused.Error.Message.ShouldContain("across a resource group");
+        refused.Error.Message.ShouldContain("'prod-a'");
+
+        command.CheckCoOwnedAgainst(LiveVpc(subscription: Guid.Parse("cccccccc-0000-4000-8000-000000000003")))
+            .Error!.Message.ShouldContain("across a subscription");
+    }
+
+    [Fact]
+    public void TheAgentRefusesACoOwnedCommandThatNamesNoResourceGroup() {
+        // A frame that lost its group would pass the shape and then fail every live check against
+        // an empty string; the shape names the omission instead, on the agent's side.
+        var command = CoWrite(PeeringA, LiveVpc()).Build();
+        var wire = JsonNode.Parse(KubeCommandJson.ToJson(command))!.AsObject();
+
+        wire["resourceGroup"].ShouldNotBeNull("the group crosses the tunnel with the command");
+        wire.Remove("resourceGroup");
+
+        var refused = KubeCommandJson.FromJson(wire.ToJsonString());
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Message.ShouldContain("names no resource group");
+    }
+
+    [Fact]
     public void AManagerThatIsNotTheOneDerivedFromTheObjectFailsTheLiveCheck() {
         // The shape check accepts any cybercloud/{type}/{ownerId} for the claimed owner; the type
         // half is the object's to confirm, because the shape alone cannot know it.
@@ -904,12 +969,14 @@ public sealed class CoOwnedCommandBuilderTests {
     static KubeObject LiveVpc(
         Dictionary<string, string>? annotations = null,
         string resourceVersion = "12",
-        Guid? tenant = null
+        Guid? tenant = null,
+        Guid? subscription = null,
+        string group = "prod"
     ) {
         var labels = new JsonObject {
             [KubeLabels.TenantId] = KubeLabels.GuidValue(tenant ?? Tenant),
-            [KubeLabels.SubscriptionId] = KubeLabels.GuidValue(Subscription),
-            [KubeLabels.ResourceGroup] = "prod",
+            [KubeLabels.SubscriptionId] = KubeLabels.GuidValue(subscription ?? Subscription),
+            [KubeLabels.ResourceGroup] = group,
             [KubeLabels.ResourceId] = KubeLabels.GuidValue(Owner.Id),
             [KubeLabels.ResourceType] = KubeLabels.ResourceTypeValue(Owner.Type),
             [KubeLabels.ApiVersion] = "2026-08-01",

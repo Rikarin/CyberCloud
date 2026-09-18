@@ -52,6 +52,9 @@ public static class KubeCommandJson {
 
         [JsonPropertyName("ownerResourceId")]
         public Guid OwnerResourceId { get; init; }
+
+        [JsonPropertyName("resourceGroup")]
+        public string ResourceGroup { get; init; } = string.Empty;
     }
 
     /// <summary>Serializes a built command.</summary>
@@ -72,7 +75,8 @@ public static class KubeCommandJson {
                 ReconcileHash = command.ReconcileHash,
                 Force = command.Force,
                 ResourcePath = command.ResourcePath,
-                OwnerResourceId = command.OwnerResourceId
+                OwnerResourceId = command.OwnerResourceId,
+                ResourceGroup = command.ResourceGroup
             }
         );
     }
@@ -135,7 +139,8 @@ public static class KubeCommandJson {
             ReconcileHash = value.ReconcileHash,
             Force = value.Force,
             ResourcePath = value.ResourcePath,
-            OwnerResourceId = value.OwnerResourceId
+            OwnerResourceId = value.OwnerResourceId,
+            ResourceGroup = value.ResourceGroup
         };
 
         var shape = command.CheckCoOwnedShape();

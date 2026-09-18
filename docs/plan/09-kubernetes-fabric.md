@@ -186,8 +186,18 @@ to the **co-owned** mode, whose rules are:
   `WithSubscriptionId` by name: a co-writer adds only its own fragment, and an annotation applied
   beside a fragment would ride under the shared manager without being in the fragment the next
   co-writer merges, which prunes it. The live object must carry the seven — a co-writer writes only onto an object this
-  platform owns — and its `tenant-id` must be the co-writer's own. Who the owner is comes off the
-  live object's labels, never from the caller.
+  platform owns — and its `tenant-id`, `subscription-id` and `resource-group` must be the co-writer's
+  own. Who the owner is comes off the live object's labels, never from the caller.
+  ⚠ **The group is a boundary because the caller was authorized on the co-writer alone.** The write
+  path checks write on the co-writer's address and nothing else; what lets that caller change the
+  owner's object is that write on the one implies write on the other, and [07](07-rebac-authorization.md)
+  grants roles on subscriptions and groups, so one resource group is the smallest scope on which it
+  does. The first version of this mode read only `tenant-id` and the #31 review found the hole on
+  the peering: a `Vpc` is named `{sub}-{group}-{network}` with hyphens allowed in both halves, so
+  `prod`'s network `a-b` and `prod-a`'s network `b` are one object name, and a peering in `prod`
+  naming `a-b` read `prod-a`'s router and wrote a route into it. The three labels are held in the
+  builder and again by `KubeCommand.CheckCoOwnedAgainst` on the read before the `PATCH`; the group
+  rides on the command as `KubeCommand.ResourceGroup`, since a co-owned command carries no labels.
 - **One field manager per co-owned object, named for the owner:**
   `cybercloud/{ownerType}/{ownerId}` — `cybercloud/cybercloud.network_virtualnetworks/3a8f0c22-…` —
   shared by every co-writer of that object and distinct from the owner's `cybercloud/{provider}`.
@@ -230,8 +240,8 @@ to the **co-owned** mode, whose rules are:
   absent on a withdrawal, `Force` off. The tunnel agent runs it on every co-owned frame
   (`KubeCommandJson.FromJson`), and `KubeApiClient` runs it again and then
   `KubeCommand.CheckCoOwnedAgainst` on the object it has just read: the live `resource-id` is the
-  owner the command claims, the live `tenant-id` is the command's, and the manager is the one derived
-  from the live labels. A name taken by another resource between a co-writer's read and its apply is
+  owner the command claims, the live `tenant-id`, `subscription-id` and `resource-group` are the
+  command's, and the manager is the one derived from the live labels. A name taken by another resource between a co-writer's read and its apply is
   what the second catches — a failure rather than an outcome, `ErrorCode.Conflict` naming both
   owners, because reading again is not the repair; measured in
   `CoOwnedApplyTests.ANameTakenByAnotherResourceAfterTheReadIsRefusedAndNothingIsWritten`.
@@ -239,13 +249,21 @@ to the **co-owned** mode, whose rules are:
   the per-cluster scan of [08](08-resource-manager.md) — a hash join on that label — would call every
   converged peering a stray, forever. `ClusterObjectRecord.Fragments` carries each object's
   `fragment.{writer}` annotations with the hash and path beside them, and `DriftScanner` looks a
-  resource up under both keys: a co-writer with neither is a stray, one whose `fragment-hash.{writer}`
-  differs from its desired hash — the hash of its *fragment*, which is what a co-owned apply reports —
-  is diverged, and a fragment whose writer no grain owns is an orphan naming the slice rather than the
-  object. That last one is the only place a fragment left by a co-writer that vanished without
-  withdrawing is ever found: the apply path carries every stored fragment forward verbatim and prunes
-  none, and the API server's 256 KiB cap on an object's annotations is the ceiling that bookkeeping
-  lives under (`KubeLabels.FragmentAnnotationPrefix`).
+  resource up under both keys: a co-writer with neither is a stray; one whose `fragment-hash.{writer}`
+  on an object differs from the hash `ExpectedResource.Fragments` expects *on that object* is
+  diverged, as is one expected on an object that carries none of its slices, or found on an object
+  it is no longer expected on; and a fragment whose writer no grain owns is an orphan naming the
+  slice rather than the object. ⚠ **One hash per object, not one per resource.** The first cut held a
+  single desired hash against every fragment, and the first co-writer writes two: a peering's
+  fragments are mirror images — each names the *other* `Vpc`, each route points at the other end of
+  the link — so they never hash the same, and every converged peering was `Diverged` on every scan
+  (the #31 review; the real-cluster test had compared the last apply's hash and asserted only strays
+  and orphans). The per-object shape also names what a single hash could not: a slice left behind on
+  an object the writer no longer places it on — a peering whose `remoteNetwork` was changed under the
+  unenforced `Immutable` — is `Diverged` naming that object, not an orphan, since the grain exists.
+  The apply path carries every stored fragment forward verbatim and prunes none, so the scan is the
+  one place a fragment nobody will withdraw is found, and the API server's 256 KiB cap on an object's
+  annotations is the ceiling that bookkeeping lives under (`KubeLabels.FragmentAnnotationPrefix`).
 
 A child reconciler reaches this through `ReconcileContext.CoWriter` — `ApplyFragmentAsync` and
 `WithdrawFragmentAsync` over the pass's own connection, read-then-apply with the stale retry inside
@@ -276,9 +294,11 @@ Storage's and Compute's resources, which [`src/Providers/README.md` § Hard rule
 forbids by assembly reference). Held against it, the co-owned mode comes out **provider-blind and
 resource-blind**, and that is checked rather than assumed: nothing in `CoWriting`, `KubeApiClient`
 or the two checks above asks which provider owns the object — the manager is named for the owner's
-`resource-type` label whatever its namespace, and the only boundary read off the object is
-`tenant-id` — so a vault that had to co-write a fragment onto a Storage or Compute *object* in its
-own tenant could use this mode unchanged. Three things do **not** carry over, and they are why #30
+`resource-type` label whatever its namespace, and the boundaries read off the object are
+`tenant-id`, `subscription-id` and `resource-group`, never the provider — so a vault that had to
+co-write a fragment onto a Storage or Compute *object* in its own resource group could use this mode
+unchanged (one in another group could not, and should not: its caller was authorized on the vault
+alone). Three things do **not** carry over, and they are why #30
 stays owed on its own seam rather than closing here. First, a vault mostly has to *read*: enumerate
 the resources a policy protects and learn what objects they render, and `CoWriting` takes an
 `ObjectRef` the caller already knows — a peering derives its parent's from its own address, the way

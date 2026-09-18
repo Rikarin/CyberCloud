@@ -336,6 +336,45 @@ public sealed class NetworkPeeringTests {
     }
 
     [Fact]
+    public async Task ARemoteWhoseNameIsAnotherGroupsNetworkIsRefusedByGroupAndThatRouterIsUntouched() {
+        // ⚠ THE #31 REVIEW'S PROBE, KEPT AS THE TEST. A Vpc's name is {sub}-{group}-{network} and
+        // both halves admit hyphens, so `prod`'s network `a-b` and `prod-a`'s network `b` render ONE
+        // object name in one subscription. Before the review, "the remote is qualified with this
+        // resource's namespace" was the whole of the boundary, and this peering — in `prod`, naming
+        // `a-b` — converged with a peer port and a static route written into `prod-a`'s router, a
+        // group its author may hold no role on. The co-owned apply now holds the live object's
+        // subscription and group against the writer's, in the builder and again before the PATCH.
+        var reconciler = new VirtualNetworkPeeringReconciler(new FixedClock());
+        var peering = new ResourceId(TenantOne, SubscriptionOne, "prod", VirtualNetworkPeerings.Type, "x", Guid.Parse("66666666-6666-4666-8666-666666666666"), "hub");
+        var ns = ReconcileDriver.NamespaceFor(peering);
+
+        var victimId = Guid.Parse("77777777-7777-4777-8777-777777777777");
+        var victim = new ResourceId(TenantOne, SubscriptionOne, "prod-a", VirtualNetworks.Type, "b", victimId);
+        var victimNs = ReconcileDriver.NamespaceFor(victim);
+
+        VirtualNetworks.ObjectNameOf(ns, "a-b").ShouldBe(VirtualNetworks.ObjectNameOf(victimNs, "b"), "the collision this test is about");
+
+        var world = new CoOwnedConnection();
+        world.PlaceOwnedVpc(ns, "hub", HubId, peering);
+        world.PlaceOwnedVpc(victimNs, "b", victimId, victim);
+
+        using var body = JsonDocument.Parse(VirtualNetworkPeerings.Body(Cluster, remoteNetwork: "a-b"));
+
+        var outcome = await reconciler.ReconcileAsync(Context(peering, body.RootElement, world), TestContext.Current.CancellationToken);
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed, outcome.ToString());
+        outcome.Error!.Message.ShouldContain("'prod-a'");
+        outcome.Error.Message.ShouldContain("'prod'");
+        outcome.Error.Message.ShouldContain("resource group");
+
+        var router = JsonNode.Parse(world.Objects[CoOwnedConnection.Key(VirtualNetworks.VpcRef(victimNs, "b"))])!.AsObject();
+        VirtualNetworkPeerings.CarriesFragmentOf(router.ToJsonString(), peering.Id).ShouldBeFalse("the other group's router carries the peering's bookkeeping");
+        router["spec"]!.AsObject().ContainsKey("vpcPeerings").ShouldBeFalse("a peer port was written into the other group's router");
+        router["spec"]!.AsObject().ContainsKey("staticRoutes").ShouldBeFalse("a route was written into the other group's router");
+        router["metadata"]!["labels"]![KubeLabels.ResourceGroup]!.GetValue<string>().ShouldBe("prod-a");
+    }
+
+    [Fact]
     public async Task DeletingWithdrawsBothFragmentsAndLeavesBothVpcsStanding() {
         var reconciler = new VirtualNetworkPeeringReconciler(new FixedClock());
         var peering = Address("to-spoke", TenantOne, SubscriptionOne, network: "hub");

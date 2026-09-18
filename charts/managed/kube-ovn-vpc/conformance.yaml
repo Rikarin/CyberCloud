@@ -255,6 +255,25 @@ owed:
       is reconciled against a router that no longer exists. So deleting a network can leave a tenant's
       address range being programmed in, or adjacent to, the platform's own routing domain. Closing it
       is docs/plan/08's per-parent child counter plus ~10 lines in ResourceManagerService's delete path.
+  - id: hyphenated-groups-can-render-one-object-name
+    says: >
+      ⚠ FOUND BY THE #31 REVIEW ON THE PEERING, AND IT IS THIS TYPE'S. VirtualNetworks.ObjectNameOf
+      is `{subscriptionId:N}-{resourceGroup}-{name}` and ResourceNaming.Pattern admits hyphens in
+      both the group and the name, so `prod`'s network `a-b` and `prod-a`'s network `b` — one
+      subscription, two groups — render ONE cluster-scoped Vpc name. Both networks apply under the
+      family's one field manager, so nothing conflicts: each pass takes the object over, labels and
+      spec, and the two converge by overwriting each other with neither reporting an error — the
+      exact failure ObjectNameOf's remarks describe for two subscriptions, one hyphen away, and
+      nothing in KubeApiClient's ordinary apply compares the live resource-id label to the command's.
+      The co-owned apply is the one path that now refuses it: a peering in `prod` naming `a-b` read
+      `prod-a`'s router and wrote onto it until the builder and KubeCommand.CheckCoOwnedAgainst began
+      holding the live object's subscription-id and resource-group labels against the writer's
+      (charts/managed/kube-ovn-vpc-peering/conformance.yaml,
+      the-remote-cannot-reach-outside-the-resource-group). ⚠ WHAT WOULD CLOSE IT: an unambiguous join
+      in the name — a separator neither half can contain, which the DNS-1123 alphabet does not offer,
+      or a fixed-width hash of the group — behind a new api-version, since every existing Vpc is
+      named the current way; and, independently, the ordinary apply refusing a live object whose
+      resource-id label is another resource's, the way the co-owned one does.
   - id: the-cluster-backed-suite-proves-less-than-it-looks
     says: >
       ⚠ STATED EXPLICITLY BECAUSE THE GAP IS WIDER ON THIS FAMILY THAN ON ANY BEFORE IT. The k3s the

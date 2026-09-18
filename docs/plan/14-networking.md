@@ -53,7 +53,10 @@ virtualNetworks/{name}
 > taken one: the write path authorizes the caller against the peering alone, and a resource group is
 > the smallest scope on which write on the peering implies write on both networks —
 > `charts/managed/kube-ovn-vpc-peering/conformance.yaml § owed`,
-> `the-remote-must-be-in-the-same-resource-group`. ⚠ **And what is proven is the write, not the
+> `the-remote-must-be-in-the-same-resource-group`. ⚠ The qualified name is not what holds that
+> boundary — hyphenated group and network names can render one `Vpc` name across two groups, which
+> the #31 review showed — the co-owned apply's check of the live object's subscription and group
+> labels is ([09 § A second writer on an object](09-kubernetes-fabric.md)). ⚠ **And what is proven is the write, not the
 > routing.** No harness here has a Kube-OVN controller, so the peer ports and the routes are reasoned
 > from `pkg/controller/vpc.go` and wait for the VM lane (#95): `routing-is-unproven-until-the-vm-lane`
 > in the same file. The shared conformance suite grew the co-writer's reading of its ownership

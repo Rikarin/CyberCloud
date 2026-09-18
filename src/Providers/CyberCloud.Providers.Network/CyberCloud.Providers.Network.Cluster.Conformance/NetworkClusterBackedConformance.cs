@@ -11,16 +11,20 @@ namespace CyberCloud.Providers.Network.ClusterConformance;
 ///     <para>
 ///         ⚠
 ///         <b>
-///             Twelve class declarations over the six cases
-///             <c>CyberCloud.Providers.Network.Conformance</c> declares.
+///             Fourteen class declarations over the seven cases
+///             <c>CyberCloud.Providers.Network.Conformance</c> declares: twelve here, and the
+///             peering's two in <c>PeeringClusterBackedConformance.cs</c>.
 ///         </b> One provider, one
-///         <c>ProviderConformanceCase</c> per type, two suites per case. ⚠
+///         <c>ProviderConformanceCase</c> per type, two suites per case — except the peering, whose
+///         cluster-backed half is a dedicated class rather than the shared suite, for the reason
+///         that file gives. ⚠
 ///         <b>
 ///             This sentence read "four
-///             over two" while the family had four types
+///             over two" while the family had four types, and "twelve over six" after the peering
+///             had made it seven
 ///         </b>, which is how the public address's pair went
-///         missing: nothing counts the classes in this file against the cases in that one, so a row
-///         with no class here is simply a row the docs/plan/24 exit criterion never reaches.
+///         missing: nothing counts the classes in this assembly against the cases in that one, so a
+///         row with no class here is simply a row the docs/plan/24 exit criterion never reaches.
 ///     </para>
 ///     <para>
 ///         ⚠

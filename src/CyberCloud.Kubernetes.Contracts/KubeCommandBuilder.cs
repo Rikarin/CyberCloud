@@ -456,7 +456,8 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
                 Annotations = annotations,
                 ReconcileHash = reconcileHash,
                 Force = false,
-                ResourcePath = resource.Path
+                ResourcePath = resource.Path,
+                ResourceGroup = resource.ResourceGroup
             }
         );
     }
@@ -596,6 +597,34 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
             return Invalid(
                 $"the live object '{live.Ref}' belongs to tenant {ownerTenant} and the co-writer is in "
                 + $"tenant {KubeLabels.GuidValue(tenantId)}. A co-writer never reaches across a tenant."
+            );
+        }
+
+        // ⚠ THE GROUP BOUNDARY, ON THE OBJECT'S LABELS FOR THE SAME REASON. The write path authorized
+        // the caller on the co-writer's own address and nothing else; what lets that caller change
+        // the owner's object is that write on the one implies write on the other, and docs/plan/07
+        // grants roles on subscriptions and groups, so one group is the smallest scope where it does.
+        // The tenant check alone was not enough: a Vpc's name is {sub}-{group}-{network} and both
+        // halves admit hyphens, so `prod`'s network `a-b` and `prod-a`'s network `b` are one object
+        // name, and a peering in `prod` naming `a-b` read `prod-a`'s router here and wrote onto it.
+        var ownerSubscription = liveLabels[KubeLabels.SubscriptionId]!.GetValue<string>();
+        if (!string.Equals(ownerSubscription, KubeLabels.GuidValue(resource.SubscriptionId), StringComparison.Ordinal)) {
+            return Invalid(
+                $"the live object '{live.Ref}' belongs to subscription {ownerSubscription} and the co-writer "
+                + $"is in subscription {KubeLabels.GuidValue(resource.SubscriptionId)}. A co-writer never "
+                + "reaches across a subscription: write on it was checked on its own address, and that "
+                + "implies write on the owner's object inside one resource group only."
+            );
+        }
+
+        var ownerGroup = liveLabels[KubeLabels.ResourceGroup]!.GetValue<string>();
+        if (!string.Equals(ownerGroup, resource.ResourceGroup, StringComparison.Ordinal)) {
+            return Invalid(
+                $"the live object '{live.Ref}' belongs to resource group '{ownerGroup}' and the co-writer "
+                + $"is in resource group '{resource.ResourceGroup}'. A co-writer never reaches across a "
+                + "resource group: write on it was checked on its own address, and one group is the smallest "
+                + "scope on which that implies write on the owner's object. Two groups that differ by a "
+                + "hyphen can render one object name, which is how a co-writer arrives here."
             );
         }
 
@@ -782,6 +811,7 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
                 ReconcileHash = fragmentHash,
                 Force = false,
                 ResourcePath = resource.Path,
+                ResourceGroup = resource.ResourceGroup,
                 OwnerResourceId = ownerId
             }
         );
