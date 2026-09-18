@@ -118,6 +118,15 @@
           ⚠ It is still a prerelease and it also pulls NATS.Net [2.7.2,), a different client package
           from the NATS.Client.Core/.JetStream pair named in docs/plan/02 § Data, transport, Kubernetes. Whether both can coexist
           is untested — no project references this yet.
+
+          ⚠ RE-CHECKED 2026-09-17 FOR ISSUE #54, AND THE ANSWER IS THE SAME WITH MORE VERSIONS BEHIND
+          IT. The flat-container index lists fourteen versions, 10.0.0-alpha.1 through 10.3.1-alpha.1,
+          and every one carries the `-alpha.1` suffix: there has never been a stable release to move
+          to. The resource-changed stream therefore went the way ADR-005's fallback names — NATS
+          JetStream through the NATS.Client pair below, in CyberCloud.ResourceGraph — and the reasons
+          beyond the suffix are on that project's .csproj (the producer is the gateway, an Orleans
+          client; the two client families would coexist in one process). This pin stays for the day
+          the suffix goes, and the day it does, NatsResourceChangedSink is the one class that changes.
         -->
         <PackageVersion Include="Microsoft.Orleans.Streaming.NATS" Version="$(OrleansVersion)-alpha.1"/>
     </ItemGroup>

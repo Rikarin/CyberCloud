@@ -527,6 +527,22 @@ public sealed record ResourceSnapshot {
     /// <summary>The lock in force at this scope, inherited included.</summary>
     [Id(17)]
     public LockLevel Lock { get; init; } = LockLevel.None;
+
+    /// <summary>
+    ///     The grain's monotonic version — the number <see cref="ResourceChangedEvent.Version" />
+    ///     carries, so the projection can drop an event it has already seen.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Appended at 18 for issue #54, and the number is never reused.</b> Until then every
+    ///     <c>resource-changed</c> event went out with <c>Version = 0</c>: the grain counted every
+    ///     write in <c>ResourceGrainState.Version</c> and the snapshot did not carry it, so the write
+    ///     path had nothing to put on the event and docs/plan/04 § Streams' promise of "a monotonic
+    ///     <c>Version</c> from the grain's etag" was a sentence with no number behind it. The etag
+    ///     itself is a fresh GUID per write and orders nothing. A peer that predates this member reads
+    ///     <c>0</c>, which is what it read before.
+    /// </remarks>
+    [Id(18)]
+    public long Version { get; init; }
 }
 
 /// <summary>
@@ -914,8 +930,9 @@ public sealed record OperationStatus {
 ///     ⚠ <b>The members are the ClickHouse columns, on purpose.</b> docs/plan/08 § The resource-graph
 ///     projection lists them; keeping the event and the table in the same shape means the projector is
 ///     a copy rather than a transformation, and a transformation is where a projection drifts from its
-///     source. <b>The projector itself is out of scope here</b> — this assembly emits, and
-///     <see cref="IResourceChangedSink" /> is where a projector attaches.
+///     source. <b>The projector lives in <c>CyberCloud.ResourceGraph</c></b> — this assembly emits,
+///     <see cref="IResourceChangedSink" /> is where the transport attaches, and <see cref="Subject" />
+///     is the NATS subject the event travels under.
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.ResourceManager.ResourceChangedEvent")]
@@ -1007,6 +1024,65 @@ public sealed record ResourceChangedEvent {
 
     /// <summary>The stream this event belongs on — <c>cc.{tenantId:N}.res</c>, per step 11.</summary>
     public string StreamNamespace => string.Create(CultureInfo.InvariantCulture, $"cc.{TenantId:N}.res");
+
+    /// <summary>
+    ///     The NATS subject this event is published on —
+    ///     <c>cc.{tenantId:N}.res.{provider}.{type}.{resourceId:N}</c>, docs/plan/04 § Streams.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The provider and type tokens are spelled, not copied, because a NATS subject is
+    ///         dot-delimited and both carry characters a token cannot.</b> <c>CyberCloud.Storage</c>
+    ///         holds a dot, which would split one token into two and put every later token one
+    ///         position to the right; <c>accounts/fileShares</c> holds a slash, which NATS allows but
+    ///         which no subject filter can spell as one token. So each is ASCII-lower-cased with
+    ///         <c>.</c> and <c>/</c> replaced by <c>_</c> — the same fold <c>KubeLabels.ResourceTypeValue</c>
+    ///         applies to a label value, for the same reason — and the two are separate tokens:
+    ///         <c>cc.{tenant}.res.cybercloud_storage.accounts_fileshares.{id}</c>. A consumer filters
+    ///         one tenant with <c>cc.{tenant}.res.&gt;</c>, one provider across every tenant with
+    ///         <c>cc.*.res.cybercloud_storage.&gt;</c>, and the token positions never move.
+    ///     </para>
+    ///     <para>
+    ///         Lower-casing is what makes the subject stable across spellings: the provider
+    ///         namespace is case-preserving and case-insensitive, and two spellings of one resource
+    ///         must not become two subjects. <c>*</c>, <c>&gt;</c> and whitespace are folded to
+    ///         <c>_</c> as well, so a name can never widen a filter.
+    ///     </para>
+    /// </remarks>
+    public string Subject =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"cc.{TenantId:N}.res.{SubjectToken(Provider)}.{SubjectToken(Type)}.{ResourceId:N}"
+        );
+
+    /// <summary>
+    ///     Folds one path segment into a NATS subject token: ASCII lower case, with <c>.</c>,
+    ///     <c>/</c>, <c>*</c>, <c>&gt;</c> and whitespace replaced by <c>_</c>.
+    /// </summary>
+    /// <param name="segment">The provider namespace or the type path.</param>
+    public static string SubjectToken(string segment) {
+        ArgumentNullException.ThrowIfNull(segment);
+
+        if (segment.Length == 0) {
+            return "_";
+        }
+
+        return string.Create(
+            segment.Length,
+            segment,
+            static (span, source) => {
+                for (var i = 0; i < source.Length; i++) {
+                    var c = source[i];
+                    span[i] = c switch {
+                        '.' or '/' or '*' or '>' => '_',
+                        _ when char.IsWhiteSpace(c) => '_',
+                        _ when c is >= 'A' and <= 'Z' => (char)(c + ('a' - 'A')),
+                        _ => c
+                    };
+                }
+            }
+        );
+    }
 }
 
 /// <summary>One thing a per-cluster drift scan found. docs/plan/08 § The reconcile loop.</summary>

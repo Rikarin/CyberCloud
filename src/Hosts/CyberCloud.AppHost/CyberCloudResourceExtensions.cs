@@ -267,4 +267,32 @@ public static class CyberCloudResourceExtensions {
             .WithEnvironment("CyberCloud__Communication__Smtp__FromName", CyberCloudResources.PlatformSenderName)
             .WithEnvironment("CyberCloud__Communication__Smtp__UnsubscribeMailbox", CyberCloudResources.PlatformUnsubscribeMailbox);
     }
+
+    /// <summary>
+    ///     Points a silo at the region's ClickHouse, so its <c>ResourceGraphProjector</c> has
+    ///     somewhere to land. The NATS half of the same section arrives through
+    ///     <c>WithReference(nats)</c>, which <c>ResourceGraphOptions.Bind</c> reads as
+    ///     <c>ConnectionStrings:nats</c>.
+    /// </summary>
+    /// <param name="builder">The silo being configured.</param>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <returns>The same builder, for chaining.</returns>
+    /// <remarks>
+    ///     Writes <c>CyberCloud__ResourceGraph__…</c>, the section <c>ResourceGraphOptions</c>
+    ///     binds. ⚠ <c>AllowInsecureTransport</c> for the same reason <see cref="WithObjectStore{T}" />
+    ///     sets it: plain HTTP to a container on the laptop, refused anywhere else.
+    /// </remarks>
+    public static IResourceBuilder<T> WithResourceGraph<T>(this IResourceBuilder<T> builder)
+        where T : IResourceWithEnvironment {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder
+            .WithEnvironment(
+                "CyberCloud__ResourceGraph__ClickHouseEndpoint",
+                $"http://localhost:{CyberCloudResources.ClickHouseHttpPort.ToString(CultureInfo.InvariantCulture)}"
+            )
+            .WithEnvironment("CyberCloud__ResourceGraph__ClickHouseUser", CyberCloudResources.ClickHouseUser)
+            .WithEnvironment("CyberCloud__ResourceGraph__ClickHousePassword", CyberCloudResources.ClickHousePassword)
+            .WithEnvironment("CyberCloud__ResourceGraph__AllowInsecureTransport", "true");
+    }
 }

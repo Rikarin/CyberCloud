@@ -144,6 +144,15 @@
         -->
         <Project Path="src/CyberCloud.ObjectStorage/CyberCloud.ObjectStorage.csproj" />
         <Project Path="src/CyberCloud.ObjectStorage.Tests/CyberCloud.ObjectStorage.Tests.csproj" />
+
+        <!--
+          docs/plan/08 § The resource-graph projection, docs/plan/04 § Streams — issue #54. The
+          resource-changed stream's publisher over NATS JetStream and the projector that consumes it
+          into a per-tenant ClickHouse table. No .Contracts pair, for the reason the two above have
+          none: IResourceChangedSink already lives in CyberCloud.ResourceManager.Contracts.
+        -->
+        <Project Path="src/CyberCloud.ResourceGraph/CyberCloud.ResourceGraph.csproj" />
+        <Project Path="src/CyberCloud.ResourceGraph.Tests/CyberCloud.ResourceGraph.Tests.csproj" />
     </Folder>
     <!--
       docs/plan/03 § Providers — the five projects every provider has. CyberCloud.Sample is the first

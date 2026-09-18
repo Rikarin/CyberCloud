@@ -232,6 +232,52 @@ want to answer by correlating a second stream.
 idempotent, and the resource-changed events carry a monotonic `Version` from the grain's etag so a
 consumer can drop what it has already seen. Anything requiring global order does not use streams.
 
+⚠ **CORRECTED — `resource-changed` is built (issue #54), and it is not on an Orleans stream
+provider, its subject is spelled rather than copied, and the version is not the etag.** Three
+sentences in this section were true as a design and are false as a description; each is corrected
+here rather than rewritten so the original argument stays readable.
+
+- **The transport is NATS JetStream through `NATS.Client.JetStream`, not `Events` over
+  `Microsoft.Orleans.Streaming.NATS`.** That package has never shipped without an `-alpha.1` suffix —
+  fourteen versions checked on 2026-09-17, `10.0.0` through `10.3.1` — and the producer of this
+  namespace is the gateway, an Orleans *client* with no `AddMultitenantStreams` to call. So there is
+  one JetStream stream, `cc-resource-changed`, capturing `cc.*.res.>`, seven days of retention, a
+  two-minute duplicate window keyed on `{resourceId:N}.{version}`; and one durable pull consumer,
+  `resource-graph`, shared by the silo fleet. The `Events` provider line in § Silo composition is a
+  seam and stays one; `TenantSeparatingStreamFilter` therefore separates nothing here, and what does
+  is the subject: the tenant is its second token, the projector routes on it before it decodes the
+  body, and a body naming another tenant than its subject is terminated. The other four namespaces
+  in the table are each their own stream when they land, because a stream's retention is one number
+  and an operation's progress and a resource's history do not want the same one.
+- **The subject's `{provider}` and `{type}` tokens are folded, because a NATS subject is
+  dot-delimited and both carry characters a token cannot.** `CyberCloud.Storage` holds a dot, which
+  would split one token into two and move every later token one position right; `accounts/fileShares`
+  holds a slash no wildcard can address as one token. Each is ASCII-lower-cased with `.` and `/`
+  replaced by `_` — the fold `KubeLabels.ResourceTypeValue` already applies to a label value — so the
+  subject is `cc.{tenant:N}.res.cybercloud_storage.accounts_fileshares.{id:N}`: six tokens, always,
+  and `cc.*.res.cybercloud_storage.>` is every storage resource across every tenant.
+  `ResourceChangedEvent.Subject` is the one spelling; `SubjectGrammarTests` pins it.
+- **`Version` is `ResourceGrainState.Version`, the grain's write count, and not the etag.** The etag
+  is a fresh GUID per write and orders nothing. Until #54 the count never reached the snapshot and
+  every event carried `Version = 0` — the paragraph above described a number nothing produced.
+  `ResourceSnapshot.Version` carries it now, and the projector drops any event at or below the
+  version it holds.
+- **The producer column reads "`IResourceGrain` on every state transition", and it is two
+  emitters, neither of them the resource grain.** `ResourceManagerService` emits `Created`, `Updated`
+  and `Deleting` at step 11 of the write path, from the gateway; `OperationGrain` emits
+  `StateChanged` at a terminal reconcile, `SoftDeleted` when a teardown parks the resource for its
+  recovery window, and `Deleted` when a teardown clears the grain, from a silo. Both build the
+  event through one function, so the columns cannot drift. The resource grain
+  itself publishes nothing: a publish inside a grain's state write is the Orleans provider's shape,
+  and the seam is kept for the day it is worth taking.
+- **Of the four consumers listed for `resource-changed`, one exists.** The resource-graph projection
+  ([08 § The resource-graph projection](08-resource-manager.md)) consumes; the portal's SignalR
+  fan-out, the audit sink and billing do not yet, and the stream, the grammar and the JSON wire form
+  are what they will subscribe to. The wire form is JSON with enums by name, not the Orleans
+  serializer, for exactly that reason: [03 § Hosts](03-repository-layout.md) makes the ingest host
+  "not an Orleans client at all", and a payload only one runtime can read is a stream with one
+  possible consumer.
+
 ## Reminders
 
 Redis reminder service, sharded with the hot tier. Reminders are used for exactly five things — four

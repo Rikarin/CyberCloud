@@ -222,6 +222,32 @@ public static class CyberCloudResources {
     /// </summary>
     public const string PlatformUnsubscribeMailbox = "unsubscribe@cybercloud.local";
 
+    // ── The platform's ClickHouse ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     The platform's own ClickHouse — docs/plan/05 § Every store's one row, "per region;
+    ///     database-per-tenant" — and on this run the home of the resource-graph projection
+    ///     (docs/plan/08 § The resource-graph projection).
+    /// </summary>
+    /// <remarks>
+    ///     The same image <c>ProjectionRoundTripTests</c> stands up, so what the silos project into
+    ///     is what the projector is tested against. No data volume, like PostgreSQL: a run starts
+    ///     from empty, and the projector creates a tenant's database on the tenant's first event.
+    ///     ⚠ Not <c>CyberCloud.Analytics/clickhouseClusters</c>: that type is a tenant's own
+    ///     ClickHouse in a tenant namespace; this is the region's, which a workspace and the
+    ///     projection are tenancies <i>in</i>.
+    /// </remarks>
+    public const string ClickHouse = "clickhouse";
+
+    /// <summary>ClickHouse's HTTP interface, published unproxied so the endpoint is the address.</summary>
+    public const int ClickHouseHttpPort = 8123;
+
+    /// <summary>The one user this run's ClickHouse knows. Development-only, like every credential here.</summary>
+    public const string ClickHouseUser = "cybercloud";
+
+    /// <inheritdoc cref="ClickHouseUser" />
+    public const string ClickHousePassword = "cybercloud-dev-clickhouse-password";
+
     // ── What the AppHost is asked to leave out ────────────────────────────────────────────────
 
     /// <summary>

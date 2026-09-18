@@ -67,7 +67,8 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
             ModifiedAt = DateTimeOffset.Parse("2026-02-03T04:05:06Z", null),
             LastFailure = "the API server refused the delete",
             OperationId = Guid.Parse("7f1c4a55-1111-4222-8333-444455556666"),
-            Lock = LockLevel.CanNotDelete
+            Lock = LockLevel.CanNotDelete,
+            Version = 7
         };
 
         var round = RoundTrip(value);
@@ -89,6 +90,9 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
         round.ClusterId.ShouldBe(value.ClusterId);
         round.CreatedAt.ShouldBe(value.CreatedAt);
         round.LastFailure.ShouldBe(value.LastFailure);
+        // ⚠ The member appended at [Id(18)] for #54, and the one number the projection keys on: a
+        // snapshot that came back at 0 would put every event under the version the first one took.
+        round.Version.ShouldBe(7);
         round.Lock.ShouldBe(LockLevel.CanNotDelete);
     }
 

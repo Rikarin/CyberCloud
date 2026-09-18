@@ -3,6 +3,7 @@ using CyberCloud.Gateway.Host.Authentication;
 using CyberCloud.Gateway.Host.Hubs;
 using CyberCloud.Gateway.Host.Pipeline;
 using CyberCloud.Gateway.Host.Routing;
+using CyberCloud.ResourceGraph;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using CyberCloud.ServiceDefaults;
 using CyberCloud.Vault;
@@ -130,6 +131,24 @@ public static class GatewayComposition {
 
         if (vault.IsConfigured) {
             builder.Services.AddOpenBaoSecretResolver(vault);
+        }
+
+        // ── The resource-changed stream — docs/plan/04 § Streams, docs/plan/08 § The resource-graph projection ──
+        //
+        // ⚠ THE GATEWAY PUBLISHES AND DOES NOT PROJECT, for the reason the vault is here: step 11 of
+        // the write path runs inside ResourceManagerService, in THIS process, so the NATS sink has
+        // to be registered here or Created, Updated and Deleting never reach the stream. The
+        // projector consumes on the silos, where the tenant's check grain is local.
+        //
+        // ⚠ CONDITIONAL, AND THE FALLBACK IS THE LOGGING SINK. ResourceGraphOptions.Bind reads
+        // CyberCloud:ResourceGraph and then ConnectionStrings:nats, which is the key the AppHost's
+        // WithReference(nats) writes; a gateway with neither keeps LoggingResourceChangedSink, so the
+        // write path works and the projection is simply not fed — the shape every host had until
+        // #54, and still a supported one.
+        var resourceGraph = ResourceGraphOptions.Bind(builder.Configuration);
+
+        if (resourceGraph.IsPublisherConfigured) {
+            builder.Services.AddResourceChangedPublisher(resourceGraph);
         }
 
         // docs/plan/10 § SignalR — AddSignalR and nothing else. No AddStackExchangeRedis: "No SignalR

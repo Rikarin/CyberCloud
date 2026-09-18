@@ -511,7 +511,19 @@ public enum ResourceChangeKind {
     Deleted = 4,
 
     /// <summary>The provisioning state moved without the desired body changing.</summary>
-    StateChanged = 5
+    StateChanged = 5,
+
+    /// <summary>
+    ///     Teardown finished and the resource is parked for its recovery window: not addressable,
+    ///     in no listing, its desired state and its grain kept for a restore.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The projection treats it as <see cref="Deleted" /> for a listing and unlike it for the
+    ///     readers: the row leaves the list, and its access column holds the subscription-scoped
+    ///     holders the park re-parented it to — docs/plan/08 § Soft delete. A restore emits
+    ///     <see cref="Updated" /> at a higher version, which brings the row back.
+    /// </remarks>
+    SoftDeleted = 6
 }
 
 /// <summary>

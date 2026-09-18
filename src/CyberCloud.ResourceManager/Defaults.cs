@@ -35,11 +35,14 @@ public sealed class NotSupportedPolicyEvaluator : IPolicyEvaluator {
 ///     The <see cref="IResourceChangedSink" /> a silo with no projector registers: it logs.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The projector is out of scope and this is what stands in for it.</b>
+///     ⚠ <b>The stand-in for a host that has no stream, and what every host had until #54.</b>
 ///     docs/plan/08 § The resource-graph projection routes <c>resource-changed</c> to a per-tenant
-///     ClickHouse table. Nothing here writes to ClickHouse. What is real is the <i>emission</i> — the
-///     event is built with the projection's columns and published at step 11 — so landing a projector
-///     is adding a consumer rather than changing the write path.
+///     ClickHouse table; the sink that gets it there is <c>CyberCloud.ResourceGraph</c>'s
+///     <c>NatsResourceChangedSink</c>, which a host registers when <c>CyberCloud:ResourceGraph</c> (or
+///     Aspire's <c>ConnectionStrings:nats</c>) is configured. This one logs, so a host without NATS
+///     still shows every emission in its log and the write path is unchanged — and an operator
+///     reading "resource-changed … on cc.…" with no projection behind it knows which section is
+///     unset.
 /// </remarks>
 public sealed class LoggingResourceChangedSink(ILogger<LoggingResourceChangedSink> logger) : IResourceChangedSink {
     /// <inheritdoc />

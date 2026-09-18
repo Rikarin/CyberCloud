@@ -77,13 +77,33 @@ public static class CyberCloudTopology {
 
         // ── Streams ────────────────────────────────────────────────────────────────────────────────────
         //
-        // ⚠ NOTHING CONSUMES THIS YET, and it is here anyway because docs/plan/24 § Phase 0 lists it. The
-        // stream provider is still a seam: OrleansApplication.CreateSilo's body names
-        // `.AddMultitenantStreams(StreamProviders.Events, …)` as not-yet-wired, and
-        // Microsoft.Orleans.Streaming.NATS is a prerelease that no project references
-        // (Directory.Packages.props § Orleans spells out why). The silos get the connection string, so the
-        // day that provider lands the AppHost does not change.
+        // The resource-changed stream (docs/plan/04 § Streams) — JetStream, because the projector below
+        // pulls it through a durable consumer and a plain NATS keeps nothing to pull. Until #54 nothing
+        // consumed this; the silos and the gateway now read the connection string it renders
+        // (ConnectionStrings__nats) as ResourceGraphOptions' NATS URL. ⚠ The GATEWAY gets it too, and
+        // that line is what makes the stream carry anything: ResourceManagerService emits step 11 from
+        // the gateway's process, so a gateway without NATS keeps the logging sink and the projection
+        // learns only the silo-side transitions.
+        //
+        // ⚠ Not the Orleans stream provider. OrleansApplication.CreateSilo's body still names
+        // `.AddMultitenantStreams(StreamProviders.Events, …)` as a seam, and it stays one:
+        // Microsoft.Orleans.Streaming.NATS has never shipped without an -alpha suffix
+        // (Directory.Packages.props § Orleans), so CyberCloud.ResourceGraph speaks JetStream directly.
         var nats = builder.AddNats(CyberCloudResources.Nats).WithJetStream();
+
+        // ── The region's ClickHouse — docs/plan/05 § Every store, docs/plan/08 § The resource-graph projection ──
+        //
+        // Where the silos' ResourceGraphProjector writes each tenant's resource_graph table. One
+        // container, one user, no volume: the same shape ProjectionRoundTripTests stands up. /ping is
+        // the readiness answer ClickHouse gives once it listens, and it reads CLICKHOUSE_USER before it
+        // listens, so a 200 here is a server whose user exists.
+        var clickHouse = builder
+            .AddContainer(CyberCloudResources.ClickHouse, "clickhouse/clickhouse-server", "25.3-alpine")
+            .WithEnvironment("CLICKHOUSE_USER", CyberCloudResources.ClickHouseUser)
+            .WithEnvironment("CLICKHOUSE_PASSWORD", CyberCloudResources.ClickHousePassword)
+            .WithEnvironment("CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT", "1")
+            .WithEndpoint(CyberCloudResources.ClickHouseHttpPort, CyberCloudResources.ClickHouseHttpPort, "http", "http", isProxied: false)
+            .WithHttpHealthCheck("/ping", 200, "http");
 
         // ── The Kubernetes data plane ──────────────────────────────────────────────────────────────────
         //
@@ -275,6 +295,7 @@ public static class CyberCloudTopology {
             .AddProject<CyberCloud_Silo_Host>(CyberCloudResources.SiloOne)
             .WithCyberCloudStorage(redis, shardA, shardB, platformShard)
             .WithReference(nats)
+            .WithResourceGraph()
             .WithObjectStore()
             .WithDevelopmentMailRelay()
             .WithEnvironment("CyberCloud__Silo__KubeconfigRoot", kubeconfigRoot)
@@ -296,12 +317,18 @@ public static class CyberCloudTopology {
             .WithHttpHealthCheck("/health")
             .WaitForCompletion(durableSchema)
             .WaitForCompletion(objectStoreBucket)
-            .WaitFor(redis);
+            .WaitFor(redis)
+            // The projector reconnects on its own, so this is a quieter start rather than a
+            // correctness need: without it the first seconds of the silo's log are NATS and
+            // ClickHouse refusals that read like a misconfiguration.
+            .WaitFor(nats)
+            .WaitFor(clickHouse);
 
         builder
             .AddProject<CyberCloud_Silo_Host>(CyberCloudResources.SiloTwo)
             .WithCyberCloudStorage(redis, shardA, shardB, platformShard)
             .WithReference(nats)
+            .WithResourceGraph()
             .WithObjectStore()
             .WithDevelopmentMailRelay()
             .WithEnvironment("CyberCloud__Silo__KubeconfigRoot", kubeconfigRoot)
@@ -380,6 +407,9 @@ public static class CyberCloudTopology {
         var gateway = builder
             .AddProject<CyberCloud_Gateway_Host>(CyberCloudResources.Gateway)
             .AsOrleansClient()
+            // The publisher's half of the resource-changed stream — see § Streams above for why the
+            // gateway, an Orleans client, is the process that has to hold it.
+            .WithReference(nats)
             .WithEnvironment("CyberCloud__Gateway__Identity__Issuer", CyberCloudResources.IdentityIssuer)
             // ⚠ PublicBaseUri is what the gateway tells OTHERS about itself — the agent tunnel address a
             // connected cluster's install command carries (#36), among other things. The shipped default

@@ -279,6 +279,41 @@ public sealed class AppHostTopologyTests {
         built.Resource(CyberCloudResources.SiloOne).Annotations.OfType<WaitAnnotation>()
             .ShouldNotContain(x => x.Resource.Name == CyberCloudResources.Mailpit, "a carrier is a data plane the control plane refuses honestly without");
     }
+    [Fact]
+    public async Task TheResourceChangedStreamReachesTheGatewayAndTheProjectionReachesTheSilos() {
+        // docs/plan/08 § The resource-graph projection, #54. The gateway PUBLISHES — step 11 runs in
+        // its process — so it needs NATS and nothing else; the silos publish their half and PROJECT,
+        // so they need NATS and ClickHouse. A gateway without the NATS reference is the shape the
+        // platform had before #54: the write path works and the stream carries only the silo's
+        // transitions, with nothing in any log to say the creates are missing.
+        var built = Model();
+
+        foreach (var name in new[] { CyberCloudResources.Gateway, CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo }) {
+            var environment = await built.EnvironmentOf(name);
+
+            // Under Publish a reference renders as its manifest expression rather than an address —
+            // see EnvironmentOf — so what is asserted is that the key ResourceGraphOptions.Bind reads
+            // is there and names the NATS resource.
+            environment.ShouldContainKey("ConnectionStrings__nats", $"{name} has no NATS connection string, so it keeps the logging sink and publishes nothing");
+            environment["ConnectionStrings__nats"].ShouldContain(CyberCloudResources.Nats);
+        }
+
+        foreach (var name in new[] { CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo }) {
+            var environment = await built.EnvironmentOf(name);
+
+            environment["CyberCloud__ResourceGraph__ClickHouseEndpoint"].ShouldBe($"http://localhost:{CyberCloudResources.ClickHouseHttpPort}");
+            environment["CyberCloud__ResourceGraph__ClickHouseUser"].ShouldBe(CyberCloudResources.ClickHouseUser);
+            environment["CyberCloud__ResourceGraph__AllowInsecureTransport"].ShouldBe("true", $"{name} speaks plain http to a container on the laptop, and the option exists so production cannot");
+        }
+
+        (await built.EnvironmentOf(CyberCloudResources.Gateway))
+            .ShouldNotContainKey("CyberCloud__ResourceGraph__ClickHouseEndpoint", "the gateway publishes and does not project");
+
+        var clickHouse = built.Resource(CyberCloudResources.ClickHouse);
+        clickHouse.ShouldBeAssignableTo<ContainerResource>();
+        clickHouse.Annotations.OfType<EndpointAnnotation>()
+            .ShouldContain(x => x.Port == CyberCloudResources.ClickHouseHttpPort && x.TargetPort == CyberCloudResources.ClickHouseHttpPort && !x.IsProxied);
+    }
 
     [Fact]
     public void ThePortalProxyForwardsApiToTheGatewayOnItsPinnedPort() {

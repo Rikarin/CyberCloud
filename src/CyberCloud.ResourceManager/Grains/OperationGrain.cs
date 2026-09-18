@@ -39,6 +39,7 @@ public sealed class OperationGrain(
     IPersistentState<OperationGrainState> state,
     ReconcileDriver driver,
     IResourceRelationWriter relations,
+    IResourceChangedSink changes,
     IGrainFactory grains,
     IClock clock,
     ILogger<OperationGrain> logger
@@ -433,10 +434,26 @@ public sealed class OperationGrain(
             // ⚠ Only now is the grain state removed — the reconciler READ THE OBJECTS BACK AS GONE.
             // docs/plan/06 § Two-phase create's harder half: the index was released first so the name
             // was immediately reusable, the data plane came down second, and the grain goes last.
+            //
+            // ⚠ THE LAST SNAPSHOT IS READ BEFORE THE CLEAR, BECAUSE THE `Deleted` EVENT NEEDS A
+            // VERSION THE GRAIN WILL NO LONGER HAVE. docs/plan/04 § Streams makes the version what
+            // lets a consumer drop a reordered event; the clear is the resource's last transition and
+            // takes the number after the last one the grain counted, so a `Deleting` or
+            // `StateChanged` that lands late at the projection is dropped rather than resurrecting
+            // the row. NotFound here is a re-drive after a clear that already happened — the event
+            // went out the first time, and a second one would be the duplicate the projector is built
+            // to drop anyway, so nothing is emitted.
+            var last = await Resource(spec).GetAsync(spec.ApiVersion, []);
+
             var completed = await Resource(spec).CompleteDeleteAsync();
             if (completed.TryGetError(out var completeError)) {
                 await ScheduleAsync(ReconcileOutcome.Failed(completeError, true));
                 return;
+            }
+
+            if (last.IsSuccess) {
+                var gone = last.GetValueOrThrow();
+                await EmitAsync(ResourceChangeKind.Deleted, spec, gone with { Version = gone.Version + 1 });
             }
 
             // ⚠ AND THE ReBAC PARENT EDGE GOES WITH IT. THIS IS THE OTHER HALF OF THE WRITE PATH'S
@@ -737,6 +754,38 @@ public sealed class OperationGrain(
             return;
         }
 
+        // ── AND THE PROJECTION IS TOLD, AT A VERSION THE GRAIN COUNTED ──────────────────────────
+        //
+        // ⚠ WITHOUT THIS THE PARKED RESOURCE STAYED IN THE LIST FOR ITS WHOLE WINDOW (#54 review).
+        // The gateway emitted Deleting at the accept and this path emitted nothing after it, so the
+        // projection held a live Deleting row with the pre-park access column for seven days — the
+        // exact opposite of docs/plan/08 § Soft delete, which puts a parked resource in no listing
+        // and makes its readers the subscription-scoped holders. The Deleted branch could not be
+        // shared: it emits after IResourceGrain.CompleteDeleteAsync, which this path must never call.
+        //
+        // ⚠ THE GRAIN COUNTS THE PARK, AND THAT IS WHY IResourceGrain.ParkAsync EXISTS. Every step
+        // above writes some grain other than the resource's, so the snapshot's version is still the
+        // one the gateway's Deleting carried and the projector would drop an event at it. The
+        // Deleted branch invents Version + 1 because its grain is about to be cleared and nothing
+        // can count after it; here the next count is BeginRestoreAsync's, and an invented number
+        // would collide with it and drop the restore's own event instead. So the grain counts one,
+        // and the event carries what it counted.
+        //
+        // ⚠ AFTER THE REPARENT AND THE DROP, so the access column the projector reads under this
+        // version is the window's: the subscription's holders through the moved edge, and none of
+        // the direct grants. NotFound is a grain a purge cleared under a re-drive, which has its own
+        // Deleted event and nothing left to announce here.
+        var parked = await Resource(spec).ParkAsync();
+        if (parked.TryGetError(out var parkError)) {
+            if (parkError.Code != ErrorCode.ResourceNotFound) {
+                await ScheduleAsync(ReconcileOutcome.Failed(parkError, true));
+                return;
+            }
+        }
+        else {
+            await EmitAsync(ResourceChangeKind.SoftDeleted, spec, parked.GetValueOrThrow());
+        }
+
         Append(
             Progress(
                 "parked",
@@ -827,7 +876,7 @@ public sealed class OperationGrain(
         // resource grain refuses to move a Deleting resource to Failed, so this records the reason
         // and leaves the state alone.
         if (outcome.Kind == ReconcileOutcomeKind.Failed && outcome.Error is not null) {
-            _ = await Resource(state.State.Spec!).CompleteAsync(ProvisioningState.Failed, outcome.Error);
+            await FinishResourceAsync(state.State.Spec!, ProvisioningState.Failed, outcome.Error);
         }
 
         await state.WriteStateAsync();
@@ -1041,7 +1090,60 @@ public sealed class OperationGrain(
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
 
     async Task FinishResourceAsync(OperationSpec spec, ProvisioningState terminal, Error? error) {
-        _ = await Resource(spec).CompleteAsync(terminal, error);
+        var finished = await Resource(spec).CompleteAsync(terminal, error);
+
+        // ⚠ THE SILO-SIDE HALF OF THE resource-changed STREAM. The gateway emits Created, Updated and
+        // Deleting at step 11 of the write path; the transition that matters most to a list — Creating
+        // becoming Succeeded, or Failed — happens here, on a silo, at the end of a reconcile, and
+        // until #54 nothing emitted it. A failed CompleteAsync is a resource that refused the move
+        // (a Deleting resource keeps its state), so there is no transition to announce.
+        if (finished.IsSuccess) {
+            await EmitAsync(ResourceChangeKind.StateChanged, spec, finished.GetValueOrThrow());
+        }
+    }
+
+    /// <summary>
+    ///     Publishes one <c>resource-changed</c> event for this operation's resource, and never
+    ///     fails the operation over it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Same rule as <c>ResourceManagerService.EmitAsync</c>, for the same reason: docs/plan/08
+    ///     § The resource-graph projection is eventually consistent by design, and failing a
+    ///     reconcile that converged because a list view will lag would turn a working resource into a
+    ///     failed operation over a cosmetic delay. The sink returns a <see cref="Result" /> rather
+    ///     than throwing; the catch is for a sink that breaks that contract, because this runs inside
+    ///     a reminder-driven grain and an exception here would re-drive a finished operation.
+    /// </remarks>
+    async Task EmitAsync(ResourceChangeKind change, OperationSpec spec, ResourceSnapshot snapshot) {
+        var address = Address(spec);
+
+        if (address.Id == Guid.Empty) {
+            // A spec whose path does not parse names no resource the projection could key on.
+            return;
+        }
+
+        try {
+            var published = await changes.PublishAsync(ResourceChangedEvents.From(change, address, spec.ApiVersion, snapshot));
+
+            if (published.TryGetError(out var publishError)) {
+                logger.LogWarning(
+                    "Publishing {Change} for {Path} failed: {Message}. The operation stands; the resource-graph "
+                    + "projection will be behind until the next change.",
+                    change,
+                    spec.ResourcePath,
+                    publishError.Message
+                );
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException) {
+            logger.LogWarning(
+                exception,
+                "Publishing {Change} for {Path} threw. The operation stands; the resource-graph projection "
+                + "will be behind until the next change.",
+                change,
+                spec.ResourcePath
+            );
+        }
     }
 
     async Task EnsureReminderAsync() =>

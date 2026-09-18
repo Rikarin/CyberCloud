@@ -265,7 +265,7 @@ the design was never as absent as the line made it look.
 | Container Apps | #51 | 2.5 | |
 | Virtual desktops | #52 | 2.0 | |
 | CDN / http-cache | #53 | 1.0 † | |
-| Resource graph API | #54 | ⚠ none | |
+| Resource graph API | #54 | ⚠ none | ◐ **The stream and the projection landed 2026-09-17; the API did not.** `CyberCloud.ResourceGraph` publishes `resource-changed` on NATS JetStream from the gateway and the operation grain, and a silo-side projector writes the flattened row — with the access column [07 § ListObjects](07-rebac-authorization.md) promised — into `tenant_{id}.resource_graph` in the region's ClickHouse, idempotent on `(resource_id, version)` against real servers. What is owed is the query over it, recorded in [08 § The resource-graph projection](08-resource-manager.md) |
 | Security posture | #55 | 1.5 | |
 | GPU pools and fractional sharing | #56 | ⚠ none | |
 | Placement policies | #57 | ⚠ none | |

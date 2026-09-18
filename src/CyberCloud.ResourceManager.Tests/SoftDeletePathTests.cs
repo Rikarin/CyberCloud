@@ -1819,6 +1819,100 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
             .ShouldBeEmpty("the purge is the ending an expired resource has, and it clears the entry");
     }
 
+    // ── The projection's view of the window — docs/plan/08 § The resource-graph projection ──────
+
+    /// <summary>
+    ///     ⚠
+    ///     <b>
+    ///         A park emits <c>SoftDeleted</c>, a restore emits above it, and a purge ends the row —
+    ///         ten events, one resource, versions that never go backwards.
+    ///     </b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Found by the #54 review: <c>ParkAsync</c> returned before the branch that emits
+    ///         <c>Deleted</c>, and emitted nothing of its own, so the stream's last word on a parked
+    ///         resource was the gateway's <c>Deleting</c> — a live row, listed, with its pre-park
+    ///         readers, for the whole window. docs/plan/08 § Soft delete puts a parked resource in no
+    ///         listing.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The version is the assertion that matters, and the grain has to count it.</b> The
+    ///         park writes the index, the relation store and the group, and none of those is the
+    ///         resource grain, so an event built from the snapshot alone would carry the
+    ///         <c>Deleting</c> event's version and the projector would drop it. The <c>Deleted</c>
+    ///         branch's <c>Version + 1</c> is not available either: the next real write is the
+    ///         restore's <c>BeginRestoreAsync</c>, which would count the same number and lose its own
+    ///         event. <c>IResourceGrain.ParkAsync</c> exists so the number is counted rather than
+    ///         invented, and the restore's <c>Updated</c> landing strictly above the park is what
+    ///         proves it.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task AParkEmitsSoftDeletedAtAVersionTheGrainCountedAndTheRestoreEmitsAboveIt() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = VaultAddress("projected");
+
+        var created = await Create(address);
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+        await Converge(created.GetValueOrThrow());
+        var resourceId = created.GetValueOrThrow().Resource.Id;
+
+        var deleted = await Delete(address);
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+        await Converge(deleted.GetValueOrThrow());
+
+        var afterPark = RecordingChangeSink.Published.Where(x => x.ResourceId == resourceId).ToList();
+
+        afterPark.Select(x => x.Change).ShouldBe(
+            [ResourceChangeKind.Created, ResourceChangeKind.StateChanged, ResourceChangeKind.Deleting, ResourceChangeKind.SoftDeleted],
+            "the gateway's two, the silo's terminal transition, and the park — and no Deleted, because nothing was destroyed"
+        );
+
+        afterPark[3].ProvisioningState.ShouldBe(ProvisioningState.Deleting, "a parked resource is still Deleting; the window is what it is in");
+        afterPark[3].Version.ShouldBeGreaterThan(afterPark[2].Version, "counted by the grain, above the Deleting the gateway sent");
+
+        // ── The restore: Updated from the gateway, StateChanged from the silo, both above the park ──
+        var restored = await RestoreAndConverge(address);
+        restored.IsSuccess.ShouldBeTrue(restored.Error?.Message);
+
+        var afterRestore = RecordingChangeSink.Published.Where(x => x.ResourceId == resourceId).Skip(4).ToList();
+
+        afterRestore.Select(x => x.Change).ShouldBe(
+            [ResourceChangeKind.Updated, ResourceChangeKind.StateChanged],
+            "a restore is a write at the gateway and a reconcile on the silo, like any update"
+        );
+        afterRestore[0].ProvisioningState.ShouldBe(ProvisioningState.Updating);
+        afterRestore[1].ProvisioningState.ShouldBe(ProvisioningState.Succeeded);
+
+        // ⚠ THE COLLISION THAT AN INVENTED VERSION WOULD HAVE HAD. BeginRestoreAsync counts one; if
+        // the park had claimed that number the projector would drop the Updated and the row would
+        // say SoftDeleted until the reconcile landed.
+        afterRestore[0].Version.ShouldBeGreaterThan(afterPark[3].Version, "the restore's own event lands above the park's");
+
+        // ── And the purge is the Deleted the park did not send ──────────────────────────────────
+        await Converge((await Delete(address)).GetValueOrThrow());
+        await Converge((await Purge(address)).GetValueOrThrow());
+
+        var all = RecordingChangeSink.Published.Where(x => x.ResourceId == resourceId).ToList();
+
+        all.Select(x => x.Change).Skip(6).ShouldBe(
+            [ResourceChangeKind.Deleting, ResourceChangeKind.SoftDeleted, ResourceChangeKind.Deleting, ResourceChangeKind.Deleted],
+            "the second park, then the purge's accept and its clear"
+        );
+        all[^1].Version.ShouldBeGreaterThan(all[^2].Version, "the purge's clear is the last transition and takes the number after the last one counted");
+
+        // Never decreasing over the whole life, so a consumer holding one drops everything at or
+        // below it. ⚠ ONE PAIR SHARES A NUMBER, AND IT IS THE PURGE'S ACCEPT: PurgeCoreAsync reads
+        // the grain without writing it, so its Deleting carries the second park's version. The
+        // projector drops it, and the row it would have written — a tombstone out of the list —
+        // is the one the park already wrote; the clear that follows is what changes the row.
+        all.Select(x => x.Version).ShouldBe(all.Select(x => x.Version).Order().ToList());
+        all.Select(x => x.Version).Distinct().Count().ShouldBe(all.Count - 1, "every transition but the purge's accept has its own version");
+        all[8].Version.ShouldBe(all[7].Version, "and the purge's accept is that one");
+        all.ShouldAllBe(x => x.Subject == all[0].Subject, "one resource is one subject for its whole life");
+    }
+
     Task<Result<WriteAccepted>> PurgeExpired(ResourceId address) =>
         cluster.Manager.PurgeExpiredAsync(
             new() { Path = address.Path, ApiVersion = TestingProvider.V2026 },

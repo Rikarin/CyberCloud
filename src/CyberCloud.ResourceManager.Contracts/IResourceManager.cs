@@ -400,11 +400,13 @@ public interface IPolicyEvaluator {
 ///     Where step 11's <c>resource-changed</c> events go.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The projector is out of scope and this is the seam it attaches to.</b>
+///     ⚠ <b>The seam the transport attaches to, and nothing here writes to ClickHouse or should.</b>
 ///     docs/plan/08 § The resource-graph projection routes these to a per-tenant ClickHouse table via
-///     a projector; nothing here writes to ClickHouse and nothing here should. What is implemented is
-///     the <i>emission</i> — the event is built with the projection's columns and published at step
-///     10, so a projector is a consumer rather than a change to the write path.
+///     a projector. This assembly emits — the event is built with the projection's columns and
+///     published at step 11 of the write path and at the terminal transitions <c>OperationGrain</c>
+///     drives — and <c>CyberCloud.ResourceGraph</c> implements this interface over NATS JetStream and
+///     consumes the stream on the silos (#54). A host with no stream configured keeps
+///     <c>LoggingResourceChangedSink</c>.
 /// </remarks>
 public interface IResourceChangedSink {
     /// <summary>Publishes one change.</summary>

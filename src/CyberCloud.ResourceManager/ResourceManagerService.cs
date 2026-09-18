@@ -2935,26 +2935,10 @@ public sealed class ResourceManagerService(
         ResourceSnapshot snapshot,
         CancellationToken cancellationToken
     ) {
-        var changed = new ResourceChangedEvent {
-            Change = change,
-            ResourceId = target.Id.Id,
-            TenantId = target.Id.TenantId,
-            SubscriptionId = target.Id.SubscriptionId,
-            ResourceGroup = target.Id.ResourceGroup,
-            Provider = target.Id.Type.Namespace,
-            Type = target.Id.Type.Type,
-            Name = target.Id.Name,
-            ApiVersion = target.ApiVersion.Value,
-            ProvisioningState = snapshot.ProvisioningState,
-            Location = snapshot.Location,
-            ClusterId = snapshot.ClusterId,
-            Tags = snapshot.Tags,
-            CreatedAt = snapshot.CreatedAt,
-            ModifiedAt = snapshot.ModifiedAt,
-            DesiredHash = DesiredHash.Of(snapshot.Body),
-            Version = 0,
-            Path = target.Id.Path
-        };
+        // ⚠ ONE BUILDER FOR BOTH EMITTERS. OperationGrain emits the silo-side half of the stream
+        // (StateChanged, SoftDeleted, Deleted) through the same function, so the columns cannot drift between the
+        // gateway's events and the silo's — see ResourceChangedEvents.
+        var changed = ResourceChangedEvents.From(change, target.Id, target.ApiVersion.Value, snapshot);
 
         var published = await changes.PublishAsync(changed, cancellationToken);
 
