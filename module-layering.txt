@@ -229,6 +229,17 @@ CyberCloud.ObjectStorage -> CyberCloud.ResourceManager
 # id alone, so the edge is not needed for the join — only for resolving the id, which is
 # CyberCloud.ResourceManager's.
 #
+# ⚠ THE FIRST CONSUMER ARRIVED — CyberCloud.Providers.Compute, docs/plan/13's VMs — AND TOOK THE
+# ALTERNATIVE THE PARAGRAPH ABOVE WROTE DOWN FOR IT. A virtual machine joins a tenant subnet through
+# `ovn.kubernetes.io/logical_switch: {namespace}-{network}-{subnet}` on its pod template, which is
+# NetworkSubnets.ObjectNameOf's output and is derivable from the machine's own namespace and two names
+# in its body; VirtualMachines.LogicalSwitchOf spells the join a second time rather than referencing
+# CyberCloud.Providers.Network.Contracts, and ComputeNetworkJoinTests — a TEST project, which rule 2
+# does not reach — holds the two spellings together. Four edges, the same four, for the sixteenth
+# family. What the family did NOT get is the reader: a body may name a subnet that is not there, and
+# the machine's launcher pod is what finds out (charts/managed/virtual-machine/conformance.yaml
+# § owed, `the-joins-are-not-resolved-before-202`).
+#
 # ⚠ AND CyberCloud.Providers.ContainerRegistry IS THE THIRD FAMILY WITH A REASON TO WANT A FIFTH, AND
 # THE FIRST WHOSE PLAN DOCUMENT ASKS FOR THE EDGE IN AS MANY WORDS. docs/plan/13 § Container Registry:
 # "Storage backend is the tenant's SeaweedFS bucket, so registry storage is billed like any other
@@ -312,6 +323,10 @@ CyberCloud.Providers.Cache -> CyberCloud.Core
 # manager deliberately does not do's "a provider with no cluster at all" — so it names no kind and no
 # connection. The absence is checked the same way the presence would be: a line here with no edge
 # behind it is a coupling nobody reviewed.
+CyberCloud.Providers.Compute -> CyberCloud.Core
+CyberCloud.Providers.Compute -> CyberCloud.Kubernetes
+CyberCloud.Providers.Compute -> CyberCloud.ResourceManager
+CyberCloud.Providers.Compute -> CyberCloud.Tenancy
 CyberCloud.Providers.Communication -> CyberCloud.Communication
 CyberCloud.Providers.Communication -> CyberCloud.Core
 CyberCloud.Providers.Communication -> CyberCloud.ResourceManager

@@ -29,6 +29,15 @@ import type {
   CommunicationServicesTemplatesRenderContent,
   CommunicationServicesTemplatesRenderResult,
   CommunicationServicesTemplatesResource,
+  ComputeDisksData,
+  ComputeDisksResource,
+  ComputeImagesData,
+  ComputeImagesResource,
+  ComputeVirtualMachinesData,
+  ComputeVirtualMachinesResource,
+  ComputeVirtualMachinesRestartResult,
+  ComputeVirtualMachinesStartResult,
+  ComputeVirtualMachinesStopResult,
   ContainerRegistryFeedsData,
   ContainerRegistryFeedsResource,
   ContainerRegistryRegistriesData,
@@ -358,6 +367,96 @@ export class CyberCloudApi {
   /** render — permission 'read'. */
   renderMessageTemplate(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, resourceName: string, content: CommunicationServicesTemplatesRenderContent): Promise<ApiResponse<CommunicationServicesTemplatesRenderResult>> {
     return this.transport.send<CommunicationServicesTemplatesRenderResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/templates/${CyberCloudApi.segment(resourceName)}/render`, body: content });
+  }
+
+  /** Reads one Managed disk. */
+  getManagedDisk(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<ComputeDisksResource>> {
+    return this.transport.send<ComputeDisksResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/disks/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Managed disk. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateManagedDisk(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: ComputeDisksData): Promise<ApiResponse<ComputeDisksResource>> {
+    return this.transport.send<ComputeDisksResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/disks/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Managed disk. A merge patch: what is not set is not changed. */
+  updateManagedDisk(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: Partial<ComputeDisksData>): Promise<ApiResponse<ComputeDisksResource>> {
+    return this.transport.send<ComputeDisksResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/disks/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Managed disk. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteManagedDisk(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/disks/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Managed disks in a resource group. ⚠ A short page never means "that is all there is". */
+  listManagedDisk(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<ComputeDisksResource>>> {
+    return this.transport.send<Page<ComputeDisksResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/disks`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** Reads one Image. */
+  getImage(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<ComputeImagesResource>> {
+    return this.transport.send<ComputeImagesResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/images/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Image. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateImage(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: ComputeImagesData): Promise<ApiResponse<ComputeImagesResource>> {
+    return this.transport.send<ComputeImagesResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/images/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Image. A merge patch: what is not set is not changed. */
+  updateImage(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: Partial<ComputeImagesData>): Promise<ApiResponse<ComputeImagesResource>> {
+    return this.transport.send<ComputeImagesResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/images/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Image. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteImage(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/images/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Images in a resource group. ⚠ A short page never means "that is all there is". */
+  listImage(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<ComputeImagesResource>>> {
+    return this.transport.send<Page<ComputeImagesResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/images`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** Reads one Virtual machine. */
+  getVirtualMachine(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<ComputeVirtualMachinesResource>> {
+    return this.transport.send<ComputeVirtualMachinesResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/virtualMachines/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Virtual machine. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateVirtualMachine(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: ComputeVirtualMachinesData): Promise<ApiResponse<ComputeVirtualMachinesResource>> {
+    return this.transport.send<ComputeVirtualMachinesResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/virtualMachines/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Virtual machine. A merge patch: what is not set is not changed. */
+  updateVirtualMachine(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: Partial<ComputeVirtualMachinesData>): Promise<ApiResponse<ComputeVirtualMachinesResource>> {
+    return this.transport.send<ComputeVirtualMachinesResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/virtualMachines/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Virtual machine. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteVirtualMachine(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/virtualMachines/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Virtual machines in a resource group. ⚠ A short page never means "that is all there is". */
+  listVirtualMachine(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<ComputeVirtualMachinesResource>>> {
+    return this.transport.send<Page<ComputeVirtualMachinesResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/virtualMachines`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** restart — permission 'write'. */
+  restartVirtualMachine(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<ComputeVirtualMachinesRestartResult>> {
+    return this.transport.send<ComputeVirtualMachinesRestartResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/virtualMachines/${CyberCloudApi.segment(resourceName)}/restart` });
+  }
+
+  /** start — permission 'write'. */
+  startVirtualMachine(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<ComputeVirtualMachinesStartResult>> {
+    return this.transport.send<ComputeVirtualMachinesStartResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/virtualMachines/${CyberCloudApi.segment(resourceName)}/start` });
+  }
+
+  /** stop — permission 'write'. */
+  stopVirtualMachine(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<ComputeVirtualMachinesStopResult>> {
+    return this.transport.send<ComputeVirtualMachinesStopResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Compute/virtualMachines/${CyberCloudApi.segment(resourceName)}/stop` });
   }
 
   /** Reads one Artifact feed. */

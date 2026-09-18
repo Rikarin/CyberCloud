@@ -62,11 +62,15 @@ images:
   - quay.io/kubevirt/virt-operator:v1.9.0@sha256:d08b5b5ad1c0d694fad13279e44b44b6fad961aa7508acd53b87ce6ef468cbae
 
 notes: >
-  ⚠ Nested virtualisation. KubeVirt runs guests under KVM, and a node with no `/dev/kvm` falls back
-  to software emulation, which is slow enough that a Cluster API Machine can time out before its
-  guest finishes booting. That is a property of the host fleet rather than of this pin, and it is the
-  first thing to check when charts/managed/kubernetes-agentpool creates Machines that never become
-  Ready.
+  ⚠ Nested virtualisation. KubeVirt runs guests under KVM, and a node with no `/dev/kvm` schedules
+  NO guest at all: every launcher pod requests `devices.kubevirt.io/kvm`, and the scheduler answers
+  "Insufficient devices.kubevirt.io/kvm". ⚠ THIS PARAGRAPH SAID "falls back to software emulation"
+  UNTIL 2026-09-17 AND THAT IS ONLY TRUE WITH `developerConfiguration.useEmulation: true` IN THE
+  KubeVirt RESOURCE, which this bundle does not set. Emulation would be slow enough that a Cluster
+  API Machine could time out before its guest finishes booting, which is why it is not switched on
+  for a lane's convenience. Either way it is a property of the host fleet rather than of this pin,
+  and it is the first thing to check when charts/managed/kubernetes-agentpool creates Machines that
+  never become Ready.
   ⚠ INSTALLED ON 2026-09-15 THROUGH install.sh AGAINST A `rancher/k3s:v1.35.7-k3s1` WITH A KUBELET,
   AND TWO THINGS ABOUT THAT NODE HAD TO BE TRUE FIRST. (1) `/var/run` must be a SHARED mount:
   `virt-handler` refuses a node where it is not — `path "/var/run/kubevirt" is mounted on "/var/run"
@@ -77,8 +81,11 @@ notes: >
   at all; a real node has no such problem. (2) containerized-data-importer must be `Deployed` FIRST —
   see `requires:` above. With both, the `KubeVirt` resource reached `Deployed` 1 m 40 s after apply
   on a warm cache, `virt-handler` and all nine of the operator's workloads Running.
-  ⚠ WHAT THAT DOES NOT PROVE, AND STAYS FOR REAL NODES: no VirtualMachine has been created here.
-  Docker Desktop's VM exposes no `/dev/kvm` to a container, so a guest on this lane would be the
-  software emulation the paragraph above warns about, and charts/managed/kubernetes' Machines — the
-  reason this component exists — are the VM lane's to prove. bundle.yaml § owed,
-  `virtual-machines-need-a-node-with-kvm`.
+  ✅ A VirtualMachine HAS RUN HERE, since 2026-09-17: test/CyberCloud.Bundle.Cluster.Conformance
+  § KubeVirtOnAnEmptyCluster applies charts/managed/virtual-machine against this component and the
+  guest reports Running under KVM. The sentence this paragraph carried — "Docker Desktop's VM
+  exposes no /dev/kvm to a container" — was true of an unprivileged container and false of the
+  privileged k3s one, because WSL2 nests virtualization; the device plugin advertises
+  `devices.kubevirt.io/kvm` on the node. WHAT THAT STILL DOES NOT PROVE: charts/managed/kubernetes'
+  Machines — the reason this component exists — need the phase-40 rows under test and a guest that
+  joins a cluster, which are the VM lane's. bundle.yaml § owed, `virtual-machines-need-a-node-with-kvm`.

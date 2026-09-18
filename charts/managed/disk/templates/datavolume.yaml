@@ -1,0 +1,42 @@
+{{/*
+CDI `DataVolume`, blank — docs/plan/13 § Virtual Machines, "Disks".
+
+⚠ This renders a custom resource; it does not install CDI. That is charts/bundle/'s job (phase 30).
+
+⚠ NO `cdi.kubevirt.io/storage.bind.immediate.requested`, AND THE ABSENCE IS THE TYPE. The bundle's
+default class is WaitForFirstConsumer; a disk left on the class's own binding mode binds to the node
+its first machine is scheduled to, where an immediately-bound one would pin the machine to whichever
+node CDI's helper pod picked. Cdi.ImmediateBindAnnotation carries the argument, and charts/managed/image
+makes the opposite choice for the opposite reason. The reconciler calls the WaitForFirstConsumer phase
+provisioned — a disk nobody has attached is inventory, not a failure.
+*/}}
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: {{ include "disk.objectName" . }}
+  labels:
+    {{- include "disk.platformLabels" . | nindent 4 }}
+spec:
+  source:
+    blank: {}
+  {{/*
+    ⚠ `storage` and not `pvc`, so the volume mode comes from CDI's StorageProfile for the class
+    rather than from a guess here. storageClassName is written only when the body names one: an empty
+    string is "no class at all" to the API server, not "the default".
+  */}}
+  storage:
+    {{/*
+      ⚠ THE ACCESS MODE IS WRITTEN. CDI fills it from a StorageProfile only for provisioners it knows,
+      and openebs.io/local is not one: the first DataVolume ever applied to a real CDI answered "no
+      accessMode specified in StorageProfile openebs-hostpath" and never bound (2026-09-17). ReadWriteOnce
+      is what a node-local disk can be; live migration would need ReadWriteMany — conformance.yaml
+      § owed, `access-mode-is-read-write-once`. The volume mode is still the profile's.
+    */}}
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: {{ .Values.size | quote }}
+    {{- if .Values.storageClass }}
+    storageClassName: {{ .Values.storageClass | quote }}
+    {{- end }}

@@ -166,6 +166,19 @@ them — see § What a chart cannot say for why they are not in any `ResourceSch
 > against. The prediction's shape still holds at ten for its child chart, which has a real
 > configuration surface and nothing unusual in its tail.
 
+> ⚠ **The three `CyberCloud.Compute` charts (2026-09-17) have the shortest `@internal` tails in the
+> tree — nine, nine and ten — and the reason is the operator's, not the chart's.** Every earlier tail
+> carries an image escape hatch, because the chart renders a workload and somebody may need to
+> mirror its image. A `DataVolume` and a `VirtualMachine` render no image at all: CDI's importer and
+> KubeVirt's launcher are the bundle's images, pulled by the operator from names the chart never
+> sees. So `managed/disk` is 11 rows (2 API, 9 `@internal`), `managed/image` 15 (6, 9) and
+> `managed/virtual-machine` 19 (9, 10), where the tenth row of the last is the one genuinely new
+> shape: `runStrategy`, the power state, `@internal` because a tenant moves it through the
+> `start`/`stop` actions and never through a body. ⚠ One table each is NOT in `values.yaml` at all:
+> the machine's size table and the image catalogue are template dictionaries in `_helpers.tpl`, the
+> catalogue because its names carry a dot (`ubuntu-24.04`) that [§ The values subset](#the-values-subset)
+> has no key for. `ComputeChartDriftTests` compares both against their C# copies.
+
 > ⚠ **CORRECTED 2026-08-12.** This paragraph read: "`Build.Generate` turns that into the resource
 > type's OpenAPI body, the CLI flags, the SDK model and the portal form" — the chart authoring the
 > API. [ADR-010 § Which end authors the schema](../docs/plan/02-technology-decisions.md) decided the

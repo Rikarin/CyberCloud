@@ -1,0 +1,46 @@
+# A managed disk — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from Disks.Schema2026 by `./build.sh Charts`, and so
+# is values.schema.json. ADR-010 § Which end authors the schema: "The C# ResourceSchema is authored.
+# The chart's @param annotations are generated from it and diffed." Editing a generated row here is
+# undone on the next run and fails the build in between; add the field in C# instead.
+#
+# ⚠ EVERYTHING HERE IS IMMUTABLE, AND THAT IS CDI'S RULE. A DataVolume's spec cannot be changed after
+# creation and a claim can never shrink; growing one depends on the class. So a bigger disk is a new
+# disk, and the only PUT this type accepts moves tags — conformance.yaml § owed,
+# `nothing-mutable-reaches-the-cluster`.
+
+## @param size {string} The disk's size, in Kubernetes quantity form. ⚠ Immutable: growing a disk depends on the storage class and shrinking one is never possible, so a bigger disk is a new disk.
+## @required
+## @immutable
+## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+## @example "32Gi"
+size: "32Gi"
+
+## @param storageClass {string} The storage class the disk is on. Empty means the cluster's default, which on a bundle-installed cluster is node-local: one copy, on one node, and the machine that attaches the disk runs on that node.
+## @immutable
+## @length ..253
+## @widget storageclass
+storageClass: ""
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Compute/disks
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

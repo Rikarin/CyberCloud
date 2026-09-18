@@ -2071,6 +2071,68 @@ the first type in the catalogue whose data plane is a platform host — `CyberCl
   `charts/managed/feeds/conformance.yaml § owed`, `no-real-client-is-driven`, beside the proxy and
   retention thirds of doc 13's scope and the two meters the host does not yet emit.
 
+### What the sixteenth provider measured
+
+`CyberCloud.Compute/virtualMachines`, `disks` and `images`,
+[13 § Virtual Machines](../../docs/plan/13-compute-vm-containers.md), M2 · 3.0 EM, #28 — the core of
+the row #28 calls "the one that makes the platform a cloud rather than a managed-database service",
+on KubeVirt and CDI. Three root types and no child, because a managed disk outlives the machine it is
+attached to and a child shares its parent's lifetime by construction.
+
+- **⚠ THE FIRST TYPE WITH A POWER STATE, AND IT IS NOT IN THE BODY.** `start`, `stop` and `restart`
+  are actions, as doc 13 lists them and as Azure models them; an action cannot change a desired body
+  — the operation grain drives the reconciler and hands it the stored body, never the action's name —
+  so `powerState` as a property would have had no way to be moved by `POST …/stop`. The state is
+  `spec.runStrategy` on the KubeVirt object: the power handler applies the **whole** render with the
+  field changed, under the reconciler's own field manager, and `VirtualMachineReconciler` reads the
+  object before it renders and writes back what it found. Two other designs were built on paper and
+  rejected in `VirtualMachines`' class remarks: a partial apply under the same manager prunes every
+  other field, and a second manager conflicts on the reconcile-hash annotation `KubeCommandBuilder`
+  injects non-overridably. What it costs — a one-apply-wide window in which a power action landing
+  between a pass's read and its apply is overwritten — is
+  `charts/managed/virtual-machine/conformance.yaml § owed`, `power-state-can-lose-a-race`.
+  `VirtualMachinePowerTests` drives stop → PUT → still halted → start; sabotaging the read turns three
+  tests red.
+- **⚠ THE FIRST HANDLERS THAT WRITE A CLUSTER.** Every earlier `IResourceActionHandler` read — a
+  status, a Secret, a constant. The three power actions apply and delete objects through the same
+  `KubeCommand` seam the reconciler uses, and the shared suite's action assertion now drives a stop
+  through the manager and validates the answer against `VirtualMachines.PowerResponse`.
+- **⚠ THE FIRST FAMILY WHOSE WEBHOOK HALF IS MEASURED RATHER THAN OWED.** Every
+  `.Cluster.Conformance` suite records that a derived CRD stub admits anything;
+  `charts/managed/kubernetes/conformance.yaml` calls it `a-green-cluster-suite-proves-the-apply-path-only`.
+  `test/CyberCloud.Bundle.Cluster.Conformance § KubeVirtOnAnEmptyCluster` installs openebs-localpv,
+  CDI and KubeVirt through `install.sh` — the first `manifest:` rows a test has ever installed —
+  imports an image through `charts/managed/image`, applies `charts/managed/virtual-machine`, and the
+  real `kubevirt.io` webhook admits it — and the guest boots: `Running` under KVM, 46 seconds after
+  the apply. ⚠ The test was written to assert `ErrorUnschedulable`, because issue #95 and
+  `charts/bundle/bundle.yaml § owed` said Docker Desktop's VM lends no `/dev/kvm`; the first run
+  past CDI turned that red the other way, and `docker run --privileged alpine ls -l /dev/kvm` is the
+  one-line measurement nobody had taken. What is still owed is the guest itself — nothing reaches a
+  console or an agent — `charts/managed/virtual-machine/conformance.yaml § owed`,
+  `the-guest-is-not-reached`.
+- **⚠ THE SIZE TABLE IS WHAT THE GUEST GETS, WHICH THE NODE POOL'S IS NOT.** `AgentPools` renders an
+  instancetype name the bundle does not install and records its sizing table as a belief; this family
+  renders `domain.cpu.cores` and `domain.memory.guest` from `VirtualMachines.Sizes`, so the number
+  quota reserves is the number the guest boots with. The chart carries the same four rows in a
+  template dictionary and `ComputeChartDriftTests` compares them.
+- **⚠ THE IMAGE CATALOGUE IS A TABLE, NOT A PIPELINE.** #28 predicted this row would get stuck on
+  building images, on the evidence of the CAPK node-image repository; a plain cloud image carries no
+  kubelet, and `quay.io/containerdisks` publishes Ubuntu and Debian rebuilt from the distributions'
+  own images. `Images.Catalogue` pins four of them by digest — the checksum the puller verifies —
+  and the chart's copy could not be a value block because a catalogue name carries a dot the values
+  subset has no key for, so it is a template dictionary like the sizes.
+- **⚠ THE FIRST CONSUMER OF THE NETWORK FAMILY, THROUGH THE ROUTE `module-layering.txt` WROTE DOWN
+  FOR IT.** A machine joins a subnet through `ovn.kubernetes.io/logical_switch:
+  {namespace}-{network}-{subnet}`, which is `NetworkSubnets.ObjectNameOf`'s rule spelled a second time
+  in `VirtualMachines.LogicalSwitchOf` because rule 2 forbids the reference that would spell it once.
+  `ComputeNetworkJoinTests` is the first test project to cross a family boundary — legal, because
+  rule 2 is over the shipped graph — and is the only thing holding the two spellings together.
+- **⚠ Three of doc 13's rows are deliberately not types, and each has an id.** Scale sets
+  (`scale-sets-are-not-landed`: KubeVirt's alpha `VirtualMachinePool`, or a fan-out that needs the
+  reader every family owes), container instances (`container-instances-are-not-landed`: a different
+  namespace, waiting for a log-streaming path), and `deallocate` (`deallocate-is-stop`: a halted
+  KubeVirt machine already holds no compute and keeps every disk).
+
 ## Namespaces
 
 Every namespaced object this platform applies lands in `{subscriptionId:N}-{resourceGroup}`, derived

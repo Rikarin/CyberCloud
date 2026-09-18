@@ -104,6 +104,12 @@
       "src/Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Application/CyberCloud.Providers.Communication.Application.csproj",
       "src/Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Tests/CyberCloud.Providers.Communication.Tests.csproj",
       "src/Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Conformance/CyberCloud.Providers.Communication.Conformance.csproj",
+      "src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Contracts/CyberCloud.Providers.Compute.Contracts.csproj",
+      "src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.csproj",
+      "src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Application/CyberCloud.Providers.Compute.Application.csproj",
+      "src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Tests/CyberCloud.Providers.Compute.Tests.csproj",
+      "src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Conformance/CyberCloud.Providers.Compute.Conformance.csproj",
+      "src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Cluster.Conformance/CyberCloud.Providers.Compute.Cluster.Conformance.csproj",
       "test/CyberCloud.Conformance/CyberCloud.Conformance.csproj",
       "test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"
     ]

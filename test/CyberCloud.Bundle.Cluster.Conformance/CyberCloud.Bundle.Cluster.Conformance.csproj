@@ -117,6 +117,14 @@
           name into a second file — is how the two come to disagree.
         -->
         <ProjectReference Include="../CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
+        <!--
+          ⚠ ONE PROVIDER'S .Contracts, FOR ONE READING. KubeVirtOnAnEmptyCluster hands the VirtualMachine
+          a real KubeVirt wrote to VirtualMachines.ReadinessOf, so the sentence the reconciler would put
+          in a tenant's InProgress message is asserted against a status no fake produced — the missing
+          KVM device, by name. No reconciler runs here; the object is applied by this test's own kubectl
+          from a chart, exactly as CloudNativePgOnAnEmptyCluster applies its Cluster.
+        -->
+        <ProjectReference Include="../../src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Contracts/CyberCloud.Providers.Compute.Contracts.csproj"/>
     </ItemGroup>
 
 </Project>

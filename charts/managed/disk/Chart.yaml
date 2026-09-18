@@ -1,0 +1,37 @@
+# A managed disk — docs/plan/13 § Virtual Machines, "Disks | CyberCloud.Compute/disks → LINSTOR PVCs,
+# hot-attachable".
+#
+# ⚠ A BLANK CDI DataVolume, AND NOTHING ELSE. The claim is the disk; CDI creates it and fills it with
+# nothing; a virtual machine names it in its body and mounts it at its next start. Not a child of the
+# machine, because a managed disk outlives the machine it is attached to — that is the point of the
+# word.
+apiVersion: v2
+name: disk
+description: A blank data disk of a size and a storage class, provisioned on its own and attached to a virtual machine by name. It outlives the machine.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ The CDI release this chart's object was reviewed against — charts/bundle/containerized-data-importer's pin.
+appVersion: "1.66.0"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - kubevirt
+  - cdi
+  - disk
+  - compute
+
+home: https://kubevirt.io
+sources:
+  - https://github.com/kubevirt/containerized-data-importer
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Compute/disks
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: containerized-data-importer

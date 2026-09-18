@@ -1,0 +1,41 @@
+# A bootable disk image — docs/plan/13 § Virtual Machines, "Image | CyberCloud.Compute/images → a CDI
+# DataVolume source. Platform catalogue (Ubuntu, Debian, Rocky, Windows Server ⚠ licensing) +
+# tenant-private images".
+#
+# ⚠ THE CATALOGUE IS FOUR ROWS PINNED BY DIGEST, NOT AN IMAGE PIPELINE. #28 predicted this family would
+# get stuck on building and hosting images, on the evidence of the CAPK node-image repository. A plain
+# cloud image needs no kubelet baked in: quay.io/containerdisks publishes Ubuntu and Debian as
+# container disks, and `catalogue` below pins each by the digest quay.io served — a checksum the puller
+# verifies. Rocky is not offered because containerdisks does not publish it; Windows Server is a
+# licensing arrangement (docs/plan/13 § Images and licensing).
+apiVersion: v2
+name: image
+description: A bootable disk image imported once into a resource group — one of the platform's Ubuntu and Debian cloud images, pinned by digest, or a container disk or HTTP address the tenant supplies — and cloned by every virtual machine that boots from it.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ The CDI release this chart's object was reviewed against — charts/bundle/containerized-data-importer's pin.
+appVersion: "1.66.0"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - kubevirt
+  - cdi
+  - image
+  - compute
+
+home: https://kubevirt.io
+sources:
+  - https://github.com/kubevirt/containerized-data-importer
+  - https://github.com/kubevirt/containerdisks
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Compute/images
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: containerized-data-importer

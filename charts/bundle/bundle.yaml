@@ -237,6 +237,18 @@ owed:
       installs the same three helm rows it always did, and the lane that would install a `manifest:`
       row under test now EXISTS on this machine (docs/plan/23 § The lane that needs a kubelet) and is
       not yet used for one.
+      ✅ AND ON 2026-09-17 THE LANE WAS USED FOR TWO, WHICH MOVES THE COUNT ABOVE FROM THREE TO FIVE.
+      test/CyberCloud.Bundle.Cluster.Conformance § KubeVirtOnAnEmptyCluster runs THIS DIRECTORY'S
+      `install.sh --component kubevirt --component containerized-data-importer --component
+      openebs-localpv` — named the wrong way round on purpose — onto one fresh k3s: the roster orders
+      them, both `manifest:` rows go through the kubectl branch UNDER TEST for the first time, both
+      `waitFor:` entries return (`cdi/cdi` and `kubevirt/kubevirt` at `Deployed`), and the run takes
+      about five minutes (CDI Deployed at 1 m 30 s, KubeVirt at 5 m, most of it image pulls) on a fresh k3s. Then the test applies what a PROVIDER renders against the operators
+      it was written for — charts/managed/image and charts/managed/virtual-machine, CyberCloud.Compute's
+      charts (#28) — and KubeVirt's own webhook admits the machine and boots it;
+      `virtual-machines-need-a-node-with-kvm` below has what that corrected. Five of twenty by a
+      test, all twenty by hand, and the `manifest:` half of the sentence above is no longer a reading
+      by a person.
       ⚠ THE PHASE ORDER IS RUN, AND THE PHASE BARRIER IS NOW HALF RUN, AND THE TWO ARE DIFFERENT
       CLAIMS. `BundleInstallSelection` drives a full `--dry-run` and asserts that all nineteen
       components are attempted once each, in the roster's order, under ascending phase headers — the
@@ -364,6 +376,12 @@ owed:
       healthy cluster is the wrong way round, so the flag is on and the reason is beside it.
       WHAT IS STILL A READING BY A PERSON: all of the above. The suite installs three helm rows; no
       test has yet run a `manifest:` row, and the lane that could now exists on this machine.
+      ✅ NO LONGER, SINCE 2026-09-17: KubeVirtOnAnEmptyCluster installs containerized-data-importer
+      and kubevirt through install.sh under test — the kubectl branch, the establishment wait and
+      both `waitFor:` entries, run by a suite rather than a person — and the two shapes recorded
+      above for those rows held on a fresh k3s (CDI `Deployed` before KubeVirt was applied, KubeVirt
+      `Deployed` with virt-handler Running). The four Cluster API rows and rabbitmq-cluster-operator
+      are still the person's reading.
       ⚠ ONE THING THE FIX CANNOT BE IS SILENTLY GREEN, AND THAT WAS MEASURED TOO — AND RE-MEASURED ON
       2026-09-05 ON THE FORM THE SCRIPT ACTUALLY RUNS, BECAUSE THE FIRST MEASUREMENT WAS OF A
       DIFFERENT INVOCATION. What was recorded was `kubectl wait --for=condition=Established crd -l <a
@@ -426,6 +444,35 @@ owed:
       joins — is the VM lane's to prove, together with the LINSTOR/DRBD stage
       `the-replicated-stage-is-not-installed` already carries. Three things, one lane, all real
       nodes: kube-ovn, replicated storage, and a guest with KVM.
+      ✅ A GUEST HAS RUN ON IT, AND THE TWO SENTENCES ABOVE ABOUT `/dev/kvm` AND EMULATION WERE BOTH
+      WRONG — NOBODY HAD MEASURED. On 2026-09-17 test/CyberCloud.Bundle.Cluster.Conformance
+      § KubeVirtOnAnEmptyCluster applied charts/managed/virtual-machine (CyberCloud.Compute, #28)
+      against the KubeVirt this script installed, and the machine reported `Running` about a minute (46 s on one run, 60 s on the next, half of it the clone) after
+      the apply, under KVM: `docker run --privileged alpine ls -l /dev/kvm` answers
+      `crw-rw---- 10, 232` on this host (an unprivileged container answers "No such file", which is
+      the reading that misled), because WSL2 runs with nested virtualization on and the k3s
+      container is privileged; virt-handler's device plugin advertised `devices.kubevirt.io/kvm` on
+      the node and the launcher pod requested and received it. Nor would a node WITHOUT the device
+      emulate: KubeVirt requests the device on every launcher pod — the temporary pod it renders to
+      bind a WaitForFirstConsumer claim included — unless `developerConfiguration.useEmulation` is
+      set in the KubeVirt resource, which this bundle does not, so such a node schedules nothing and
+      the machine reads `ErrorUnschedulable` (the state the test was first written to assert, and
+      the one it would report on a real node without nested virtualization).
+      kubevirt/component.yaml § notes and docs/plan/23 § The lane that needs a kubelet are
+      corrected the same way. What the run cost, on a fresh k3s: about five minutes (CDI Deployed at 1 m 30 s, KubeVirt at 5 m, most of it image pulls) for the three
+      components, under a minute for CDI's registry importer to fill a cirros image on openebs-hostpath,
+      about a minute (46 s on one run, 60 s on the next, half of it the clone) for the machine to go from applied to Running — 8 m 26 s for the class, k3s start included in all. ⚠ AND THE FIRST
+      DataVolume EVER APPLIED TO A REAL CDI FOUND A DEFECT NO FAKE COULD: `no accessMode specified in
+      StorageProfile openebs-hostpath`. CDI has no profile entry for openebs.io/local and fills
+      nothing for a class it does not know, so every claim CyberCloud.Compute renders now writes
+      ReadWriteOnce — charts/managed/disk/conformance.yaml § owed, `access-mode-is-read-write-once`,
+      which also names this bundle's half: a StorageProfile for its own class.
+      WHAT THIS ROW STILL OWES, AND IT IS NARROWER THAN ITS NAME: the guest itself — nothing reaches a
+      console or a guest agent, so "booted" is libvirt's word rather than a login
+      (charts/managed/virtual-machine/conformance.yaml § owed, `the-guest-is-not-reached`) — and the
+      node-pool sentence this component exists for: a Cluster API Machine becoming a Node, which
+      needs the phase-40 rows under test as well. Two things, one lane, real nodes: kube-ovn and
+      replicated storage. KVM is no longer one of them on a WSL2 host.
   - id: a-selector-that-matched-nothing-reported-success
     says: >
       ✅ FIXED ON 2026-09-03, RECORDED BECAUSE THE READING IS WORTH MORE THAN THE FIX.

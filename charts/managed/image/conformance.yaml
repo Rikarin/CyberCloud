@@ -1,0 +1,115 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Compute/images. This file is data: `Build.Charts`
+# checks that it is present, non-empty, and names the same resource type as Chart.yaml.
+
+resourceType: CyberCloud.Compute/images
+apiVersion: "2026-08-01"
+chart: image
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+renders:
+  - group: cdi.kubevirt.io
+    version: v1beta1
+    kind: DataVolume
+    count: 1
+
+# ADR-013 — every rendered object carries all seven labels.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.compute_images
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: a-catalogue-name-is-a-digest
+    says: >
+      A body with `source.kind: catalogue` and a catalogue name renders `source.registry.url` as the
+      digest-pinned reference Images.Catalogue holds for it — never a tag — and the chart's own
+      catalogue block resolves the name to the same string. ComputeChartDriftTests compares the two
+      tables row by row.
+  - id: the-scheme-picks-the-importer
+    says: >
+      A `url` source beginning docker:// renders `source.registry`; one beginning http:// or https://
+      renders `source.http`; a `url` body with no address is refused before anything is applied,
+      naming both properties.
+  - id: an-image-binds-immediately-and-converges-when-imported
+    says: >
+      The DataVolume carries `cdi.kubevirt.io/storage.bind.immediate.requested: "true"`, so on the
+      bundle's WaitForFirstConsumer class the claim binds without a consumer and the import runs; the
+      resource is Succeeded when CDI reports Succeeded and InProgress with CDI's own progress
+      sentence until then. ⚠ Measured, not assumed: test/CyberCloud.Bundle.Cluster.Conformance
+      § KubeVirtOnAnEmptyCluster imports an image through this chart on a real CDI.
+  - id: a-failed-import-is-terminal
+    says: >
+      An image whose import CDI marks Failed is Failed, with CDI's reason, and stays so: its source and
+      size are immutable, so a retry would ask the same registry for the same bytes forever. A
+      different image is a new resource.
+  - id: the-claim-is-the-resource-name
+    says: >
+      The DataVolume, and so the claim, is named exactly as the resource is, so a machine naming
+      the image renders `source.pvc.name: <image>` in its own namespace without reading this
+      resource.
+
+# Meters the type must emit.
+meters:
+  - meter: resources
+    amount: 1
+  - meter: storageGb
+    amount: size
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────────
+owed:
+  - id: http-imports-are-unverified
+    says: >
+      A `url` source over http(s) carries no checksum and CDI's HTTP importer takes none — a URL, a
+      secret and a certificate bundle are its whole surface. A `sha256` property this platform
+      recorded and never compared would be the record-not-a-pin shape charts/bundle/bundle.yaml
+      § owed, `images-are-not-pinned-by-digest`, spends a page on, so it is not declared. What would
+      close it is a checksum the importer verifies, which is a CDI feature request, or an import
+      through a platform pod that hashes the stream — infrastructure #28 said this row would need.
+  - id: the-catalogue-is-re-pinned-by-hand
+    says: >
+      Images.Catalogue and the chart's `catalogue` block hold digests read on 2026-09-17, and nothing
+      re-resolves them. A rebuilt tag does not move a digest, so the pin never breaks — it ages.
+      Moving it is a deliberate edit to both copies with SOURCE updated, and the comparison that keeps
+      the copies together is ComputeChartDriftTests; the comparison that would notice a stale pin is
+      charts/bundle/images.sh's shape, pointed at this table, and is not written.
+  - id: no-rocky-no-windows
+    says: >
+      docs/plan/13 names Rocky and Windows Server in the catalogue. containerdisks publishes no Rocky
+      disk, and a Rocky row would be an HTTP import of the distribution's own image with the
+      verification gap above; Windows Server is a licensing arrangement (docs/plan/13 § Images and
+      licensing) and the API answers an unknown name with the schema's own enum refusal rather than a
+      mysterious absence.
+  - id: images-are-per-resource-group
+    says: >
+      An image is imported into one namespace and cloned by machines in that namespace. A shared
+      platform catalogue every tenant clones from — one import per image rather than one per resource
+      group — needs CDI's cross-namespace clone authorisation reasoned about for KubeVirt's
+      controller as the DataVolume creator; charts/managed/virtual-machine records the machine's half
+      under the same id.
+  - id: nothing-mutable-reaches-the-cluster
+    says: >
+      Every tenant-facing property is immutable, so the only PUT this type accepts moves tags, and
+      tags reach no object. The shared suite's update assertion varies a tag and proves that an
+      update travels the grain path, nothing about the cluster — the same row charts/managed/disk
+      carries.
+  - id: no-recovery-window
+    says: >
+      No SupportsSoftDelete: deleting an image deletes the claim and the bytes, and a machine that
+      later boots from the same name gets nothing. Re-importing a catalogue image is cheap; a
+      tenant's own url image is theirs to keep a copy of, and the description says neither yet.
+  - id: grafana-dashboard
+    says: >
+      Eighth sighting of charts/managed/nats' item of the same name. Import progress is on the
+      DataVolume's status and the reconciler carries it into the operation's progress; nothing
+      charts it.

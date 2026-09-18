@@ -249,6 +249,7 @@
     "CyberCloud.Analytics",
     "CyberCloud.Cache",
     "CyberCloud.Communication",
+    "CyberCloud.Compute",
     "CyberCloud.ContainerRegistry",
     "CyberCloud.ContainerService",
     "CyberCloud.DBforMySQL",
@@ -339,6 +340,45 @@
         "plural": "Message templates",
         "alias": "template",
         "summary": "A named, versioned message body with typed variables. Every change appends a version; a send names the template and the version it wants.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Compute/disks",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Managed disk",
+        "plural": "Managed disks",
+        "alias": "disk",
+        "summary": "A blank data disk of a size and a storage class, provisioned on its own and attached to a virtual machine by name. It outlives the machine.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Compute/images",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Image",
+        "plural": "Images",
+        "alias": "image",
+        "summary": "A bootable disk image imported once into your resource group — one of the platform's Ubuntu and Debian cloud images, pinned by digest, or a container disk or HTTP address you supply — and cloned by every machine that boots from it.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Compute/virtualMachines",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Virtual machine",
+        "plural": "Virtual machines",
+        "alias": "vm",
+        "summary": "A virtual machine on KubeVirt: a size from the platform catalogue, a root disk cloned from an image, managed disks by name, a tenant subnet, and cloud-init from a vault handle. Start, stop and restart are actions; stop releases compute and keeps every disk.",
         "declared": true
       }
     },

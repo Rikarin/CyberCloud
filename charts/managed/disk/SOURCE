@@ -1,0 +1,33 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+
+vendored: none
+upstream: https://github.com/kubevirt/containerized-data-importer
+
+upstream-api: cdi.kubevirt.io/v1beta1
+
+importer: https://github.com/kubevirt/containerized-data-importer         # v1.66.0
+
+reviewed: 2026-09-17
+
+# ── What the review established ───────────────────────────────────────────────────────────────────
+#
+# ⚠ A DataVolume's SPEC IS IMMUTABLE AFTER CREATION. CDI's validating webhook refuses an update that
+# changes `spec`, and a PersistentVolumeClaim's request can never decrease; expansion is a change to
+# the claim and depends on the class's allowVolumeExpansion. That is why every tenant-facing value in
+# this chart is @immutable, and why `resize-is-not-offered` is an owed row rather than a property.
+#
+# ⚠ `spec.storage` VERSUS `spec.pvc`, AND WHAT THE FIRST REAL RUN CORRECTED. The `storage` form lets
+# CDI fill accessModes and volumeMode from the StorageProfile it keeps per class. This file said CDI
+# "falls back to ReadWriteOnce/Filesystem for a class it has no profile entry for", and it does not:
+# on 2026-09-17 the first DataVolume applied to a real CDI 1.66 sat on `no accessMode specified in
+# StorageProfile openebs-hostpath` and never bound. CDI's table of known provisioners has no
+# openebs.io/local row, and with no entry it fills nothing. So accessModes is written — ReadWriteOnce —
+# and only the volume mode is left to the profile; conformance.yaml § owed,
+# `access-mode-is-read-write-once`, carries what that costs and the bundle's half.
+#
+# ⚠ THE PHASES A BLANK DISK PASSES THROUGH ON A WaitForFirstConsumer CLASS: Pending → WaitForFirstConsumer
+# (or PendingPopulation under CDI's populator path) → Bound and Succeeded once a pod mounts it. The
+# reconciler calls the middle one converged — Cdi.IsProvisioned — because nothing consumes a disk
+# until a machine does, and KubeVirt's own VM controller treats the same two phases as ready
+# (pkg/virt-controller/watch/vm/vm.go, handleDataVolumes).
+upstream-webhook: CDI ships a validating webhook for DataVolume (spec immutability, source shape, a clone's source claim must exist) and a mutating one that fills spec.storage from the StorageProfile

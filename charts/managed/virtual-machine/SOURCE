@@ -1,0 +1,65 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+
+vendored: none
+upstream: https://github.com/kubevirt/kubevirt
+
+upstream-api: kubevirt.io/v1, cdi.kubevirt.io/v1beta1
+
+hypervisor: https://github.com/kubevirt/kubevirt                          # v1.9.0
+importer: https://github.com/kubevirt/containerized-data-importer         # v1.66.0
+
+reviewed: 2026-09-17
+
+# ── What the review established, read firsthand at the pinned tags ──────────────────────────────
+#
+# ⚠ `spec.runStrategy` IS REQUIRED BY THE VALIDATING WEBHOOK, AND `running` IS DEPRECATED.
+# pkg/virt-api/webhooks/validating-webhook/admitters/vms-admitter.go, validateRunStrategy: a spec with
+# neither `running` nor `runStrategy` is refused with "RunStrategy must be specified", and one with both
+# with "Running and RunStrategy are mutually exclusive. Note that Running is deprecated". So the field
+# cannot be left out for another manager to own, which is what decided that the reconciler READS it
+# off the object before it renders — values.yaml § runStrategy.
+#
+# ⚠ THE PRINTABLE STATUS IS FIRST-MATCH-WINS OVER AN ORDERED LIST, AND `ErrorUnschedulable` COMES
+# BEFORE `Provisioning` AND `WaitingForVolumeBinding`. pkg/virt-controller/watch/vm/vm.go,
+# setPrintableStatus: Terminating, Stopping, Migrating, Paused, Running, ErrorPvcNotFound,
+# DataVolumeError, ErrorUnschedulable, Provisioning, WaitingForVolumeBinding, ErrImagePull,
+# ImagePullBackOff, Starting, CrashLoopBackOff, Stopped, WaitingForReceiver. isVirtualMachineStatusUnschedulable
+# is the VMI carrying PodScheduled=False with reason Unschedulable. That ordering is why a machine on
+# a node without KVM reads `ErrorUnschedulable` and not `WaitingForVolumeBinding`, although its root
+# claim is also unbound.
+#
+# ⚠ A DataVolume IN WaitForFirstConsumer OR PendingPopulation COUNTS AS READY FOR THE INSTANCE TO BE
+# CREATED. vm.go, handleDataVolumes: `case cdiv1.Succeeded, cdiv1.WaitForFirstConsumer,
+# cdiv1.PendingPopulation: continue`. The VMI controller then renders a TEMPORARY launcher pod
+# (pkg/virt-controller/watch/vmi/lifecycle.go, "Scheduling temporary pod for WaitForFirstConsumer
+# DV", RenderLaunchManifestNoVm) to trigger the binding — and that pod requests
+# `devices.kubevirt.io/kvm` exactly as the real one does (services/template.go,
+# WithVirtualizationResources(getRequiredResources(vmi, …, AllowEmulation()))). On a node without
+# the device the temporary pod is unschedulable, the claim never binds, the clone never runs, and the
+# instance sits in `Pending` with `PodScheduled=False`; the VM reads `ErrorUnschedulable`.
+#
+# ⚠ THAT WAS THE STATE THIS CHART'S FIRST TEST WAS WRITTEN TO ASSERT, AND THE LANE HAS KVM. The record
+# (charts/bundle/bundle.yaml § owed, `virtual-machines-need-a-node-with-kvm`; issue #95) said Docker
+# Desktop's VM lends no /dev/kvm to a container. Measured on 2026-09-17: WSL2 runs with nested
+# virtualization on, `docker run --privileged alpine ls -l /dev/kvm` answers `crw-rw---- 10, 232`, the
+# k3s container is privileged, virt-handler's device plugin advertised `devices.kubevirt.io/kvm` on
+# the node, and the first machine rendered from this chart went WaitingForVolumeBinding →
+# Provisioning (the clone, ~20 s) → Running in 46 seconds. test/CyberCloud.Bundle.Cluster.Conformance
+# § KubeVirtOnAnEmptyCluster asserts `Running`, the KVM device on the node and on the launcher pod's
+# requests. The ErrorUnschedulable reading above is what a real node WITHOUT nested virtualization
+# gives, and VirtualMachines.ReadinessOf carries the scheduler's sentence back for it.
+#
+# ⚠ THE NODE IS `kubevirt.io/schedulable=true` WITHOUT KVM TOO. pkg/virt-handler/heartbeat/heartbeat.go
+# sets the label to false only while the device plugins are not yet initialised; a kvm plugin with
+# no /dev/kvm initialises and advertises zero devices. So on such a node the scheduler's refusal is
+# "Insufficient devices.kubevirt.io/kvm" on a node that otherwise accepts machines.
+#
+# ⚠ THE MUTATING WEBHOOK WRITES DEFAULTS INTO THE TEMPLATE — `architecture`, a machine type, the
+# disk bus where none is given — so VirtualMachines.Matches is CONTAINMENT over the fields a tenant
+# chose and never an equality over the spec.
+#
+# ⚠ WHAT THIS CHART DELIBERATELY DOES NOT RENDER, and where each is recorded: an instancetype
+# (conformance.yaml § owed, `instancetypes-wait-for-the-bundles-catalogue`), a hotplug volume
+# (charts/managed/disk, `hot-attach-is-not-rendered`), a VirtualMachineSnapshot (`snapshot-is-not-offered`),
+# a second interface or a floating IP (`one-interface-and-no-floating-ip`).
+upstream-webhook: kubevirt ships a MUTATING webhook for VirtualMachine (instancetype expansion, architecture, machine type, container-disk pull policy) and a VALIDATING one that requires runStrategy, checks every volume against its disk and refuses duplicate volume names; CDI ships a validating webhook for DataVolume that refuses a clone whose source claim is not there

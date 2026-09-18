@@ -814,6 +814,278 @@ type MessageTemplateRenderResult struct {
 	Subject string `json:"subject"`
 }
 
+// ManagedDiskData is Managed disk: the body a caller writes. A blank data disk of a size and a storage class, provisioned on its own and attached to a virtual machine by name. It outlives the machine.
+type ManagedDiskData struct {
+	// The region the disk is billed in.
+	Location string `json:"location"`
+	// The disk's own settings.
+	Properties *ManagedDiskProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// ManagedDiskProperties is The disk's own settings.
+type ManagedDiskProperties struct {
+	// The cluster the disk is provisioned in. Only a virtual machine in the same cluster and the same resource group can attach it.
+	ClusterID string `json:"clusterId"`
+	// The disk's size, in Kubernetes quantity form. ⚠ Immutable: growing a disk depends on the storage class and shrinking one is never possible, so a bigger disk is a new disk.
+	Size string `json:"size"`
+	// The storage class the disk is on. Empty means the cluster's default, which on a bundle-installed cluster is node-local: one copy, on one node, and the machine that attaches the disk runs on that node.
+	StorageClass *string `json:"storageClass,omitempty"`
+}
+
+// ManagedDiskResource is one Managed disk, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type ManagedDiskResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data ManagedDiskData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *ManagedDiskResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// ImageKind is the values /properties/source/kind accepts. ⚠ Closed: the write path refuses anything else.
+type ImageKind string
+
+const (
+	ImageKindCatalogue ImageKind = "catalogue"
+	ImageKindUrl       ImageKind = "url"
+)
+
+// ImageName is the values /properties/source/name accepts. ⚠ Closed: the write path refuses anything else.
+type ImageName string
+
+const (
+	ImageNameDebian12   ImageName = "debian-12"
+	ImageNameDebian13   ImageName = "debian-13"
+	ImageNameUbuntu2204 ImageName = "ubuntu-22.04"
+	ImageNameUbuntu2404 ImageName = "ubuntu-24.04"
+)
+
+// ImageData is Image: the body a caller writes. A bootable disk image imported once into your resource group — one of the platform's Ubuntu and Debian cloud images, pinned by digest, or a container disk or HTTP address you supply — and cloned by every machine that boots from it.
+type ImageData struct {
+	// The region the image is billed in.
+	Location string `json:"location"`
+	// The image's own settings.
+	Properties *ImageProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// ImageProperties is The image's own settings.
+type ImageProperties struct {
+	// The cluster the image is imported into. A virtual machine can boot from it only in the same cluster and the same resource group, because a clone is a claim in one namespace copied from a claim beside it.
+	ClusterID string `json:"clusterId"`
+	// The claim the image is imported into, in Kubernetes quantity form. It must hold the image's virtual size — 10Gi fits every catalogue image — and it is the smallest disk a machine booted from this image can have.
+	Size string `json:"size"`
+	// Where the bytes come from.
+	Source *ImagePropertiesSource `json:"source,omitempty"`
+	// The storage class the imported claim is on. Empty means the cluster's default, which on a bundle-installed cluster is the node-local class.
+	StorageClass *string `json:"storageClass,omitempty"`
+}
+
+// ImagePropertiesSource is Where the bytes come from.
+type ImagePropertiesSource struct {
+	// catalogue for one of the platform's own Linux cloud images, pinned by digest; url for an address you supply.
+	Kind ImageKind `json:"kind"`
+	// Which catalogue image, when kind is catalogue. ⚠ Linux only: Windows Server is a licensing arrangement and not in this catalogue — docs/plan/13 § Images and licensing.
+	Name *ImageName `json:"name,omitempty"`
+	// Where to import from, when kind is url. docker://registry/repository[:tag|@digest] is a container disk; http:// or https:// is a raw or qcow2 image. ⚠ An HTTP address carries no checksum and nothing verifies what arrives — pin a registry reference by digest when you can.
+	Url *string `json:"url,omitempty"`
+}
+
+// ImageResource is one Image, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type ImageResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data ImageData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *ImageResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// VirtualMachineSize is the values /properties/size accepts. ⚠ Closed: the write path refuses anything else.
+type VirtualMachineSize string
+
+const (
+	VirtualMachineSizeS1Large  VirtualMachineSize = "s1.large"
+	VirtualMachineSizeS1Medium VirtualMachineSize = "s1.medium"
+	VirtualMachineSizeS1Small  VirtualMachineSize = "s1.small"
+	VirtualMachineSizeS1Xlarge VirtualMachineSize = "s1.xlarge"
+)
+
+// VirtualMachineData is Virtual machine: the body a caller writes. A virtual machine on KubeVirt: a size from the platform catalogue, a root disk cloned from an image, managed disks by name, a tenant subnet, and cloud-init from a vault handle. Start, stop and restart are actions; stop releases compute and keeps every disk.
+type VirtualMachineData struct {
+	// The region the machine is billed in.
+	Location string `json:"location"`
+	// The machine's own settings.
+	Properties *VirtualMachineProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// VirtualMachineProperties is The machine's own settings.
+type VirtualMachineProperties struct {
+	// First-boot configuration, as cloud-init reads it.
+	CloudInit *VirtualMachinePropertiesCloudInit `json:"cloudInit,omitempty"`
+	// The cluster the machine runs in. Must be the one its image and its disks are in — nothing checks that, and a machine placed elsewhere clones a claim that is not there.
+	ClusterID string `json:"clusterId"`
+	// CyberCloud.Compute/disks resources attached to the machine, by name, in this resource group. A change attaches or detaches at the machine's next start. ⚠ A disk named os or cloudinit collides with the machine's own volumes and is refused at admission.
+	DataDisks []string `json:"dataDisks,omitempty"`
+	// The CyberCloud.Compute/images resource the root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the machine waits for it and says so.
+	Image string `json:"image"`
+	// The tenant network the machine's interface joins. Both empty means the cluster's pod network.
+	Network *VirtualMachinePropertiesNetwork `json:"network,omitempty"`
+	// The root disk, in Kubernetes quantity form. At least the image's own size; a clone into a smaller claim is refused by CDI, not by this API. ⚠ Immutable, for the reason a managed disk's size is.
+	OsDiskSize string `json:"osDiskSize"`
+	// The machine's size, from the platform's sizing catalogue: s1.small is 1 vCPU and 4 GiB, and each rung doubles both. Changing it takes effect the next time the machine starts — KubeVirt reports RestartRequired until then.
+	Size VirtualMachineSize `json:"size"`
+}
+
+// VirtualMachinePropertiesCloudInit is First-boot configuration, as cloud-init reads it.
+type VirtualMachinePropertiesCloudInit struct {
+	// A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. Empty means no cloud-init at all.
+	UserData *string `json:"userData,omitempty"`
+}
+
+// VirtualMachinePropertiesNetwork is The tenant network the machine's interface joins. Both empty means the cluster's pod network.
+type VirtualMachinePropertiesNetwork struct {
+	// The subnet of that network the interface takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the machine never starts.
+	Subnet *string `json:"subnet,omitempty"`
+	// The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.
+	VirtualNetwork *string `json:"virtualNetwork,omitempty"`
+}
+
+// VirtualMachineResource is one Virtual machine, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type VirtualMachineResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data VirtualMachineData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *VirtualMachineResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// VirtualMachineRestartResultAction is the values /action accepts. ⚠ Closed: the write path refuses anything else.
+type VirtualMachineRestartResultAction string
+
+const (
+	VirtualMachineRestartResultActionStart   VirtualMachineRestartResultAction = "start"
+	VirtualMachineRestartResultActionStop    VirtualMachineRestartResultAction = "stop"
+	VirtualMachineRestartResultActionRestart VirtualMachineRestartResultAction = "restart"
+)
+
+// VirtualMachineRestartResultRunStrategy is the values /runStrategy accepts. ⚠ Closed: the write path refuses anything else.
+type VirtualMachineRestartResultRunStrategy string
+
+const (
+	VirtualMachineRestartResultRunStrategyAlways VirtualMachineRestartResultRunStrategy = "Always"
+	VirtualMachineRestartResultRunStrategyHalted VirtualMachineRestartResultRunStrategy = "Halted"
+)
+
+// VirtualMachineRestartResultRunStrategyBefore is the values /runStrategyBefore accepts. ⚠ Closed: the write path refuses anything else.
+type VirtualMachineRestartResultRunStrategyBefore string
+
+const (
+	VirtualMachineRestartResultRunStrategyBeforeAlways VirtualMachineRestartResultRunStrategyBefore = "Always"
+	VirtualMachineRestartResultRunStrategyBeforeHalted VirtualMachineRestartResultRunStrategyBefore = "Halted"
+)
+
+// VirtualMachineRestartResult is what restart returns.
+type VirtualMachineRestartResult struct {
+	// start, stop or restart — which one ran.
+	Action VirtualMachineRestartResultAction `json:"action"`
+	// The run strategy after the action. A restart leaves it as it was.
+	RunStrategy VirtualMachineRestartResultRunStrategy `json:"runStrategy"`
+	// The machine's KubeVirt run strategy before the action: Always for a machine that should be on, Halted for one that should be off.
+	RunStrategyBefore VirtualMachineRestartResultRunStrategyBefore `json:"runStrategyBefore"`
+}
+
+// VirtualMachineStartResultAction is the values /action accepts. ⚠ Closed: the write path refuses anything else.
+type VirtualMachineStartResultAction string
+
+const (
+	VirtualMachineStartResultActionStart   VirtualMachineStartResultAction = "start"
+	VirtualMachineStartResultActionStop    VirtualMachineStartResultAction = "stop"
+	VirtualMachineStartResultActionRestart VirtualMachineStartResultAction = "restart"
+)
+
+// VirtualMachineStartResultRunStrategy is the values /runStrategy accepts. ⚠ Closed: the write path refuses anything else.
+type VirtualMachineStartResultRunStrategy string
+
+const (
+	VirtualMachineStartResultRunStrategyAlways VirtualMachineStartResultRunStrategy = "Always"
+	VirtualMachineStartResultRunStrategyHalted VirtualMachineStartResultRunStrategy = "Halted"
+)
+
+// VirtualMachineStartResultRunStrategyBefore is the values /runStrategyBefore accepts. ⚠ Closed: the write path refuses anything else.
+type VirtualMachineStartResultRunStrategyBefore string
+
+const (
+	VirtualMachineStartResultRunStrategyBeforeAlways VirtualMachineStartResultRunStrategyBefore = "Always"
+	VirtualMachineStartResultRunStrategyBeforeHalted VirtualMachineStartResultRunStrategyBefore = "Halted"
+)
+
+// VirtualMachineStartResult is what start returns.
+type VirtualMachineStartResult struct {
+	// start, stop or restart — which one ran.
+	Action VirtualMachineStartResultAction `json:"action"`
+	// The run strategy after the action. A restart leaves it as it was.
+	RunStrategy VirtualMachineStartResultRunStrategy `json:"runStrategy"`
+	// The machine's KubeVirt run strategy before the action: Always for a machine that should be on, Halted for one that should be off.
+	RunStrategyBefore VirtualMachineStartResultRunStrategyBefore `json:"runStrategyBefore"`
+}
+
+// VirtualMachineStopResultAction is the values /action accepts. ⚠ Closed: the write path refuses anything else.
+type VirtualMachineStopResultAction string
+
+const (
+	VirtualMachineStopResultActionStart   VirtualMachineStopResultAction = "start"
+	VirtualMachineStopResultActionStop    VirtualMachineStopResultAction = "stop"
+	VirtualMachineStopResultActionRestart VirtualMachineStopResultAction = "restart"
+)
+
+// VirtualMachineStopResultRunStrategy is the values /runStrategy accepts. ⚠ Closed: the write path refuses anything else.
+type VirtualMachineStopResultRunStrategy string
+
+const (
+	VirtualMachineStopResultRunStrategyAlways VirtualMachineStopResultRunStrategy = "Always"
+	VirtualMachineStopResultRunStrategyHalted VirtualMachineStopResultRunStrategy = "Halted"
+)
+
+// VirtualMachineStopResultRunStrategyBefore is the values /runStrategyBefore accepts. ⚠ Closed: the write path refuses anything else.
+type VirtualMachineStopResultRunStrategyBefore string
+
+const (
+	VirtualMachineStopResultRunStrategyBeforeAlways VirtualMachineStopResultRunStrategyBefore = "Always"
+	VirtualMachineStopResultRunStrategyBeforeHalted VirtualMachineStopResultRunStrategyBefore = "Halted"
+)
+
+// VirtualMachineStopResult is what stop returns.
+type VirtualMachineStopResult struct {
+	// start, stop or restart — which one ran.
+	Action VirtualMachineStopResultAction `json:"action"`
+	// The run strategy after the action. A restart leaves it as it was.
+	RunStrategy VirtualMachineStopResultRunStrategy `json:"runStrategy"`
+	// The machine's KubeVirt run strategy before the action: Always for a machine that should be on, Halted for one that should be off.
+	RunStrategyBefore VirtualMachineStopResultRunStrategyBefore `json:"runStrategyBefore"`
+}
+
 // ArtifactFeedKind is the values /properties/kind accepts. ⚠ Closed: the write path refuses anything else.
 type ArtifactFeedKind string
 

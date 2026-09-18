@@ -1,0 +1,55 @@
+{{/*
+CDI `DataVolume`, imported — docs/plan/13 § Virtual Machines, "Image".
+
+⚠ This renders a custom resource; it does not install CDI. That is charts/bundle/'s job (phase 30).
+
+⚠ `cdi.kubevirt.io/storage.bind.immediate.requested` IS WHAT MAKES AN IMAGE IMPORTABLE AT ALL. The
+bundle's default class is WaitForFirstConsumer and an image has no consumer — it is the SOURCE of a
+clone, never a mounted volume — so without the annotation the claim never binds, the import never
+starts, and the tenant sees an image that is Pending forever with nothing saying why. Measured on the
+first cluster-backed run (test/CyberCloud.Bundle.Cluster.Conformance § KubeVirtOnAnEmptyCluster).
+charts/managed/disk makes the opposite choice for the opposite reason — Cdi.ImmediateBindAnnotation.
+*/}}
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: {{ include "image.objectName" . }}
+  labels:
+    {{- include "image.platformLabels" . | nindent 4 }}
+  annotations:
+    cdi.kubevirt.io/storage.bind.immediate.requested: "true"
+spec:
+  {{- $url := include "image.importUrl" . }}
+  source:
+    {{/*
+      ⚠ THE SCHEME PICKS THE IMPORTER, as Images.IsRegistry does: docker:// is CDI's registry importer,
+      anything else its HTTP one. A separate kind beside the address would be a second spelling of the
+      scheme, and the two would disagree the first time a body carried one of each.
+    */}}
+    {{- if hasPrefix "docker://" $url }}
+    registry:
+      url: {{ $url | quote }}
+    {{- else }}
+    http:
+      url: {{ $url | quote }}
+    {{- end }}
+  {{/*
+    ⚠ `storage` and not `pvc`, so the volume mode comes from CDI's StorageProfile for the class
+    rather than from a guess here. storageClassName is written only when the body names one.
+  */}}
+  storage:
+    {{/*
+      ⚠ THE ACCESS MODE IS WRITTEN. CDI fills it from a StorageProfile only for provisioners it knows,
+      and openebs.io/local is not one: the first DataVolume ever applied to a real CDI answered "no
+      accessMode specified in StorageProfile openebs-hostpath" and never bound (2026-09-17). ReadWriteOnce
+      is what a node-local disk can be; live migration would need ReadWriteMany — conformance.yaml
+      § owed, `access-mode-is-read-write-once`. The volume mode is still the profile's.
+    */}}
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: {{ .Values.size | quote }}
+    {{- if .Values.storageClass }}
+    storageClassName: {{ .Values.storageClass | quote }}
+    {{- end }}

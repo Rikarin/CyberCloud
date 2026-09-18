@@ -338,10 +338,13 @@ it. `charts/README.md` § Licences are a build gate has the two halves side by s
 
 ## Verification, and its honest limit
 
-**Three of the twenty components are installed onto a real cluster by CI. Seventeen are not, and the
-state of the tree says which in `bundle.yaml` § owed rather than implying otherwise. All twenty were
-installed by hand on 2026-09-15 onto one k3s with a kubelet, and nineteen serve — the paragraphs
-below the suite's say what that run found.**
+**Five of the twenty components are installed onto a real cluster by CI — three helm rows, and since
+2026-09-17 the two `manifest:` rows of phase 30, CDI and KubeVirt, by
+`test/CyberCloud.Bundle.Cluster.Conformance § KubeVirtOnAnEmptyCluster`, which then applies
+`charts/managed/image` and `charts/managed/virtual-machine` against them and reads the guest
+`Running`. Fifteen are not, and the state of the tree says which in `bundle.yaml` § owed rather than
+implying otherwise. All twenty were installed by hand on 2026-09-15 onto one k3s with a kubelet, and
+nineteen serve — the paragraphs below the suite's say what that run found.**
 
 > ⚠ **The denominator here read "eighteen" until 2026-09-02 and had been wrong since
 > `openebs-localpv` landed.** `bundle.yaml`'s `components:` holds nineteen rows and this directory
@@ -515,7 +518,14 @@ serial tail on a machine where a daemon answers, and costs nothing at all on one
 > seventeen itself; the permit is no longer the only thing holding the line.
 
 **With the cloudnative-pg class it is 4 m 27 s to 4 m 47 s green across three runs, 9 tests, none
-skipped, measured 2026-09-03.**
+skipped, measured 2026-09-03.** ⚠ **The KubeVirt class added on 2026-09-17 costs 8 m 26 s for the class, k3s start included on top**,
+on a fresh k3s — about five minutes (CDI Deployed at 1 m 30 s, KubeVirt at 5 m, most of it image pulls) for `install.sh` to put openebs-localpv, CDI and KubeVirt on (the two
+operators pull about a dozen images between them and each waits for its resource to report
+`Deployed`), under a minute for CDI to import a cirros container disk, and about a minute (46 s on one run, 60 s on the next, half of it the clone) for the machine to
+go from applied to `Running` — so this assembly is now the slowest suite in the tree by a wide
+margin, and the row `most-of-the-roster-has-never-been-installed` opens with, a lane for
+container-backed suites too slow for per-PR, is a decision this class makes more pressing rather than
+one it takes.
 The class costs about **1 m 50 s**: 26 s for `install.sh` to put both components on the cluster
 (cheaper than cert-manager's single row, which pays a `startupapicheck` Job), 8 s to the operator's
 claim, 18 s to `Bound`, 68 s to `Ready` — the bulk of that last figure being the

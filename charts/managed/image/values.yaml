@@ -1,0 +1,68 @@
+# A bootable disk image — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from Images.Schema2026 by `./build.sh Charts`, and
+# so is values.schema.json. ADR-010 § Which end authors the schema: "The C# ResourceSchema is authored.
+# The chart's @param annotations are generated from it and diffed." Editing a generated row here is
+# undone on the next run and fails the build in between; add the field in C# instead.
+#
+# ⚠ THE CATALOGUE IS NOT A VALUE. A catalogue name carries a dot — `ubuntu-24.04` — and the values
+# subset Build.Charts reads (charts/README.md § The values subset) takes no such key, so the table
+# lives in templates/_helpers.tpl as `image.catalogue`, beside the C# copy in Images.Catalogue, and
+# ComputeChartDriftTests compares the two. A tenant chooses a NAME from it through `source.name`; the
+# pin is the platform's.
+#
+# ⚠ EVERYTHING TENANT-FACING IS IMMUTABLE, for CDI's reason: a DataVolume's spec cannot change after
+# creation, so a different image is a different resource. conformance.yaml § owed,
+# `nothing-mutable-reaches-the-cluster`.
+
+## @param source {object} Where the bytes come from.
+source:
+  ## @param kind {string} catalogue for one of the platform's own Linux cloud images, pinned by digest; url for an address you supply.
+  ## @required
+  ## @immutable
+  ## @enum catalogue | url
+  kind: catalogue
+  ## @param name {string} Which catalogue image, when kind is catalogue. ⚠ Linux only: Windows Server is a licensing arrangement and not in this catalogue — docs/plan/13 § Images and licensing.
+  ## @immutable
+  ## @enum debian-12 | debian-13 | ubuntu-22.04 | ubuntu-24.04
+  name: ubuntu-24.04
+  ## @param url {string} Where to import from, when kind is url. docker://registry/repository[:tag|@digest] is a container disk; http:// or https:// is a raw or qcow2 image. ⚠ An HTTP address carries no checksum and nothing verifies what arrives — pin a registry reference by digest when you can.
+  ## @immutable
+  ## @length ..2048
+  ## @pattern ((docker|https?)://\S+)?
+  url: ""
+
+## @param size {string} The claim the image is imported into, in Kubernetes quantity form. It must hold the image's virtual size — 10Gi fits every catalogue image — and it is the smallest disk a machine booted from this image can have.
+## @required
+## @immutable
+## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+## @example "10Gi"
+size: "10Gi"
+
+## @param storageClass {string} The storage class the imported claim is on. Empty means the cluster's default, which on a bundle-installed cluster is the node-local class.
+## @immutable
+## @length ..253
+## @widget storageclass
+storageClass: ""
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Compute/images
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

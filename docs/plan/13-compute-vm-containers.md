@@ -53,6 +53,42 @@ M3. A fixed-size set is 80 % of the value for 20 % of the risk.
 **Live migration** is supported by KubeVirt for maintenance drains and is used by the platform, but is
 not a tenant-facing action. It is an operational capability, not a feature to document and support.
 
+**What landed (#28, 2026-09-17): the three nouns of this row's table, and not the scale sets.**
+`CyberCloud.Compute/virtualMachines`, `CyberCloud.Compute/disks` and `CyberCloud.Compute/images` are
+published at `2026-08-01`, with the charts under `charts/managed/virtual-machine`, `charts/managed/disk`
+and `charts/managed/image`. What the table above says and what shipped differ in five places, each
+recorded at `charts/managed/virtual-machine/conformance.yaml § owed` rather than left to be
+discovered. **Size** is a closed set — `s1.small` to `s1.xlarge`, whole cores — rendered as
+`domain.cpu.cores` and `domain.memory.guest` rather than as an instancetype name, because the bundle
+installs no catalogue object and a name nothing resolves is a machine that never starts; what quota
+reserves is what the guest gets. **Image** is a CDI `DataVolume` a tenant imports once per resource
+group, from the platform catalogue (Ubuntu 24.04/22.04, Debian 13/12 — `quay.io/containerdisks`
+references pinned by digest, which is the checksum the puller verifies) or from a `docker://` or
+`http(s)://` address of their own; a machine's root disk is a clone of it in the same namespace.
+⚠ #28 predicted this row would get stuck on building images, and it did not: a plain cloud image
+carries no kubelet, so the catalogue is a table and not a pipeline. **Disks** are blank `DataVolume`s
+attached by name in the machine's body and taking effect at its next start — hotplug is not rendered.
+**Networking** is one interface on one subnet, joined through `ovn.kubernetes.io/logical_switch` with
+the Network family's own object name; no floating IP and no security group on the machine yet.
+**Init** is as written: `cloudInit.userData` is a `SecretRef` handle, resolved at render into a Secret
+the machine mounts, and the value reaches no body and no grain. **Actions** are `start`, `stop` and
+`restart`, the first handlers in the tree that write a cluster; ⚠ the power state is
+`spec.runStrategy` on the KubeVirt object and not a body property, because an action cannot change a
+desired body, and the reconciler reads it back before every render so a tag change does not boot a
+stopped machine. `stop` is this row's `deallocate` — a halted KubeVirt machine holds no compute and
+keeps every disk, and there is no stopped-but-allocated state for a second verb to mean. `snapshot`
+needs a `VolumeSnapshotClass` the node-local storage stage has none of, and `resize` is a mutable
+`size` that KubeVirt applies at the next start rather than a refused PUT on a running machine.
+⚠ **The first machine ran, on the lane the plan said could not run one.** The first `VirtualMachine`
+this platform rendered was admitted by KubeVirt's webhooks on a real CDI and KubeVirt installed
+through `charts/bundle/install.sh` — the first family whose chart-schema half is measured rather than
+owed — and reported `Running` under KVM 46 seconds after the apply, on k3s-in-Docker. Issue #95 and
+`charts/bundle/bundle.yaml § owed` said Docker Desktop's VM lends no `/dev/kvm`; a privileged
+container on a WSL2 host with nested virtualization has it, and nobody had measured. What `Running`
+does not prove — the guest finishing its boot, cloud-init taking effect, a disk appearing inside — is
+`charts/managed/virtual-machine/conformance.yaml § owed`, `the-guest-is-not-reached`; kube-ovn,
+LINSTOR and the node-pool Machines stay the VM lane's (#95).
+
 ## Container Instances — `CyberCloud.ContainerInstance/containerGroups` · M2 · 0.8 EM
 
 The cheapest real provider and a good second one to write. A container group is a `Pod` (or a `Job`

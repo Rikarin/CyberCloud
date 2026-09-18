@@ -126,10 +126,12 @@ is moot on a v2 host and is kept for a host in the state this one was in.
 |---|---|
 | 19 of the bundle's 20 components installed and serving through `install.sh`; the four Cluster API controllers 1/1 after the `${VAR:=default}` substitution; KubeVirt and CDI `Deployed`; every `waitFor:` returning | **kube-ovn** — needs the `kube-ovn/role=master` node label, a CNI-less cluster, ADR-019 values and OVS kernel modules; refuses at template time here |
 | The `.Cluster.Conformance` suites, the reconciler layer, the bundle suite's three helm rows | **LINSTOR/DRBD** — the replicated storage stage, a kernel module (`bundle.yaml` § owed, `the-replicated-stage-is-not-installed`) |
-| A cgroup-v2 host is the *only* prerequisite for the per-PR lanes above | **KubeVirt guests** — Docker Desktop's VM lends no `/dev/kvm`, so a Machine here is software emulation; the Cluster e2e row of the table above is this lane's, and it is still nightly-and-unbuilt |
+| A cgroup-v2 host is the *only* prerequisite for the per-PR lanes above; ⚠ **and KubeVirt guests run here** — the first `VirtualMachine` this platform rendered reported `Running` under KVM on k3s-in-Docker (#28, 2026-09-17, `test/CyberCloud.Bundle.Cluster.Conformance § KubeVirtOnAnEmptyCluster`). The right-hand column said this lane lends no `/dev/kvm`; a *privileged* container on a WSL2 host with nested virtualization has it, and an unprivileged one — the reading that misled — does not | **A guest that joins a cluster** — the node-pool Machines need the phase-40 rows under test and a guest the platform can reach (console, agent), neither of which this lane has yet; the Cluster e2e row of the table above is this lane's, and it is still nightly-and-unbuilt. ⚠ KVM itself is no longer on this side of the table on a WSL2 host; a real node without nested virtualization leaves a machine at `ErrorUnschedulable`, which `VirtualMachines.ReadinessOf` reports by name |
 
 The lane that holds those three is the Hyper-V / real-node lane the Cluster e2e row already names.
-It does not exist yet; what changed on 2026-09-15 is that everything *else* no longer waits for it.
+It does not exist yet; what changed on 2026-09-15 is that everything *else* no longer waits for it —
+and what changed on 2026-09-17 is that one of the three, a guest under KVM, turned out not to need
+it on this host.
 
 ### The chaos invariants
 

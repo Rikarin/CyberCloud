@@ -631,6 +631,194 @@ export interface CommunicationServicesTemplatesRenderResult {
   subject: string;
 }
 
+/** Managed disk. A blank data disk of a size and a storage class, provisioned on its own and attached to a virtual machine by name. It outlives the machine. */
+export interface ComputeDisksData {
+  /** The region the disk is billed in. */
+  location: string;
+  /** The disk's own settings. */
+  properties?: {
+    /** The cluster the disk is provisioned in. Only a virtual machine in the same cluster and the same resource group can attach it. */
+    clusterId: string;
+    /** The disk's size, in Kubernetes quantity form. ⚠ Immutable: growing a disk depends on the storage class and shrinking one is never possible, so a bigger disk is a new disk. */
+    size: string;
+    /** The storage class the disk is on. Empty means the cluster's default, which on a bundle-installed cluster is node-local: one copy, on one node, and the machine that attaches the disk runs on that node. */
+    storageClass?: string;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Managed disk, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface ComputeDisksResource extends Resource, ComputeDisksData {
+  readonly type: 'CyberCloud.Compute/disks';
+}
+
+/** The values /properties/source/kind accepts. ⚠ Closed: the write path refuses anything else. */
+export type ComputeImagesKind =
+  | 'catalogue'
+  | 'url';
+
+/** The values /properties/source/name accepts. ⚠ Closed: the write path refuses anything else. */
+export type ComputeImagesName =
+  | 'debian-12'
+  | 'debian-13'
+  | 'ubuntu-22.04'
+  | 'ubuntu-24.04';
+
+/** Image. A bootable disk image imported once into your resource group — one of the platform's Ubuntu and Debian cloud images, pinned by digest, or a container disk or HTTP address you supply — and cloned by every machine that boots from it. */
+export interface ComputeImagesData {
+  /** The region the image is billed in. */
+  location: string;
+  /** The image's own settings. */
+  properties?: {
+    /** The cluster the image is imported into. A virtual machine can boot from it only in the same cluster and the same resource group, because a clone is a claim in one namespace copied from a claim beside it. */
+    clusterId: string;
+    /** The claim the image is imported into, in Kubernetes quantity form. It must hold the image's virtual size — 10Gi fits every catalogue image — and it is the smallest disk a machine booted from this image can have. */
+    size: string;
+    /** Where the bytes come from. */
+    source?: {
+      /** catalogue for one of the platform's own Linux cloud images, pinned by digest; url for an address you supply. */
+      kind: ComputeImagesKind;
+      /** Which catalogue image, when kind is catalogue. ⚠ Linux only: Windows Server is a licensing arrangement and not in this catalogue — docs/plan/13 § Images and licensing. */
+      name?: ComputeImagesName;
+      /** Where to import from, when kind is url. docker://registry/repository[:tag|@digest] is a container disk; http:// or https:// is a raw or qcow2 image. ⚠ An HTTP address carries no checksum and nothing verifies what arrives — pin a registry reference by digest when you can. */
+      url?: string;
+    };
+    /** The storage class the imported claim is on. Empty means the cluster's default, which on a bundle-installed cluster is the node-local class. */
+    storageClass?: string;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Image, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface ComputeImagesResource extends Resource, ComputeImagesData {
+  readonly type: 'CyberCloud.Compute/images';
+}
+
+/** The values /properties/size accepts. ⚠ Closed: the write path refuses anything else. */
+export type ComputeVirtualMachinesSize =
+  | 's1.large'
+  | 's1.medium'
+  | 's1.small'
+  | 's1.xlarge';
+
+/** Virtual machine. A virtual machine on KubeVirt: a size from the platform catalogue, a root disk cloned from an image, managed disks by name, a tenant subnet, and cloud-init from a vault handle. Start, stop and restart are actions; stop releases compute and keeps every disk. */
+export interface ComputeVirtualMachinesData {
+  /** The region the machine is billed in. */
+  location: string;
+  /** The machine's own settings. */
+  properties?: {
+    /** First-boot configuration, as cloud-init reads it. */
+    cloudInit?: {
+      /** A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. Empty means no cloud-init at all. */
+      userData?: string;
+    };
+    /** The cluster the machine runs in. Must be the one its image and its disks are in — nothing checks that, and a machine placed elsewhere clones a claim that is not there. */
+    clusterId: string;
+    /** CyberCloud.Compute/disks resources attached to the machine, by name, in this resource group. A change attaches or detaches at the machine's next start. ⚠ A disk named os or cloudinit collides with the machine's own volumes and is refused at admission. */
+    dataDisks?: string[];
+    /** The CyberCloud.Compute/images resource the root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the machine waits for it and says so. */
+    image: string;
+    /** The tenant network the machine's interface joins. Both empty means the cluster's pod network. */
+    network?: {
+      /** The subnet of that network the interface takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the machine never starts. */
+      subnet?: string;
+      /** The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty. */
+      virtualNetwork?: string;
+    };
+    /** The root disk, in Kubernetes quantity form. At least the image's own size; a clone into a smaller claim is refused by CDI, not by this API. ⚠ Immutable, for the reason a managed disk's size is. */
+    osDiskSize: string;
+    /** The machine's size, from the platform's sizing catalogue: s1.small is 1 vCPU and 4 GiB, and each rung doubles both. Changing it takes effect the next time the machine starts — KubeVirt reports RestartRequired until then. */
+    size: ComputeVirtualMachinesSize;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Virtual machine, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface ComputeVirtualMachinesResource extends Resource, ComputeVirtualMachinesData {
+  readonly type: 'CyberCloud.Compute/virtualMachines';
+}
+
+/** The values /action accepts. ⚠ Closed: the write path refuses anything else. */
+export type ComputeVirtualMachinesRestartResultAction =
+  | 'start'
+  | 'stop'
+  | 'restart';
+
+/** The values /runStrategy accepts. ⚠ Closed: the write path refuses anything else. */
+export type ComputeVirtualMachinesRestartResultRunStrategy =
+  | 'Always'
+  | 'Halted';
+
+/** The values /runStrategyBefore accepts. ⚠ Closed: the write path refuses anything else. */
+export type ComputeVirtualMachinesRestartResultRunStrategyBefore =
+  | 'Always'
+  | 'Halted';
+
+/** What restart returns. */
+export interface ComputeVirtualMachinesRestartResult {
+  /** start, stop or restart — which one ran. */
+  action: ComputeVirtualMachinesRestartResultAction;
+  /** The run strategy after the action. A restart leaves it as it was. */
+  runStrategy: ComputeVirtualMachinesRestartResultRunStrategy;
+  /** The machine's KubeVirt run strategy before the action: Always for a machine that should be on, Halted for one that should be off. */
+  runStrategyBefore: ComputeVirtualMachinesRestartResultRunStrategyBefore;
+}
+
+/** The values /action accepts. ⚠ Closed: the write path refuses anything else. */
+export type ComputeVirtualMachinesStartResultAction =
+  | 'start'
+  | 'stop'
+  | 'restart';
+
+/** The values /runStrategy accepts. ⚠ Closed: the write path refuses anything else. */
+export type ComputeVirtualMachinesStartResultRunStrategy =
+  | 'Always'
+  | 'Halted';
+
+/** The values /runStrategyBefore accepts. ⚠ Closed: the write path refuses anything else. */
+export type ComputeVirtualMachinesStartResultRunStrategyBefore =
+  | 'Always'
+  | 'Halted';
+
+/** What start returns. */
+export interface ComputeVirtualMachinesStartResult {
+  /** start, stop or restart — which one ran. */
+  action: ComputeVirtualMachinesStartResultAction;
+  /** The run strategy after the action. A restart leaves it as it was. */
+  runStrategy: ComputeVirtualMachinesStartResultRunStrategy;
+  /** The machine's KubeVirt run strategy before the action: Always for a machine that should be on, Halted for one that should be off. */
+  runStrategyBefore: ComputeVirtualMachinesStartResultRunStrategyBefore;
+}
+
+/** The values /action accepts. ⚠ Closed: the write path refuses anything else. */
+export type ComputeVirtualMachinesStopResultAction =
+  | 'start'
+  | 'stop'
+  | 'restart';
+
+/** The values /runStrategy accepts. ⚠ Closed: the write path refuses anything else. */
+export type ComputeVirtualMachinesStopResultRunStrategy =
+  | 'Always'
+  | 'Halted';
+
+/** The values /runStrategyBefore accepts. ⚠ Closed: the write path refuses anything else. */
+export type ComputeVirtualMachinesStopResultRunStrategyBefore =
+  | 'Always'
+  | 'Halted';
+
+/** What stop returns. */
+export interface ComputeVirtualMachinesStopResult {
+  /** start, stop or restart — which one ran. */
+  action: ComputeVirtualMachinesStopResultAction;
+  /** The run strategy after the action. A restart leaves it as it was. */
+  runStrategy: ComputeVirtualMachinesStopResultRunStrategy;
+  /** The machine's KubeVirt run strategy before the action: Always for a machine that should be on, Halted for one that should be off. */
+  runStrategyBefore: ComputeVirtualMachinesStopResultRunStrategyBefore;
+}
+
 /** The values /properties/kind accepts. ⚠ Closed: the write path refuses anything else. */
 export type ContainerRegistryFeedsKind =
   | 'nuget'
