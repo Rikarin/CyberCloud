@@ -27,6 +27,21 @@ have been Durable and was left on the default is one incident.
 the chaos suite's `FLUSHALL` run, which fails if anything durable was lost. **The gate is worth more
 than the design** — the design is one paragraph and the gate is what makes it true in month fourteen.
 
+⚠ **The `FLUSHALL` run exists and has run** — `test/CyberCloud.Chaos`, invariant 2, against a real
+Redis and real PostgreSQL shards; [23 § The chaos invariants](23-build-ci-and-testing.md) has the
+dated numbers. What it found beyond the invariant is worth this row's attention: the reminder table
+lives in the same Redis as the hot tier (`SiloComposition.ConfigureStorage` points
+`UseRedisReminderService` at the hot connection string), so a flush of the hot tier empties every
+operation's safety net too. What brought the in-flight operation back was *observed* in the run
+that followed the branch's review, with the test's hands off it: the reminder service's local copy
+ticked from memory 58 s after the flush (its table refresh is every 5 min), the tick activated the
+grain, and `OperationGrain.OnActivateAsync` re-registered the row — so nothing was lost in that
+run. ⚠ The ordering the suite does not induce is a list refresh landing between the flush and the
+next tick, after which the operation has no driver until something activates it; "the hot tier is
+disposable" is not a sentence about the reminder table, and a Redis that is flushed *and* stays
+flushed past a refresh would be. Separating the two, or making the reminder table durable, is a
+decision this row now owes.
+
 ⚠ **Open question:** should the durable tier be Postgres at all, or should it be a per-tenant
 event journal in NATS JetStream with Redis as a pure projection? The journal design is more Orleans-native,
 removes Postgres entirely, and makes rebuild-from-truth automatic. It is also much more code and puts
@@ -68,6 +83,11 @@ sometimes very deep and very wide.
 **Mitigation.** The property-test corpus includes deliberately pathological graphs, and the load suite
 measures at depth 5 / 10 000 members ([23](23-build-ci-and-testing.md)). The index is M2, so M1's small
 tenants are a safe place to discover the shape.
+
+⚠ **First measured 2026-09-18, at depth 5 / 1 000 members / 2 000 checks/s** — a tenth of the row,
+which is what `test/CyberCloud.Load` can host; [23 § The load scenarios](23-build-ci-and-testing.md)
+has the warm and cold p99s and what they say against the 10 ms and 50 ms budgets. The full-width
+graph is the staging run's.
 
 ⚠ **Open question: is negation restricted enough?** [07](07-rebac-authorization.md) confines `!` to the
 top level over same-object relations, which keeps invalidation sane. If a real customer requirement

@@ -19,11 +19,13 @@
 #     than `E2E` — which did the same dry-run and then failed on a suite that does not exist, so a
 #     dry-run that passed and one that failed were the same red (Build.Bootstrap.cs' header).
 #   * `security-history` — the whole-history secret scan and the closure audit.
+#   * `chaos` — since issue #44, test/CyberCloud.Chaos starts the topology it breaks in the runner's
+#     own Docker (ubuntu-24.04 is cgroup v2), so it needs no secret and no staging. It is RED while
+#     docs/plan/23 § The chaos invariants carries a ✘ row, which it does — the rows say what each owes.
 #
 # SKIPS, with a step named for the secret and docs/plan/23 § CI secrets naming who sets it:
-#   * `e2e` and `chaos` — E2E_BASE_URL and STAGING_KUBECONFIG. ⚠ Both are also BLOCKED on suites
-#     that do not exist (test/CyberCloud.E2E, test/CyberCloud.Chaos); with the secrets set they fail
-#     on that, by design (Build.cs § target graph), so the skip step says so.
+#   * `e2e` — E2E_BASE_URL. ⚠ Also BLOCKED on a suite that does not exist (test/CyberCloud.E2E);
+#     with the secret set it fails on that, by design (Build.cs § target graph), so the skip says so.
 #   * `security-runtime` — a registry for Trivy to scan and a staging for ZAP to baseline.
 #
 # ── ⚠ SECRETS THIS WORKFLOW USES ─────────────────────────────────────────────────────────────────
@@ -31,7 +33,8 @@
 #   E2E_BASE_URL         base URL of staging, e.g. https://api.staging.cybercloud.example.
 #                        Build.E2E.cs § E2EBaseUrl has no fallback on purpose: "an E2E run against a
 #                        local process is a different test wearing this one's name".
-#   STAGING_KUBECONFIG   kubeconfig for staging, for the bootstrap dry-run and for Chaos.
+#   STAGING_KUBECONFIG   kubeconfig for staging, for the bootstrap dry-run. ⚠ Not for Chaos any more:
+#                        the suite starts its own topology and Build.Chaos refuses a --kube-context.
 #   STAGING_KUBE_CONTEXT the context name inside it. Optional; defaults to the current-context.
 #   CONTAINER_REGISTRY   registry prefix, so Trivy knows what to scan.
 #   REGISTRY_USERNAME    a principal that can pull from it.
@@ -291,48 +294,49 @@ jobs:
           echo "All four hostilities ran."
 
   # ── docs/plan/23 § Test layers, row Chaos; the assertions are § The chaos invariants ─────────────
+  #
+  # ⚠ NO SECRETS AND NO STAGING. The suite starts what it breaks — a Redis, three PostgreSQL shards
+  # and a k3s in Docker, three silos in the test process — so the one input is a Docker daemon on a
+  # cgroup v2 host, which ubuntu-24.04 is. Build.Chaos REFUSES a --kube-context rather than
+  # ignoring one: there is no mode that breaks somebody else's cluster, and the staging run at the
+  # doc's scale (30 silos, two versions, a real NATS) is owed under docs/plan/23 § The chaos
+  # invariants. Until it lands, this job IS the nightly chaos run, and its ✔ ○ ✘ table is the one
+  # docs/plan/23 dates.
+  #
+  # ⚠ RED WHILE A ROW IS ✘. The first run found rows 5 and 7 violated and the review of the branch
+  # made row 4 honest about its Failed reads; each says what it owes in docs/plan/23 § The chaos
+  # invariants, and Build.Chaos fails the target on any ✘ row. That is a red job with a diagnosis,
+  # which is the right colour — and the results file and the silos' log are uploaded whatever the
+  # outcome, so the diagnosis survives the runner.
   chaos:
     name: chaos
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    env:
-      STAGING_KUBECONFIG: ${{ secrets.STAGING_KUBECONFIG }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Is the staging kubeconfig configured?
-        id: secrets
+      # The same proof gate.yml makes before the container-backed suites: one loud failure rather
+      # than seven invariants failing at their fixture with connection errors.
+      - name: Prove Docker can host the topology
         run: |
-          .github/scripts/gate-on-secrets.sh chaos \
-            "docs/plan/23 § The chaos invariants: 'Each is an assertion, not an observation.' An assertion needs something to assert against, and nothing was asserted." \
-            "STAGING_KUBECONFIG=create the secret with a kubeconfig for a cluster that can lose a silo, a shard and a NATS node without anybody minding"
+          docker version --format 'client {{.Client.Version}}, server {{.Server.Version}}'
+          docker info --format 'cgroup {{.CgroupVersion}}'
+          docker run --rm hello-world > /dev/null
+          echo "Docker works — the suite can start its Redis, shards, k3s and silos."
 
-      - name: "skipped: STAGING_KUBECONFIG is not configured — docs/plan/23 § CI secrets"
-        if: steps.secrets.outputs.configured != 'true'
-        run: |
-          echo "::warning title=chaos::chaos is also BLOCKED on a suite that does not exist — test/CyberCloud.Chaos — and on an environment whose size can be verified (Build.Chaos.cs). With the secret set, ./build.sh Chaos fails naming both. docs/plan/23 § CI secrets, 'Blocked on work, not on a secret'."
-
-      - uses: ./.github/actions/dotnet
-        if: steps.secrets.outputs.configured == 'true'
-
-      - name: Point kubectl at staging
-        if: steps.secrets.outputs.configured == 'true'
-        run: |
-          umask 077
-          mkdir -p "$HOME/.kube"
-          printf '%s' "$STAGING_KUBECONFIG" > "$HOME/.kube/config"
-          kubectl config current-context
-
-      # ⚠ Expected to fail on three preconditions today, and the third is the interesting one:
-      # Build.Chaos.cs reports the environment's SIZE as unverifiable — invariant 7 needs 30 silos
-      # and nothing can count them. A green chaos run against a three-silo staging would be worse
-      # than this red one.
       - name: ./build.sh Chaos
-        if: steps.secrets.outputs.configured == 'true'
-        run: |
-          context="${{ secrets.STAGING_KUBE_CONTEXT }}"
-          [ -n "$context" ] || context="$(kubectl config current-context)"
-          ./build.sh Chaos --kube-context "$context"
+        run: .github/scripts/run-build.sh "$RUNNER_TEMP/chaos.log" Chaos
+
+      - name: Upload the chaos results and the silos' log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: chaos-results
+          path: artifacts/chaos/
+          # `warn`, for the reason weekly.yml gives its load results: a run that never reached its
+          # fixture has no file, and the job is already red for the real reason.
+          if-no-files-found: warn
+          retention-days: 90
 
   # ── docs/plan/23 § Test layers, row Security: the nightly half ───────────────────────────────────
   #

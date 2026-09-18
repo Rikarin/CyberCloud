@@ -2316,14 +2316,24 @@ public sealed class ResourceManagerService(
 
         // ⚠ Two-phase create, step 3: "Confirm the claim … converts the lease into a permanent
         // binding." It goes HERE — after the resource grain and the operation exist — because that is
-        // the order docs/plan/06 § Two-phase create fixes, and because the failure mode it buys is
-        // the good one: a silo that dies before this leaves a claim that expires and frees the name,
-        // and an orphaned resource grain the per-subscription reaper sweeps.
+        // the order docs/plan/06 § Two-phase create fixes.
+        //
+        // ⚠ THIS COMMENT USED TO SAY THE FAILURE MODE WAS "THE GOOD ONE": a silo dying before this
+        // line "leaves a claim that expires and frees the name, and an orphaned resource grain the
+        // per-subscription reaper sweeps". The first chaos storm (issue #44) showed it is not: the
+        // operation started three lines up has a durable reminder, drives the orphan to Succeeded
+        // regardless, and the reaper — which sweeps Creating members — never sees it; the lease then
+        // expires and the tenant's retried PUT creates a second resource under the same name. So the
+        // operation finishes this step itself on its first pass, OperationGrain.ConfirmClaimAsync,
+        // and a silo dying here leaves a create that its reminder both drives and names. This call
+        // stays: on the path that does not die it confirms within milliseconds rather than within a
+        // minute, and the grain's version is idempotent over it.
         var confirmed = await Index(resolvedTarget).ConfirmAsync(resourceId);
         if (confirmed.TryGetError(out var confirmError)) {
             logger.LogError(
                 "Confirming the index claim for {Path} failed after the resource and operation were "
-                + "created: {Message}. The claim will expire and the resource grain will be swept.",
+                + "created: {Message}. The operation's first pass will confirm it, or cancel the create "
+                + "if the claim is gone — OperationGrain.ConfirmClaimAsync.",
                 addressed.Path,
                 confirmError.Message
             );

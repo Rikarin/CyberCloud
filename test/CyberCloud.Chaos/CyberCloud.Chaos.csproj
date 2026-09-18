@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/23 § The chaos invariants — the seven, each as a test that INDUCES its fault against
+      real infrastructure and asserts the invariant held, with numbers. Issue #44.
+
+      ⚠ THE FAULTS ARE REAL AND THE TOPOLOGY IS THE PLATFORM'S OWN WIRING. A silo is killed with
+      Orleans' ungraceful path, a shard is a stopped PostgreSQL container, the hot tier is FLUSHALLed
+      on a real Redis, the managed cluster is a stopped k3s. The silos are wired through the same
+      extension methods CyberCloud.Silo.Host composes — AddCyberCloudTenancy (both storage tiers),
+      UseRedisReminderService, AddCyberCloudAuthorization, AddCyberCloudKubernetes,
+      GrainClusterConnectionFactory, AddCyberCloudResourceManager — over Orleans.TestingHost, which is
+      what gives a test the handles a process shell does not: kill this silo, start another, read
+      this silo's reminder table. What is NOT the production shell: Serilog, ABP, the health
+      endpoints, and CyberCloud.Silo.Host's PlatformBootstrapTask, whose one effect here
+      (ConfigureShardsAsync) the topology performs itself.
+
+      ⚠ ONE TEST PER INVARIANT, NAMED *Invariant<n>*. build/Build.Chaos.cs § AssertEveryInvariantIsCovered
+      lists this assembly's tests by that pattern before it runs anything; an invariant whose test is
+      renamed is a nightly that went green by omission, and that check is what catches it.
+
+      ⚠ EVERY TEST RECORDS AN OUTCOME — Held, Violated, or Vacuous — AND THE BUILD READS THE FILE, NOT
+      THE EXIT CODE. A test that skips because the machine cannot host its fault (invariant 6 needs a
+      NATS cluster no silo here speaks to; invariant 7 needs 30 silos) writes Vacuous with the reason,
+      and Build.Chaos prints ○ for it rather than ✔. The exit code alone cannot tell "held" from
+      "skipped", which is the distinction the target exists to make.
+
+      ⚠ IT TAKES ClusterSlot, for the reason CyberCloud.Bundle.Cluster.Conformance.csproj gives at
+      length: a suite that holds a k3s without the permit is one more cluster competing for the
+      container budget build/Build.Test.cs caps at one.
+
+      It references CyberCloud.Providers.Sample rather than the conformance reference provider because
+      a widget is a shipped resource type with a shipped reconciler, so what the storm provisions is
+      what a tenant provisions.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
+        <PackageReference Include="Microsoft.Orleans.Reminders.Redis"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+        <PackageReference Include="Npgsql"/>
+        <PackageReference Include="StackExchange.Redis"/>
+        <!-- The raw client, for the half of every assertion that is deliberately NOT our code. -->
+        <PackageReference Include="KubernetesClient"/>
+        <PackageReference Include="Testcontainers.K3s"/>
+        <PackageReference Include="Testcontainers.PostgreSql"/>
+        <PackageReference Include="Testcontainers.Redis"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- ClusterInfrastructure.K3s() — the pinned image, the cgroup drop-in, the shared /var/run — and ClusterSlot. -->
+        <ProjectReference Include="../CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
+        <ProjectReference Include="../../src/CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
+        <ProjectReference Include="../../src/CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
+        <ProjectReference Include="../../src/CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+        <ProjectReference Include="../../src/CyberCloud.Kubernetes/CyberCloud.Kubernetes.csproj"/>
+        <ProjectReference Include="../../src/CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <ProjectReference Include="../../src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.csproj"/>
+        <ProjectReference Include="../../src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Contracts/CyberCloud.Providers.Sample.Contracts.csproj"/>
+    </ItemGroup>
+
+</Project>

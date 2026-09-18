@@ -19,9 +19,19 @@ namespace CyberCloud.ResourceManager.Grains;
 ///         ⚠ <b>The reminder and <see cref="DriveAsync" /> are separate on purpose.</b> Orleans'
 ///         minimum reminder period is one minute, and the backoff ladder starts at ten seconds — so a
 ///         reminder alone cannot express the schedule, and a test that waited for one would take an
-///         hour. The reminder is the <i>safety net</i> that survives a silo loss; the scheduled
-///         in-activation timer is what honours the ladder; and <see cref="DriveAsync" /> is the body
-///         both call and a test drives directly.
+///         hour. The reminder is the <i>safety net</i> that survives a silo loss, and
+///         <see cref="DriveAsync" /> is the body it calls and a test drives directly.
+///     </para>
+///     <para>
+///         ⚠ <b>Nothing honours the ladder yet, and the load suite measured what that costs.</b> This
+///         paragraph used to say "the scheduled in-activation timer is what honours the ladder"; no
+///         such timer exists — <c>ScheduleAsync</c> computes the ladder's delay, writes it into the
+///         progress entry, and re-registers the one-minute reminder. So in production every pass
+///         after the first waits for a reminder tick, the first pass of a fresh create lands about a
+///         minute after its 202, and a sustained write rate fills a queue one reminder period deep
+///         before it drains — the numbers are in docs/plan/23 § The load scenarios' dated table,
+///         under the reconcile-queue row. An in-activation timer that fires the ladder's delay, with
+///         the reminder kept as the safety net, is the missing piece and is owed there.
 ///     </para>
 /// </remarks>
 public sealed class OperationGrain(
@@ -49,8 +59,8 @@ public sealed class OperationGrain(
     public const string ReminderName = "reconcile";
 
     /// <summary>
-    ///     The reminder's period. ⚠ Orleans' floor is one minute; the ladder is honoured by the
-    ///     in-activation schedule, and this exists so an operation whose silo died is still picked up.
+    ///     The reminder's period. ⚠ Orleans' floor is one minute, and until the in-activation timer
+    ///     the class remarks owe exists, this is the cadence every pass after a create's 202 runs at.
     /// </summary>
     public static TimeSpan ReminderPeriod { get; } = TimeSpan.FromMinutes(1);
 
@@ -201,6 +211,33 @@ public sealed class OperationGrain(
 
         state.State.Status = Contracts.OperationState.Running;
         state.State.Attempts++;
+
+        // ── THE CLAIM IS CONFIRMED BY THE OPERATION IF THE WRITE PATH NEVER GOT TO IT ────────────
+        //
+        // ⚠ FOUND BY THE FIRST CHAOS STORM (issue #44), AND docs/plan/06 § Two-phase create HAD IT
+        // WRONG. The write path starts this operation at step 10 and confirms the index claim
+        // immediately after — so a silo that dies between the two leaves an operation with a
+        // durable reminder and a claim with a five-minute lease. The document said the orphan "is
+        // swept by a per-subscription reaper"; what actually happened is that the reminder drove the
+        // orphan to Succeeded, the reaper — which looks at Creating members only — never saw it, the
+        // lease expired, the tenant's retried PUT created a second resource under the same name,
+        // and the first one stayed: Succeeded, billed, with a ConfigMap in the cluster, and
+        // addressable by nobody. Two members shared one path in the group listing.
+        //
+        // The repair is that the operation, which is the one durable thing that survives the silo,
+        // finishes step 3 itself on its first pass. The reminder fires within a minute and the lease
+        // is five, so in practice the confirm lands while the claim is still this operation's; the
+        // call is idempotent when the write path did get there first. If the claim IS gone — the
+        // lease expired, or another create has the name — converging would manufacture exactly the
+        // ghost above, so the create is cancelled instead and the existing cancel path tears down
+        // whatever a previous pass applied, returns the quota and stamps the member Canceled.
+        //
+        // ⚠ An index shard that cannot be reached THROWS out of this call — the index grain's
+        // PersistAsync propagates the storage failure rather than returning a Result — so the pass
+        // below does not run, the flag stays unset, and the next reminder tick retries the whole
+        // pass, confirm included. That is the same shape every other storage failure in this pass
+        // has, and it is what keeps an unreachable index from being mistaken for a lost claim.
+        await ConfirmClaimAsync(spec);
 
         // ── A SOFT DELETE TEARS THE DATA PLANE DOWN, AND EVERY OTHER PART OF IT IS WHAT MAKES THE
         //    WINDOW A WINDOW ──────────────────────────────────────────────────────────────────────
@@ -1059,6 +1096,70 @@ public sealed class OperationGrain(
     static ResourceId Address(OperationSpec spec) {
         var parsed = ResourceId.ParsePath(spec.ResourcePath);
         return parsed.IsSuccess ? parsed.GetValueOrThrow().WithId(spec.ResourceId) : default;
+    }
+
+    /// <summary>
+    ///     Finishes docs/plan/06 § Two-phase create's step 3 for a create whose write path died before
+    ///     reaching it, or cancels the create when the claim is no longer this operation's to confirm.
+    /// </summary>
+    /// <param name="spec">The operation's spec; only a create that claimed the name does anything here.</param>
+    /// <remarks>
+    ///     See the comment at the call site in <see cref="DriveAsync" /> for why this exists. Runs
+    ///     once: a confirmed claim sets <see cref="OperationGrainState.IndexConfirmed" /> and later
+    ///     passes skip the call.
+    /// </remarks>
+    async Task ConfirmClaimAsync(OperationSpec spec) {
+        if (spec.Kind != OperationKind.Create || !spec.IndexClaimed || state.State.IndexConfirmed || state.State.CancelRequested) {
+            return;
+        }
+
+        var confirmed = await Tenant(spec)
+            .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(Address(spec)))
+            .ConfirmAsync(spec.ResourceId);
+
+        if (confirmed.IsSuccess) {
+            state.State.IndexConfirmed = true;
+            return;
+        }
+
+        var error = confirmed.Error!;
+
+        if (error.Code != ErrorCode.Conflict) {
+            // ⚠ NOT A TRANSIENT-FAILURE BRANCH, AND THE FIRST VERSION OF THIS METHOD SAID IT WAS.
+            // IndexClaimMachine.Confirm returns Conflict and nothing else, and an index shard that
+            // cannot be reached does not come back as a Result at all: the index grain's
+            // PersistAsync throws, the exception leaves DriveAsync before the pass, and the next
+            // reminder tick is the retry — the pass does NOT run in that case. So a non-Conflict
+            // failure here is a contract change in the index grain, not a blip, and the safe answer
+            // to a contract change is to leave the flag unset, say so, and let the next pass ask
+            // again rather than cancel a create over a code nobody has defined the meaning of.
+            logger.LogWarning(
+                "Operation {Operation} could not confirm the index claim for {Path} and will ask again on its next pass: {Code} — {Message}",
+                operationId,
+                spec.ResourcePath,
+                error.Code,
+                error.Message
+            );
+
+            return;
+        }
+
+        // ⚠ The name is not this resource's any more. Cancelling is the one ending that leaves
+        // nothing running under a name nobody can reach — see DriveAsync's comment.
+        state.State.CancelRequested = true;
+        state.State.CancelReason =
+            $"The index claim for '{spec.ResourcePath}' could not be confirmed: {error.Message} A create "
+            + "that converged without its name would be a resource no caller could address, delete or "
+            + "stop paying for, so it is torn down instead. docs/plan/06 § Two-phase create.";
+
+        Append(Progress("cancelling", state.State.CancelReason));
+
+        logger.LogWarning(
+            "Operation {Operation} is cancelling the create of {Path}: {Reason}",
+            operationId,
+            spec.ResourcePath,
+            error.Message
+        );
     }
 
     IQuotaGrain Quota(OperationSpec spec) =>

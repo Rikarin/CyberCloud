@@ -22,9 +22,9 @@ CyberCloud/
 │   ├── Build.Licence.cs          # ADR-011 scan over charts + images
 │   ├── Build.Portal.cs           # pnpm install/lint/test/build, performance budget, axe
 │   ├── Build.Bootstrap.cs        # deploy/bootstrap/bootstrap.sh preflight and --dry-run; the first phase of E2E
-│   ├── Build.E2E.cs              # ─┐
-│   ├── Build.Chaos.cs            #  ├ against a real deployment; nightly and weekly, not per-PR
-│   ├── Build.Load.cs             # ─┘
+│   ├── Build.E2E.cs              # against a real deployment; nightly, not per-PR
+│   ├── Build.Chaos.cs            # the seven invariants of 23, on a topology the suite starts in Docker; nightly
+│   ├── Build.Load.cs             # the 00 § quality-bar budgets and the 20 % trend, on that topology; weekly
 │   └── Build.Publish.cs          # NuGet, npm, charts, `cyc` binaries per RID
 ├── src/                          # ── all .NET ──
 ├── charts/                       # ── Helm charts we own or have forked ──

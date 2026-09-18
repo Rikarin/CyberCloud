@@ -1,0 +1,19 @@
+{
+  "_comment": "The load run after the branch review of issue #44, at a tenth of docs/plan/23 s rates on a laptop. PROVISIONAL: there is no release, so Build.Load prints every delta against these numbers and blocks on none of them; the first release stamps this file with its tag under \"release\", which is what arms the 20 % rule (Build.Load.cs § LoadBaselineFile, docs/plan/23 § The load scenarios). Updated by a reviewed diff at release time, never by the build.",
+  "measuredAt": "2026-09-18T03:58:50.7725303+00:00",
+  "release": null,
+  "scale": 0.1,
+  "metrics": {
+    "control-plane-read-p99-ms": 6.5595,
+    "control-plane-write-p99-ms": 45.6588,
+    "grain-activation-churn-per-minute": 0,
+    "rebac-check-p99-cold-ms": 34.6769,
+    "rebac-check-p99-warm-ms": 1.3784,
+    "reconcile-queue-depth-slope-per-minute": 2.36,
+    "silo-working-set-gb": 1.528
+  },
+  "vacuous": {
+    "span-ingest-drops": "there is no span-ingest path in this repository to drive: the collector and VictoriaMetrics are charts/bundle/ components (docs/plan/16 § Observability) that nothing in a silo or gateway feeds spans into, so 'no drops below quota' and 'ingest pods scale linearly' have no pipeline to be true of. The row needs the observability stack installed and an ingest client written.",
+    "terminal-stream-p99-ms": "a thousand concurrent terminal sessions are a thousand exec streams into a thousand cloud-shell pods (docs/plan/19 § Cloud terminal), and the k3s in Docker that hosts this run schedules pods on one node with a laptop's share of it; CyberCloud.Providers.Terminal's conformance suite proves one session, and a hundred pods here would measure the laptop. The row needs the staging cluster."
+  }
+}
