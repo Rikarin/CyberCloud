@@ -33,15 +33,20 @@
 #   CHART_REGISTRY       OCI registry for packaged charts, e.g. oci://ghcr.io/acme/cybercloud/charts.
 #   PROD_KUBECONFIG      for the staged rollout. Currently unusable — see `rollout`.
 #
-# ── ⚠ WITHOUT THE SIX, A TAG PUSH IS A SKIPPED RELEASE, AND IT SAYS SO ───────────────────────────
+# ── ⚠ WITHOUT THE SIX, A TAG IS GATED AND NOT PUBLISHED, AND THE STEP LIST SAYS WHICH ────────────
 #
 # Since issue #25 both jobs gate on their secrets the way main.yml's do (.github/scripts/gate-on-
 # secrets.sh): all absent is a step named `skipped: … — docs/plan/23 § CI secrets` and a green job;
-# some absent is a failure naming the rest. ⚠ What a skipped `publish` gives up is the GATE as well as
-# the publishing — `./build.sh Publish` IS the full gate (the header above), so a tag pushed to a
-# repository with no release secrets has been validated by nothing this workflow ran. The skipped
-# step says so in as many words, because "green release" is the one thing that must not be read into
-# it. main.yml has gated the same commit, and that is the evidence there is.
+# some absent is a failure naming the rest. ⚠ But `./build.sh Publish` is TWO things — the full gate
+# and the pushes — and only the pushes need a secret. #25's first draft skipped the whole target when
+# the secrets were absent, which left a tag validated by nothing this workflow ran and made the
+# docs/plan/23 § CI shape row for this file ("Full gate, publish everything") false in the only shape
+# the repository can run; its review said so. So the unconfigured shape runs the gate half by name —
+# `./build.sh Test Generate Architecture Portal Licence --skip Images`, which is `Publish`'s own
+# dependency list with the one dependency that needs a registry skipped the way weekly.yml's
+# `licence` job skips it — and only the pushes are what `skipped:` names. A tag pushed to a repository
+# with no release secrets has run every test, every gate and the licence scan; what it has not done
+# is release, and the skipped step says exactly that.
 
 name: release
 
@@ -104,13 +109,12 @@ jobs:
             "NUGET_API_KEY=create the secret with its API key" \
             "CHART_REGISTRY=create the secret with an oci:// registry for packaged charts"
 
-      - name: "skipped: CONTAINER_REGISTRY / REGISTRY_USERNAME / REGISTRY_PASSWORD / NUGET_FEED / NUGET_API_KEY / CHART_REGISTRY are not configured — docs/plan/23 § CI secrets"
+      - name: "skipped: CONTAINER_REGISTRY / REGISTRY_USERNAME / REGISTRY_PASSWORD / NUGET_FEED / NUGET_API_KEY / CHART_REGISTRY are not configured, so nothing is published — docs/plan/23 § CI secrets"
         if: steps.secrets.outputs.configured != 'true'
         run: |
-          echo "::warning title=publish::tag ${GITHUB_REF_NAME} was NOT released and NOT gated by this workflow — ./build.sh Publish is both, and it did not run. main.yml's run for the same commit is the gate that did. docs/plan/23 § CI secrets."
+          echo "::warning title=publish::tag ${GITHUB_REF_NAME} is GATED below and NOT released — the pushes are the half of ./build.sh Publish that needs the six secrets, and they are absent. docs/plan/23 § CI secrets."
 
       - uses: ./.github/actions/dotnet
-        if: steps.secrets.outputs.configured == 'true'
 
       # ── ⚠ THE PORTAL IS ON THE RELEASE PATH, AND UNTIL NOW ITS NODE WAS NOT PINNED HERE ─────────
       #
@@ -126,7 +130,6 @@ jobs:
       # build and would have failed the release — but a release that fails on a runner-image bump
       # is not a pin, it is a tripwire over a hole. Same file, same reason, same one number.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: steps.secrets.outputs.configured == 'true'
         with:
           node-version-file: portal/.node-version
 
@@ -134,7 +137,6 @@ jobs:
       # portal/package.json is the single pnpm pin, and Build.Portal.cs § ResolvePnpm needs `pnpm`
       # on PATH or it fails the target outright.
       - name: Enable pnpm from portal/package.json's packageManager pin
-        if: steps.secrets.outputs.configured == 'true'
         env:
           COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
         run: |
@@ -142,9 +144,26 @@ jobs:
           echo "node: $(node --version)"
           echo "pnpm: $(cd portal && pnpm --version)"
 
+      # ⚠ In BOTH shapes, the way weekly.yml's `licence` job installs it: on CI a missing syft FAILS
+      # `Licence` rather than warning (Build.Licence.cs § ResolveOptionalTool), and the gate half below
+      # runs `Licence` over the bundle's upstream images with or without a registry.
       - name: Install syft
-        if: steps.secrets.outputs.configured == 'true'
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+
+      # The full `Test` run — no `--test-lane`, so the sixteen *.Cluster.Conformance suites hold a k3s
+      # each — is in both shapes below. nightly.yml's `test-full` proves the daemon first for the same
+      # reason: a v1 daemon gives every one of them an API server with no node and a skip that reads as
+      # a pass (docs/plan/23 § The lane that needs a kubelet).
+      - name: Prove Docker can run the container-backed suites
+        run: |
+          docker version --format 'client {{.Client.Version}}, server {{.Server.Version}}'
+          docker run --rm hello-world > /dev/null
+          cgroup=$(docker info --format '{{.CgroupVersion}}')
+          echo "cgroup version: $cgroup"
+          if [ "$cgroup" != "2" ]; then
+            echo "::error title=publish::the Docker daemon is on cgroup v$cgroup and k3s v1.35 will not schedule a pod on it, so the cluster-conformance half of the gate would skip and report success. docs/plan/23 § The lane that needs a kubelet."
+            exit 1
+          fi
 
       - name: Install cosign
         if: steps.secrets.outputs.configured == 'true'
@@ -178,6 +197,58 @@ jobs:
             --nuget-feed "$NUGET_FEED" \
             --nuget-api-key "$NUGET_API_KEY" \
             --chart-registry "$CHART_REGISTRY"
+
+      # ── The gate without the pushes ──────────────────────────────────────────────────────────────
+      #
+      # Build.cs § Publish: `.DependsOn(Test, Generate, Architecture, Portal, Licence)`. This is that
+      # list, invoked by name, so a tag with no release secrets is still gated by exactly what
+      # `Publish` would have gated it by. ⚠ Kept as the LIST rather than as `Publish --skip Publish`
+      # or a new `Gate` target: Nuke cannot skip the target it was invoked with, and a second node
+      # that repeats `Publish`'s dependency list is a list that drifts the first time one of them
+      # changes — Build.Publish.cs § PublishArtefacts is where "the gate" is defined, and this step
+      # cites it rather than copying it into the build. `--skip Images` is weekly.yml's shape for the
+      # one dependency that needs a registry: Build.Licence.cs reports the platform-image half as ○
+      # and scans the bundle half in full.
+      - name: ./build.sh Test Generate Architecture Portal Licence --skip Images
+        if: steps.secrets.outputs.configured != 'true'
+        run: |
+          .github/scripts/run-build.sh "$RUNNER_TEMP/gate.log" \
+            Test Generate Architecture Portal Licence --skip Images
+
+      # The same two guards nightly.yml's `test-full` has, because a gate that ran nothing is the
+      # failure the whole of #25 is about. `always()`, so a red gate still says which half was red.
+      - name: The gate's suites actually ran
+        if: always() && steps.secrets.outputs.configured != 'true'
+        run: .github/scripts/assert-suites-ran.sh artifacts/test-results "$RUNNER_TEMP/gate.log"
+
+      - name: The gate scanned what it could and said what it could not
+        if: steps.secrets.outputs.configured != 'true'
+        run: |
+          if grep -q 'coverage floor was NOT ENFORCED' "$RUNNER_TEMP/gate.log"; then
+            echo "::error title=publish::./build.sh Test measured no coverage at all and still exited 0. Build.Test.cs § EnforceCoverageFloor is supposed to make that a hard failure whenever IsServerBuild."
+            exit 1
+          fi
+          if ! grep -q 'Images was skipped' "$RUNNER_TEMP/gate.log"; then
+            echo "::error title=publish::./build.sh Licence --skip Images did not report the platform-image half as skipped. Build.Licence.cs § ScanPlatformImages prints that ○ so a reader of this run knows what was not scanned; its absence means the row went quiet."
+            exit 1
+          fi
+          echo "○ Platform images not scanned — no registry. Every other half of the gate ran."
+          grep -E 'Licence: [0-9]+ artefact' "$RUNNER_TEMP/gate.log" | tail -1
+
+      # What the gate half leaves behind, kept as long as a release would be: a tag with no release
+      # secrets is still a tag somebody may ship from by hand, and this is the evidence it was gated.
+      - name: Upload the gate's results
+        if: always() && steps.secrets.outputs.configured != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gate-${{ github.ref_name }}
+          path: |
+            artifacts/test-results/
+            artifacts/coverage/
+            artifacts/licence/
+          # `warn`: a gate that died in Compile has nothing here, and the job is already red for it.
+          if-no-files-found: warn
+          retention-days: 400
 
       # ⚠ `Publish` reports zero npm packages and carries on, deliberately — docs/plan/21 § Other
       # SDKs says the TypeScript client is not written. It does NOT tolerate zero of the other
@@ -228,16 +299,23 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: publish
-    env:
-      PROD_KUBECONFIG: ${{ secrets.PROD_KUBECONFIG }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # The same two-kinds-of-blocker shape as main.yml's deploy-dev: no kubeconfig is a skip that
       # names the three pieces of work in a warning; a kubeconfig is a failure that names them in
       # an error, because a secret nothing can consume is a misconfiguration worth a red.
+      #
+      # ⚠ The secret is materialised on THIS STEP and not on the job. master never read
+      # PROD_KUBECONFIG at all; the only thing this job does with it is ask whether it is empty, and
+      # a production kubeconfig in the environment of every step of an unprotected job — there is no
+      # `environment:` here, because nothing here deploys — is a wider landing than a yes/no needs.
+      # When the three blockers below are gone and a rollout step exists, it gets the secret on its
+      # own `env:` and the job gets an `environment: prod` with its protection rules.
       - name: Is the production kubeconfig configured?
         id: secrets
+        env:
+          PROD_KUBECONFIG: ${{ secrets.PROD_KUBECONFIG }}
         run: |
           .github/scripts/gate-on-secrets.sh rollout \
             "docs/plan/23 § Environments and rollout: canary → 25 % → 100 %, with automatic rollback. Nothing was rolled out." \

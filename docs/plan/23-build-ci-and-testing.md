@@ -208,6 +208,21 @@ secrets set still fails naming the rest — that is a half-configured job, not a
 `rollout`, `restore-drill`) carry a `::warning` annotation naming the work, every run, and fail only
 when somebody creates the secret that nothing can yet consume. § CI secrets below is the list.
 
+⚠ **What skips is the half that needs the secret, never the gate.** `release.yml`'s row above says
+"full gate, publish everything", and `./build.sh Publish` is both at once — its dependency list *is*
+the gate, and only the pushes need a credential. With no release secrets the job runs that list by
+name, `./build.sh Test Generate Architecture Portal Licence --skip Images`, and the `skipped:` step
+names the publishing alone; a tag on a repository with no release secrets has still run every suite,
+every gate and the licence scan. The first draft of #25 skipped the whole target, which left a tag
+validated by nothing the workflow ran; its review caught it.
+
+⚠ **The secret scans read `verified,unknown`, and exempt four files by path.** `unknown` is a
+credential-shaped string whose host the runner could not reach — the shape of every connection
+string this platform has — so dropping it tree-wide to silence thirteen fixtures would have dropped
+the one finding the repository is most likely to produce. `.github/trufflehog-exclude-paths.txt`
+names the four test files that have to hold secret-shaped strings, and what each tests; it is the
+only place a file is exempted from either scan, and adding a row to it is a review request.
+
 ## CI secrets
 
 Configured under the repository's *Settings → Secrets and variables → Actions*, or on the `dev` and

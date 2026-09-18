@@ -1,0 +1,58 @@
+# The files trufflehog does not scan, and why each is here. One Go regular expression per line,
+# matched against the repository-relative path of every file in every commit; `#` lines and blank
+# lines are ignored (trufflehog pkg/common/filter.go § FilterRulesFromFile). Passed as
+# `--exclude-paths=.github/trufflehog-exclude-paths.txt` by pr.yml's diff scan and nightly.yml's
+# full-history scan.
+#
+# ── ⚠ WHY A PATH LIST AND NOT `--results=verified` ──────────────────────────────────────────────
+#
+# Both scans run `--results=verified,unknown`. `unknown` is a credential-shaped string whose host
+# the runner could not reach, so verification never finished — and that is precisely the shape of
+# this platform's own connection strings: a Postgres or Redis on a private address, an internal
+# registry, a kubeconfig for a cluster with no public API server. A live credential of that shape,
+# committed by mistake, is `unknown` to a GitHub runner forever. Dropping `unknown` tree-wide to
+# silence thirteen fixtures would have dropped exactly the finding this repository is most likely
+# to produce, and GitHub's push protection does not cover it: that layer matches partner-issued
+# token formats, not connection strings. So the fixtures are excluded BY PATH, and `unknown` stays
+# on for every other file. Measured the same day by committing a private-address Postgres string
+# into another suite: `--results=verified` exited 0 over it; `verified,unknown` with this file
+# reported it and exited 183.
+#
+# ⚠ THIS FILE IS SCANNED TOO, so no comment here may contain anything shaped like a connection
+# string — the first draft quoted a fixture verbatim and was itself the fourteenth result.
+#
+# ── ⚠ WHAT A ROW HERE MEANS, AND WHAT IT COSTS ──────────────────────────────────────────────────
+#
+# A file listed here is never scanned, in any commit, in either workflow. So a row is a claim that
+# the file is a TEST FIXTURE that has to contain secret-shaped strings to do its job, and a real
+# credential pasted into it would go unnoticed by these scans — which is why every row names what
+# the file tests and why the shape is unavoidable, and why this list is four files and not a
+# directory. `src/.*Tests/` would be the easy line and the wrong one: it is every suite in the tree,
+# and a suite is where a developer pastes a real connection string "just to try it".
+#
+# Measured 2026-09-18 with trufflehog 3.96.0 over the full history (672 commits): without this file,
+# `--results=verified,unknown` reports thirteen results, `verified_secrets: 0`,
+# `unverified_secrets: 13`, all in these four files — the ones nightly.yml's `security-history`
+# exited 183 on every night before #25. With it, the same scan reports zero and exits 0.
+
+# The secret-scrubbing sink's own tests. A test of a scrubber has to feed it a Postgres connection
+# string with a password and a URI with credentials, plain and in base64 and HTML encodings, and
+# assert that none of them reaches the log. Every string is a fixture the sink is asked to redact;
+# nothing here connects.
+^src/CyberCloud\.ServiceDefaults\.Tests/Logging/SecretScrubbingSinkTests\.cs$
+
+# Orleans ADO.NET schema tests. The file's own header shows the localhost connection string, with a
+# placeholder password, that a developer exports to point the suite at a scratch database, and
+# trufflehog reads it as a SQL Server credential. It is documentation of a shape, not a credential.
+^src/CyberCloud\.ServiceDefaults\.Tests/Storage/OrleansAdoNetSchemaTests\.cs$
+
+# Shard-map tests: a one-letter-host connection string with a one-letter password per shard,
+# asserting the placement arithmetic and the pool options over them. Fixture hosts, never opened.
+# (The `Wit` result trufflehog also reports here is a hot-key string that happens to match that
+# detector's shape.)
+^src/CyberCloud\.ServiceDefaults\.Tests/Storage/HashTagAndShardMapTests\.cs$
+
+# The DocumentDB reconciler's tests: they assert the Postgres URL the reconciler writes into the
+# FerretDB pod, whose user and password are `$(FERRETDB_PGUSER)` and `$(FERRETDB_PGPASSWORD)` —
+# environment references the pod resolves, which to a scanner is a URL with credentials in it.
+^src/Providers/CyberCloud\.Providers\.DocumentDB/CyberCloud\.Providers\.DocumentDB\.Tests/DocumentDbReconcilerTests\.cs$

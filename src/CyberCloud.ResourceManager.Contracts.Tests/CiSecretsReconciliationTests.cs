@@ -87,10 +87,21 @@ public sealed class CiSecretsReconciliationTests {
     ///     <c>skipped:</c> and cites docs/plan/23 § CI secrets.
     /// </summary>
     /// <remarks>
-    ///     ⚠ This is the property that lets <c>gate-on-secrets.sh</c> skip at all — its header lists
-    ///     three, and this is the first. A gate call with no named skip step beside it is a green
-    ///     job whose step list says nothing about what did not run, which is the shape
-    ///     <c>require-secrets.sh</c> was written to refuse.
+    ///     <para>
+    ///         ⚠ This is the property that lets <c>gate-on-secrets.sh</c> skip at all — its header
+    ///         lists three, and this is the first. A gate call with no named skip step beside it is a
+    ///         green job whose step list says nothing about what did not run, which is the shape
+    ///         <c>require-secrets.sh</c> was written to refuse.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Per job, not per file.</b> The first version counted gate calls and
+    ///         <c>skipped:</c> steps across a whole workflow and compared the totals, so a file with
+    ///         two gated jobs, one of them carrying two skip steps and the other none, passed — the
+    ///         property the script header promises is "a named skip beside every call", and a total
+    ///         cannot assert "beside". #25's review found it. The jobs are cut by
+    ///         <see cref="JobHeader" /> — a two-space-indented key under <c>jobs:</c>, which is how
+    ///         every workflow here is laid out — and the counts are compared inside each cut.
+    ///     </para>
     /// </remarks>
     [Fact]
     public void EveryJobThatGatesOnSecretsHasANamedSkippedStep() {
@@ -103,29 +114,58 @@ public sealed class CiSecretsReconciliationTests {
         var withoutSkip = new List<string>();
 
         foreach (var file in workflows) {
-            var text = File.ReadAllText(file);
             var name = Path.GetFileName(file);
 
-            var gates = GateCall.Matches(text).Select(x => x.Groups["label"].Value).ToArray();
-            var skips = SkippedStep.Count(text);
+            foreach (var (job, text) in Jobs(File.ReadAllText(file))) {
+                var gates = GateCall.Matches(text).Select(x => x.Groups["label"].Value).ToArray();
+                var skips = SkippedStep.Count(text);
 
-            gated.AddRange(gates.Select(x => $"{name} / {x}"));
+                gated.AddRange(gates.Select(x => $"{name} / {job} ({x})"));
 
-            if (gates.Length > skips) {
-                withoutSkip.Add($"{name}: {gates.Length} gate-on-secrets call(s), {skips} `skipped:` step(s)");
+                if (gates.Length > skips) {
+                    withoutSkip.Add(
+                        $"{name} / {job}: {gates.Length} gate-on-secrets call(s), {skips} `skipped:` step(s)"
+                    );
+                }
             }
         }
 
         gated.ShouldNotBeEmpty(
-            "no workflow calls .github/scripts/gate-on-secrets.sh, so the regex has stopped matching "
-            + "— main.yml's images job calls it."
+            "no job in any workflow calls .github/scripts/gate-on-secrets.sh, so either the gate regex "
+            + "or the job cut has stopped matching — main.yml's images job calls it."
         );
 
         withoutSkip.ShouldBeEmpty(
-            "a workflow gates a job on secrets without a step named `skipped: … — docs/plan/23 § CI "
-            + "secrets` beside the call. The named step is what makes the skip visible in the job's "
-            + "step list; without it a green job says nothing about what did not run."
+            "a job gates on secrets without a step named `skipped: … — docs/plan/23 § CI secrets` in "
+            + "the same job. The named step is what makes the skip visible in that job's step list; "
+            + "a skip step in another job of the same file does not stand in for it."
         );
+    }
+
+    /// <summary>
+    ///     The jobs of a workflow file: each job id paired with the text from its header to the next
+    ///     job's header.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Text before <c>jobs:</c> is dropped rather than attributed to a job, so the header
+    ///     comment that mentions the gate script by name is counted nowhere — the same reason
+    ///     <see cref="GateCall" /> is anchored to the start of a line.
+    /// </remarks>
+    static IEnumerable<(string Job, string Text)> Jobs(string workflow) {
+        var start = workflow.IndexOf("\njobs:", StringComparison.Ordinal);
+        start.ShouldBeGreaterThanOrEqualTo(0, "a workflow file has no `jobs:` key at column zero.");
+
+        var body = workflow[start..];
+        var headers = JobHeader.Matches(body);
+
+        headers.Count.ShouldBeGreaterThan(0, "a workflow file has a `jobs:` key and no two-space-indented job under it.");
+
+        for (var i = 0; i < headers.Count; i++) {
+            var from = headers[i].Index;
+            var to = i + 1 < headers.Count ? headers[i + 1].Index : body.Length;
+
+            yield return (headers[i].Groups["id"].Value, body[from..to]);
+        }
     }
 
     /// <summary>Every distinct <c>NAME</c> in a <c>secrets.NAME</c> expression across the workflows.</summary>
@@ -187,6 +227,18 @@ public sealed class CiSecretsReconciliationTests {
     /// </remarks>
     static readonly Regex GateCall = new(
         @"^\s*\.github/scripts/gate-on-secrets\.sh\s+(?<label>[A-Za-z0-9_-]+)",
+        RegexOptions.Multiline,
+        TimeSpan.FromSeconds(5)
+    );
+
+    /// <summary>A job header: a two-space-indented key on a line of its own, under <c>jobs:</c>.</summary>
+    /// <remarks>
+    ///     ⚠ Exactly two spaces, anchored to the line. A step's <c>with:</c> or <c>env:</c> sits at six
+    ///     or more, and the workflow's own top-level keys sit at zero; the only two-space keys after
+    ///     <c>jobs:</c> in these files are job ids, which is what <see cref="Jobs" /> relies on.
+    /// </remarks>
+    static readonly Regex JobHeader = new(
+        @"^  (?<id>[A-Za-z0-9_-]+):[ \t\r]*$",
         RegexOptions.Multiline,
         TimeSpan.FromSeconds(5)
     );

@@ -53,8 +53,11 @@ partial class Build {
     /// </summary>
     enum TestSuite {
         /// <summary>
-        ///     <c>Test</c>, every PR: the unit, grain, reconciler, conformance, isolation and
-        ///     contract layers of docs/plan/23 § Test layers.
+        ///     <c>Test</c>: the unit, grain, reconciler, conformance, isolation and contract layers
+        ///     of docs/plan/23 § Test layers. "Per pull request" names the TARGET that owns them, not
+        ///     how often each runs: since #25 <see cref="TestLane" /> splits this set, and the
+        ///     reconciler layer — the <c>*.Cluster.Conformance</c> assemblies — runs on every merge
+        ///     and every night rather than on every PR, for the measured reason given there.
         /// </summary>
         PerPullRequest,
 
@@ -207,20 +210,32 @@ partial class Build {
     readonly string? LaneName;
 
     /// <summary>The <see cref="TestLane" /> this run was asked for, or a failure naming the value it could not read.</summary>
+    /// <remarks>
+    ///     ⚠ Matched against the NAMES, not parsed. <c>Enum.TryParse</c> accepts <c>"1"</c> as
+    ///     <see cref="TestLane.Fast" /> and <c>"2"</c> as <see cref="TestLane.Cluster" />, and
+    ///     <c>Enum.IsDefined</c> agrees with it, so the first version of this property refused
+    ///     <c>Bogus</c> and accepted a digit — a numeric typo in a workflow file would have run a lane
+    ///     other than the one the step was named for, which is the failure the comment above
+    ///     <see cref="LaneName" /> promises cannot happen. #25's review found it.
+    /// </remarks>
     TestLane Lane {
         get {
             if (string.IsNullOrWhiteSpace(LaneName)) {
                 return TestLane.All;
             }
 
+            var name = Enum.GetNames<TestLane>()
+                .SingleOrDefault(candidate => candidate.Equals(LaneName.Trim(), StringComparison.OrdinalIgnoreCase));
+
             Assert.True(
-                Enum.TryParse<TestLane>(LaneName, ignoreCase: true, out var lane) && Enum.IsDefined(lane),
+                name is not null,
                 $"--test-lane '{LaneName}' is not a lane. It is one of {string.Join(", ", Enum.GetNames<TestLane>())}, "
-                + "and a value that is none of them must not fall back to All: that would run every "
-                + "suite under the name of the lane that was asked for. Build.Test.cs § TestLane."
+                + "spelled out — not a number, which Enum.TryParse would accept — and a value that is "
+                + "none of them must not fall back to All: that would run every suite under the name "
+                + "of the lane that was asked for. Build.Test.cs § TestLane."
             );
 
-            return lane;
+            return Enum.Parse<TestLane>(name!);
         }
     }
 

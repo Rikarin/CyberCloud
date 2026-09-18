@@ -357,17 +357,22 @@ jobs:
       # rejects the repeat outright — "error: flag 'fail' cannot be repeated" — which is how this
       # step failed every night: not on a finding, but before scanning anything at all. The failing
       # behaviour the flag asks for is the action's default and is unchanged by dropping it.
-      # ⚠ `--results=verified`, not `verified,unknown`, since issue #25. With `unknown` included the
-      # scan exited 183 every night on the same thirteen results: connection strings in
+      # ⚠ `verified,unknown` WITH FOUR FIXTURE FILES EXCLUDED BY PATH, since issue #25's review. The
+      # scan exited 183 every night on the same thirteen `unknown` results — connection strings in
       # SecretScrubbingSinkTests, OrleansAdoNetSchemaTests, HashTagAndShardMapTests and
-      # DocumentDbReconcilerTests, each naming a host a runner cannot reach, so verification never
-      # finished and trufflehog filed them as `unknown` — "Found unverified Postgres result" thirteen
-      # times, `verified_secrets: 0` in its own summary. A test of a secret scrubber has to contain a
-      # secret-shaped string. pr.yml's diff scan has the same setting and the same paragraph.
+      # DocumentDbReconcilerTests, each naming a fixture host a runner cannot reach, so verification
+      # never finished — `verified_secrets: 0` in its own summary. A test of a secret scrubber has to
+      # contain a secret-shaped string. The first fix was `--results=verified`, tree-wide, and that
+      # gave up the one finding this repository is most likely to produce: a REAL connection string
+      # to a private address is `unknown` to a runner too. So the four files are excluded by path in
+      # .github/trufflehog-exclude-paths.txt, which says what each one tests, and `unknown` stays on
+      # for everything else. Measured 2026-09-18 over the full history with trufflehog 3.96.0:
+      # thirteen results without the file, zero with it, and a sabotage commit outside the four
+      # files reported. pr.yml's diff scan has the same setting and the same paragraph.
       - name: Secret scan, full history
         uses: trufflesecurity/trufflehog@6f3c981e7b77f235fd2702dd74af25fc4b72bf11 # v3.96.0
         with:
-          extra_args: --results=verified
+          extra_args: --results=verified,unknown --exclude-paths=.github/trufflehog-exclude-paths.txt
 
       # Re-run nightly as well as per-PR: advisories are published against packages nobody touched,
       # so a repository with no PRs for a week is a repository whose audit is a week old.
