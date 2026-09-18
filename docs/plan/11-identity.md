@@ -237,8 +237,14 @@ communication service as well, so it is also in the inbox at `http://localhost:8
 ([17 § The outbound carrier](17-communication-and-email.md)). ⚠ That cross-tenant send — the user's
 `UserGrain` into the platform tenant's message grain — is the one edge
 `CyberCloudGrainCallTenantSeparator` opens through the separation this paragraph describes, and the
-route to the platform's service was unreachable on a real silo until it did. The progress UI, the
-welcome mail and the optional cluster are the part
+route to the platform's service was unreachable on a real silo until it did. ⚠ **Every code `begin`
+issues draws on one platform-wide daily cap** (`PlatformCommunicationServiceOptions.MaxEmailsPerDay`,
+shared with every tenant's sign-in codes), and `begin` is unauthenticated — so the "global per-IP
+limit" [§ Credentials](#credentials) names is applied there first: `SignUpApi.BeginAsync` runs the
+lockout ladder on the caller's address (`LockoutKey.ForCaller`) before any grain, five begins free
+per window and then doubling waits, with the same body either way. One machine cannot spend the
+platform's day; many machines still can, and the cap is what stops that from becoming a relay bill.
+The progress UI, the welcome mail and the optional cluster are the part
 of [06 § Tenant lifecycle](06-tenancy-and-resource-model.md)'s operation still owed; the step record
 in the grain is its seed.
 

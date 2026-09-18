@@ -36,6 +36,16 @@ namespace CyberCloud.Communication.Providers.Smtp;
 ///             for.
 ///         </item>
 ///         <item>
+///             <i>Send as the registered sender.</i> ⚠ Not yet. <see cref="OutboundMessage.Sender" />
+///             is a <c>From</c> address the tenant registered, and the relay sends as
+///             <see cref="SmtpRelayOptions.From" /> only — a tenant's <c>From</c> needs SPF and DKIM
+///             alignment for the tenant's domain, which docs/plan/17 § Deliverability puts on
+///             <c>CyberCloud.Mail</c>. A message naming a sender that is not the relay's own
+///             <c>From</c> is <b>refused</b> before any connection, rather than sent under the
+///             platform's name with nothing saying so.
+///             <c>SmtpRefusalTests.ARegisteredSenderTheRelayCannotSendAsIsRefusedNotReplaced</c>.
+///         </item>
+///         <item>
 ///             <i>A provider message id, always.</i> The <c>Message-ID</c> this class minted,
 ///             without its angle brackets. It is under the sender's domain, so a bounce quoting it
 ///             can be attributed to a message.
@@ -62,9 +72,12 @@ namespace CyberCloud.Communication.Providers.Smtp;
 ///         </item>
 ///         <item>
 ///             <i>Be idempotent where the carrier lets you.</i> SMTP does not. Our idempotency is the
-///             message grain's, and a retry of a <see cref="MessageStatus.Queued" /> message
-///             (<c>IMessageGrain.RetryAsync</c>) mints the same <c>Message-ID</c>, so a receiver
-///             that deduplicates on it drops the second copy.
+///             message grain's. A relay that never answers is reported as
+///             <see cref="ErrorCode.OperationTimeout" />, which is the one carrier failure the grain
+///             keeps <see cref="MessageStatus.Queued" /> rather than settling as
+///             <see cref="MessageStatus.Failed" /> — whether the relay queued the message is
+///             unknown — and a deliberate retry of it (<c>IMessageGrain.RetryAsync</c>) mints the
+///             same <c>Message-ID</c>, so a receiver that deduplicates on it drops the second copy.
 ///         </item>
 ///         <item>
 ///             <i>Enforce nothing about compliance.</i> Nothing here checks SPF, DKIM or DMARC on
@@ -123,6 +136,21 @@ public sealed class SmtpChannelProvider(
 
         if (MailAddresses.Check(message.Destination).TryGetError(out var badAddress)) {
             return Result<DispatchReceipt>.Failure(badAddress.Code, $"The destination was refused before any connection: {badAddress.Message}");
+        }
+
+        // ⚠ A registered sender is a From address the tenant proved to a carrier, and this relay
+        // sends as the platform's From alone — see the class remarks. Refused, not replaced: mail
+        // that says "from the platform" when the channel said "from billing@tenant" is a
+        // misattribution nobody asked for, and the refusal names the gap.
+        if (message.Sender.Length > 0 && !string.Equals(message.Sender, relay.From, StringComparison.OrdinalIgnoreCase)) {
+            return Result<DispatchReceipt>.Failure(
+                ErrorCode.PolicyViolation,
+                $"This channel names a registered sender ({message.Sender}) and the smtp carrier sends as the "
+                + $"relay's own From ({relay.From}) only: a tenant's From needs SPF and DKIM alignment for the "
+                + "tenant's domain, which is CyberCloud.Mail's (docs/plan/17 § Deliverability) and does not ship "
+                + "yet. Nothing was sent. Until it does, an email channel on this carrier leaves its sender "
+                + "empty and goes out under the platform's name."
+            );
         }
 
         var messageId = MailMessages.MessageIdFor(message.MessageId, relay.FromDomain);
@@ -283,7 +311,8 @@ public sealed class SmtpChannelProvider(
                 ErrorCode.OperationTimeout,
                 $"The relay {relay.Host}:{relay.Port.ToString(CultureInfo.InvariantCulture)} did not finish the "
                 + $"exchange within {relay.Timeout.TotalSeconds.ToString(CultureInfo.InvariantCulture)} s. Whether "
-                + "it queued the message is unknown; the message grain keeps it Queued for a deliberate retry."
+                + "it queued the message is unknown, so the message grain keeps it Queued — not Failed — and "
+                + "only IMessageGrain.RetryAsync, by a caller who knows a second copy is acceptable, sends it again."
             );
         } catch (Exception error) when (error is SocketException or IOException or AuthenticationException or InvalidOperationException) {
             return Result<string>.Failure(

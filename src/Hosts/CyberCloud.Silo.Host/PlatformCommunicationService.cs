@@ -20,11 +20,30 @@ public sealed class PlatformCommunicationServiceOptions {
     ///     else the platform sends through it. <c>ChannelLimits.MaxMessagesPerWindow</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ A thousand rather than unlimited, for the reason <c>ChannelLimits.None</c> gives — the
-    ///     limit is the only thing between a sign-up loop and a relay's abuse desk. The refusal names
-    ///     the limit and this section, so raising it is a deliberate act. It is per UTC day, and it is
-    ///     shared by every tenant's sign-in codes, which <c>CommunicationOtpDelivery</c>'s remarks
-    ///     own as a cost.
+    ///     <para>
+    ///         ⚠ A thousand rather than unlimited, for the reason <c>ChannelLimits.None</c> gives — the
+    ///         limit is the only thing between a sign-up loop and a relay's abuse desk. The refusal
+    ///         names the limit and this section, so raising it is a deliberate act. It is per UTC
+    ///         calendar day (<c>ChannelLimits.MaxMessagesPerWindow</c>), not a rolling 24 hours.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Read it as an outage lever as well as a guard, because it is both.</b> This one
+    ///         number is shared by every tenant's sign-in, step-up and password-reset codes the
+    ///         moment <c>CyberCloud:Identity:OtpDelivery:ServiceId</c> names this service —
+    ///         <c>CommunicationOtpDelivery</c>'s remarks own that as the cost of one service for
+    ///         every tenant's codes — and its feeder is <c>POST /api/signup/begin</c>, which is
+    ///         unauthenticated and issues a code for any address it is handed. The per-sign-up issue
+    ///         cap (<c>OtpPolicy.MaxIssuesPerWindow</c>) bounds one address, so a caller who varies
+    ///         the address is what exhausts it: at the default, a thousand addresses and nobody on
+    ///         the platform gets a code until midnight UTC. Two things bound that, and neither is
+    ///         this number. <c>SignUpApi.BeginAsync</c> runs the lockout ladder on the caller's
+    ///         address (<c>LockoutKey.ForCaller</c>) — five begins free per window, then doubling
+    ///         waits — so one machine cannot spend the day; a caller spread across many addresses
+    ///         still can, and this cap is what stops <i>that</i> from becoming a relay bill and a
+    ///         blocked sending domain. When it trips, the refusal is loud and names this section:
+    ///         raising it for the day is the operator's call, and so is what the sign-up surface
+    ///         should have been sitting behind.
+    ///     </para>
     /// </remarks>
     public long MaxEmailsPerDay { get; set; } = 1000;
 }

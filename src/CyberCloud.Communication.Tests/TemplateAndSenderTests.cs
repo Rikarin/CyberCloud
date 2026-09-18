@@ -268,6 +268,32 @@ public sealed class TemplateAndSenderTests(CommunicationCluster cluster) {
     }
 
     [Fact]
+    public async Task TheCarrierIsHandedTheSenderRecipientsSee() {
+        CommunicationCluster.ResetDoubles();
+        var senderId = Guid.NewGuid();
+        var service = await cluster.NewServiceAsync(senderId: senderId);
+
+        _ = await cluster.SenderIdentity(senderId).RegisterAsync(ChannelKind.Sms, "CYBERCLOUD", ["CZ"]);
+        _ = await cluster.SenderIdentity(senderId).RecordDecisionAsync(SenderRegistrationStatus.Approved, ["CZ"], "ok");
+
+        (await cluster.SendAsync(CommunicationCluster.Tenant, CommunicationCluster.Request(service, "otp-1")))
+            .IsSuccess.ShouldBeTrue();
+
+        // ⚠ OutboundMessage.Sender is "what recipients see as the sender" — the registered value, not
+        // the sender resource's id. The first cut passed the GUID, and a carrier handed a GUID for a
+        // From line can only ignore it, which the email carrier did, silently, under the platform's
+        // name.
+        var handed = TestProviders.Sms.Sent.ShouldHaveSingleItem();
+        handed.Sender.ShouldBe("CYBERCLOUD");
+
+        // And a channel with no registered sender hands the carrier nothing, so the carrier's own
+        // default applies and nothing is invented.
+        var plain = await cluster.NewServiceAsync();
+        (await cluster.SendAsync(CommunicationCluster.Tenant, CommunicationCluster.Request(plain, "otp-2"))).IsSuccess.ShouldBeTrue();
+        TestProviders.Sms.Sent.Last().Sender.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task AnApprovedSenderClearedForNoCountryStillCannotSend() {
         CommunicationCluster.ResetDoubles();
         var senderId = Guid.NewGuid();

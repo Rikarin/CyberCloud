@@ -320,18 +320,29 @@ public static partial class IdentityLog {
     /// </summary>
     /// <param name="logger">The sink.</param>
     /// <param name="userId">Who it was for.</param>
-    /// <param name="reason">The sending module's own sentence.</param>
+    /// <param name="code">The refusal's <c>ErrorCode</c> value — <c>PolicyViolation</c>, <c>InternalError</c>.</param>
     /// <remarks>
-    ///     ⚠ Warning and not Error, and the delivery still reports success: in Development the log
-    ///     line <i>is</i> a delivery, and a Mailpit that is not up yet must not turn a sign-up into
-    ///     "something went wrong" when the code is on the console the person is looking at.
+    ///     <para>
+    ///         ⚠ Warning and not Error, and the delivery still reports success: in Development the
+    ///         log line <i>is</i> a delivery, and a Mailpit that is not up yet must not turn a
+    ///         sign-up into "something went wrong" when the code is on the console the person is
+    ///         looking at.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The sending module's sentence is not in the template</b>, and the first cut had
+    ///         it there. A suppression refusal opens with the address it refused and a relay's
+    ///         <c>550</c> quotes it back, so the sentence is the address by another route.
+    ///         <c>DevelopmentOtpDelivery</c> puts it in the scope under
+    ///         <c>DevelopmentOtpDelivery.ReasonProperty</c>, beside the destination; what the line
+    ///         carries is the code, which says what kind of refusal it was and names nobody.
+    ///     </para>
     /// </remarks>
     [LoggerMessage(
         EventId = 1122,
         Level = LogLevel.Warning,
-        Message = "The development code for user {UserId} was logged above and was NOT mailed: {Reason}"
+        Message = "The development code for user {UserId} was logged above and was NOT mailed ({Code}); the sending module's reason is the Reason property."
     )]
-    public static partial void DevelopmentOtpNotMailed(ILogger logger, Guid userId, string reason);
+    public static partial void DevelopmentOtpNotMailed(ILogger logger, Guid userId, string code);
 
     /// <summary>A self-serve sign-up began and allocated its ids. ⚠ No address.</summary>
     /// <param name="logger">The sink.</param>

@@ -53,6 +53,15 @@ public sealed class SignUpApiHarness {
     /// <summary>The clock.</summary>
     public SystemClock Clock { get; } = new();
 
+    /// <summary>
+    ///     The clock the caller ladder reads. ⚠ Frozen rather than the real one, so a held caller
+    ///     stays held for exactly as long as a test says and no test races a one-second lock.
+    /// </summary>
+    public FrozenClock LadderClock { get; } = new();
+
+    /// <summary>The address every begin comes from unless a test says otherwise.</summary>
+    public const string Caller = "203.0.113.7";
+
     /// <summary>The API, over the harness.</summary>
     public SignUpApi Api { get; }
 
@@ -81,6 +90,7 @@ public sealed class SignUpApiHarness {
             Grains,
             Passkeys,
             orchestrator,
+            new InMemoryLockoutCounter(LadderClock),
             options,
             SignInOptions.Default with { MinimumDuration = TimeSpan.Zero },
             Clock,
@@ -94,7 +104,7 @@ public sealed class SignUpApiHarness {
     /// </summary>
     /// <param name="email">The address.</param>
     public async Task<SignUpTicket> VerifiedSignUpAsync(string email = "rene@example.com") {
-        var begun = await Api.BeginAsync(new(email, "/"), null, TestContext.Current.CancellationToken);
+        var begun = await Api.BeginAsync(new(email, "/"), null, Caller, TestContext.Current.CancellationToken);
         var ticket = begun.Ticket.ShouldNotBeNull();
 
         var code = Grains.SignUps[ticket.SignupId].Code.ShouldNotBeNull();
@@ -110,6 +120,16 @@ public sealed class SignUpApiHarness {
         var signup = Grains.SignUps[ticket.SignupId];
         return Grains.Users.GetValueOrDefault((signup.TenantId, signup.UserId));
     }
+}
+
+/// <summary>A clock that moves only when a test moves it.</summary>
+public sealed class FrozenClock : IClock {
+    /// <inheritdoc />
+    public DateTimeOffset UtcNow { get; private set; } = new(2026, 9, 18, 9, 30, 0, TimeSpan.Zero);
+
+    /// <summary>Moves time forward.</summary>
+    /// <param name="by">How far.</param>
+    public void Advance(TimeSpan by) => UtcNow += by;
 }
 
 /// <summary>

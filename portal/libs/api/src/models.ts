@@ -535,7 +535,7 @@ export interface CommunicationServicesChannelsData {
       /** The most this channel spends in one UTC day, in currency. Zero means none. */
       maxSpendPerDay?: number;
     };
-    /** Which carrier implementation serves it — twilio, meta-cloud, ses — or empty for the one the platform registers for the kind. */
+    /** Which carrier implementation serves it — smtp is the one that ships, for kind: email — or empty for the one the platform registers for the kind. A name the platform has not registered refuses every send by that name. */
     provider?: string;
     /** The vault handle of the carrier's webhook-signing value, when it signs its callbacks. A receipt that cannot be verified is data from the internet. */
     signingRef?: string;

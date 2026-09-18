@@ -83,6 +83,11 @@ public sealed class ScriptedSmtpServer : IAsyncDisposable {
                 return;
             } catch (SocketException) {
                 return;
+            } catch (ObjectDisposedException) {
+                // ⚠ DisposeAsync cancels and then disposes the listener, and an accept that was
+                // between the two sees the disposed socket rather than the cancellation. It is the
+                // same "stopping", and it turned two refusal tests red on a loaded machine.
+                return;
             }
 
             try {

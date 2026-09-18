@@ -1252,7 +1252,7 @@ public sealed partial class CommunicationChannelData {
         [JsonPropertyName("limits")]
         public LimitsData? Limits { get; set; }
 
-        /// <summary>Which carrier implementation serves it — twilio, meta-cloud, ses — or empty for the one the platform registers for the kind.</summary>
+        /// <summary>Which carrier implementation serves it — smtp is the one that ships, for kind: email — or empty for the one the platform registers for the kind. A name the platform has not registered refuses every send by that name.</summary>
         /// <remarks>Defaults to "" when left unset.</remarks>
         [JsonPropertyName("provider")]
         public string? Provider { get; set; }

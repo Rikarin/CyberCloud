@@ -187,4 +187,65 @@ public sealed class IdempotencyTests(CommunicationCluster cluster) {
         refused.Error!.Code.ShouldBe(ErrorCode.InvalidGrainKey);
         TestProviders.Sms.Calls.ShouldBe(0);
     }
+
+    // ── FAILURE CLASS: a carrier that never answered is neither sent nor failed ─────────────────
+
+    [Fact]
+    public async Task ACarrierThatNeverAnsweredLeavesTheMessageQueuedForADeliberateRetry() {
+        CommunicationCluster.ResetDoubles();
+        var service = await cluster.NewServiceAsync();
+        var request = CommunicationCluster.Request(service, "invoice-2026-09");
+
+        TestProviders.Sms.TimeOut = true;
+
+        var stuck = (await cluster.SendAsync(CommunicationCluster.Tenant, request)).GetValueOrThrow();
+
+        // ⚠ Queued and not Failed. Failed says "the carrier said no"; a carrier that said nothing may
+        // have queued the message, and the grain does not know — which is exactly the ambiguity
+        // IMessageGrain.RetryAsync exists to hand to a caller who does.
+        stuck.Status.ShouldBe(MessageStatus.Queued, stuck.Detail);
+        stuck.ProviderMessageId.ShouldBeEmpty();
+        stuck.Detail.ShouldContain("never answered", Case.Sensitive, "the carrier's own sentence is what a status reader sees");
+
+        // The reservation stays held: the message may have left, so the day's cap counts it.
+        (await cluster.Limits(service).ReadAsync(ChannelKind.Sms)).GetValueOrThrow().Messages.ShouldBe(1);
+
+        // A plain retry under the same key is the idempotency guarantee at work: nothing reaches the
+        // carrier a second time without somebody deciding it should.
+        var again = (await cluster.SendAsync(CommunicationCluster.Tenant, request)).GetValueOrThrow();
+        again.Status.ShouldBe(MessageStatus.Queued);
+        TestProviders.Sms.Calls.ShouldBe(1, "SendAsync must not re-drive an ambiguous message on its own");
+
+        // The deliberate one. The carrier is back, the caller says a second copy is acceptable.
+        TestProviders.Sms.TimeOut = false;
+
+        var redriven = (await cluster.Message(service, request.IdempotencyKey).RetryAsync(request)).GetValueOrThrow();
+        redriven.Status.ShouldBe(MessageStatus.Dispatched, redriven.Detail);
+        redriven.MessageId.ShouldBe(stuck.MessageId, "a retry is the same message, not a second one");
+        redriven.ProviderMessageId.ShouldNotBeEmpty();
+        TestProviders.Sms.Calls.ShouldBe(2);
+
+        // Counted once: the retry gave back the reservation the first attempt held before making its own.
+        (await cluster.Limits(service).ReadAsync(ChannelKind.Sms)).GetValueOrThrow().Messages.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task ACarrierThatSaidNoIsFailedAndCannotBeRetried() {
+        CommunicationCluster.ResetDoubles();
+        var service = await cluster.NewServiceAsync();
+        var request = CommunicationCluster.Request(service, "invoice-2026-10");
+
+        TestProviders.Sms.Fail = true;
+
+        (await cluster.SendAsync(CommunicationCluster.Tenant, request)).GetValueOrThrow().Status.ShouldBe(MessageStatus.Failed);
+
+        TestProviders.Sms.Fail = false;
+
+        // ⚠ The asymmetry with the test above is the contract: a refusal has a known outcome, and
+        // re-driving a known outcome is how a second copy gets sent.
+        var refused = await cluster.Message(service, request.IdempotencyKey).RetryAsync(request);
+        refused.Error!.Code.ShouldBe(ErrorCode.Conflict);
+        refused.Error.Message.ShouldContain("only a Queued one can be re-driven");
+        TestProviders.Sms.Calls.ShouldBe(1);
+    }
 }

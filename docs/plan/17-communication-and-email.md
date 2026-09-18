@@ -109,7 +109,7 @@ that would otherwise have un-unsubscribed a recipient. `SuppressionEnforcementTe
 `CyberCloud.Providers.Communication.Tests` was sabotage-tested on both.
 
 ⚠ **What ✅ on the roadmap row does not mean, said here as well as there.** One carrier client ships
-— email, [§ The outbound carrier](#the-outbound-carrier--landed-2026-09-18-93) below — and the other
+— email, [§ The outbound carrier](#the-outbound-carrier--the-client-landed-2026-09-18-93-stays-open) below — and the other
 four channels resolve to the module's refusing seam unless a host registers a real `IChannelProvider`,
 so an SMS `send` today refuses honestly rather than sending. The sender-id registration flow has its
 grain (`ISenderIdentityGrain`) and no resource surface, so `ChannelConfiguration.SenderId` is always
@@ -124,7 +124,14 @@ notification, and neither is a webhook). And the platform's own outbound MTA —
 above, the warmed pool with its PTR records and feedback loops — is still not deployed, which is what
 the same section's `the-platform-has-no-mta` now says.
 
-### The outbound carrier — landed 2026-09-18 (#93)
+### The outbound carrier — the client landed 2026-09-18, #93 stays open
+
+⚠ **What landed is the client, and #93 asked for the carrier.** The issue names the platform's
+outbound MTA — a warmed pool with PTR records, feedback loops, RBL monitoring and separate sending
+IPs — the SMS, WhatsApp and voice carrier accounts, and the receipt ingress. None of those is in this
+section or in this repository: what follows is the SMTP submission client, a development relay for
+the AppHost, and the platform's own service reachable through it. The issue stays open for the rest,
+and the **What remains** paragraph at the foot of this section is the list.
 
 `SmtpChannelProvider` in `CyberCloud.Communication/Providers/Smtp` is the email `IChannelProvider`:
 one SMTP submission per message to whatever relay `CyberCloud:Communication:Smtp` names — a host, a
@@ -174,7 +181,8 @@ opens exactly one edge: a call **into the platform tenant's `IMessageGrain`** is
 Nothing else in the platform tenant is reachable that way — its tuple store above all — and
 [11 § Sign-up](11-identity.md) and the separator's own remarks carry what the edge costs.
 
-⚠ **What remains, each with its row in `charts/bundle/bundle.yaml § owed`.** The relay itself
+⚠ **What remains — the part of #93 that is still open — each with its row in
+`charts/bundle/bundle.yaml § owed`.** The relay itself
 (`the-platform-has-no-mta`): a warmed outbound pool with PTR records, feedback-loop registrations,
 RBL monitoring and the separate sending IPs [25](25-risks-and-open-questions.md)'s closed row 2
 requires; on a cluster it is a Postfix relay or an SES SMTP credential, and the configuration section

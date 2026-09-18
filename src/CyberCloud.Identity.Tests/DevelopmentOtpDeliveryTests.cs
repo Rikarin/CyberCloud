@@ -111,7 +111,14 @@ public sealed class DevelopmentOtpDeliveryTests {
     [Fact]
     public async Task AMailThatIsRefusedIsAWarningBesideTheCodeAndNotAFailedDelivery() {
         var logger = new CapturingLogger();
-        var mail = new RecordingSeam(Result.Failure(ErrorCode.InternalError, "The relay 127.0.0.1:1025 could not be spoken to: SocketException"));
+
+        // ⚠ A refusal that QUOTES THE ADDRESS, on purpose: this is the shape MessageGrain's
+        // suppression refusal has ("{destination} is on this service's Email suppression list …")
+        // and the shape a relay's 550 has. A reason with no address in it would pass a line that
+        // put the sentence in the template, which is what the first cut did.
+        var reason = $"{Delivery.Destination} is on this service's Email suppression list (Complaint, recorded "
+            + "2026-09-18T09:00:00.0000000+00:00). Nothing was sent and no carrier was called.";
+        var mail = new RecordingSeam(Result.Failure(ErrorCode.PolicyViolation, reason));
         var seam = new DevelopmentOtpDelivery(new FixedEnvironment(Environments.Development), logger, mail);
 
         var delivered = await seam.DeliverAsync(Delivery, TestContext.Current.CancellationToken);
@@ -124,11 +131,20 @@ public sealed class DevelopmentOtpDeliveryTests {
         logger.Entries[0].EventId.ShouldBe(1113, "the code first");
         logger.Entries[0].Message.ShouldContain(Delivery.Code);
 
-        logger.Entries[1].EventId.ShouldBe(1122);
-        logger.Entries[1].Level.ShouldBe(LogLevel.Warning);
-        logger.Entries[1].Message.ShouldContain("NOT mailed");
-        logger.Entries[1].Message.ShouldContain("could not be spoken to");
-        logger.Entries[1].Message.ShouldNotContain("wilhelmina", Case.Insensitive, "still no address in a message");
+        var warning = logger.Entries[1];
+        warning.EventId.ShouldBe(1122);
+        warning.Level.ShouldBe(LogLevel.Warning);
+        warning.Message.ShouldContain("NOT mailed");
+        warning.Message.ShouldContain(nameof(ErrorCode.PolicyViolation), Case.Sensitive, "the kind of refusal is in the line");
+
+        // ⚠ docs/plan/11 § Auditing, applied to the refusal as well as to the code: the module's
+        // sentence — which here IS the address — is a scope property, and no part of it is rendered.
+        warning.Message.ShouldNotContain("wilhelmina", Case.Insensitive, "still no address in a message");
+        warning.Message.ShouldNotContain("featherstonehaugh", Case.Insensitive);
+        warning.Message.ShouldNotContain("suppression list", Case.Insensitive, "and not the sentence that carried it");
+        warning.State.ShouldNotContainKey(DevelopmentOtpDelivery.ReasonProperty, "the reason is not a template argument");
+        warning.Scope.ShouldContainKeyAndValue(DevelopmentOtpDelivery.ReasonProperty, reason);
+        warning.Scope.ShouldContainKeyAndValue(DevelopmentOtpDelivery.DestinationProperty, Delivery.Destination);
     }
 
     /// <summary>An inner seam that records what it was handed and answers what it was told to.</summary>

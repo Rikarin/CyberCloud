@@ -774,7 +774,8 @@ owed:
     says: >
       CyberCloud.Communication/services and its three children shipped on 2026-09-15 (#33) as the
       tenant-facing face of the sending module, and NOTHING IN THIS BUNDLE CAN CARRY AN EMAIL. What
-      changed on 2026-09-18 (#93), and what did not: the module now ships the CLIENT — SmtpChannelProvider,
+      changed on 2026-09-18 (#93), and what did not — AND #93 STAYS OPEN, because what it asked for
+      is the carrier and what landed is the client: the module now ships the CLIENT — SmtpChannelProvider,
       a hand-written SMTP submission (STARTTLS, AUTH PLAIN/LOGIN, the deliverability headers docs/plan/17
       § The outbound carrier lists) to whatever relay CyberCloud:Communication:Smtp names, proven against
       Mailpit in a container and run against Mailpit by the AppHost — and this bundle still ships no

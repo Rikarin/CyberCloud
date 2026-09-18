@@ -40,15 +40,24 @@ namespace CyberCloud.Identity.Seams;
 ///         no production tenant.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The address is a structured property and never in the message.</b> docs/plan/11
-///         § Auditing bans an email from a log <i>message</i>; the code is not PII and is in the
-///         line, the address is not and rides in a scope. <c>IdentityLog.DevelopmentOtpDelivered</c>
-///         carries the template and the argument.
+///         ⚠ <b>The address is a structured property and never in the message — and neither is
+///         the sending module's sentence.</b> docs/plan/11 § Auditing bans an email from a log
+///         <i>message</i>; the code is not PII and is in the line, the address is not and rides in
+///         a scope. <c>IdentityLog.DevelopmentOtpDelivered</c> carries the template and the
+///         argument. The refusal line is held to the same rule: a suppression refusal starts with
+///         the address and a relay's <c>550</c> quotes it back, so the module's sentence goes in
+///         the scope as <see cref="ReasonProperty" /> and the line carries only its
+///         <c>ErrorCode</c>.
+///         <c>DevelopmentOtpDeliveryTests.AMailThatIsRefusedIsAWarningBesideTheCodeAndNotAFailedDelivery</c>
+///         drives it with a refusal that quotes the address.
 ///     </para>
 /// </remarks>
 public sealed class DevelopmentOtpDelivery : IOtpDeliverySeam {
     /// <summary>The scope property the destination address travels in.</summary>
     public const string DestinationProperty = "Destination";
+
+    /// <summary>The scope property a refused mail's reason — the sending module's own sentence — travels in.</summary>
+    public const string ReasonProperty = "Reason";
 
     readonly ILogger<DevelopmentOtpDelivery> logger;
     readonly IOtpDeliverySeam? mail;
@@ -106,7 +115,17 @@ public sealed class DevelopmentOtpDelivery : IOtpDeliverySeam {
         var mailed = await mail.DeliverAsync(delivery, cancellationToken);
 
         if (mailed.TryGetError(out var refused)) {
-            IdentityLog.DevelopmentOtpNotMailed(logger, delivery.UserId, refused.Message);
+            // ⚠ The sentence in the SCOPE, the code in the line — the module's sentence can quote
+            // the address (a suppression refusal opens with it), and the rule above has no exception
+            // for a refusal.
+            using (logger.BeginScope(
+                       new Dictionary<string, object>(StringComparer.Ordinal) {
+                           [DestinationProperty] = delivery.Destination,
+                           [ReasonProperty] = refused.Message
+                       }
+                   )) {
+                IdentityLog.DevelopmentOtpNotMailed(logger, delivery.UserId, refused.Code.Value);
+            }
         }
 
         return Result.Success;

@@ -54,7 +54,11 @@ namespace CyberCloud.Tenancy.Separation;
 ///         mail from the platform's <c>From</c> address to whoever the message grain's checks allow.
 ///         Grains are the platform's own code running for a tenant — a tenant authors nothing that
 ///         runs inside a silo — so the exposure is to a <i>bug</i> in a provider, and the bound on it
-///         is the platform service's own <c>ChannelLimits</c>. The same capability was already the
+///         is the platform service's own <c>ChannelLimits</c>. ⚠ That bound is one number for the
+///         whole platform: the same daily cap every tenant's sign-in codes draw on once the OTP
+///         route names the platform service, so a grain that spent it would have refused every
+///         tenant's codes until midnight UTC, not only its own. <c>PlatformCommunicationServiceOptions</c>
+///         says what feeds the cap and what bounds the feeder. The same capability was already the
 ///         production design; this makes it work and names what it costs.
 ///     </para>
 ///     <para>
@@ -77,8 +81,15 @@ public sealed class CyberCloudGrainCallTenantSeparator(ILogger<CyberCloudGrainCa
     /// </summary>
     public const string PlatformMessageGrainInterface = "CyberCloud.Communication.Contracts.IMessageGrain";
 
+    long allowedPlatformServiceEdges;
+
     /// <summary>How many calls took the platform-service edge. A number that climbs while nobody signs in is worth a look.</summary>
-    public long AllowedPlatformServiceEdges { get; private set; }
+    /// <remarks>
+    ///     ⚠ Read and written with <see cref="Interlocked" />: the filter is one singleton on every
+    ///     silo thread at once, and a plain <c>++</c> on a counter offered as an abuse signal would
+    ///     lose exactly the increments a burst produces.
+    /// </remarks>
+    public long AllowedPlatformServiceEdges => Interlocked.Read(ref allowedPlatformServiceEdges);
 
     /// <inheritdoc />
     public bool IsTenantSeparatedCall(IIncomingGrainCallContext context) {
@@ -89,7 +100,7 @@ public sealed class CyberCloudGrainCallTenantSeparator(ILogger<CyberCloudGrainCa
         }
 
         if (IsPlatformServiceEdge(context.InterfaceName, context.TargetId.GetTenantId())) {
-            AllowedPlatformServiceEdges++;
+            _ = Interlocked.Increment(ref allowedPlatformServiceEdges);
             logger.LogDebug(
                 "Platform-service edge taken: a {Interface} call into the platform tenant's communication service "
                 + "from tenant {Source}. docs/plan/17 — the platform is the sending module's first customer.",

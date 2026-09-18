@@ -400,6 +400,15 @@ public sealed class InMemoryChannelProvider(ChannelKind kind) : IChannelProvider
     /// <summary>When set, every dispatch fails — so the release-on-failure path can be exercised.</summary>
     public bool Fail { get; set; }
 
+    /// <summary>
+    ///     When set, every dispatch reports <see cref="ErrorCode.OperationTimeout" /> — a carrier that
+    ///     was called and never answered — so the path that keeps a message
+    ///     <see cref="MessageStatus.Queued" /> for <see cref="IMessageGrain.RetryAsync" /> can be
+    ///     exercised. ⚠ Counted in <see cref="Calls" /> and not in <see cref="Sent" />, like a
+    ///     failure: the real carrier does not know either.
+    /// </summary>
+    public bool TimeOut { get; set; }
+
     /// <summary>What each dispatch reports as its cost.</summary>
     public decimal Cost { get; set; }
 
@@ -411,6 +420,7 @@ public sealed class InMemoryChannelProvider(ChannelKind kind) : IChannelProvider
         sent.Clear();
         Volatile.Write(ref calls, 0);
         Fail = false;
+        TimeOut = false;
         Cost = 0m;
         Currency = "EUR";
     }
@@ -425,6 +435,10 @@ public sealed class InMemoryChannelProvider(ChannelKind kind) : IChannelProvider
 
         if (Fail) {
             return Task.FromResult(Result<DispatchReceipt>.Failure(ErrorCode.InternalError, "the carrier is down"));
+        }
+
+        if (TimeOut) {
+            return Task.FromResult(Result<DispatchReceipt>.Failure(ErrorCode.OperationTimeout, "the carrier never answered"));
         }
 
         sent.Enqueue(message);

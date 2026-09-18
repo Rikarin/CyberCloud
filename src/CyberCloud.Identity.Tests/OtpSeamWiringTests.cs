@@ -120,8 +120,9 @@ public sealed class OtpSeamWiringTests {
     [Fact]
     public void ADevelopmentSiloWithNoRouteLogsItsCodes() {
         // ⚠ The line CyberCloud.Silo.Host makes when CyberCloud:Identity:OtpDelivery is unset in
-        // Development — SiloIdentityComposition.AddSiloIdentity. There is no MTA on a laptop (#93),
-        // and an enrolment code that goes to UnavailableOtpDelivery is a sign-up nobody can finish.
+        // Development — SiloIdentityComposition.AddSiloIdentity. A laptop's relay is Mailpit on the
+        // AppHost, and without it (a silo run on its own, #93) an enrolment code that goes to
+        // UnavailableOtpDelivery is a sign-up nobody can finish, so the code goes to the log.
         var services = Compose(silo => silo.AddCyberCloudIdentity()
             .AddDevelopmentOtpDelivery(new FixedEnvironment(Environments.Development))
         );

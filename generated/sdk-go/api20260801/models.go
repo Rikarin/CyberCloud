@@ -669,7 +669,7 @@ type CommunicationChannelProperties struct {
 	Kind CommunicationChannelKind `json:"kind"`
 	// What the channel may send and spend per UTC day.
 	Limits *CommunicationChannelPropertiesLimits `json:"limits,omitempty"`
-	// Which carrier implementation serves it — twilio, meta-cloud, ses — or empty for the one the platform registers for the kind.
+	// Which carrier implementation serves it — smtp is the one that ships, for kind: email — or empty for the one the platform registers for the kind. A name the platform has not registered refuses every send by that name.
 	Provider *string `json:"provider,omitempty"`
 	// The vault handle of the carrier's webhook-signing value, when it signs its callbacks. A receipt that cannot be verified is data from the internet.
 	SigningRef *string `json:"signingRef,omitempty"`

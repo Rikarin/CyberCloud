@@ -548,7 +548,8 @@ public sealed record MessageSnapshot {
     public ImmutableArray<DeliveryReceipt> Receipts { get; init; } = [];
 
     /// <summary>
-    ///     Why it was refused or failed, in the words the caller gets. Empty otherwise.
+    ///     Why it was refused or failed — or, for a <see cref="MessageStatus.Queued" /> message whose
+    ///     carrier never answered, why it is stuck — in the words the caller gets. Empty otherwise.
     /// </summary>
     /// <remarks>
     ///     ⚠ The body is deliberately <b>not</b> here. A snapshot is the answer to "did it arrive",

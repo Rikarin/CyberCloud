@@ -87,8 +87,9 @@ public static class CommunicationChannels {
                 new(
                     "/properties/provider",
                     SchemaKind.Text,
-                    Description: "Which carrier implementation serves it — twilio, meta-cloud, ses — or empty "
-                    + "for the one the platform registers for the kind."
+                    Description: "Which carrier implementation serves it — smtp is the one that ships, for "
+                    + "kind: email — or empty for the one the platform registers for the kind. A name the "
+                    + "platform has not registered refuses every send by that name."
                 ) { Pattern = OptionalProviderPattern, MaxLength = 64, DefaultJson = "\"\"" },
                 new(
                     "/properties/enabled",

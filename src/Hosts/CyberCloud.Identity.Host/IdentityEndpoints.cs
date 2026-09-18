@@ -324,7 +324,12 @@ public static class IdentityEndpoints {
                 SignUpTicketCookie tickets,
                 CancellationToken cancellationToken
             ) => {
-                var result = await api.BeginAsync(request, tickets.Take(context), cancellationToken);
+                var result = await api.BeginAsync(
+                    request,
+                    tickets.Take(context),
+                    context.Connection.RemoteIpAddress?.ToString() ?? string.Empty,
+                    cancellationToken
+                );
 
                 if (result.Ticket is { } ticket) {
                     tickets.Issue(context, ticket);

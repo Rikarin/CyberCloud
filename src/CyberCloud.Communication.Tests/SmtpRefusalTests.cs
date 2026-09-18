@@ -172,7 +172,33 @@ public sealed class SmtpRefusalTests {
 
         refused.Error!.Code.ShouldBe(ErrorCode.OperationTimeout);
         refused.Error.Message.ShouldContain("did not finish the exchange within 2 s");
-        refused.Error.Message.ShouldContain("Queued", Case.Sensitive, "whether it queued is unknown, and the message grain keeps the record that says so");
+        // ⚠ The sentence tells an operator what the grain does with the message, so it has to be
+        // what the grain does: MessageGrain keeps an OperationTimeout Queued and settles every other
+        // carrier failure as Failed —
+        // IdempotencyTests.ACarrierThatNeverAnsweredLeavesTheMessageQueuedForADeliberateRetry.
+        refused.Error.Message.ShouldContain("keeps it Queued — not Failed", Case.Sensitive);
+        refused.Error.Message.ShouldContain("IMessageGrain.RetryAsync", Case.Sensitive, "and names the one call that moves it on");
+    }
+
+    [Fact]
+    public async Task ARegisteredSenderTheRelayCannotSendAsIsRefusedNotReplaced() {
+        await using var server = new ScriptedSmtpServer();
+        server.Start();
+
+        // A channel with a registered sender hands the carrier the From the tenant proved. This relay
+        // sends as its own From only, so the honest answer is a refusal — not mail from the platform
+        // pretending nothing was asked.
+        var refused = await Carrier(server).SendAsync(Message() with { Sender = "billing@tenant.example" }, Ct);
+
+        refused.Error!.Code.ShouldBe(ErrorCode.PolicyViolation);
+        refused.Error.Message.ShouldContain("billing@tenant.example");
+        refused.Error.Message.ShouldContain("CyberCloud.Mail");
+        server.Commands.ShouldBeEmpty("refused before any connection");
+
+        // The relay's own From, spelled with a different case, is the one sender it can honour.
+        var accepted = await Carrier(server).SendAsync(Message() with { Sender = "No-Reply@CyberCloud.example" }, Ct);
+        accepted.GetValueOrThrow().Status.ShouldBe(MessageStatus.Dispatched);
+        server.Commands.ShouldContain("MAIL FROM:<no-reply@cybercloud.example>");
     }
 
     [Fact]
