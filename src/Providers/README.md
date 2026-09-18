@@ -2004,12 +2004,14 @@ any provider existed, and **the first clusterless family in the catalogue**.
   resource because the first test's still held the kind. `IConvergedModule.Reset` exists for that,
   and it is the second place this family taught the harness something no provider had had to think
   about.
-- **What a green run proves, bounded by what does not exist:** no carrier client, so every channel
-  resolves to the module's refusing seam and a `send` refuses honestly; no `senders` type; no inbound
-  forwarding; no cluster-backed harness for the silo-kill criterion, because
-  `test/CyberCloud.Cluster.Conformance` refuses a case with no objects by name. All four are in
-  `charts/bundle/bundle.yaml § owed`, because a family with no chart has no `conformance.yaml` to
-  carry them.
+- **What a green run proves, bounded by what does not exist:** one carrier client, since #93 —
+  `smtp`, for `kind: email`, to whatever relay the silo's `CyberCloud:Communication:Smtp` names — so
+  an email channel on it sends when a relay is configured and every other channel still resolves to
+  the module's refusing seam and a `send` refuses honestly; the relay itself is not deployed; no
+  `senders` type; no inbound forwarding; no cluster-backed harness for the silo-kill criterion,
+  because `test/CyberCloud.Cluster.Conformance` refuses a case with no objects by name. All of them
+  are in `charts/bundle/bundle.yaml § owed`, because a family with no chart has no
+  `conformance.yaml` to carry them.
 
 ### What the feeds type measured
 

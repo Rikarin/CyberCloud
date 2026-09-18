@@ -41,9 +41,12 @@ namespace CyberCloud.Providers.Communication.Contracts;
 ///         for itself, and an operator configures that value rather than a GUID read off a listing.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What this row does NOT build, in the order it matters.</b> No carrier: every channel
-///         resolves to <c>CyberCloud.Communication</c>'s refusing seam unless a host registers a real
-///         <c>IChannelProvider</c>, so a <c>send</c> today refuses honestly rather than sending. No
+///         ⚠ <b>What this row does NOT build, in the order it matters.</b> No relay: the module ships
+///         one carrier since #93 — email over SMTP, registered when the silo's
+///         <c>CyberCloud:Communication:Smtp</c> names a relay, which the AppHost's does and no chart's
+///         does — and every other channel resolves to <c>CyberCloud.Communication</c>'s refusing seam
+///         unless a host registers a real <c>IChannelProvider</c>, so an SMS <c>send</c> today refuses
+///         honestly rather than sending. No
 ///         <c>senders</c> type: docs/plan/17's sender-id registration flow has its grain
 ///         (<c>ISenderIdentityGrain</c>) and no resource surface, so
 ///         <c>ChannelConfiguration.SenderId</c> is always empty here. No inbound forwarding: a

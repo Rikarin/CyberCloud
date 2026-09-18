@@ -120,8 +120,9 @@ public sealed class OtpSeamWiringTests {
     [Fact]
     public void ADevelopmentSiloWithNoRouteLogsItsCodes() {
         // ⚠ The line CyberCloud.Silo.Host makes when CyberCloud:Identity:OtpDelivery is unset in
-        // Development — SiloIdentityComposition.AddSiloIdentity. There is no MTA on a laptop (#93),
-        // and an enrolment code that goes to UnavailableOtpDelivery is a sign-up nobody can finish.
+        // Development — SiloIdentityComposition.AddSiloIdentity. A laptop's relay is Mailpit on the
+        // AppHost, and without it (a silo run on its own, #93) an enrolment code that goes to
+        // UnavailableOtpDelivery is a sign-up nobody can finish, so the code goes to the log.
         var services = Compose(silo => silo.AddCyberCloudIdentity()
             .AddDevelopmentOtpDelivery(new FixedEnvironment(Environments.Development))
         );
@@ -150,6 +151,45 @@ public sealed class OtpSeamWiringTests {
         seam.ShouldBeOfType<UnavailableOtpDelivery>(
             $"a {environmentName} silo with no configured route must refuse to send, not write codes to its log"
         );
+    }
+
+    [Fact]
+    public void ADevelopmentSiloWithARelayLogsAndMailsItsCodes() {
+        // ⚠ The line CyberCloud.Silo.Host makes when CyberCloud:Communication:Smtp names a relay and
+        // the route is unset, in Development (#93): one seam, which logs the code AND hands it to
+        // CommunicationOtpDelivery over the platform's own service — the AppHost's Mailpit.
+        var services = Compose(silo => silo.AddCyberCloudIdentity()
+            .AddDevelopmentOtpDelivery(
+                new FixedEnvironment(Environments.Development),
+                new OtpDeliveryRoute { TenantId = Guid.Empty, ServiceId = Guid.NewGuid() }
+            )
+        );
+
+        services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
+        services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
+
+        var seam = services.BuildServiceProvider().GetRequiredService<IOtpDeliverySeam>().ShouldBeOfType<DevelopmentOtpDelivery>();
+        seam.AlsoMails.ShouldBeTrue("the relay is configured, so the code goes to the inbox as well as the console");
+
+        services.Count(x => x.ServiceType == typeof(IOtpDeliverySeam)).ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData("Production")]
+    [InlineData("Staging")]
+    public void AProductionSiloWithARelayAndNoRouteStillKeepsTheRefusingSeam(string environmentName) {
+        // ⚠ THE ROW THAT WOULD CATCH THE TEMPTING FIX: "a relay is configured, so mail the codes
+        // through the platform's service everywhere". Outside Development the route is the
+        // operator's to configure — CyberCloud:Identity:OtpDelivery — and the relay alone opts
+        // nobody in. The logging seam's constructor would refuse a second time anyway.
+        var seam = Seam(silo => silo.AddCyberCloudIdentity()
+            .AddDevelopmentOtpDelivery(
+                new FixedEnvironment(environmentName),
+                new OtpDeliveryRoute { TenantId = Guid.Empty, ServiceId = Guid.NewGuid() }
+            )
+        );
+
+        seam.ShouldBeOfType<UnavailableOtpDelivery>();
     }
 
     [Fact]

@@ -1,5 +1,7 @@
 using CyberCloud.Core.Resources;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace CyberCloud.Identity.Contracts;
 
@@ -74,6 +76,48 @@ public readonly record struct LockoutKey {
     /// <param name="userId">The resolved user.</param>
     public static LockoutKey ForUser(Guid userId) =>
         new("lockout/user/" + userId.ToString("N", CultureInfo.InvariantCulture));
+
+    /// <summary>
+    ///     The per-caller counter — docs/plan/11 § Credentials' "global per-IP limit" — for the one
+    ///     endpoint that sends something for a stranger's input: <c>POST /api/signup/begin</c>.
+    /// </summary>
+    /// <param name="clientAddress">
+    ///     The caller's network address as the host saw it (<c>RemoteIpAddress</c>). Digested here, so
+    ///     the hot tier holds no address in the clear.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>What it bounds, and what it does not.</b> Every code <c>begin</c> sends goes
+    ///         through the platform's own communication service, whose daily cap
+    ///         (<c>PlatformCommunicationServiceOptions.MaxEmailsPerDay</c>) is shared by every
+    ///         tenant's sign-in codes. The per-address issue cap (<see cref="OtpPolicy.MaxIssuesPerWindow" />)
+    ///         is per sign-up, so a caller who varies the address is bounded by nothing else — a
+    ///         thousand addresses from one machine is the platform's whole day. This counter puts
+    ///         the lockout ladder (<see cref="LockoutPolicy" />) on the <i>caller</i>: five begins
+    ///         free, then doubling waits. What remains is a caller spread across many addresses,
+    ///         and the honest bound on that is the daily cap itself, which refuses loudly.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Behind a proxy that is not declared, every caller is the proxy.</b>
+    ///         <c>RemoteIpAddress</c> is the connection's peer; a host behind an ingress that does
+    ///         not run <c>UseForwardedHeaders</c> with a known-proxy list sees one address for
+    ///         everybody, and this counter would then ration the whole platform's sign-ups to five
+    ///         per window. <c>IdentityEndpoints.Describe</c> owns why the header is not read
+    ///         directly; the deployment that puts a proxy in front owns declaring it. An empty
+    ///         address — no peer known — is not counted at all, for the same reason: one shared
+    ///         bucket for "unknown" is that outage under another name.
+    ///     </para>
+    /// </remarks>
+    public static LockoutKey ForCaller(string clientAddress) {
+        ArgumentException.ThrowIfNullOrWhiteSpace(clientAddress);
+
+        // The same 64-bit truncation and the same "purpose, newline, value" shape as
+        // GrainKeys.EmailIndex, so a caller digest and an address digest never share a hash stream.
+        var bytes = Encoding.UTF8.GetBytes("lockout/caller\n" + clientAddress.Trim());
+        var digest = Convert.ToHexStringLower(SHA256.HashData(bytes)[..8]);
+
+        return new("lockout/caller/" + digest);
+    }
 
     /// <inheritdoc />
     public override string ToString() => Value;

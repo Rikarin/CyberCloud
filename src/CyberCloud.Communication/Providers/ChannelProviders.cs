@@ -1,3 +1,4 @@
+using CyberCloud.Communication.Providers.Smtp;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
@@ -43,7 +44,7 @@ static class Refusal {
         Result<DispatchReceipt>.Failure(
             ErrorCode.InternalError,
             $"No {channel} carrier is registered, so nothing was sent. docs/plan/17 § The channel "
-            + $"abstraction names the implementations and this build ships none of them. {owes} "
+            + $"abstraction names the implementations; this build ships the email one (smtp) and no other. {owes} "
             + "Register an IChannelProvider whose Kind is "
             + channel.ToString()
             + "; IChannelProvider's remarks list what one owes."
@@ -73,6 +74,25 @@ static class Refusal {
         ValueTask.FromResult(Result<WebhookOutcome>.Success(WebhookOutcome.Empty));
 }
 
+/// <summary>
+///     An <see cref="IChannelProvider" /> that is the <i>absence</i> of a carrier — one of the five
+///     refusing seams below — rather than a carrier.
+/// </summary>
+/// <remarks>
+///     ⚠
+///     <b>
+///         Exists so <see cref="ChannelProviderRegistry" /> can tell "one carrier beside the refusing
+///         seam" from "two carriers", and the difference is the whole of #93's default.
+///     </b> A channel that names no provider resolves to the channel's only registration; before
+///     the first real carrier landed that was always the refusing seam, and the day the email
+///     carrier joined the collection every unnamed email channel became ambiguous — "2 registered
+///     providers and the channel configuration names none". The seam is not a candidate anybody
+///     would choose, so an unnamed lookup skips it whenever something real serves the channel and
+///     falls back to it only when nothing does. Two <i>real</i> carriers for one channel are still
+///     refused unnamed, for the registration-order reason the registry gives.
+/// </remarks>
+public interface IRefusingChannelProvider : IChannelProvider;
+
 /// <summary>The <see cref="IChannelProvider" /> a silo with no SMS carrier registers: it refuses.</summary>
 /// <remarks>
 ///     ⚠ <b>A real implementation's hard part is not the HTTP call, it is US 10DLC.</b> Sending
@@ -83,7 +103,7 @@ static class Refusal {
 ///     provider owes <see cref="ISenderIdentityGrain" /> an honest campaign status and owes the
 ///     delivery-receipt path the ability to distinguish "filtered" from "undelivered".
 /// </remarks>
-public sealed class UnavailableSmsProvider(ILogger<UnavailableSmsProvider> logger) : IChannelProvider {
+public sealed class UnavailableSmsProvider(ILogger<UnavailableSmsProvider> logger) : IRefusingChannelProvider {
     /// <inheritdoc />
     public ChannelKind Kind => ChannelKind.Sms;
 
@@ -137,7 +157,7 @@ public sealed class UnavailableSmsProvider(ILogger<UnavailableSmsProvider> logge
 ///     a clear failure when neither exists — which is what <c>MessageGrain</c> already refuses on
 ///     before it gets here.
 /// </remarks>
-public sealed class UnavailableWhatsAppProvider(ILogger<UnavailableWhatsAppProvider> logger) : IChannelProvider {
+public sealed class UnavailableWhatsAppProvider(ILogger<UnavailableWhatsAppProvider> logger) : IRefusingChannelProvider {
     /// <inheritdoc />
     public ChannelKind Kind => ChannelKind.WhatsApp;
 
@@ -180,20 +200,21 @@ public sealed class UnavailableWhatsAppProvider(ILogger<UnavailableWhatsAppProvi
         Refusal.Webhook();
 }
 
-/// <summary>The <see cref="IChannelProvider" /> a silo with no email sender registers: it refuses.</summary>
+/// <summary>
+///     The <see cref="IChannelProvider" /> a silo with no relay configured keeps for email: it
+///     refuses, naming the section that would register the real one.
+/// </summary>
 /// <remarks>
-///     ⚠ <b>A real implementation's hard part is deliberately somebody else's.</b> docs/plan/17
-///     § Deliverability puts SPF, DKIM, DMARC, PTR records, feedback loops and IP warm-up on
-///     <c>CyberCloud.Mail</c>, and says
-///     <i>
-///         "the platform will not enable sending until the DNS
-///         records verify"
-///     </i>. A provider here talks to whatever does that — SES, or our own Postfix —
-///     and owes bounce and complaint classification into
-///     <see cref="DeliveryReceipt.Suppresses" />, because that is what keeps the sending domain
-///     alive.
+///     ⚠ <b>The real one exists and is one configuration section away.</b>
+///     <c>Smtp.SmtpChannelProvider</c> is the carrier; <c>CyberCloud:Communication:Smtp</c> is what
+///     a silo binds to get it (<c>CommunicationSiloBuilderExtensions.AddSmtpEmailCarrier</c>), and a
+///     silo with the section unset lands here on purpose rather than on a carrier pointed at
+///     nothing. What the carrier does not bring is the relay itself: docs/plan/17 § Deliverability's
+///     PTR records, feedback loops and IP warm-up are the relay operator's, and bounce and complaint
+///     classification into <see cref="DeliveryReceipt.Suppresses" /> waits on an ingress —
+///     <c>charts/bundle/bundle.yaml § owed</c>.
 /// </remarks>
-public sealed class UnavailableEmailProvider(ILogger<UnavailableEmailProvider> logger) : IChannelProvider {
+public sealed class UnavailableEmailProvider(ILogger<UnavailableEmailProvider> logger) : IRefusingChannelProvider {
     /// <inheritdoc />
     public ChannelKind Kind => ChannelKind.Email;
 
@@ -207,17 +228,19 @@ public sealed class UnavailableEmailProvider(ILogger<UnavailableEmailProvider> l
     ) {
         ArgumentNullException.ThrowIfNull(message);
         logger.LogWarning(
-            "No email sender is registered, so message {MessageId} was not sent.",
+            "No email relay is configured under {Section}, so message {MessageId} was not sent.",
+            SmtpRelayOptions.SectionName,
             message.MessageId
         );
 
         return Task.FromResult(
             Refusal.Dispatch(
                 ChannelKind.Email,
-                "A real one owes a verified sending domain before its first send — docs/plan/17 "
-                + "§ Deliverability — and owes bounce and complaint classification onto "
-                + "DeliveryReceipt.Suppresses, which is what stops an ignored complaint from getting "
-                + "the domain blocked."
+                "The smtp carrier ships in this build and is registered when "
+                + SmtpRelayOptions.SectionName
+                + ":Host names a relay — an Amazon SES SMTP endpoint, a Postfix relay, or Mailpit on a "
+                + "development run. Set the section; the relay itself, with its verified sending domain "
+                + "(docs/plan/17 § Deliverability), is the part this build does not deploy."
             )
         );
     }
@@ -249,7 +272,7 @@ public sealed class UnavailableEmailProvider(ILogger<UnavailableEmailProvider> l
 ///     an address that no longer exists, and continuing to push at it is what gets a sender
 ///     throttled.
 /// </remarks>
-public sealed class UnavailablePushProvider(ILogger<UnavailablePushProvider> logger) : IChannelProvider {
+public sealed class UnavailablePushProvider(ILogger<UnavailablePushProvider> logger) : IRefusingChannelProvider {
     /// <inheritdoc />
     public ChannelKind Kind => ChannelKind.Push;
 
@@ -300,7 +323,7 @@ public sealed class UnavailablePushProvider(ILogger<UnavailablePushProvider> log
 ///     carrier's own answer about what a sender is cleared for, and owes it accurately, because it
 ///     is the only thing standing between the tenant and a regulator.
 /// </remarks>
-public sealed class UnavailableVoiceProvider(ILogger<UnavailableVoiceProvider> logger) : IChannelProvider {
+public sealed class UnavailableVoiceProvider(ILogger<UnavailableVoiceProvider> logger) : IRefusingChannelProvider {
     /// <inheritdoc />
     public ChannelKind Kind => ChannelKind.Voice;
 
@@ -377,6 +400,15 @@ public sealed class InMemoryChannelProvider(ChannelKind kind) : IChannelProvider
     /// <summary>When set, every dispatch fails — so the release-on-failure path can be exercised.</summary>
     public bool Fail { get; set; }
 
+    /// <summary>
+    ///     When set, every dispatch reports <see cref="ErrorCode.OperationTimeout" /> — a carrier that
+    ///     was called and never answered — so the path that keeps a message
+    ///     <see cref="MessageStatus.Queued" /> for <see cref="IMessageGrain.RetryAsync" /> can be
+    ///     exercised. ⚠ Counted in <see cref="Calls" /> and not in <see cref="Sent" />, like a
+    ///     failure: the real carrier does not know either.
+    /// </summary>
+    public bool TimeOut { get; set; }
+
     /// <summary>What each dispatch reports as its cost.</summary>
     public decimal Cost { get; set; }
 
@@ -388,6 +420,7 @@ public sealed class InMemoryChannelProvider(ChannelKind kind) : IChannelProvider
         sent.Clear();
         Volatile.Write(ref calls, 0);
         Fail = false;
+        TimeOut = false;
         Cost = 0m;
         Currency = "EUR";
     }
@@ -402,6 +435,10 @@ public sealed class InMemoryChannelProvider(ChannelKind kind) : IChannelProvider
 
         if (Fail) {
             return Task.FromResult(Result<DispatchReceipt>.Failure(ErrorCode.InternalError, "the carrier is down"));
+        }
+
+        if (TimeOut) {
+            return Task.FromResult(Result<DispatchReceipt>.Failure(ErrorCode.OperationTimeout, "the carrier never answered"));
         }
 
         sent.Enqueue(message);
@@ -458,12 +495,15 @@ public sealed class InMemoryChannelProvider(ChannelKind kind) : IChannelProvider
 /// <remarks>
 ///     ⚠
 ///     <b>
-///         An unnamed provider resolves to the channel's <i>only</i> registration, and to nothing
-///         when there are several.
+///         An unnamed provider resolves to the channel's <i>only</i> carrier, and to nothing when
+///         there are several.
 ///     </b> Picking the first of several would make which carrier a tenant
 ///     sends through depend on service-registration order — a thing that changes when somebody
 ///     reorders a wiring method, and that nobody would look at when a tenant's messages started
-///     arriving from a different sender id.
+///     arriving from a different sender id. The refusing seam
+///     (<see cref="IRefusingChannelProvider" />) does not count as a carrier for that purpose: with
+///     one real carrier registered beside it, an unnamed channel gets the carrier; with none, it
+///     gets the seam's honest refusal.
 /// </remarks>
 public sealed class ChannelProviderRegistry(IEnumerable<IChannelProvider> providers) : IChannelProviderRegistry {
     readonly ImmutableArray<IChannelProvider> registered = [.. providers];
@@ -482,13 +522,18 @@ public sealed class ChannelProviderRegistry(IEnumerable<IChannelProvider> provid
         }
 
         if (string.IsNullOrWhiteSpace(name)) {
-            return forChannel.Length == 1
-                ? Result<IChannelProvider>.Success(forChannel[0])
+            // The refusing seam is what an unnamed channel falls back to, never what it competes
+            // with — IRefusingChannelProvider's remarks.
+            var carriers = forChannel.Where(x => x is not IRefusingChannelProvider).ToImmutableArray();
+            var candidates = carriers.Length > 0 ? carriers : forChannel;
+
+            return candidates.Length == 1
+                ? Result<IChannelProvider>.Success(candidates[0])
                 : Result<IChannelProvider>.Failure(
                     ErrorCode.InvalidRequestBody,
-                    $"{channel} has {forChannel.Length.ToString(CultureInfo.InvariantCulture)} "
-                    + "registered providers ("
-                    + string.Join(", ", forChannel.Select(x => x.Name))
+                    $"{channel} has {candidates.Length.ToString(CultureInfo.InvariantCulture)} "
+                    + "registered carriers ("
+                    + string.Join(", ", candidates.Select(x => x.Name))
                     + ") and the channel configuration names none. Set "
                     + "ChannelConfiguration.Provider — which carrier a tenant sends through is not a "
                     + "thing to decide by registration order."

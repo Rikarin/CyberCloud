@@ -169,9 +169,9 @@ public sealed class MessageGrain(
                 ErrorCode.Conflict,
                 $"This message is {state.State.Snapshot.Status} and only a Queued one can be "
                 + "re-driven. Queued with no provider id is the ambiguous case — the silo died "
-                + "between recording the send and hearing from the carrier, so nobody knows whether "
-                + "it went out. Everything else has a known outcome, and re-driving it would send a "
-                + "second copy."
+                + "between recording the send and hearing from the carrier, or the carrier never "
+                + "answered, so nobody knows whether it went out. Everything else has a known "
+                + "outcome, and re-driving it would send a second copy."
             );
         }
 
@@ -280,6 +280,12 @@ public sealed class MessageGrain(
         }
 
         // ── The sender's compliance standing. We are a broker, not a carrier. ──────────────────
+        // ⚠ What the carrier is handed is the sender's VALUE — the alphanumeric id, the number, the
+        // From address recipients see — and not the resource id. The first cut passed the GUID, and
+        // the email carrier, which cannot put a GUID on a From line, sent as the platform instead
+        // with nothing saying so. TemplateAndSenderTests.TheCarrierIsHandedTheSenderRecipientsSee.
+        var senderValue = string.Empty;
+
         if (channel.SenderId != Guid.Empty) {
             var sender = await Tenant()
                 .GetGrain<ISenderIdentityGrain>(CommunicationGrainKeys.Sender(channel.SenderId))
@@ -288,6 +294,8 @@ public sealed class MessageGrain(
             if (sender.TryGetError(out var notCleared)) {
                 return await RefuseAsync(messageId, request, destination, digest, now, notCleared);
             }
+
+            senderValue = sender.GetValueOrThrow().Value;
         }
 
         // ── The suppression list, before dispatch. docs/plan/17 § The parts that are actually the
@@ -330,6 +338,14 @@ public sealed class MessageGrain(
             return await RefuseAsync(messageId, request, destination, digest, now, noProvider);
         }
 
+        // A re-driven Queued message (RetryAsync) still holds the reservation its first attempt
+        // made, and is about to make another. The first goes back so the message is counted once;
+        // the lease would have returned it anyway, but not before the day's cap read one too high.
+        if (state.State.ReservationId != Guid.Empty) {
+            _ = await Limits(request.ServiceId).ReleaseAsync(state.State.ReservationId);
+            state.State.ReservationId = Guid.Empty;
+        }
+
         // ── The spend limit, before dispatch. The only thing between a bug and a five-figure
         //    invoice — docs/plan/17 § The parts that are actually the work. ──────────────────────
         var reserved = await Limits(request.ServiceId).ReserveAsync(
@@ -369,7 +385,7 @@ public sealed class MessageGrain(
                     TenantId = tenantId,
                     Channel = request.Channel,
                     Destination = destination,
-                    Sender = channel.SenderId == Guid.Empty ? string.Empty : channel.SenderId.ToString("D"),
+                    Sender = senderValue,
                     Subject = content.Subject,
                     Body = content.Body,
                     ProviderTemplateName = content.ProviderTemplateName,
@@ -380,6 +396,24 @@ public sealed class MessageGrain(
             );
 
         if (dispatched.TryGetError(out var carrierRefused)) {
+            if (carrierRefused.Code == ErrorCode.OperationTimeout) {
+                // ⚠ A carrier that never answered is the ambiguous case IMessageGrain.RetryAsync
+                // exists for, and it is the SAME case as a silo dying mid-dispatch: the message may
+                // be in the relay's queue or may never have arrived, and nobody on this side knows
+                // which. So the record stays Queued — Failed would say "it did not go", which is
+                // not known — the reservation stays held, because the message may have left, and
+                // the carrier's sentence is kept so a caller reading the status sees why it is
+                // stuck. RetryAsync is the only way out, deliberately: a retry decides the ambiguity
+                // towards a possible duplicate, and docs/plan/17 § The parts that are actually the
+                // work wants a caller who knows the message is safe to repeat to make that call.
+                // IdempotencyTests.ACarrierThatNeverAnsweredLeavesTheMessageQueuedForADeliberateRetry
+                // drives both halves.
+                state.State.Snapshot = state.State.Snapshot with { Detail = carrierRefused.Message };
+                await state.WriteStateAsync();
+
+                return Result<MessageSnapshot>.Success(state.State.Snapshot);
+            }
+
             // ⚠ The reservation goes back. A channel whose carrier is down would otherwise burn the
             // day's allowance on messages that never left, and the tenant's first working send would
             // be refused with a limit message that is true and useless.

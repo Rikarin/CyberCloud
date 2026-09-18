@@ -129,7 +129,9 @@ public interface IMessageGrain : IGrainWithStringKey {
     ///     <para>
     ///         ⚠ <b>Explicit rather than automatic, and that is the safe direction.</b> A message is
     ///         <see cref="MessageStatus.Queued" /> with no provider id when the silo died between
-    ///         writing the record and hearing back from the carrier — so nobody knows whether it
+    ///         writing the record and hearing back from the carrier, or when the carrier was called
+    ///         and never answered (<see cref="ErrorCode.OperationTimeout" /> from the provider, which
+    ///         the grain keeps as <see cref="MessageSnapshot.Detail" />) — so nobody knows whether it
     ///         went. Retrying automatically would resolve that ambiguity towards a duplicate, and
     ///         docs/plan/17 § The parts that are actually the work is explicit about which way to
     ///         resolve it:

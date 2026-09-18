@@ -57,6 +57,22 @@ public sealed record SignUpApiResult(
 ///         sign-up the ticket names, which the caller started, so their answers may be specific.
 ///     </para>
 ///     <para>
+///         ⚠ <b><c>begin</c> is the one unauthenticated call that makes the platform send
+///         something, and the caller is bounded before the grain is.</b> Every code it issues
+///         goes out through the platform's own communication service, whose daily cap is shared by
+///         every tenant's sign-in codes (<c>PlatformCommunicationServiceOptions.MaxEmailsPerDay</c>).
+///         The per-sign-up issue cap (<see cref="OtpPolicy.MaxIssuesPerWindow" />) bounds one
+///         address; a caller who varies the address was bounded by nothing, and a thousand
+///         addresses from one machine was the platform's whole day. So the lockout ladder — the
+///         same <see cref="ILockoutCounter" /> and <see cref="LockoutPolicy" /> the sign-in path
+///         uses, keyed by <see cref="LockoutKey.ForCaller" /> — is consulted first and counted on
+///         every well-formed begin: five free per window, then doubling waits. A locked caller gets
+///         the same body and no code, and the reason goes to the log, for the enumeration rule's
+///         sake. <c>SignUpApiTests.ACallerWhoVariesTheAddressIsBoundedAndTheAnswerDoesNotChange</c>.
+///         ⚠ What this does not bound — a caller spread across many addresses — is bounded by the
+///         daily cap itself, and <see cref="LockoutKey.ForCaller" />'s remarks carry the proxy trap.
+///     </para>
+///     <para>
 ///         ⚠ <b>The address is never taken from a request after <c>begin</c>.</b> <c>complete</c>
 ///         creates a user for the address the grain holds — the one that was proven — and a body
 ///         field would let a caller enrol an address nobody has proven. The same rule keeps the
@@ -77,6 +93,7 @@ public sealed class SignUpApi(
     IGrainFactory grains,
     IPasskeyService passkeys,
     SignUpOrchestrator orchestrator,
+    ILockoutCounter lockout,
     IOptions<IdentityHostOptions> options,
     SignInOptions signInOptions,
     IClock clock,
@@ -107,16 +124,25 @@ public sealed class SignUpApi(
     /// </summary>
     /// <param name="request">The address and where to go afterwards.</param>
     /// <param name="ticket">The caller's existing ticket, or <see langword="null" />.</param>
+    /// <param name="clientAddress">
+    ///     The caller's network address as the host saw it, for <see cref="LockoutKey.ForCaller" />.
+    ///     Empty when the host knows no peer, in which case nothing is counted — the key's remarks
+    ///     say why a shared "unknown" bucket would be worse.
+    /// </param>
     /// <param name="cancellationToken">Cancels the attempt, including its timing pad.</param>
     /// <returns>
     ///     <see cref="SignUpBeginResponse" /> with <c>sent: true</c>, always — a malformed address
-    ///     touches no grain and issues no ticket and still answers it, on the same floor.
+    ///     touches no grain and issues no ticket and still answers it, on the same floor, and so does
+    ///     a caller the ladder is holding.
     /// </returns>
     public async Task<SignUpApiResult> BeginAsync(
         SignUpBeginRequest? request,
         SignUpTicket? ticket,
+        string clientAddress,
         CancellationToken cancellationToken = default
     ) {
+        ArgumentNullException.ThrowIfNull(clientAddress);
+
         var returnUrl = ReturnUrl.Sanitize(request?.ReturnUrl);
 
         if (!options.SelfServeSignUp) {
@@ -131,6 +157,26 @@ public sealed class SignUpApi(
                 // ⚠ No grain, no ticket, the same body. A 400 here would be a distinguishable answer
                 // for which strings the platform considers addresses — SignInApi.Begin.
                 return new(new SignUpBeginResponse(true, returnUrl));
+            }
+
+            // ── The caller's gate. NOTHING BELOW THIS LINE RUNS FOR A CALLER THE LADDER IS HOLDING,
+            //    and the counter is a hot-tier INCR with no grain behind it, so a script pays for
+            //    nothing here — the class remarks. Counted on every well-formed begin that passes
+            //    the gate, whether the grain then issues a code or refuses one: a resend is a code
+            //    too, and a malformed address costs nothing, so it is not counted. ────────────────
+            var caller = string.IsNullOrWhiteSpace(clientAddress) ? (LockoutKey?)null : LockoutKey.ForCaller(clientAddress);
+
+            if (caller is { } key) {
+                if (await lockout.IsLockedAsync(key, cancellationToken)) {
+                    logger.LogInformation(
+                        "Sign-up begin held by the caller ladder ({CallerKey}): no code was issued and the answer is unchanged.",
+                        key.Value
+                    );
+
+                    return new(new SignUpBeginResponse(true, returnUrl), ticket);
+                }
+
+                _ = await lockout.RecordFailureAsync(key, cancellationToken);
             }
 
             var address = normalized.GetValueOrThrow();

@@ -268,6 +268,32 @@ public sealed class TemplateAndSenderTests(CommunicationCluster cluster) {
     }
 
     [Fact]
+    public async Task TheCarrierIsHandedTheSenderRecipientsSee() {
+        CommunicationCluster.ResetDoubles();
+        var senderId = Guid.NewGuid();
+        var service = await cluster.NewServiceAsync(senderId: senderId);
+
+        _ = await cluster.SenderIdentity(senderId).RegisterAsync(ChannelKind.Sms, "CYBERCLOUD", ["CZ"]);
+        _ = await cluster.SenderIdentity(senderId).RecordDecisionAsync(SenderRegistrationStatus.Approved, ["CZ"], "ok");
+
+        (await cluster.SendAsync(CommunicationCluster.Tenant, CommunicationCluster.Request(service, "otp-1")))
+            .IsSuccess.ShouldBeTrue();
+
+        // ⚠ OutboundMessage.Sender is "what recipients see as the sender" — the registered value, not
+        // the sender resource's id. The first cut passed the GUID, and a carrier handed a GUID for a
+        // From line can only ignore it, which the email carrier did, silently, under the platform's
+        // name.
+        var handed = TestProviders.Sms.Sent.ShouldHaveSingleItem();
+        handed.Sender.ShouldBe("CYBERCLOUD");
+
+        // And a channel with no registered sender hands the carrier nothing, so the carrier's own
+        // default applies and nothing is invented.
+        var plain = await cluster.NewServiceAsync();
+        (await cluster.SendAsync(CommunicationCluster.Tenant, CommunicationCluster.Request(plain, "otp-2"))).IsSuccess.ShouldBeTrue();
+        TestProviders.Sms.Sent.Last().Sender.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task AnApprovedSenderClearedForNoCountryStillCannotSend() {
         CommunicationCluster.ResetDoubles();
         var senderId = Guid.NewGuid();
@@ -543,23 +569,61 @@ public sealed class ChannelConfigurationTests(CommunicationCluster cluster) {
     }
 
     [Fact]
-    public void AnUnnamedProviderWithSeveralCandidatesIsRefusedRatherThanPickedByRegistrationOrder() {
+    public void AnUnnamedProviderWithSeveralCarriersIsRefusedRatherThanPickedByRegistrationOrder() {
+        // Two REAL carriers for one channel. Before #93 this row used the in-memory double beside
+        // the refusing seam, which is no longer ambiguous — see the row below.
         var registry = new ChannelProviderRegistry(
             [
-                new InMemoryChannelProvider(ChannelKind.Sms),
-                new UnavailableSmsProvider(
-                    Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableSmsProvider>.Instance
+                new InMemoryChannelProvider(ChannelKind.Email),
+                new Providers.Smtp.SmtpChannelProvider(
+                    new() { Host = "relay.example", From = "no-reply@cybercloud.example" },
+                    new Core.Time.SystemClock(),
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<Providers.Smtp.SmtpChannelProvider>.Instance
+                ),
+                new UnavailableEmailProvider(
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableEmailProvider>.Instance
                 )
             ]
         );
 
-        registry.Resolve(ChannelKind.Sms, string.Empty)
-            .Error!
+        var refused = registry.Resolve(ChannelKind.Email, string.Empty);
+
+        refused.Error!
             .Code
             .ShouldBe(
                 ErrorCode.InvalidRequestBody,
                 "which carrier a tenant sends through is not a thing to decide by the order somebody "
                 + "wrote lines in a wiring method"
             );
+
+        refused.Error.Message.ShouldContain("2 registered carriers (in-memory, smtp)", Case.Sensitive, "and the seam is not counted among them");
+    }
+
+    [Fact]
+    public void AnUnnamedProviderResolvesToTheOneCarrierBesideTheRefusingSeam() {
+        // ⚠ THE DEFAULT #93 DEPENDS ON. A tenant's `channels` resource with kind: email and no
+        // provider, on a silo with the relay configured, must reach the relay — not a refusal saying
+        // the channel has two providers, one of which is the absence of one.
+        var registry = new ChannelProviderRegistry(
+            [
+                new UnavailableEmailProvider(
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableEmailProvider>.Instance
+                ),
+                new InMemoryChannelProvider(ChannelKind.Email)
+            ]
+        );
+
+        registry.Resolve(ChannelKind.Email, string.Empty).GetValueOrThrow().Name.ShouldBe("in-memory");
+
+        // And with nothing real registered, the seam is still what an unnamed channel gets.
+        var seamOnly = new ChannelProviderRegistry(
+            [
+                new UnavailableEmailProvider(
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableEmailProvider>.Instance
+                )
+            ]
+        );
+
+        seamOnly.Resolve(ChannelKind.Email, string.Empty).GetValueOrThrow().ShouldBeAssignableTo<IRefusingChannelProvider>();
     }
 }

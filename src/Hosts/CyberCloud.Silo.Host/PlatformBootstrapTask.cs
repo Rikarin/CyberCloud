@@ -1,4 +1,6 @@
 using CyberCloud.Authorization.Contracts;
+using CyberCloud.Communication.Contracts;
+using CyberCloud.Communication.Providers.Smtp;
 using CyberCloud.Core.Resources;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.ResourceManager;
@@ -12,9 +14,10 @@ using System.Globalization;
 namespace CyberCloud.Silo.Host;
 
 /// <summary>
-///     What a fresh cluster needs written before the first tenant can exist: the shard map, and —
-///     when self-serve sign-up is on — the platform-operator grant sign-up creates tenants under.
-///     docs/plan/05 § The shard map, docs/plan/06 § Platform administration.
+///     What a fresh cluster needs written before the first tenant can exist: the shard map, —
+///     when self-serve sign-up is on — the platform-operator grant sign-up creates tenants under,
+///     and — when a relay is configured — the platform's own communication service (#93).
+///     docs/plan/05 § The shard map, docs/plan/06 § Platform administration, docs/plan/17.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -68,7 +71,7 @@ public sealed class PlatformBootstrapTask(
     /// <summary>The configuration key that opens self-serve sign-up. Read by the silo and the identity host.</summary>
     public const string SelfServeSignUpKey = "CyberCloud:Identity:SelfServeSignUp";
 
-    /// <summary>Runs both halves. What <c>SiloComposition</c> registers as the silo's startup task.</summary>
+    /// <summary>Runs every half. What <c>SiloComposition</c> registers as the silo's startup task.</summary>
     /// <param name="cancellationToken">Cancels the start-up.</param>
     public async Task ExecuteAsync(CancellationToken cancellationToken) {
         var storage = new CyberCloudStorageOptions();
@@ -92,6 +95,22 @@ public sealed class PlatformBootstrapTask(
 
         if (configuration.GetValue<bool>(SelfServeSignUpKey)) {
             await GrantSignUpOperatorAsync();
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var relay = new SmtpRelayOptions();
+        configuration.GetSection(SmtpRelayOptions.SectionName).Bind(relay);
+
+        if (relay.IsConfigured) {
+            await ConfigurePlatformCommunicationServiceAsync();
+        } else {
+            logger.LogInformation(
+                "The platform's communication service was not configured: no relay is named under {Section}, so "
+                + "there is no email carrier for it to send through. The platform's codes go to the console in "
+                + "Development and are refused elsewhere.",
+                SmtpRelayOptions.SectionName
+            );
         }
     }
 
@@ -153,6 +172,68 @@ public sealed class PlatformBootstrapTask(
         logger.LogInformation(
             "Self-serve sign-up is open: {Tuple} is in the platform tenant's tuple store.",
             tuple
+        );
+    }
+
+    /// <summary>
+    ///     The third half (#93): the platform's own communication service, with its email channel on
+    ///     the smtp carrier — <see cref="PlatformCommunicationService" />.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Idempotent on the same terms as the other two: <c>CreateAsync</c> on a created service
+    ///         answers the snapshot and writes nothing, and <c>ConfigureChannelAsync</c> with the same
+    ///         configuration is a rewrite of the same bytes. A second silo, or a restart, finds the
+    ///         service there and re-asserts the channel — which is also what picks up a changed
+    ///         <see cref="PlatformCommunicationServiceOptions.MaxEmailsPerDay" /> on the next start.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Only when a relay is configured.</b> A service with an email channel on a carrier
+    ///         nobody registered would refuse every send with the seam's sentence, which is the same
+    ///         outcome as no service at all with one more grain to be confused by. So the channel
+    ///         exists exactly when <c>SmtpRelayOptions.IsConfigured</c> — the same switch that
+    ///         registers the carrier in <c>SiloComposition</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Thrown rather than logged, like the shard map.</b> A silo whose platform service
+    ///         could not be written is a silo on which every OTP refuses later, one sign-up at a time.
+    ///     </para>
+    /// </remarks>
+    async Task ConfigurePlatformCommunicationServiceAsync() {
+        var options = new PlatformCommunicationServiceOptions();
+        configuration.GetSection(PlatformCommunicationServiceOptions.SectionName).Bind(options);
+
+        var service = grains
+            .ForTenant(N(PlatformTenant, "D"))
+            .GetGrain<ICommunicationServiceGrain>(CommunicationGrainKeys.Service(PlatformCommunicationService.ServiceId));
+
+        var created = await service.CreateAsync(PlatformTenant, PlatformCommunicationService.Name);
+
+        if (created.TryGetError(out var notCreated)) {
+            throw new InvalidOperationException(
+                $"The platform's communication service {PlatformCommunicationService.ServiceId:D} could not be "
+                + $"created: {notCreated.Message}. Without it the platform's own codes have nothing to send through."
+            );
+        }
+
+        var configured = await service.ConfigureChannelAsync(PlatformCommunicationService.EmailChannel(options));
+
+        if (configured.TryGetError(out var notConfigured)) {
+            throw new InvalidOperationException(
+                $"The platform's communication service {PlatformCommunicationService.ServiceId:D} refused its email "
+                + $"channel: {notConfigured.Message}"
+            );
+        }
+
+        logger.LogInformation(
+            "The platform's communication service {ServiceId} ({Path}) has its email channel on the {Provider} carrier, "
+            + "{MaxEmailsPerDay} message(s) per UTC day. Point {OtpSection} at it, or run in Development, to send the "
+            + "platform's codes through it.",
+            PlatformCommunicationService.ServiceId,
+            PlatformCommunicationService.Address.Path,
+            SmtpChannelProvider.ProviderName,
+            options.MaxEmailsPerDay,
+            SiloIdentityOptions.SectionName
         );
     }
 

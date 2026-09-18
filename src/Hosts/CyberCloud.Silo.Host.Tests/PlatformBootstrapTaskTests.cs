@@ -1,9 +1,13 @@
 using CyberCloud.Authorization;
 using CyberCloud.Authorization.Contracts;
+using CyberCloud.Communication;
+using CyberCloud.Communication.Contracts;
+using CyberCloud.Communication.Providers.Smtp;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Resources;
 using CyberCloud.Core.Time;
 using CyberCloud.Identity.Contracts;
+using CyberCloud.Providers.Communication.Contracts;
 using CyberCloud.ServiceDefaults.Storage;
 using CyberCloud.Tenancy.Contracts;
 using Microsoft.Extensions.Configuration;
@@ -17,9 +21,10 @@ using System.Globalization;
 namespace CyberCloud.Silo.Host.Tests;
 
 /// <summary>
-///     What a fresh cluster is given at start so the first tenant can exist — the shard map and the
-///     sign-up operator's grant — asserted against the real <c>ShardMapGrain</c> and
-///     <c>TupleStoreGrain</c> rather than against doubles.
+///     What a fresh cluster is given at start so the first tenant can exist — the shard map, the
+///     sign-up operator's grant, and (#93) the platform's own communication service — asserted
+///     against the real <c>ShardMapGrain</c>, <c>TupleStoreGrain</c> and
+///     <c>CommunicationServiceGrain</c> rather than against doubles.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -92,6 +97,53 @@ public sealed class PlatformBootstrapTaskTests(BootstrapCluster cluster) {
             .ShouldBeTrue("platform:root#operator@servicePrincipal:{SignUpOperator} is what CreateTenantAsync checks");
     }
 
+    // ── The third half (#93): the platform's own communication service ─────────────────────────
+
+    [Fact]
+    public async Task WritesThePlatformsCommunicationServiceOnlyWhenARelayIsConfigured() {
+        // ⚠ Order matters within this test and nowhere else in the class: the service grain is one
+        // per cluster, so the "no relay, no service" half has to run before any test writes it.
+        // The second half below is what every other test in the collection may have already done,
+        // and is asserted on the state rather than on this call having been the first.
+        if ((await cluster.PlatformService.DescribeAsync()).IsFailure) {
+            await cluster.Task(selfServe: true, relay: false).ExecuteAsync(Ct);
+
+            (await cluster.PlatformService.DescribeAsync()).IsFailure
+                .ShouldBeTrue("with no relay there is no carrier, and a service whose every send refuses is one more grain to be confused by");
+        }
+
+        await cluster.Task(selfServe: true, relay: true, maxEmailsPerDay: 250).ExecuteAsync(Ct);
+
+        var service = (await cluster.PlatformService.DescribeAsync()).GetValueOrThrow();
+        service.TenantId.ShouldBe(Guid.Empty, "the platform tenant");
+        service.Name.ShouldBe(PlatformCommunicationService.Name);
+
+        var email = (await cluster.PlatformService.GetChannelAsync(ChannelKind.Email)).GetValueOrThrow();
+        email.Provider.ShouldBe("smtp", "named, so a second email carrier cannot make every platform OTP ambiguous");
+        email.Enabled.ShouldBeTrue();
+        email.Credentials.Mode.ShouldBe(CredentialMode.PlatformAccount);
+        email.Limits.MaxMessagesPerWindow.ShouldBe(250, "CyberCloud:Communication:PlatformService:MaxEmailsPerDay");
+        email.OwnerResourceId.ShouldBe(Guid.Empty, "no resource owns it, so a services/platform resource created later adopts it");
+
+        // And the id is the one the tenant-facing provider would derive for the same address, which
+        // is what makes "a resource created later adopts it" true rather than hoped.
+        PlatformCommunicationService.ServiceId.ShouldBe(CommunicationServices.ServiceIdOf(PlatformCommunicationService.Address));
+        PlatformCommunicationService.OtpRoute.ServiceId.ShouldBe(PlatformCommunicationService.ServiceId);
+        PlatformCommunicationService.OtpRoute.TenantId.ShouldBe(Guid.Empty);
+    }
+
+    [Fact]
+    public async Task ASecondRunReassertsTheChannelAndChangesNothingElse() {
+        await cluster.Task(selfServe: true, relay: true).ExecuteAsync(Ct);
+        var first = (await cluster.PlatformService.DescribeAsync()).GetValueOrThrow();
+
+        await cluster.Task(selfServe: true, relay: true).ExecuteAsync(Ct);
+        var second = (await cluster.PlatformService.DescribeAsync()).GetValueOrThrow();
+
+        second.CreatedAt.ShouldBe(first.CreatedAt, "CreateAsync on a created service answers the snapshot and writes nothing");
+        second.Channels.Length.ShouldBe(1, "one email channel, re-asserted rather than duplicated");
+    }
+
     [Fact]
     public async Task ASiloWithNoDurableShardSkipsItself() {
         // ⚠ The shape HostCompositionTests starts: no CyberCloud:Storage at all, so no grain storage
@@ -147,20 +199,37 @@ public sealed class BootstrapCluster : IAsyncLifetime {
     /// <summary>The real shard map.</summary>
     public IShardMapGrain ShardMap => cluster.GrainFactory.GetGrain<IShardMapGrain>(GrainKeys.ShardMap());
 
+    /// <summary>The platform's own communication service grain, as <c>PlatformCommunicationService</c> addresses it.</summary>
+    public ICommunicationServiceGrain PlatformService => cluster.GrainFactory
+        .ForTenant(Guid.Empty.ToString("D", CultureInfo.InvariantCulture))
+        .GetGrain<ICommunicationServiceGrain>(CommunicationGrainKeys.Service(PlatformCommunicationService.ServiceId));
+
     /// <summary>The task, over the configuration the AppHost would give a silo.</summary>
     /// <param name="selfServe">Whether <c>CyberCloud:Identity:SelfServeSignUp</c> is on.</param>
-    public PlatformBootstrapTask Task(bool selfServe) {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                new Dictionary<string, string?>(StringComparer.Ordinal) {
-                    [$"{CyberCloudStorageOptions.SectionName}:Durable:Shards:{ShardA}"] = "Host=a",
-                    [$"{CyberCloudStorageOptions.SectionName}:Durable:Shards:{ShardB}"] = "Host=b",
-                    [$"{CyberCloudStorageOptions.SectionName}:Durable:Shards:{PlatformShard}"] = "Host=p",
-                    [$"{CyberCloudStorageOptions.SectionName}:Durable:NullTenantShard"] = PlatformShard,
-                    [PlatformBootstrapTask.SelfServeSignUpKey] = selfServe ? "true" : "false"
-                }
-            )
-            .Build();
+    /// <param name="relay">Whether <c>CyberCloud:Communication:Smtp</c> names a relay — the AppHost's Mailpit shape.</param>
+    /// <param name="maxEmailsPerDay"><c>CyberCloud:Communication:PlatformService:MaxEmailsPerDay</c>, or the default when null.</param>
+    public PlatformBootstrapTask Task(bool selfServe, bool relay = false, long? maxEmailsPerDay = null) {
+        var settings = new Dictionary<string, string?>(StringComparer.Ordinal) {
+            [$"{CyberCloudStorageOptions.SectionName}:Durable:Shards:{ShardA}"] = "Host=a",
+            [$"{CyberCloudStorageOptions.SectionName}:Durable:Shards:{ShardB}"] = "Host=b",
+            [$"{CyberCloudStorageOptions.SectionName}:Durable:Shards:{PlatformShard}"] = "Host=p",
+            [$"{CyberCloudStorageOptions.SectionName}:Durable:NullTenantShard"] = PlatformShard,
+            [PlatformBootstrapTask.SelfServeSignUpKey] = selfServe ? "true" : "false"
+        };
+
+        if (relay) {
+            // Nothing connects to it: the task writes a grain, it does not send.
+            settings[$"{SmtpRelayOptions.SectionName}:Host"] = "localhost";
+            settings[$"{SmtpRelayOptions.SectionName}:Port"] = "1025";
+            settings[$"{SmtpRelayOptions.SectionName}:Security"] = "None";
+            settings[$"{SmtpRelayOptions.SectionName}:From"] = "no-reply@cybercloud.local";
+        }
+
+        if (maxEmailsPerDay is { } cap) {
+            settings[$"{PlatformCommunicationServiceOptions.SectionName}:MaxEmailsPerDay"] = cap.ToString(CultureInfo.InvariantCulture);
+        }
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
 
         return new(cluster.GrainFactory, configuration, NullLogger<PlatformBootstrapTask>.Instance);
     }
@@ -213,6 +282,9 @@ public sealed class BootstrapCluster : IAsyncLifetime {
             // The schema CheckGrain and TupleStoreGrain evaluate against — the same line
             // SiloComposition writes.
             silo.AddCyberCloudAuthorization();
+
+            // The sending domain's grains, for the third half — the platform's communication service.
+            silo.AddCyberCloudCommunication();
         }
     }
 }

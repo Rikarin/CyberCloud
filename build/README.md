@@ -286,7 +286,9 @@ another suite spelled the path differently. This one **deflated**, hard:
 | `CyberCloud.Silo.Host` | 32.5 % | 32.5 % |
 
 ⚠ **Five of the six projects that looked like breaches never were**, which is why
-`coverage-below-floor.txt` has one row rather than six. The key is now the resolved absolute path,
+`coverage-below-floor.txt` had one row rather than six — and since 2026-09-18 has none, the sixth
+having cleared the floor by growing in-process startup code (the file's last dated paragraph has the
+measurement). The key is now the resolved absolute path,
 and a report declaring more than one `<source>` is refused rather than guessed at — with two roots a
 relative filename could belong to either, and picking one would merge some files correctly and split
 others, which is this same failure arriving silently a second time.

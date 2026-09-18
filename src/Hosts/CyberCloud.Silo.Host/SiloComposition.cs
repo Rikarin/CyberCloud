@@ -1,5 +1,6 @@
 using CyberCloud.Authorization;
 using CyberCloud.Communication;
+using CyberCloud.Communication.Providers.Smtp;
 using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes;
 using CyberCloud.Kubernetes.Connections;
@@ -136,7 +137,11 @@ public static class SiloComposition {
     ///         bind <c>StorageTiers.Hot</c> and <c>StorageTiers.Durable</c>, which are the two
     ///         <c>AddCyberCloudTenancy</c> already wires. With no carrier configured every send fails
     ///         with a sentence saying so, which is the designed state of a silo with no Twilio client
-    ///         rather than a defect.
+    ///         rather than a defect. The one carrier that ships — email over SMTP (#93) — is added
+    ///         beside it by <c>AddSmtpEmailCarrier</c> when <c>CyberCloud:Communication:Smtp</c>
+    ///         names a relay, and that section's <c>IsConfigured</c> is the one switch that also
+    ///         makes <c>PlatformBootstrapTask</c> write the platform's own service and
+    ///         <c>AddSiloIdentity</c> route the platform's codes through it in Development.
     ///     </para>
     ///     <para>
     ///         ⚠ <b><c>AddSiloIdentity</c> goes beside it and not instead of it</b> — docs/plan/11. The
@@ -161,8 +166,26 @@ public static class SiloComposition {
     ///     </para>
     /// </remarks>
     static void ConfigureCluster(ISiloBuilder silo, IHostEnvironment environment) {
+        // ── The email carrier — docs/plan/17, #93 ─────────────────────────────────────────────────
+        //
+        // ⚠ CONDITIONAL, LIKE THE OBJECT STORE, AND FOR THE SAME REASON. With CyberCloud:Communication:Smtp
+        // naming a relay — Amazon SES's SMTP endpoint, a Postfix relay, Mailpit on the AppHost — the
+        // smtp carrier joins the provider collection and every email channel that names it, or names
+        // nothing, sends through it. Unconfigured leaves UnavailableEmailProvider's refusal in place,
+        // which names this section. Misconfigured is not unconfigured: a password over Security=None
+        // or a From that is not an address throws out of AddSmtpEmailCarrier here, so the pod does not
+        // start. The same bound section decides two more things below: PlatformBootstrapTask writes
+        // the platform's own communication service when it is set, and AddSiloIdentity routes the
+        // platform's codes through that service in Development.
+        var relay = new SmtpRelayOptions();
+        silo.Configuration.GetSection(SmtpRelayOptions.SectionName).Bind(relay);
+
+        if (relay.IsConfigured) {
+            silo.AddSmtpEmailCarrier(relay);
+        }
+
         silo.AddCyberCloudCommunication()
-            .AddSiloIdentity(environment)
+            .AddSiloIdentity(environment, relay.IsConfigured)
             // ── docs/plan/07's ReBAC engine — step 3 of every write ────────────────────────────────
             //
             // ⚠ WITHOUT THIS THE ENFORCEMENT SEAM ANSWERED 404 TO EVERYBODY, INCLUDING ITSELF.

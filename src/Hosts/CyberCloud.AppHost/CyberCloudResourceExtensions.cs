@@ -232,4 +232,39 @@ public static class CyberCloudResourceExtensions {
             .WithEnvironment("CyberCloud__ObjectStorage__SecretAccessKey", CyberCloudResources.ObjectStoreSecretAccessKey)
             .WithEnvironment("CyberCloud__ObjectStorage__AllowInsecureTransport", "true");
     }
+
+    /// <summary>
+    ///     Points a silo at Mailpit as its outbound email relay — the development carrier (#93).
+    /// </summary>
+    /// <param name="builder">The silo being configured.</param>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <returns>The same builder, for chaining.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         Writes <c>CyberCloud__Communication__Smtp__…</c>, the section <c>SmtpRelayOptions</c>
+    ///         binds. On the silo that one section does three things: <c>SiloComposition</c> registers
+    ///         the smtp carrier, <c>PlatformBootstrapTask</c> writes the platform's own communication
+    ///         service with an email channel on it, and <c>SiloIdentityComposition</c> — this being
+    ///         Development — mails every sign-up code through that service beside logging it. Both
+    ///         silos get it, because the grain that mints a code lives on either.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <c>Security=None</c> and no credential, which the section allows only when there is
+    ///         no password to put on the wire. Mailpit's SMTP port is published unproxied, so the
+    ///         literal <c>localhost:1025</c> here is the address — the same argument the S3 endpoint
+    ///         above makes.
+    ///     </para>
+    /// </remarks>
+    public static IResourceBuilder<T> WithDevelopmentMailRelay<T>(this IResourceBuilder<T> builder)
+        where T : IResourceWithEnvironment {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder
+            .WithEnvironment("CyberCloud__Communication__Smtp__Host", "localhost")
+            .WithEnvironment("CyberCloud__Communication__Smtp__Port", CyberCloudResources.MailpitSmtpPort.ToString(CultureInfo.InvariantCulture))
+            .WithEnvironment("CyberCloud__Communication__Smtp__Security", "None")
+            .WithEnvironment("CyberCloud__Communication__Smtp__From", CyberCloudResources.PlatformSender)
+            .WithEnvironment("CyberCloud__Communication__Smtp__FromName", CyberCloudResources.PlatformSenderName)
+            .WithEnvironment("CyberCloud__Communication__Smtp__UnsubscribeMailbox", CyberCloudResources.PlatformUnsubscribeMailbox);
+    }
 }

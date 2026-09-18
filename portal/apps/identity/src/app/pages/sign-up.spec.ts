@@ -98,9 +98,11 @@ describe('the sign-up page', () => {
     await fixture.whenStable();
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
 
-    // ⚠ There is no MTA on a development run (#93). A person staring at an empty inbox has no other
-    // way to learn that the code went to the silo's console.
+    // ⚠ On a development run the mail lands in Mailpit, not in the person's real inbox (#93), and
+    // the code is on the silo's console as well. A person staring at their real inbox has no other
+    // way to learn either.
     expect(text).toContain(ADDRESS);
+    expect(text).toContain('localhost:8025');
     expect(text).toContain('Aspire dashboard');
   });
 

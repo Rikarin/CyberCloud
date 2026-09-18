@@ -54,7 +54,7 @@ public sealed class SignUpApiTests {
                      "someone@example.com", "nobody-has-this-address@example.com", "not-an-address", "",
                      new string('x', 400) + "@example.com"
                  }) {
-            var result = await harness.Api.BeginAsync(new(address, "/after"), null, Ct);
+            var result = await harness.Api.BeginAsync(new(address, "/after"), null, SignUpApiHarness.Caller, Ct);
             answers.Add(result.Body.ShouldBeOfType<SignUpBeginResponse>());
         }
 
@@ -65,7 +65,7 @@ public sealed class SignUpApiTests {
         answers[0].Sent.ShouldBeTrue();
         answers[0].ReturnUrl.ShouldBe("/after");
 
-        (await harness.Api.BeginAsync(null, null, Ct)).Body.ShouldBeOfType<SignUpBeginResponse>().ShouldBe(
+        (await harness.Api.BeginAsync(null, null, SignUpApiHarness.Caller, Ct)).Body.ShouldBeOfType<SignUpBeginResponse>().ShouldBe(
             answers[0] with { ReturnUrl = ReturnUrl.Default }
         );
     }
@@ -74,7 +74,7 @@ public sealed class SignUpApiTests {
     public async Task AMalformedAddressTouchesNoGrain() {
         var harness = new SignUpApiHarness();
 
-        var result = await harness.Api.BeginAsync(new("not-an-address", "/"), null, Ct);
+        var result = await harness.Api.BeginAsync(new("not-an-address", "/"), null, SignUpApiHarness.Caller, Ct);
 
         // ⚠ docs/plan/11 § Credentials: an unauthenticated endpoint whose path costs a grain
         // activation is an amplifier. A well-formed address reaches a grain keyed by a random id the
@@ -83,7 +83,7 @@ public sealed class SignUpApiTests {
         result.Ticket.ShouldBeNull("nothing was begun, so there is nothing to name");
         result.Body.ShouldBeOfType<SignUpBeginResponse>().Sent.ShouldBeTrue("and the answer is still the one answer");
 
-        var wellFormed = await harness.Api.BeginAsync(new("someone@example.com", "/"), null, Ct);
+        var wellFormed = await harness.Api.BeginAsync(new("someone@example.com", "/"), null, SignUpApiHarness.Caller, Ct);
         harness.Grains.References.ShouldBe(1);
         wellFormed.Ticket.ShouldNotBeNull();
     }
@@ -92,14 +92,58 @@ public sealed class SignUpApiTests {
     public async Task ABeginWithATicketReissuesOnTheSameSignUp() {
         var harness = new SignUpApiHarness();
 
-        var first = await harness.Api.BeginAsync(new("someone@example.com", "/"), null, Ct);
+        var first = await harness.Api.BeginAsync(new("someone@example.com", "/"), null, SignUpApiHarness.Caller, Ct);
         var ticket = first.Ticket.ShouldNotBeNull();
 
-        var again = await harness.Api.BeginAsync(new("someone@example.com", "/"), ticket, Ct);
+        var again = await harness.Api.BeginAsync(new("someone@example.com", "/"), ticket, SignUpApiHarness.Caller, Ct);
 
         again.Ticket.ShouldNotBeNull().SignupId.ShouldBe(ticket.SignupId, "a resend is the same sign-up");
         harness.Grains.SignUps.Count.ShouldBe(1);
         harness.Grains.SignUps[ticket.SignupId].Issues.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task ACallerWhoVariesTheAddressIsBoundedAndTheAnswerDoesNotChange() {
+        var harness = new SignUpApiHarness();
+
+        // ⚠ The per-sign-up cap (OtpPolicy.MaxIssuesPerWindow) bounds one address. Every one of
+        // these is a different address, so it bounds none of them, and every one is a code the
+        // platform's shared daily allowance pays for. The caller is what has to be bounded.
+        var answers = new List<SignUpBeginResponse>();
+
+        for (var i = 0; i < LockoutPolicy.FreeAttempts + 3; i++) {
+            var result = await harness.Api.BeginAsync(new($"person-{i}@example.com", "/"), null, SignUpApiHarness.Caller, Ct);
+            answers.Add(result.Body.ShouldBeOfType<SignUpBeginResponse>());
+        }
+
+        // Five free, the sixth climbs the ladder — LockoutPolicy.DelayFor(6) is one second and the
+        // ladder's clock is frozen — so the seventh and eighth reach no grain and send nothing.
+        harness.Grains.SignUps.Count.ShouldBe(LockoutPolicy.FreeAttempts + 1, "the ladder starts after the free attempts, as it does for sign-in");
+        answers.ShouldAllBe(x => x.Sent, "and a held caller is told the same thing as everyone else");
+        answers.Select(x => x.ReturnUrl).Distinct().ShouldHaveSingleItem();
+
+        // A different caller is not held by this one's ladder.
+        var other = await harness.Api.BeginAsync(new("person-x@example.com", "/"), null, "198.51.100.9", Ct);
+        other.Ticket.ShouldNotBeNull();
+        harness.Grains.SignUps.Count.ShouldBe(LockoutPolicy.FreeAttempts + 2);
+
+        // And the hold lifts when the ladder says so.
+        harness.LadderClock.Advance(LockoutPolicy.DelayFor(LockoutPolicy.FreeAttempts + 1));
+        var later = await harness.Api.BeginAsync(new("person-y@example.com", "/"), null, SignUpApiHarness.Caller, Ct);
+        later.Ticket.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task ACallerWithNoAddressIsNotCounted() {
+        var harness = new SignUpApiHarness();
+
+        // ⚠ Deliberately fail-open: a host that knows no peer would otherwise put every caller in one
+        // bucket and ration the whole platform's sign-ups to five — LockoutKey.ForCaller's remarks.
+        for (var i = 0; i < LockoutPolicy.FreeAttempts + 3; i++) {
+            (await harness.Api.BeginAsync(new($"person-{i}@example.com", "/"), null, string.Empty, Ct)).Ticket.ShouldNotBeNull();
+        }
+
+        harness.Grains.SignUps.Count.ShouldBe(LockoutPolicy.FreeAttempts + 3);
     }
 
     // ── verify, and the ticket ─────────────────────────────────────────────────────────────────
@@ -118,7 +162,7 @@ public sealed class SignUpApiTests {
     [Fact]
     public async Task AWrongCodeIsFalseAndTheRightOneIsTrueOnce() {
         var harness = new SignUpApiHarness();
-        var ticket = (await harness.Api.BeginAsync(new("someone@example.com", "/"), null, Ct)).Ticket!;
+        var ticket = (await harness.Api.BeginAsync(new("someone@example.com", "/"), null, SignUpApiHarness.Caller, Ct)).Ticket!;
 
         (await harness.Api.VerifyAsync(new("000000"), ticket)).Body.ShouldBeOfType<SignUpVerifyResponse>().Verified.ShouldBeFalse();
         (await harness.Api.VerifyAsync(new("482913"), ticket)).Body.ShouldBeOfType<SignUpVerifyResponse>().Verified.ShouldBeTrue();
@@ -130,7 +174,7 @@ public sealed class SignUpApiTests {
     [Fact]
     public async Task CompleteBeforeVerifyIsRefusedByName() {
         var harness = new SignUpApiHarness();
-        var ticket = (await harness.Api.BeginAsync(new("someone@example.com", "/"), null, Ct)).Ticket!;
+        var ticket = (await harness.Api.BeginAsync(new("someone@example.com", "/"), null, SignUpApiHarness.Caller, Ct)).Ticket!;
 
         var result = await harness.Api.CompleteAsync(Password(), ticket, null, Context, Ct);
 
@@ -385,7 +429,7 @@ public sealed class SignUpApiTests {
         var harness = new SignUpApiHarness(selfServe: false);
 
         foreach (var (endpoint, result) in new[] {
-                     ("begin", await harness.Api.BeginAsync(new("someone@example.com", "/after"), null, Ct)),
+                     ("begin", await harness.Api.BeginAsync(new("someone@example.com", "/after"), null, SignUpApiHarness.Caller, Ct)),
                      ("verify", await harness.Api.VerifyAsync(new("482913"), null)),
                      ("passkey/begin", await harness.Api.BeginPasskeyAsync(new("Rene"), null)),
                      ("complete", await harness.Api.CompleteAsync(Password(), null, null, Context, Ct))

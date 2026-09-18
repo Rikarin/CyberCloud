@@ -57,7 +57,7 @@ dotnet run --project src/Hosts/CyberCloud.AppHost
 ```
 
 brings up **the whole platform**: Redis, one PostgreSQL server carrying three shard databases, NATS,
-a k3s in Docker, SeaweedFS as the object store, **two** silos —
+a k3s in Docker, SeaweedFS as the object store, Mailpit as the mail relay, **two** silos —
 [docs/plan/24 § Phase 0](../../docs/plan/24-roadmap.md)'s exit criterion — and, since 2026-09-15,
 the three hosts a user reaches and the two Angular apps:
 
@@ -69,6 +69,7 @@ the three hosts a user reaches and the two Angular apps:
 | `portal` | `http://localhost:4200` | `ng serve portal`; its `/api` is proxied to the gateway |
 | `identity-app` | `http://localhost:4201` | `ng serve identity`; the sign-in and sign-up pages, proxied to the identity host |
 | `seaweedfs` | `http://localhost:8333` | the S3 gateway, bucket `cybercloud`, created by the `seaweedfs-bucket` container |
+| `mailpit` | `http://localhost:8025` | the inbox every email the platform sends on this run lands in (#93); SMTP on `localhost:1025`, which both silos are pointed at through `CyberCloud:Communication:Smtp` |
 
 `CyberCloud.AppHost.Tests` runs that same AppHost — minus the two Angular apps,
 `--CyberCloud:AppHost:Frontends=false` — and asserts the criterion; it is a per-PR test.
@@ -88,9 +89,13 @@ identity app's sign-in page. "Create one" runs the self-serve sign-up — an add
 code, a name, an organisation and a passkey or a password — and lands back in the portal signed
 in, with the new tenant's default subscription and resource group in the context bar; from there
 the subscription and resource-group pages list what sign-up created and a resource can be created
-and watched to `Succeeded` (#88). ⚠ **The code is not mailed — there is no MTA (#93).** The silo
-that minted it logs it at Warning: open the Aspire dashboard, Structured logs, and filter for
-`DEVELOPMENT OTP`; the console log of `silo-1` or `silo-2` carries the same line. ⚠ **A stop of the
+and watched to `Succeeded` (#88). ⚠ **The code is in two places (#93).** It is mailed through the
+platform's own communication service to Mailpit — open http://localhost:8025 — and the silo that
+minted it also logs it at Warning: open the Aspire dashboard, Structured logs, and filter for
+`DEVELOPMENT OTP`; the console log of `silo-1` or `silo-2` carries the same line. A `was NOT
+mailed` Warning beside it says why the relay refused, if it did. The same relay carries a tenant's
+own email channel (`CyberCloud.Communication/services/{name}/channels` with `kind: email`), so an
+alert (#32) lands in the same inbox. ⚠ **A stop of the
 AppHost empties the durable tier**, so the tenant is gone with it, but `.identity/` beside this
 AppHost keeps the signing and encryption keys (gitignored), so a restart of the identity host alone
 keeps every portal tab signed in. `PersonOverHttpTests` performs the same story against this
@@ -98,12 +103,13 @@ topology, minus the browser. `CyberCloud.Sample/widgets` needs a `clusterId`, so
 is still starting the type to create first is one that declares no cluster — a
 `CyberCloud.Communication/services`, for one.
 
-⚠ **The AppHost fixes eleven ports** — 11111/30011 and 11112/30012 for the two silos' Orleans
-sockets, 6443 for the k3s API server, 8333/8888 for SeaweedFS, and the five in the table. Orleans'
-sockets are opened from configuration rather than from an Aspire endpoint, so Aspire cannot allocate
-them and cannot detect a collision; the rest are pinned because a proxy file, a kubeconfig, an S3
-signature and an OIDC issuer each name a port. A second `dotnet run`, or a `dotnet run` beside
-`CyberCloud.AppHost.Tests`, fails with `AddressInUseException`.
+⚠ **The AppHost fixes thirteen ports** — 11111/30011 and 11112/30012 for the two silos' Orleans
+sockets, 6443 for the k3s API server, 8333/8888 for SeaweedFS, 1025/8025 for Mailpit, and the five
+hosts and apps in the table. Orleans' sockets are opened from configuration rather than from an
+Aspire endpoint, so Aspire cannot allocate them and cannot detect a collision; the rest are pinned
+because a proxy file, a kubeconfig, an S3 signature, an SMTP relay address and an OIDC issuer each
+name a port. A second `dotnet run`, or a `dotnet run` beside `CyberCloud.AppHost.Tests`, fails with
+`AddressInUseException`.
 
 ⚠ **`CyberCloud.Silo.Host --apply-durable-schema`** is a one-shot mode, not a silo. It creates the
 Orleans grain-storage schema on every configured durable shard and exits;

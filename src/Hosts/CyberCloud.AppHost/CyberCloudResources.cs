@@ -177,6 +177,51 @@ public static class CyberCloudResources {
     /// <inheritdoc cref="ObjectStoreAccessKeyId" />
     public const string ObjectStoreSecretAccessKey = "cybercloud-dev-secret-access-key";
 
+    // ── The development mail relay — #93 ──────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Mailpit — an SMTP server that accepts everything and shows it in a web inbox. The
+    ///     development carrier behind <c>CyberCloud.Communication</c>'s email channel, so a sign-up
+    ///     code and an alert land somewhere a person can open.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Development only, and not because Mailpit is a toy.</b> It is a relay that delivers
+    ///     nothing anywhere: every message stays in its inbox. The silos are pointed at it through
+    ///     <c>CyberCloud:Communication:Smtp</c> with <c>Security=None</c> and no credential, which
+    ///     <c>SmtpRelayOptions.Validate</c> allows only because there is no password to leak; a
+    ///     production relay is the same section with TLS and an <c>AUTH</c> credential, and the
+    ///     relay itself is what <c>charts/bundle/bundle.yaml § owed</c> still carries.
+    /// </remarks>
+    public const string Mailpit = "mailpit";
+
+    /// <summary>The image, pinned. ⚠ The same tag <c>SmtpChannelProviderTests</c> runs the carrier against, and <c>AppHostTopologyTests</c> holds the two together.</summary>
+    public const string MailpitImage = "axllent/mailpit";
+
+    /// <inheritdoc cref="MailpitImage" />
+    public const string MailpitTag = "v1.31.1";
+
+    /// <summary>Mailpit's SMTP port, published unproxied so the silos' <c>localhost:1025</c> is the address.</summary>
+    public const int MailpitSmtpPort = 1025;
+
+    /// <summary>Mailpit's web inbox and API — <c>http://localhost:8025</c>.</summary>
+    public const int MailpitHttpPort = 8025;
+
+    /// <summary>
+    ///     The address the platform's mail is sent from on a development run. A <c>.local</c> domain
+    ///     nothing resolves, because nothing is meant to answer it — Mailpit keeps the reply too.
+    /// </summary>
+    public const string PlatformSender = "no-reply@cybercloud.local";
+
+    /// <summary>The display name beside <see cref="PlatformSender" />.</summary>
+    public const string PlatformSenderName = "Cyber Cloud (dev)";
+
+    /// <summary>
+    ///     The mailbox <c>List-Unsubscribe</c> points at. On Mailpit an unsubscribe reply lands in the
+    ///     same inbox as everything else, which is exactly where a developer testing the header wants
+    ///     to see it.
+    /// </summary>
+    public const string PlatformUnsubscribeMailbox = "unsubscribe@cybercloud.local";
+
     // ── What the AppHost is asked to leave out ────────────────────────────────────────────────
 
     /// <summary>

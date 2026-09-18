@@ -40,7 +40,11 @@ namespace CyberCloud.Identity.Seams;
 ///             That is the cost, and it is deliberate: a single global cap on authentication spend is
 ///             the thing an operator can actually reason about at 03:00, and the failure it produces
 ///             — codes refused, loudly, with the limit and the window named — is better than an
-///             unbounded carrier bill.
+///             unbounded carrier bill. ⚠ The loop need not be the platform's own: the unauthenticated
+///             sign-up surface issues a code for any address, so a stranger varying the address is
+///             the same loop from outside, and the per-caller ladder on <c>SignUpApi.BeginAsync</c>
+///             is what keeps one machine from spending everyone's day. What that leaves — many
+///             machines — is exactly what this cap is for.
 ///         </item>
 ///     </list>
 ///     <para>

@@ -55,7 +55,11 @@ public enum MessageStatus {
     /// <summary>No message has been recorded under this idempotency key.</summary>
     Unknown = 0,
 
-    /// <summary>Accepted and recorded, not yet handed to a carrier.</summary>
+    /// <summary>
+    ///     Accepted and recorded, and the carrier's answer is not known: it has not been called yet,
+    ///     or it was called and never answered. Only <see cref="IMessageGrain.RetryAsync" /> moves
+    ///     a message out of it.
+    /// </summary>
     Queued,
 
     /// <summary>A carrier accepted it and returned a provider message id.</summary>

@@ -31,7 +31,11 @@ public sealed class SiloIdentityOptions {
     /// <summary>The configuration section this binds from.</summary>
     public const string SectionName = "CyberCloud:Identity:OtpDelivery";
 
-    /// <summary>The tenant that owns the communication service. ⚠ Not the user's tenant.</summary>
+    /// <summary>
+    ///     The tenant that owns the communication service. ⚠ Not the user's tenant — and unset is the
+    ///     <b>platform tenant</b>, whose id is all zeroes, so a route to the platform's own service
+    ///     (<see cref="PlatformCommunicationService" />) names only a <see cref="ServiceId" />.
+    /// </summary>
     public Guid TenantId { get; set; }
 
     /// <summary>The communication service resource the platform's codes are sent through.</summary>
@@ -46,7 +50,10 @@ public sealed class SiloIdentityOptions {
     ///     <b>Where to read it:</b> the service's own PUT operation. Its <c>ready</c> progress line
     ///     names the id (<c>CommunicationServiceReconciler</c> reports it, and progress reaches the
     ///     portal and <c>cyc --wait</c> — docs/plan/08 § The reconcile loop), so the number is read
-    ///     off the operation that created the service rather than recomputed by hand.
+    ///     off the operation that created the service rather than recomputed by hand. Or, since #93,
+    ///     the platform's own service: <c>PlatformBootstrapTask</c> writes it whenever a relay is
+    ///     configured and logs its id at start, and <see cref="PlatformCommunicationService.ServiceId" />
+    ///     is the same number.
     /// </remarks>
     public Guid ServiceId { get; set; }
 
@@ -61,9 +68,15 @@ public sealed class SiloIdentityOptions {
     public string TemplateName { get; set; } = string.Empty;
 
     /// <summary>
-    ///     Whether both ids are set. ⚠ An unset pair is a silo that has deliberately not opted in.
+    ///     Whether a service is named. ⚠ An unset section is a silo that has deliberately not opted in.
     /// </summary>
-    public bool IsConfigured => TenantId != Guid.Empty && ServiceId != Guid.Empty;
+    /// <remarks>
+    ///     The service id alone decides, since #93: <see cref="TenantId" /> may legitimately be all
+    ///     zeroes, because that is the platform tenant, and the platform's own service is the route
+    ///     most deployments want. Before, the pair had to be set and a route to the platform tenant
+    ///     could not be written at all.
+    /// </remarks>
+    public bool IsConfigured => ServiceId != Guid.Empty;
 }
 
 /// <summary>Composes the identity module onto this silo.</summary>
@@ -73,7 +86,11 @@ public static class SiloIdentityComposition {
     ///     <c>IOtpDeliverySeam</c> at <c>CyberCloud.Communication</c>.
     /// </summary>
     /// <param name="silo">The silo being composed.</param>
-    /// <param name="environment">The host's environment — the one input the Development branch reads.</param>
+    /// <param name="environment">The host's environment — the input the Development branch reads first.</param>
+    /// <param name="hasRelay">
+    ///     Whether <c>CyberCloud:Communication:Smtp</c> names a relay, so the platform's own service
+    ///     can carry a code. Read only by the Development branch; a configured route ignores it.
+    /// </param>
     /// <returns>The same builder, for chaining.</returns>
     /// <remarks>
     ///     <para>
@@ -107,17 +124,28 @@ public static class SiloIdentityComposition {
     ///         ⚠
     ///         <b>
     ///             In Development, and only there, an unconfigured route logs the code instead —
-    ///             <c>DevelopmentOtpDelivery</c>.
-    ///         </b> There is no MTA on a developer's laptop (#93), and a sign-up whose enrolment
-    ///         code goes nowhere is a sign-up nobody can finish. Keyed on
-    ///         <paramref name="environment" /> rather than on a setting, for the reason that type
-    ///         gives; a configured route still wins, so a developer who wires a real communication
-    ///         service gets real delivery. The person reads the code off the silo's console in the
-    ///         Aspire dashboard — the silo, because <c>OtpPolicy</c>'s fourth property keeps the
-    ///         plaintext in the process that ran the grain.
+    ///             <c>DevelopmentOtpDelivery</c> — and, when the silo has a relay, mails it as well.
+    ///         </b> A sign-up whose enrolment code goes nowhere is a sign-up nobody can finish.
+    ///         Keyed on <paramref name="environment" /> rather than on a setting, for the reason
+    ///         that type gives; a configured route still wins, so a developer who wires a real
+    ///         communication service gets real delivery. The person reads the code off the silo's
+    ///         console in the Aspire dashboard — the silo, because <c>OtpPolicy</c>'s fourth property
+    ///         keeps the plaintext in the process that ran the grain — and, on the AppHost since
+    ///         #93, in Mailpit's inbox at <c>http://localhost:8025</c>: with
+    ///         <paramref name="hasRelay" /> the development seam also sends through the platform's
+    ///         own communication service (<see cref="PlatformCommunicationService" />), which
+    ///         <c>PlatformBootstrapTask</c> writes at start on the same condition.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The relay alone opts nobody in outside Development.</b> A Staging silo with a
+    ///         relay and no route keeps <c>UnavailableOtpDelivery</c>; routing a tenant's
+    ///         authentication traffic through a service the operator did not name is the default
+    ///         the paragraph above refuses, and a relay is not a route.
+    ///         <c>OtpSeamWiringTests.AProductionSiloWithARelayAndNoRouteStillKeepsTheRefusingSeam</c>
+    ///         pins it.
     ///     </para>
     /// </remarks>
-    public static ISiloBuilder AddSiloIdentity(this ISiloBuilder silo, IHostEnvironment environment) {
+    public static ISiloBuilder AddSiloIdentity(this ISiloBuilder silo, IHostEnvironment environment, bool hasRelay = false) {
         ArgumentNullException.ThrowIfNull(silo);
         ArgumentNullException.ThrowIfNull(environment);
 
@@ -129,7 +157,7 @@ public static class SiloIdentityComposition {
         if (options.IsConfigured) {
             silo.AddCommunicationOtpDelivery(options.TenantId, options.ServiceId, options.TemplateName);
         } else {
-            silo.AddDevelopmentOtpDelivery(environment);
+            silo.AddDevelopmentOtpDelivery(environment, hasRelay ? PlatformCommunicationService.OtpRoute : null);
         }
 
         return silo;

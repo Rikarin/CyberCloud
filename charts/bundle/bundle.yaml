@@ -773,20 +773,33 @@ owed:
   - id: the-platform-has-no-mta
     says: >
       CyberCloud.Communication/services and its three children shipped on 2026-09-15 (#33) as the
-      tenant-facing face of the sending module, and NOTHING IN THIS BUNDLE CAN CARRY AN EMAIL. docs/plan/17
-      § The channel abstraction names "Amazon SES/our own Postfix (email)" as the email carrier; the
-      module ships no SES client and this bundle ships no relay, so every email channel — the platform's
-      own OTPs included — resolves to CyberCloud.Communication's refusing seam and a send refuses
-      honestly with "no Email carrier is registered". Recorded HERE rather than in a chart's
-      conformance.yaml because the family is clusterless and has no chart: the outbound MTA is not a
-      per-tenant resource, it is platform infrastructure — a shared, warmed outbound pool with a PTR,
-      feedback-loop registrations and RBL monitoring, docs/plan/17 § Deliverability's table — and
-      docs/plan/25's closed row 2 adds that the platform's OWN transactional sending IPs must be
-      separate from tenant sending IPs, so that one tenant's reputation problem cannot take the
-      platform's OTPs and invoices down with it. Until it exists, the only email carrier this
-      repository can drive is the in-memory double the tests use. The SMS, WhatsApp, push and voice
-      carriers are the same shape of absence and the same seam; the MTA is listed alone because it is
-      the one this bundle would host rather than a contract somebody signs.
+      tenant-facing face of the sending module, and NOTHING IN THIS BUNDLE CAN CARRY AN EMAIL. What
+      changed on 2026-09-18 (#93), and what did not — AND #93 STAYS OPEN, because what it asked for
+      is the carrier and what landed is the client: the module now ships the CLIENT — SmtpChannelProvider,
+      a hand-written SMTP submission (STARTTLS, AUTH PLAIN/LOGIN, the deliverability headers docs/plan/17
+      § The outbound carrier lists) to whatever relay CyberCloud:Communication:Smtp names, proven against
+      Mailpit in a container and run against Mailpit by the AppHost — and this bundle still ships no
+      RELAY, so on a cluster the section names nothing and every email channel, the platform's own OTPs
+      included, still lands on the refusing seam, whose sentence now names the section to set. Recorded
+      HERE rather than in a chart's conformance.yaml because the family is clusterless and has no chart:
+      the outbound MTA is not a per-tenant resource, it is platform infrastructure — a shared, warmed
+      outbound pool with a PTR, feedback-loop registrations and RBL monitoring, docs/plan/17
+      § Deliverability's table — and docs/plan/25's closed row 2 adds that the platform's OWN
+      transactional sending IPs must be separate from tenant sending IPs, so that one tenant's
+      reputation problem cannot take the platform's OTPs and invoices down with it. WHAT CLOSING IT
+      TAKES, now that the client exists: a Postfix relay component in this roster (its own chart, its
+      own conformance.yaml, `requires:` cert-manager for the submission certificate) or an Amazon SES
+      SMTP credential in a Secret — either is the same six configuration keys on the silo — plus the
+      operational half no chart carries: the PTR, the feedback loops, the warm-up, and the abuse desk
+      docs/plan/17 § Deliverability says to decide about before starting. ⚠ TWO SMALLER THINGS RIDE ON
+      THE SAME ROW. A tenant's own SMTP account (account: tenant on an email channel) is REFUSED by the
+      carrier rather than sent through the platform's relay under the platform's name, because a BYO
+      relay has a host per tenant and ChannelConfiguration carries only two credential handles; closing
+      it is a `relayHost` on the channel and a third CarrierSecretRef read through a vault seam this
+      module does not yet have. And the relay credential itself is configuration, not a vault handle —
+      SmtpRelayOptions' remarks own the deviation and name the one line to change. The SMS, WhatsApp,
+      push and voice carriers are the same shape of absence and the same seam; the MTA is listed alone
+      because it is the one this bundle would host rather than a contract somebody signs.
   - id: communication-silo-kill-has-no-clusterless-harness
     says: >
       test/CyberCloud.Cluster.Conformance refuses a case with no objects by name
@@ -847,3 +860,23 @@ owed:
       carries the service id in its path (WebhookEnvelope.ServiceId — "this is where the tenant comes
       from"), rate-limited, handing the raw bytes to the router unparsed because the signature is over
       them.
+      ⚠ THE FIRST CARRIER LANDED (2026-09-18, #93) AND THE INGRESS DID NOT, DELIBERATELY, AND THIS
+      ROW NOW CARRIES THE EMAIL-SPECIFIC DESIGN SO THE RELAY LANDS WITH IT. The carrier is SMTP to a
+      relay, and a relay reports a bounce as MAIL, not as a webhook: an RFC 3464 delivery status
+      notification to the envelope sender, with the original Message-ID (the provider message id
+      SmtpChannelProvider returns, minted under the From domain) in the returned headers and a
+      per-recipient `Status:` field whose first digit says permanent (5.x.x → HardBounce) or
+      transient (4.x.x → nothing). Amazon SES reports the same as an SNS notification — JSON with
+      `notificationType` Bounce/Complaint, `bounce.bounceType` Permanent/Transient and the SES
+      message id, which is NOT ours (SES rewrites Message-ID), signed with the SNS certificate named
+      in `SigningCertURL`. So two ingestion shapes, both landing on IWebhookRouter.HandleReceiptAsync
+      with DeliveryReceipt.Suppresses set by the parser and nobody else: (1) for a Postfix relay, a
+      mailbox the DSNs are routed to — the envelope sender, or a VERP address per message
+      (`bounces+{messageId}@domain`, which makes the correlation the address itself) — read by a poller
+      or delivered by the relay to an HTTP hook; and (2) for SES, the gateway route kind above, verifying
+      the SNS signature before parsing, with a lookup from the SES message id to ours that the
+      dispatch path has to record when the relay's 250 carries it. The List-Unsubscribe mailbox is the
+      third arrival on the same path: a mail to it is an OptOut for the sender, and the RFC 8058
+      one-click `https:` form is the same gateway route kind again. None of this ships before a relay
+      does, for the security reason at the top of this row — with no relay there is nothing to verify
+      a bounce against, and an unverified bounce is a stranger suppressing an address.
