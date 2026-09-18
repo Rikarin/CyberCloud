@@ -1,4 +1,5 @@
 using Kusto.Language;
+using Kusto.Language.Parsing;
 using Kusto.Language.Symbols;
 using Kusto.Language.Syntax;
 using System.Collections.Immutable;
@@ -62,12 +63,52 @@ public sealed record KqlTranslationContext(Guid TenantId, ImmutableArray<string>
 ///         this time; the tag map sorts by its JSON text for that purpose. <c>LIMIT</c> and
 ///         <c>OFFSET</c> are numbers this translator computed and are written as numbers.
 ///     </para>
+///     <para>
+///         ⚠ <b>Four sizes are refused before anything recurses, because a stack overflow is the
+///         one exception .NET does not let a process catch (#54 review).</b> The first cut recursed
+///         once per pipe and once per nesting level with no limit, and <c>resources</c> followed by
+///         eight thousand <c>| where true</c> — 104 KB, a tenth of the gateway's body cap — killed
+///         the test host from inside the walk. Microsoft's parser has the same shape: measured on a
+///         1 MB thread against 12.4.1, it survives 8,000 pipes, 3,000 <c>and</c>s, 8,000 parentheses
+///         and every other bracket-less chain, and overflows between 250 and 500 nested function
+///         calls (<c>not(not(not(…)))</c>). So the query is lexed first — the lexer is a loop — and
+///         refused when it has more than <see cref="MaxTokens" /> tokens or nests brackets deeper
+///         than <see cref="MaxNesting" />, before the parser sees it; and the walk itself refuses
+///         more than <see cref="MaxOperators" /> operators and an expression deeper than
+///         <see cref="MaxExpressionDepth" />, with the pipe chain and <c>and</c>/<c>or</c> chains
+///         walked as loops so that a long query is refused by the count and never by the stack.
+///         <c>KqlRefusalTests.ASizeThatWouldOverflowTheStackIsRefusedByItsNumberBeforeTheParserRuns</c>
+///         drives each of the four.
+///     </para>
 /// </remarks>
 public static class KqlTranslator {
     static readonly Regex Identifier = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, TimeSpan.FromSeconds(1));
 
     /// <summary>The placeholder name the access filter binds.</summary>
     public const string AccessParameter = "access";
+
+    /// <summary>
+    ///     The most tokens a query may lex to. A two-thousand-member <c>in</c> list fits; a body
+    ///     built to exhaust the parser does not.
+    /// </summary>
+    public const int MaxTokens = 4096;
+
+    /// <summary>
+    ///     How deep <c>(</c>, <c>[</c> and <c>{</c> may nest. A real query nests two or three; the
+    ///     parser's stack gives out somewhere past two hundred and fifty.
+    /// </summary>
+    public const int MaxNesting = 32;
+
+    /// <summary>The most tabular operators after the table.</summary>
+    public const int MaxOperators = 64;
+
+    /// <summary>
+    ///     How deep the walk may recurse into one expression. Brackets are already held to
+    ///     <see cref="MaxNesting" /> and <c>and</c>/<c>or</c> chains are flattened, so this catches
+    ///     what is left — a tag path a hundred keys long (<c>tags.a.a.a…</c>), the one left-nested
+    ///     shape KQL's grammar accepts without a bracket, which no real query writes.
+    /// </summary>
+    public const int MaxExpressionDepth = 64;
 
     /// <summary>Translates one query.</summary>
     /// <param name="kql">The query text.</param>
@@ -87,6 +128,10 @@ public static class KqlTranslator {
 
         if (context.AccessSubjects.IsDefaultOrEmpty) {
             throw new ArgumentException("A query needs the caller's subjects for the access filter; none were given.", nameof(context));
+        }
+
+        if (Size(kql) is { } tooLarge) {
+            return Refuse(tooLarge);
         }
 
         var code = KustoCode.ParseAndAnalyze(kql, ResourceGraphSchema.Globals);
@@ -119,6 +164,43 @@ public static class KqlTranslator {
             // exception is not.
             return Refuse(Bound(bound));
         }
+    }
+
+    /// <summary>
+    ///     The refusal for a query too large to parse, or <c>null</c> for one the parser may see:
+    ///     the token count against <see cref="MaxTokens" /> and the bracket nesting against
+    ///     <see cref="MaxNesting" />, read off the lexer's tokens in one pass.
+    /// </summary>
+    static string? Size(string kql) {
+        var tokens = TokenParser.ParseTokens(kql);
+
+        if (tokens.Length > MaxTokens) {
+            return $"The query has {tokens.Length} tokens and the resource graph takes at most {MaxTokens}. "
+                + "Split it, or narrow it with a where. " + KqlSubset.SupportedSentence;
+        }
+
+        var depth = 0;
+        var deepest = 0;
+
+        foreach (var token in tokens) {
+            switch (token.Kind) {
+                case SyntaxKind.OpenParenToken:
+                case SyntaxKind.OpenBracketToken:
+                case SyntaxKind.OpenBraceToken:
+                    deepest = Math.Max(deepest, ++depth);
+                    break;
+
+                case SyntaxKind.CloseParenToken:
+                case SyntaxKind.CloseBracketToken:
+                case SyntaxKind.CloseBraceToken:
+                    depth--;
+                    break;
+            }
+        }
+
+        return deepest > MaxNesting
+            ? $"The query nests brackets {deepest} deep and the resource graph takes at most {MaxNesting}. " + KqlSubset.SupportedSentence
+            : null;
     }
 
     static string Bound(Diagnostic diagnostic) => $"{diagnostic.Message} (at character {diagnostic.Start}). " + KqlSubset.SupportedSentence;
@@ -175,6 +257,7 @@ public static class KqlTranslator {
         readonly List<SqlParameter> parameters = [];
         int literals;
         bool inAggregate;
+        int depth;
 
         public TranslatedQuery Translate(QueryBlock block) {
             var statements = block.Statements;
@@ -208,23 +291,42 @@ public static class KqlTranslator {
 
         // ── Tabular operators ──────────────────────────────────────────────────────────────────
 
+        /// <summary>
+        ///     The table and its operators, applied in order. ⚠ A loop and not a recursion: the
+        ///     parser hands a pipe back left-nested — <c>((resources | a) | b) | c</c> — so the walk
+        ///     goes down the left spine collecting operators and applies them on the way back,
+        ///     refusing more than <see cref="MaxOperators" /> before any runs.
+        /// </summary>
         Stage Pipeline(Expression expression) {
-            switch (expression) {
-                case PipeExpression pipe: {
-                    var stage = Pipeline(pipe.Expression);
-                    return Apply(stage, pipe.Operator);
-                }
+            var operators = new Stack<QueryOperator>();
 
-                case NameReference table when table.ReferencedSymbol is TableSymbol
-                                              && string.Equals(table.SimpleName, ResourceGraphSchema.TableName, StringComparison.Ordinal):
-                    return Base();
-
-                default:
-                    throw new KqlRefusedException(
-                        $"A query starts with the table 'resources' and this one starts with '{Text(expression)}'. "
-                        + KqlSubset.SupportedSentence
-                    );
+            while (expression is PipeExpression pipe) {
+                operators.Push(pipe.Operator);
+                expression = pipe.Expression;
             }
+
+            if (operators.Count > MaxOperators) {
+                throw new KqlRefusedException(
+                    $"The query has {operators.Count} operators after the table and the resource graph takes at most {MaxOperators}. "
+                    + KqlSubset.SupportedSentence
+                );
+            }
+
+            if (expression is not NameReference { ReferencedSymbol: TableSymbol } table
+                || !string.Equals(table.SimpleName, ResourceGraphSchema.TableName, StringComparison.Ordinal)) {
+                throw new KqlRefusedException(
+                    $"A query starts with the table 'resources' and this one starts with '{Text(expression)}'. "
+                    + KqlSubset.SupportedSentence
+                );
+            }
+
+            var stage = Base();
+
+            while (operators.Count > 0) {
+                stage = Apply(stage, operators.Pop());
+            }
+
+            return stage;
         }
 
         Stage Base() {
@@ -568,6 +670,22 @@ public static class KqlTranslator {
         // ── Scalar expressions ─────────────────────────────────────────────────────────────────
 
         SqlExpression Scalar(Stage stage, Expression expression) {
+            if (++depth > MaxExpressionDepth) {
+                throw new KqlRefusedException(
+                    $"The query has an expression more than {MaxExpressionDepth} levels deep, which the resource graph does not translate. "
+                    + KqlSubset.SupportedSentence
+                );
+            }
+
+            try {
+                return Nested(stage, expression);
+            }
+            finally {
+                depth--;
+            }
+        }
+
+        SqlExpression Nested(Stage stage, Expression expression) {
             switch (expression) {
                 case ParenthesizedExpression parenthesized:
                     return Scalar(stage, parenthesized.Expression);
@@ -661,7 +779,13 @@ public static class KqlTranslator {
                         _ => DateTime.SpecifyKind(instant, DateTimeKind.Utc)
                     };
 
-                    return new(Parameter("DateTime64(3)", SqlParameter.DateTime64(new DateTimeOffset(utc))), KqlType.DateTime);
+                    // ⚠ The parameter's type names the zone too. A bare `DateTime64(3)` is parsed in
+                    // the SERVER's time zone, so the UTC value computed above would have landed two
+                    // hours off on a ClickHouse running in Europe/Prague while the columns are
+                    // `DateTime64(3, 'UTC')` — every suite passed because the containers ran in UTC
+                    // (#54 review). ProjectionFixture now starts its ClickHouse in Europe/Prague so
+                    // that the suite would find it again.
+                    return new(Parameter(SqlParameter.DateTimeType, SqlParameter.DateTime64(new DateTimeOffset(utc))), KqlType.DateTime);
                 }
 
                 default:
@@ -692,9 +816,28 @@ public static class KqlTranslator {
             switch (binary.Kind) {
                 case SyntaxKind.AndExpression:
                 case SyntaxKind.OrExpression: {
-                    var left = Boolean(stage, binary.Left);
-                    var right = Boolean(stage, binary.Right);
-                    return new($"({left.Sql} {(binary.Kind == SyntaxKind.AndExpression ? "AND" : "OR")} {right.Sql})", KqlType.Bool);
+                    // ⚠ A chain of one operator — `a and b and c and …` — is left-nested in the tree
+                    // and a loop here, so a filter with a hundred terms is a hundred iterations and
+                    // not a hundred frames: the walk down the left spine collects the operands, and
+                    // each is translated at this depth. The SQL keeps the tree's parentheses, one
+                    // pair per binary node, so the golden files did not move.
+                    var kind = binary.Kind;
+                    var operands = new Stack<Expression>();
+                    Expression current = binary;
+
+                    while (current is BinaryExpression { Kind: var k } chain && k == kind) {
+                        operands.Push(chain.Right);
+                        current = chain.Left;
+                    }
+
+                    var op = kind == SyntaxKind.AndExpression ? "AND" : "OR";
+                    var sql = Boolean(stage, current).Sql;
+
+                    while (operands.Count > 0) {
+                        sql = $"({sql} {op} {Boolean(stage, operands.Pop()).Sql})";
+                    }
+
+                    return new(sql, KqlType.Bool);
                 }
 
                 case SyntaxKind.EqualExpression:
@@ -760,8 +903,13 @@ public static class KqlTranslator {
                         );
                     }
 
+                    // ⚠ On the tag map the term is matched against the map's JSON text — keys and
+                    // values both, which is what `tags has 'prod'` means in Azure Resource Graph.
+                    // The first cut handed ClickHouse the Map itself, and ClickHouse refused it
+                    // ("Illegal type Map(String, String) of argument of function match") for the
+                    // most natural tag query there is (#54 review).
                     var pattern = "(?i)(^|[^\\p{L}\\p{N}_])" + EscapeRe2(term) + "($|[^\\p{L}\\p{N}_])";
-                    return new($"match({left.Sql}, {Parameter("String", pattern)})", KqlType.Bool);
+                    return new($"match({AsString(left)}, {Parameter("String", pattern)})", KqlType.Bool);
                 }
 
                 default:

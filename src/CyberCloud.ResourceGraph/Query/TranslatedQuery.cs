@@ -9,7 +9,7 @@ namespace CyberCloud.ResourceGraph.Query;
 ///     value ClickHouse binds to it, as its HTTP interface takes them.
 /// </summary>
 /// <param name="Name">The placeholder's name, <c>p0</c>, <c>p1</c>, … or <c>access</c>.</param>
-/// <param name="ClickHouseType">The type the placeholder declares — <c>String</c>, <c>Int64</c>, <c>Float64</c>, <c>Bool</c>, <c>DateTime64(3)</c>, <c>Array(String)</c>.</param>
+/// <param name="ClickHouseType">The type the placeholder declares — <c>String</c>, <c>Int64</c>, <c>Float64</c>, <c>Bool</c>, <see cref="DateTimeType" />, <c>Array(String)</c>.</param>
 /// <param name="Value">The value in ClickHouse's parameter spelling, before URL encoding.</param>
 /// <remarks>
 ///     ⚠ <b>A literal from the query text never reaches the SQL; it reaches this record.</b> That is
@@ -18,6 +18,18 @@ namespace CyberCloud.ResourceGraph.Query;
 ///     binds as a string, and the SQL carries <c>{p0:String}</c> where it was.
 /// </remarks>
 public sealed record SqlParameter(string Name, string ClickHouseType, string Value) {
+    /// <summary>
+    ///     The type a datetime binds as: <c>DateTime64(3, 'UTC')</c>, with the zone spelled.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Not <c>DateTime64(3)</c>. ClickHouse parses a parameter of a zoneless type in the
+    ///     server's own time zone, and the columns it is compared with are
+    ///     <c>DateTime64(3, 'UTC')</c> — so on a server in Europe/Prague a value this module
+    ///     computed in UTC would have been read two hours early (#54 review). Naming the zone on the
+    ///     parameter makes the server's zone irrelevant, which is what a stored instant wants.
+    /// </remarks>
+    public const string DateTimeType = "DateTime64(3, 'UTC')";
+
     /// <summary>The placeholder as the SQL spells it.</summary>
     public string Placeholder => "{" + Name + ":" + ClickHouseType + "}";
 
@@ -44,7 +56,7 @@ public sealed record SqlParameter(string Name, string ClickHouseType, string Val
         return built.Append(']').ToString();
     }
 
-    /// <summary>A <c>DateTime64(3)</c> value in the spelling ClickHouse's parameter parser takes, in UTC.</summary>
+    /// <summary>A <see cref="DateTimeType" /> value in the spelling ClickHouse's parameter parser takes, in UTC.</summary>
     /// <param name="value">The instant.</param>
     public static string DateTime64(DateTimeOffset value) =>
         value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);

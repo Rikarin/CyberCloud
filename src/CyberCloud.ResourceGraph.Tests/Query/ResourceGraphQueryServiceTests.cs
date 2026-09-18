@@ -1,5 +1,6 @@
 using CyberCloud.ResourceGraph.Query;
 using CyberCloud.ResourceGraph.Tests.Infrastructure;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
@@ -32,7 +33,7 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
     static string N(Guid id) => id.ToString("N", CultureInfo.InvariantCulture);
 
     ResourceGraphQueryService Service() =>
-        new(fixture.ClickHouse, fixture.Reader, new MembershipIndexCallerAccessResolver(fixture.Grains), fixture.Options);
+        new(fixture.ClickHouse, fixture.Reader, new MembershipIndexCallerAccessResolver(fixture.Grains), fixture.Options, NullLogger<ResourceGraphQueryService>.Instance);
 
     static CallerContext Caller(string user) => new() { TenantId = ProjectionFixture.Tenant, SubjectType = "user", SubjectId = user };
 
@@ -198,6 +199,76 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
         );
         deep.IsSuccess.ShouldBeTrue(deep.Error?.Message);
         Names(deep.GetValueOrThrow()).ShouldBe([prefix + "-owned"]);
+
+        // ⚠ `has` on the tag map — the most natural tag query there is, and the one shape the first
+        // cut emitted that ClickHouse refused ("Illegal type Map(String, String) of argument of
+        // function match"), found by the #54 review. It matches the map's JSON text.
+        var tagged = await service.QueryAsync(
+            new() { Query = $"resources | where name startswith '{prefix}-' and tags has 'prod' | project name", Caller = caller },
+            token
+        );
+        tagged.IsSuccess.ShouldBeTrue(tagged.Error?.Message);
+        Names(tagged.GetValueOrThrow()).ShouldBe([prefix + "-owned"]);
+    }
+
+    [Fact]
+    public async Task ADatetimeLiteralIsComparedAsTheInstantItNamesWhateverTheServersZone() {
+        var token = TestContext.Current.CancellationToken;
+        var (prefix, _, _, _) = await SeedAsync();
+        var service = Service();
+
+        // ⚠ The server is NOT in UTC — ProjectionFixture says why — and this assertion is what makes
+        // the rest of the test mean anything: on a UTC server a zoneless parameter is parsed right by
+        // accident.
+        var zone = await fixture.ClickHouse.ExecuteAsync("SELECT timezone() FORMAT TSVRaw", cancellationToken: token);
+        zone.IsSuccess.ShouldBeTrue(zone.Error?.Message);
+        zone.GetValueOrThrow().Trim().ShouldBe(ProjectionFixture.ClickHouseTimeZone);
+
+        // The seeded rows were created at exactly 10:00:00Z. A one-second window around that instant
+        // holds them; parsed in Europe/Prague, the same digits name 08:00:00Z and the window is empty.
+        var window = await service.QueryAsync(
+            new() {
+                Query = $"resources | where name startswith '{prefix}-' and createdAt >= datetime(2026-09-17T10:00:00Z) and createdAt < datetime(2026-09-17T10:00:01Z) | project name",
+                Caller = Caller("alice-" + prefix)
+            },
+            token
+        );
+
+        window.IsSuccess.ShouldBeTrue(window.Error?.Message);
+        Names(window.GetValueOrThrow()).ShouldBe([prefix + "-owned"]);
+    }
+
+    [Fact]
+    public async Task AQueryPastItsBudgetIsA400ThatNamesTheBudgetAndNotTheStatement() {
+        var token = TestContext.Current.CancellationToken;
+        var (prefix, _, _, _) = await SeedAsync();
+
+        // A budget of one row, so the seeded table is already past it: ClickHouse refuses the read
+        // with TOO_MANY_ROWS before it runs.
+        var starved = new ResourceGraphOptions {
+            ClickHouseEndpoint = fixture.Options.ClickHouseEndpoint,
+            ClickHouseUser = fixture.Options.ClickHouseUser,
+            ClickHousePassword = fixture.Options.ClickHousePassword,
+            AllowInsecureTransport = fixture.Options.AllowInsecureTransport,
+            QueryMaxRowsToRead = 1
+        };
+        var service = new ResourceGraphQueryService(fixture.ClickHouse, fixture.Reader, new MembershipIndexCallerAccessResolver(fixture.Grains), starved, NullLogger<ResourceGraphQueryService>.Instance);
+
+        var refused = await service.QueryAsync(new() { Query = "resources | project name", Caller = Caller("alice-" + prefix) }, token);
+
+        refused.IsFailure.ShouldBeTrue("a table of many rows was read under a budget of one");
+        refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        refused.Error.Message.ShouldContain("budget");
+        refused.Error.Message.ShouldContain("1 rows read");
+
+        // ⚠ And none of what ClickHouse said: its text quotes the statement, the tenant database,
+        // the access filter with the caller's usersets in it, and the endpoint (#54 review).
+        refused.Error.Message.ShouldNotContain("SELECT");
+        refused.Error.Message.ShouldNotContain("tenant_");
+        refused.Error.Message.ShouldNotContain("hasAny");
+        refused.Error.Message.ShouldNotContain("user:alice");
+        refused.Error.Message.ShouldNotContain("DB::Exception");
+        refused.Error.Message.ShouldNotContain("http://");
     }
 
     [Fact]

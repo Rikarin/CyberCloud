@@ -52,10 +52,13 @@ public interface IResourceGraphQuery {
     /// <param name="cancellationToken">Cancels the request.</param>
     /// <returns>
     ///     One page of rows, or a failure: <see cref="ErrorCode.InvalidRequestBody" /> for a query
-    ///     outside the subset or a malformed one — the message names what was refused and what is
-    ///     supported — and <see cref="ErrorCode.InternalError" /> when the store did not answer.
-    ///     ⚠ Never <see cref="ErrorCode.AuthorizationFailed" />: what the caller may not read is
-    ///     absent rather than refused.
+    ///     outside the subset, a malformed one, one too large to parse, or one that ran past the
+    ///     store's budget — the message names what was refused and what is supported — and
+    ///     <see cref="ErrorCode.InternalError" /> when the store did not answer. ⚠ Every message
+    ///     is written for the caller: the store's own words, which quote the statement and the
+    ///     caller's usersets back, go to the implementation's log and never into a failure —
+    ///     docs/plan/08 § Errors. And never <see cref="ErrorCode.AuthorizationFailed" />: what the
+    ///     caller may not read is absent rather than refused.
     /// </returns>
     Task<Result<ResourceGraphQueryPage>> QueryAsync(
         ResourceGraphQueryRequest request,

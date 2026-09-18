@@ -47,6 +47,8 @@ public sealed class ResourceGraphQueryEndToEndTests : IAsyncLifetime {
         .WithEnvironment("CLICKHOUSE_USER", User)
         .WithEnvironment("CLICKHOUSE_PASSWORD", Password)
         .WithEnvironment("CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT", "1")
+        // Not UTC, for the reason ProjectionFixture.ClickHouseTimeZone gives.
+        .WithEnvironment("TZ", "Europe/Prague")
         // /ping and not a query: ProjectionFixture's remarks carry the trap.
         .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(x => x.ForPort(8123).ForPath("/ping")))
         .Build();
@@ -70,7 +72,7 @@ public sealed class ResourceGraphQueryEndToEndTests : IAsyncLifetime {
 
         // The grantees each row gets — what ICheckGrain.ListRoleAssignmentsAsync would report.
         var readers = new Dictionary<Guid, ImmutableArray<string>> {
-            [Owned] = ["user:alice"],
+            [Owned] = ["user:alice", "group:ops#member"],
             [Shared] = ["group:eng#member"],
             [Hidden] = ["user:zed"],
             [Parked] = ["user:alice"]
@@ -101,10 +103,12 @@ public sealed class ResourceGraphQueryEndToEndTests : IAsyncLifetime {
         var callers = new Dictionary<string, ImmutableArray<string>>(StringComparer.Ordinal) {
             ["alice"] = ["user:alice"],
             ["bob"] = ["user:bob", "group:eng#member"],
-            ["carol"] = ["user:carol"]
+            ["carol"] = ["user:carol"],
+            // Dana is in both groups, so she reads Alice's and Bob's rows: two locations to page.
+            ["dana"] = ["user:dana", "group:eng#member", "group:ops#member"]
         };
 
-        gateway = new GatewayHarness(new ResourceGraphQueryService(client, store, new DictionaryCallerResolver(callers), options));
+        gateway = new GatewayHarness(new ResourceGraphQueryService(client, store, new DictionaryCallerResolver(callers), options, NullLogger<ResourceGraphQueryService>.Instance));
     }
 
     public async ValueTask DisposeAsync() => await clickHouse.DisposeAsync();
@@ -141,16 +145,58 @@ public sealed class ResourceGraphQueryEndToEndTests : IAsyncLifetime {
 
     [Fact]
     public async Task TheNextLinkPagesTheSameQueryAndARefusedQueryIs400() {
-        // Bob gets Alice's row too, so there are two to page — through the access column, since
-        // pg-main's readers are ["user:alice"], by asking as a caller closed into both.
-        var summary = await QueryAsync("alice", "resources | summarize n = count() by location | order by location asc", top: 1);
+        // Dana is closed into both groups, so she reads pg-main (eu-central) and pg-replica
+        // (eu-west): two locations, a page of one, and a second page to follow.
+        const string kql = "resources | summarize n = count() by location | order by location asc";
+        var summary = await QueryAsync("dana", kql, top: 1);
         summary.Status.ShouldBe(StatusCodes.Status200OK, summary.Body);
 
-        using var first = JsonDocument.Parse(summary.Body);
-        first.RootElement.GetProperty("value").GetArrayLength().ShouldBe(1);
-        first.RootElement.GetProperty("value")[0].GetProperty("location").GetString().ShouldBe("eu-central");
-        first.RootElement.GetProperty("value")[0].GetProperty("n").GetInt64().ShouldBe(1);
-        first.RootElement.TryGetProperty("nextLink", out _).ShouldBeFalse("alice reads one location; one row is the whole result");
+        string nextLink;
+
+        using (var first = JsonDocument.Parse(summary.Body)) {
+            first.RootElement.GetProperty("value").GetArrayLength().ShouldBe(1);
+            first.RootElement.GetProperty("value")[0].GetProperty("location").GetString().ShouldBe("eu-central");
+            first.RootElement.GetProperty("value")[0].GetProperty("n").GetInt64().ShouldBe(1);
+            nextLink = first.RootElement.GetProperty("nextLink").GetString()!;
+        }
+
+        // ⚠ The link is followed the way a client follows it: the same body POSTed to the link's
+        // address, with $top and $skipToken read off the link's query string and not repeated in
+        // the body. The first cut of this test asserted the link's ABSENCE for a one-row result and
+        // followed nothing (#54 review).
+        var link = new Uri(nextLink);
+        link.GetLeftPart(UriPartial.Path).ShouldBe("https://api.cybercloud.io" + new ResourceGraphAddress(GatewayHarness.TenantA).Path);
+        link.Query.ShouldContain("$skipToken=");
+        link.Query.ShouldContain("$top=1");
+
+        var followed = await gateway.SendAsync(
+            "POST",
+            link.AbsolutePath,
+            gateway.Token(GatewayHarness.TenantA, subjectId: "dana"),
+            query: link.Query.TrimStart('?'),
+            body: JsonSerializer.Serialize(new Dictionary<string, object> { ["query"] = kql })
+        );
+
+        followed.Status.ShouldBe(StatusCodes.Status200OK, followed.Body);
+
+        using (var second = JsonDocument.Parse(followed.Body)) {
+            second.RootElement.GetProperty("value").GetArrayLength().ShouldBe(1);
+            second.RootElement.GetProperty("value")[0].GetProperty("location").GetString().ShouldBe("eu-west");
+            second.RootElement.GetProperty("value")[0].GetProperty("n").GetInt64().ShouldBe(1);
+            second.RootElement.TryGetProperty("nextLink", out _).ShouldBeFalse("two locations, two pages of one, and the second is the last");
+        }
+
+        // The token belongs to the query it was handed out for: the same link with another query
+        // is a 400, not a page of the other query at that offset.
+        var mismatched = await gateway.SendAsync(
+            "POST",
+            link.AbsolutePath,
+            gateway.Token(GatewayHarness.TenantA, subjectId: "dana"),
+            query: link.Query.TrimStart('?'),
+            body: JsonSerializer.Serialize(new Dictionary<string, object> { ["query"] = "resources | project name" })
+        );
+        mismatched.Status.ShouldBe(StatusCodes.Status400BadRequest, mismatched.Body);
+        mismatched.Body.ShouldContain("different query");
 
         var refused = await QueryAsync("alice", "resources | where createdAt > ago(1d)");
         refused.Status.ShouldBe(StatusCodes.Status400BadRequest, refused.Body);

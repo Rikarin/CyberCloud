@@ -147,7 +147,8 @@ public static class ResourceGraphServiceCollectionExtensions {
                     provider.GetRequiredService<ClickHouseClient>(),
                     provider.GetRequiredService<ClickHouseResourceGraphStore>(),
                     provider.GetRequiredService<ICallerAccessResolver>(),
-                    options
+                    options,
+                    provider.GetRequiredService<ILogger<ResourceGraphQueryService>>()
                 )
             )
         );

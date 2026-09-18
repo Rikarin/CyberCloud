@@ -175,17 +175,43 @@
           DIFFER. The source at github.com/microsoft/Kusto-Query-Language is Apache-2.0 (the LICENSE
           file and GitHub's own detection agree). The NuGet package is NOT: its nuspec says
           `<license type="file">EULA-agreement.txt</license>` with requireLicenseAcceptance=true, and
-          that file is the "MICROSOFT SOFTWARE LICENSE TERMS — AZURE DATA EXPLORER SDK": a proprietary
-          EULA granting install-and-use rights, distribution of the "distributable code" inside our
-          applications, and forbidding reverse engineering. What ADR-011 (docs/plan/02) guards against
-          is a licence whose purpose is to forbid offering the software as a service — SSPL, BUSL,
-          AGPL, Elastic, RSAL — and this EULA has no such clause: the platform RUNS the parser in the
-          gateway's process and distributes it to nobody. So it passes the ADR, but not with the
-          "Apache-2.0" label the first draft of #54's brief gave it, and the exit if the EULA ever
-          bites is written here: build the Apache-2.0 source ourselves (the repository README calls the
-          package "this source code … available as a package on nuget.org") and reference that
-          instead. `Build.Licence` scans charts and images, not NuGet packages, so this row is the one
-          place the fact is recorded.
+          that file is the "MICROSOFT SOFTWARE LICENSE TERMS — AZURE DATA EXPLORER SDK", a proprietary
+          EULA. Read in full (~/.nuget/packages/microsoft.azure.kusto.language/12.4.1/EULA-agreement.txt),
+          it says three things that matter here, quoted so the record cannot drift from the text:
+
+            §1(a): "You may install and use any number of copies of the software to develop and test
+            your applications."
+            §4(e): you will not "share, publish, distribute, or lend the software (except for any
+            distributable code, subject to the terms above), provide the software as a stand-alone
+            hosted solution for others to use, or transfer the software or this agreement to any
+            third party."
+            §2(b): "For any code you distribute, you must: i. add significant primary functionality
+            to it in your applications; ii. require distributors and external end users to agree to
+            terms that protect it and Microsoft at least as much as this agreement; and iii.
+            indemnify, defend, and hold harmless Microsoft from any claims, including attorneys’ fees,
+            related to the distribution or use of your applications, except to the extent that any
+            claim is based solely on the unmodified distributable code."
+
+          ⚠ The first record of this row said the EULA "has no such clause" as the offer-as-a-service
+          restriction ADR-011 (docs/plan/02) guards against. That was a misquotation, found by the #54
+          review: §4(e) IS such a clause, narrower than SSPL's — it forbids the software "as a
+          stand-alone hosted solution for others to use". The reading that keeps the package is that
+          an embedded parser is not a stand-alone hosted solution: the gateway runs it to translate a
+          tenant's KQL into a statement over the tenant's own table, nobody is offered the parser,
+          and the platform is the "significant primary functionality" §2(b)(i) asks for. That is a
+          reading and not counsel; it is written here so the next reader argues with the text rather
+          than with a summary of it.
+
+          And §2(b) is not idle: the moment the gateway image — with this DLL in it — is shipped to a
+          self-hoster, the platform is DISTRIBUTING the code, and (ii) and (iii) attach: the
+          platform's own terms must protect Microsoft at least as much as the EULA does, and the
+          platform indemnifies Microsoft for claims from that distribution. Nothing in this tree
+          writes those terms today; docs/plan/02 § the package table carries the obligation. The exit
+          from both clauses is the same and stays written: build the Apache-2.0 source ourselves (the
+          repository README calls the package "this source code … available as a package on
+          nuget.org") and reference that instead, which is a day's work and no EULA. `Build.Licence`
+          scans charts and images, not NuGet packages, so this row is the one place the fact is
+          recorded.
         -->
         <PackageVersion Include="Microsoft.Azure.Kusto.Language" Version="12.4.1"/>
     </ItemGroup>

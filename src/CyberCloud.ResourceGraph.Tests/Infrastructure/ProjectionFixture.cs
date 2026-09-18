@@ -61,11 +61,21 @@ public sealed class ProjectionFixture : IAsyncLifetime {
         .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Server is ready"))
         .Build();
 
+    /// <summary>
+    ///     The server's time zone, deliberately not UTC. ⚠ ClickHouse parses a zoneless
+    ///     <c>DateTime64(3)</c> parameter in the server's zone, and the first cut of the translator
+    ///     bound its datetimes that way; every suite passed because the container ran in UTC, and
+    ///     the two-hour error was found by a review (#54). Prague is two hours off UTC in September,
+    ///     so a comparison that ignores the column's zone lands a row two hours away.
+    /// </summary>
+    public const string ClickHouseTimeZone = "Europe/Prague";
+
     readonly IContainer clickHouse = new ContainerBuilder(ClickHouseImage)
         .WithPortBinding(8123, true)
         .WithEnvironment("CLICKHOUSE_USER", ClickHouseUser)
         .WithEnvironment("CLICKHOUSE_PASSWORD", ClickHousePassword)
         .WithEnvironment("CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT", "1")
+        .WithEnvironment("TZ", ClickHouseTimeZone)
         // ⚠ /ping, and not a query. The server reads CLICKHOUSE_USER from its environment before
         // it listens, so a 200 from /ping is a server whose user exists — and a path with a query
         // string in it does not work here: the wait strategy builds its URI from a path, so the

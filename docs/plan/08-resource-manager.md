@@ -1106,7 +1106,9 @@ wire. What landed, in the same module and behind one seam:
   how many rows exist that they may not.
   `ResourceGraphQueryRoutingTests` pins the shape, the verbs, the tenant rebuild and both readings
   of the page parameters; `ResourceGraphQueryEndToEndTests` drives a KQL body through the real
-  pipeline against a ClickHouse container the real projector fed.
+  pipeline against a ClickHouse container the real projector fed, and follows a `nextLink` the
+  way a client does — the same body `POST`ed to the link — to the second page and to a `400`
+  for the same link with another query.
 - **The seam is `IResourceGraphQuery` in `CyberCloud.ResourceManager.Contracts`, the fourth entry
   point beside the resource, scope and role assignment managers, and the one that reads no
   grain.** The implementation is `ResourceGraphQueryService` in `CyberCloud.ResourceGraph`, which
@@ -1152,7 +1154,9 @@ wire. What landed, in the same module and behind one seam:
   review the diff); `KqlRefusalTests` pins the refusals by the token they name;
   `ResourceGraphQueryServiceTests` runs every shape against the real ClickHouse behind the real
   projector and the real membership index, and is where `toBool` on a bool column and the words
-  `true`/`false` for `tostring(bool)` were found to be needed.
+  `true`/`false` for `tostring(bool)` were found to be needed — and, after the review, where
+  `tags has 'prod'` was found to reach the server as `match(Map, …)` and be refused; it now
+  matches the map's JSON text, which is what the Azure query means.
 - **Every emitted SQL is parameterised, one table, the caller's tenant database, with four
   settings no caller can change.** A literal from the query text — a string, a number, a date, a
   tag key — is a `{pN:Type}` placeholder and a `SqlParameter`; the tenant's database is derived
@@ -1163,7 +1167,39 @@ wire. What landed, in the same module and behind one seam:
   afterwards. On the request: `max_execution_time` (`QueryTimeout`, 10 s) and `max_rows_to_read`
   (`QueryMaxRowsToRead`, a million) are the budget; `readonly=2` makes the connection refuse any
   statement that is not a read, belt to the translator's braces; `prefer_column_name_to_alias=1`
-  is the alias rule above.
+  is the alias rule above. ⚠ A datetime binds as `DateTime64(3, 'UTC')` with the zone spelled,
+  because ClickHouse parses a zoneless parameter in the *server's* zone while the columns are
+  UTC — the first cut bound `DateTime64(3)` and every suite passed because the containers ran in
+  UTC (#54 review); `ProjectionFixture` now starts its ClickHouse in Europe/Prague and
+  `ResourceGraphQueryServiceTests.ADatetimeLiteralIsComparedAsTheInstantItNamesWhateverTheServersZone`
+  asserts the server's zone before it asserts the window.
+- **Four sizes are refused before anything recurses, because a stack overflow is the one
+  exception .NET does not let a process catch (#54 review).** The first cut recursed once per pipe
+  operator and once per nesting level, unbounded, and `resources` followed by eight thousand
+  `| where true` — 104 KB, a tenth of the gateway's body cap — killed the test host from inside
+  the walk; measured on a 1 MB thread, Microsoft's parser itself survives 8,000 pipes and every
+  bracket-less chain and overflows between 250 and 500 nested function calls. So the query is
+  lexed first (the lexer is a loop) and refused at more than 4,096 tokens or brackets nested
+  deeper than 32, before the parser sees it; the walk refuses more than 64 operators and an
+  expression deeper than 64 levels, with the pipe chain and `and`/`or` chains walked as loops.
+  Each refusal names its number.
+  `KqlRefusalTests.ASizeThatWouldOverflowTheStackIsRefusedByItsNumberBeforeTheParserRuns` drives
+  the four; a two-thousand-member `in` list and a hundred-term `and` still translate.
+- **What the store says goes to the log, and the caller gets one of two sentences (#54 review).**
+  ClickHouse refuses a statement with its exception text, and that text quotes the whole statement
+  back — the tenant database, every column, `is_deleted`, `hasAny(access, [...])` with the
+  caller's usersets substituted in, and the endpoint's URL. The first cut returned it as the `500`
+  body: § Errors' *"No exception details, ever"* is pinned at the gateway for a *thrown* exception
+  (`PipelineTests.AFaultingStageProducesA500WithNoDetailInTheBody`) and not for a *returned*
+  failure, which `ResultShaper` passes through by design. Now `ResourceGraphQueryService` reads
+  the exception number off `X-ClickHouse-Exception-Code`: `TIMEOUT_EXCEEDED` and `TOO_MANY_ROWS`
+  — the budget above — are an `InvalidRequestBody` (`400`) naming the budget and how to narrow
+  the query; everything else — the store unreachable, a statement it would not run, a body that is
+  not JSON, a caller the membership index could not resolve — is an `InternalError` whose message
+  says only that, with the detail logged at error beside the tenant and the query.
+  `ResourceGraphQueryFailureTests` holds it against a scripted server answering the real 25.3 text;
+  `ResourceGraphQueryServiceTests.AQueryPastItsBudgetIsA400ThatNamesTheBudgetAndNotTheStatement`
+  against the real one under a budget of one row.
 - **`cyc graph query "<kql>" [--tenant T] [--top N] [--skip-token …] [--all]`** is hand-written
   beside `cyc rest`, follows a `nextLink` by `POST`ing the same query with the link's
   `$skipToken`, and is reserved in `CommandTree.ReservedGroups` so no provider can shadow it —
@@ -1189,7 +1225,7 @@ wire. What landed, in the same module and behind one seam:
   day" query wants, left out because each reads a clock the translator would have to bind as a
   parameter at translation time — which is fine — and because `bin` over `DateTime64` is
   `toStartOfInterval` with an interval grammar of its own. Small, and the shape is written:
-  `now()` and `ago(1d)` are one `DateTime64(3)` parameter each; `bin(createdAt, 1d)` is
+  `now()` and `ago(1d)` are one `DateTime64(3, 'UTC')` parameter each; `bin(createdAt, 1d)` is
   `toStartOfInterval(created_at, INTERVAL 1 DAY)`.
 - **A stale membership slice under-lists.** `MembershipIndexCallerAccessResolver` rebuilds a
   slice nothing has written and reads a slice stamped with an older schema version as it stands,

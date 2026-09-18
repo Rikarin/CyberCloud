@@ -94,6 +94,62 @@ public sealed class KqlRefusalTests {
         refused.Error.Message.ShouldContain(sentence, customMessage: refused.Error.Message);
     }
 
+    /// <summary>
+    ///     The four sizes, each one past its cap and refused by that cap's number. ⚠ Every one of
+    ///     these overflowed a stack before the caps: the pipes in the translator's walk (the #54
+    ///     review's probe, 8,000 of them at 104 KB — a tenth of the gateway's body cap — took the
+    ///     test host down), the nested calls in Microsoft's parser itself, which gives out between
+    ///     250 and 500 levels on a 1 MB thread. A <c>StackOverflowException</c> cannot be caught, so
+    ///     "returns a failure" is the whole assertion and the process surviving is the evidence.
+    ///     The depth case is a tag path — <c>tags.a.a.a…</c> — because it is the one left-nested
+    ///     shape without a bracket that KQL's grammar accepts: a comparison does not chain, and
+    ///     <c>and</c> is walked as a loop.
+    /// </summary>
+    [Theory]
+    [InlineData("pipes", 8_000, "24002 tokens")]
+    [InlineData("pipes", 40_000, "120002 tokens")]
+    [InlineData("pipes", 65, "65 operators")]
+    [InlineData("nots", 500, "brackets 500 deep")]
+    [InlineData("nots", 33, "brackets 33 deep")]
+    [InlineData("path", 100, "more than 64 levels deep")]
+    public void ASizeThatWouldOverflowTheStackIsRefusedByItsNumberBeforeTheParserRuns(string shape, int count, string named) {
+        var kql = shape switch {
+            "pipes" => "resources" + string.Concat(Enumerable.Repeat(" | where true", count)),
+            "nots" => "resources | where " + string.Concat(Enumerable.Repeat("not(", count)) + "true" + new string(')', count),
+            _ => "resources | where tags" + string.Concat(Enumerable.Repeat(".a", count)) + " == 'x'"
+        };
+
+        var refused = KqlTranslator.Translate(kql, KqlTranslationGoldenTests.Context());
+
+        refused.IsFailure.ShouldBeTrue($"{count} {shape} translated");
+        refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        refused.Error.Message.ShouldContain(named, customMessage: refused.Error.Message);
+        refused.Error.Message.Length.ShouldBeLessThan(1_000, "the refusal quoted the query back");
+    }
+
+    /// <summary>
+    ///     The sizes just inside the caps translate — the caps refuse an attack, not a query. A
+    ///     sixty-four-operator pipe, brackets thirty-two deep, a hundred-term <c>and</c> (a chain,
+    ///     walked as a loop and never counted as depth) and a two-thousand-member <c>in</c> list.
+    /// </summary>
+    [Theory]
+    [InlineData("pipes", 64)]
+    [InlineData("nots", 32)]
+    [InlineData("ands", 100)]
+    [InlineData("in", 2_000)]
+    public void ASizeInsideTheCapsTranslates(string shape, int count) {
+        var kql = shape switch {
+            "pipes" => "resources" + string.Concat(Enumerable.Repeat(" | where true", count)),
+            "nots" => "resources | where " + string.Concat(Enumerable.Repeat("not(", count)) + "true" + new string(')', count),
+            "ands" => "resources | where true" + string.Concat(Enumerable.Repeat(" and name != 'x'", count)),
+            _ => "resources | where name in (" + string.Join(", ", Enumerable.Range(0, count).Select(i => $"'n{i}'")) + ")"
+        };
+
+        var translated = KqlTranslator.Translate(kql, KqlTranslationGoldenTests.Context());
+
+        translated.IsSuccess.ShouldBeTrue(translated.Error?.Message);
+    }
+
     [Fact]
     public void TheAccessAndTombstoneColumnsAreNotInTheLanguage() {
         // ⚠ The property the whole filter rests on: the caller cannot name the columns the base
