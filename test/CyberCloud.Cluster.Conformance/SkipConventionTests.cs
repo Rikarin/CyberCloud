@@ -20,6 +20,18 @@ namespace CyberCloud.Cluster.Conformance;
 ///         which pins the build's globs against the assembly they classify.
 ///     </para>
 ///     <para>
+///         ⚠ <b>The constant is what is pinned, not one message.</b> The first version of this
+///         test asserted <see cref="ClusterInfrastructure.SkipMessage" /> alone, while the two
+///         skips the build's second clause was written for — <c>EmptyClusterFixture.Skip</c> and
+///         <c>M1StoryClusterFixture.Skip</c> in the bundle suite, the suite that passed only by
+///         skipping on 2026-09-17 — spelled the word by hand and were checked by nothing; the review
+///         of that commit read them. Every writer of the word now interpolates
+///         <see cref="ClusterInfrastructure.PrerequisiteMarker" />, this test pins that constant
+///         against the build's, and <c>BundleSkipConventionTests</c> in the bundle suite pins its
+///         three writers against the constant — so the chain from the bundle's skip to the build's
+///         reader has no hand-typed link left in it.
+///     </para>
+///     <para>
 ///         ⚠ <b>Daemon-free on purpose</b>, like <c>TheCaseOwnsClusterObjectsOrThisWholeSuiteWouldBeVacuous</c>:
 ///         this reads a string and a source file, so it runs — and can fail — on a machine with no
 ///         Docker, which is the machine on which the guard it protects would otherwise be the only
@@ -42,6 +54,14 @@ public sealed class SkipConventionTests {
         );
 
         var marker = match.Groups[1].Value;
+
+        ClusterInfrastructure.PrerequisiteMarker.ShouldBe(
+            marker,
+            "ClusterInfrastructure.PrerequisiteMarker is not the word build/Build.Test.cs § PrerequisiteMarker "
+            + "reads out of a skip. Every prerequisite skip in the test tree — this assembly's, the bundle "
+            + "suite's fixtures', its daemon-free tests' — interpolates the constant, so the guard is blind "
+            + "to all of them until the two agree again."
+        );
 
         ClusterInfrastructure.SkipMessage("CyberCloud.Sample/widgets", "nothing").ShouldContain(
             marker,

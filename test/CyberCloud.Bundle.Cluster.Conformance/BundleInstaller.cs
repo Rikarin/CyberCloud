@@ -1,3 +1,4 @@
+using CyberCloud.Cluster.Conformance.Infrastructure;
 using System.Diagnostics;
 using System.Text;
 
@@ -669,6 +670,29 @@ public static class BundleInstaller {
                 File.Exists(Path.Combine(directory, command))
                 || (OperatingSystem.IsWindows() && File.Exists(Path.Combine(directory, command + ".exe")))
             );
+
+    /// <summary>
+    ///     Why a daemon-free test did not run when <see cref="OnPath" /> says there is no
+    ///     <c>bash</c>, in the form every skip that names a missing tool takes.
+    /// </summary>
+    /// <param name="script">The <c>charts/bundle/</c> script the calling test would have run.</param>
+    /// <param name="wouldProve">What the calling test would have proved.</param>
+    /// <remarks>
+    ///     ⚠ <b>These skips used to be thirteen hand-written strings with no
+    ///     <see cref="ClusterInfrastructure.PrerequisiteMarker" /> in them</b>, while
+    ///     <c>ClusterInfrastructure.SkipMessage</c>'s remarks and <c>build/Build.Test.cs</c>
+    ///     § <c>PrerequisiteSkips</c> both said every skip naming a missing tool carried it — the
+    ///     review of the commit that made the claim read the strings. A missing <c>bash</c> beside
+    ///     a Docker daemon is the same shape as the missing <c>helm</c> that guard was written for:
+    ///     a suite green because it skipped, on a machine that could have run it, so it is marked
+    ///     the same way and the build asks for the tool by name.
+    /// </remarks>
+    public static string SkipWithoutBash(string script, string wouldProve) =>
+        $"SKIPPED — charts/bundle/{script} is a bash script and `bash` is not on PATH, so nothing was "
+        + "checked. "
+        + $"{ClusterInfrastructure.PrerequisiteMarker} `bash` on PATH — Git for Windows' on Windows, "
+        + "found beside git.exe. "
+        + $"WOULD PROVE: {wouldProve}";
 
     /// <summary>
     ///     The bash that can run <c>install.sh</c>, or <see langword="null" /> when the machine has

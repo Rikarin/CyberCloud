@@ -90,14 +90,24 @@ public sealed class AppHostTopologyTests {
     ///     builder, and <c>Build()</c> on that starts nothing until somebody calls <c>Start</c>,
     ///     which nobody here does.
     /// </remarks>
-    static Built Model(params string[] args) {
+    static Built Model(params string[] args) => ModelOver(AppHostDirectory, args);
+
+    /// <summary>Where <c>Program.cs</c> lives — what <see cref="Model" /> composes over.</summary>
+    static string AppHostDirectory => Path.Combine(RepositoryRoot, "src", "Hosts", "CyberCloud.AppHost");
+
+    /// <summary>
+    ///     <see cref="Model" /> over a chosen AppHost directory — the one thing about the
+    ///     composition a test can move, and only <see cref="TheModelBuildsWhenManyComposeAtOnceOnAFreshCheckout" />
+    ///     moves it.
+    /// </summary>
+    static Built ModelOver(string appHostDirectory, params string[] args) {
         var builder = DistributedApplication.CreateBuilder(
             new DistributedApplicationOptions {
                 Args = args,
                 // Where Program.cs lives, so that AppHostDirectory — which the topology uses for the
                 // k3s kubeconfig and the SeaweedFS identity file — is the same directory it is under
                 // `dotnet run`, and the portal is found two levels above it.
-                ProjectDirectory = Path.Combine(RepositoryRoot, "src", "Hosts", "CyberCloud.AppHost"),
+                ProjectDirectory = appHostDirectory,
                 DisableDashboard = true
             }
         );
@@ -280,8 +290,7 @@ public sealed class AppHostTopologyTests {
     /// </remarks>
     [Fact]
     public void TheModelBuildsWhileAnotherProcessHoldsTheObjectStoreIdentityFile() {
-        var directory = Path.Combine(RepositoryRoot, "src", "Hosts", "CyberCloud.AppHost", ".seaweedfs");
-        var file = Path.Combine(directory, "s3.json");
+        var file = Path.Combine(AppHostDirectory, ".seaweedfs", "s3.json");
 
         // The first Model() writes the file if it is not there; every later one compares and leaves it.
         Model();
@@ -296,6 +305,55 @@ public sealed class AppHostTopologyTests {
                 CyberCloudResources.ObjectStore,
                 "Compose ran with the identity file held open and lost the object store on the way"
             );
+        }
+    }
+
+    /// <summary>
+    ///     The model builds when several Compose calls start at once over an AppHost directory that
+    ///     has never run — the fresh checkout every CI run is.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The half the test above does not reach, found by the review of it.</b>
+    ///         <see cref="TheModelBuildsWhileAnotherProcessHoldsTheObjectStoreIdentityFile" /> holds a
+    ///         file that exists, so it exercises the guard's <i>read</i>; when
+    ///         <c>.seaweedfs/s3.json</c> does not exist yet the guard reads nothing and every Compose
+    ///         writes, and <c>File.WriteAllText</c> opens with <c>FileShare.Read</c> — so the fixture's
+    ///         Compose and this class's, started by xUnit at the same moment, failed
+    ///         <c>TheIssuerIsOneStringOnAllThreeSides</c> 53 ms in with "being used by another process"
+    ///         out of <c>File.WriteAllText</c>, 2 of 2 times on a fresh worktree and never with the file
+    ///         present, which is the only state the first fix was measured in (the file is gitignored).
+    ///     </para>
+    ///     <para>
+    ///         So this test makes its own fresh checkout — a temporary AppHost directory with no
+    ///         <c>.seaweedfs</c> under it — and composes eight models over it at once. Without the
+    ///         frontends, because the portal is found relative to the AppHost directory and there is
+    ///         none above a temporary one; the object store is what is under test and it stays. Sabotage
+    ///         checked: with the lock and the catch removed from
+    ///         <c>CyberCloudTopology.EnsureObjectStoreIdentityFile</c> this fails on the first run
+    ///         with the measured message.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheModelBuildsWhenManyComposeAtOnceOnAFreshCheckout() {
+        var appHostDirectory = Path.Combine(Path.GetTempPath(), "cybercloud-apphost-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(appHostDirectory);
+
+        try {
+            var file = Path.Combine(appHostDirectory, ".seaweedfs", "s3.json");
+            File.Exists(file).ShouldBeFalse("a directory made a moment ago already holds the identity file, and the race this test runs needs it absent");
+
+            var composed = await Task.WhenAll(
+                Enumerable.Range(0, 8).Select(_ => Task.Run(() => ModelOver(appHostDirectory, $"--{CyberCloudResources.FrontendsKey}=false"), TestContext.Current.CancellationToken))
+            );
+
+            foreach (var built in composed) {
+                built.Names.ShouldContain(CyberCloudResources.ObjectStore, "a Compose that raced another on the identity file lost the object store on the way");
+            }
+
+            File.Exists(file).ShouldBeTrue("eight Compose calls over an empty AppHost directory and none of them wrote the identity file");
+        } finally {
+            Directory.Delete(appHostDirectory, recursive: true);
         }
     }
 

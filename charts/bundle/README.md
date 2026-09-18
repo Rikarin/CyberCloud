@@ -521,15 +521,20 @@ to 3 m 15 s** with two installing classes — roughly 80 s for Testcontainers to
 for the helm install with `--wait`, the assertions in under a second, and the rest variance in what
 the machine was already doing. A red run costs more: the sabotage that removes `crds.enabled` takes
 **6 m 40 s**, because helm retries its post-install hook before giving up. The
-suite takes `ClusterSlot`, the same cross-process permit the other **fifteen** assemblies built on
+suite takes `ClusterSlot`, the same cross-process permit the other **sixteen** assemblies built on
 `ClusterInfrastructure` take (the PostgreSQL family's joined on 2026-09-17), so it does not widen the concurrency Task #95 capped — it lengthens the
 serial tail on a machine where a daemon answers, and costs nothing at all on one where none does.
 
-> ⚠ That count read "fifteen" until 2026-09-05 and was one too many: fifteen assemblies take
+> ⚠ That count has been wrong twice. It read "fifteen" until 2026-09-05 and was one too many for
+> the tree of that day, in which fifteen took `ClusterSlot` in total, this one included. On
+> 2026-09-17 the sentence above was moved to "fifteen" for the PostgreSQL family while this note
+> still argued the old total, and the review of that commit read the two against each other.
+> Counted over the `*.Cluster.Conformance.csproj` files rather than the prose — fifteen provider
+> families, `test/CyberCloud.Cluster.Conformance` and this suite: **seventeen** assemblies take
 > `ClusterSlot` in total, this one included. Two more hold a k3s and take it not at all —
-> `CyberCloud.Kubernetes.Tests` and `CyberCloud.AppHost.Tests` — which is seventeen cluster-backed
-> suites under three unrelated permits, and is what #77 turned out to be. `build/` now caps all
-> seventeen itself; the permit is no longer the only thing holding the line.
+> `CyberCloud.Kubernetes.Tests` and `CyberCloud.AppHost.Tests` — which is **nineteen** cluster-backed
+> suites under three unrelated permits, the shape #77 found at seventeen. `build/` caps all nineteen
+> itself; the permit is no longer the only thing holding the line.
 
 **With the cloudnative-pg class it is 4 m 27 s to 4 m 47 s green across three runs, 9 tests, none
 skipped, measured 2026-09-03. With the story class as well: 20 tests, none skipped, about eight
@@ -538,6 +543,10 @@ wait while another process holds a cluster.** ⚠ Without `helm` on `PATH` the f
 *skip* and the sixteen daemon-free tests keep the run green — 16 passed, 3 skipped, exit 0, measured
 the same day, before the story class landed — which is why `./build.sh Test` now fails such a run
 when a Docker endpoint is present (`build/README.md` § `Test` says how many cluster-backed cases ran).
+⚠ The same rule reaches a missing `bash`: the daemon-free tests' skips carried no `NEEDS:` for a day
+after that paragraph said every prerequisite skip did, and they go through
+`BundleInstaller.SkipWithoutBash` now — 23 tests in the assembly, three of them
+`BundleSkipConventionTests`, which pin the suite's three skip writers to the word the build reads.
 
 The cloudnative-pg class costs about **1 m 50 s**: 26 s for `install.sh` to put both components on
 the cluster (cheaper than cert-manager's single row, which pays a `startupapicheck` Job), 8 s to the operator's

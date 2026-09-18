@@ -158,8 +158,10 @@ public sealed class BundleManifestSubstitution : IDisposable {
     async Task<BundleInstaller.Run> SubstituteAsync(string document, IReadOnlyDictionary<string, string>? environment = null) {
         Assert.SkipUnless(
             BundleInstaller.OnPath("bash"),
-            "SKIPPED — charts/bundle/substitute.sh is a bash script and `bash` is not on PATH. WOULD "
-            + "PROVE: the `${VAR:=default}` pass install.sh runs over every manifest component."
+            BundleInstaller.SkipWithoutBash(
+                "substitute.sh",
+                "the `${VAR:=default}` pass install.sh runs over every manifest component."
+            )
         );
 
         Directory.CreateDirectory(root);

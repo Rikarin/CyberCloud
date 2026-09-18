@@ -40,10 +40,12 @@ public sealed class CloudNativePgComponentInstaller {
     public async Task TheDryRunSelectsOneComponentByNameAndNamesTheVersionItPins() {
         Assert.SkipUnless(
             BundleInstaller.OnPath("bash"),
-            "SKIPPED — charts/bundle/install.sh is a bash script and `bash` is not on PATH, so what "
-            + "the installer would run could not be read. WOULD PROVE: that install.sh --component "
-            + "selects one row of charts/bundle/bundle.yaml by name and derives its helm invocation "
-            + "from charts/bundle/cloudnative-pg/component.yaml rather than hard-coding it."
+            BundleInstaller.SkipWithoutBash(
+                "install.sh",
+                "that install.sh --component selects one row of charts/bundle/bundle.yaml by name "
+                + "and derives its helm invocation from charts/bundle/cloudnative-pg/component.yaml "
+                + "rather than hard-coding it."
+            )
         );
 
         var component = BundleInstaller.CloudNativePgComponent;
@@ -272,7 +274,8 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
             + "with `kubectl`, and one of the two is not on PATH. ⚠ That kubectl is THIS TEST'S, not "
             + "install.sh's: the installer's own kubectl branch belongs to the six `manifest:` "
             + "components, none of which is installed here, and it has been executed exactly once — "
-            + "by hand on 2026-09-05 against an API server with no kubelet — and by no test. WOULD "
+            + "by hand on 2026-09-05 against an API server with no kubelet — and by no test. "
+            + $"{ClusterInfrastructure.PrerequisiteMarker} `kubectl` and `helm` on PATH. WOULD "
             + "PROVE: that an operator this bundle installed creates and binds the claim for a "
             + "managed chart's custom resource."
         );

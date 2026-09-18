@@ -140,7 +140,7 @@ public sealed class EmptyClusterFixture : IAsyncLifetime {
     public string Skip(string component, string owedRow, string wouldProve) =>
         $"SKIPPED — charts/bundle/ {component}: no empty cluster to install onto, so nothing was "
         + "checked. "
-        + $"NEEDS: a Docker daemon able to run {ClusterInfrastructure.K3sImage}, and `bash` and `helm` "
+        + $"{ClusterInfrastructure.PrerequisiteMarker} a Docker daemon able to run {ClusterInfrastructure.K3sImage}, and `bash` and `helm` "
         + "on PATH. "
         + $"WOULD PROVE: {wouldProve} "
         + "This suite is present by name and skipped rather than absent, because "
@@ -273,10 +273,11 @@ public sealed class CertManagerComponentInstaller {
     public async Task TheDryRunNamesTheChartVersionTheComponentPinsAndPassesTheCrdsOverride() {
         Assert.SkipUnless(
             BundleInstaller.OnPath("bash"),
-            "SKIPPED — charts/bundle/install.sh is a bash script and `bash` is not on PATH, so what "
-            + "the installer would run could not be read. WOULD PROVE: that install.sh derives the "
-            + "cert-manager helm invocation from charts/bundle/cert-manager/component.yaml rather "
-            + "than hard-coding it."
+            BundleInstaller.SkipWithoutBash(
+                "install.sh",
+                "that install.sh derives the cert-manager helm invocation from "
+                + "charts/bundle/cert-manager/component.yaml rather than hard-coding it."
+            )
         );
 
         var run = await BundleInstaller.RunAsync(

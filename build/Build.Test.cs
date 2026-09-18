@@ -376,7 +376,9 @@ partial class Build {
         //
         // ⚠ MEASURED 2026-09-05 OVER THIS TREE'S OWN BUILD OUTPUT, AT 73 PER-PR SUITES: 21 ship
         // something that can start a container, and SEVENTEEN OF THE 21 HOLD A WHOLE KUBERNETES
-        // CLUSTER. The four that do not are
+        // CLUSTER. (Nineteen since 2026-09-17 — the bundle suite and the PostgreSQL family's joined,
+        // and seventeen of the nineteen take ClusterSlot; the figures below are the day's own, and
+        // the argument does not move with them.) The four that do not are
         // `CyberCloud.{Authorization,ServiceDefaults,Tenancy,Vault}.Tests`. So a budget denominated
         // in "container-backed suites" was, for very nearly every slot it ever handed out, a budget
         // in k3s clusters — and three separate mechanisms were each answering "may I hold one?" on
@@ -406,7 +408,7 @@ partial class Build {
         // OWN. That is #77's third option, and it is the only one of the three that models the
         // constraint rather than the symptom: the count that has to be capped is clusters, the
         // number is not a property of this host, and it is not tuned — see ClusterBackedSuiteDegree,
-        // which is 1 because 1 is what ClusterSlot already enforces among fifteen of the seventeen.
+        // which is 1 because 1 is what ClusterSlot already enforces among seventeen of the nineteen.
         var containerBacked = projects.Where(StartsContainers).ToHashSet();
 
         // ⚠ A SUBSET of containerBacked by construction rather than by two globs that happen to
@@ -461,7 +463,7 @@ partial class Build {
         // right, for the reason above; what it does not do is fill idle cores.
         //
         // ⚠ And the cluster-backed ones go first WITHIN that, which is new with #77 and is not
-        // cosmetic. Seventeen suites sharing one permit are a serial chain about as long as the whole
+        // cosmetic. Nineteen suites sharing one permit are a serial chain about as long as the whole
         // gate — 18 m 14 s of which the cluster suites are most — so the chain has to start at t = 0.
         // Ordered the other way it starts whenever a thread first happens to reach a cluster suite,
         // and the gate is that chain PLUS whatever ran before it. OrderBy is a stable sort, so the
@@ -481,7 +483,7 @@ partial class Build {
 
         // ⚠ A SECOND semaphore rather than a smaller first one, and the difference is the whole of
         // #77. One semaphore can only express "how many suites", and the suites are not alike: four
-        // of the twenty-one hold a PostgreSQL or a Redis and seventeen hold a Kubernetes control
+        // of the twenty-three hold a PostgreSQL or a Redis and nineteen hold a Kubernetes control
         // plane. Shrinking the shared cap until the heavy case fits makes the light case wait for a
         // reason that is not true of it, and — worse — leaves the tree with no place to write down
         // what the real limit is, so the next cluster-backed suite silently spends the same budget
@@ -858,22 +860,27 @@ partial class Build {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The convention this reads is the one every cluster-backed skip in the tree already
+    ///         ⚠ <b>The convention this reads is the one every cluster-backed skip in the tree
     ///         follows</b>: <c>ClusterInfrastructure.SkipMessage</c>, <c>EmptyClusterFixture.Skip</c>,
-    ///         <c>M1StoryClusterFixture.Skip</c> and the hand-written skips beside them all say
+    ///         <c>M1StoryClusterFixture.Skip</c> and <c>BundleInstaller.SkipWithoutBash</c> all say
     ///         <c>SKIPPED — …: … NEEDS: … WOULD PROVE: …</c>, and the one skip a working lane makes
     ///         honestly — "created no PersistentVolumeClaim on a real cluster" — does not, because
     ///         nothing is missing. So <see cref="PrerequisiteMarker" /> is the difference between "the
     ///         lane did not run" and "the lane ran and this type has nothing to say", and it is the
-    ///         only text this build reads out of a skip.
+    ///         only text this build reads out of a skip. ⚠ "And the hand-written skips beside them"
+    ///         stood here for a day and was not true: the bundle's thirteen daemon-free tests skipped
+    ///         on a missing <c>bash</c> with no marker at all, which the review of that commit read.
+    ///         They go through the helper now, and the word is one constant on the test side.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>A string across a boundary no compiler checks</b>, and it is written down here
-    ///         and in <c>ClusterInfrastructure.SkipMessage</c>'s remarks so that the two move
+    ///         and in <c>ClusterInfrastructure.PrerequisiteMarker</c>'s remarks so that the two move
     ///         together — the same defence <c>CyberCloud.AppHost.Tests</c> § <c>ClusterBackedGatingTests</c>
-    ///         gives the glob spellings. The cost of the two drifting apart is bounded: a skip that
-    ///         drops the marker falls back to the executed-versus-skipped shape above, which still
-    ///         catches a suite skipping wholesale and misses only a mostly-daemon-free one.
+    ///         gives the glob spellings; <c>SkipConventionTests</c> pins the two constants against
+    ///         each other and <c>BundleSkipConventionTests</c> pins the bundle's writers against the
+    ///         test-side one. The cost of the two drifting apart is bounded: a skip that drops the
+    ///         marker falls back to the executed-versus-skipped shape above, which still catches a
+    ///         suite skipping wholesale and misses only a mostly-daemon-free one.
     ///     </para>
     ///     <para>
     ///         ⚠ xunit's TRX writer puts a skip's reason in <c>UnitTestResult/Output/StdOut</c>, which
@@ -1105,8 +1112,8 @@ partial class Build {
     ///     </para>
     ///     <para>
     ///         ⚠ <b>It deliberately does not ask whether the suite takes <c>ClusterSlot</c>.</b> That
-    ///         lock file is the tree's cross-process permit and fifteen assemblies take it, but two of
-    ///         the seventeen do not — <c>ClusterInfrastructure</c>'s own remarks say
+    ///         lock file is the tree's cross-process permit and seventeen assemblies take it, but two of
+    ///         the nineteen do not — <c>ClusterInfrastructure</c>'s own remarks say
     ///         <c>CyberCloud.Kubernetes.Tests</c> does not, and <c>CyberCloud.AppHost.Tests</c> takes
     ///         a different lock file entirely — so a rule phrased over the permit would have missed
     ///         exactly the two suites whose overlap #77 measured. The evidence has to be the cluster,
@@ -1219,7 +1226,7 @@ partial class Build {
     ///             One, and — unlike every other number in this file — it is not measured, not
     ///             derived, and not tunable, because it is not a property of the host.
     ///         </b> It is the
-    ///         invariant fifteen of the seventeen cluster-backed assemblies already keep among
+    ///         invariant seventeen of the nineteen cluster-backed assemblies already keep among
     ///         themselves: <c>ClusterSlot</c>, in
     ///         <c>test/CyberCloud.Cluster.Conformance/Infrastructure/ClusterInfrastructure.cs</c>, is
     ///         a lock file taken before the containers and held until the process exits, and its own
@@ -1234,15 +1241,15 @@ partial class Build {
     ///         as unserialised ("would need one line in that project"), and
     ///         <c>CyberCloud.AppHost.Tests</c>, which takes
     ///         <c>cybercloud-apphost-local-topology.lock</c> — a different file, excluding only a
-    ///         second copy of itself. Gating here covers all seventeen with no edit to either suite,
+    ///         second copy of itself. Gating here covers all nineteen with no edit to either suite,
     ///         and it is the right place for the rule regardless: a permit taken inside a test
-    ///         process cannot stop the build from starting the process, so the seventeen used to
+    ///         process cannot stop the build from starting the process, so the seventeen of the day used to
     ///         spend the container budget on waiting rather than on working.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>There is deliberately no <c>CC_TEST_CLUSTER_PARALLELISM</c>.</b> An override that
-    ///         cannot take effect is worse than none: raising this to 2 would still leave fifteen of
-    ///         the seventeen queued behind <c>ClusterSlot</c>, so the setting would appear to work,
+    ///         cannot take effect is worse than none: raising this to 2 would still leave seventeen of
+    ///         the nineteen queued behind <c>ClusterSlot</c>, so the setting would appear to work,
     ///         change almost nothing, and be believed. If a host genuinely holds two clusters, the
     ///         edit is this constant <em>and</em> <c>ClusterSlot</c>'s permit count, together, and
     ///         the reason they have to move together is this paragraph.
@@ -1316,7 +1323,7 @@ partial class Build {
     ///             <see cref="Parallel" /> worker.
     ///         </b> <c>MaxDegreeOfParallelism</c> is
     ///         <see cref="Environment.ProcessorCount" /> and the partitioner hands out one item at a
-    ///         time in order, so while the head of the queue is seventeen cluster-backed suites, the
+    ///         time in order, so while the head of the queue is nineteen cluster-backed suites, the
     ///         workers are pinned to them and the cheap suites behind them do not start — the queue
     ///         drains rather than overlaps until fewer cluster suites remain than there are workers.
     ///         That was already true before #77 (the container-backed suites were ordered first and

@@ -81,7 +81,7 @@ public sealed class M1StoryClusterFixture : IAsyncLifetime {
     public string Skip(string wouldProve) =>
         "SKIPPED — docs/plan/24 § Phase 2's exit story: no fresh cluster to run it on, so nothing was "
         + "checked. "
-        + $"NEEDS: a Docker daemon able to run {ClusterInfrastructure.K3sImage}, "
+        + $"{ClusterInfrastructure.PrerequisiteMarker} a Docker daemon able to run {ClusterInfrastructure.K3sImage}, "
         + $"{ClusterInfrastructure.PostgresImage} and {ClusterInfrastructure.RedisImage}, and `bash`, "
         + "`helm` and `kubectl` on PATH. "
         + $"WOULD PROVE: {wouldProve} "

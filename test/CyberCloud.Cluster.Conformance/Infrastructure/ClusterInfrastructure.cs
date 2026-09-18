@@ -79,6 +79,20 @@ public static class ClusterInfrastructure {
     public const string K3sImage = "rancher/k3s:v1.35.7-k3s1";
 
     /// <summary>
+    ///     The word a skip carries when the lane did not run because a daemon or a tool was
+    ///     missing — the one word <c>build/Build.Test.cs</c> § <c>PrerequisiteSkips</c> reads.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>One spelling on this side of the boundary, on purpose.</b> The first version of
+    ///     the convention had this word typed into <see cref="SkipMessage" /> and typed again into
+    ///     the bundle suite's two fixtures, and <c>SkipConventionTests</c> pinned only the first
+    ///     against the build — the review of that commit found the second, the suite the guard was
+    ///     written for, free to drift out of it. Every skip in the test tree that names a missing
+    ///     daemon or tool now interpolates this constant, and the one test pins the constant.
+    /// </remarks>
+    public const string PrerequisiteMarker = "NEEDS:";
+
+    /// <summary>
     ///     Where the kubelet reads drop-in configuration inside the k3s container, and the one drop-in
     ///     this harness puts there.
     /// </summary>
@@ -206,21 +220,23 @@ public static class ClusterInfrastructure {
     /// <param name="wouldProve">What the calling test would have proved.</param>
     /// <param name="reason">What went wrong, when it was not Docker's absence.</param>
     /// <remarks>
-    ///     ⚠ <b><c>NEEDS:</c> is read by the build.</b> <c>build/Build.Test.cs</c>
+    ///     ⚠ <b><see cref="PrerequisiteMarker" /> is read by the build.</b> <c>build/Build.Test.cs</c>
     ///     § <c>PrerequisiteSkips</c> reads every cluster-backed suite's report after a <c>Test</c>
     ///     run and treats a skip carrying that word as "the lane did not run because something was
     ///     missing", which beside a Docker endpoint fails the run. Every skip in this tree that names
-    ///     a missing daemon or tool spells it this way — <c>EmptyClusterFixture.Skip</c> and
-    ///     <c>M1StoryClusterFixture.Skip</c> in the bundle suite included — and the one skip a working
-    ///     lane makes honestly ("created no PersistentVolumeClaim on a real cluster") does not, because
-    ///     nothing is missing. Renaming the word here without renaming
+    ///     a missing daemon or tool carries it — <c>EmptyClusterFixture.Skip</c>,
+    ///     <c>M1StoryClusterFixture.Skip</c> and <c>BundleInstaller.SkipWithoutBash</c> in the bundle
+    ///     suite included, and every one of them through the constant rather than by spelling — and
+    ///     the one skip a working lane makes honestly ("created no PersistentVolumeClaim on a real
+    ///     cluster") does not, because nothing is missing. Renaming the constant without renaming
     ///     <c>Build.Test.cs § PrerequisiteMarker</c> would not break anything and would quietly make
-    ///     the guard blind to this message, which is why the two are written down together.
+    ///     the guard blind to every one of these messages, which is what <c>SkipConventionTests</c>
+    ///     is for.
     /// </remarks>
     public static string SkipMessage(string provider, string wouldProve, Exception? reason = null) =>
         $"SKIPPED — {provider}: the cluster-backed conformance infrastructure did not come up, so "
         + "nothing was checked. "
-        + $"NEEDS: a Docker daemon able to run {K3sImage}, {PostgresImage} and {RedisImage}. "
+        + $"{PrerequisiteMarker} a Docker daemon able to run {K3sImage}, {PostgresImage} and {RedisImage}. "
         + $"WOULD PROVE: {wouldProve} "
         + "This suite is present by name and skipped rather than absent, because \"conformance: "
         + "green\" must not be readable as \"criterion 3 is met\" on a machine that never ran the "
