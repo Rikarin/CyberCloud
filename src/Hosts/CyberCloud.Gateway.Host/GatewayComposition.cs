@@ -202,7 +202,7 @@ public static class GatewayComposition {
         // around the pipeline — throws. That is a gateway that starts, reports healthy, and serves
         // nothing; #68 is its record. The registration is checked here by name because it is the
         // one the pipeline cannot run without and the one no default can honestly fill.
-        if (builder.Services.All(x => x.ServiceType != typeof(ICallerContextResolver))) {
+        if (builder.Services.All(static x => x.ServiceType != typeof(ICallerContextResolver))) {
             throw new InvalidOperationException(
                 "The gateway has no ICallerContextResolver, so stage 2 cannot run and every request "
                 + "would fail — this refusal is instead of a gateway that starts, passes its health "
@@ -248,7 +248,7 @@ public static class GatewayComposition {
     public static WebApplication MapGateway(this WebApplication app) {
         ArgumentNullException.ThrowIfNull(app);
 
-        app.Use(async (context, next) => {
+        app.Use(static async (context, next) => {
                 if (context.Request.Path.StartsWithSegments("/health")
                     || context.Request.Path.StartsWithSegments("/alive")) {
                     await next(context);

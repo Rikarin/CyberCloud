@@ -4,11 +4,11 @@ using CyberCloud.Providers.Monitor.Conformance;
 using CyberCloud.Providers.Monitor.Contracts;
 using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ResourceManager.Reconcile;
-using k8s;
 using Shouldly;
 using System.Globalization;
 using System.Net;
 using System.Text;
+using k8s;
 
 namespace CyberCloud.Providers.Monitor.ClusterConformance;
 
@@ -54,7 +54,8 @@ namespace CyberCloud.Providers.Monitor.ClusterConformance;
 /// </remarks>
 /// <param name="fixture">The harness.</param>
 public sealed class MonitorCollectorClusterBackedConformance(ClusterConformanceFixture<MonitorCollectorCase> fixture)
-    : ClusterConformanceTests<MonitorCollectorCase>(fixture), IClassFixture<ClusterConformanceFixture<MonitorCollectorCase>> {
+    : ClusterConformanceTests<MonitorCollectorCase>(fixture),
+    IClassFixture<ClusterConformanceFixture<MonitorCollectorCase>> {
     /// <summary>How long a kubelet gets to pull the image and start the pod before this is a failure.</summary>
     /// <remarks>
     ///     Four minutes: the contrib image is a few hundred megabytes and this k3s pulls it cold on
@@ -68,9 +69,9 @@ public sealed class MonitorCollectorClusterBackedConformance(ClusterConformanceF
     ///     <c>Content-Type: application/json</c>.
     /// </summary>
     const string OneLogRecord = """
-        {"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"cluster-conformance"}}]},
-        "scopeLogs":[{"logRecords":[{"timeUnixNano":"1700000000000000000","severityText":"INFO","body":{"stringValue":"the collector accepted this"}}]}]}]}
-        """;
+                                {"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"cluster-conformance"}}]},
+                                "scopeLogs":[{"logRecords":[{"timeUnixNano":"1700000000000000000","severityText":"INFO","body":{"stringValue":"the collector accepted this"}}]}]}]}
+                                """;
 
     [Fact]
     public async Task TheCollectorPodStartsAndAcceptsAnOtlpExport() {
@@ -101,7 +102,11 @@ public sealed class MonitorCollectorClusterBackedConformance(ClusterConformanceF
         var available = 0;
 
         while (DateTimeOffset.UtcNow < deadline) {
-            var deployment = await harness.Raw.AppsV1.ReadNamespacedDeploymentAsync(objectName, ns, cancellationToken: token);
+            var deployment = await harness.Raw.AppsV1.ReadNamespacedDeploymentAsync(
+                objectName,
+                ns,
+                cancellationToken: token
+            );
             available = deployment.Status?.AvailableReplicas ?? 0;
 
             if (available >= 1) {

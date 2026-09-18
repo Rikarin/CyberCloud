@@ -153,12 +153,12 @@ public sealed class MariaDbSecretTests {
         // The action's response is the one shape in this provider that carries a credential, and
         // ResourceManagerService audits every `secret: true` action call. Declaring the property
         // without the flag would put the value on a surface that is neither audited nor masked.
-        var password = MariaDbServers.ListKeysResponse.Properties.Single(x => x.JsonPointer == "/password");
+        var password = MariaDbServers.ListKeysResponse.Properties.Single(static x => x.JsonPointer == "/password");
 
         password.Secret.ShouldBeTrue();
 
         MariaDbServers.ListKeysResponse.Properties
-            .Where(x => x.JsonPointer != "/password")
+            .Where(static x => x.JsonPointer != "/password")
             .ShouldAllBe(x => !x.Secret);
 
         // ⚠ And it is the APPLICATION account's password, not root's. A credential with GRANT OPTION

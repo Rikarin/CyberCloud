@@ -343,7 +343,7 @@ public static class PostgresServers {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the server is billed in."
                 ) {
                     Format = SchemaFormat.Region,
@@ -355,7 +355,7 @@ public static class PostgresServers {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster whose namespace holds the CloudNativePG objects."
                 ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
@@ -363,14 +363,14 @@ public static class PostgresServers {
                 new(
                     "/properties/version",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "Major PostgreSQL version. Minor upgrades are applied automatically "
                     + "in the maintenance window."
                 ) { AllowedValues = ["16", "17", "18"], DefaultJson = "\"17\"" },
                 new(
                     "/properties/replicas",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "Number of instances, including the primary. One is a single point of "
                     + "failure and is offered for development only."
                 ) { Minimum = 1, Maximum = 5, DefaultJson = "2" },
@@ -420,7 +420,7 @@ public static class PostgresServers {
                 new(
                     "/properties/storage/size",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "Data volume size in Kubernetes quantity form. Grows online; never "
                     + "shrinks."
                 ) { Pattern = QuantityPattern, DefaultJson = "\"20Gi\"", ExampleJson = "\"20Gi\"" },
@@ -469,7 +469,7 @@ public static class PostgresServers {
                     ElementKind = SchemaKind.Text,
                     AllowedValues = ["pgvector", "postgis", "pg_stat_statements", "timescaledb"],
                     DefaultJson = "[]",
-                    ExampleJson = "[\"pgvector\"]"
+                    ExampleJson = """["pgvector"]"""
                 },
                 new(
                     "/properties/backup",
@@ -557,20 +557,20 @@ public static class PostgresServers {
                 new(
                     "/host",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The in-cluster DNS name to connect to. ⚠ The pooler's when pooling "
                     + "is on, so turning pooling off later is a visible change to this value rather "
                     + "than a silent one."
                 ),
-                new("/port", SchemaKind.WholeNumber, Required: true, Description: "The TCP port.") {
+                new("/port", SchemaKind.WholeNumber, true, Description: "The TCP port.") {
                     Minimum = 1, Maximum = 65535
                 },
-                new("/database", SchemaKind.Text, Required: true, Description: "The application database."),
-                new("/username", SchemaKind.Text, Required: true, Description: "The owning role."),
+                new("/database", SchemaKind.Text, true, Description: "The application database."),
+                new("/username", SchemaKind.Text, true, Description: "The owning role."),
                 new(
                     "/password",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Secret: true,
                     Description: "The owning role's password, read from the tenant's Vault for this "
                     + "call only."
@@ -676,7 +676,8 @@ public static class PostgresServers {
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── Addressing ────────────────────────────────────────────────────────────────────────────
 
@@ -769,7 +770,8 @@ public static class PostgresServers {
 
     /// <summary>The object-store URL backups go to, or the empty string when the body names none.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string BackupDestination(JsonElement desired) => Text(desired, "backup", "destinationPath", string.Empty);
+    public static string BackupDestination(JsonElement desired) =>
+        Text(desired, "backup", "destinationPath", string.Empty);
 
     /// <summary>
     ///     Why the desired body cannot be rendered into a <c>Cluster</c> the operator's definition
@@ -797,7 +799,9 @@ public static class PostgresServers {
         BackupEnabled(desired) && BackupDestination(desired).Length == 0
             ? "backup.enabled is true and backup.destinationPath is empty. CloudNativePG needs an "
             + "s3://bucket/prefix to archive WAL and base backups to, and the platform does not fill "
-            + "in a default bucket yet. Set " + BackupDestinationPointer + ", or set "
+            + "in a default bucket yet. Set "
+            + BackupDestinationPointer
+            + ", or set "
             + "/properties/backup/enabled to false."
             : null;
 
@@ -829,10 +833,12 @@ public static class PostgresServers {
     /// </remarks>
     public static string? PoolingModeProblem(JsonElement desired) =>
         PoolingEnabled(desired) && string.Equals(PoolingMode(desired), "statement", StringComparison.Ordinal)
-            ? "pooling.enabled is true and pooling.mode is \"statement\". CloudNativePG's Pooler accepts "
-            + "only \"session\" and \"transaction\" for spec.pgbouncer.poolMode, so the operator's "
+            ? """pooling.enabled is true and pooling.mode is "statement". CloudNativePG's Pooler accepts """
+            + """only "session" and "transaction" for spec.pgbouncer.poolMode, so the operator's """
             + "definition refuses the object and PgBouncer's statement pooling is not reachable through "
-            + "it. Set " + PoolingModePointer + " to \"transaction\" or \"session\", or set "
+            + "it. Set "
+            + PoolingModePointer
+            + """ to "transaction" or "session", or set """
             + "/properties/pooling/enabled to false."
             : null;
 
@@ -966,10 +972,7 @@ public static class PostgresServers {
         // Left absent, the operator writes `{name}-app` itself with the same two keys
         // PostgresServerListKeysHandler reads. The name stays public because the handler still
         // needs it; the renderer must never mention it.
-        var initdb = new JsonObject {
-            ["database"] = Database(desired),
-            ["owner"] = Owner(desired)
-        };
+        var initdb = new JsonObject { ["database"] = Database(desired), ["owner"] = Owner(desired) };
 
         // ⚠ The EXTENSION name, which for pgvector is `vector`. `CREATE EXTENSION pgvector` fails —
         // there is no control file by that name — and the failure lands in the bootstrap job rather

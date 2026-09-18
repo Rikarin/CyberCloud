@@ -13,7 +13,8 @@ namespace CyberCloud.ResourceGraph.Query;
 [SuppressMessage(
     "Naming",
     "CA1720:Identifier contains type name",
-    Justification = "The members are Kusto's own scalar type names — string, long, real, bool, datetime, dynamic — and the wire spells them."
+    Justification =
+        "The members are Kusto's own scalar type names — string, long, real, bool, datetime, dynamic — and the wire spells them."
 )]
 public enum KqlType {
     /// <summary>Never assigned.</summary>
@@ -53,12 +54,18 @@ public sealed record ResourceGraphColumnDefinition(string Name, KqlType Type, st
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The names are Azure Resource Graph's where Azure has the column, and camel case
-///         where it does not, because the person typing the query knows Azure's table.</b>
+///         ⚠
+///         <b>
+///             The names are Azure Resource Graph's where Azure has the column, and camel case
+///             where it does not, because the person typing the query knows Azure's table.
+///         </b>
 ///         <c>name</c>, <c>type</c>, <c>location</c>, <c>resourceGroup</c>, <c>subscriptionId</c>,
 ///         <c>tags</c> are spelled as ARG spells them; <c>type</c> is <c>{provider}/{type}</c>
-///         exactly as ARG's is <c>microsoft.compute/virtualmachines</c>, so <c>type =~
-///         'cybercloud.dbforpostgresql/servers'</c> works on the first try. The projection's own
+///         exactly as ARG's is <c>microsoft.compute/virtualmachines</c>, so
+///         <c>
+/// type =~
+///         'cybercloud.dbforpostgresql/servers'
+///         </c> works on the first try. The projection's own
 ///         snake-case columns (<c>ResourceGraphTable</c>) are the storage, and this table is the
 ///         view; the two are joined by <see cref="ResourceGraphColumnDefinition.Sql" /> and nowhere
 ///         else.
@@ -113,7 +120,7 @@ public static class ResourceGraphSchema {
 
     /// <summary>The columns by name, ordinally.</summary>
     public static FrozenDictionary<string, ResourceGraphColumnDefinition> ByName { get; } =
-        Columns.ToFrozenDictionary(x => x.Name, StringComparer.Ordinal);
+        Columns.ToFrozenDictionary(static x => x.Name, StringComparer.Ordinal);
 
     /// <summary>
     ///     The binder's view of the world: one database holding one table with these columns and
@@ -129,7 +136,10 @@ public static class ResourceGraphSchema {
     public static GlobalState Globals { get; } = GlobalState.Default.WithDatabase(
         new DatabaseSymbol(
             DatabaseName,
-            new TableSymbol(TableName, Columns.Select(column => new ColumnSymbol(column.Name, Scalar(column.Type))))
+            new TableSymbol(
+                TableName,
+                Columns.Select(static column => new ColumnSymbol(column.Name, Scalar(column.Type)))
+            )
         )
     );
 
@@ -156,7 +166,8 @@ public static class ResourceGraphSchema {
             _ when symbol == ScalarTypes.Real || symbol == ScalarTypes.Decimal => KqlType.Real,
             _ when symbol == ScalarTypes.Bool => KqlType.Bool,
             _ when symbol == ScalarTypes.DateTime => KqlType.DateTime,
-            _ when symbol == ScalarTypes.Dynamic || symbol is DynamicPrimitiveSymbol or DynamicArraySymbol or DynamicBagSymbol => KqlType.Dynamic,
+            _ when symbol == ScalarTypes.Dynamic
+                || symbol is DynamicPrimitiveSymbol or DynamicArraySymbol or DynamicBagSymbol => KqlType.Dynamic,
             _ => KqlType.Unknown
         };
 

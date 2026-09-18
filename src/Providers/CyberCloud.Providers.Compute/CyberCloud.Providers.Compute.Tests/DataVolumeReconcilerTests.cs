@@ -16,23 +16,40 @@ public sealed class DataVolumeReconcilerTests {
         var disk = new DiskReconciler(new FixedClock());
 
         foreach (var (phase, imageConverges, diskConverges) in new[] {
-                     ("", true, true),
-                     ("Pending", false, false),
-                     ("ImportInProgress", false, false),
-                     (Cdi.WaitForFirstConsumer, false, true),
-                     (Cdi.PendingPopulation, false, true),
+                     ("", true, true), ("Pending", false, false), ("ImportInProgress", false, false),
+                     (Cdi.WaitForFirstConsumer, false, true), (Cdi.PendingPopulation, false, true),
                      (Cdi.Succeeded, true, true)
                  }) {
-            (await PassWithPhase(image, Compute.Image("ubuntu"), Images.Body(Compute.ClusterId), Images.DataVolumeRef, phase)).IsConverged
+            (await PassWithPhase(
+                    image,
+                    Compute.Image("ubuntu"),
+                    Images.Body(Compute.ClusterId),
+                    Images.DataVolumeRef,
+                    phase
+                )).IsConverged
                 .ShouldBe(imageConverges, $"image at phase '{phase}'");
 
-            (await PassWithPhase(disk, Compute.Disk("data"), Disks.Body(Compute.ClusterId), Disks.DataVolumeRef, phase)).IsConverged
+            (await PassWithPhase(
+                    disk,
+                    Compute.Disk("data"),
+                    Disks.Body(Compute.ClusterId),
+                    Disks.DataVolumeRef,
+                    phase
+                )).IsConverged
                 .ShouldBe(diskConverges, $"disk at phase '{phase}'");
         }
 
-        var failed = await PassWithPhase(image, Compute.Image("ubuntu"), Images.Body(Compute.ClusterId), Images.DataVolumeRef, Cdi.Failed);
+        var failed = await PassWithPhase(
+            image,
+            Compute.Image("ubuntu"),
+            Images.Body(Compute.ClusterId),
+            Images.DataVolumeRef,
+            Cdi.Failed
+        );
         failed.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
-        failed.Retryable.ShouldBeFalse("a failed import is terminal: the source is immutable, so a retry would ask the same registry for the same bytes forever");
+        failed.Retryable.ShouldBeFalse(
+            "a failed import is terminal: the source is immutable, so a retry would ask the same registry for the same bytes forever"
+        );
     }
 
     [Fact]
@@ -42,7 +59,10 @@ public sealed class DataVolumeReconcilerTests {
         var address = Compute.Disk("data");
         using var body = JsonDocument.Parse(Disks.Body(Compute.ClusterId));
 
-        await reconciler.ReconcileAsync(Compute.Context(connection, address, body.RootElement), TestContext.Current.CancellationToken);
+        await reconciler.ReconcileAsync(
+            Compute.Context(connection, address, body.RootElement),
+            TestContext.Current.CancellationToken
+        );
 
         Compute.Report(
             connection,
@@ -55,10 +75,17 @@ public sealed class DataVolumeReconcilerTests {
             }
         );
 
-        var outcome = await reconciler.ReconcileAsync(Compute.Context(connection, address, body.RootElement), TestContext.Current.CancellationToken);
+        var outcome = await reconciler.ReconcileAsync(
+            Compute.Context(connection, address, body.RootElement),
+            TestContext.Current.CancellationToken
+        );
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.InProgress);
-        outcome.Reason.ShouldContain("no storage class found", Case.Sensitive, "CDI's sentence is the one the tenant needs, not the phase alone");
+        outcome.Reason.ShouldContain(
+            "no storage class found",
+            Case.Sensitive,
+            "CDI's sentence is the one the tenant needs, not the phase alone"
+        );
     }
 
     [Fact]
@@ -67,13 +94,20 @@ public sealed class DataVolumeReconcilerTests {
         // that would pin a disk to whichever node CDI's helper picked — Cdi.ImmediateBindAnnotation.
         var imageConnection = new RecordingConnection();
         using var imageBody = JsonDocument.Parse(Images.Body(Compute.ClusterId));
-        await new ImageReconciler(new FixedClock()).ReconcileAsync(Compute.Context(imageConnection, Compute.Image("ubuntu"), imageBody.RootElement), TestContext.Current.CancellationToken);
+        await new ImageReconciler(new FixedClock()).ReconcileAsync(
+            Compute.Context(imageConnection, Compute.Image("ubuntu"), imageBody.RootElement),
+            TestContext.Current.CancellationToken
+        );
 
-        Annotations(imageConnection.Applied.Single().Body)[Cdi.ImmediateBindAnnotation]!.GetValue<string>().ShouldBe("true");
+        Annotations(imageConnection.Applied.Single().Body)[Cdi.ImmediateBindAnnotation]!.GetValue<string>()
+            .ShouldBe("true");
 
         var diskConnection = new RecordingConnection();
         using var diskBody = JsonDocument.Parse(Disks.Body(Compute.ClusterId));
-        await new DiskReconciler(new FixedClock()).ReconcileAsync(Compute.Context(diskConnection, Compute.Disk("data"), diskBody.RootElement), TestContext.Current.CancellationToken);
+        await new DiskReconciler(new FixedClock()).ReconcileAsync(
+            Compute.Context(diskConnection, Compute.Disk("data"), diskBody.RootElement),
+            TestContext.Current.CancellationToken
+        );
 
         Annotations(diskConnection.Applied.Single().Body).ContainsKey(Cdi.ImmediateBindAnnotation).ShouldBeFalse();
         Compute.Spec(diskConnection.Applied.Single().Body)["source"]!["blank"].ShouldNotBeNull();
@@ -82,7 +116,10 @@ public sealed class DataVolumeReconcilerTests {
         // provisioner and refuses a claim it cannot fill one for — the first real run's finding, and
         // the line that turned it green. Cdi.Storage carries the reading.
         foreach (var body in new[] { imageConnection.Applied.Single().Body, diskConnection.Applied.Single().Body }) {
-            Compute.Spec(body)["storage"]!["accessModes"]!.AsArray().Select(x => x!.GetValue<string>()).ShouldBe([Cdi.ReadWriteOnce]);
+            Compute.Spec(body)["storage"]!["accessModes"]!
+                .AsArray()
+                .Select(static x => x!.GetValue<string>())
+                .ShouldBe([Cdi.ReadWriteOnce]);
         }
     }
 
@@ -91,20 +128,42 @@ public sealed class DataVolumeReconcilerTests {
         using var catalogue = JsonDocument.Parse(Images.Body(Compute.ClusterId, name: "debian-13"));
         var rendered = Images.DataVolumeJson("debian", catalogue.RootElement);
 
-        Compute.Spec(rendered)["source"]!["registry"]!["url"]!.GetValue<string>()
+        Compute.Spec(rendered)["source"]!["registry"]!["url"]!
+            .GetValue<string>()
             .ShouldBe(Images.Catalogue["debian-13"].Url);
-        Images.Catalogue["debian-13"].Url.ShouldContain("@sha256:", Case.Sensitive, "the catalogue pins by digest, never by tag");
+        Images.Catalogue["debian-13"].Url.ShouldContain(
+            "@sha256:",
+            Case.Sensitive,
+            "the catalogue pins by digest, never by tag"
+        );
 
-        using var http = JsonDocument.Parse(Images.Body(Compute.ClusterId, kind: Images.UrlSource, url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"));
-        Compute.Spec(Images.DataVolumeJson("noble", http.RootElement))["source"]!["http"]!["url"]!.GetValue<string>().ShouldStartWith("https://");
+        using var http = JsonDocument.Parse(
+            Images.Body(
+                Compute.ClusterId,
+                Images.UrlSource,
+                url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+            )
+        );
+        Compute.Spec(Images.DataVolumeJson("noble", http.RootElement))["source"]!["http"]!["url"]!
+            .GetValue<string>()
+            .ShouldStartWith("https://");
 
-        using var registry = JsonDocument.Parse(Images.Body(Compute.ClusterId, kind: Images.UrlSource, url: "docker://quay.io/kubevirt/cirros-container-disk-demo:v1.9.0"));
+        using var registry = JsonDocument.Parse(
+            Images.Body(
+                Compute.ClusterId,
+                Images.UrlSource,
+                url: "docker://quay.io/kubevirt/cirros-container-disk-demo:v1.9.0"
+            )
+        );
         Compute.Spec(Images.DataVolumeJson("cirros", registry.RootElement))["source"]!["registry"].ShouldNotBeNull();
 
         // A url body with no address is refused before anything is applied.
         var connection = new RecordingConnection();
-        using var empty = JsonDocument.Parse(Images.Body(Compute.ClusterId, kind: Images.UrlSource));
-        var outcome = await new ImageReconciler(new FixedClock()).ReconcileAsync(Compute.Context(connection, Compute.Image("x"), empty.RootElement), TestContext.Current.CancellationToken);
+        using var empty = JsonDocument.Parse(Images.Body(Compute.ClusterId, Images.UrlSource));
+        var outcome = await new ImageReconciler(new FixedClock()).ReconcileAsync(
+            Compute.Context(connection, Compute.Image("x"), empty.RootElement),
+            TestContext.Current.CancellationToken
+        );
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
         outcome.Error!.Message.ShouldContain("source.url");
@@ -113,7 +172,7 @@ public sealed class DataVolumeReconcilerTests {
 
     [Fact]
     public void MatchesIsContainmentOverTheFieldsATenantChose() {
-        using var body = JsonDocument.Parse(Disks.Body(Compute.ClusterId, size: "64Gi", storageClass: "openebs-hostpath"));
+        using var body = JsonDocument.Parse(Disks.Body(Compute.ClusterId, "64Gi", "openebs-hostpath"));
         var rendered = JsonNode.Parse(Disks.DataVolumeJson("data", body.RootElement))!.AsObject();
 
         // CDI's mutating path fills what the StorageProfile knows; that is not drift.
@@ -124,7 +183,7 @@ public sealed class DataVolumeReconcilerTests {
         rendered["spec"]!["storage"]!["resources"]!["requests"]!["storage"] = "32Gi";
         Disks.Matches(rendered.ToJsonString(), body.RootElement).ShouldBeFalse("a rewritten size is drift");
 
-        Disks.Matches("{\"kind\":\"PersistentVolumeClaim\",\"spec\":{}}", body.RootElement).ShouldBeFalse();
+        Disks.Matches("""{"kind":"PersistentVolumeClaim","spec":{}}""", body.RootElement).ShouldBeFalse();
         Disks.Matches("not json", body.RootElement).ShouldBeFalse();
     }
 
@@ -135,11 +194,17 @@ public sealed class DataVolumeReconcilerTests {
         var address = Compute.Image("ubuntu");
         using var body = JsonDocument.Parse(Images.Body(Compute.ClusterId));
 
-        await reconciler.ReconcileAsync(Compute.Context(connection, address, body.RootElement), TestContext.Current.CancellationToken);
-        var outcome = await reconciler.DeleteAsync(Compute.Context(connection, address, body.RootElement), TestContext.Current.CancellationToken);
+        await reconciler.ReconcileAsync(
+            Compute.Context(connection, address, body.RootElement),
+            TestContext.Current.CancellationToken
+        );
+        var outcome = await reconciler.DeleteAsync(
+            Compute.Context(connection, address, body.RootElement),
+            TestContext.Current.CancellationToken
+        );
 
         outcome.ShouldBe(ReconcileOutcome.Converged);
-        connection.Deleted.Select(x => x.Kind.Kind).ShouldBe(["DataVolume"]);
+        connection.Deleted.Select(static x => x.Kind.Kind).ShouldBe(["DataVolume"]);
         connection.Objects.ShouldBeEmpty();
     }
 
@@ -150,10 +215,20 @@ public sealed class DataVolumeReconcilerTests {
         var address = Compute.Disk("data");
         using var body = JsonDocument.Parse(Disks.Body(Compute.ClusterId));
 
-        await reconciler.ReconcileAsync(Compute.Context(connection, address, body.RootElement), TestContext.Current.CancellationToken);
-        Compute.Report(connection, Disks.DataVolumeRef(ReconcileDriver.NamespaceFor(address), "data"), new JsonObject { ["phase"] = Cdi.WaitForFirstConsumer });
+        await reconciler.ReconcileAsync(
+            Compute.Context(connection, address, body.RootElement),
+            TestContext.Current.CancellationToken
+        );
+        Compute.Report(
+            connection,
+            Disks.DataVolumeRef(ReconcileDriver.NamespaceFor(address), "data"),
+            new JsonObject { ["phase"] = Cdi.WaitForFirstConsumer }
+        );
 
-        var observed = await reconciler.ObserveAsync(Compute.Observe(connection, address, body.RootElement), TestContext.Current.CancellationToken);
+        var observed = await reconciler.ObserveAsync(
+            Compute.Observe(connection, address, body.RootElement),
+            TestContext.Current.CancellationToken
+        );
 
         observed.Exists.ShouldBeTrue();
         observed.Summary.ShouldContain("CDI reports WaitForFirstConsumer");
@@ -171,13 +246,23 @@ public sealed class DataVolumeReconcilerTests {
         var connection = new RecordingConnection();
         using var desired = JsonDocument.Parse(body);
 
-        await reconciler.ReconcileAsync(Compute.Context(connection, address, desired.RootElement), TestContext.Current.CancellationToken);
+        await reconciler.ReconcileAsync(
+            Compute.Context(connection, address, desired.RootElement),
+            TestContext.Current.CancellationToken
+        );
 
         if (phase.Length > 0) {
-            Compute.Report(connection, target(ReconcileDriver.NamespaceFor(address), address.Name), new JsonObject { ["phase"] = phase });
+            Compute.Report(
+                connection,
+                target(ReconcileDriver.NamespaceFor(address), address.Name),
+                new JsonObject { ["phase"] = phase }
+            );
         }
 
-        return await reconciler.ReconcileAsync(Compute.Context(connection, address, desired.RootElement), TestContext.Current.CancellationToken);
+        return await reconciler.ReconcileAsync(
+            Compute.Context(connection, address, desired.RootElement),
+            TestContext.Current.CancellationToken
+        );
     }
 
     static JsonObject Annotations(string objectJson) =>

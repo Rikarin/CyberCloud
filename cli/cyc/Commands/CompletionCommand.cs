@@ -121,13 +121,13 @@ static class CompletionCommand {
             return Values(named, context, string.Empty);
         }
 
-        return parse.GetCompletions().Select(x => x.Label);
+        return parse.GetCompletions().Select(static x => x.Label);
     }
 
     static IEnumerable<string> Values(Option option, CompletionContext context, string prefix) =>
         option
             .GetCompletions(context)
-            .Select(x => x.Label)
+            .Select(static x => x.Label)
             .Where(x => x.StartsWith(prefix, StringComparison.Ordinal));
 
     /// <summary>

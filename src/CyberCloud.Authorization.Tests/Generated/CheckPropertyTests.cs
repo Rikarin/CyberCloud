@@ -283,7 +283,7 @@ public sealed class CheckPropertyTests {
 
         try {
             return edges.TryGetValue(node, out var next)
-                && next.Any(x => Walk(x, edges, visited, stack));
+                && next.Exists(x => Walk(x, edges, visited, stack));
         } finally {
             stack.Remove(node);
         }

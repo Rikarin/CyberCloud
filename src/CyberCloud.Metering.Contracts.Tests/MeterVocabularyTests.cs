@@ -18,7 +18,7 @@ namespace CyberCloud.Metering.Contracts.Tests;
 /// </remarks>
 public sealed class MeterVocabularyTests {
     static readonly ImmutableArray<QuotaMeter> Families =
-        [.. Enum.GetValues<QuotaMeter>().Where(x => x != QuotaMeter.Unknown)];
+        [.. Enum.GetValues<QuotaMeter>().Where(static x => x != QuotaMeter.Unknown)];
 
     /// <summary>
     ///     ⚠ The one that matters. A family the registry can declare and the write path can reserve,
@@ -39,7 +39,7 @@ public sealed class MeterVocabularyTests {
     /// </summary>
     [Fact]
     public void EveryStateBasedMeterIntegratesAQuotaFamily() {
-        foreach (var definition in MeterCatalog.Definitions.Where(x => x.Kind == MeterKind.StateBased)) {
+        foreach (var definition in MeterCatalog.Definitions.Where(static x => x.Kind == MeterKind.StateBased)) {
             definition.Family.ShouldNotBe(
                 QuotaMeter.Unknown,
                 $"{definition.Meter} is state-based and integrates no family, so nothing can sample it."
@@ -54,7 +54,7 @@ public sealed class MeterVocabularyTests {
     /// </summary>
     [Fact]
     public void NoEventBasedMeterIntegratesAQuotaFamily() {
-        foreach (var definition in MeterCatalog.Definitions.Where(x => x.Kind == MeterKind.EventBased)) {
+        foreach (var definition in MeterCatalog.Definitions.Where(static x => x.Kind == MeterKind.EventBased)) {
             definition.Family.ShouldBe(QuotaMeter.Unknown, $"{definition.Meter} would be sampled.");
         }
     }
@@ -73,7 +73,7 @@ public sealed class MeterVocabularyTests {
     /// </summary>
     [Fact]
     public void EveryBillingMeterIsDefined() {
-        foreach (var meter in Enum.GetValues<BillingMeter>().Where(x => x != BillingMeter.Unknown)) {
+        foreach (var meter in Enum.GetValues<BillingMeter>().Where(static x => x != BillingMeter.Unknown)) {
             MeterCatalog.Define(meter).IsSuccess.ShouldBeTrue($"{meter} has no definition.");
         }
     }

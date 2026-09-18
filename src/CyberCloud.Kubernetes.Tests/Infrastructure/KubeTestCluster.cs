@@ -89,7 +89,8 @@ public sealed class LogCapture : ILoggerProvider {
 
     sealed class Sink : ILogger {
         public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
+            where TState : notnull =>
+            null;
 
         public bool IsEnabled(LogLevel logLevel) => true;
 
@@ -399,7 +400,7 @@ public sealed class KubeTestCluster : IAsyncLifetime {
         public void Configure(ISiloBuilder silo) {
             silo.AddMemoryGrainStorage(StorageTiers.Durable);
 
-            silo.ConfigureServices(services => {
+            silo.ConfigureServices(static services => {
                     services.AddSingleton<ILoggerProvider, LogCapture>();
                     services.AddSingleton<IClock>(SharedTestClock.Instance);
                     services.TryAddSingleton<IClusterOperatorAuthority, SwitchableClusterOperatorAuthority>();
@@ -408,7 +409,7 @@ public sealed class KubeTestCluster : IAsyncLifetime {
                     // The health timer is off: a test asserting a health transition cannot share a
                     // process with a loop quietly repairing it. Same argument as
                     // TenancyRefreshOptions.RunBackgroundRefresh.
-                    services.Configure<KubernetesOptions>(o => {
+                    services.Configure<KubernetesOptions>(static o => {
                             o.RunHealthTimer = false;
                             o.InformerStaggerWindow = TimeSpan.Zero;
                         }
@@ -422,8 +423,8 @@ public sealed class KubeTestCluster : IAsyncLifetime {
             // Orleans' own separation, allowing the edge into a null-tenant grain exactly as
             // PlatformCrossTenantAuthorizer does — so the connection grain's own check is reached.
             silo.AddMultitenantCommunicationSeparation(
-                _ => new AllowIntoNullTenant(),
-                _ => new AllCallsSeparated()
+                static _ => new AllowIntoNullTenant(),
+                static _ => new AllCallsSeparated()
             );
         }
     }

@@ -14,8 +14,11 @@ namespace CyberCloud.Providers.Compute.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>ONE CASE OBJECT AND TWO CLASS DECLARATIONS, and the first time that shape has held for
-///         a type whose actions WRITE the cluster.</b> <c>AnActionOnAnExistingResourceIsAccepted</c>
+///         ⚠
+///         <b>
+///             ONE CASE OBJECT AND TWO CLASS DECLARATIONS, and the first time that shape has held for
+///             a type whose actions WRITE the cluster.
+///         </b> <c>AnActionOnAnExistingResourceIsAccepted</c>
 ///         invokes <see cref="VirtualMachines.StopAction" /> after the create has converged: the
 ///         handler reads the <c>VirtualMachine</c> the reconciler applied, applies it again with
 ///         <c>Halted</c>, and answers a body the suite validates against
@@ -24,16 +27,22 @@ namespace CyberCloud.Providers.Compute.Conformance;
 ///         so <c>VirtualMachinePowerTests</c> drives that sequence by hand.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The image is not there, and every assertion here passes anyway — by the reconciler's
-///         own rule rather than by the harness's leniency.</b> <see cref="FakeKubeCluster" /> holds no
+///         ⚠
+///         <b>
+///             The image is not there, and every assertion here passes anyway — by the reconciler's
+///             own rule rather than by the harness's leniency.
+///         </b> <see cref="FakeKubeCluster" /> holds no
 ///         <c>DataVolume</c> for the body's image, and <c>VirtualMachineReconciler</c> proceeds on an
 ///         absent image because CDI's admission is the honest refuser of a clone with no source.
 ///         An image that exists and is importing is the case it waits for, and that case has no
 ///         harness object either; <c>VirtualMachineReconcilerTests</c> builds it.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="ProviderConformanceCase.ObjectMatchesDesired" /> is
-///         <c>VirtualMachines.Matches</c>, which ignores the run strategy on purpose</b> — a stopped
+///         ⚠
+///         <b>
+///             <see cref="ProviderConformanceCase.ObjectMatchesDesired" /> is
+///             <c>VirtualMachines.Matches</c>, which ignores the run strategy on purpose
+///         </b> — a stopped
 ///         machine still carries its desired spec — and takes the namespace, because the logical
 ///         switch a body names is spelled with it.
 ///     </para>
@@ -43,29 +52,29 @@ public sealed class VirtualMachineCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Compute/virtualMachines",
-            CreateProvider = () => new ComputeProvider(),
+            CreateProvider = static () => new ComputeProvider(),
             ReconcilerType = typeof(VirtualMachineReconciler),
-            CreateReconciler = clock => new VirtualMachineReconciler(clock),
+            CreateReconciler = static clock => new VirtualMachineReconciler(clock),
             Type = VirtualMachines.Type,
             ApiVersion = VirtualMachines.V2026,
-            Body = cluster => VirtualMachines.Body(cluster),
+            Body = static cluster => VirtualMachines.Body(cluster),
             // ⚠ Changes `size`, which the rendered VirtualMachine carries in TWO places —
             // domain.cpu.cores and domain.memory.guest — and which two of the three meters read. A
             // body that differed only where the reconciler ignores it would pass the update test while
             // proving the update never left the grain.
-            ChangedBody = cluster => VirtualMachines.Body(cluster, size: "s1.medium"),
+            ChangedBody = static cluster => VirtualMachines.Body(cluster, size: "s1.medium"),
             // Drops the required `/properties/image`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written: a
             // hand-written invalid body drifts out of date the day the schema gains a property and then
             // tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => Without(VirtualMachines.Body(cluster), "image"),
+            InvalidBody = static cluster => Without(VirtualMachines.Body(cluster), "image"),
             InvalidBodyTarget = "/properties/image",
             ActionName = VirtualMachines.StopAction,
             // ⚠ ONE OBJECT, NOT TWO: the body names no cloud-init, so no Secret is rendered, and a
             // second reference here would be an object the suite removes, reads back, and finds
             // missing for the right reason and the wrong test. The cloud-init half is
             // VirtualMachineReconcilerTests' to assert.
-            Objects = (id, ns) => [VirtualMachines.VirtualMachineRef(ns, id.Name)],
+            Objects = static (id, ns) => [VirtualMachines.VirtualMachineRef(ns, id.Name)],
             // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
             DataPlane = null,
             StoragePrefix = null,
@@ -79,10 +88,15 @@ public sealed class VirtualMachineCase : IProviderCaseSource {
             OperatorWritten = static (id, ns) => [
                 (
                     Disks.DataVolumeRef(ns, VirtualMachines.RootDataVolumeName(id.Name)),
-                    VirtualMachines.RootDataVolumeJson(ns, id.Name, Desired(VirtualMachines.Body(Guid.Empty)), Cdi.Succeeded)
+                    VirtualMachines.RootDataVolumeJson(
+                        ns,
+                        id.Name,
+                        Desired(VirtualMachines.Body(Guid.Empty)),
+                        Cdi.Succeeded
+                    )
                 )
             ],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return VirtualMachines.Matches(match.ObjectJson, match.Namespace, desired.RootElement);
             }
@@ -133,26 +147,26 @@ public sealed class DiskCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Compute/disks",
-            CreateProvider = () => new ComputeProvider(),
+            CreateProvider = static () => new ComputeProvider(),
             ReconcilerType = typeof(DiskReconciler),
-            CreateReconciler = clock => new DiskReconciler(clock),
+            CreateReconciler = static clock => new DiskReconciler(clock),
             Type = Disks.Type,
             ApiVersion = Disks.V2026,
-            Body = cluster => Disks.Body(cluster),
-            ChangedBody = cluster => VirtualMachineCase.WithTag(Disks.Body(cluster), "tier", "data"),
+            Body = static cluster => Disks.Body(cluster),
+            ChangedBody = static cluster => VirtualMachineCase.WithTag(Disks.Body(cluster), "tier", "data"),
             // Drops the required `/properties/size`.
-            InvalidBody = cluster => VirtualMachineCase.Without(Disks.Body(cluster), "size"),
+            InvalidBody = static cluster => VirtualMachineCase.Without(Disks.Body(cluster), "size"),
             InvalidBodyTarget = "/properties/size",
             // ⚠ No action, and saying so: a disk is attached by a machine's body, grown by nothing yet,
             // and snapshotted by nothing yet — charts/managed/disk/conformance.yaml § owed carries the
             // last two. The suite skips its two POST assertions loudly for an empty name.
             ActionName = string.Empty,
-            Objects = (id, ns) => [Disks.DataVolumeRef(ns, id.Name)],
+            Objects = static (id, ns) => [Disks.DataVolumeRef(ns, id.Name)],
             // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return Disks.Matches(match.ObjectJson, desired.RootElement);
             }
@@ -172,23 +186,23 @@ public sealed class ImageCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Compute/images",
-            CreateProvider = () => new ComputeProvider(),
+            CreateProvider = static () => new ComputeProvider(),
             ReconcilerType = typeof(ImageReconciler),
-            CreateReconciler = clock => new ImageReconciler(clock),
+            CreateReconciler = static clock => new ImageReconciler(clock),
             Type = Images.Type,
             ApiVersion = Images.V2026,
-            Body = cluster => Images.Body(cluster),
-            ChangedBody = cluster => VirtualMachineCase.WithTag(Images.Body(cluster), "os", "ubuntu"),
+            Body = static cluster => Images.Body(cluster),
+            ChangedBody = static cluster => VirtualMachineCase.WithTag(Images.Body(cluster), "os", "ubuntu"),
             // Drops the required `/properties/size`.
-            InvalidBody = cluster => VirtualMachineCase.Without(Images.Body(cluster), "size"),
+            InvalidBody = static cluster => VirtualMachineCase.Without(Images.Body(cluster), "size"),
             InvalidBodyTarget = "/properties/size",
             ActionName = string.Empty,
-            Objects = (id, ns) => [Images.DataVolumeRef(ns, id.Name)],
+            Objects = static (id, ns) => [Images.DataVolumeRef(ns, id.Name)],
             // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return Images.Matches(match.ObjectJson, desired.RootElement);
             }
@@ -273,15 +287,16 @@ public sealed class ComputeSuiteShapeTests {
     }
 
     static ImmutableArray<ProviderConformanceCase> AncestorsOf<TSource>()
-        where TSource : IProviderCaseSource => TSource.Ancestors;
+        where TSource : IProviderCaseSource =>
+        TSource.Ancestors;
 
     /// <summary>Every <c>[Fact]</c> a test class runs, by name, ordered.</summary>
     /// <param name="suite">The closed test class.</param>
     static ImmutableArray<string> RunnableFactsOf(Type suite) => [
         .. suite
             .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-            .Where(x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
-            .Select(x => x.Name)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Where(static x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
+            .Select(static x => x.Name)
+            .OrderBy(static x => x, StringComparer.Ordinal)
     ];
 }

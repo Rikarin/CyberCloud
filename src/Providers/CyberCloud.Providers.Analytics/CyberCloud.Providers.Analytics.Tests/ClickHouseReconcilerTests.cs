@@ -69,13 +69,9 @@ public sealed class ClickHouseReconcilerTests {
 
         var connection = new RecordingConnection();
 
-        using var aliceBody = JsonDocument.Parse(
-            ClickHouseClusters.Body(ClusterId, shards: 1, replicas: 2, storageSize: "100Gi")
-        );
+        using var aliceBody = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId, 1, 2, "100Gi"));
 
-        using var bobBody = JsonDocument.Parse(
-            ClickHouseClusters.Body(ClusterId, shards: 4, replicas: 3, storageSize: "500Gi")
-        );
+        using var bobBody = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId, 4, 3, "500Gi"));
 
         // Interleaved, so a cache written on the first pass is read on the third.
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
@@ -85,7 +81,7 @@ public sealed class ClickHouseReconcilerTests {
 
         // Two objects per pass.
         var installations = connection.Applied
-            .Where(x => x.Target.Kind.Kind == "ClickHouseInstallation")
+            .Where(static x => x.Target.Kind.Kind == "ClickHouseInstallation")
             .ToList();
 
         installations.Count.ShouldBe(4);
@@ -136,7 +132,7 @@ public sealed class ClickHouseReconcilerTests {
 
         (await Reconcile(connection, body.RootElement)).ShouldBe(ReconcileOutcome.Converged);
 
-        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target))
+        var applied = connection.Applied.Select(static x => RecordingConnection.Key(x.Target))
             .ToHashSet(StringComparer.Ordinal);
 
         var read = connection.Read.Select(RecordingConnection.Key).ToHashSet(StringComparer.Ordinal);
@@ -180,7 +176,7 @@ public sealed class ClickHouseReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
-        connection.Applied.Select(x => x.Target.Kind.Group)
+        connection.Applied.Select(static x => x.Target.Kind.Group)
             .Order(StringComparer.Ordinal)
             .ShouldBe(["clickhouse-keeper.altinity.com", "clickhouse.altinity.com"]);
     }
@@ -222,8 +218,8 @@ public sealed class ClickHouseReconcilerTests {
         await Pass(reconciler, connection, Address("orders", TenantB, SubscriptionB), body.RootElement);
 
         var hosts = connection.Applied
-            .Where(x => x.Target.Kind.Kind == "ClickHouseInstallation")
-            .Select(x => JsonNode.Parse(x.Body)!["spec"]!["configuration"]!["zookeeper"]!["nodes"]!
+            .Where(static x => x.Target.Kind.Kind == "ClickHouseInstallation")
+            .Select(static x => JsonNode.Parse(x.Body)!["spec"]!["configuration"]!["zookeeper"]!["nodes"]!
                     .AsArray()[0]!["host"]!
                     .GetValue<string>()
             )
@@ -239,10 +235,10 @@ public sealed class ClickHouseReconcilerTests {
         using var body = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId));
 
         await Reconcile(connection, body.RootElement);
-        var first = connection.Applied.Select(x => x.Body).ToArray();
+        var first = connection.Applied.Select(static x => x.Body).ToArray();
 
         await Reconcile(connection, body.RootElement);
-        var second = connection.Applied.Skip(first.Length).Select(x => x.Body).ToArray();
+        var second = connection.Applied.Skip(first.Length).Select(static x => x.Body).ToArray();
 
         second.ShouldBe(first);
     }
@@ -287,7 +283,7 @@ public sealed class ClickHouseReconcilerTests {
 
         deleted.ShouldBe(ReconcileOutcome.Converged);
 
-        connection.Deleted.Select(x => x.Kind.Kind)
+        connection.Deleted.Select(static x => x.Kind.Kind)
             .ShouldBe(
                 ["ClickHouseInstallation", "ClickHouseKeeperInstallation"],
                 "the installation is deleted first, so servers do not outlive their coordination"

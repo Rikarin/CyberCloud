@@ -14,8 +14,11 @@ namespace CyberCloud.Providers.Monitor;
 ///         <b>
 ///             THE SECOND <c>IResourceProvider</c> IN ONE ASSEMBLY, WHICH NO FAMILY HAD DONE, AND
 ///             docs/plan/03 ASKED FOR IT FIRST.
-///         </b> § Providers' tree reads <c>CyberCloud.Providers.Monitor/ # workspaces, collectors,
-///         alerts, grafanas</c> — four nouns, one directory — while docs/plan/01 gives Grafana its
+///         </b> § Providers' tree reads
+///         <c>
+/// CyberCloud.Providers.Monitor/ # workspaces, collectors,
+///         alerts, grafanas
+///         </c> — four nouns, one directory — while docs/plan/01 gives Grafana its
 ///         own namespace. A provider declares exactly one namespace, so the two documents together
 ///         say: two providers, one family. <c>ProviderDiscovery.FromAssembly</c> instantiates
 ///         <i>"every provider an assembly declares"</i> and <c>MonitorApplicationModule</c> registers
@@ -64,21 +67,21 @@ public sealed class DashboardProvider : IResourceProvider {
                 Grafanas.UrlAction,
                 ActionKind.Post,
                 Grafanas.UrlPermission,
-                secret: true,
+                true,
                 response: Grafanas.UrlResponse,
                 handler: typeof(GrafanaUrlHandler)
             )
             .Display(
                 "Managed Grafana",
                 "Managed Grafanas",
-                shortName: "grafana",
-                summary: "An unmodified Grafana OSS instance in your cluster, provisioned with one monitor "
+                "grafana",
+                "An unmodified Grafana OSS instance in your cluster, provisioned with one monitor "
                 + "workspace's metrics and logs as its datasources and reachable at a URL your pages "
                 + "embed rendered dashboards from."
             )
             .Chart(Grafanas.ChartName)
             .SupportsTags()
-            .RequiresCluster(Grafanas.ClusterIdPointer);
+            .RequiresCluster();
     }
 
     /// <summary>vCPU: the sizing preset's cpu, in cores.</summary>
@@ -86,7 +89,7 @@ public sealed class DashboardProvider : IResourceProvider {
         MeterDerivation.Of(
             "sizing.preset's cpu, in cores",
             ["/properties/sizing/preset"],
-            body => KubeQuantity.TryParse(Grafanas.Resources(body).Cpu, out var cores)
+            static body => KubeQuantity.TryParse(Grafanas.Resources(body).Cpu, out var cores)
                 ? Result<decimal>.Success(cores)
                 : Result<decimal>.Failure(
                     ErrorCode.InternalError,
@@ -100,7 +103,7 @@ public sealed class DashboardProvider : IResourceProvider {
         MeterDerivation.Of(
             "sizing.preset's memory, in GiB",
             ["/properties/sizing/preset"],
-            body => KubeQuantity.TryGibibytes(Grafanas.Resources(body).Memory, out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(Grafanas.Resources(body).Memory, out var gibibytes)
                 ? Result<decimal>.Success(gibibytes)
                 : Result<decimal>.Failure(
                     ErrorCode.InternalError,

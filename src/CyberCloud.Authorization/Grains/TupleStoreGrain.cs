@@ -44,8 +44,11 @@ namespace CyberCloud.Authorization.Grains;
 ///         needs no version of its own for docs/plan/07 § The Leopard index's staleness rule.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The index lands last on a write and first on a delete, and the asymmetry is the
-///         whole safety argument for letting <c>Check</c> read it.</b> docs/plan/07 § Storage lets
+///         ⚠
+///         <b>
+///             The index lands last on a write and first on a delete, and the asymmetry is the
+///             whole safety argument for letting <c>Check</c> read it.
+///         </b> docs/plan/07 § Storage lets
 ///         the reverse index be stale because nothing on the check path reads it; the Leopard index
 ///         <i>is</i> read on the check path, and a <c>false</c> from it is taken without a walk. So
 ///         at every point a crash can leave the tenant, the index must be no more permissive than
@@ -106,7 +109,7 @@ public sealed class TupleStoreGrain(
 
     /// <inheritdoc />
     public async Task<Result<SweepReport>> SweepAsync() {
-        var pending = state.State.Pending.OrderBy(x => x.Sequence).ToList();
+        var pending = state.State.Pending.OrderBy(static x => x.Sequence).ToList();
         if (pending.Count == 0) {
             return Result<SweepReport>.Success(new());
         }

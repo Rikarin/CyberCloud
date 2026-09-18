@@ -117,8 +117,11 @@ partial class Build {
     ///         would pass the thing it exists to catch.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>AGPL is here and Grafana is an exception, written where this paragraph said it
-    ///         would be.</b> ADR-011 marks Grafana "⚠ Offerable as a managed instance (we distribute,
+    ///         ⚠
+    ///         <b>
+    ///             AGPL is here and Grafana is an exception, written where this paragraph said it
+    ///             would be.
+    ///         </b> ADR-011 marks Grafana "⚠ Offerable as a managed instance (we distribute,
     ///         we do not modify)". That is a condition, and it is written into
     ///         <see cref="LicenceExceptions" /> next to the artefact it excuses — not into this list.
     ///         This paragraph used to end "the day a Grafana image enters the bundle"; the image
@@ -150,8 +153,11 @@ partial class Build {
     ///         renders <c>grafana/grafana</c> by digest — and the argument beside it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The scan does not reach the artefact the entry excuses, and the entry is written
-    ///         anyway.</b> <see cref="ScanComponent" /> reads <c>charts/bundle/</c> components' images
+    ///         ⚠
+    ///         <b>
+    ///             The scan does not reach the artefact the entry excuses, and the entry is written
+    ///             anyway.
+    ///         </b> <see cref="ScanComponent" /> reads <c>charts/bundle/</c> components' images
     ///         and <see cref="ScanPlatformImages" /> the platform's own; an image a chart under
     ///         <c>charts/managed/</c> renders — <c>haproxy</c>'s GPL-2.0 before this, Grafana's AGPL-3.0
     ///         and the collector's Apache-2.0 now — is outside both. So today nothing in this target
@@ -186,7 +192,13 @@ partial class Build {
     /// <param name="Licence">What the evidence says, or what it failed to say.</param>
     /// <param name="Verdict">✔ allowed, ✘ refused, or ○ not inspected.</param>
     /// <param name="Detail">The sentence that goes with the verdict.</param>
-    sealed record LicenceRow(string Section, string Artefact, string Evidence, string Licence, string Verdict, string Detail);
+    sealed record LicenceRow(
+        string Section,
+        string Artefact,
+        string Evidence,
+        string Licence,
+        string Verdict,
+        string Detail);
 
     const string Allowed = "✔";
     const string Refused = "✘";
@@ -197,7 +209,8 @@ partial class Build {
         var rows = new List<LicenceRow>();
         var violations = new List<string>();
 
-        foreach (var violation in manifestViolations.Where(x => x.Contains("licenceEvidence", StringComparison.Ordinal))) {
+        foreach (var violation in manifestViolations.Where(x => x.Contains("licenceEvidence", StringComparison.Ordinal)
+                 )) {
             violations.Add(violation);
         }
 
@@ -280,7 +293,16 @@ partial class Build {
         // `licenceEvidence:` on it, and so there is no upstream to witness — it is "not inspected"
         // rather than "declared and unwitnessed", which is the refusal for a PIN with no evidence.
         if (component.Scalars.GetValueOrDefault("install", string.Empty) == "file") {
-            rows.Add(new("Components", component.Name, "(first-party file)", "(none)", NotInspected, "install: file pulls no upstream artefact"));
+            rows.Add(
+                new(
+                    "Components",
+                    component.Name,
+                    "(first-party file)",
+                    "(none)",
+                    NotInspected,
+                    "install: file pulls no upstream artefact"
+                )
+            );
 
             return;
         }
@@ -292,7 +314,16 @@ partial class Build {
                 var classified = ClassifyLicenceText(text);
 
                 if (classified is null) {
-                    rows.Add(new("Components", component.Name, evidenceUrl, "unrecognised", Refused, "the licence text matches no family this scan knows"));
+                    rows.Add(
+                        new(
+                            "Components",
+                            component.Name,
+                            evidenceUrl,
+                            "unrecognised",
+                            Refused,
+                            "the licence text matches no family this scan knows"
+                        )
+                    );
                     violations.Add(
                         $"{relative}: `licenceEvidence: {evidenceUrl}` fetched, and its text matches none of "
                         + "the licence families Build.Licence.cs § ClassifyLicenceText recognises. Either "
@@ -300,7 +331,16 @@ partial class Build {
                         + "the second case is worth a person reading it before the classifier learns it"
                     );
                 } else if (!string.Equals(classified, declared, StringComparison.Ordinal)) {
-                    rows.Add(new("Components", component.Name, evidenceUrl, classified, Refused, $"component.yaml declares `licence: {declared}`"));
+                    rows.Add(
+                        new(
+                            "Components",
+                            component.Name,
+                            evidenceUrl,
+                            classified,
+                            Refused,
+                            $"component.yaml declares `licence: {declared}`"
+                        )
+                    );
                     violations.Add(
                         $"{relative} declares `licence: {declared}`, and the licence file it names — "
                         + $"{evidenceUrl} — reads as {classified}. The declaration is a claim about the "
@@ -309,18 +349,42 @@ partial class Build {
                     );
                 } else {
                     var verdict = IsOnBundleAllowList(classified) ? Allowed : Refused;
-                    rows.Add(new("Components", component.Name, evidenceUrl, classified, verdict, verdict == Allowed ? "agrees with component.yaml; on the allow-list" : "not on ADR-011's allow-list"));
+                    rows.Add(
+                        new(
+                            "Components",
+                            component.Name,
+                            evidenceUrl,
+                            classified,
+                            verdict,
+                            verdict == Allowed
+                                ? "agrees with component.yaml; on the allow-list"
+                                : "not on ADR-011's allow-list"
+                        )
+                    );
 
                     if (verdict == Refused) {
-                        violations.Add($"{relative}: {classified}, read from {evidenceUrl}, is not on ADR-011's allow-list ({string.Join(", ", BundleLicenceAllowList)})");
+                        violations.Add(
+                            $"{relative}: {classified}, read from {evidenceUrl}, is not on ADR-011's allow-list ({string.Join(", ", BundleLicenceAllowList)})"
+                        );
                     }
                 }
             } catch (HttpRequestException exception) {
                 rows.Add(new("Components", component.Name, evidenceUrl, "unread", Refused, exception.Message));
-                violations.Add($"{relative}: `licenceEvidence: {evidenceUrl}` could not be fetched ({exception.Message}). A licence nobody can read is a licence nobody has checked");
+                violations.Add(
+                    $"{relative}: `licenceEvidence: {evidenceUrl}` could not be fetched ({exception.Message}). A licence nobody can read is a licence nobody has checked"
+                );
             }
         } else {
-            rows.Add(new("Components", component.Name, "(no licenceEvidence:)", declared, Refused, "declared and unwitnessed"));
+            rows.Add(
+                new(
+                    "Components",
+                    component.Name,
+                    "(no licenceEvidence:)",
+                    declared,
+                    Refused,
+                    "declared and unwitnessed"
+                )
+            );
         }
 
         // 2. The pinned chart's own metadata, where the pin is a chart.
@@ -362,7 +426,11 @@ partial class Build {
             switch (install) {
                 case "helm":
                     evidence = $"{component.Scalars["repo"]}/index.yaml";
-                    chart = ReadIndexEntry(registry.GetText(evidence), component.Scalars["chart"], component.Scalars["version"]);
+                    chart = ReadIndexEntry(
+                        registry.GetText(evidence),
+                        component.Scalars["chart"],
+                        component.Scalars["version"]
+                    );
                     break;
                 case "helm-archive":
                     evidence = component.Scalars["archive"];
@@ -373,36 +441,80 @@ partial class Build {
             }
         } catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidDataException) {
             rows.Add(new("Charts", component.Name, install, "unread", Refused, exception.Message));
-            violations.Add($"{relative}: the pinned chart could not be read ({exception.Message}), so its annotations were not checked");
+            violations.Add(
+                $"{relative}: the pinned chart could not be read ({exception.Message}), so its annotations were not checked"
+            );
 
             return;
         }
 
         if (chart is null) {
-            rows.Add(new("Charts", component.Name, evidence, "absent", Refused, $"no entry for {component.Scalars["chart"]} {component.Scalars["version"]}"));
-            violations.Add($"{relative}: {evidence} has no entry for chart {component.Scalars["chart"]} version {component.Scalars["version"]}. The pin does not resolve, and install.sh --verify would say the same");
+            rows.Add(
+                new(
+                    "Charts",
+                    component.Name,
+                    evidence,
+                    "absent",
+                    Refused,
+                    $"no entry for {component.Scalars["chart"]} {component.Scalars["version"]}"
+                )
+            );
+            violations.Add(
+                $"{relative}: {evidence} has no entry for chart {component.Scalars["chart"]} version {component.Scalars["version"]}. The pin does not resolve, and install.sh --verify would say the same"
+            );
 
             return;
         }
 
         if (chart.Licence is null) {
-            rows.Add(new("Charts", $"{component.Name} ({chart.Name} {chart.Version})", evidence, "no annotation", NotInspected, "the chart carries no artifacthub.io/license; the LICENSE file above is the evidence"));
+            rows.Add(
+                new(
+                    "Charts",
+                    $"{component.Name} ({chart.Name} {chart.Version})",
+                    evidence,
+                    "no annotation",
+                    NotInspected,
+                    "the chart carries no artifacthub.io/license; the LICENSE file above is the evidence"
+                )
+            );
         } else if (!string.Equals(chart.Licence, declared, StringComparison.Ordinal)) {
-            rows.Add(new("Charts", $"{component.Name} ({chart.Name} {chart.Version})", evidence, chart.Licence, Refused, $"component.yaml declares `licence: {declared}`"));
-            violations.Add($"{relative} declares `licence: {declared}` and the pinned chart's artifacthub.io/license annotation says {chart.Licence}");
+            rows.Add(
+                new(
+                    "Charts",
+                    $"{component.Name} ({chart.Name} {chart.Version})",
+                    evidence,
+                    chart.Licence,
+                    Refused,
+                    $"component.yaml declares `licence: {declared}`"
+                )
+            );
+            violations.Add(
+                $"{relative} declares `licence: {declared}` and the pinned chart's artifacthub.io/license annotation says {chart.Licence}"
+            );
         } else {
-            rows.Add(new("Charts", $"{component.Name} ({chart.Name} {chart.Version})", evidence, chart.Licence, Allowed, "artifacthub.io/license agrees with component.yaml"));
+            rows.Add(
+                new(
+                    "Charts",
+                    $"{component.Name} ({chart.Name} {chart.Version})",
+                    evidence,
+                    chart.Licence,
+                    Allowed,
+                    "artifacthub.io/license agrees with component.yaml"
+                )
+            );
         }
 
         foreach (var (name, version, repository) in chart.Dependencies) {
-            rows.Add(new(
-                "Chart dependencies",
-                $"{component.Name} → {name} {version}",
-                repository.Length == 0 ? "(subchart inside the archive)" : repository,
-                "listed",
-                NotInspected,
-                "a dependency's images are in this component's images: block, which is where they are scanned"
-            ));
+            rows.Add(
+                new(
+                    "Chart dependencies",
+                    $"{component.Name} → {name} {version}",
+                    repository.Length == 0 ? "(subchart inside the archive)" : repository,
+                    "listed",
+                    NotInspected,
+                    "a dependency's images are in this component's images: block, which is where they are scanned"
+                )
+            );
         }
     }
 
@@ -425,13 +537,24 @@ partial class Build {
             inspected = registry.Inspect(image);
         } catch (HttpRequestException exception) {
             rows.Add(new("Images", reference, "registry", "unread", Refused, exception.Message));
-            violations.Add($"{componentName}: {image} could not be read from its registry ({exception.Message}). A recorded digest the registry does not serve is a pin to nothing");
+            violations.Add(
+                $"{componentName}: {image} could not be read from its registry ({exception.Message}). A recorded digest the registry does not serve is a pin to nothing"
+            );
 
             return;
         }
 
         if (inspected.Licences is null) {
-            rows.Add(new("Images", reference, "config label", "no label", NotInspected, $"no {OciImage.LicencesLabel}; the component's LICENSE evidence stands for it"));
+            rows.Add(
+                new(
+                    "Images",
+                    reference,
+                    "config label",
+                    "no label",
+                    NotInspected,
+                    $"no {OciImage.LicencesLabel}; the component's LICENSE evidence stands for it"
+                )
+            );
         } else {
             var offending = LicenceIdentifiers(inspected.Licences).Where(id => !IsOnBundleAllowList(id)).ToList();
 
@@ -441,7 +564,16 @@ partial class Build {
                     : $"a helper image under its own terms; the component declares {declared}";
                 rows.Add(new("Images", reference, OciImage.LicencesLabel, inspected.Licences, Allowed, note));
             } else {
-                rows.Add(new("Images", reference, OciImage.LicencesLabel, inspected.Licences, Refused, "not on ADR-011's allow-list"));
+                rows.Add(
+                    new(
+                        "Images",
+                        reference,
+                        OciImage.LicencesLabel,
+                        inspected.Licences,
+                        Refused,
+                        "not on ADR-011's allow-list"
+                    )
+                );
                 violations.Add(
                     $"{componentName}: {reference} is labelled `{OciImage.LicencesLabel}={inspected.Licences}`, and "
                     + $"{string.Join(", ", offending)} is not on ADR-011's allow-list ({string.Join(", ", BundleLicenceAllowList)}). "
@@ -469,7 +601,11 @@ partial class Build {
 
         var file = LicenceReportDirectory / (Regex.Replace(image.Split('@')[0], "[^A-Za-z0-9.-]", "_") + ".spdx.json");
 
-        syft($"scan registry:{image} --output spdx-json={file} --quiet", workingDirectory: RootDirectory, logOutput: false);
+        syft(
+            $"scan registry:{image} --output spdx-json={file} --quiet",
+            workingDirectory: RootDirectory,
+            logOutput: false
+        );
 
         Assert.FileExists(file, $"syft reported success for {image} and wrote no SBOM to {file}");
 
@@ -489,7 +625,16 @@ partial class Build {
             : [];
 
         if (sboms.Count == 0) {
-            rows.Add(new("Platform images", "(every host under src/Hosts)", RootDirectory.GetRelativePathTo(SbomDirectory).ToString(), "no SBOM", NotInspected, "Images has not run in this checkout"));
+            rows.Add(
+                new(
+                    "Platform images",
+                    "(every host under src/Hosts)",
+                    RootDirectory.GetRelativePathTo(SbomDirectory).ToString(),
+                    "no SBOM",
+                    NotInspected,
+                    "Images has not run in this checkout"
+                )
+            );
 
             // ⚠ `--skip Images` ON CI IS A ○, NOT A ✘, AND ONLY WHEN IT WAS ASKED FOR IN SO MANY WORDS.
             //
@@ -535,7 +680,13 @@ partial class Build {
         foreach (var sbom in sboms) {
             var host = sbom.Name[..^".spdx.json".Length];
 
-            ScanSbom(host, host, () => JsonNode.Parse(sbom.ReadAllText()) ?? throw new InvalidDataException($"{sbom} is not JSON"), rows, violations);
+            ScanSbom(
+                host,
+                host,
+                () => JsonNode.Parse(sbom.ReadAllText()) ?? throw new InvalidDataException($"{sbom} is not JSON"),
+                rows,
+                violations
+            );
         }
     }
 
@@ -586,14 +737,32 @@ partial class Build {
         var summary = string.Join(", ", tally.Select(x => $"{x.Key} ×{x.Value}"));
 
         if (restricted.Count > 0) {
-            rows.Add(new("Image contents", artefact, "syft SBOM", summary, Refused, $"service-restricted: {string.Join("; ", restricted)}"));
+            rows.Add(
+                new(
+                    "Image contents",
+                    artefact,
+                    "syft SBOM",
+                    summary,
+                    Refused,
+                    $"service-restricted: {string.Join("; ", restricted)}"
+                )
+            );
             violations.Add(
                 $"{owner} links {restricted.Count} package(s) under a licence ADR-011 refuses — {string.Join("; ", restricted)}. "
                 + "docs/plan/02 § ADR-011: the alternative is written down (Valkey not Redis, OpenBao not "
                 + "Vault, OpenSearch not Elasticsearch) or the exception is, in Build.Licence.cs § LicenceExceptions"
             );
         } else {
-            rows.Add(new("Image contents", artefact, "syft SBOM", $"{packages} package(s)", Allowed, summary.Length == 0 ? "no package declares a licence" : summary));
+            rows.Add(
+                new(
+                    "Image contents",
+                    artefact,
+                    "syft SBOM",
+                    $"{packages} package(s)",
+                    Allowed,
+                    summary.Length == 0 ? "no package declares a licence" : summary
+                )
+            );
         }
     }
 
@@ -636,11 +805,13 @@ partial class Build {
     static string? ClassifyLicenceText(string text) {
         var flat = Regex.Replace(text, @"\s+", " ").ToLowerInvariant();
 
-        if (flat.Contains("apache license", StringComparison.Ordinal) && flat.Contains("version 2.0", StringComparison.Ordinal)) {
+        if (flat.Contains("apache license", StringComparison.Ordinal)
+            && flat.Contains("version 2.0", StringComparison.Ordinal)) {
             return "Apache-2.0";
         }
 
-        if (flat.Contains("mozilla public license", StringComparison.Ordinal) && flat.Contains("version 2.0", StringComparison.Ordinal)) {
+        if (flat.Contains("mozilla public license", StringComparison.Ordinal)
+            && flat.Contains("version 2.0", StringComparison.Ordinal)) {
             return "MPL-2.0";
         }
 
@@ -674,9 +845,10 @@ partial class Build {
         }
 
         if (flat.Contains("redistribution and use in source and binary forms", StringComparison.Ordinal)) {
-            return flat.Contains("neither the name", StringComparison.Ordinal) || flat.Contains("may not be used to endorse", StringComparison.Ordinal)
-                ? "BSD-3-Clause"
-                : "BSD-2-Clause";
+            return flat.Contains("neither the name", StringComparison.Ordinal)
+                || flat.Contains("may not be used to endorse", StringComparison.Ordinal)
+                    ? "BSD-3-Clause"
+                    : "BSD-2-Clause";
         }
 
         if (flat.Contains("isc license", StringComparison.Ordinal)) {
@@ -693,7 +865,11 @@ partial class Build {
     /// <param name="Version">The chart's version.</param>
     /// <param name="Licence">Its <c>artifacthub.io/license</c> annotation, or <see langword="null" />.</param>
     /// <param name="Dependencies">Its <c>dependencies:</c> — name, version constraint, repository.</param>
-    sealed record UpstreamChart(string Name, string Version, string? Licence, IReadOnlyList<(string Name, string Version, string Repository)> Dependencies);
+    sealed record UpstreamChart(
+        string Name,
+        string Version,
+        string? Licence,
+        IReadOnlyList<(string Name, string Version, string Repository)> Dependencies);
 
     /// <summary>
     ///     The entry for one chart version in a Helm repository's <c>index.yaml</c>, or
@@ -727,7 +903,10 @@ partial class Build {
                 continue;
             }
 
-            if (line.StartsWith("  ", StringComparison.Ordinal) && line.Length > 2 && line[2] != ' ' && line[2] != '-') {
+            if (line.StartsWith("  ", StringComparison.Ordinal)
+                && line.Length > 2
+                && line[2] != ' '
+                && line[2] != '-') {
                 if (entry.Count > 0) {
                     entries.Add(entry);
                     entry = [];
@@ -757,7 +936,10 @@ partial class Build {
             entries.Add(entry);
         }
 
-        var wanted = entries.FirstOrDefault(x => x.Any(line => line == $"    version: {version}" || line == $"    version: \"{version}\""));
+        var wanted = entries.FirstOrDefault(x => x.Any(line => line == $"    version: {version}"
+                || line == $"    version: \"{version}\""
+            )
+        );
 
         return wanted is null ? null : ReadChartDocument(wanted, 4);
     }
@@ -771,7 +953,9 @@ partial class Build {
         while (tar.GetNextEntry() is { } entry) {
             var name = entry.Name.TrimStart('.', '/');
 
-            if (name.Count(x => x == '/') != 1 || !name.EndsWith("/Chart.yaml", StringComparison.Ordinal) || entry.DataStream is null) {
+            if (name.Count(x => x == '/') != 1
+                || !name.EndsWith("/Chart.yaml", StringComparison.Ordinal)
+                || entry.DataStream is null) {
                 continue;
             }
 
@@ -797,11 +981,13 @@ partial class Build {
 
         void Flush() {
             if (dependency is not null) {
-                dependencies.Add((
-                    dependency.GetValueOrDefault("name", "(unnamed)"),
-                    dependency.GetValueOrDefault("version", "(unversioned)"),
-                    dependency.GetValueOrDefault("repository", string.Empty)
-                ));
+                dependencies.Add(
+                    (
+                        dependency.GetValueOrDefault("name", "(unnamed)"),
+                        dependency.GetValueOrDefault("version", "(unversioned)"),
+                        dependency.GetValueOrDefault("repository", string.Empty)
+                    )
+                );
                 dependency = null;
             }
         }
@@ -811,7 +997,10 @@ partial class Build {
                 continue;
             }
 
-            if (line.StartsWith(pad, StringComparison.Ordinal) && line.Length > indent && line[indent] != ' ' && line[indent] != '-') {
+            if (line.StartsWith(pad, StringComparison.Ordinal)
+                && line.Length > indent
+                && line[indent] != ' '
+                && line[indent] != '-') {
                 Flush();
 
                 var colon = line.IndexOf(':', StringComparison.Ordinal);
@@ -877,10 +1066,14 @@ partial class Build {
         try {
             return ToolResolver.GetPathTool(executable);
         } catch (Exception exception) {
-            var message = $"`{executable}` is not on PATH ({exception.Message.TrimEnd('.')}), so {what} was not run. To unblock: {unblock}.";
+            var message =
+                $"`{executable}` is not on PATH ({exception.Message.TrimEnd('.')}), so {what} was not run. To unblock: {unblock}.";
 
             if (IsServerBuild) {
-                violations.Add(message + " On CI this is a failure, not a warning — a licence scan that skips the SBOM half is green over the row with a legal consequence");
+                violations.Add(
+                    message
+                    + " On CI this is a failure, not a warning — a licence scan that skips the SBOM half is green over the row with a legal consequence"
+                );
             } else {
                 Log.Warning("Licence: {Message} Locally that is a warning; on CI it fails the target.", message);
             }
@@ -902,9 +1095,17 @@ partial class Build {
 
         markdown.AppendLine("# Licence scan — ADR-011 § Enforcement");
         markdown.AppendLine();
-        markdown.AppendLine($"Run at {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC over {rows.Count} artefact row(s); {violations.Count} finding(s).");
+        markdown.AppendLine(
+            $"Run at {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC over {rows.Count} artefact row(s); {violations.Count} finding(s)."
+        );
         markdown.AppendLine();
-        markdown.AppendLine("Allow-list (offering): " + string.Join(", ", BundleLicenceAllowList) + ". Refused families (linked): " + string.Join(", ", ServiceRestrictedLicences) + ".");
+        markdown.AppendLine(
+            "Allow-list (offering): "
+            + string.Join(", ", BundleLicenceAllowList)
+            + ". Refused families (linked): "
+            + string.Join(", ", ServiceRestrictedLicences)
+            + "."
+        );
         markdown.AppendLine();
 
         foreach (var section in rows.GroupBy(x => x.Section)) {
@@ -914,7 +1115,9 @@ partial class Build {
             markdown.AppendLine("|---|---|---|---|---|");
 
             foreach (var row in section) {
-                markdown.AppendLine($"| {row.Verdict} | {Cell(row.Artefact)} | {Cell(row.Evidence)} | {Cell(row.Licence)} | {Cell(row.Detail)} |");
+                markdown.AppendLine(
+                    $"| {row.Verdict} | {Cell(row.Artefact)} | {Cell(row.Evidence)} | {Cell(row.Licence)} | {Cell(row.Detail)} |"
+                );
             }
 
             markdown.AppendLine();
@@ -943,7 +1146,8 @@ partial class Build {
                         ["verdict"] = x.Verdict,
                         ["detail"] = x.Detail
                     }
-                ).ToArray()
+                )
+                    .ToArray()
             ),
             ["findings"] = new JsonArray(violations.Select(x => (JsonNode)JsonValue.Create(x)).ToArray())
         };
@@ -951,5 +1155,6 @@ partial class Build {
         LicenceReportJson.WriteAllText(json.ToString());
     }
 
-    static string Cell(string value) => value.Replace("|", "\\|", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
+    static string Cell(string value) =>
+        value.Replace("|", "\\|", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
 }

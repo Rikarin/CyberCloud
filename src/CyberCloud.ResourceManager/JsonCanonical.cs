@@ -40,7 +40,7 @@ static class JsonCanonical {
     public static JsonObject Of(JsonObject value) {
         var sorted = new JsonObject();
 
-        foreach (var member in value.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+        foreach (var member in value.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
             sorted[member.Key] = member.Value switch {
                 JsonObject nested => Of(nested),
                 null => null,

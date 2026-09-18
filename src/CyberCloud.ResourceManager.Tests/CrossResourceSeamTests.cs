@@ -1,5 +1,4 @@
 using CyberCloud.ResourceManager.Reconcile;
-using CyberCloud.ResourceManager.Tests.Infrastructure;
 using System.Globalization;
 
 namespace CyberCloud.ResourceManager.Tests;
@@ -130,14 +129,19 @@ public sealed class CrossResourceSeamTests(ResourceManagerCluster cluster) {
 
         // The oldest went, the newest stayed, and the sequence counted the dropped ones too.
         input.PendingChanges[0].Name.ShouldBe("share-4");
-        input.PendingChanges[^1].Name.ShouldBe("share-" + (ReconcileInput.MaxPendingChanges + 3).ToString(CultureInfo.InvariantCulture));
+        input.PendingChanges[^1].Name.ShouldBe(
+            "share-" + (ReconcileInput.MaxPendingChanges + 3).ToString(CultureInfo.InvariantCulture)
+        );
         input.ChangeSequence.ShouldBe(ReconcileInput.MaxPendingChanges + 3);
 
         // Acknowledging everything read resets the count; a partial acknowledgement does not.
         (await resource.AcknowledgeChangesAsync(input.ChangeSequence - 1)).IsSuccess.ShouldBeTrue();
         var partial = (await resource.GetReconcileInputAsync()).GetValueOrThrow();
         partial.PendingChanges.Length.ShouldBe(1);
-        partial.ChangesDropped.ShouldBe(3, "a partial acknowledgement forgot the drops the next pass still has to rescan for");
+        partial.ChangesDropped.ShouldBe(
+            3,
+            "a partial acknowledgement forgot the drops the next pass still has to rescan for"
+        );
 
         (await resource.AcknowledgeChangesAsync(input.ChangeSequence)).IsSuccess.ShouldBeTrue();
         var caughtUp = (await resource.GetReconcileInputAsync()).GetValueOrThrow();

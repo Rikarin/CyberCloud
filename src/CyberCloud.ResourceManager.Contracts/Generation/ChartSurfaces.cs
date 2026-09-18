@@ -51,7 +51,7 @@ public sealed record ChartAnnotationReport(
     public int Pairs => Documents.Length;
 
     /// <summary>Whether anything at all is wrong with the pairs that exist.</summary>
-    public bool IsClean => Documents.All(x => !x.Drifted && x.Problems.IsEmpty);
+    public bool IsClean => Documents.All(static x => !x.Drifted && x.Problems.IsEmpty);
 
     /// <summary>
     ///     Whether the run had nothing to compare — <c>Build.Architecture</c>'s
@@ -137,8 +137,8 @@ public static class ChartSurfaces {
         var claimed = new HashSet<string>(StringComparer.Ordinal);
 
         var declaring = registry.Types
-            .Where(x => x.Chart.Length > 0)
-            .OrderBy(x => x.Type.ToString(), StringComparer.Ordinal)
+            .Where(static x => x.Chart.Length > 0)
+            .OrderBy(static x => x.Type.ToString(), StringComparer.Ordinal)
             .ToList();
 
         foreach (var type in declaring) {
@@ -172,8 +172,8 @@ public static class ChartSurfaces {
         }
 
         return new(
-            [.. produced.OrderBy(x => x.File, StringComparer.Ordinal)],
-            [.. unpaired.OrderBy(x => x, StringComparer.Ordinal)],
+            [.. produced.OrderBy(static x => x.File, StringComparer.Ordinal)],
+            [.. unpaired.OrderBy(static x => x, StringComparer.Ordinal)],
             managed.Count,
             declaring.Count
         );
@@ -243,14 +243,14 @@ public static class ChartSurfaces {
                 $"{DirectoryName}/{chart}/Chart.yaml says `{ApiVersionAnnotation}: {declaredVersion}`, "
                 + $"which '{type.Type}' does not declare. An api-version is immutable once published "
                 + "(docs/plan/08 § The provider registry), so a chart has to name one that exists — the "
-                + $"registry has [{string.Join(", ", type.ApiVersions.Select(x => x.Version.Value))}]."
+                + $"registry has [{string.Join(", ", type.ApiVersions.Select(static x => x.Version.Value))}]."
             );
         }
 
         if (!File.Exists(path)) {
             problems.Add(
                 $"{DirectoryName}/{file} is missing. docs/plan/03 § charts/ makes the annotated "
-                + "values.yaml \"the single description of a managed service's configuration surface\", "
+                + """values.yaml "the single description of a managed service's configuration surface", """
                 + "and there is nothing to rewrite the block into."
             );
         }
@@ -328,7 +328,7 @@ public static class ChartSurfaces {
 
         return Directory
             .EnumerateFiles(root, "Chart.yaml", SearchOption.AllDirectories)
-            .Where(x => !x.Contains(
+            .Where(static x => !x.Contains(
                     Path.DirectorySeparatorChar + "templates" + Path.DirectorySeparatorChar,
                     StringComparison.Ordinal
                 )
@@ -336,7 +336,7 @@ public static class ChartSurfaces {
             .Select(x => Path.GetRelativePath(directory, Path.GetDirectoryName(x)!)
                     .Replace(Path.DirectorySeparatorChar, '/')
             )
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
     }
 
@@ -404,8 +404,8 @@ public static class ChartSurfaces {
             normalised += "\n";
         }
 
-        return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(normalised);
+        return new UTF8Encoding(false).GetBytes(normalised);
     }
 
-    static string Text(byte[] bytes) => new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetString(bytes);
+    static string Text(byte[] bytes) => new UTF8Encoding(false).GetString(bytes);
 }

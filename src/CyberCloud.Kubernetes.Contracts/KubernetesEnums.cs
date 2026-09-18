@@ -27,8 +27,11 @@ public enum ClusterConnectionKind {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Over a WebSocket, not gRPC, and the summary above still says gRPC because it
-    ///         quotes the table.</b> docs/plan/09 § Cluster connections' correction says why the
+    ///         ⚠
+    ///         <b>
+    ///             Over a WebSocket, not gRPC, and the summary above still says gRPC because it
+    ///             quotes the table.
+    ///         </b> docs/plan/09 § Cluster connections' correction says why the
     ///         carrier changed; <c>WebSocketTunnelTransport</c> carries the short form.
     ///     </para>
     ///     <para>

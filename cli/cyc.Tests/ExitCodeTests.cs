@@ -25,7 +25,7 @@ public sealed class ExitCodeTests {
     [Fact]
     public async Task ZeroWhenTheCallSucceeds() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, _) =>
+            new ScriptedTransport(static (_, _) =>
                 Responses.Json(HttpStatusCode.OK, """{"name":"w1","location":"eu-central"}""")
             )
         );
@@ -37,7 +37,7 @@ public sealed class ExitCodeTests {
     [Fact]
     public async Task OneWhenThePlatformRefusesTheRequest() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, _) =>
+            new ScriptedTransport(static (_, _) =>
                 Responses.Error(HttpStatusCode.BadRequest, "InvalidResourceName", "'w1' is not a legal resource name.")
             )
         );
@@ -94,7 +94,7 @@ public sealed class ExitCodeTests {
     [Fact]
     public async Task ThreeWhenThePlatformRejectsTheCredential() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, _) =>
+            new ScriptedTransport(static (_, _) =>
                 Responses.Error(
                     HttpStatusCode.Forbidden,
                     "AuthorizationFailed",
@@ -111,7 +111,7 @@ public sealed class ExitCodeTests {
     [Fact]
     public async Task ThreeWhenThereIsNoCredentialAtAll() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}")),
+            new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, "{}")),
             credential: new UnavailableCredential("No sign-in is cached. Run 'cyc login'.")
         );
 
@@ -122,7 +122,7 @@ public sealed class ExitCodeTests {
     [Fact]
     public async Task FourWhenThePlatformFails() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, _) =>
+            new ScriptedTransport(static (_, _) =>
                 Responses.Error(HttpStatusCode.InternalServerError, "InternalError", "Something went wrong.")
             )
         );

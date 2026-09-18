@@ -1,4 +1,3 @@
-using CyberCloud.Authorization.Contracts;
 using CyberCloud.Core.Resources;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Host.Api;
@@ -37,7 +36,12 @@ public sealed partial class TokenApiTests {
     public async Task ACodeExchangeOpensATokenSessionAndTracksIt() {
         var (code, interactive) = await CodeAsync();
 
-        var minted = await Api.MintForCodeAsync(code, Portal, new() { DeviceLabel = "a test", ClientAddress = "127.0.0.1" }, Ct);
+        var minted = await Api.MintForCodeAsync(
+            code,
+            Portal,
+            new() { DeviceLabel = "a test", ClientAddress = "127.0.0.1" },
+            Ct
+        );
 
         minted.IsSuccess.ShouldBeTrue(minted.Error?.Message);
 
@@ -56,7 +60,9 @@ public sealed partial class TokenApiTests {
         described.UserId.ShouldBe(fixture.UserId);
         described.DeviceLabel.ShouldBe("a test");
 
-        (await fixture.For(IdentityHostFixture.Tenant).GetGrain<IUserGrain>(GrainKeys.User(fixture.UserId)).ListSessionsAsync())
+        (await fixture.For(IdentityHostFixture.Tenant)
+                .GetGrain<IUserGrain>(GrainKeys.User(fixture.UserId))
+                .ListSessionsAsync())
             .GetValueOrThrow()
             .ShouldContain(tokenSession, "sign-out-everywhere has to reach the token session");
     }
@@ -70,10 +76,11 @@ public sealed partial class TokenApiTests {
 
         // The password the grain recorded and the code the cookie stamped, both — on the grain the
         // token session was opened from, and on the token's amr.
-        (await Session(tokenSession).GetAsync()).GetValueOrThrow().Methods
+        (await Session(tokenSession).GetAsync()).GetValueOrThrow()
+            .Methods
             .ShouldBe([AuthenticationMethod.Password, AuthenticationMethod.EmailOtp]);
 
-        principal.FindAll(AccessTokenClaims.AuthenticationMethods).Select(x => x.Value).ShouldBe(["pwd", "otp"]);
+        principal.FindAll(AccessTokenClaims.AuthenticationMethods).Select(static x => x.Value).ShouldBe(["pwd", "otp"]);
     }
 
     [Fact]
@@ -101,11 +108,15 @@ public sealed partial class TokenApiTests {
 
         var second = refreshed.GetValueOrThrow();
 
-        second.GetClaim(AccessTokenClaims.SessionId).ShouldBe(tokenSession.ToString("N"), "a refresh keeps the token session");
-        second.GetClaim(AccessTokenPrincipalFactory.RefreshHandleClaim).ShouldNotBe(first.GetClaim(AccessTokenPrincipalFactory.RefreshHandleClaim));
-        second.GetClaim(AccessTokenClaims.AuthenticationTime).ShouldBe(first.GetClaim(AccessTokenClaims.AuthenticationTime), "auth_time is carried");
-        second.FindAll(AccessTokenClaims.AuthenticationMethods).Select(x => x.Value).ShouldBe(["pwd", "otp"]);
-        second.GetClaim(OpenIddictConstants.Claims.Email).ShouldBe(IdentityHostFixture.Email, "the id_token's claims ride the refresh token too");
+        second.GetClaim(AccessTokenClaims.SessionId)
+            .ShouldBe(tokenSession.ToString("N"), "a refresh keeps the token session");
+        second.GetClaim(AccessTokenPrincipalFactory.RefreshHandleClaim)
+            .ShouldNotBe(first.GetClaim(AccessTokenPrincipalFactory.RefreshHandleClaim));
+        second.GetClaim(AccessTokenClaims.AuthenticationTime)
+            .ShouldBe(first.GetClaim(AccessTokenClaims.AuthenticationTime), "auth_time is carried");
+        second.FindAll(AccessTokenClaims.AuthenticationMethods).Select(static x => x.Value).ShouldBe(["pwd", "otp"]);
+        second.GetClaim(OpenIddictConstants.Claims.Email)
+            .ShouldBe(IdentityHostFixture.Email, "the id_token's claims ride the refresh token too");
 
         (await Session(tokenSession).ChainLengthAsync()).GetValueOrThrow().ShouldBe(2);
     }
@@ -141,13 +152,15 @@ public sealed partial class TokenApiTests {
         // /logout revokes the interactive session and nothing else; the token sessions bound to it
         // are found at their next refresh.
         (await Session(interactive).RevokeAsync(RevocationReason.SignOut)).IsSuccess.ShouldBeTrue();
-        (await Session(tokenSession).IsLiveAsync()).GetValueOrThrow().ShouldBeTrue("nothing has touched the token session yet");
+        (await Session(tokenSession).IsLiveAsync()).GetValueOrThrow()
+            .ShouldBeTrue("nothing has touched the token session yet");
 
         var refused = await Api.MintForRefreshAsync(first, Portal, Ct);
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Message.ShouldBe(TokenApi.SessionRevokedDescription);
-        (await Session(tokenSession).IsLiveAsync()).GetValueOrThrow().ShouldBeFalse("the token session was left alive after its sign-in ended");
+        (await Session(tokenSession).IsLiveAsync()).GetValueOrThrow()
+            .ShouldBeFalse("the token session was left alive after its sign-in ended");
     }
 
     [Fact]
@@ -156,13 +169,20 @@ public sealed partial class TokenApiTests {
         // so "never reaches a grain" is a property of its signature. What is asserted is the rule:
         // a foreign Origin is refused before the cookie is even read, and the request is left
         // without a refresh token so nothing downstream could use one.
-        var handler = new DegradedModeHandlers.ExtractRefreshTokenFromCookie(fixture.Services.GetRequiredService<FirstPartyClients>());
+        var handler = new DegradedModeHandlers.ExtractRefreshTokenFromCookie(
+            fixture.Services.GetRequiredService<FirstPartyClients>()
+        );
 
         var http = new DefaultHttpContext();
         http.Request.Headers.Origin = "http://localhost:5100";
         http.Request.Headers.Cookie = RefreshCookie.Name + "=stolen";
 
-        var context = Extract(http, new OpenIddictRequest { GrantType = OpenIddictConstants.GrantTypes.RefreshToken, ClientId = FirstPartyClients.Portal });
+        var context = Extract(
+            http,
+            new OpenIddictRequest {
+                GrantType = OpenIddictConstants.GrantTypes.RefreshToken, ClientId = FirstPartyClients.Portal
+            }
+        );
 
         await handler.HandleAsync(context);
 
@@ -172,11 +192,16 @@ public sealed partial class TokenApiTests {
         context.Request!.RefreshToken.ShouldBeNull();
 
         // The portal's origin, the same cookie: copied into the request for OpenIddict to decrypt.
-        http = new DefaultHttpContext();
+        http = new();
         http.Request.Headers.Origin = IdentityHostFixture.PortalOrigin;
         http.Request.Headers.Cookie = RefreshCookie.Name + "=mine";
 
-        context = Extract(http, new OpenIddictRequest { GrantType = OpenIddictConstants.GrantTypes.RefreshToken, ClientId = FirstPartyClients.Portal });
+        context = Extract(
+            http,
+            new OpenIddictRequest {
+                GrantType = OpenIddictConstants.GrantTypes.RefreshToken, ClientId = FirstPartyClients.Portal
+            }
+        );
 
         await handler.HandleAsync(context);
 
@@ -184,10 +209,17 @@ public sealed partial class TokenApiTests {
         context.Request!.RefreshToken.ShouldBe("mine");
 
         // The CLI, from a process with no Origin and the token in its body: not this handler's.
-        http = new DefaultHttpContext();
+        http = new();
         http.Request.Headers.Cookie = RefreshCookie.Name + "=someone-elses";
 
-        context = Extract(http, new OpenIddictRequest { GrantType = OpenIddictConstants.GrantTypes.RefreshToken, ClientId = FirstPartyClients.Cli, RefreshToken = "from-the-keychain" });
+        context = Extract(
+            http,
+            new OpenIddictRequest {
+                GrantType = OpenIddictConstants.GrantTypes.RefreshToken,
+                ClientId = FirstPartyClients.Cli,
+                RefreshToken = "from-the-keychain"
+            }
+        );
 
         await handler.HandleAsync(context);
 
@@ -213,7 +245,13 @@ public sealed partial class TokenApiTests {
         var (code, _) = await CodeAsync();
 
         foreach (var origin in new[] { "http://evil.example", "http://localhost:5100", "null", "" }) {
-            var context = Validate(origin, new OpenIddictRequest { GrantType = OpenIddictConstants.GrantTypes.AuthorizationCode, ClientId = FirstPartyClients.Portal }, code: code);
+            var context = Validate(
+                origin,
+                new OpenIddictRequest {
+                    GrantType = OpenIddictConstants.GrantTypes.AuthorizationCode, ClientId = FirstPartyClients.Portal
+                },
+                code
+            );
 
             await handler.HandleAsync(context);
 
@@ -222,26 +260,49 @@ public sealed partial class TokenApiTests {
             context.ErrorDescription.ShouldBe(DegradedModeHandlers.ValidateTokenRequest.OriginNotAllowed);
             context.Transaction.Properties.ShouldNotContainKey(DegradedModeHandlers.ClientProperty);
 
-            context = Validate(origin, new OpenIddictRequest { GrantType = OpenIddictConstants.GrantTypes.RefreshToken, ClientId = FirstPartyClients.Portal, RefreshToken = "from-a-form" }, refresh: code);
+            context = Validate(
+                origin,
+                new OpenIddictRequest {
+                    GrantType = OpenIddictConstants.GrantTypes.RefreshToken,
+                    ClientId = FirstPartyClients.Portal,
+                    RefreshToken = "from-a-form"
+                },
+                refresh: code
+            );
 
             await handler.HandleAsync(context);
 
-            context.IsRejected.ShouldBeTrue($"a body-borne refresh for the portal from Origin '{origin}' was validated");
+            context.IsRejected.ShouldBeTrue(
+                $"a body-borne refresh for the portal from Origin '{origin}' was validated"
+            );
             context.ErrorDescription.ShouldBe(DegradedModeHandlers.ValidateTokenRequest.OriginNotAllowed);
         }
 
         // The portal's own origin: validated, client resolved, and the passthrough gets to mint.
-        var own = Validate(IdentityHostFixture.PortalOrigin, new OpenIddictRequest { GrantType = OpenIddictConstants.GrantTypes.AuthorizationCode, ClientId = FirstPartyClients.Portal }, code: code);
+        var own = Validate(
+            IdentityHostFixture.PortalOrigin,
+            new OpenIddictRequest {
+                GrantType = OpenIddictConstants.GrantTypes.AuthorizationCode, ClientId = FirstPartyClients.Portal
+            },
+            code
+        );
 
         await handler.HandleAsync(own);
 
         own.IsRejected.ShouldBeFalse(own.ErrorDescription);
-        own.Transaction.Properties[DegradedModeHandlers.ClientProperty].ShouldBeOfType<ApplicationRegistration>().ClientId.ShouldBe(FirstPartyClients.Portal);
+        own.Transaction.Properties[DegradedModeHandlers.ClientProperty].ShouldBeOfType<ApplicationRegistration>()
+            .ClientId.ShouldBe(FirstPartyClients.Portal);
 
         // The CLI, from a process with no Origin: not a browser client, and not this rule's. That
         // the code was minted for the portal is OpenIddict's ValidateAuthorizedParty to refuse,
         // later in the same pipeline — GrantsOverHttpTests.TheVerifierIsWhatBindsACodeToTheTabThatAskedForIt.
-        var cli = Validate("", new OpenIddictRequest { GrantType = OpenIddictConstants.GrantTypes.AuthorizationCode, ClientId = FirstPartyClients.Cli }, code: code);
+        var cli = Validate(
+            "",
+            new OpenIddictRequest {
+                GrantType = OpenIddictConstants.GrantTypes.AuthorizationCode, ClientId = FirstPartyClients.Cli
+            },
+            code
+        );
 
         await handler.HandleAsync(cli);
 
@@ -262,7 +323,11 @@ public sealed partial class TokenApiTests {
         // And on the sign-in API, the uniform failure with no cookie — the same body a wrong password
         // gets, so the tenant's existence is not readable off this endpoint.
         var refused = await fixture.Services.GetRequiredService<SignInApi>()
-            .SignInWithPasswordAsync(new(IdentityHostFixture.Email, IdentityHostFixture.Password, "/", "no-such-tenant"), new(), Ct);
+            .SignInWithPasswordAsync(
+                new(IdentityHostFixture.Email, IdentityHostFixture.Password, "/", "no-such-tenant"),
+                new(),
+                Ct
+            );
 
         refused.Principal.ShouldBeNull();
         refused.Response.Succeeded.ShouldBeFalse();
@@ -281,20 +346,37 @@ public sealed partial class TokenApiTests {
         var api = fixture.Services.GetRequiredService<SignInApi>();
         var resumed = "/authorize?client_id=cyc-portal&state=s&code_challenge=c&code_challenge_method=S256";
 
-        var signedIn = await api.SignInWithPasswordAsync(new(IdentityHostFixture.Email, IdentityHostFixture.Password, resumed, IdentityHostFixture.Slug), new(), Ct);
+        var signedIn = await api.SignInWithPasswordAsync(
+            new(IdentityHostFixture.Email, IdentityHostFixture.Password, resumed, IdentityHostFixture.Slug),
+            new(),
+            Ct
+        );
 
         signedIn.Response.Succeeded.ShouldBeTrue(signedIn.Response.Message);
-        signedIn.Response.ReturnUrl.ShouldBe(resumed + "&tenant=" + IdentityHostFixture.Tenant.ToString("D"), "the resumed request has to name the tenant the cookie is for");
+        signedIn.Response.ReturnUrl.ShouldBe(
+            resumed + "&tenant=" + IdentityHostFixture.Tenant.ToString("D"),
+            "the resumed request has to name the tenant the cookie is for"
+        );
 
         // A stale remembered tenant in the return URL is replaced, not joined by a second value.
         var stale = "/authorize?tenant=" + Guid.NewGuid().ToString("D") + "&state=s";
-        var replaced = await api.SignInWithPasswordAsync(new(IdentityHostFixture.Email, IdentityHostFixture.Password, stale, IdentityHostFixture.Slug), new(), Ct);
+        var replaced = await api.SignInWithPasswordAsync(
+            new(IdentityHostFixture.Email, IdentityHostFixture.Password, stale, IdentityHostFixture.Slug),
+            new(),
+            Ct
+        );
 
         replaced.Response.Succeeded.ShouldBeTrue(replaced.Response.Message);
-        replaced.Response.ReturnUrl.ShouldBe("/authorize?tenant=" + IdentityHostFixture.Tenant.ToString("D") + "&state=s");
+        replaced.Response.ReturnUrl.ShouldBe(
+            "/authorize?tenant=" + IdentityHostFixture.Tenant.ToString("D") + "&state=s"
+        );
 
         // Any other destination survives unchanged — a plain `/` does not grow a query it never reads.
-        var elsewhere = await api.SignInWithPasswordAsync(new(IdentityHostFixture.Email, IdentityHostFixture.Password, "/account", IdentityHostFixture.Slug), new(), Ct);
+        var elsewhere = await api.SignInWithPasswordAsync(
+            new(IdentityHostFixture.Email, IdentityHostFixture.Password, "/account", IdentityHostFixture.Slug),
+            new(),
+            Ct
+        );
 
         elsewhere.Response.Succeeded.ShouldBeTrue(elsewhere.Response.Message);
         elsewhere.Response.ReturnUrl.ShouldBe("/account");
@@ -307,13 +389,23 @@ public sealed partial class TokenApiTests {
         (await hint.ResolveAsync(IdentityHostFixture.Slug, Ct)).ShouldBe(IdentityHostFixture.Tenant);
         (await hint.ResolveAsync(IdentityHostFixture.Tenant.ToString("D"), Ct)).ShouldBe(IdentityHostFixture.Tenant);
         (await hint.ResolveAsync(IdentityHostFixture.Tenant.ToString("N"), Ct)).ShouldBe(IdentityHostFixture.Tenant);
-        (await hint.ResolveAsync("  " + IdentityHostFixture.Slug + " ", Ct)).ShouldBe(IdentityHostFixture.Tenant, "a typed value is trimmed");
+        (await hint.ResolveAsync("  " + IdentityHostFixture.Slug + " ", Ct)).ShouldBe(
+            IdentityHostFixture.Tenant,
+            "a typed value is trimmed"
+        );
 
         // A retired tenant is unknown over HTTP, whatever the directory still holds for it.
         var retired = Guid.Parse("7a11e0aa-0000-4000-8000-00000000a0ff");
 
         (await fixture.Grains.GetGrain<Tenancy.Contracts.ITenantDirectoryGrain>(GrainKeys.TenantDirectory())
-            .RegisterAsync(new() { TenantId = retired, Slug = "grants-tests-retired", HomeRegion = "local", Status = Tenancy.Contracts.TenantStatus.PendingDeletion }))
+                .RegisterAsync(
+                    new() {
+                        TenantId = retired,
+                        Slug = "grants-tests-retired",
+                        HomeRegion = "local",
+                        Status = Tenancy.Contracts.TenantStatus.PendingDeletion
+                    }
+                ))
             .IsSuccess.ShouldBeTrue();
 
         (await hint.ResolveAsync("grants-tests-retired", Ct)).ShouldBeNull();
@@ -325,11 +417,22 @@ public sealed partial class TokenApiTests {
         // names nothing must not wake the directory to find that out.
         var grains = new RefusingGrainFactory();
 
-        var development = new TenantHint(grains, Options.Create(new IdentityHostOptions()), TestEnvironment.Development);
+        var development = new TenantHint(
+            grains,
+            Options.Create(new IdentityHostOptions()),
+            TestEnvironment.Development
+        );
         var production = new TenantHint(grains, Options.Create(new IdentityHostOptions()), TestEnvironment.Production);
-        var configured = new TenantHint(grains, Options.Create(new IdentityHostOptions { TenantId = SignInApiHarness.Tenant }), TestEnvironment.Production);
+        var configured = new TenantHint(
+            grains,
+            Options.Create(new IdentityHostOptions { TenantId = SignInApiHarness.Tenant }),
+            TestEnvironment.Production
+        );
 
-        development.Default.ShouldBe(Guid.Empty, "Development falls back to the platform tenant so a fresh run can sign in");
+        development.Default.ShouldBe(
+            Guid.Empty,
+            "Development falls back to the platform tenant so a fresh run can sign in"
+        );
         production.Default.ShouldBeNull("outside Development a request that names no tenant names none");
         configured.Default.ShouldBe(SignInApiHarness.Tenant, "an explicitly configured tenant wins in any environment");
 
@@ -348,9 +451,11 @@ public sealed partial class TokenApiTests {
 
     TokenApi Api => fixture.Services.GetRequiredService<TokenApi>();
 
-    ApplicationRegistration Portal => fixture.Services.GetRequiredService<FirstPartyClients>().Find(FirstPartyClients.Portal)!;
+    ApplicationRegistration Portal =>
+        fixture.Services.GetRequiredService<FirstPartyClients>().Find(FirstPartyClients.Portal)!;
 
-    ISessionGrain Session(Guid id) => fixture.For(IdentityHostFixture.Tenant).GetGrain<ISessionGrain>(GrainKeys.Session(id));
+    ISessionGrain Session(Guid id) =>
+        fixture.For(IdentityHostFixture.Tenant).GetGrain<ISessionGrain>(GrainKeys.Session(id));
 
     /// <summary>A code principal for a fresh password-and-code sign-in — what /authorize would mint.</summary>
     async Task<(ClaimsPrincipal Code, Guid InteractiveSessionId)> CodeAsync() {
@@ -364,21 +469,22 @@ public sealed partial class TokenApiTests {
             AuthenticationMethod.EmailOtp
         );
 
-        var decision = await fixture.Services.GetRequiredService<AuthorizeApi>().DecideAsync(
-            new OpenIddictRequest {
-                ClientId = FirstPartyClients.Portal,
-                RedirectUri = IdentityHostFixture.PortalRedirectUri,
-                ResponseType = "code",
-                Scope = string.Join(' ', AllScopes),
-                CodeChallenge = "c",
-                CodeChallengeMethod = "S256"
-            },
-            IdentityHostFixture.Tenant,
-            Portal,
-            cookie,
-            "/authorize",
-            cancellationToken: Ct
-        );
+        var decision = await fixture.Services.GetRequiredService<AuthorizeApi>()
+            .DecideAsync(
+                new OpenIddictRequest {
+                    ClientId = FirstPartyClients.Portal,
+                    RedirectUri = IdentityHostFixture.PortalRedirectUri,
+                    ResponseType = "code",
+                    Scope = string.Join(' ', AllScopes),
+                    CodeChallenge = "c",
+                    CodeChallengeMethod = "S256"
+                },
+                IdentityHostFixture.Tenant,
+                Portal,
+                cookie,
+                "/authorize",
+                cancellationToken: Ct
+            );
 
         var code = decision.ShouldBeOfType<AuthorizeDecision.IssueCode>().Principal;
 
@@ -394,7 +500,12 @@ public sealed partial class TokenApiTests {
     ///     A token request at the validation stage — after OpenIddict decrypted the code or the
     ///     refresh token and put its principal on the context — from a page on <paramref name="origin" />.
     /// </summary>
-    OpenIddictServerEvents.ValidateTokenRequestContext Validate(string origin, OpenIddictRequest request, ClaimsPrincipal? code = null, ClaimsPrincipal? refresh = null) {
+    OpenIddictServerEvents.ValidateTokenRequestContext Validate(
+        string origin,
+        OpenIddictRequest request,
+        ClaimsPrincipal? code = null,
+        ClaimsPrincipal? refresh = null
+    ) {
         var http = new DefaultHttpContext();
 
         if (origin.Length > 0) {

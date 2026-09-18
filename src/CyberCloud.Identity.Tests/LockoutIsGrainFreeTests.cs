@@ -28,8 +28,11 @@ namespace CyberCloud.Identity.Tests;
 ///         amplification factor the paragraph is about.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Seen to fail once under a full <c>./build.sh Test</c> and never alone, and not
-///         diagnosed — written here so the next run that hits it does not start from zero.</b>
+///         ⚠
+///         <b>
+///             Seen to fail once under a full <c>./build.sh Test</c> and never alone, and not
+///             diagnosed — written here so the next run that hits it does not start from zero.
+///         </b>
 ///         2026-09-17, on a 24-CPU host running the whole gate with other agents' clusters beside it:
 ///         <c>ALockedIdentifierIsRefusedWithoutTouchingASingleGrain</c> failed with
 ///         <c>recorder.References should be 0 but was 6</c>, and

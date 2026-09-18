@@ -36,7 +36,7 @@ public sealed class NetworkPeeringTests {
         // VirtualNetworks.ObjectNameOf renders for each network, and the two routes have to point at
         // the OTHER side's link address. A fragment that named the tenant's short name, or routed to
         // its own port, would be accepted by the API server and connect nothing.
-        var peering = Address("to-spoke", TenantOne, SubscriptionOne, network: "hub");
+        var peering = Address("to-spoke", TenantOne, SubscriptionOne, "hub");
         var ns = ReconcileDriver.NamespaceFor(peering);
 
         using var body = JsonDocument.Parse(VirtualNetworkPeerings.Body(Cluster));
@@ -46,13 +46,15 @@ public sealed class NetworkPeeringTests {
 
         local["vpcPeerings"]![0]!["remoteVpc"]!.GetValue<string>().ShouldBe(VirtualNetworks.ObjectNameOf(ns, "spoke"));
         local["vpcPeerings"]![0]!["localConnectIP"]!.GetValue<string>().ShouldBe("10.255.255.1/30");
-        local["staticRoutes"]![0]!["cidr"]!.GetValue<string>().ShouldBe(VirtualNetworkPeerings.DefaultRemoteAddressSpace);
+        local["staticRoutes"]![0]!["cidr"]!.GetValue<string>()
+            .ShouldBe(VirtualNetworkPeerings.DefaultRemoteAddressSpace);
         local["staticRoutes"]![0]!["nextHopIP"]!.GetValue<string>().ShouldBe("10.255.255.2");
         local["staticRoutes"]![0]!["policy"]!.GetValue<string>().ShouldBe("policyDst");
 
         remote["vpcPeerings"]![0]!["remoteVpc"]!.GetValue<string>().ShouldBe(VirtualNetworks.ObjectNameOf(ns, "hub"));
         remote["vpcPeerings"]![0]!["localConnectIP"]!.GetValue<string>().ShouldBe("10.255.255.2/30");
-        remote["staticRoutes"]![0]!["cidr"]!.GetValue<string>().ShouldBe(VirtualNetworkPeerings.DefaultLocalAddressSpace);
+        remote["staticRoutes"]![0]!["cidr"]!.GetValue<string>()
+            .ShouldBe(VirtualNetworkPeerings.DefaultLocalAddressSpace);
         remote["staticRoutes"]![0]!["nextHopIP"]!.GetValue<string>().ShouldBe("10.255.255.1");
 
         // ⚠ And a fragment carries no identity: the builder refuses kind, metadata and labels by
@@ -88,7 +90,8 @@ public sealed class NetworkPeeringTests {
         // so the only way an address with no parent reaches these functions is under a different type.
         var orphan = new ResourceId(TenantOne, SubscriptionOne, "rg", VirtualNetworks.Type, "to-spoke", Guid.NewGuid());
 
-        Should.Throw<ArgumentException>(() => VirtualNetworkPeerings.NetworkOf(orphan)).Message.ShouldContain("child type");
+        Should.Throw<ArgumentException>(() => VirtualNetworkPeerings.NetworkOf(orphan))
+            .Message.ShouldContain("child type");
     }
 
     // ── The range rule the schema cannot state ───────────────────────────────────────────────────
@@ -97,7 +100,12 @@ public sealed class NetworkPeeringTests {
     [InlineData("10.20.0.0/16", "10.20.128.0/17", "10.255.255.0/30", "/properties/localAddressSpace/v4")]
     [InlineData("10.20.0.0/16", "10.30.0.0/16", "10.20.0.0/30", "/properties/localAddressSpace/v4")]
     [InlineData("10.20.0.0/16", "10.30.0.0/16", "10.30.1.0/30", "/properties/remoteAddressSpace/v4")]
-    public void OverlappingRangesAreRefusedNamingBothPointers(string local, string remote, string link, string firstPointer) {
+    public void OverlappingRangesAreRefusedNamingBothPointers(
+        string local,
+        string remote,
+        string link,
+        string firstPointer
+    ) {
         var peering = Address("to-spoke", TenantOne, SubscriptionOne);
 
         using var body = JsonDocument.Parse(
@@ -143,9 +151,9 @@ public sealed class NetworkPeeringTests {
 
     [Fact]
     public void ANetworkCannotPeerWithItself() {
-        var peering = Address("to-self", TenantOne, SubscriptionOne, network: "hub");
+        var peering = Address("to-self", TenantOne, SubscriptionOne, "hub");
 
-        using var body = JsonDocument.Parse(VirtualNetworkPeerings.Body(Cluster, remoteNetwork: "hub"));
+        using var body = JsonDocument.Parse(VirtualNetworkPeerings.Body(Cluster, "hub"));
 
         VirtualNetworkPeerings.AddressProblem(peering, body.RootElement).ShouldNotBeNull().ShouldContain("own network");
     }
@@ -162,12 +170,17 @@ public sealed class NetworkPeeringTests {
         VirtualNetworkPeerings.Schema2026.Validate(body.RootElement).IsSuccess.ShouldBeTrue();
         VirtualNetworkPeerings.AddressProblem(peering, body.RootElement).ShouldBeNull();
 
-        foreach (var region in NetworkAddressing.ReservedRanges.Select(x => x.Region).Distinct()) {
-            using var elsewhere = JsonDocument.Parse(VirtualNetworkPeerings.Body(Cluster, location: region.Length == 0 ? "eu-central" : region));
+        foreach (var region in NetworkAddressing.ReservedRanges.Select(static x => x.Region).Distinct()) {
+            using var elsewhere = JsonDocument.Parse(
+                VirtualNetworkPeerings.Body(Cluster, location: region.Length == 0 ? "eu-central" : region)
+            );
             VirtualNetworkPeerings.AddressProblem(peering, elsewhere.RootElement).ShouldBeNull(region);
         }
 
-        VirtualNetworkPeerings.DefaultLocalAddressSpace.ShouldBe("10.20.0.0/16", "the network type's own default, so the fixtures read as one network");
+        VirtualNetworkPeerings.DefaultLocalAddressSpace.ShouldBe(
+            "10.20.0.0/16",
+            "the network type's own default, so the fixtures read as one network"
+        );
     }
 
     [Theory]
@@ -188,7 +201,10 @@ public sealed class NetworkPeeringTests {
         // VirtualNetworkPeerings' remarks for why it does not.
         var validated = VirtualNetworkPeerings.Schema2026.Validate(
             JsonDocument.Parse(
-                VirtualNetworkPeerings.Body(Cluster, remoteNetwork: "/subscriptions/x/resourceGroups/rg/providers/CyberCloud.Network/virtualNetworks/spoke")
+                VirtualNetworkPeerings.Body(
+                    Cluster,
+                    "/subscriptions/x/resourceGroups/rg/providers/CyberCloud.Network/virtualNetworks/spoke"
+                )
             ).RootElement
         );
 
@@ -198,11 +214,16 @@ public sealed class NetworkPeeringTests {
 
     [Fact]
     public void OnlyTheRemoteIsImmutableBecauseARangeCanBeReRoutedAndARemoteCannotBeWithdrawnFrom() {
-        VirtualNetworkPeerings.Schema2026.Properties.Single(x => x.JsonPointer == "/properties/remoteNetwork").Immutable.ShouldBeTrue();
+        VirtualNetworkPeerings.Schema2026.Properties.Single(static x => x.JsonPointer == "/properties/remoteNetwork")
+            .Immutable.ShouldBeTrue();
 
-        foreach (var pointer in new[] { "/properties/localAddressSpace/v4", "/properties/remoteAddressSpace/v4", "/properties/link/v4" }) {
+        foreach (var pointer in new[] {
+                     "/properties/localAddressSpace/v4", "/properties/remoteAddressSpace/v4", "/properties/link/v4"
+                 }) {
             VirtualNetworkPeerings.Schema2026.Properties.Single(x => x.JsonPointer == pointer)
-                .Immutable.ShouldBeFalse($"{pointer} is a route, and a changed route is re-rendered as a changed fragment");
+                .Immutable.ShouldBeFalse(
+                    $"{pointer} is a route, and a changed route is re-rendered as a changed fragment"
+                );
         }
     }
 
@@ -213,35 +234,49 @@ public sealed class NetworkPeeringTests {
         // ⚠ formatVpc fills `policy` in and adds a finalizer; the controller writes status; and a
         // second peering's entries sit in the same two arrays. Containment over both lists is what
         // converges; equality would report drift forever.
-        var peering = Address("to-spoke", TenantOne, SubscriptionOne, network: "hub");
+        var peering = Address("to-spoke", TenantOne, SubscriptionOne, "hub");
         var ns = ReconcileDriver.NamespaceFor(peering);
 
         using var body = JsonDocument.Parse(VirtualNetworkPeerings.Body(Cluster));
 
         var live = AfterTheController(ns, peering, body.RootElement, VirtualNetworkPeerings.Side.Local);
 
-        VirtualNetworkPeerings.Matches(live, ns, peering, body.RootElement, VirtualNetworkPeerings.Side.Local).ShouldBeTrue();
+        VirtualNetworkPeerings.Matches(live, ns, peering, body.RootElement, VirtualNetworkPeerings.Side.Local)
+            .ShouldBeTrue();
         VirtualNetworkPeerings.Matches(live, ns, peering, body.RootElement, VirtualNetworkPeerings.Side.Remote)
-            .ShouldBeFalse("the local Vpc does not carry the REMOTE side's entries, and a predicate that said so would pass a peering routed to itself");
+            .ShouldBeFalse(
+                "the local Vpc does not carry the REMOTE side's entries, and a predicate that said so would pass a peering routed to itself"
+            );
         VirtualNetworkPeerings.ConnectedPeers(live).ShouldContain(VirtualNetworks.ObjectNameOf(ns, "spoke"));
     }
 
     [Fact]
     public void ARouteWhoseNextHopWasRewrittenIsDrift() {
-        var peering = Address("to-spoke", TenantOne, SubscriptionOne, network: "hub");
+        var peering = Address("to-spoke", TenantOne, SubscriptionOne, "hub");
         var ns = ReconcileDriver.NamespaceFor(peering);
 
         using var body = JsonDocument.Parse(VirtualNetworkPeerings.Body(Cluster));
 
-        var live = JsonNode.Parse(AfterTheController(ns, peering, body.RootElement, VirtualNetworkPeerings.Side.Local))!.AsObject();
+        var live = JsonNode.Parse(AfterTheController(ns, peering, body.RootElement, VirtualNetworkPeerings.Side.Local))!
+            .AsObject();
         // ⚠ Index 1: the other peering's route sits first in the controller-shaped read-back.
         live["spec"]!["staticRoutes"]![1]!["nextHopIP"] = "10.255.255.9";
 
-        VirtualNetworkPeerings.Matches(live.ToJsonString(), ns, peering, body.RootElement, VirtualNetworkPeerings.Side.Local)
-            .ShouldBeFalse("a route pointing anywhere but the peer's port is a route to nowhere, under this tenant's resource id");
+        VirtualNetworkPeerings.Matches(
+            live.ToJsonString(),
+            ns,
+            peering,
+            body.RootElement,
+            VirtualNetworkPeerings.Side.Local
+        )
+            .ShouldBeFalse(
+                "a route pointing anywhere but the peer's port is a route to nowhere, under this tenant's resource id"
+            );
 
-        VirtualNetworkPeerings.Matches("not json", ns, peering, body.RootElement, VirtualNetworkPeerings.Side.Local).ShouldBeFalse();
-        VirtualNetworkPeerings.Matches("{}", ns, peering, body.RootElement, VirtualNetworkPeerings.Side.Local).ShouldBeFalse();
+        VirtualNetworkPeerings.Matches("not json", ns, peering, body.RootElement, VirtualNetworkPeerings.Side.Local)
+            .ShouldBeFalse();
+        VirtualNetworkPeerings.Matches("{}", ns, peering, body.RootElement, VirtualNetworkPeerings.Side.Local)
+            .ShouldBeFalse();
     }
 
     // ── Clause 2 ────────────────────────────────────────────────────────────────────────────────
@@ -256,7 +291,7 @@ public sealed class NetworkPeeringTests {
     [Fact]
     public async Task APeeringWritesBothVpcsAsFragmentsUnderTheOwnersManagersAndConverges() {
         var reconciler = new VirtualNetworkPeeringReconciler(new FixedClock());
-        var peering = Address("to-spoke", TenantOne, SubscriptionOne, network: "hub");
+        var peering = Address("to-spoke", TenantOne, SubscriptionOne, "hub");
         var ns = ReconcileDriver.NamespaceFor(peering);
         var world = new CoOwnedConnection();
 
@@ -265,7 +300,10 @@ public sealed class NetworkPeeringTests {
 
         using var body = JsonDocument.Parse(VirtualNetworkPeerings.Body(Cluster));
 
-        var outcome = await reconciler.ReconcileAsync(Context(peering, body.RootElement, world), TestContext.Current.CancellationToken);
+        var outcome = await reconciler.ReconcileAsync(
+            Context(peering, body.RootElement, world),
+            TestContext.Current.CancellationToken
+        );
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.Converged, outcome.ToString());
 
@@ -274,26 +312,35 @@ public sealed class NetworkPeeringTests {
         world.Applied.ShouldAllBe(x => x.Labels.Count == 0, "a co-writer writes no labels");
         world.Applied[0].OwnerResourceId.ShouldBe(HubId);
         world.Applied[1].OwnerResourceId.ShouldBe(SpokeId);
-        world.Applied[0].FieldManager.ShouldBe(KubeLabels.CoWriterFieldManager(KubeLabels.ResourceTypeValue(VirtualNetworks.Type), KubeLabels.GuidValue(HubId)));
+        world.Applied[0].FieldManager.ShouldBe(
+            KubeLabels.CoWriterFieldManager(
+                KubeLabels.ResourceTypeValue(VirtualNetworks.Type),
+                KubeLabels.GuidValue(HubId)
+            )
+        );
 
         // The owner's object is still the owner's, with the slice beside its own field.
         var hub = JsonNode.Parse(world.Objects[CoOwnedConnection.Key(VirtualNetworks.VpcRef(ns, "hub"))])!.AsObject();
         hub["metadata"]!["labels"]![KubeLabels.ResourceId]!.GetValue<string>().ShouldBe(KubeLabels.GuidValue(HubId));
         hub["spec"]!["enableExternal"].ShouldNotBeNull();
         hub["spec"]!["vpcPeerings"]!.AsArray().Count.ShouldBe(1);
-        (hub["metadata"]!["annotations"] as JsonObject)!.ContainsKey(KubeLabels.FragmentAnnotation(peering.Id)).ShouldBeTrue();
+        (hub["metadata"]!["annotations"] as JsonObject)!.ContainsKey(KubeLabels.FragmentAnnotation(peering.Id))
+            .ShouldBeTrue();
 
         // A second pass is the idempotent one: both applies say Unchanged and the objects do not move.
-        var before = world.Objects.ToDictionary(x => x.Key, x => x.Value);
-        var again = await reconciler.ReconcileAsync(Context(peering, body.RootElement, world), TestContext.Current.CancellationToken);
+        var before = world.Objects.ToDictionary(static x => x.Key, static x => x.Value);
+        var again = await reconciler.ReconcileAsync(
+            Context(peering, body.RootElement, world),
+            TestContext.Current.CancellationToken
+        );
         again.Kind.ShouldBe(ReconcileOutcomeKind.Converged);
-        world.Objects.ToDictionary(x => x.Key, x => x.Value).ShouldBe(before);
+        world.Objects.ToDictionary(static x => x.Key, static x => x.Value).ShouldBe(before);
     }
 
     [Fact]
     public async Task AnAbsentRemoteIsInProgressNamingTheRemoteAndNothingIsCreated() {
         var reconciler = new VirtualNetworkPeeringReconciler(new FixedClock());
-        var peering = Address("to-spoke", TenantOne, SubscriptionOne, network: "hub");
+        var peering = Address("to-spoke", TenantOne, SubscriptionOne, "hub");
         var ns = ReconcileDriver.NamespaceFor(peering);
         var world = new CoOwnedConnection();
 
@@ -301,7 +348,10 @@ public sealed class NetworkPeeringTests {
 
         using var body = JsonDocument.Parse(VirtualNetworkPeerings.Body(Cluster));
 
-        var outcome = await reconciler.ReconcileAsync(Context(peering, body.RootElement, world), TestContext.Current.CancellationToken);
+        var outcome = await reconciler.ReconcileAsync(
+            Context(peering, body.RootElement, world),
+            TestContext.Current.CancellationToken
+        );
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.InProgress, outcome.ToString());
         outcome.Reason.ShouldContain("remote");
@@ -311,13 +361,17 @@ public sealed class NetworkPeeringTests {
             .ShouldBeFalse("a co-writer never creates the owner's object");
 
         // ⚠ And the local half landed, which is the documented intermediate state.
-        VirtualNetworkPeerings.CarriesFragmentOf(world.Objects[CoOwnedConnection.Key(VirtualNetworks.VpcRef(ns, "hub"))], peering.Id).ShouldBeTrue();
+        VirtualNetworkPeerings.CarriesFragmentOf(
+            world.Objects[CoOwnedConnection.Key(VirtualNetworks.VpcRef(ns, "hub"))],
+            peering.Id
+        )
+            .ShouldBeTrue();
     }
 
     [Fact]
     public async Task OverlappingRangesFailTerminallyRatherThanRetryingForAnHour() {
         var reconciler = new VirtualNetworkPeeringReconciler(new FixedClock());
-        var peering = Address("to-spoke", TenantOne, SubscriptionOne, network: "hub");
+        var peering = Address("to-spoke", TenantOne, SubscriptionOne, "hub");
         var ns = ReconcileDriver.NamespaceFor(peering);
         var world = new CoOwnedConnection();
 
@@ -326,7 +380,10 @@ public sealed class NetworkPeeringTests {
 
         using var body = JsonDocument.Parse(VirtualNetworkPeerings.Body(Cluster, remoteAddressSpaceV4: "10.20.0.0/16"));
 
-        var outcome = await reconciler.ReconcileAsync(Context(peering, body.RootElement, world), TestContext.Current.CancellationToken);
+        var outcome = await reconciler.ReconcileAsync(
+            Context(peering, body.RootElement, world),
+            TestContext.Current.CancellationToken
+        );
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
         outcome.IsTerminal.ShouldBeTrue("a body whose ranges overlap can never converge");
@@ -345,39 +402,57 @@ public sealed class NetworkPeeringTests {
         // group its author may hold no role on. The co-owned apply now holds the live object's
         // subscription and group against the writer's, in the builder and again before the PATCH.
         var reconciler = new VirtualNetworkPeeringReconciler(new FixedClock());
-        var peering = new ResourceId(TenantOne, SubscriptionOne, "prod", VirtualNetworkPeerings.Type, "x", Guid.Parse("66666666-6666-4666-8666-666666666666"), "hub");
+        var peering = new ResourceId(
+            TenantOne,
+            SubscriptionOne,
+            "prod",
+            VirtualNetworkPeerings.Type,
+            "x",
+            Guid.Parse("66666666-6666-4666-8666-666666666666"),
+            "hub"
+        );
         var ns = ReconcileDriver.NamespaceFor(peering);
 
         var victimId = Guid.Parse("77777777-7777-4777-8777-777777777777");
         var victim = new ResourceId(TenantOne, SubscriptionOne, "prod-a", VirtualNetworks.Type, "b", victimId);
         var victimNs = ReconcileDriver.NamespaceFor(victim);
 
-        VirtualNetworks.ObjectNameOf(ns, "a-b").ShouldBe(VirtualNetworks.ObjectNameOf(victimNs, "b"), "the collision this test is about");
+        VirtualNetworks.ObjectNameOf(ns, "a-b")
+            .ShouldBe(VirtualNetworks.ObjectNameOf(victimNs, "b"), "the collision this test is about");
 
         var world = new CoOwnedConnection();
         world.PlaceOwnedVpc(ns, "hub", HubId, peering);
         world.PlaceOwnedVpc(victimNs, "b", victimId, victim);
 
-        using var body = JsonDocument.Parse(VirtualNetworkPeerings.Body(Cluster, remoteNetwork: "a-b"));
+        using var body = JsonDocument.Parse(VirtualNetworkPeerings.Body(Cluster, "a-b"));
 
-        var outcome = await reconciler.ReconcileAsync(Context(peering, body.RootElement, world), TestContext.Current.CancellationToken);
+        var outcome = await reconciler.ReconcileAsync(
+            Context(peering, body.RootElement, world),
+            TestContext.Current.CancellationToken
+        );
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed, outcome.ToString());
         outcome.Error!.Message.ShouldContain("'prod-a'");
         outcome.Error.Message.ShouldContain("'prod'");
         outcome.Error.Message.ShouldContain("resource group");
 
-        var router = JsonNode.Parse(world.Objects[CoOwnedConnection.Key(VirtualNetworks.VpcRef(victimNs, "b"))])!.AsObject();
-        VirtualNetworkPeerings.CarriesFragmentOf(router.ToJsonString(), peering.Id).ShouldBeFalse("the other group's router carries the peering's bookkeeping");
-        router["spec"]!.AsObject().ContainsKey("vpcPeerings").ShouldBeFalse("a peer port was written into the other group's router");
-        router["spec"]!.AsObject().ContainsKey("staticRoutes").ShouldBeFalse("a route was written into the other group's router");
+        var router = JsonNode.Parse(world.Objects[CoOwnedConnection.Key(VirtualNetworks.VpcRef(victimNs, "b"))])!
+            .AsObject();
+        VirtualNetworkPeerings.CarriesFragmentOf(router.ToJsonString(), peering.Id)
+            .ShouldBeFalse("the other group's router carries the peering's bookkeeping");
+        router["spec"]!.AsObject()
+            .ContainsKey("vpcPeerings")
+            .ShouldBeFalse("a peer port was written into the other group's router");
+        router["spec"]!.AsObject()
+            .ContainsKey("staticRoutes")
+            .ShouldBeFalse("a route was written into the other group's router");
         router["metadata"]!["labels"]![KubeLabels.ResourceGroup]!.GetValue<string>().ShouldBe("prod-a");
     }
 
     [Fact]
     public async Task DeletingWithdrawsBothFragmentsAndLeavesBothVpcsStanding() {
         var reconciler = new VirtualNetworkPeeringReconciler(new FixedClock());
-        var peering = Address("to-spoke", TenantOne, SubscriptionOne, network: "hub");
+        var peering = Address("to-spoke", TenantOne, SubscriptionOne, "hub");
         var ns = ReconcileDriver.NamespaceFor(peering);
         var world = new CoOwnedConnection();
 
@@ -386,16 +461,23 @@ public sealed class NetworkPeeringTests {
 
         using var body = JsonDocument.Parse(VirtualNetworkPeerings.Body(Cluster));
 
-        (await reconciler.ReconcileAsync(Context(peering, body.RootElement, world), TestContext.Current.CancellationToken)).IsConverged.ShouldBeTrue();
+        (await reconciler.ReconcileAsync(
+                Context(peering, body.RootElement, world),
+                TestContext.Current.CancellationToken
+            )).IsConverged.ShouldBeTrue();
 
-        var deleted = await reconciler.DeleteAsync(Context(peering, body.RootElement, world), TestContext.Current.CancellationToken);
+        var deleted = await reconciler.DeleteAsync(
+            Context(peering, body.RootElement, world),
+            TestContext.Current.CancellationToken
+        );
 
         deleted.Kind.ShouldBe(ReconcileOutcomeKind.Converged, deleted.ToString());
         world.Deleted.ShouldBeEmpty("a withdrawal deletes nothing");
 
         foreach (var network in new[] { "hub", "spoke" }) {
             var json = world.Objects[CoOwnedConnection.Key(VirtualNetworks.VpcRef(ns, network))];
-            VirtualNetworkPeerings.CarriesFragmentOf(json, peering.Id).ShouldBeFalse($"{network} still carries the fragment");
+            VirtualNetworkPeerings.CarriesFragmentOf(json, peering.Id)
+                .ShouldBeFalse($"{network} still carries the fragment");
             var spec = JsonNode.Parse(json)!["spec"]!.AsObject();
             spec.ContainsKey("vpcPeerings").ShouldBeFalse($"{network} still carries the peering entry");
             spec["enableExternal"].ShouldNotBeNull("the owner's own field survives the withdrawal");
@@ -403,14 +485,17 @@ public sealed class NetworkPeeringTests {
 
         // A second delete pass — the operation re-driven — is Converged with nothing applied.
         var applied = world.Applied.Count;
-        (await reconciler.DeleteAsync(Context(peering, body.RootElement, world), TestContext.Current.CancellationToken)).IsConverged.ShouldBeTrue();
+        (await reconciler.DeleteAsync(
+                Context(peering, body.RootElement, world),
+                TestContext.Current.CancellationToken
+            )).IsConverged.ShouldBeTrue();
         world.Applied.Count.ShouldBe(applied, "a withdrawal of a fragment that is not there applies nothing");
     }
 
     [Fact]
     public async Task DeletingAPeeringWhoseRemoteIsAlreadyGoneConvergesBecauseTheOwnersDeleteWins() {
         var reconciler = new VirtualNetworkPeeringReconciler(new FixedClock());
-        var peering = Address("to-spoke", TenantOne, SubscriptionOne, network: "hub");
+        var peering = Address("to-spoke", TenantOne, SubscriptionOne, "hub");
         var ns = ReconcileDriver.NamespaceFor(peering);
         var world = new CoOwnedConnection();
 
@@ -419,19 +504,29 @@ public sealed class NetworkPeeringTests {
 
         using var body = JsonDocument.Parse(VirtualNetworkPeerings.Body(Cluster));
 
-        (await reconciler.ReconcileAsync(Context(peering, body.RootElement, world), TestContext.Current.CancellationToken)).IsConverged.ShouldBeTrue();
+        (await reconciler.ReconcileAsync(
+                Context(peering, body.RootElement, world),
+                TestContext.Current.CancellationToken
+            )).IsConverged.ShouldBeTrue();
         world.Objects.TryRemove(CoOwnedConnection.Key(VirtualNetworks.VpcRef(ns, "spoke")), out _).ShouldBeTrue();
 
-        var deleted = await reconciler.DeleteAsync(Context(peering, body.RootElement, world), TestContext.Current.CancellationToken);
+        var deleted = await reconciler.DeleteAsync(
+            Context(peering, body.RootElement, world),
+            TestContext.Current.CancellationToken
+        );
 
         deleted.Kind.ShouldBe(ReconcileOutcomeKind.Converged, deleted.ToString());
-        VirtualNetworkPeerings.CarriesFragmentOf(world.Objects[CoOwnedConnection.Key(VirtualNetworks.VpcRef(ns, "hub"))], peering.Id).ShouldBeFalse();
+        VirtualNetworkPeerings.CarriesFragmentOf(
+            world.Objects[CoOwnedConnection.Key(VirtualNetworks.VpcRef(ns, "hub"))],
+            peering.Id
+        )
+            .ShouldBeFalse();
     }
 
     [Fact]
     public async Task ObserveReadsTheLocalVpcAndSaysWhichSideHasDrifted() {
         var reconciler = new VirtualNetworkPeeringReconciler(new FixedClock());
-        var peering = Address("to-spoke", TenantOne, SubscriptionOne, network: "hub");
+        var peering = Address("to-spoke", TenantOne, SubscriptionOne, "hub");
         var ns = ReconcileDriver.NamespaceFor(peering);
         var world = new CoOwnedConnection();
 
@@ -440,18 +535,30 @@ public sealed class NetworkPeeringTests {
 
         using var body = JsonDocument.Parse(VirtualNetworkPeerings.Body(Cluster));
 
-        var absent = await reconciler.ObserveAsync(new(peering, VirtualNetworkPeerings.V2026, body.RootElement, ns, world), TestContext.Current.CancellationToken);
+        var absent = await reconciler.ObserveAsync(
+            new(peering, VirtualNetworkPeerings.V2026, body.RootElement, ns, world),
+            TestContext.Current.CancellationToken
+        );
         absent.Exists.ShouldBeFalse("nothing has been written yet");
 
-        (await reconciler.ReconcileAsync(Context(peering, body.RootElement, world), TestContext.Current.CancellationToken)).IsConverged.ShouldBeTrue();
+        (await reconciler.ReconcileAsync(
+                Context(peering, body.RootElement, world),
+                TestContext.Current.CancellationToken
+            )).IsConverged.ShouldBeTrue();
 
-        var observed = await reconciler.ObserveAsync(new(peering, VirtualNetworkPeerings.V2026, body.RootElement, ns, world), TestContext.Current.CancellationToken);
+        var observed = await reconciler.ObserveAsync(
+            new(peering, VirtualNetworkPeerings.V2026, body.RootElement, ns, world),
+            TestContext.Current.CancellationToken
+        );
         observed.Exists.ShouldBeTrue();
         observed.Summary.ShouldContain("both networks carry the peering");
 
         world.Objects.TryRemove(CoOwnedConnection.Key(VirtualNetworks.VpcRef(ns, "spoke")), out _);
 
-        var half = await reconciler.ObserveAsync(new(peering, VirtualNetworkPeerings.V2026, body.RootElement, ns, world), TestContext.Current.CancellationToken);
+        var half = await reconciler.ObserveAsync(
+            new(peering, VirtualNetworkPeerings.V2026, body.RootElement, ns, world),
+            TestContext.Current.CancellationToken
+        );
         half.Exists.ShouldBeTrue();
         half.Summary.ShouldContain("the remote does not");
     }
@@ -460,7 +567,7 @@ public sealed class NetworkPeeringTests {
 
     [Fact]
     public async Task ShowRoutesReportsWrittenAndConnectedPerSide() {
-        var peering = Address("to-spoke", TenantOne, SubscriptionOne, network: "hub");
+        var peering = Address("to-spoke", TenantOne, SubscriptionOne, "hub");
         var ns = ReconcileDriver.NamespaceFor(peering);
         var world = new CoOwnedConnection();
 
@@ -494,7 +601,8 @@ public sealed class NetworkPeeringTests {
         response["remoteConnectIP"]!.GetValue<string>().ShouldBe("10.255.255.2/30");
         response["localWritten"]!.GetValue<bool>().ShouldBeTrue();
         response["localConnected"]!.GetValue<bool>().ShouldBeTrue();
-        response["remoteWritten"]!.GetValue<bool>().ShouldBeFalse("the remote Vpc is not there, and that is an answer rather than a 404");
+        response["remoteWritten"]!.GetValue<bool>()
+            .ShouldBeFalse("the remote Vpc is not there, and that is an answer rather than a 404");
         response["remoteConnected"]!.GetValue<bool>().ShouldBeFalse();
 
         // ⚠ And the response satisfies the schema the action declares, which is what the SDK and the
@@ -513,19 +621,28 @@ public sealed class NetworkPeeringTests {
     /// <remarks>
     ///     ⚠ <b>Hand-written, because there is no controller in any harness this repository runs.</b>
     /// </remarks>
-    static string AfterTheController(string ns, ResourceId peering, JsonElement desired, VirtualNetworkPeerings.Side side) {
+    static string AfterTheController(
+        string ns,
+        ResourceId peering,
+        JsonElement desired,
+        VirtualNetworkPeerings.Side side
+    ) {
         var fragment = JsonNode.Parse(
             side == VirtualNetworkPeerings.Side.Local
                 ? VirtualNetworkPeerings.LocalFragmentJson(ns, peering, desired)
                 : VirtualNetworkPeerings.RemoteFragmentJson(ns, peering, desired)
-        )!.AsObject();
+        )!
+            .AsObject();
 
         var peerings = fragment["spec"]!["vpcPeerings"]!.AsArray();
         var routes = fragment["spec"]!["staticRoutes"]!.AsArray();
 
         // Another peering's slice, first in both lists.
         peerings.Insert(0, new JsonObject { ["remoteVpc"] = ns + "-elsewhere", ["localConnectIP"] = "10.254.0.1/30" });
-        routes.Insert(0, new JsonObject { ["policy"] = "policyDst", ["cidr"] = "10.40.0.0/16", ["nextHopIP"] = "10.254.0.2" });
+        routes.Insert(
+            0,
+            new JsonObject { ["policy"] = "policyDst", ["cidr"] = "10.40.0.0/16", ["nextHopIP"] = "10.254.0.2" }
+        );
 
         var remote = peerings[1]!["remoteVpc"]!.GetValue<string>();
 
@@ -595,7 +712,10 @@ sealed class CoOwnedConnection : IKubeClusterConnection {
 
     public Guid ClusterId => Guid.Parse("cccccccc-0000-4000-8000-000000000003");
 
-    /// <summary>Places a network's <c>Vpc</c> as its own reconciler would have applied it — the seven labels and its one field.</summary>
+    /// <summary>
+    ///     Places a network's <c>Vpc</c> as its own reconciler would have applied it — the seven labels and its one
+    ///     field.
+    /// </summary>
     public void PlaceOwnedVpc(string ns, string network, Guid ownerId, ResourceId tenantOf) {
         var target = VirtualNetworks.VpcRef(ns, network);
 
@@ -629,7 +749,9 @@ sealed class CoOwnedConnection : IKubeClusterConnection {
         Applied.Add(command);
 
         if (!command.IsCoOwned) {
-            throw new InvalidOperationException("a peering applies nothing it owns; an ordinary apply here is a bug in the reconciler");
+            throw new InvalidOperationException(
+                "a peering applies nothing it owns; an ordinary apply here is a bug in the reconciler"
+            );
         }
 
         var shape = command.CheckCoOwnedShape();
@@ -640,12 +762,19 @@ sealed class CoOwnedConnection : IKubeClusterConnection {
         var key = Key(command.Target);
 
         if (!Objects.TryGetValue(key, out var before)) {
-            return Task.FromResult(Result<ApplyOutcome>.Failure(ErrorCode.ResourceNotFound, $"'{command.Target}' is not here, and a co-writer never creates it."));
+            return Task.FromResult(
+                Result<ApplyOutcome>.Failure(
+                    ErrorCode.ResourceNotFound,
+                    $"'{command.Target}' is not here, and a co-writer never creates it."
+                )
+            );
         }
 
         var version = versions.GetValueOrDefault(key, 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-        var against = command.CheckCoOwnedAgainst(new() { Ref = command.Target, Json = before, ResourceVersion = version });
+        var against = command.CheckCoOwnedAgainst(
+            new() { Ref = command.Target, Json = before, ResourceVersion = version }
+        );
         if (against.TryGetError(out var ownerError)) {
             return Task.FromResult(Result<ApplyOutcome>.Failure(ownerError));
         }
@@ -653,7 +782,9 @@ sealed class CoOwnedConnection : IKubeClusterConnection {
         var body = JsonNode.Parse(command.Body)!.AsObject();
 
         if (body["metadata"]!["resourceVersion"]!.GetValue<string>() != version) {
-            return Task.FromResult(Result<ApplyOutcome>.Success(new() { Result = ApplyResult.Stale, Target = command.Target }));
+            return Task.FromResult(
+                Result<ApplyOutcome>.Success(new() { Result = ApplyResult.Stale, Target = command.Target })
+            );
         }
 
         var live = JsonNode.Parse(before)!.AsObject();
@@ -672,7 +803,9 @@ sealed class CoOwnedConnection : IKubeClusterConnection {
         Set(live, union);
 
         var annotations = live["metadata"]!["annotations"]!.AsObject();
-        foreach (var stale in annotations.Where(x => KubeLabels.IsFragmentAnnotation(x.Key)).Select(x => x.Key).ToList()) {
+        foreach (var stale in annotations.Where(static x => KubeLabels.IsFragmentAnnotation(x.Key))
+                     .Select(static x => x.Key)
+                     .ToList()) {
             annotations.Remove(stale);
         }
 
@@ -695,7 +828,8 @@ sealed class CoOwnedConnection : IKubeClusterConnection {
                 new() {
                     Result = changed ? ApplyResult.Updated : ApplyResult.Unchanged,
                     Target = command.Target,
-                    ResourceVersion = versions.GetValueOrDefault(key, 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ResourceVersion = versions.GetValueOrDefault(key, 1)
+                        .ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ReconcileHash = command.ReconcileHash
                 }
             )
@@ -709,15 +843,25 @@ sealed class CoOwnedConnection : IKubeClusterConnection {
                     new() {
                         Ref = target,
                         Json = json,
-                        ResourceVersion = versions.GetValueOrDefault(Key(target), 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                        ResourceVersion = versions.GetValueOrDefault(Key(target), 1)
+                            .ToString(System.Globalization.CultureInfo.InvariantCulture)
                     }
                 )
                 : Result<KubeObject>.Failure(ErrorCode.ResourceNotFound, $"'{target}' is not here.")
         );
 
-    public Task<Result> DeleteAsync(KubeCommand command, CascadePolicy policy = CascadePolicy.Background, CancellationToken cancellationToken = default) {
+    public Task<Result> DeleteAsync(
+        KubeCommand command,
+        CascadePolicy policy = CascadePolicy.Background,
+        CancellationToken cancellationToken = default
+    ) {
         Deleted.Add(command.Target);
-        return Task.FromResult(Result.Failure(ErrorCode.InvalidRequestBody, "a peering deletes nothing; a co-owned withdrawal goes through ApplyAsync"));
+        return Task.FromResult(
+            Result.Failure(
+                ErrorCode.InvalidRequestBody,
+                "a peering deletes nothing; a co-owned withdrawal goes through ApplyAsync"
+            )
+        );
     }
 
     static void Remove(JsonObject target, JsonObject owned) {

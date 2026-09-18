@@ -217,6 +217,6 @@ public static class CommunicationGrainKeys {
         // ⚠ bigEndian: true. `new Guid(ReadOnlySpan<byte>)` defaults to the little-endian .NET
         // layout, which byte-swaps the first three fields — so the version and variant bits stamped
         // above would land on different octets and the guid would not be the one just constructed.
-        return new(id, bigEndian: true);
+        return new(id, true);
     }
 }

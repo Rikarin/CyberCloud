@@ -1,4 +1,3 @@
-using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
@@ -54,16 +53,12 @@ public sealed class RabbitmqReconcilerTests {
 
         var connection = new RecordingConnection();
 
-        using var aliceBody = JsonDocument.Parse(
-            RabbitmqClusters.Body(ClusterId, nodes: 3, storageSize: "20Gi", defaultQueueType: "quorum")
-        );
+        using var aliceBody = JsonDocument.Parse(RabbitmqClusters.Body(ClusterId, 3, "20Gi", "quorum"));
 
         // ⚠ Bob differs on the field a cache would most plausibly be added for: `additionalConfig` is
         // the only value on this type that the provider BUILDS a string for rather than copying out
         // of the body, so it is the one somebody memoises.
-        using var bobBody = JsonDocument.Parse(
-            RabbitmqClusters.Body(ClusterId, nodes: 5, storageSize: "80Gi", defaultQueueType: "classic")
-        );
+        using var bobBody = JsonDocument.Parse(RabbitmqClusters.Body(ClusterId, 5, "80Gi", "classic"));
 
         // Interleaved, so a cache written on the first pass is read on the third.
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
@@ -111,7 +106,7 @@ public sealed class RabbitmqReconcilerTests {
 
         outcome.ShouldBe(ReconcileOutcome.Converged);
 
-        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target))
+        var applied = connection.Applied.Select(static x => RecordingConnection.Key(x.Target))
             .ToHashSet(StringComparer.Ordinal);
 
         var read = connection.Read.Select(RecordingConnection.Key).ToHashSet(StringComparer.Ordinal);
@@ -155,10 +150,10 @@ public sealed class RabbitmqReconcilerTests {
         using var body = JsonDocument.Parse(RabbitmqClusters.Body(ClusterId));
 
         await Reconcile(connection, body.RootElement);
-        var first = connection.Applied.Select(x => x.Body).ToArray();
+        var first = connection.Applied.Select(static x => x.Body).ToArray();
 
         await Reconcile(connection, body.RootElement);
-        var second = connection.Applied.Skip(first.Length).Select(x => x.Body).ToArray();
+        var second = connection.Applied.Skip(first.Length).Select(static x => x.Body).ToArray();
 
         second.ShouldBe(first);
     }
@@ -210,7 +205,7 @@ public sealed class RabbitmqReconcilerTests {
 
         gone.ShouldBe(ReconcileOutcome.Converged);
 
-        connection.Deleted.Select(x => x.Kind.Kind + "/" + x.Name)
+        connection.Deleted.Select(static x => x.Kind.Kind + "/" + x.Name)
             .ShouldContain("RabbitmqCluster/observed");
     }
 

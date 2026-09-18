@@ -189,7 +189,7 @@ public sealed class TenancyWireContractTests {
     ];
 
     static IEnumerable<Type> GeneratedSerializerTypes =>
-        Contracts.GetTypes().Where(t => t.GetCustomAttribute<GenerateSerializerAttribute>() is not null);
+        Contracts.GetTypes().Where(static t => t.GetCustomAttribute<GenerateSerializerAttribute>() is not null);
 
     /// <summary>
     ///     Types this assembly's <i>source</i> declares an <c>[Alias]</c> on.
@@ -209,15 +209,15 @@ public sealed class TenancyWireContractTests {
     /// </remarks>
     static IEnumerable<Type> AliasedTypes =>
         Contracts.GetTypes()
-            .Where(t => t.GetCustomAttribute<AliasAttribute>() is not null)
-            .Where(t => t.GetCustomAttribute<GeneratedCodeAttribute>() is null);
+            .Where(static t => t.GetCustomAttribute<AliasAttribute>() is not null)
+            .Where(static t => t.GetCustomAttribute<GeneratedCodeAttribute>() is null);
 
     [Fact]
     public void EveryGenerateSerializerTypeHasAnAlias() =>
         GeneratedSerializerTypes
-            .Where(t => t.GetCustomAttribute<AliasAttribute>() is null)
-            .Select(t => t.Name)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Where(static t => t.GetCustomAttribute<AliasAttribute>() is null)
+            .Select(static t => t.Name)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ShouldBeEmpty(
                 "docs/plan/04 § Failure and upgrade makes a rolling upgrade depend on every "
                 + "[GenerateSerializer] type having a stable [Alias]."
@@ -229,10 +229,10 @@ public sealed class TenancyWireContractTests {
         // grain interfaces. A grain interface without an [Alias] is identified on the wire by its
         // full CLR name, so moving ITenantGrain to another namespace would orphan every activation.
         var missing = Contracts.GetTypes()
-            .Where(t => t.IsInterface && typeof(IAddressable).IsAssignableFrom(t))
-            .Where(t => t.GetCustomAttribute<AliasAttribute>() is null)
-            .Select(t => t.Name)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Where(static t => t.IsInterface && typeof(IAddressable).IsAssignableFrom(t))
+            .Where(static t => t.GetCustomAttribute<AliasAttribute>() is null)
+            .Select(static t => t.Name)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
 
         missing.ShouldBeEmpty();
@@ -244,10 +244,10 @@ public sealed class TenancyWireContractTests {
         // above cannot see them, and an un-aliased enum is exactly as renameable-into-a-break as an
         // un-aliased record.
         var missing = Contracts.GetTypes()
-            .Where(t => t.IsEnum && t.IsPublic)
-            .Where(t => t.GetCustomAttribute<AliasAttribute>() is null)
-            .Select(t => t.Name)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Where(static t => t.IsEnum && t.IsPublic)
+            .Where(static t => t.GetCustomAttribute<AliasAttribute>() is null)
+            .Select(static t => t.Name)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
 
         missing.ShouldBeEmpty();
@@ -256,10 +256,10 @@ public sealed class TenancyWireContractTests {
     [Fact]
     public void EveryAliasIsUnique() {
         var duplicates = AliasedTypes
-            .Select(t => t.GetCustomAttribute<AliasAttribute>()!.Alias)
-            .GroupBy(a => a, StringComparer.Ordinal)
-            .Where(g => g.Count() > 1)
-            .Select(g => g.Key)
+            .Select(static t => t.GetCustomAttribute<AliasAttribute>()!.Alias)
+            .GroupBy(static a => a, StringComparer.Ordinal)
+            .Where(static g => g.Count() > 1)
+            .Select(static g => g.Key)
             .ToList();
 
         duplicates.ShouldBeEmpty("two types claiming one alias is a coin flip at deserialization.");
@@ -268,12 +268,12 @@ public sealed class TenancyWireContractTests {
     [Fact]
     public void TheAliasesAreTheOnesRecordedHere() {
         var actual = AliasedTypes
-            .Select(t => (Type: t.Name, t.GetCustomAttribute<AliasAttribute>()!.Alias))
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
+            .Select(static t => (Type: t.Name, t.GetCustomAttribute<AliasAttribute>()!.Alias))
+            .OrderBy(static x => x.Type, StringComparer.Ordinal)
             .ToList();
 
         actual.ShouldBe(
-            Aliases.OrderBy(x => x.Type, StringComparer.Ordinal).ToList(),
+            Aliases.OrderBy(static x => x.Type, StringComparer.Ordinal).ToList(),
             "an alias changed, or an aliased type was added without recording it. Both are "
             + "wire-contract changes."
         );
@@ -282,18 +282,18 @@ public sealed class TenancyWireContractTests {
     [Fact]
     public void TheIdManifestMatchesTheBaseline() {
         var actual = GeneratedSerializerTypes
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetMembers(BindingFlags.Public | BindingFlags.Instance)
-                    .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
-                    .Where(x => x.id is not null)
+                    .Select(static member => (member, id: member.GetCustomAttribute<IdAttribute>()))
+                    .Where(static x => x.id is not null)
                     .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
             )
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
-            .ThenBy(x => x.Id)
+            .OrderBy(static x => x.Type, StringComparer.Ordinal)
+            .ThenBy(static x => x.Id)
             .ToList();
 
         actual.ShouldBe(
-            Baseline.OrderBy(x => x.Type, StringComparer.Ordinal).ThenBy(x => x.Id).ToList(),
+            Baseline.OrderBy(static x => x.Type, StringComparer.Ordinal).ThenBy(static x => x.Id).ToList(),
             "docs/plan/05 § Serialization: [Id(n)] numbers are never reused and never reordered. If "
             + "this fails because a member was added, append it to Baseline with the next unused "
             + "number for that type. If it fails for any other reason, the wire contract just "
@@ -303,8 +303,8 @@ public sealed class TenancyWireContractTests {
 
     [Fact]
     public void NoTypeReusesAnIdNumber() {
-        foreach (var group in Baseline.GroupBy(x => x.Type, StringComparer.Ordinal)) {
-            var ids = group.Select(x => x.Id).ToList();
+        foreach (var group in Baseline.GroupBy(static x => x.Type, StringComparer.Ordinal)) {
+            var ids = group.Select(static x => x.Id).ToList();
             ids.Distinct().Count().ShouldBe(ids.Count, $"{group.Key} declares the same [Id(n)] twice.");
         }
     }
@@ -312,12 +312,12 @@ public sealed class TenancyWireContractTests {
     [Fact]
     public void TheBaselineNamesEveryPublicMemberOfEveryWireType() {
         var unnumbered = GeneratedSerializerTypes
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                    .Where(p => p.GetCustomAttribute<IdAttribute>() is null)
+                    .Where(static p => p.GetCustomAttribute<IdAttribute>() is null)
                     .Select(p => string.Create(CultureInfo.InvariantCulture, $"{type.Name}.{p.Name}"))
             )
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
 
         unnumbered.ShouldBeEmpty("a public property on a [GenerateSerializer] type with no [Id(n)] is not serialised.");
@@ -326,15 +326,15 @@ public sealed class TenancyWireContractTests {
     [Fact]
     public void EveryWireTypeIsPublic() =>
         GeneratedSerializerTypes
-            .Where(t => !t.IsPublic && !t.IsNestedPublic)
-            .Select(t => t.Name)
+            .Where(static t => !t.IsPublic && !t.IsNestedPublic)
+            .Select(static t => t.Name)
             .ShouldBeEmpty("the gateway, the CLI and the SDK reference this assembly.");
 
     [Fact]
     public void TheAssemblyHasNoOrleansHostingDependency() {
         // The graph rule that makes this assembly referenceable from the CLI and the SDK: it is
         // Microsoft.Orleans.Sdk only, so referencing it does not acquire a silo.
-        var references = Contracts.GetReferencedAssemblies().Select(x => x.Name ?? string.Empty).ToList();
+        var references = Contracts.GetReferencedAssemblies().Select(static x => x.Name ?? string.Empty).ToList();
 
         references.ShouldNotContain("Orleans.Runtime");
         references.ShouldNotContain("Orleans.TestingHost");

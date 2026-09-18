@@ -1,4 +1,3 @@
-using CyberCloud.Authorization.Contracts;
 using CyberCloud.Core;
 using CyberCloud.Core.Resources;
 using CyberCloud.Core.Time;
@@ -11,7 +10,6 @@ using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.Tenancy.Contracts;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using System.Globalization;
 
 namespace CyberCloud.Identity.Host.Tests.Infrastructure;
 
@@ -163,10 +161,13 @@ public sealed class FakeGrainFactory : IGrainFactory {
         var (tenant, within) = Split(primaryKey);
 
         object grain = typeof(TGrainInterface) switch {
-            var t when t == typeof(ISignUpGrain) => SignUps.GetOrAdd(Id(within), id => new FakeSignUpGrain().WithId(id)),
-            var t when t == typeof(IUserGrain) => Users.GetOrAdd((tenant, Id(within)), _ => new()),
-            var t when t == typeof(IEmailIndexGrain) => EmailIndexes.GetOrAdd(primaryKey, _ => new()),
-            var t when t == typeof(ISessionGrain) => Sessions.GetOrAdd(primaryKey, _ => new()),
+            var t when t == typeof(ISignUpGrain) => SignUps.GetOrAdd(
+                Id(within),
+                static id => new FakeSignUpGrain().WithId(id)
+            ),
+            var t when t == typeof(IUserGrain) => Users.GetOrAdd((tenant, Id(within)), static _ => new()),
+            var t when t == typeof(IEmailIndexGrain) => EmailIndexes.GetOrAdd(primaryKey, static _ => new()),
+            var t when t == typeof(ISessionGrain) => Sessions.GetOrAdd(primaryKey, static _ => new()),
             var t when t == typeof(ITenantDirectoryGrain) => Directory,
             var t => throw new NotSupportedException(
                 $"The sign-up path reached for {t.Name} ('{primaryKey}'), which the harness does not fake. "
@@ -193,19 +194,31 @@ public sealed class FakeGrainFactory : IGrainFactory {
 
     /// <inheritdoc />
     public TGrainInterface GetGrain<TGrainInterface>(Guid primaryKey, string? grainClassNamePrefix = null)
-        where TGrainInterface : IGrainWithGuidKey => throw Unkeyed();
+        where TGrainInterface : IGrainWithGuidKey =>
+        throw Unkeyed();
 
     /// <inheritdoc />
     public TGrainInterface GetGrain<TGrainInterface>(long primaryKey, string? grainClassNamePrefix = null)
-        where TGrainInterface : IGrainWithIntegerKey => throw Unkeyed();
+        where TGrainInterface : IGrainWithIntegerKey =>
+        throw Unkeyed();
 
     /// <inheritdoc />
-    public TGrainInterface GetGrain<TGrainInterface>(Guid primaryKey, string keyExtension, string? grainClassNamePrefix = null)
-        where TGrainInterface : IGrainWithGuidCompoundKey => throw Unkeyed();
+    public TGrainInterface GetGrain<TGrainInterface>(
+        Guid primaryKey,
+        string keyExtension,
+        string? grainClassNamePrefix = null
+    )
+        where TGrainInterface : IGrainWithGuidCompoundKey =>
+        throw Unkeyed();
 
     /// <inheritdoc />
-    public TGrainInterface GetGrain<TGrainInterface>(long primaryKey, string keyExtension, string? grainClassNamePrefix = null)
-        where TGrainInterface : IGrainWithIntegerCompoundKey => throw Unkeyed();
+    public TGrainInterface GetGrain<TGrainInterface>(
+        long primaryKey,
+        string keyExtension,
+        string? grainClassNamePrefix = null
+    )
+        where TGrainInterface : IGrainWithIntegerCompoundKey =>
+        throw Unkeyed();
 
     /// <inheritdoc />
     public IGrain GetGrain(Type grainInterfaceType, Guid grainPrimaryKey) => throw Unkeyed();
@@ -224,7 +237,8 @@ public sealed class FakeGrainFactory : IGrainFactory {
 
     /// <inheritdoc />
     public TGrainInterface GetGrain<TGrainInterface>(GrainId grainId)
-        where TGrainInterface : IAddressable => throw Unkeyed();
+        where TGrainInterface : IAddressable =>
+        throw Unkeyed();
 
     /// <inheritdoc />
     public IAddressable GetGrain(GrainId grainId) => throw Unkeyed();
@@ -240,16 +254,22 @@ public sealed class FakeGrainFactory : IGrainFactory {
 
     /// <inheritdoc />
     public TGrainObserverInterface CreateObjectReference<TGrainObserverInterface>(IGrainObserver obj)
-        where TGrainObserverInterface : IGrainObserver => throw Unkeyed();
+        where TGrainObserverInterface : IGrainObserver =>
+        throw Unkeyed();
 
     /// <inheritdoc />
     public void DeleteObjectReference<TGrainObserverInterface>(IGrainObserver obj)
-        where TGrainObserverInterface : IGrainObserver => throw Unkeyed();
+        where TGrainObserverInterface : IGrainObserver =>
+        throw Unkeyed();
 }
 
 /// <summary>A small helper so a fake is created once per key.</summary>
 static class FakeDictionaries {
-    public static TValue GetOrAdd<TKey, TValue>(this Dictionary<TKey, TValue> dictionary, TKey key, Func<TKey, TValue> create)
+    public static TValue GetOrAdd<TKey, TValue>(
+        this Dictionary<TKey, TValue> dictionary,
+        TKey key,
+        Func<TKey, TValue> create
+    )
         where TKey : notnull {
         if (!dictionary.TryGetValue(key, out var value)) {
             value = create(key);
@@ -391,7 +411,9 @@ public sealed class FakeUserGrain : IUserGrain {
         Creates++;
         Email = email;
         DisplayName = displayName;
-        return Task.FromResult(Result<UserProfile>.Success(new() { Email = email, DisplayName = displayName, Status = status }));
+        return Task.FromResult(
+            Result<UserProfile>.Success(new() { Email = email, DisplayName = displayName, Status = status })
+        );
     }
 
     /// <inheritdoc />
@@ -433,17 +455,20 @@ public sealed class FakeUserGrain : IUserGrain {
     public Task<Result<bool>> VerifyPasswordAsync(string candidate) => throw OffPath(nameof(VerifyPasswordAsync));
 
     /// <inheritdoc />
-    public Task<Result<IReadOnlyList<PasskeyCredential>>> ListPasskeysAsync() => throw OffPath(nameof(ListPasskeysAsync));
+    public Task<Result<IReadOnlyList<PasskeyCredential>>> ListPasskeysAsync() =>
+        throw OffPath(nameof(ListPasskeysAsync));
 
     /// <inheritdoc />
     public Task<Result<bool>> RecordPasskeyAssertionAsync(string credentialId, uint signCount) =>
         throw OffPath(nameof(RecordPasskeyAssertionAsync));
 
     /// <inheritdoc />
-    public Task<Result<UserProfile>> RemovePasskeyAsync(string credentialId) => throw OffPath(nameof(RemovePasskeyAsync));
+    public Task<Result<UserProfile>> RemovePasskeyAsync(string credentialId) =>
+        throw OffPath(nameof(RemovePasskeyAsync));
 
     /// <inheritdoc />
-    public Task<Result<UserProfile>> EnrollTotpAsync(TotpEnrollment enrollment) => throw OffPath(nameof(EnrollTotpAsync));
+    public Task<Result<UserProfile>> EnrollTotpAsync(TotpEnrollment enrollment) =>
+        throw OffPath(nameof(EnrollTotpAsync));
 
     /// <inheritdoc />
     public Task<Result<TotpEnrollment>> GetTotpAsync() => throw OffPath(nameof(GetTotpAsync));
@@ -455,13 +480,16 @@ public sealed class FakeUserGrain : IUserGrain {
     public Task<Result> IssueOtpAsync(OtpPurpose purpose, CredentialKind kind) => throw OffPath(nameof(IssueOtpAsync));
 
     /// <inheritdoc />
-    public Task<Result<bool>> RedeemOtpAsync(OtpPurpose purpose, string candidate) => throw OffPath(nameof(RedeemOtpAsync));
+    public Task<Result<bool>> RedeemOtpAsync(OtpPurpose purpose, string candidate) =>
+        throw OffPath(nameof(RedeemOtpAsync));
 
     /// <inheritdoc />
-    public Task<Result<RecoveryCodeBatch>> GenerateRecoveryCodesAsync() => throw OffPath(nameof(GenerateRecoveryCodesAsync));
+    public Task<Result<RecoveryCodeBatch>> GenerateRecoveryCodesAsync() =>
+        throw OffPath(nameof(GenerateRecoveryCodesAsync));
 
     /// <inheritdoc />
-    public Task<Result<bool>> RedeemRecoveryCodeAsync(string candidate) => throw OffPath(nameof(RedeemRecoveryCodeAsync));
+    public Task<Result<bool>> RedeemRecoveryCodeAsync(string candidate) =>
+        throw OffPath(nameof(RedeemRecoveryCodeAsync));
 
     /// <inheritdoc />
     public Task<Result<IReadOnlyList<Guid>>> ListSessionsAsync() => throw OffPath(nameof(ListSessionsAsync));
@@ -555,12 +583,15 @@ public sealed class FakeTenantDirectoryGrain : ITenantDirectoryGrain {
     public Task<Result<TenantDirectoryEntry>> LookupBySlugAsync(string slug) =>
         Task.FromResult(
             Held.TryGetValue(slug, out var tenant)
-                ? Result<TenantDirectoryEntry>.Success(new() { TenantId = tenant, Slug = slug, Status = TenantStatus.Active })
+                ? Result<TenantDirectoryEntry>.Success(
+                    new() { TenantId = tenant, Slug = slug, Status = TenantStatus.Active }
+                )
                 : Result<TenantDirectoryEntry>.Failure(ErrorCode.TenantNotFound, "no such slug")
         );
 
     /// <inheritdoc />
-    public Task<Result<TenantDirectoryEntry>> RegisterAsync(TenantDirectoryEntry entry) => throw new NotSupportedException();
+    public Task<Result<TenantDirectoryEntry>> RegisterAsync(TenantDirectoryEntry entry) =>
+        throw new NotSupportedException();
 
     /// <inheritdoc />
     public Task<Result<TenantDirectoryEntry>> LookupAsync(Guid tenantId) => throw new NotSupportedException();
@@ -611,13 +642,21 @@ public sealed class RecordingScopeManager : IScopeManager {
             TenantSlugConflicts
                 ? Result<ScopeSnapshot>.Failure(ErrorCode.Conflict, $"Slug '{request.Slug}' is already held.")
                 : Result<ScopeSnapshot>.Success(
-                    new() { Path = ScopeId.Tenant(request.TenantId).Path, Kind = ScopeKind.Tenant, Name = request.Slug, Created = true }
+                    new() {
+                        Path = ScopeId.Tenant(request.TenantId).Path,
+                        Kind = ScopeKind.Tenant,
+                        Name = request.Slug,
+                        Created = true
+                    }
                 )
         );
     }
 
     /// <inheritdoc />
-    public Task<Result<ScopeSnapshot>> CreateAsync(ScopeRequest request, CancellationToken cancellationToken = default) {
+    public Task<Result<ScopeSnapshot>> CreateAsync(
+        ScopeRequest request,
+        CancellationToken cancellationToken = default
+    ) {
         Creates.Add(request);
 
         if (string.Equals(FailOnceAt, request.Path, StringComparison.Ordinal)) {
@@ -639,7 +678,10 @@ public sealed class RecordingScopeManager : IScopeManager {
         throw new NotSupportedException();
 
     /// <inheritdoc />
-    public Task<Result<ScopeListPage>> ListAsync(ScopeListRequest request, CancellationToken cancellationToken = default) =>
+    public Task<Result<ScopeListPage>> ListAsync(
+        ScopeListRequest request,
+        CancellationToken cancellationToken = default
+    ) =>
         throw new NotSupportedException();
 }
 
@@ -656,7 +698,11 @@ public sealed class ScriptedPasskeyService : IPasskeyService {
         Requested = request;
         return Task.FromResult(
             Result<PasskeyRegistrationChallenge>.Success(
-                new() { OptionsJson = "{\"challenge\":\"abc\"}", UserId = request.UserId, ExpiresAt = DateTimeOffset.MaxValue }
+                new() {
+                    OptionsJson = """{"challenge":"abc"}""",
+                    UserId = request.UserId,
+                    ExpiresAt = DateTimeOffset.MaxValue
+                }
             )
         );
     }

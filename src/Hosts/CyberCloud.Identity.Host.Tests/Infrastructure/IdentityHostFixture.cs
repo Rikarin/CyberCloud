@@ -28,8 +28,11 @@ namespace CyberCloud.Identity.Host.Tests.Infrastructure;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The composition under test is <c>IdentityComposition.BuildAsync</c> — the call
-///         <c>Program.cs</c> makes — and nothing about the OIDC pipeline is substituted.</b> The
+///         ⚠
+///         <b>
+///             The composition under test is <c>IdentityComposition.BuildAsync</c> — the call
+///             <c>Program.cs</c> makes — and nothing about the OIDC pipeline is substituted.
+///         </b> The
 ///         same OpenIddict server in the same degraded mode with the same handlers, the same
 ///         cookie scheme, the same <c>TokenApi</c> over the same grain interfaces; what the cluster
 ///         behind it stores is in memory rather than in Redis and PostgreSQL, and its password
@@ -126,7 +129,8 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
     public const string TenantConfidentialClientSecret = "acme-server-secret-7c1e";
 
     /// <summary>The vault handle the confidential client's registration names.</summary>
-    public static SecretRef TenantConfidentialClientSecretRef { get; } = new() { Path = "tenants/grants-tests/apps/acme-server", Field = "client_secret" };
+    public static SecretRef TenantConfidentialClientSecretRef { get; } =
+        new() { Path = "tenants/grants-tests/apps/acme-server", Field = "client_secret" };
 
     TestCluster cluster = null!;
     WebApplication host = null!;
@@ -144,7 +148,8 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
     public Uri BaseAddress { get; private set; } = null!;
 
     /// <summary>The key directory the host was started with, and will be restarted with.</summary>
-    public string KeyDirectory { get; } = Path.Combine(Path.GetTempPath(), "cyc-identity-host-tests", Guid.NewGuid().ToString("N"));
+    public string KeyDirectory { get; } =
+        Path.Combine(Path.GetTempPath(), "cyc-identity-host-tests", Guid.NewGuid().ToString("N"));
 
     /// <summary>The host's container — <c>TokenApi</c>, <c>AuthorizeApi</c>, the handlers.</summary>
     public IServiceProvider Services => host.Services;
@@ -187,7 +192,7 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
         }
 
         try {
-            Directory.Delete(KeyDirectory, recursive: true);
+            Directory.Delete(KeyDirectory, true);
         } catch (IOException) {
             // A key ring file still open on Windows. The directory is under the temp path.
         }
@@ -237,12 +242,15 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
             services => {
                 services.AddSingleton<IPasswordHasher>(new Argon2idPasswordHasher(CheapArgon2));
                 // What a deployment registers here: its vault adapter. This one knows one secret.
-                services.AddSingleton<IClientSecretSeam>(new DictionarySecrets(TenantConfidentialClientSecretRef, TenantConfidentialClientSecret));
+                services.AddSingleton<IClientSecretSeam>(
+                    new DictionarySecrets(TenantConfidentialClientSecretRef, TenantConfidentialClientSecret)
+                );
                 services.AddSingleton<IClock>(Clock);
             }
         );
 
-        await started.Services.GetRequiredService<IAbpApplicationWithExternalServiceProvider>().InitializeAsync(started.Services);
+        await started.Services.GetRequiredService<IAbpApplicationWithExternalServiceProvider>()
+            .InitializeAsync(started.Services);
         started.MapIdentityHost();
         await started.StartAsync(CancellationToken.None);
 
@@ -254,7 +262,9 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
     async Task RegisterTenantAsync(Guid tenant, string slug) {
         var registered = await Grains
             .GetGrain<ITenantDirectoryGrain>(GrainKeys.TenantDirectory())
-            .RegisterAsync(new() { TenantId = tenant, Slug = slug, HomeRegion = "local", Status = TenantStatus.Active });
+            .RegisterAsync(
+                new() { TenantId = tenant, Slug = slug, HomeRegion = "local", Status = TenantStatus.Active }
+            );
 
         registered.IsSuccess.ShouldBeTrue(registered.Error?.Message);
     }
@@ -341,11 +351,11 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
             // has UseRedisReminderService; this is its in-memory stand-in.
             silo.UseInMemoryReminderService();
 
-            silo.ConfigureServices(services => {
+            silo.ConfigureServices(static services => {
                     // FIRST, so the module's TryAdd keeps them.
                     services.AddSingleton<IOtpDeliverySeam>(Instance!.Otp);
                     services.AddSingleton<IPasswordHasher>(new Argon2idPasswordHasher(CheapArgon2));
-                    services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
+                    services.TryAddSingleton<ILoggerFactory>(static _ => NullLoggerFactory.Instance);
                 }
             );
 
@@ -399,11 +409,18 @@ public sealed class ShiftableClock : IClock {
 /// </summary>
 public sealed class DictionarySecrets(SecretRef known, string secret) : IClientSecretSeam {
     /// <inheritdoc />
-    public Task<Result<bool>> VerifyAsync(SecretRef reference, string presented, CancellationToken cancellationToken = default) =>
+    public Task<Result<bool>> VerifyAsync(
+        SecretRef reference,
+        string presented,
+        CancellationToken cancellationToken = default
+    ) =>
         Task.FromResult(
             Result<bool>.Success(
                 reference == known
-                && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(presented ?? string.Empty), Encoding.UTF8.GetBytes(secret))
+                && CryptographicOperations.FixedTimeEquals(
+                    Encoding.UTF8.GetBytes(presented ?? string.Empty),
+                    Encoding.UTF8.GetBytes(secret)
+                )
             )
         );
 }

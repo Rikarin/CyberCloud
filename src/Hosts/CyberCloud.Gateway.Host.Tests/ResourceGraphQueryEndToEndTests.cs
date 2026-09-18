@@ -15,8 +15,11 @@ namespace CyberCloud.Gateway.Host.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Every piece between the HTTP request and the rows is production code except two
-///         resolvers, and the two are the ones that need a cluster.</b> The pipeline is
+///         ⚠
+///         <b>
+///             Every piece between the HTTP request and the rows is production code except two
+///             resolvers, and the two are the ones that need a cluster.
+///         </b> The pipeline is
 ///         <see cref="GatewayHarness" />'s eight stages; stage 8's <c>IResourceGraphQuery</c> is the
 ///         real <see cref="ResourceGraphQueryService" /> over the real <see cref="ClickHouseClient" />;
 ///         the rows were written by the real <see cref="ResourceGraphProjector" />'s
@@ -50,7 +53,9 @@ public sealed class ResourceGraphQueryEndToEndTests : IAsyncLifetime {
         // Not UTC, for the reason ProjectionFixture.ClickHouseTimeZone gives.
         .WithEnvironment("TZ", "Europe/Prague")
         // /ping and not a query: ProjectionFixture's remarks carry the trap.
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(x => x.ForPort(8123).ForPath("/ping")))
+        .WithWaitStrategy(
+            Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(static x => x.ForPort(8123).ForPath("/ping"))
+        )
         .Build();
 
     GatewayHarness gateway = null!;
@@ -92,7 +97,9 @@ public sealed class ResourceGraphQueryEndToEndTests : IAsyncLifetime {
                      Created(Owned, "pg-main", "eu-central", ("env", "prod")),
                      Created(Shared, "pg-replica", "eu-west", ("env", "prod")),
                      Created(Hidden, "pg-secret", "eu-west", ("env", "prod")),
-                     Created(Parked, "pg-old", "eu-central", ("env", "test")) with { Change = ResourceChangeKind.SoftDeleted }
+                     Created(Parked, "pg-old", "eu-central", ("env", "test")) with {
+                         Change = ResourceChangeKind.SoftDeleted
+                     }
                  }) {
             var projected = await projector.ProjectAsync(change, token);
             projected.IsSuccess.ShouldBeTrue(projected.Error?.Message);
@@ -108,7 +115,15 @@ public sealed class ResourceGraphQueryEndToEndTests : IAsyncLifetime {
             ["dana"] = ["user:dana", "group:eng#member", "group:ops#member"]
         };
 
-        gateway = new GatewayHarness(new ResourceGraphQueryService(client, store, new DictionaryCallerResolver(callers), options, NullLogger<ResourceGraphQueryService>.Instance));
+        gateway = new(
+            new ResourceGraphQueryService(
+                client,
+                store,
+                new DictionaryCallerResolver(callers),
+                options,
+                NullLogger<ResourceGraphQueryService>.Instance
+            )
+        );
     }
 
     public async ValueTask DisposeAsync() => await clickHouse.DisposeAsync();
@@ -116,14 +131,24 @@ public sealed class ResourceGraphQueryEndToEndTests : IAsyncLifetime {
     [Fact]
     public async Task AQueryTypedAtTheGatewayIsAnsweredFromClickHouseWithTheCallersAccessApplied() {
         // Alice: the one she owns. The parked one is hers too and is not a resource any more.
-        var alice = await QueryAsync("alice", "resources | where type =~ 'cybercloud.testing/widgets' | project name, location, tags | order by name asc");
+        var alice = await QueryAsync(
+            "alice",
+            "resources | where type =~ 'cybercloud.testing/widgets' | project name, location, tags | order by name asc"
+        );
 
         alice.Status.ShouldBe(StatusCodes.Status200OK, alice.Body);
         Names(alice.Body).ShouldBe(["pg-main"]);
 
         using (var document = JsonDocument.Parse(alice.Body)) {
-            document.RootElement.GetProperty("columns").EnumerateArray().Select(x => x.GetProperty("name").GetString()).ShouldBe(["name", "location", "tags"]);
-            document.RootElement.GetProperty("value")[0].GetProperty("tags").GetProperty("env").GetString().ShouldBe("prod");
+            document.RootElement.GetProperty("columns")
+                .EnumerateArray()
+                .Select(static x => x.GetProperty("name").GetString())
+                .ShouldBe(["name", "location", "tags"]);
+            document.RootElement.GetProperty("value")[0]
+                .GetProperty("tags")
+                .GetProperty("env")
+                .GetString()
+                .ShouldBe("prod");
             document.RootElement.GetProperty("value")[0].GetProperty("location").GetString().ShouldBe("eu-central");
         }
 
@@ -148,7 +173,7 @@ public sealed class ResourceGraphQueryEndToEndTests : IAsyncLifetime {
         // Dana is closed into both groups, so she reads pg-main (eu-central) and pg-replica
         // (eu-west): two locations, a page of one, and a second page to follow.
         const string kql = "resources | summarize n = count() by location | order by location asc";
-        var summary = await QueryAsync("dana", kql, top: 1);
+        var summary = await QueryAsync("dana", kql, 1);
         summary.Status.ShouldBe(StatusCodes.Status200OK, summary.Body);
 
         string nextLink;
@@ -165,16 +190,17 @@ public sealed class ResourceGraphQueryEndToEndTests : IAsyncLifetime {
         // the body. The first cut of this test asserted the link's ABSENCE for a one-row result and
         // followed nothing (#54 review).
         var link = new Uri(nextLink);
-        link.GetLeftPart(UriPartial.Path).ShouldBe("https://api.cybercloud.io" + new ResourceGraphAddress(GatewayHarness.TenantA).Path);
+        link.GetLeftPart(UriPartial.Path)
+            .ShouldBe("https://api.cybercloud.io" + new ResourceGraphAddress(GatewayHarness.TenantA).Path);
         link.Query.ShouldContain("$skipToken=");
         link.Query.ShouldContain("$top=1");
 
         var followed = await gateway.SendAsync(
             "POST",
             link.AbsolutePath,
-            gateway.Token(GatewayHarness.TenantA, subjectId: "dana"),
-            query: link.Query.TrimStart('?'),
-            body: JsonSerializer.Serialize(new Dictionary<string, object> { ["query"] = kql })
+            gateway.Token(GatewayHarness.TenantA, "dana"),
+            link.Query.TrimStart('?'),
+            JsonSerializer.Serialize(new Dictionary<string, object> { ["query"] = kql })
         );
 
         followed.Status.ShouldBe(StatusCodes.Status200OK, followed.Body);
@@ -183,7 +209,8 @@ public sealed class ResourceGraphQueryEndToEndTests : IAsyncLifetime {
             second.RootElement.GetProperty("value").GetArrayLength().ShouldBe(1);
             second.RootElement.GetProperty("value")[0].GetProperty("location").GetString().ShouldBe("eu-west");
             second.RootElement.GetProperty("value")[0].GetProperty("n").GetInt64().ShouldBe(1);
-            second.RootElement.TryGetProperty("nextLink", out _).ShouldBeFalse("two locations, two pages of one, and the second is the last");
+            second.RootElement.TryGetProperty("nextLink", out _)
+                .ShouldBeFalse("two locations, two pages of one, and the second is the last");
         }
 
         // The token belongs to the query it was handed out for: the same link with another query
@@ -191,9 +218,9 @@ public sealed class ResourceGraphQueryEndToEndTests : IAsyncLifetime {
         var mismatched = await gateway.SendAsync(
             "POST",
             link.AbsolutePath,
-            gateway.Token(GatewayHarness.TenantA, subjectId: "dana"),
-            query: link.Query.TrimStart('?'),
-            body: JsonSerializer.Serialize(new Dictionary<string, object> { ["query"] = "resources | project name" })
+            gateway.Token(GatewayHarness.TenantA, "dana"),
+            link.Query.TrimStart('?'),
+            JsonSerializer.Serialize(new Dictionary<string, object> { ["query"] = "resources | project name" })
         );
         mismatched.Status.ShouldBe(StatusCodes.Status400BadRequest, mismatched.Body);
         mismatched.Body.ShouldContain("different query");
@@ -203,7 +230,10 @@ public sealed class ResourceGraphQueryEndToEndTests : IAsyncLifetime {
         refused.Body.ShouldContain("ago");
         refused.Body.ShouldContain("InvalidRequestBody");
 
-        var injected = await QueryAsync("alice", "resources | where name == 'x\\' OR 1=1; DROP TABLE tenant_x.resource_graph; --' | project name");
+        var injected = await QueryAsync(
+            "alice",
+            """resources | where name == 'x\' OR 1=1; DROP TABLE tenant_x.resource_graph; --' | project name"""
+        );
         injected.Status.ShouldBe(StatusCodes.Status200OK, injected.Body);
         Names(injected.Body).ShouldBeEmpty("the payload matched no name and ran nothing");
 
@@ -215,16 +245,28 @@ public sealed class ResourceGraphQueryEndToEndTests : IAsyncLifetime {
         gateway.SendAsync(
             "POST",
             new ResourceGraphAddress(GatewayHarness.TenantA).Path,
-            gateway.Token(GatewayHarness.TenantA, subjectId: caller),
-            body: JsonSerializer.Serialize(top is { } size ? new Dictionary<string, object> { ["query"] = kql, ["$top"] = size } : new Dictionary<string, object> { ["query"] = kql })
+            gateway.Token(GatewayHarness.TenantA, caller),
+            body: JsonSerializer.Serialize(
+                top is { } size
+                    ? new Dictionary<string, object> { ["query"] = kql, ["$top"] = size }
+                    : new Dictionary<string, object> { ["query"] = kql }
+            )
         );
 
     static List<string> Names(string body) {
         using var document = JsonDocument.Parse(body);
-        return document.RootElement.GetProperty("value").EnumerateArray().Select(x => x.GetProperty("name").GetString()!).ToList();
+        return document.RootElement.GetProperty("value")
+            .EnumerateArray()
+            .Select(static x => x.GetProperty("name").GetString()!)
+            .ToList();
     }
 
-    static ResourceChangedEvent Created(Guid resourceId, string name, string location, params (string Key, string Value)[] tags) =>
+    static ResourceChangedEvent Created(
+        Guid resourceId,
+        string name,
+        string location,
+        params (string Key, string Value)[] tags
+    ) =>
         new() {
             Change = ResourceChangeKind.Created,
             ResourceId = resourceId,
@@ -237,22 +279,35 @@ public sealed class ResourceGraphQueryEndToEndTests : IAsyncLifetime {
             ApiVersion = OneTypeRegistry.TheVersion,
             ProvisioningState = ProvisioningState.Succeeded,
             Location = location,
-            Tags = tags.ToImmutableDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal),
-            CreatedAt = new DateTimeOffset(2026, 9, 17, 10, 0, 0, TimeSpan.Zero),
-            ModifiedAt = new DateTimeOffset(2026, 9, 17, 10, 0, 0, TimeSpan.Zero),
+            Tags = tags.ToImmutableDictionary(static x => x.Key, static x => x.Value, StringComparer.Ordinal),
+            CreatedAt = new(2026, 9, 17, 10, 0, 0, TimeSpan.Zero),
+            ModifiedAt = new(2026, 9, 17, 10, 0, 0, TimeSpan.Zero),
             DesiredHash = "sha256:0",
             Version = 1
         };
 
-    sealed class DictionaryAccessResolver(IReadOnlyDictionary<Guid, ImmutableArray<string>> readers) : IResourceAccessResolver {
-        public Task<Result<ImmutableArray<string>>> ReadersOfAsync(Guid tenantId, Guid resourceId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Result<ImmutableArray<string>>.Success(readers.TryGetValue(resourceId, out var found) ? found : []));
+    sealed class DictionaryAccessResolver(IReadOnlyDictionary<Guid, ImmutableArray<string>> readers) :
+        IResourceAccessResolver {
+        public Task<Result<ImmutableArray<string>>> ReadersOfAsync(
+            Guid tenantId,
+            Guid resourceId,
+            CancellationToken cancellationToken = default
+        ) =>
+            Task.FromResult(
+                Result<ImmutableArray<string>>.Success(readers.TryGetValue(resourceId, out var found) ? found : [])
+            );
     }
 
-    sealed class DictionaryCallerResolver(IReadOnlyDictionary<string, ImmutableArray<string>> callers) : ICallerAccessResolver {
-        public Task<Result<ImmutableArray<string>>> SubjectsOfAsync(CallerContext caller, CancellationToken cancellationToken = default) =>
+    sealed class DictionaryCallerResolver(IReadOnlyDictionary<string, ImmutableArray<string>> callers) :
+        ICallerAccessResolver {
+        public Task<Result<ImmutableArray<string>>> SubjectsOfAsync(
+            CallerContext caller,
+            CancellationToken cancellationToken = default
+        ) =>
             Task.FromResult(
-                Result<ImmutableArray<string>>.Success(callers.TryGetValue(caller.SubjectId, out var found) ? found : ["user:" + caller.SubjectId])
+                Result<ImmutableArray<string>>.Success(
+                    callers.TryGetValue(caller.SubjectId, out var found) ? found : ["user:" + caller.SubjectId]
+                )
             );
     }
 }

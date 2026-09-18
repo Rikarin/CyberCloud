@@ -14,7 +14,7 @@ public sealed class IdTokenTests {
     const string Audience = "cyc";
 
     static string Jwk() {
-        var parameters = Key.ExportParameters(includePrivateParameters: false);
+        var parameters = Key.ExportParameters(false);
 
         return $$"""
             {"keys":[{"kty":"RSA","kid":"{{KeyId}}","use":"sig","alg":"RS256",
@@ -46,7 +46,7 @@ public sealed class IdTokenTests {
     }
 
     static (FakeIdentityServer Server, IdentityClient Identity, SigningKeyCache Keys) Fixture() {
-        var server = new FakeIdentityServer { KeysResponse = () => Responses.Json(HttpStatusCode.OK, Jwk()) };
+        var server = new FakeIdentityServer { KeysResponse = static () => Responses.Json(HttpStatusCode.OK, Jwk()) };
         var identity = new IdentityClient(server.Authority, server);
 
         return (server, identity, new SigningKeyCache(identity));

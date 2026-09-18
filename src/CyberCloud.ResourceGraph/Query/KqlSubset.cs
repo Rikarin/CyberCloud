@@ -11,8 +11,11 @@ namespace CyberCloud.ResourceGraph.Query;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>A subset by allow-list, refused by name, with the list in the refusal.</b>
-///         docs/plan/02 § ADR-011 puts it in one line for FerretDB — <i>"A compatibility layer, not
-///         MongoDB; state the supported subset explicitly"</i> — and the same rule holds for a KQL
+///         docs/plan/02 § ADR-011 puts it in one line for FerretDB —
+///         <i>
+///             "A compatibility layer, not
+///             MongoDB; state the supported subset explicitly"
+///         </i> — and the same rule holds for a KQL
 ///         that is not Kusto. Every operator and function the translator does not name is refused
 ///         before any SQL is built, and the refusal says which token was refused and what would have
 ///         been accepted, because "unsupported" alone sends a person to a document and the document is

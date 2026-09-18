@@ -177,7 +177,7 @@ public sealed class SignUpOrchestrator(
         yield return (SignUpStep.CredentialSet, () => SetCredentialAsync(completion));
         yield return (SignUpStep.SubscriptionCreated, () => CreateSubscriptionAsync(completion.SignUp));
         yield return (SignUpStep.ResourceGroupCreated, () => CreateResourceGroupAsync(completion.SignUp));
-        yield return (SignUpStep.Completed, () => Task.FromResult(Result.Success));
+        yield return (SignUpStep.Completed, static () => Task.FromResult(Result.Success));
     }
 
     // ── b. The tenant, as the sign-up operator, owned by the new user ─────────────────────────
@@ -268,7 +268,8 @@ public sealed class SignUpOrchestrator(
     async Task<Result> CreateSubscriptionAsync(SignUpDescriptor signup) {
         var request = new ScopeRequest {
             Path = ScopeId.Subscription(signup.TenantId, signup.SubscriptionId).Path,
-            Body = JsonSerializer.Serialize(new Dictionary<string, string>(StringComparer.Ordinal) {
+            Body = JsonSerializer.Serialize(
+                new Dictionary<string, string>(StringComparer.Ordinal) {
                     [ScopeBodyProperties.DisplayName] = DefaultSubscriptionName
                 }
             ),
@@ -293,7 +294,8 @@ public sealed class SignUpOrchestrator(
         var created = await scopes.CreateAsync(
             new() {
                 Path = ScopeId.Group(signup.TenantId, signup.SubscriptionId, DefaultResourceGroupName).Path,
-                Body = JsonSerializer.Serialize(new Dictionary<string, string>(StringComparer.Ordinal) {
+                Body = JsonSerializer.Serialize(
+                    new Dictionary<string, string>(StringComparer.Ordinal) {
                         [ScopeBodyProperties.Location] = options.DefaultRegion
                     }
                 ),

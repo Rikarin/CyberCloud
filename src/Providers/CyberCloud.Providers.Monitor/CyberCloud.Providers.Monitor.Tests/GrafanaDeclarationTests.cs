@@ -26,7 +26,10 @@ public sealed partial class GrafanaDeclarationTests {
         registration.Chart.ShouldBe(Grafanas.ChartName);
         registration.ReconcilerType.ShouldBe(typeof(GrafanaReconciler));
         registration.SupportsTags.ShouldBeTrue();
-        registration.SoftDeleteDays.ShouldBe(0, "an instance's state is an emptyDir, and a window over nothing is a promise nobody can keep");
+        registration.SoftDeleteDays.ShouldBe(
+            0,
+            "an instance's state is an emptyDir, and a window over nothing is a promise nobody can keep"
+        );
     }
 
     [Fact]
@@ -40,7 +43,7 @@ public sealed partial class GrafanaDeclarationTests {
         registry.Namespaces.Order(StringComparer.Ordinal).ShouldBe(["CyberCloud.Dashboard", "CyberCloud.Monitor"]);
 
         ProviderDiscovery.FromAssembly(typeof(MonitorProvider).Assembly)
-            .Select(x => x.ProviderNamespace)
+            .Select(static x => x.ProviderNamespace)
             .Order(StringComparer.Ordinal)
             .ShouldBe(["CyberCloud.Dashboard", "CyberCloud.Monitor"]);
     }
@@ -50,7 +53,7 @@ public sealed partial class GrafanaDeclarationTests {
         var registry = ProviderRegistry.Build([new DashboardProvider()]);
         registry.TryGetType(Grafanas.Type, out var registration).ShouldBeTrue();
 
-        var action = registration.Actions.Single(x => x.Name == Grafanas.UrlAction);
+        var action = registration.Actions.Single(static x => x.Name == Grafanas.UrlAction);
 
         // ⚠ Secret, because the response carries the admin password; its own permission rather than
         // read, for the reason listKeys gives — a viewer of the resource is not a party who may sign
@@ -60,7 +63,9 @@ public sealed partial class GrafanaDeclarationTests {
         action.HandlerType.ShouldBe(typeof(GrafanaUrlHandler));
         action.Permission.ShouldNotBe(registration.ReadPermission);
 
-        Grafanas.UrlResponse.Properties.Where(x => x.Secret).Select(x => x.JsonPointer).ShouldBe(["/adminPassword"]);
+        Grafanas.UrlResponse.Properties.Where(static x => x.Secret)
+            .Select(static x => x.JsonPointer)
+            .ShouldBe(["/adminPassword"]);
 
         var handler = new GrafanaUrlHandler();
         handler.Type.ShouldBe(Grafanas.Type);
@@ -91,15 +96,21 @@ public sealed partial class GrafanaDeclarationTests {
         // be a modified Grafana and a different licence question.
         Grafanas.ImageRepository.ShouldBe("grafana/grafana");
         BundlePin().IsMatch(Grafanas.Image).ShouldBeTrue(Grafanas.Image);
-        Grafanas.Image.ShouldNotContain("0000000000000000", customMessage: "a placeholder digest is a reference nothing can pull");
+        Grafanas.Image.ShouldNotContain(
+            "0000000000000000",
+            customMessage: "a placeholder digest is a reference nothing can pull"
+        );
     }
 
     [Fact]
     public void TheChartCarriesTheSameImagePinAndPluginAsTheContract() {
         var values = Embedded("grafana.values.yaml").Split('\n');
 
-        values.Single(x => x.StartsWith("image: ", StringComparison.Ordinal))["image: ".Length..].Trim().ShouldBe(Grafanas.Image);
-        values.Single(x => x.StartsWith("preinstall: ", StringComparison.Ordinal))["preinstall: ".Length..].Trim()
+        values.Single(static x => x.StartsWith("image: ", StringComparison.Ordinal))["image: ".Length..]
+            .Trim()
+            .ShouldBe(Grafanas.Image);
+        values.Single(static x => x.StartsWith("preinstall: ", StringComparison.Ordinal))["preinstall: ".Length..]
+            .Trim()
             .ShouldBe(Grafanas.ClickHousePreinstall);
     }
 
@@ -139,10 +150,12 @@ public sealed partial class GrafanaDeclarationTests {
         // the one place no build gate looks; the url action is the integration, and it is a string.
         var manifest = JsonNode.Parse(Embedded("portal.package.json"))!.AsObject();
 
-        foreach (var section in new[] { "dependencies", "devDependencies", "peerDependencies", "optionalDependencies" }) {
+        foreach (var section in new[] {
+                     "dependencies", "devDependencies", "peerDependencies", "optionalDependencies"
+                 }) {
             if (manifest[section] is JsonObject dependencies) {
-                dependencies.Select(x => x.Key)
-                    .Where(x => x.Contains("grafana", StringComparison.OrdinalIgnoreCase))
+                dependencies.Select(static x => x.Key)
+                    .Where(static x => x.Contains("grafana", StringComparison.OrdinalIgnoreCase))
                     .ShouldBeEmpty($"portal/package.json § {section} names a Grafana package");
             }
         }
@@ -153,7 +166,9 @@ public sealed partial class GrafanaDeclarationTests {
         using var body = JsonDocument.Parse(Grafanas.Body(ClusterId, WorkspacePath("prod")));
         var deployment = JsonNode.Parse(Grafanas.DeploymentJson("team", "prod", body.RootElement))!;
         var container = deployment["spec"]!["template"]!["spec"]!["containers"]!.AsArray().Single()!;
-        var env = container["env"]!.AsArray().Select(x => x!.AsObject()).ToDictionary(x => x["name"]!.GetValue<string>(), x => x);
+        var env = container["env"]!.AsArray()
+            .Select(static x => x!.AsObject())
+            .ToDictionary(static x => x["name"]!.GetValue<string>(), static x => x);
 
         // ⚠ The one integration ADR-011 permits, spelled as Grafana spells it.
         env["GF_SECURITY_ALLOW_EMBEDDING"]["value"]!.GetValue<string>().ShouldBe("true");
@@ -172,16 +187,23 @@ public sealed partial class GrafanaDeclarationTests {
         Grafanas.ClickHousePreinstall.ShouldBe(Grafanas.ClickHousePlugin + "@" + Grafanas.ClickHousePluginVersion);
         env["GF_PLUGINS_PREINSTALL_AUTO_UPDATE"]["value"]!.GetValue<string>().ShouldBe("false");
         env.ShouldNotContainKey("GF_INSTALL_PLUGINS");
-        env.ShouldNotContainKey("GF_PLUGINS_PREINSTALL_DISABLED", "preinstall_disabled also disables preinstall_sync — measured — so the ClickHouse plugin would never install");
+        env.ShouldNotContainKey(
+            "GF_PLUGINS_PREINSTALL_DISABLED",
+            "preinstall_disabled also disables preinstall_sync — measured — so the ClickHouse plugin would never install"
+        );
 
         // The workspace's three, by reference, plus the admin credential's two.
-        env[MonitorWorkspaces.EnvAccountId]["valueFrom"]!["configMapKeyRef"]!["name"]!.GetValue<string>().ShouldBe(MonitorWorkspaces.RowName("prod"));
-        env[MonitorWorkspaces.EnvIngestKey]["valueFrom"]!["secretKeyRef"]!["name"]!.GetValue<string>().ShouldBe(MonitorWorkspaces.KeySecretName("prod"));
-        env["GF_SECURITY_ADMIN_PASSWORD"]["valueFrom"]!["secretKeyRef"]!["name"]!.GetValue<string>().ShouldBe(Grafanas.AdminSecretName("team"));
+        env[MonitorWorkspaces.EnvAccountId]["valueFrom"]!["configMapKeyRef"]!["name"]!.GetValue<string>()
+            .ShouldBe(MonitorWorkspaces.RowName("prod"));
+        env[MonitorWorkspaces.EnvIngestKey]["valueFrom"]!["secretKeyRef"]!["name"]!.GetValue<string>()
+            .ShouldBe(MonitorWorkspaces.KeySecretName("prod"));
+        env["GF_SECURITY_ADMIN_PASSWORD"]["valueFrom"]!["secretKeyRef"]!["name"]!.GetValue<string>()
+            .ShouldBe(Grafanas.AdminSecretName("team"));
 
         container["image"]!.GetValue<string>().ShouldBe(Grafanas.Image);
         container["securityContext"]!["readOnlyRootFilesystem"]!.GetValue<bool>().ShouldBeTrue();
-        deployment["spec"]!["template"]!["spec"]!["securityContext"]!["runAsUser"]!.GetValue<int>().ShouldBe(Grafanas.GrafanaUid);
+        deployment["spec"]!["template"]!["spec"]!["securityContext"]!["runAsUser"]!.GetValue<int>()
+            .ShouldBe(Grafanas.GrafanaUid);
         deployment["spec"]!["replicas"]!.GetValue<int>().ShouldBe(1);
     }
 
@@ -210,18 +232,26 @@ public sealed partial class GrafanaDeclarationTests {
         // ⚠ Line for line, with the chart's one include resolved — a drifted uid here is a dashboard
         // exported from one instance that imports into another with a broken datasource.
         var helpers = Embedded("grafana.helpers.tpl");
-        const string open = "{{- define \"grafana.datasources\" -}}";
+        const string open = """{{- define "grafana.datasources" -}}""";
         var define = helpers[(helpers.IndexOf(open, StringComparison.Ordinal) + open.Length)..];
         define = define[..define.IndexOf("{{- end -}}", StringComparison.Ordinal)];
 
         var chartLines = define
-            .Replace("{{ include \"grafana.vmUser\" . }}", MonitorWorkspaces.VmUserName("prod"), StringComparison.Ordinal)
+            .Replace(
+                """{{ include "grafana.vmUser" . }}""",
+                MonitorWorkspaces.VmUserName("prod"),
+                StringComparison.Ordinal
+            )
             .Split('\n')
-            .Select(x => x.TrimEnd())
-            .Where(x => x.Length > 0)
+            .Select(static x => x.TrimEnd())
+            .Where(static x => x.Length > 0)
             .ToArray();
 
-        var contractLines = Grafanas.DatasourcesYaml("prod").Split('\n').Select(x => x.TrimEnd()).Where(x => x.Length > 0).ToArray();
+        var contractLines = Grafanas.DatasourcesYaml("prod")
+            .Split('\n')
+            .Select(static x => x.TrimEnd())
+            .Where(static x => x.Length > 0)
+            .ToArray();
 
         chartLines.ShouldBe(contractLines);
     }
@@ -246,11 +276,30 @@ public sealed partial class GrafanaDeclarationTests {
         Refusal(id, WorkspacePath("telemetry")).ShouldBeNull();
 
         Refusal(id, "not-a-path")!.ShouldContain("not a resource id path");
-        Refusal(id, WorkspacePath("telemetry", tenant: Guid.Parse("22222222-2222-4222-8222-222222222222")))!.ShouldContain("belongs to tenant");
-        Refusal(id, new ResourceId(Tenant, Subscription, "prod", MonitorAlertRules.Type, "rule", Guid.Empty, "telemetry").Path)!.ShouldContain("must be a CyberCloud.Monitor/workspaces");
-        Refusal(id, new ResourceId(Tenant, Subscription, "prod", new("CyberCloud.Communication", "services"), "alerts", Guid.Empty).Path)!.ShouldContain("must be a CyberCloud.Monitor/workspaces");
+        Refusal(
+            id,
+            WorkspacePath("telemetry", Guid.Parse("22222222-2222-4222-8222-222222222222"))
+        )!.ShouldContain("belongs to tenant");
+        Refusal(
+            id,
+            new ResourceId(Tenant, Subscription, "prod", MonitorAlertRules.Type, "rule", Guid.Empty, "telemetry").Path
+        )!.ShouldContain("must be a CyberCloud.Monitor/workspaces");
+        Refusal(
+            id,
+            new ResourceId(
+                Tenant,
+                Subscription,
+                "prod",
+                new("CyberCloud.Communication", "services"),
+                "alerts",
+                Guid.Empty
+            ).Path
+        )!.ShouldContain("must be a CyberCloud.Monitor/workspaces");
         Refusal(id, WorkspacePath("telemetry", resourceGroup: "other"))!.ShouldContain("share a resource group");
-        Refusal(id, WorkspacePath("telemetry", subscription: Guid.Parse("44444444-4444-4444-8444-444444444444")))!.ShouldContain("share a resource group");
+        Refusal(
+            id,
+            WorkspacePath("telemetry", subscription: Guid.Parse("44444444-4444-4444-8444-444444444444"))
+        )!.ShouldContain("share a resource group");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────
@@ -268,19 +317,32 @@ public sealed partial class GrafanaDeclarationTests {
         return result.Error.Message;
     }
 
-    static string WorkspacePath(string name, Guid? tenant = null, Guid? subscription = null, string resourceGroup = "prod") =>
-        new ResourceId(tenant ?? Tenant, subscription ?? Subscription, resourceGroup, MonitorWorkspaces.Type, name, Guid.Empty).Path;
+    static string WorkspacePath(
+        string name,
+        Guid? tenant = null,
+        Guid? subscription = null,
+        string resourceGroup = "prod"
+    ) =>
+        new ResourceId(
+            tenant ?? Tenant,
+            subscription ?? Subscription,
+            resourceGroup,
+            MonitorWorkspaces.Type,
+            name,
+            Guid.Empty
+        ).Path;
 
     /// <summary>
     ///     The template's <c>env</c> entries that carry a literal <c>value</c> line, by name — the
     ///     <c>valueFrom</c> references are not in it.
     /// </summary>
     static Dictionary<string, string> LiteralEnvironment(string template) {
-        var lines = template.Split('\n').Select(x => x.Trim()).ToArray();
+        var lines = template.Split('\n').Select(static x => x.Trim()).ToArray();
         var env = new Dictionary<string, string>(StringComparer.Ordinal);
 
         for (var i = 0; i + 1 < lines.Length; i++) {
-            if (lines[i].StartsWith("- name: ", StringComparison.Ordinal) && lines[i + 1].StartsWith("value: ", StringComparison.Ordinal)) {
+            if (lines[i].StartsWith("- name: ", StringComparison.Ordinal)
+                && lines[i + 1].StartsWith("value: ", StringComparison.Ordinal)) {
                 env[lines[i]["- name: ".Length..]] = lines[i + 1]["value: ".Length..];
             }
         }
@@ -290,14 +352,20 @@ public sealed partial class GrafanaDeclarationTests {
 
     static string Embedded(string logicalName) {
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(logicalName)
-            ?? throw new InvalidOperationException($"{logicalName} is not embedded. See the EmbeddedResource items in this project's .csproj.");
+            ?? throw new InvalidOperationException(
+                $"{logicalName} is not embedded. See the EmbeddedResource items in this project's .csproj."
+            );
 
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd().Replace("\r\n", "\n", StringComparison.Ordinal);
     }
 
     static Regex PresetRow(string preset) =>
-        new($"\"{Regex.Escape(preset)}\"\\s+\\(dict \"cpu\" \"(?<cpu>[^\"]+)\"\\s+\"memory\" \"(?<memory>[^\"]+)\"\\)", RegexOptions.None, TimeSpan.FromSeconds(1));
+        new(
+            $"\"{Regex.Escape(preset)}\"\\s+\\(dict \"cpu\" \"(?<cpu>[^\"]+)\"\\s+\"memory\" \"(?<memory>[^\"]+)\"\\)",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(1)
+        );
 
     [GeneratedRegex(@"^[a-z0-9./_-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$")]
     private static partial Regex BundlePin();

@@ -20,7 +20,7 @@ public sealed class AgentTunnelRoutingTests {
     public async Task TheTunnelPathLeavesThePipelineForTheEndpointWithNoTokenAndNoApiVersion() {
         var gateway = new GatewayHarness();
 
-        var response = await gateway.SendAsync("GET", TunnelCodec.TunnelPath, token: null, query: "");
+        var response = await gateway.SendAsync("GET", TunnelCodec.TunnelPath, null, "");
 
         // No outcome was written: the pipeline handed the request on, as it does for a hub. The
         // harness has no endpoint behind it, so the status is the default's untouched 200 and the
@@ -35,7 +35,9 @@ public sealed class AgentTunnelRoutingTests {
 
     [Fact]
     public void TheRouteIsExactlyTheTunnelPathOnGet() {
-        GatewayRouter.Resolve(TunnelCodec.TunnelPath, "GET", Guid.Empty).GetValueOrThrow().Kind.ShouldBe(RouteKind.AgentTunnel);
+        GatewayRouter.Resolve(TunnelCodec.TunnelPath, "GET", Guid.Empty)
+            .GetValueOrThrow()
+            .Kind.ShouldBe(RouteKind.AgentTunnel);
         GatewayRouter.Resolve(TunnelCodec.TunnelPath, "POST", Guid.Empty).IsFailure.ShouldBeTrue();
         GatewayRouter.Resolve("/agent/v1/tunnel/extra", "GET", Guid.Empty).IsFailure.ShouldBeTrue();
         GatewayRouter.Resolve("/agent/v2/tunnel", "GET", Guid.Empty).IsFailure.ShouldBeTrue();
@@ -45,7 +47,11 @@ public sealed class AgentTunnelRoutingTests {
     [InlineData("POST", "/agent/v1/tunnel", 404)]
     [InlineData("GET", "/agent/v1/anything-else", 400)]
     [InlineData("GET", "/agent/", 400)]
-    public async Task EverythingElseUnderTheExemptedPrefixIsRefusedInJsonWithoutATokenCheck(string method, string path, int expected) {
+    public async Task EverythingElseUnderTheExemptedPrefixIsRefusedInJsonWithoutATokenCheck(
+        string method,
+        string path,
+        int expected
+    ) {
         // ⚠ Exemption from stage 2 is not routing. The tunnel path on any other verb is the canonical
         // 404, as security.txt's is; any other path under /agent/ falls through to the resource
         // parser and is the 400 every malformed resource path gets — the same shape
@@ -53,10 +59,12 @@ public sealed class AgentTunnelRoutingTests {
         // prefix is anonymous, and neither says anything a probe could learn from.
         var gateway = new GatewayHarness();
 
-        var response = await gateway.SendAsync(method, path, token: null, query: "");
+        var response = await gateway.SendAsync(method, path, null, "");
 
         response.Status.ShouldBe(expected);
-        response.Body.ShouldContain(expected == 404 ? "\"code\":\"ResourceNotFound\"" : "\"code\":\"InvalidResourceId\"");
+        response.Body.ShouldContain(
+            expected == 404 ? "\"code\":\"ResourceNotFound\"" : "\"code\":\"InvalidResourceId\""
+        );
     }
 
     [Fact]
@@ -65,7 +73,12 @@ public sealed class AgentTunnelRoutingTests {
         // the endpoint's answer rather than the pipeline's.
         var gateway = new GatewayHarness();
 
-        var response = await gateway.SendAsync("GET", TunnelCodec.TunnelPath, gateway.Token(GatewayHarness.TenantA), "");
+        var response = await gateway.SendAsync(
+            "GET",
+            TunnelCodec.TunnelPath,
+            gateway.Token(GatewayHarness.TenantA),
+            ""
+        );
 
         response.Status.ShouldBe(StatusCodes.Status200OK);
         response.Body.ShouldBeEmpty();

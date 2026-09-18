@@ -18,8 +18,11 @@ namespace CyberCloud.Providers.Communication;
 ///         identical drafts by the end of the week.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The name is claimed on the service before the grain is written, and a name another
-///         template holds is <see cref="ErrorCode.Conflict" />.</b> <c>ICommunicationServiceGrain</c>
+///         ⚠
+///         <b>
+///             The name is claimed on the service before the grain is written, and a name another
+///             template holds is <see cref="ErrorCode.Conflict" />.
+///         </b> <c>ICommunicationServiceGrain</c>
 ///         is the naming authority; a send resolves the name there in one hop. A template that
 ///         existed under a name it did not own would be a template a send could never reach, which
 ///         converges and does nothing.
@@ -34,7 +37,8 @@ namespace CyberCloud.Providers.Communication;
 /// </remarks>
 /// <param name="clock">Stamps <see cref="ObservedState.ObservedAt" />.</param>
 /// <param name="plane">The module.</param>
-public sealed class CommunicationTemplateReconciler(IClock clock, ICommunicationControlPlane plane) : IResourceReconciler {
+public sealed class CommunicationTemplateReconciler(IClock clock, ICommunicationControlPlane plane) :
+    IResourceReconciler {
     /// <inheritdoc />
     public ResourceTypeName Type => CommunicationTemplates.Type;
 
@@ -57,7 +61,14 @@ public sealed class CommunicationTemplateReconciler(IClock clock, ICommunication
 
         context.Log.Report("registering", $"claiming the template name '{context.Id.Name}' on the service", 30);
 
-        var ensured = await plane.EnsureTemplateAsync(tenantId, serviceId, templateId, context.Id.Name, channel, cancellationToken);
+        var ensured = await plane.EnsureTemplateAsync(
+            tenantId,
+            serviceId,
+            templateId,
+            context.Id.Name,
+            channel,
+            cancellationToken
+        );
         if (ensured.TryGetError(out var ensureError)) {
             if (ensureError.Code == ErrorCode.ResourceNotFound) {
                 return ReconcileOutcome.InProgress(
@@ -88,8 +99,13 @@ public sealed class CommunicationTemplateReconciler(IClock clock, ICommunication
             return ReconcileOutcome.FromFailure(listError);
         }
 
-        if (Newest(versions.GetValueOrThrow()) is { } current && CommunicationTemplates.Matches(current, context.Desired)) {
-            context.Log.Report("ready", $"version {current.Version} of '{context.Id.Name}' already carries the desired body", 100);
+        if (Newest(versions.GetValueOrThrow()) is { } current
+            && CommunicationTemplates.Matches(current, context.Desired)) {
+            context.Log.Report(
+                "ready",
+                $"version {current.Version} of '{context.Id.Name}' already carries the desired body",
+                100
+            );
             return ReconcileOutcome.Converged;
         }
 
@@ -114,7 +130,10 @@ public sealed class CommunicationTemplateReconciler(IClock clock, ICommunication
         }
 
         if (Newest(read.GetValueOrThrow()) is not { } newest) {
-            return ReconcileOutcome.InProgress("the version was appended and does not read back yet", TimeSpan.FromSeconds(5));
+            return ReconcileOutcome.InProgress(
+                "the version was appended and does not read back yet",
+                TimeSpan.FromSeconds(5)
+            );
         }
 
         if (newest.Channel != channel) {
@@ -129,7 +148,10 @@ public sealed class CommunicationTemplateReconciler(IClock clock, ICommunication
         }
 
         if (!CommunicationTemplates.Matches(newest, context.Desired)) {
-            return ReconcileOutcome.InProgress("the version was appended and does not read back as the newest yet", TimeSpan.FromSeconds(5));
+            return ReconcileOutcome.InProgress(
+                "the version was appended and does not read back as the newest yet",
+                TimeSpan.FromSeconds(5)
+            );
         }
 
         context.Log.Report("ready", $"version {newest.Version} of '{context.Id.Name}' reads back as desired", 100);
@@ -147,21 +169,34 @@ public sealed class CommunicationTemplateReconciler(IClock clock, ICommunication
 
         context.Log.Report("unregistering", $"forgetting the template name '{context.Id.Name}' on the service");
 
-        var unregistered = await plane.UnregisterTemplateAsync(tenantId, serviceId, context.Id.Name, templateId, cancellationToken);
+        var unregistered = await plane.UnregisterTemplateAsync(
+            tenantId,
+            serviceId,
+            context.Id.Name,
+            templateId,
+            cancellationToken
+        );
         if (unregistered.TryGetError(out var error) && error.Code != ErrorCode.ResourceNotFound) {
             return ReconcileOutcome.FromFailure(error);
         }
 
         var resolved = await plane.ResolveTemplateAsync(tenantId, serviceId, context.Id.Name, cancellationToken);
         if (resolved.TryGetValue(out var pointsAt) && pointsAt == templateId) {
-            return ReconcileOutcome.InProgress($"the name '{context.Id.Name}' still resolves to this template", TimeSpan.FromSeconds(5));
+            return ReconcileOutcome.InProgress(
+                $"the name '{context.Id.Name}' still resolves to this template",
+                TimeSpan.FromSeconds(5)
+            );
         }
 
         if (resolved.IsFailure && resolved.Error!.Code != ErrorCode.ResourceNotFound) {
             return ReconcileOutcome.FromFailure(resolved.Error);
         }
 
-        context.Log.Report("unregistered", $"'{context.Id.Name}' no longer names this template; its versions are kept", 100);
+        context.Log.Report(
+            "unregistered",
+            $"'{context.Id.Name}' no longer names this template; its versions are kept",
+            100
+        );
         return ReconcileOutcome.Converged;
     }
 
@@ -173,9 +208,16 @@ public sealed class CommunicationTemplateReconciler(IClock clock, ICommunication
         var tenantId = context.Id.TenantId;
         var templateId = CommunicationTemplates.TemplateIdOf(context.Id);
 
-        var resolved = await plane.ResolveTemplateAsync(tenantId, CommunicationServices.ServiceIdOf(context.Id), context.Id.Name, cancellationToken);
+        var resolved = await plane.ResolveTemplateAsync(
+            tenantId,
+            CommunicationServices.ServiceIdOf(context.Id),
+            context.Id.Name,
+            cancellationToken
+        );
         if (!resolved.TryGetValue(out var pointsAt) || pointsAt != templateId) {
-            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the name does not resolve to this template" };
+            return new() {
+                Exists = false, ObservedAt = clock.UtcNow, Summary = "the name does not resolve to this template"
+            };
         }
 
         var versions = await plane.ListTemplateVersionsAsync(tenantId, templateId, cancellationToken);
@@ -196,7 +238,9 @@ public sealed class CommunicationTemplateReconciler(IClock clock, ICommunication
             }.ToJsonString(),
             ObservedAt = clock.UtcNow,
             Revision = newest.Version.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            Summary = matches ? "the newest version carries the desired body" : "the newest version has drifted from the body"
+            Summary = matches
+                ? "the newest version carries the desired body"
+                : "the newest version has drifted from the body"
         };
     }
 

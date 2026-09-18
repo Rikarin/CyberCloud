@@ -69,7 +69,7 @@ public sealed record Error {
         if (target is not null && !IsJsonPointer(target)) {
             throw new ArgumentException(
                 $"'{target}' is not an RFC 6901 JSON Pointer. A target is either \"\" (the whole "
-                + "document) or a sequence of \"/\"-prefixed reference tokens, for example "
+                + """document) or a sequence of "/"-prefixed reference tokens, for example """
                 + "\"/properties/sku\". docs/plan/08 § Errors.",
                 nameof(target)
             );

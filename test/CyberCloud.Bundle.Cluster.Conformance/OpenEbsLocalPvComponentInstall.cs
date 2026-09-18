@@ -82,7 +82,7 @@ public sealed class OpenEbsLocalPvComponentInstaller {
 
         var run = await BundleInstaller.RunAsync(
             "--dry-run --phase 25",
-            kubeconfig: null,
+            null,
             TestContext.Current.CancellationToken
         );
 
@@ -112,7 +112,7 @@ public sealed class OpenEbsLocalPvComponentInstaller {
             $"charts/bundle/{component}/component.yaml has no `{DefaultClassFlag}` entry in its "
             + "`values:` block. localpv-provisioner ships that value as false, so without the entry "
             + "the bundle installs the openebs-hostpath class and marks nothing default — and all "
-            + "eleven charts under charts/managed/ that name a storage class default theirs to \"\", "
+            + """eleven charts under charts/managed/ that name a storage class default theirs to "", """
             + "which means the cluster's default rather than any class. The claims stay Pending "
             + "exactly as they did before this component existed, and no install reports it."
         );
@@ -297,7 +297,7 @@ public sealed class OpenEbsLocalPvOnAnEmptyCluster(EmptyClusterFixture cluster) 
                 + "API server unattended, that the class it installs is annotated default on a "
                 + "cluster that already had a different default, and that a claim naming "
                 + $"`storageClassName: {StorageClass}` binds through a pod to a PersistentVolume "
-                + $"whose class and node-local path are that component's and not k3s's."
+                + "whose class and node-local path are that component's and not k3s's."
             )
         );
 
@@ -318,7 +318,8 @@ public sealed class OpenEbsLocalPvOnAnEmptyCluster(EmptyClusterFixture cluster) 
             + "that arrives with this class on it is a fixture defect, not a bundle one."
         );
 
-        var k3sClass = before.Items.SingleOrDefault(storageClass => storageClass.Metadata.Name == K3sStorageClass);
+        var k3sClass = before.Items.SingleOrDefault(static storageClass => storageClass.Metadata.Name == K3sStorageClass
+        );
 
         k3sClass.ShouldNotBeNull(
             $"{ClusterInfrastructure.K3sImage} does not ship a `{K3sStorageClass}` StorageClass, which is "
@@ -376,7 +377,7 @@ public sealed class OpenEbsLocalPvOnAnEmptyCluster(EmptyClusterFixture cluster) 
             + "conditional, so this is the `values:` block in "
             + $"charts/bundle/{BundleInstaller.OpenEbsLocalPvComponent}/component.yaml not reaching "
             + "helm. It is the one defect here that reports nothing at install time: eleven charts "
-            + "under charts/managed/ default `storageClassName` to \"\", which means the cluster's "
+            + """under charts/managed/ default `storageClassName` to "", which means the cluster's """
             + "default, so they would silently keep using k3s's provisioner — or stay Pending forever "
             + "on a cluster that has none. Installer output:\n"
             + run.Output
@@ -387,7 +388,10 @@ public sealed class OpenEbsLocalPvOnAnEmptyCluster(EmptyClusterFixture cluster) 
         // classes is not "the newer one wins". This line records that the situation is real here, so
         // the explicit storageClassName below is load-bearing and not decoration.
         var after = await client.StorageV1.ListStorageClassAsync(cancellationToken: token);
-        var defaults = after.Items.Where(IsDefault).Select(storageClass => storageClass.Metadata.Name).Order().ToList();
+        var defaults = after.Items.Where(IsDefault)
+            .Select(static storageClass => storageClass.Metadata.Name)
+            .Order()
+            .ToList();
 
         defaults.ShouldBe(
             new[] { K3sStorageClass, StorageClass }.Order().ToList(),
@@ -399,19 +403,19 @@ public sealed class OpenEbsLocalPvOnAnEmptyCluster(EmptyClusterFixture cluster) 
 
         // ── A claim that names the class, and a pod, because the mode requires one ─────────────
         await client.CoreV1.CreateNamespaceAsync(
-            new V1Namespace { Metadata = new V1ObjectMeta { Name = Probe } },
+            new V1Namespace { Metadata = new() { Name = Probe } },
             cancellationToken: token
         );
 
         await client.CoreV1.CreateNamespacedPersistentVolumeClaimAsync(
             new V1PersistentVolumeClaim {
-                Metadata = new V1ObjectMeta { Name = Probe },
-                Spec = new V1PersistentVolumeClaimSpec {
+                Metadata = new() { Name = Probe },
+                Spec = new() {
                     // ⚠ THE POINT OF THE WHOLE METHOD. Omitting this line is the test bundle.yaml
                     // § owed says would pass with the component uninstalled.
                     StorageClassName = StorageClass,
                     AccessModes = ["ReadWriteOnce"],
-                    Resources = new V1VolumeResourceRequirements {
+                    Resources = new() {
                         Requests = new Dictionary<string, ResourceQuantity> { ["storage"] = new("64Mi") }
                     }
                 }
@@ -455,8 +459,8 @@ public sealed class OpenEbsLocalPvOnAnEmptyCluster(EmptyClusterFixture cluster) 
 
         await client.CoreV1.CreateNamespacedPodAsync(
             new V1Pod {
-                Metadata = new V1ObjectMeta { Name = Probe },
-                Spec = new V1PodSpec {
+                Metadata = new() { Name = Probe },
+                Spec = new() {
                     // ⚠ Never, so the pod's terminal phase is the assertion. A default restart policy
                     // would put a container that exits 0 into CrashLoopBackOff and the pod would
                     // never reach Succeeded, which is a confusing way to discover a working volume.
@@ -472,16 +476,13 @@ public sealed class OpenEbsLocalPvOnAnEmptyCluster(EmptyClusterFixture cluster) 
                             // failed write is a failed pod rather than an exit code nobody reads.
                             Command = [
                                 "/bin/sh", "-c",
-                                "set -e; printf bound > /data/probe; test \"$(cat /data/probe)\" = bound"
+                                """set -e; printf bound > /data/probe; test "$(cat /data/probe)" = bound"""
                             ],
                             VolumeMounts = [new V1VolumeMount { Name = "data", MountPath = "/data" }]
                         }
                     ],
                     Volumes = [
-                        new V1Volume {
-                            Name = "data",
-                            PersistentVolumeClaim = new V1PersistentVolumeClaimVolumeSource { ClaimName = Probe }
-                        }
+                        new V1Volume { Name = "data", PersistentVolumeClaim = new() { ClaimName = Probe } }
                     ]
                 }
             },

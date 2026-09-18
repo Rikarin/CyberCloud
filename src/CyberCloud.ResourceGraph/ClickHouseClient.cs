@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -11,8 +10,11 @@ namespace CyberCloud.ResourceGraph;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Parameters go in the query string as <c>param_{name}</c> and never into the SQL
-///         text.</b> ClickHouse binds <c>{name:Type}</c> placeholders server-side, so a resource name
+///         ⚠
+///         <b>
+///             Parameters go in the query string as <c>param_{name}</c> and never into the SQL
+///             text.
+///         </b> ClickHouse binds <c>{name:Type}</c> placeholders server-side, so a resource name
 ///         or a tag value with a quote in it cannot become part of the statement. The one thing this
 ///         client interpolates is an <b>identifier</b> — the tenant's database — and
 ///         <see cref="ResourceGraphTable.Database" /> derives that from a GUID's 32 hex digits, so
@@ -41,7 +43,7 @@ public sealed class ClickHouseClient {
     public const int TooManyRowsOrBytes = 396;
 
     static readonly Regex ExceptionCodePattern = new(
-        "\\(" + ExceptionCodeHeader + ": (?<code>[0-9]+)\\)",
+        """\(""" + ExceptionCodeHeader + """: (?<code>[0-9]+)\)""",
         RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
         TimeSpan.FromSeconds(1)
     );
@@ -50,7 +52,8 @@ public sealed class ClickHouseClient {
     readonly Uri endpoint;
 
     /// <summary>
-    ///     The ClickHouse exception number a failure from <see cref="ExecuteAsync(string, IReadOnlyDictionary{string, string}?, IReadOnlyDictionary{string, string}?, CancellationToken)" />
+    ///     The ClickHouse exception number a failure from
+    ///     <see cref="ExecuteAsync(string, IReadOnlyDictionary{string, string}?, IReadOnlyDictionary{string, string}?, CancellationToken)" />
     ///     carries, or <c>0</c> for a failure that is not the server's answer — unreachable, timed
     ///     out on this side, or a failure some other component wrote.
     /// </summary>
@@ -65,9 +68,10 @@ public sealed class ClickHouseClient {
 
         var match = ExceptionCodePattern.Match(failure.Message);
 
-        return match.Success && int.TryParse(match.Groups["code"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var code)
-            ? code
-            : 0;
+        return match.Success
+            && int.TryParse(match.Groups["code"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var code)
+                ? code
+                : 0;
     }
 
     /// <summary>Whether a failure is ClickHouse refusing the statement for exceeding its per-query budget.</summary>
@@ -95,7 +99,10 @@ public sealed class ClickHouseClient {
     ///     The endpoint as an absolute URI, refusing plain HTTP unless the section opted in.
     /// </summary>
     /// <param name="options">The bound section.</param>
-    /// <exception cref="ArgumentException">The endpoint is not an absolute URI, or is <c>http</c> without <see cref="ResourceGraphOptions.AllowInsecureTransport" />.</exception>
+    /// <exception cref="ArgumentException">
+    ///     The endpoint is not an absolute URI, or is <c>http</c> without
+    ///     <see cref="ResourceGraphOptions.AllowInsecureTransport" />.
+    /// </exception>
     public static Uri ValidatedEndpoint(ResourceGraphOptions options) {
         ArgumentNullException.ThrowIfNull(options);
 
@@ -107,7 +114,8 @@ public sealed class ClickHouseClient {
             );
         }
 
-        if (string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) && !options.AllowInsecureTransport) {
+        if (string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+            && !options.AllowInsecureTransport) {
             throw new ArgumentException(
                 $"{ResourceGraphOptions.SectionName}:ClickHouseEndpoint '{options.ClickHouseEndpoint}' is plain HTTP and "
                 + "the projector's credential would travel in clear. Set AllowInsecureTransport for a "
@@ -134,7 +142,10 @@ public sealed class ClickHouseClient {
     /// <param name="sql">The statement, with <c>{name:Type}</c> placeholders for values.</param>
     /// <param name="parameters">The placeholders' values, by name.</param>
     /// <param name="cancellationToken">Cancels the request.</param>
-    /// <returns>The body, or a failure carrying ClickHouse's own error text — for the log, not for a caller; see <see cref="ExceptionCode" />.</returns>
+    /// <returns>
+    ///     The body, or a failure carrying ClickHouse's own error text — for the log, not for a caller; see
+    ///     <see cref="ExceptionCode" />.
+    /// </returns>
     public Task<Result<string>> ExecuteAsync(
         string sql,
         IReadOnlyDictionary<string, string>? parameters = null,
@@ -155,7 +166,10 @@ public sealed class ClickHouseClient {
     ///     from a request; the values are escaped like a parameter's.
     /// </param>
     /// <param name="cancellationToken">Cancels the request.</param>
-    /// <returns>The body, or a failure carrying ClickHouse's own error text — for the log, not for a caller; see <see cref="ExceptionCode" />.</returns>
+    /// <returns>
+    ///     The body, or a failure carrying ClickHouse's own error text — for the log, not for a caller; see
+    ///     <see cref="ExceptionCode" />.
+    /// </returns>
     public async Task<Result<string>> ExecuteAsync(
         string sql,
         IReadOnlyDictionary<string, string>? parameters,
@@ -174,13 +188,16 @@ public sealed class ClickHouseClient {
 
         if (parameters is not null) {
             foreach (var (name, value) in parameters) {
-                query.Append("&param_").Append(Uri.EscapeDataString(name)).Append('=').Append(Uri.EscapeDataString(value));
+                query.Append("&param_")
+                    .Append(Uri.EscapeDataString(name))
+                    .Append('=')
+                    .Append(Uri.EscapeDataString(value));
             }
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(endpoint, query.ToString()));
         request.Content = new StringContent(sql, Encoding.UTF8);
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue("text/plain") { CharSet = "utf-8" };
+        request.Content.Headers.ContentType = new("text/plain") { CharSet = "utf-8" };
 
         try {
             using var response = await http.SendAsync(request, cancellationToken);
@@ -195,9 +212,14 @@ public sealed class ClickHouseClient {
                 // caller's usersets in it — so whoever turns this failure into a response replaces
                 // the message and keeps the code (ExceptionCode) to decide what to say.
                 var code = response.Headers.TryGetValues(ExceptionCodeHeader, out var values)
-                           && int.TryParse(values.FirstOrDefault(), NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-                    ? parsed
-                    : 0;
+                    && int.TryParse(
+                        values.FirstOrDefault(),
+                        NumberStyles.None,
+                        CultureInfo.InvariantCulture,
+                        out var parsed
+                    )
+                        ? parsed
+                        : 0;
 
                 return Result<string>.Failure(
                     ErrorCode.InternalError,
@@ -206,14 +228,12 @@ public sealed class ClickHouseClient {
             }
 
             return Result<string>.Success(body);
-        }
-        catch (HttpRequestException exception) {
+        } catch (HttpRequestException exception) {
             return Result<string>.Failure(
                 ErrorCode.InternalError,
                 $"ClickHouse at {endpoint} could not be reached: {exception.Message}"
             );
-        }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested) {
+        } catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested) {
             return Result<string>.Failure(
                 ErrorCode.InternalError,
                 $"ClickHouse at {endpoint} did not answer within {http.Timeout.TotalSeconds:0}s."

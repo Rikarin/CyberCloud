@@ -10,8 +10,11 @@ namespace CyberCloud.ResourceGraph;
 ///     writes them.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>ClickHouse writes a <c>DateTime64</c> as <c>2026-09-17 10:00:00.123</c>, with a space
-///     and no offset, and <see cref="DateTimeOffset" />'s default converter refuses that.</b> The
+///     ⚠
+///     <b>
+///         ClickHouse writes a <c>DateTime64</c> as <c>2026-09-17 10:00:00.123</c>, with a space
+///         and no offset, and <see cref="DateTimeOffset" />'s default converter refuses that.
+///     </b> The
 ///     converter below reads both that form and ISO 8601, and writes ISO 8601 in UTC — which
 ///     <c>date_time_input_format=best_effort</c> accepts on the way in. A column declared
 ///     <c>DateTime64(3, 'UTC')</c> is what makes the space-form unambiguous on the way out.
@@ -66,7 +69,12 @@ public static class ResourceGraphJson {
             // ⚠ A `max()` over no rows is 0 for UInt64 in ClickHouse rather than null, and a
             // 64-bit integer comes back quoted unless the request turned quoting off; both are
             // handled so a reader does not depend on which the server did.
-            JsonValueKind.String when long.TryParse(value.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) => parsed,
+            JsonValueKind.String when long.TryParse(
+                value.GetString(),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var parsed
+            ) => parsed,
             _ => null
         };
     }
@@ -84,7 +92,11 @@ public static class ResourceGraphJson {
         // laptop in Prague. The table is DateTime64(3), so three places arrive; seven leaves room.
         const string ClickHouseForm = "yyyy-MM-dd HH:mm:ss.FFFFFFF";
 
-        public override DateTimeOffset Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) {
+        public override DateTimeOffset Read(
+            ref Utf8JsonReader reader,
+            Type typeToConvert,
+            JsonSerializerOptions options
+        ) {
             var text = reader.GetString() ?? string.Empty;
 
             // ⚠ AssumeUniversal alone hands back the machine's LOCAL offset — the value is right
@@ -92,11 +104,23 @@ public static class ResourceGraphJson {
             // +00:00, which is what a column declared DateTime64(3, 'UTC') means.
             const DateTimeStyles utc = DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal;
 
-            if (DateTimeOffset.TryParseExact(text, ClickHouseForm, CultureInfo.InvariantCulture, utc, out var clickHouse)) {
+            if (DateTimeOffset.TryParseExact(
+                    text,
+                    ClickHouseForm,
+                    CultureInfo.InvariantCulture,
+                    utc,
+                    out var clickHouse
+                )) {
                 return clickHouse;
             }
 
-            if (DateTimeOffset.TryParseExact(text, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture, utc, out var seconds)) {
+            if (DateTimeOffset.TryParseExact(
+                    text,
+                    "yyyy-MM-dd HH:mm:ss",
+                    CultureInfo.InvariantCulture,
+                    utc,
+                    out var seconds
+                )) {
                 return seconds;
             }
 
@@ -105,6 +129,8 @@ public static class ResourceGraphJson {
         }
 
         public override void Write(Utf8JsonWriter writer, DateTimeOffset value, JsonSerializerOptions options) =>
-            writer.WriteStringValue(value.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture));
+            writer.WriteStringValue(
+                value.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture)
+            );
     }
 }

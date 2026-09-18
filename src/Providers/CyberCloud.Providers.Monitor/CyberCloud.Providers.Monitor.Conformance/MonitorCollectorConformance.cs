@@ -1,5 +1,4 @@
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.Providers.Monitor.Alerting;
 using CyberCloud.Providers.Monitor.Contracts;
 using System.Collections.Immutable;
@@ -23,8 +22,11 @@ namespace CyberCloud.Providers.Monitor.Conformance;
 ///         with nothing new.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="ProviderConformanceCase.ObjectMatchesDesired" /> IS EXACT HERE, WHERE THE
-///         WORKSPACE'S IS BY SHAPE, AND THE DIFFERENCE IS THE DESIGN.</b> The workspace renders its
+///         ⚠
+///         <b>
+///             <see cref="ProviderConformanceCase.ObjectMatchesDesired" /> IS EXACT HERE, WHERE THE
+///             WORKSPACE'S IS BY SHAPE, AND THE DIFFERENCE IS THE DESIGN.
+///         </b> The workspace renders its
 ///         own GUID into every object, and the harness's <c>MatchContext</c> carries the address, so
 ///         that case could compare exactly and does not, for a reason its remarks give. This type
 ///         renders <b>nothing</b> keyed on any GUID: the configuration substitutes the workspace's
@@ -46,27 +48,27 @@ public sealed class MonitorCollectorCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Monitor/workspaces/collectors",
-            CreateProvider = () => new MonitorProvider(),
+            CreateProvider = static () => new MonitorProvider(),
             ReconcilerType = typeof(MonitorCollectorReconciler),
-            CreateReconciler = clock => new MonitorCollectorReconciler(clock),
+            CreateReconciler = static clock => new MonitorCollectorReconciler(clock),
             Type = MonitorCollectors.Type,
             ApiVersion = MonitorWorkspaces.V2026,
-            Body = cluster => MonitorCollectors.Body(cluster),
+            Body = static cluster => MonitorCollectors.Body(cluster),
             // Two replicas rather than one: the update test asserts the change reached the cluster,
             // so it has to move something the reconciler applies, and the replica count is on the
             // Deployment and in the vCPU and memory meters both.
-            ChangedBody = cluster => MonitorCollectors.Body(cluster, replicas: 2),
+            ChangedBody = static cluster => MonitorCollectors.Body(cluster, replicas: 2),
             // Zero replicas, which the schema's Minimum refuses. Built from a valid body with one
             // property overwritten, for the reason the workspace's case gives.
-            InvalidBody = cluster => WithReplicas(MonitorCollectors.Body(cluster), 0),
+            InvalidBody = static cluster => WithReplicas(MonitorCollectors.Body(cluster), 0),
             InvalidBodyTarget = "/properties/replicas",
             ActionName = MonitorCollectors.ListEndpointsAction,
             // In apply order, matching the reconciler: configuration, collector, address.
-            Objects = (id, ns) => MonitorCollectors.Objects(ns, id),
+            Objects = static (id, ns) => MonitorCollectors.Objects(ns, id),
             OperatorWritten = static (_, _) => [],
             DataPlane = null,
             StoragePrefix = null,
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return MonitorCollectors.Matches(match.ObjectJson, match.Id, desired.RootElement);
             }
@@ -82,7 +84,7 @@ public sealed class MonitorCollectorCase : IProviderCaseSource {
     ///     <c>IAlertControlPlane</c>.
     /// </remarks>
     public static void ConfigureSilo(ISiloBuilder silo) =>
-        silo.ConfigureServices(services => services.AddCyberCloudMonitorAlerting());
+        silo.ConfigureServices(static services => services.AddCyberCloudMonitorAlerting());
 
     static string WithReplicas(string body, int replicas) {
         var node = JsonNode.Parse(body)!.AsObject();

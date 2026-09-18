@@ -18,7 +18,7 @@ namespace CyberCloud.Authorization.Tests;
 /// </remarks>
 public sealed class RegressionCorpusTests {
     /// <summary>Every case, as xUnit theory data.</summary>
-    public static TheoryData<string> CaseNames => [.. RegressionCorpus.Cases.Select(x => x.Name)];
+    public static TheoryData<string> CaseNames => [.. RegressionCorpus.Cases.Select(static x => x.Name)];
 
     [Theory]
     [MemberData(nameof(CaseNames))]
@@ -77,7 +77,7 @@ public sealed class RegressionCorpusTests {
         // schema does not define is an entry that silently tests nothing.
         RegressionCorpus.Cases.ShouldNotBeEmpty();
 
-        RegressionCorpus.Cases.Select(x => x.Name)
+        RegressionCorpus.Cases.Select(static x => x.Name)
             .Distinct(StringComparer.Ordinal)
             .Count()
             .ShouldBe(RegressionCorpus.Cases.Count, "corpus names are cited; they must be unique");
@@ -113,8 +113,8 @@ public sealed class RegressionCorpusTests {
     public void EveryCaseHasAtLeastOneAllowAndTheCorpusAsAWholeHasBoth() {
         // A corpus of nothing but denials would pass against an engine that denies everything —
         // which is exactly the state a badly-handled outage leaves the platform in.
-        var allows = RegressionCorpus.Cases.SelectMany(x => x.Expectations).Count(x => x.Expected);
-        var denies = RegressionCorpus.Cases.SelectMany(x => x.Expectations).Count(x => !x.Expected);
+        var allows = RegressionCorpus.Cases.SelectMany(static x => x.Expectations).Count(static x => x.Expected);
+        var denies = RegressionCorpus.Cases.SelectMany(static x => x.Expectations).Count(static x => !x.Expected);
 
         allows.ShouldBeGreaterThan(0);
         denies.ShouldBeGreaterThan(0);
@@ -143,7 +143,7 @@ public sealed class RegressionCorpusTests {
 [Collection(AuthorizationSuite.Name)]
 public sealed class RegressionCorpusClusterTests(AuthorizationCluster cluster) {
     /// <summary>Every case, as xUnit theory data.</summary>
-    public static TheoryData<string> CaseNames => [.. RegressionCorpus.Cases.Select(x => x.Name)];
+    public static TheoryData<string> CaseNames => [.. RegressionCorpus.Cases.Select(static x => x.Name)];
 
     [Theory]
     [MemberData(nameof(CaseNames))]

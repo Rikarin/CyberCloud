@@ -107,7 +107,7 @@ public sealed class OperationGrain(
         }
 
         state.State.Spec = spec;
-        state.State.Status = Contracts.OperationState.NotStarted;
+        state.State.Status = OperationState.NotStarted;
         state.State.StartedAt = clock.UtcNow;
 
         await state.WriteStateAsync();
@@ -210,7 +210,7 @@ public sealed class OperationGrain(
             return Result<OperationStatus>.Success(Status());
         }
 
-        state.State.Status = Contracts.OperationState.Running;
+        state.State.Status = OperationState.Running;
         state.State.Attempts++;
 
         // ── THE CLAIM IS CONFIRMED BY THE OPERATION IF THE WRITE PATH NEVER GOT TO IT ────────────
@@ -322,8 +322,6 @@ public sealed class OperationGrain(
                 await ScheduleAsync(pass.Outcome);
                 break;
 
-            case ReconcileOutcomeKind.Failed:
-            case ReconcileOutcomeKind.InProgress:
             default:
                 await ScheduleAsync(pass.Outcome);
                 break;
@@ -365,7 +363,7 @@ public sealed class OperationGrain(
             // so the group still contains it and a listing that dropped it would hide a resource that
             // is still addressable. CompleteCreateAsync takes Canceled for exactly this ending.
             await StampMemberAsync(spec, ProvisioningState.Canceled);
-            await TerminateAsync(Contracts.OperationState.Canceled, null);
+            await TerminateAsync(OperationState.Canceled, null);
             return;
         }
 
@@ -561,7 +559,7 @@ public sealed class OperationGrain(
             }
 
             await ReturnCommittedQuotaAsync(spec);
-            await TerminateAsync(Contracts.OperationState.Succeeded, null);
+            await TerminateAsync(OperationState.Succeeded, null);
             return;
         }
 
@@ -581,7 +579,7 @@ public sealed class OperationGrain(
         // the listed state and the resource's state cannot drift; a restore's member was put back in
         // Creating by RestoreAsync and this is what finishes it.
         await StampMemberAsync(spec, ProvisioningState.Succeeded);
-        await TerminateAsync(Contracts.OperationState.Succeeded, null);
+        await TerminateAsync(OperationState.Succeeded, null);
     }
 
     /// <summary>
@@ -781,8 +779,7 @@ public sealed class OperationGrain(
                 await ScheduleAsync(ReconcileOutcome.Failed(parkError, true));
                 return;
             }
-        }
-        else {
+        } else {
             await EmitAsync(ResourceChangeKind.SoftDeleted, spec, parked.GetValueOrThrow());
         }
 
@@ -802,7 +799,7 @@ public sealed class OperationGrain(
             )
         );
 
-        await TerminateAsync(Contracts.OperationState.Succeeded, null);
+        await TerminateAsync(OperationState.Succeeded, null);
     }
 
     /// <summary>The pass failed terminally, or the clock ran out.</summary>
@@ -842,7 +839,7 @@ public sealed class OperationGrain(
             await StampMemberAsync(spec, ProvisioningState.Failed);
         }
 
-        await TerminateAsync(Contracts.OperationState.Failed, error);
+        await TerminateAsync(OperationState.Failed, error);
     }
 
     /// <summary>The pass is not finished. Back off and come back.</summary>
@@ -883,12 +880,12 @@ public sealed class OperationGrain(
         await EnsureReminderAsync();
     }
 
-    async Task TerminateAsync(Contracts.OperationState status, Error? error) {
+    async Task TerminateAsync(OperationState status, Error? error) {
         state.State.Status = status;
         state.State.EndedAt = clock.UtcNow;
         state.State.Failure = error;
 
-        if (status == Contracts.OperationState.Succeeded) {
+        if (status == OperationState.Succeeded) {
             state.State.PercentComplete = 100;
         }
 
@@ -1123,7 +1120,9 @@ public sealed class OperationGrain(
         }
 
         try {
-            var published = await changes.PublishAsync(ResourceChangedEvents.From(change, address, spec.ApiVersion, snapshot));
+            var published = await changes.PublishAsync(
+                ResourceChangedEvents.From(change, address, spec.ApiVersion, snapshot)
+            );
 
             if (published.TryGetError(out var publishError)) {
                 logger.LogWarning(
@@ -1134,8 +1133,7 @@ public sealed class OperationGrain(
                     publishError.Message
                 );
             }
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException) {
+        } catch (Exception exception) when (exception is not OperationCanceledException) {
             logger.LogWarning(
                 exception,
                 "Publishing {Change} for {Path} threw. The operation stands; the resource-graph projection "
@@ -1211,7 +1209,10 @@ public sealed class OperationGrain(
     ///     passes skip the call.
     /// </remarks>
     async Task ConfirmClaimAsync(OperationSpec spec) {
-        if (spec.Kind != OperationKind.Create || !spec.IndexClaimed || state.State.IndexConfirmed || state.State.CancelRequested) {
+        if (spec.Kind != OperationKind.Create
+            || !spec.IndexClaimed
+            || state.State.IndexConfirmed
+            || state.State.CancelRequested) {
             return;
         }
 
@@ -1319,8 +1320,8 @@ public sealed class OperationGrain(
     TenantGrainFactory Tenant(OperationSpec spec) =>
         grains.ForTenant(spec.TenantId.ToString("D", CultureInfo.InvariantCulture));
 
-    static bool IsTerminal(Contracts.OperationState status) =>
-        status is Contracts.OperationState.Succeeded
-            or Contracts.OperationState.Failed
-            or Contracts.OperationState.Canceled;
+    static bool IsTerminal(OperationState status) =>
+        status is OperationState.Succeeded
+            or OperationState.Failed
+            or OperationState.Canceled;
 }

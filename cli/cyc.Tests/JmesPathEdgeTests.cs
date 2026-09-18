@@ -137,6 +137,6 @@ public sealed class JmesPathEdgeTests {
     static string Run(string expression) {
         using var document = JsonDocument.Parse(Document);
 
-        return JmesPath.Evaluate(expression, Payload.Of(document.RootElement)).ToJson(indented: false);
+        return JmesPath.Evaluate(expression, Payload.Of(document.RootElement)).ToJson(false);
     }
 }

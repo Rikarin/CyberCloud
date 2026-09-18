@@ -36,8 +36,11 @@ namespace CyberCloud.Gateway.Host.Hubs;
 ///         where that rule lives, and <c>HubTicketTests.ATicketCannotMintAnotherTicket</c> holds it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The gateway mints it and not the console's <c>connect</c> action, although the
-///         portal asks for both in one motion.</b> An action handler runs with no caller — its own
+///         ⚠
+///         <b>
+///             The gateway mints it and not the console's <c>connect</c> action, although the
+///             portal asks for both in one motion.
+///         </b> An action handler runs with no caller — its own
 ///         remarks say so, and <c>charts/managed/cloud-shell/conformance.yaml § owed</c> records the
 ///         consequence — while a ticket is exactly a caller's claims made portable for thirty seconds.
 ///         Only the process that validated the token can vouch for them, and that process is this one.

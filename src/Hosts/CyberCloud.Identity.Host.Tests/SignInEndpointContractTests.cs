@@ -53,9 +53,9 @@ public sealed class SignInEndpointContractTests {
         "//evil.example",
         "//evil.example/path",
         "///evil.example",
-        "/\\evil.example",
-        "\\\\evil.example",
-        "https:/\\evil.example",
+        """/\evil.example""",
+        """\\evil.example""",
+        """https:/\evil.example""",
         "javascript:alert(document.cookie)",
         "data:text/html,<script>alert(1)</script>",
         "/\tevil",
@@ -122,7 +122,7 @@ public sealed class SignInEndpointContractTests {
             "someone@example.com", "nobody-has-this-address@example.com", "not-an-address", "",
             new string('x', 400) + "@example.com"
         }
-                .Select(x => SignInApi.Begin(new(x)).Offered)
+                .Select(static x => SignInApi.Begin(new(x)).Offered)
                 .ToList();
 
         foreach (var offered in answers) {

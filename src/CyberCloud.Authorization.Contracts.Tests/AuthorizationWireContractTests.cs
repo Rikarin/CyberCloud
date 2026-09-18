@@ -118,13 +118,13 @@ public sealed class AuthorizationWireContractTests {
     ];
 
     static IEnumerable<Type> WireTypes =>
-        Contracts.GetTypes().Where(t => t.GetCustomAttribute<GenerateSerializerAttribute>() is not null);
+        Contracts.GetTypes().Where(static t => t.GetCustomAttribute<GenerateSerializerAttribute>() is not null);
 
     [Fact]
     public void EveryWireTypeHasAStableAlias() =>
         WireTypes
-            .Where(t => t.GetCustomAttribute<AliasAttribute>() is null)
-            .Select(t => t.Name)
+            .Where(static t => t.GetCustomAttribute<AliasAttribute>() is null)
+            .Select(static t => t.Name)
             .ShouldBeEmpty(
                 "docs/plan/05 § Serialization, rule 5: 'Renaming a type without [Alias] is a "
                 + "data-loss bug; the analyzer makes it a compile error.' There is no such analyzer "
@@ -135,26 +135,26 @@ public sealed class AuthorizationWireContractTests {
     [Fact]
     public void TheAliasesAreTheOnesRecordedHere() =>
         WireTypes
-            .Select(t => (Type: t.Name, Alias: t.GetCustomAttribute<AliasAttribute>()?.Alias ?? "<none>"))
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
+            .Select(static t => (Type: t.Name, Alias: t.GetCustomAttribute<AliasAttribute>()?.Alias ?? "<none>"))
+            .OrderBy(static x => x.Type, StringComparer.Ordinal)
             .ToList()
-            .ShouldBe(Aliases.OrderBy(x => x.Type, StringComparer.Ordinal).ToList());
+            .ShouldBe(Aliases.OrderBy(static x => x.Type, StringComparer.Ordinal).ToList());
 
     [Fact]
     public void TheIdManifestMatchesTheBaseline() {
         var actual = WireTypes
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetMembers(BindingFlags.Public | BindingFlags.Instance)
-                    .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
-                    .Where(x => x.id is not null)
+                    .Select(static member => (member, id: member.GetCustomAttribute<IdAttribute>()))
+                    .Where(static x => x.id is not null)
                     .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
             )
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
-            .ThenBy(x => x.Id)
+            .OrderBy(static x => x.Type, StringComparer.Ordinal)
+            .ThenBy(static x => x.Id)
             .ToList();
 
         actual.ShouldBe(
-            Baseline.OrderBy(x => x.Type, StringComparer.Ordinal).ThenBy(x => x.Id).ToList(),
+            Baseline.OrderBy(static x => x.Type, StringComparer.Ordinal).ThenBy(static x => x.Id).ToList(),
             "[Id(n)] numbers are never reused and never reordered — docs/plan/05 § Serialization."
         );
     }
@@ -162,10 +162,10 @@ public sealed class AuthorizationWireContractTests {
     [Fact]
     public void EveryEnumHasAnAlias() {
         var unaliased = Contracts.GetTypes()
-            .Where(t => t.IsEnum && t.IsPublic)
-            .Where(t => t.GetCustomAttribute<AliasAttribute>() is null)
-            .Select(t => t.Name)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Where(static t => t.IsEnum && t.IsPublic)
+            .Where(static t => t.GetCustomAttribute<AliasAttribute>() is null)
+            .Select(static t => t.Name)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
 
         unaliased.ShouldBeEmpty(
@@ -211,13 +211,13 @@ public sealed class AuthorizationWireContractTests {
         // A member with no [Id(n)] is silently dropped on the wire. Computed properties are
         // excluded by having no setter at all, which is how IsValid and IsUserset are declared.
         var unnumbered = WireTypes
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                    .Where(p => p.GetCustomAttribute<IdAttribute>() is null)
-                    .Where(p => p.CanWrite)
+                    .Where(static p => p.GetCustomAttribute<IdAttribute>() is null)
+                    .Where(static p => p.CanWrite)
                     .Select(p => string.Create(CultureInfo.InvariantCulture, $"{type.Name}.{p.Name}"))
             )
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
 
         unnumbered.ShouldBeEmpty("a settable member with no [Id(n)] is dropped on the wire.");

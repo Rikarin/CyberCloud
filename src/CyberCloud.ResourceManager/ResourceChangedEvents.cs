@@ -10,8 +10,11 @@ namespace CyberCloud.ResourceManager;
 ///         <c>ResourceManagerService</c> emits <c>Created</c>, <c>Updated</c> and <c>Deleting</c> from
 ///         the gateway's process at step 11; <c>OperationGrain</c> emits <c>StateChanged</c>,
 ///         <c>SoftDeleted</c> and <c>Deleted</c> from the silo when a reconcile reaches a terminal
-///         state, a teardown parks the resource, or a teardown clears the grain. docs/plan/04 § Streams names <i>"<c>IResourceGrain</c> on every state
-///         transition"</i> as the producer, and until #54 only the first half of that sentence had an
+///         state, a teardown parks the resource, or a teardown clears the grain. docs/plan/04 § Streams names
+///         <i>
+///             "<c>IResourceGrain</c> on every state
+///             transition"
+///         </i> as the producer, and until #54 only the first half of that sentence had an
 ///         emitter: a resource that went <c>Creating → Succeeded</c> never told the projection, so a
 ///         list built from the stream would have shown every resource creating forever. The columns
 ///         are docs/plan/08 § The resource-graph projection's, in its order, and a second copy of this

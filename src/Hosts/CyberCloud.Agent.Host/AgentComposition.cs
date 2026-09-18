@@ -34,7 +34,7 @@ public static class AgentComposition {
 
         builder.Services.AddOptions<AgentOptions>().BindConfiguration(AgentOptions.SectionName);
         builder.Services.TryAddSingleton<IClock, SystemClock>();
-        builder.Services.TryAddSingleton<IAgentEndpoints>(provider => {
+        builder.Services.TryAddSingleton<IAgentEndpoints>(static provider => {
                 var options = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<AgentOptions>>().Value;
 
                 // ⚠ The Secret name is the chart's, not a default: rbac.yaml scopes the agent's Role

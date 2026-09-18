@@ -11,8 +11,11 @@ namespace CyberCloud.Conformance.Harness;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>What it refuses is what the API server refuses, and each rule names the measurement or
-///         the source it was taken from.</b> Issue #91's finding was three fields in one chart that
+///         ⚠
+///         <b>
+///             What it refuses is what the API server refuses, and each rule names the measurement or
+///             the source it was taken from.
+///         </b> Issue #91's finding was three fields in one chart that
 ///         no test could see were wrong; the value of this class is that the next one is red on the
 ///         first run. The rules, in the order the server applies them:
 ///     </para>
@@ -73,8 +76,11 @@ namespace CyberCloud.Conformance.Harness;
 ///         cluster-backed lane.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>status</c> is dropped, not validated, when the definition has the status
-///         subresource</b> — the main resource's endpoint ignores it, and a reconciler that rendered
+///         ⚠
+///         <b>
+///             <c>status</c> is dropped, not validated, when the definition has the status
+///             subresource
+///         </b> — the main resource's endpoint ignores it, and a reconciler that rendered
 ///         one would find it absent on the read-back, here as on a cluster.
 ///     </para>
 /// </remarks>
@@ -87,7 +93,11 @@ public static class StructuralSchema {
     /// <param name="version">The version the object is addressed under.</param>
     /// <param name="body">The applied body, which is mutated in place by defaulting.</param>
     /// <returns>Every cause the API server would list, in document order; empty when the body is valid.</returns>
-    public static IReadOnlyList<string> Admit(CustomResourceDefinition definition, DefinitionVersion version, JsonObject body) {
+    public static IReadOnlyList<string> Admit(
+        CustomResourceDefinition definition,
+        DefinitionVersion version,
+        JsonObject body
+    ) {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(version);
         ArgumentNullException.ThrowIfNull(body);
@@ -149,7 +159,9 @@ public static class StructuralSchema {
                     // happens. If a default is present, it will be applied."). The first version of
                     // this refused the null as a type error, which is stricter than the real thing;
                     // the review of #91 measured the gap. A nullable field keeps its null.
-                    if (map.TryGetPropertyValue(name, out var present) && present is null && !IsTrue(property["nullable"])) {
+                    if (map.TryGetPropertyValue(name, out var present)
+                        && present is null
+                        && !IsTrue(property["nullable"])) {
                         map.Remove(name);
                     }
 
@@ -175,7 +187,7 @@ public static class StructuralSchema {
                 break;
 
             case JsonObject map when schema["additionalProperties"] is JsonObject additionalOnly:
-                PruneNulls(map, additionalOnly, _ => true);
+                PruneNulls(map, additionalOnly, static _ => true);
 
                 foreach (var (_, child) in map) {
                     ApplyDefaults(additionalOnly, child);
@@ -204,7 +216,7 @@ public static class StructuralSchema {
             return;
         }
 
-        foreach (var name in map.Where(x => x.Value is null && governed(x.Key)).Select(x => x.Key).ToList()) {
+        foreach (var name in map.Where(x => x.Value is null && governed(x.Key)).Select(static x => x.Key).ToList()) {
             map.Remove(name);
         }
     }
@@ -216,9 +228,21 @@ public static class StructuralSchema {
     ///     "field not declared in schema", as it is for a built-in.
     /// </summary>
     static readonly HashSet<string> ObjectMetaFields = new(StringComparer.Ordinal) {
-        "name", "generateName", "namespace", "labels", "annotations", "uid", "resourceVersion", "generation",
-        "creationTimestamp", "deletionTimestamp", "deletionGracePeriodSeconds", "ownerReferences", "finalizers",
-        "managedFields", "selfLink"
+        "name",
+        "generateName",
+        "namespace",
+        "labels",
+        "annotations",
+        "uid",
+        "resourceVersion",
+        "generation",
+        "creationTimestamp",
+        "deletionTimestamp",
+        "deletionGracePeriodSeconds",
+        "ownerReferences",
+        "finalizers",
+        "managedFields",
+        "selfLink"
     };
 
     static void ValidateRoot(JsonObject schema, JsonObject body, List<string> causes) {
@@ -229,7 +253,9 @@ public static class StructuralSchema {
             switch (name) {
                 case "apiVersion" or "kind":
                     if (child is not JsonValue text || !text.TryGetValue<string>(out _)) {
-                        causes.Add($"{name}: Invalid value: {Describe(child)}: {name} in body must be of type string: {TypeName(child)}");
+                        causes.Add(
+                            $"{name}: Invalid value: {Describe(child)}: {name} in body must be of type string: {TypeName(child)}"
+                        );
                     }
 
                     break;
@@ -264,20 +290,24 @@ public static class StructuralSchema {
         // above and are removed here so that `required: [apiVersion, kind]`, which some definitions
         // carry, is not reported against a body that has both.
         if (restSchema["required"] is JsonArray required) {
-            restSchema["required"] = new JsonArray([
-                .. required
-                    .OfType<JsonValue>()
-                    .Where(x => x.GetValue<string>() is not ("apiVersion" or "kind" or "metadata"))
-                    .Select(x => (JsonNode)x.DeepClone())
-            ]);
+            restSchema["required"] = new JsonArray(
+                [
+                    .. required
+                        .OfType<JsonValue>()
+                        .Where(static x => x.GetValue<string>() is not ("apiVersion" or "kind" or "metadata"))
+                        .Select(static x => x.DeepClone())
+                ]
+            );
         }
 
-        Validate(restSchema, rest, string.Empty, causes, preserveUnknown: false);
+        Validate(restSchema, rest, string.Empty, causes, false);
     }
 
     static void ValidateMetadata(JsonNode? metadata, List<string> causes) {
         if (metadata is not JsonObject map) {
-            causes.Add($"metadata: Invalid value: {Describe(metadata)}: metadata in body must be of type object: {TypeName(metadata)}");
+            causes.Add(
+                $"metadata: Invalid value: {Describe(metadata)}: metadata in body must be of type object: {TypeName(metadata)}"
+            );
 
             return;
         }
@@ -291,14 +321,18 @@ public static class StructuralSchema {
 
             if (name is "labels" or "annotations") {
                 if (child is not JsonObject strings) {
-                    causes.Add($"metadata.{name}: Invalid value: {Describe(child)}: metadata.{name} in body must be of type object: {TypeName(child)}");
+                    causes.Add(
+                        $"metadata.{name}: Invalid value: {Describe(child)}: metadata.{name} in body must be of type object: {TypeName(child)}"
+                    );
 
                     continue;
                 }
 
                 foreach (var (key, entry) in strings) {
                     if (entry is not JsonValue text || !text.TryGetValue<string>(out _)) {
-                        causes.Add($"metadata.{name}.{key}: Invalid value: {Describe(entry)}: metadata.{name}.{key} in body must be of type string: {TypeName(entry)}");
+                        causes.Add(
+                            $"metadata.{name}.{key}: Invalid value: {Describe(entry)}: metadata.{name}.{key} in body must be of type string: {TypeName(entry)}"
+                        );
                     }
                 }
             }
@@ -335,7 +369,9 @@ public static class StructuralSchema {
             // object: "string"` — apiextensions-apiserver turns kube-openapi's type failure into a
             // field.Invalid over the type name. The first version of this quoted the value, which
             // named the same field with a sentence no real cluster ever produces.
-            causes.Add($"{here}: Invalid value: {TypeName(value)}: {here} in body must be of type {declaredType}: {TypeName(value)}");
+            causes.Add(
+                $"{here}: Invalid value: {TypeName(value)}: {here} in body must be of type {declaredType}: {TypeName(value)}"
+            );
 
             // The type is wrong, so nothing below it is worth reporting: a string where an object was
             // expected has no properties to be missing, and the server stops here too.
@@ -372,18 +408,24 @@ public static class StructuralSchema {
         var additional = schema["additionalProperties"];
 
         if (schema["required"] is JsonArray required) {
-            foreach (var name in required.OfType<JsonValue>().Select(x => x.GetValue<string>())) {
+            foreach (var name in required.OfType<JsonValue>().Select(static x => x.GetValue<string>())) {
                 if (!map.ContainsKey(name)) {
                     causes.Add($"{Join(path, name)}: Required value");
                 }
             }
         }
 
-        if (schema["minProperties"] is JsonValue minimum && minimum.TryGetValue<long>(out var least) && map.Count < least) {
-            causes.Add($"{here}: Invalid value: {Describe(map)}: {here} in body should have at least {least} properties");
+        if (schema["minProperties"] is JsonValue minimum
+            && minimum.TryGetValue<long>(out var least)
+            && map.Count < least) {
+            causes.Add(
+                $"{here}: Invalid value: {Describe(map)}: {here} in body should have at least {least} properties"
+            );
         }
 
-        if (schema["maxProperties"] is JsonValue maximum && maximum.TryGetValue<long>(out var most) && map.Count > most) {
+        if (schema["maxProperties"] is JsonValue maximum
+            && maximum.TryGetValue<long>(out var most)
+            && map.Count > most) {
             causes.Add($"{here}: Invalid value: {Describe(map)}: {here} in body should have at most {most} properties");
         }
 
@@ -405,7 +447,9 @@ public static class StructuralSchema {
     static void ValidateArray(JsonObject schema, JsonArray array, string path, List<string> causes, bool preserves) {
         var here = path.Length == 0 ? "body" : path;
 
-        if (schema["minItems"] is JsonValue minimum && minimum.TryGetValue<long>(out var least) && array.Count < least) {
+        if (schema["minItems"] is JsonValue minimum
+            && minimum.TryGetValue<long>(out var least)
+            && array.Count < least) {
             causes.Add($"{here}: Invalid value: {Describe(array)}: {here} in body should have at least {least} items");
         }
 
@@ -427,7 +471,7 @@ public static class StructuralSchema {
 
         if (listType == "map" && schema["x-kubernetes-list-map-keys"] is JsonArray keys) {
             for (var i = 0; i < array.Count; i++) {
-                foreach (var key in keys.OfType<JsonValue>().Select(x => x.GetValue<string>())) {
+                foreach (var key in keys.OfType<JsonValue>().Select(static x => x.GetValue<string>())) {
                     if (array[i] is not JsonObject item || !item.ContainsKey(key)) {
                         causes.Add(
                             $"{here}: element {i}: associative list with keys has an element that omits key field \"{key}\" (and doesn't have default value)"
@@ -451,15 +495,24 @@ public static class StructuralSchema {
 
     static void ValidateScalar(JsonObject schema, JsonValue scalar, string here, List<string> causes) {
         if (scalar.TryGetValue<string>(out var text)) {
-            if (schema["minLength"] is JsonValue minimum && minimum.TryGetValue<long>(out var least) && text.Length < least) {
-                causes.Add($"{here}: Invalid value: {Describe(scalar)}: {here} in body should be at least {least} chars long");
+            if (schema["minLength"] is JsonValue minimum
+                && minimum.TryGetValue<long>(out var least)
+                && text.Length < least) {
+                causes.Add(
+                    $"{here}: Invalid value: {Describe(scalar)}: {here} in body should be at least {least} chars long"
+                );
             }
 
-            if (schema["maxLength"] is JsonValue maximum && maximum.TryGetValue<long>(out var most) && text.Length > most) {
-                causes.Add($"{here}: Invalid value: {Describe(scalar)}: {here} in body should be at most {most} chars long");
+            if (schema["maxLength"] is JsonValue maximum
+                && maximum.TryGetValue<long>(out var most)
+                && text.Length > most) {
+                causes.Add(
+                    $"{here}: Invalid value: {Describe(scalar)}: {here} in body should be at most {most} chars long"
+                );
             }
 
-            if (schema["pattern"]?.GetValue<string>() is { } pattern && !Regex.IsMatch(text, pattern, RegexOptions.None, TimeSpan.FromSeconds(1))) {
+            if (schema["pattern"]?.GetValue<string>() is { } pattern
+                && !Regex.IsMatch(text, pattern, RegexOptions.None, TimeSpan.FromSeconds(1))) {
                 causes.Add($"{here}: Invalid value: {Describe(scalar)}: {here} in body should match '{pattern}'");
             }
 
@@ -476,7 +529,8 @@ public static class StructuralSchema {
             if (exclusive ? number <= lowest : number < lowest) {
                 causes.Add(
                     $"{here}: Invalid value: {Describe(scalar)}: {here} in body should be greater than "
-                    + (exclusive ? string.Empty : "or equal to ") + Describe(low)
+                    + (exclusive ? string.Empty : "or equal to ")
+                    + Describe(low)
                 );
             }
         }
@@ -487,13 +541,19 @@ public static class StructuralSchema {
             if (exclusive ? number >= highest : number > highest) {
                 causes.Add(
                     $"{here}: Invalid value: {Describe(scalar)}: {here} in body should be less than "
-                    + (exclusive ? string.Empty : "or equal to ") + Describe(high)
+                    + (exclusive ? string.Empty : "or equal to ")
+                    + Describe(high)
                 );
             }
         }
 
-        if (schema["multipleOf"] is JsonValue step && TryNumber(step, out var multiple) && multiple != 0 && Math.Abs(Math.IEEERemainder(number, multiple)) > 1e-9) {
-            causes.Add($"{here}: Invalid value: {Describe(scalar)}: {here} in body should be a multiple of {Describe(step)}");
+        if (schema["multipleOf"] is JsonValue step
+            && TryNumber(step, out var multiple)
+            && multiple != 0
+            && Math.Abs(Math.IEEERemainder(number, multiple)) > 1e-9) {
+            causes.Add(
+                $"{here}: Invalid value: {Describe(scalar)}: {here} in body should be a multiple of {Describe(step)}"
+            );
         }
     }
 
@@ -502,12 +562,18 @@ public static class StructuralSchema {
     ///     only as value constraints — so each branch is validated with the same preserve flag and
     ///     no branch is allowed to declare fields the parent does not.
     /// </summary>
-    static void ValidateComposition(JsonObject schema, JsonNode value, string path, List<string> causes, bool preserves) {
+    static void ValidateComposition(
+        JsonObject schema,
+        JsonNode value,
+        string path,
+        List<string> causes,
+        bool preserves
+    ) {
         var here = path.Length == 0 ? "body" : path;
 
         if (schema["allOf"] is JsonArray all) {
             foreach (var branch in all.OfType<JsonObject>()) {
-                Validate(branch, value, path, causes, preserveUnknown: true);
+                Validate(branch, value, path, causes, true);
             }
         }
 
@@ -515,7 +581,9 @@ public static class StructuralSchema {
             var matched = any.OfType<JsonObject>().Any(branch => Passes(branch, value, path, preserves));
 
             if (!matched) {
-                causes.Add($"{here}: Invalid value: {Describe(value)}: {here} in body must validate at least one schema (anyOf)");
+                causes.Add(
+                    $"{here}: Invalid value: {Describe(value)}: {here} in body must validate at least one schema (anyOf)"
+                );
             }
         }
 
@@ -523,7 +591,9 @@ public static class StructuralSchema {
             var matched = one.OfType<JsonObject>().Count(branch => Passes(branch, value, path, preserves));
 
             if (matched != 1) {
-                causes.Add($"{here}: Invalid value: {Describe(value)}: {here} in body must validate one and only one schema (oneOf). Found {matched} valid alternatives");
+                causes.Add(
+                    $"{here}: Invalid value: {Describe(value)}: {here} in body must validate one and only one schema (oneOf). Found {matched} valid alternatives"
+                );
             }
         }
 
@@ -534,7 +604,7 @@ public static class StructuralSchema {
 
     static bool Passes(JsonObject branch, JsonNode value, string path, bool preserves) {
         var scratch = new List<string>();
-        Validate(branch, value, path, scratch, preserveUnknown: true);
+        Validate(branch, value, path, scratch, true);
 
         return scratch.Count == 0;
     }
@@ -583,7 +653,7 @@ public static class StructuralSchema {
     }
 
     static bool TryNumber(JsonValue scalar, out double number) {
-        if (scalar.TryGetValue<double>(out number)) {
+        if (scalar.TryGetValue(out number)) {
             return true;
         }
 

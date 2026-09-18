@@ -230,8 +230,10 @@ public interface IKubeClusterConnection {
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         <b>This is <c>kubectl cnpg destroy --keep-pvc</c>'s primitive, made available to a
-    ///         reconciler.</b> An operator that creates its own claims stamps a controller reference
+    ///         <b>
+    ///             This is <c>kubectl cnpg destroy --keep-pvc</c>'s primitive, made available to a
+    ///             reconciler.
+    ///         </b> An operator that creates its own claims stamps a controller reference
     ///         onto each, and the garbage collector removes the claim the moment the controller
     ///         goes — before a recovery window has started. Clearing the reference first is what
     ///         lets the claim outlive its <c>Cluster</c>; writing a fresh one on the restore is what

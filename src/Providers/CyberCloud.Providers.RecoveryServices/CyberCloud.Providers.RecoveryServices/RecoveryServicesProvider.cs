@@ -6,10 +6,16 @@ namespace CyberCloud.Providers.RecoveryServices;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE SEVENTEENTH PROVIDER FAMILY, AND THE FIRST WHOSE RESOURCE IS ABOUT OTHER
-///         PROVIDERS' RESOURCES.</b> Sixteen families each render their own objects from their own
-///         body. This one renders a CloudNativePG <c>ScheduledBackup</c> beside a <i>PostgreSQL
-///         server another provider owns</i>, and it learns where that server's <c>Cluster</c> is
+///         ⚠
+///         <b>
+///             THE SEVENTEENTH PROVIDER FAMILY, AND THE FIRST WHOSE RESOURCE IS ABOUT OTHER
+///             PROVIDERS' RESOURCES.
+///         </b> Sixteen families each render their own objects from their own
+///         body. This one renders a CloudNativePG <c>ScheduledBackup</c> beside a
+///         <i>
+///             PostgreSQL
+///             server another provider owns
+///         </i>, and it learns where that server's <c>Cluster</c> is
 ///         through <see cref="ReconcileContext.View" /> — issue #90's seam, built for exactly this type
 ///         and used by nothing until it. What it cost, measured: nothing in the manager changed, one
 ///         reconciler reads the view where the others read the body, and the conformance harness
@@ -19,8 +25,11 @@ namespace CyberCloud.Providers.RecoveryServices;
 ///     <para>
 ///         ⚠ <b>NOT A ROW OF docs/plan/12, AND NOT docs/plan/12's PATTERN EITHER.</b> That document's
 ///         eight pieces describe a managed <i>service</i> — an operator, a chart, a credential, a
-///         scrape. A vault is a <i>policy</i>: docs/plan/15 § Backup as a service opens <i>"Not a
-///         storage type; a policy resource"</i>. So there is no credential to mint, no scrape object
+///         scrape. A vault is a <i>policy</i>: docs/plan/15 § Backup as a service opens
+///         <i>
+///             "Not a
+///             storage type; a policy resource"
+///         </i>. So there is no credential to mint, no scrape object
 ///         to ask an operator for, no sizing table and no derived quota meter: a vault draws
 ///         <see cref="QuotaMeter.Resources" /> and nothing else, because the pods and volumes its
 ///         schedules use are the protected server's and are already reserved against the server.
@@ -29,8 +38,11 @@ namespace CyberCloud.Providers.RecoveryServices;
 ///         body.
 ///     </para>
 ///     <para>
-///         ⚠ <b>TWO ACTIONS WITH HANDLERS AND NO LONG-RUNNING ONE, WHICH IS A DECISION ABOUT THE
-///         RESTORE.</b> A restore is one server-side apply of a <c>Cluster</c> — seconds — and what
+///         ⚠
+///         <b>
+///             TWO ACTIONS WITH HANDLERS AND NO LONG-RUNNING ONE, WHICH IS A DECISION ABOUT THE
+///             RESTORE.
+///         </b> A restore is one server-side apply of a <c>Cluster</c> — seconds — and what
 ///         then takes minutes is CloudNativePG recovering it, which is the operator's work on an
 ///         object the tenant can watch. A long-running action would have this platform poll that
 ///         recovery on the tenant's behalf and report a status the object already carries. It answers
@@ -90,12 +102,12 @@ public sealed class RecoveryServicesProvider : IResourceProvider {
             .Display(
                 "Backup vault",
                 "Backup vaults",
-                shortName: "backupvault",
-                summary: "A backup policy — a schedule and a retention — over the PostgreSQL servers in a "
+                "backupvault",
+                "A backup policy — a schedule and a retention — over the PostgreSQL servers in a "
                 + "resource group, with the recovery points it produces and a restore into a new cluster."
             )
             .Chart(RecoveryVaults.ChartName)
             .SupportsTags()
-            .RequiresCluster(RecoveryVaults.ClusterIdPointer);
+            .RequiresCluster();
     }
 }

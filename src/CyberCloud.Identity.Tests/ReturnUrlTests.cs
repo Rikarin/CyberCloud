@@ -51,10 +51,10 @@ public sealed class ReturnUrlTests {
         "///evil.example",
 
         // ── The same attack spelled with backslashes, which browsers normalize to slashes ─────
-        "/\\evil.example",
-        "\\\\evil.example",
-        "/\\/evil.example",
-        "https:/\\evil.example",
+        """/\evil.example""",
+        """\\evil.example""",
+        """/\/evil.example""",
+        """https:/\evil.example""",
 
         // ── Schemes that execute rather than navigate ────────────────────────────────────────
         "javascript:alert(1)",

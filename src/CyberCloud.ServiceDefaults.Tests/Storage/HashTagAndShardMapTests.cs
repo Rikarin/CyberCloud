@@ -64,7 +64,7 @@ public sealed class HashTagAndShardMapTests {
 
         var slots = Enumerable.Range(0, 500)
             .Select(i => map.HotHashTagFor(StorageFixture.Tenant(i).ToString("D", CultureInfo.InvariantCulture)))
-            .Select(tag => RedisHashSlot.Of(TenantHotKeys.Format(tag, "Resource", "k")))
+            .Select(static tag => RedisHashSlot.Of(TenantHotKeys.Format(tag, "Resource", "k")))
             .Distinct()
             .Count();
 
@@ -126,14 +126,14 @@ public sealed class HashTagAndShardMapTests {
     public void ATagThatAlreadyCarriesBracesIsRejectedRatherThanNested() {
         // Redis takes the FIRST '{' to the FIRST following '}', so "{{a}b}" tags on "{a" — a value
         // nobody wrote. Cheaper to refuse it.
-        Should.Throw<ArgumentException>(() => new TenantHotKeys("t", "{already}"));
+        Should.Throw<ArgumentException>(static () => new TenantHotKeys("t", "{already}"));
     }
 
     [Fact]
     public void TheNullTenantSentinelRoutesInsteadOfThrowing() {
         // ⚠ This is the docs/plan/05 § Storage provider wiring defect, as a test. Its body starts
         // with Guid.Parse(tenantId); Orleans.Multitenant passes "Null" for every platform grain.
-        Should.Throw<FormatException>(() => Guid.Parse("Null"));
+        Should.Throw<FormatException>(static () => Guid.Parse("Null"));
 
         var options = TwoShards();
         options.Durable.NullTenantShard = "durable-01";
@@ -201,13 +201,13 @@ public sealed class HashTagAndShardMapTests {
         var byShard = Enumerable.Range(0, 200)
             .Select(i => map.DurableShardFor(StorageFixture.Tenant(i).ToString("D", CultureInfo.InvariantCulture)))
             .Select(shard => (Shard: shard, Connection: connections.Durable(shard)))
-            .GroupBy(x => x.Shard, StringComparer.Ordinal)
+            .GroupBy(static x => x.Shard, StringComparer.Ordinal)
             .ToList();
 
         byShard.Count.ShouldBe(2, "200 tenants should reach both shards, or this proves nothing.");
 
         foreach (var shard in byShard) {
-            shard.Select(x => x.Connection).Distinct(StringComparer.Ordinal).Count().ShouldBe(1);
+            shard.Select(static x => x.Connection).Distinct(StringComparer.Ordinal).Count().ShouldBe(1);
         }
     }
 
@@ -238,7 +238,10 @@ public sealed class HashTagAndShardMapTests {
 
     [Fact]
     public void AShardThatIsNotInTheTableFailsLoudly() {
-        Should.Throw<KeyNotFoundException>(() => new ConfiguredShardConnections(TwoShards()).Durable("durable-42"))
+        Should.Throw<KeyNotFoundException>(static () => new ConfiguredShardConnections(TwoShards()).Durable(
+                "durable-42"
+            )
+        )
             .Message.ShouldContain("durable-00");
     }
 

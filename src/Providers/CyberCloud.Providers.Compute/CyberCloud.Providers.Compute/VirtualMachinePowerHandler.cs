@@ -16,8 +16,11 @@ namespace CyberCloud.Providers.Compute;
 ///         from the action path stays consistent with the reconciler's.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE WHOLE RENDER, UNDER THE RECONCILER'S OWN FIELD MANAGER — never a partial object and
-///         never a second manager.</b> Server-side apply treats a manager's document as the complete
+///         ⚠
+///         <b>
+///             THE WHOLE RENDER, UNDER THE RECONCILER'S OWN FIELD MANAGER — never a partial object and
+///             never a second manager.
+///         </b> Server-side apply treats a manager's document as the complete
 ///         set of fields it owns, so a partial <c>{spec: {runStrategy}}</c> under the reconciler's
 ///         manager would prune every other field the reconciler had written; and a second manager
 ///         would meet <c>KubeCommandBuilder</c>'s reconcile-hash annotation, which is injected
@@ -77,10 +80,22 @@ public sealed class VirtualMachinePowerHandler : IResourceActionHandler {
 
         switch (context.Action.ToLowerInvariant()) {
             case VirtualMachines.StartAction:
-                return await SetRunStrategyAsync(context, cluster, current, VirtualMachines.RunAlways, cancellationToken);
+                return await SetRunStrategyAsync(
+                    context,
+                    cluster,
+                    current,
+                    VirtualMachines.RunAlways,
+                    cancellationToken
+                );
 
             case VirtualMachines.StopAction:
-                return await SetRunStrategyAsync(context, cluster, current, VirtualMachines.RunHalted, cancellationToken);
+                return await SetRunStrategyAsync(
+                    context,
+                    cluster,
+                    current,
+                    VirtualMachines.RunHalted,
+                    cancellationToken
+                );
 
             case VirtualMachines.RestartAction:
                 return await RestartAsync(context, cluster, current, cancellationToken);
@@ -126,7 +141,9 @@ public sealed class VirtualMachinePowerHandler : IResourceActionHandler {
         if (outcome.Result == ApplyResult.Suspended) {
             return Result<string>.Failure(
                 ErrorCode.OperationInProgress,
-                outcome.Message.Length > 0 ? outcome.Message : "the cluster is unreachable, so the machine's power state could not be changed"
+                outcome.Message.Length > 0
+                    ? outcome.Message
+                    : "the cluster is unreachable, so the machine's power state could not be changed"
             );
         }
 
@@ -167,7 +184,11 @@ public sealed class VirtualMachinePowerHandler : IResourceActionHandler {
             .InNamespace(context.Namespace)
             .WithKind(VirtualMachines.InstanceKind)
             .WithApiVersion(context.ApiVersion)
-            .ObjectJson(new JsonObject { ["metadata"] = new JsonObject { ["name"] = VirtualMachines.ObjectNameOf(context.Id.Name) } }.ToJsonString())
+            .ObjectJson(
+                new JsonObject {
+                    ["metadata"] = new JsonObject { ["name"] = VirtualMachines.ObjectNameOf(context.Id.Name) }
+                }.ToJsonString()
+            )
             .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
         if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {

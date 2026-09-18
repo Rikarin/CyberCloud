@@ -86,7 +86,8 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         var granted = await cluster.Roles.AssignAsync(
             new() {
                 Path = assignment.Path,
-                Body = $$$"""{"{{{RoleAssignmentBodyProperties.PrincipalId}}}":"{{{colleague}}}","{{{RoleAssignmentBodyProperties.RoleDefinitionId}}}":"reader"}""",
+                Body =
+                    $$$"""{"{{{RoleAssignmentBodyProperties.PrincipalId}}}":"{{{colleague}}}","{{{RoleAssignmentBodyProperties.RoleDefinitionId}}}":"reader"}""",
                 Caller = IsolationCluster.Caller(Grant, Owner)
             },
             TestContext.Current.CancellationToken
@@ -285,7 +286,10 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         // ⚠ A CONTRIBUTOR HOLDING assignRole WOULD BE A CONTRIBUTOR WHO CAN MAKE THEMSELVES AN
         // OWNER. `assignRole` is Rel(owner) & !Rel(suspended) — Azure's roleAssignments/write sits
         // in Owner and in no built-in role beneath it.
-        var refused = await Assign(RoleAssignmentId.OnScope(group, new(Relations.Owner, SubjectTypes.User, carl)), carl);
+        var refused = await Assign(
+            RoleAssignmentId.OnScope(group, new(Relations.Owner, SubjectTypes.User, carl)),
+            carl
+        );
 
         refused.IsFailure.ShouldBeTrue("a contributor granted a role");
 
@@ -302,7 +306,10 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
 
         var group = ScopeId.Group(Grant, subscription, Group);
 
-        var refused = await Assign(RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, Nobody)), Nobody);
+        var refused = await Assign(
+            RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, Nobody)),
+            Nobody
+        );
 
         refused.IsFailure.ShouldBeTrue("a caller with no grant granted themselves a role");
         refused.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
@@ -446,7 +453,9 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         tuple.Subject.IsUserset.ShouldBeTrue();
         tuple.Subject.Relation.ShouldBe(Relations.Member);
 
-        (await AllowedAsync(resource, Permissions.Read, gina)).ShouldBeTrue("a member of the granted group cannot read");
+        (await AllowedAsync(resource, Permissions.Read, gina)).ShouldBeTrue(
+            "a member of the granted group cannot read"
+        );
         (await AllowedAsync(resource, Permissions.Read, notGina)).ShouldBeFalse();
     }
 
@@ -467,7 +476,9 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         // ⚠ THE TUPLE IS ON resource:{guid:N}, RESOLVED THROUGH THE INDEX, AND NOT ON THE ADDRESS.
         // A parsed path carries Guid.Empty; a store handed the unresolved id would write a tuple on
         // resource:0000… and this line would be false while the PUT reported success.
-        (await AllowedAsync(resource, Permissions.Read, rob)).ShouldBeTrue("the resource-scoped grant did not reach the resource");
+        (await AllowedAsync(resource, Permissions.Read, rob)).ShouldBeTrue(
+            "the resource-scoped grant did not reach the resource"
+        );
 
         var (groupType, groupId) = ReBacScopeAuthorizer.ObjectOf(ScopeId.Group(Grant, subscription, Group));
         (await AllowedOnAsync(groupType, groupId, Permissions.Read, rob)).ShouldBeFalse(
@@ -510,7 +521,10 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         // ⚠ The check alone would not catch this if a parent edge had been left behind by a failed
         // create — RoleAssignmentService.ResolveAsync reads the scope's own grain for exactly that
         // reason.
-        var refused = await Assign(RoleAssignmentId.OnScope(ghost, new(Relations.Reader, SubjectTypes.User, "x")), Owner);
+        var refused = await Assign(
+            RoleAssignmentId.OnScope(ghost, new(Relations.Reader, SubjectTypes.User, "x")),
+            Owner
+        );
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
@@ -530,10 +544,16 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         // success; nothing could ever authenticate as that subject, and nothing could see the tuple.
         var ghost = IsolationCluster.SubjectId(Guid.Parse("88888888-0000-4000-8000-00000000dead"));
 
-        var refused = await Assign(RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, ghost)), Owner);
+        var refused = await Assign(
+            RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, ghost)),
+            Owner
+        );
 
         refused.IsFailure.ShouldBeTrue("a role was granted to a principal that does not exist");
-        refused.Error!.Code.ShouldBe(ErrorCode.InvalidResourceId, "the refusal is a 400 naming the principal, not a 404 on the scope");
+        refused.Error!.Code.ShouldBe(
+            ErrorCode.InvalidResourceId,
+            "the refusal is a 400 naming the principal, not a 404 on the scope"
+        );
         refused.Error.Message.ShouldContain(ghost);
         refused.Error.Message.ShouldContain("not a principal");
 
@@ -545,7 +565,10 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         // ⚠ And a name that is not even a GUID — the shape every principal in this suite had before
         // #86 — is refused the same way, not folded into one. Five spellings of one principal would
         // be five assignments.
-        var named = await Assign(RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, "alice")), Owner);
+        var named = await Assign(
+            RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, "alice")),
+            Owner
+        );
         named.IsFailure.ShouldBeTrue();
         named.Error!.Code.ShouldBe(ErrorCode.InvalidResourceId);
     }
@@ -561,19 +584,33 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         // belongs to exactly one tenant, so the victim's user is not a principal of this tenant even
         // though the grain exists. What refuses it is ForTenant on the directory's lookup and
         // nothing else — the same mechanism that keeps every other cross-tenant read a 404.
-        var stranger = await cluster.CreateUserAsync(IsolationCluster.Victim, Guid.Parse("88888888-0000-4000-8000-00000000be11"));
-        var strangersGroup = await cluster.CreateGroupAsync(IsolationCluster.Victim, Guid.Parse("88888888-0000-4000-8000-00000000be12"));
+        var stranger = await cluster.CreateUserAsync(
+            IsolationCluster.Victim,
+            Guid.Parse("88888888-0000-4000-8000-00000000be11")
+        );
+        var strangersGroup = await cluster.CreateGroupAsync(
+            IsolationCluster.Victim,
+            Guid.Parse("88888888-0000-4000-8000-00000000be12")
+        );
 
-        var refusedUser = await Assign(RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, stranger)), Owner);
+        var refusedUser = await Assign(
+            RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, stranger)),
+            Owner
+        );
         refusedUser.IsFailure.ShouldBeTrue("a user of another tenant was granted a role in this one");
         refusedUser.Error!.Code.ShouldBe(ErrorCode.InvalidResourceId);
         refusedUser.Error.Message.ShouldContain("another tenant");
 
-        var refusedGroup = await Assign(RoleAssignmentId.OnScope(group, new(Relations.Reader, ObjectTypes.Group, strangersGroup)), Owner);
+        var refusedGroup = await Assign(
+            RoleAssignmentId.OnScope(group, new(Relations.Reader, ObjectTypes.Group, strangersGroup)),
+            Owner
+        );
         refusedGroup.IsFailure.ShouldBeTrue("a group of another tenant was granted a role in this one");
         refusedGroup.Error!.Code.ShouldBe(ErrorCode.InvalidResourceId);
 
-        (await SubjectsOfAsync(group, Relations.Reader)).ShouldNotContain(x => x.Id == stranger || x.Id == strangersGroup);
+        (await SubjectsOfAsync(group, Relations.Reader)).ShouldNotContain(x => x.Id == stranger
+            || x.Id == strangersGroup
+        );
 
         // The same user, created in THIS tenant under the same GUID, is a different directory
         // object and can be granted to — which is what "two user objects with two GUIDs" means when
@@ -595,12 +632,21 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         // ⚠ A caller with no grant gets the SAME canonical 404 whether the principal exists or not.
         // If the directory were asked before the check, the difference between "does not exist"
         // and "is not a principal" would tell a stranger which GUIDs are users of this tenant.
-        var unknown = await Assign(RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, ghost)), Nobody);
-        var known = await Assign(RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, real)), Nobody);
+        var unknown = await Assign(
+            RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, ghost)),
+            Nobody
+        );
+        var known = await Assign(
+            RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, real)),
+            Nobody
+        );
 
         unknown.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
         known.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
-        unknown.Error.Message.ShouldBe(known.Error.Message, "two refusals for a stranger differed by whether the principal exists");
+        unknown.Error.Message.ShouldBe(
+            known.Error.Message,
+            "two refusals for a stranger differed by whether the principal exists"
+        );
     }
 
     [Fact]
@@ -622,7 +668,10 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         deprovisioned.IsSuccess.ShouldBeTrue(deprovisioned.Error?.Message);
 
         // A new grant is refused — the object is terminal, as a deleted principal is to Azure.
-        var again = await Assign(RoleAssignmentId.OnScope(group, new(Relations.Contributor, SubjectTypes.User, leaver)), Owner);
+        var again = await Assign(
+            RoleAssignmentId.OnScope(group, new(Relations.Contributor, SubjectTypes.User, leaver)),
+            Owner
+        );
         again.IsFailure.ShouldBeTrue("a deprovisioned user was granted a role");
         again.Error!.Code.ShouldBe(ErrorCode.InvalidResourceId);
 
@@ -633,7 +682,9 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
             TestContext.Current.CancellationToken
         );
 
-        revoked.IsSuccess.ShouldBeTrue("a grant to a deprovisioned user could not be revoked: " + revoked.Error?.Message);
+        revoked.IsSuccess.ShouldBeTrue(
+            "a grant to a deprovisioned user could not be revoked: " + revoked.Error?.Message
+        );
         (await AllowedAsync(resource, Permissions.Read, leaver)).ShouldBeFalse();
     }
 
@@ -644,13 +695,18 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
 
         var group = ScopeId.Group(Grant, subscription, Group);
 
-        var servicePrincipal = await cluster.CreateServicePrincipalAsync(Grant, Guid.Parse("88888888-0000-4000-8000-00000000e6a1"));
-        var managedIdentity = await cluster.CreateManagedIdentityAsync(Grant, Guid.Parse("88888888-0000-4000-8000-00000000e6a2"));
+        var servicePrincipal = await cluster.CreateServicePrincipalAsync(
+            Grant,
+            Guid.Parse("88888888-0000-4000-8000-00000000e6a1")
+        );
+        var managedIdentity = await cluster.CreateManagedIdentityAsync(
+            Grant,
+            Guid.Parse("88888888-0000-4000-8000-00000000e6a2")
+        );
         var team = await cluster.CreateGroupAsync(Grant, Guid.Parse("88888888-0000-4000-8000-00000000e6a3"));
 
         foreach (var (type, id) in new[] {
-                     (SubjectTypes.ServicePrincipal, servicePrincipal),
-                     (SubjectTypes.ManagedIdentity, managedIdentity),
+                     (SubjectTypes.ServicePrincipal, servicePrincipal), (SubjectTypes.ManagedIdentity, managedIdentity),
                      (ObjectTypes.Group, team)
                  }) {
             var granted = await Assign(RoleAssignmentId.OnScope(group, new(Relations.Reader, type, id)), Owner);
@@ -660,13 +716,18 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         // ⚠ The same GUID under a DIFFERENT type is a different grain that was never created. A
         // directory that looked the id up without its type would say the service principal's GUID
         // is a user, and the tuple would name a subject no token ever presents.
-        var crossed = await Assign(RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, servicePrincipal)), Owner);
+        var crossed = await Assign(
+            RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, servicePrincipal)),
+            Owner
+        );
         crossed.IsFailure.ShouldBeTrue("a service principal's GUID was accepted as a user");
         crossed.Error!.Code.ShouldBe(ErrorCode.InvalidResourceId);
 
         // And the service principal's grant is one the evaluator honours.
         var check = cluster.For(Grant)
-            .GetGrain<ICheckGrain>(GrainKeys.CheckCache(ObjectTypes.Resource, resource.ToString("N", CultureInfo.InvariantCulture)));
+            .GetGrain<ICheckGrain>(
+                GrainKeys.CheckCache(ObjectTypes.Resource, resource.ToString("N", CultureInfo.InvariantCulture))
+            );
         var allowed = await check.CheckAsync(
             Permissions.Read,
             SubjectRef.Of(SubjectTypes.ServicePrincipal, servicePrincipal),
@@ -715,7 +776,7 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         fromGroup.Path.ShouldBe(groupGrant.Path, "the inherited row's address is not the tuple's own");
         fromGroup.RoleDefinitionId.ShouldBe(Relations.Contributor);
 
-        var fromTenant = rows.Where(x => x.PrincipalId == Owner).ShouldHaveSingleItem();
+        var fromTenant = rows.Where(static x => x.PrincipalId == Owner).ShouldHaveSingleItem();
         fromTenant.Inherited.ShouldBeTrue();
         fromTenant.Scope.ShouldBe(ScopeId.Tenant(Grant).Path);
         fromTenant.RoleDefinitionId.ShouldBe(Relations.Owner);
@@ -729,7 +790,10 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
             )).IsSuccess.ShouldBeTrue();
 
         (await cluster.Roles.ReadAsync(
-                new() { Path = RoleAssignmentId.OnResource(address, groupGrant.Name).Path, Caller = IsolationCluster.Caller(Grant, Owner) },
+                new() {
+                    Path = RoleAssignmentId.OnResource(address, groupGrant.Name).Path,
+                    Caller = IsolationCluster.Caller(Grant, Owner)
+                },
                 TestContext.Current.CancellationToken
             )).IsFailure.ShouldBeTrue();
 
@@ -737,8 +801,11 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         // and nothing from the resource below it — inheritance runs one way.
         var atGroup = (await ListAsync(RoleAssignmentCollectionId.OnScope(group), Owner)).GetValueOrThrow().Assignments;
         atGroup.Where(x => x.PrincipalId == onGroup).ShouldHaveSingleItem().Inherited.ShouldBeFalse();
-        atGroup.Where(x => x.PrincipalId == Owner).ShouldHaveSingleItem().Inherited.ShouldBeTrue();
-        atGroup.ShouldNotContain(x => x.PrincipalId == onResource, "a grant on a resource leaked up into its group's listing");
+        atGroup.Where(static x => x.PrincipalId == Owner).ShouldHaveSingleItem().Inherited.ShouldBeTrue();
+        atGroup.ShouldNotContain(
+            x => x.PrincipalId == onResource,
+            "a grant on a resource leaked up into its group's listing"
+        );
     }
 
     [Fact]
@@ -753,7 +820,8 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
 
         var parentTarget = IsolationCatalog.Targets[1];
         var childTarget = IsolationCatalog.Targets[2];
-        childTarget.Ancestors.ShouldHaveSingleItem().ShouldBe(parentTarget, "the catalogue moved and this test names the wrong pair");
+        childTarget.Ancestors.ShouldHaveSingleItem()
+            .ShouldBe(parentTarget, "the catalogue moved and this test names the wrong pair");
 
         var parentName = IsolationTarget.AncestorName(0);
         await cluster.CreateAsync(parentTarget, parentName, Grant, subscription, Owner);
@@ -769,7 +837,9 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         var page = await ListAsync(RoleAssignmentCollectionId.OnResource(child), Owner);
         page.IsSuccess.ShouldBeTrue(page.Error?.Message);
 
-        var fromParent = page.GetValueOrThrow().Assignments.Where(x => x.PrincipalId == onParent).ShouldHaveSingleItem();
+        var fromParent = page.GetValueOrThrow()
+            .Assignments.Where(x => x.PrincipalId == onParent)
+            .ShouldHaveSingleItem();
         fromParent.Inherited.ShouldBeTrue();
         fromParent.Scope.ShouldBe(parent.Path);
         fromParent.Path.ShouldBe(parentGrant.Path);
@@ -790,10 +860,11 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
 
         var everything = (await ListAsync(RoleAssignmentCollectionId.OnScope(group), Owner)).GetValueOrThrow();
         everything.Assignments.Length.ShouldBeGreaterThanOrEqualTo(5, "four readers and the inherited tenant owner");
-        everything.Assignments.Select(x => x.Path).ShouldBe(
-            everything.Assignments.Select(x => x.Path).Order(StringComparer.Ordinal),
-            "the listing is not in address order"
-        );
+        everything.Assignments.Select(static x => x.Path)
+            .ShouldBe(
+                everything.Assignments.Select(static x => x.Path).Order(StringComparer.Ordinal),
+                "the listing is not in address order"
+            );
 
         List<RoleAssignmentSnapshot> walked = [];
         var continuation = "";
@@ -825,7 +896,8 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
             pages++;
         } while (continuation.Length > 0 && pages < 10);
 
-        walked.Select(x => x.Path).ShouldBe(everything.Assignments.Select(x => x.Path), "paging skipped or repeated a row");
+        walked.Select(static x => x.Path)
+            .ShouldBe(everything.Assignments.Select(static x => x.Path), "paging skipped or repeated a row");
     }
 
     [Fact]
@@ -841,12 +913,19 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         // A reader holds `read` on the group and therefore sees everything assigned there — Azure's
         // roleAssignments/read sits in Reader for the same reason.
         var asReader = await ListAsync(RoleAssignmentCollectionId.OnScope(group), reader);
-        asReader.IsSuccess.ShouldBeTrue("a reader could not list the assignments at a scope they can read: " + asReader.Error?.Message);
+        asReader.IsSuccess.ShouldBeTrue(
+            "a reader could not list the assignments at a scope they can read: " + asReader.Error?.Message
+        );
         asReader.GetValueOrThrow().Assignments.ShouldContain(x => x.PrincipalId == Owner && x.Inherited);
         asReader.GetValueOrThrow().Assignments.ShouldContain(x => x.PrincipalId == reader && !x.Inherited);
 
         // And at a resource in the group, through the inherited read.
-        var address = IsolationCluster.Address(IsolationCatalog.Targets[0], ResourceName(subscription), Grant, subscription);
+        var address = IsolationCluster.Address(
+            IsolationCatalog.Targets[0],
+            ResourceName(subscription),
+            Grant,
+            subscription
+        );
         (await ListAsync(RoleAssignmentCollectionId.OnResource(address), reader)).IsSuccess.ShouldBeTrue();
         _ = resource;
 
@@ -865,7 +944,11 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
 
     [Fact]
     public async Task OneTenantCannotListAnothersAssignments() {
-        var victimGroup = ScopeId.Group(IsolationCluster.Victim, IsolationCluster.VictimSubscription, IsolationCluster.Group);
+        var victimGroup = ScopeId.Group(
+            IsolationCluster.Victim,
+            IsolationCluster.VictimSubscription,
+            IsolationCluster.Group
+        );
 
         var refused = await cluster.Roles.ListAsync(
             new() {
@@ -883,11 +966,18 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
 
     [Fact]
     public async Task OneTenantCannotAssignARoleInsideAnother() {
-        var victimGroup = ScopeId.Group(IsolationCluster.Victim, IsolationCluster.VictimSubscription, IsolationCluster.Group);
+        var victimGroup = ScopeId.Group(
+            IsolationCluster.Victim,
+            IsolationCluster.VictimSubscription,
+            IsolationCluster.Group
+        );
 
         var refused = await cluster.Roles.AssignAsync(
             new() {
-                Path = RoleAssignmentId.OnScope(victimGroup, new(Relations.Owner, SubjectTypes.User, IsolationCluster.AttackerUser)).Path,
+                Path = RoleAssignmentId.OnScope(
+                    victimGroup,
+                    new(Relations.Owner, SubjectTypes.User, IsolationCluster.AttackerUser)
+                ).Path,
                 Caller = IsolationCluster.Caller(IsolationCluster.Attacker, IsolationCluster.AttackerUser)
             },
             TestContext.Current.CancellationToken
@@ -931,8 +1021,12 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         refused.Error.Message.ShouldContain("owner");
         refused.Error.Message.ShouldContain("reader");
 
-        (await SubjectsOfAsync(ScopeId.Group(Grant, subscription, Group), Relations.Reader)).ShouldNotContain(x => x.Id == bea);
-        (await SubjectsOfAsync(ScopeId.Group(Grant, subscription, Group), Relations.Owner)).ShouldNotContain(x => x.Id == bea);
+        (await SubjectsOfAsync(ScopeId.Group(Grant, subscription, Group), Relations.Reader)).ShouldNotContain(x => x.Id
+            == bea
+        );
+        (await SubjectsOfAsync(ScopeId.Group(Grant, subscription, Group), Relations.Owner)).ShouldNotContain(x => x.Id
+            == bea
+        );
     }
 
     [Theory]
@@ -963,12 +1057,16 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         // assignment can name, or a PUT would succeed against a tuple nothing evaluates.
         var schema = CyberCloudSchema.Instance;
 
-        foreach (var type in new[] { ObjectTypes.Tenant, ObjectTypes.Subscription, ObjectTypes.ResourceGroup, ObjectTypes.Resource }) {
+        foreach (var type in new[] {
+                     ObjectTypes.Tenant, ObjectTypes.Subscription, ObjectTypes.ResourceGroup, ObjectTypes.Resource
+                 }) {
             var defined = schema.Type(type).ShouldNotBeNull($"'{type}' is not in the schema");
 
             foreach (var role in RoleAssignmentService.GrantableRoles) {
                 var member = defined.Member(role).ShouldNotBeNull($"'{type}' declares no '{role}'");
-                member.IsPermission.ShouldBeFalse($"'{role}' is a permission on '{type}', and a tuple on it grants nothing");
+                member.IsPermission.ShouldBeFalse(
+                    $"'{role}' is a permission on '{type}', and a tuple on it grants nothing"
+                );
             }
         }
     }
@@ -1005,7 +1103,7 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         var bytes = digest[..16];
         bytes[7] = (byte)((bytes[7] & 0x0F) | 0x40);
         bytes[8] = (byte)((bytes[8] & 0x3F) | 0x80);
-        return new Guid(bytes);
+        return new(bytes);
     }
 
     Task<bool> AllowedAsync(Guid resource, string permission, string user) =>
@@ -1014,7 +1112,11 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
     async Task<bool> AllowedOnAsync(string type, string id, string permission, string user) {
         var check = cluster.For(Grant).GetGrain<ICheckGrain>(GrainKeys.CheckCache(type, id));
 
-        var result = await check.CheckAsync(permission, SubjectRef.Of(SubjectTypes.User, user), Consistency.FullyConsistent);
+        var result = await check.CheckAsync(
+            permission,
+            SubjectRef.Of(SubjectTypes.User, user),
+            Consistency.FullyConsistent
+        );
 
         result.IsSuccess.ShouldBeTrue($"the check on {type}:{id} did not answer: " + result.Error?.Message);
 
@@ -1031,7 +1133,8 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         return snapshot.IsSuccess ? snapshot.GetValueOrThrow().Subjects(relation) : [];
     }
 
-    static string ResourceName(Guid subscription) => "granted-" + subscription.ToString("N", CultureInfo.InvariantCulture)[^2..];
+    static string ResourceName(Guid subscription) =>
+        "granted-" + subscription.ToString("N", CultureInfo.InvariantCulture)[^2..];
 
     /// <summary>
     ///     The tenant, once — created and owned by <see cref="Owner" /> and nothing else.

@@ -102,7 +102,13 @@ public static class CyberCloudTopology {
             .WithEnvironment("CLICKHOUSE_USER", CyberCloudResources.ClickHouseUser)
             .WithEnvironment("CLICKHOUSE_PASSWORD", CyberCloudResources.ClickHousePassword)
             .WithEnvironment("CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT", "1")
-            .WithEndpoint(CyberCloudResources.ClickHouseHttpPort, CyberCloudResources.ClickHouseHttpPort, "http", "http", isProxied: false)
+            .WithEndpoint(
+                CyberCloudResources.ClickHouseHttpPort,
+                CyberCloudResources.ClickHouseHttpPort,
+                "http",
+                "http",
+                isProxied: false
+            )
             .WithHttpHealthCheck("/ping", 200, "http");
 
         // ── The Kubernetes data plane ──────────────────────────────────────────────────────────────────
@@ -268,9 +274,21 @@ public static class CyberCloudTopology {
         var objectStore = builder
             .AddContainer(CyberCloudResources.ObjectStore, "chrislusf/seaweedfs", "3.80")
             .WithArgs("server", "-s3", "-s3.config=/etc/seaweedfs/s3.json", "-dir=/data", "-ip.bind=0.0.0.0")
-            .WithBindMount(objectStoreConfigDirectory, "/etc/seaweedfs", isReadOnly: true)
-            .WithEndpoint(CyberCloudResources.ObjectStoreS3Port, CyberCloudResources.ObjectStoreS3Port, "http", "s3", isProxied: false)
-            .WithEndpoint(CyberCloudResources.ObjectStoreFilerPort, CyberCloudResources.ObjectStoreFilerPort, "http", "filer", isProxied: false)
+            .WithBindMount(objectStoreConfigDirectory, "/etc/seaweedfs", true)
+            .WithEndpoint(
+                CyberCloudResources.ObjectStoreS3Port,
+                CyberCloudResources.ObjectStoreS3Port,
+                "http",
+                "s3",
+                isProxied: false
+            )
+            .WithEndpoint(
+                CyberCloudResources.ObjectStoreFilerPort,
+                CyberCloudResources.ObjectStoreFilerPort,
+                "http",
+                "filer",
+                isProxied: false
+            )
             // ⚠ 403, not 200, and on the S3 port rather than the filer's — SeaweedFsRoundTripTests' finding:
             // the gateway prints its banner before the filer it depends on is ready, and a 403 to an
             // unsigned GET / is the earliest answer that means "the S3 gateway is up and checking
@@ -280,8 +298,16 @@ public static class CyberCloudTopology {
         var objectStoreBucket = builder
             .AddContainer(CyberCloudResources.ObjectStoreBucketInit, "curlimages/curl", "8.12.1")
             .WithArgs(
-                "--fail", "--silent", "--show-error", "--retry", "10", "--retry-connrefused", "--retry-delay", "2",
-                "-F", "file=@/dev/null;filename=.bucket",
+                "--fail",
+                "--silent",
+                "--show-error",
+                "--retry",
+                "10",
+                "--retry-connrefused",
+                "--retry-delay",
+                "2",
+                "-F",
+                "file=@/dev/null;filename=.bucket",
                 $"http://{CyberCloudResources.ObjectStore}:{CyberCloudResources.ObjectStoreFilerPort.ToString(CultureInfo.InvariantCulture)}/buckets/{CyberCloudResources.ObjectStoreBucket}/.bucket"
             )
             .WaitFor(objectStore);
@@ -306,8 +332,20 @@ public static class CyberCloudTopology {
         // second and the silos take longer than that to start, so in practice the first code lands.
         builder
             .AddContainer(CyberCloudResources.Mailpit, CyberCloudResources.MailpitImage, CyberCloudResources.MailpitTag)
-            .WithEndpoint(CyberCloudResources.MailpitSmtpPort, CyberCloudResources.MailpitSmtpPort, "tcp", "smtp", isProxied: false)
-            .WithEndpoint(CyberCloudResources.MailpitHttpPort, CyberCloudResources.MailpitHttpPort, "http", "http", isProxied: false)
+            .WithEndpoint(
+                CyberCloudResources.MailpitSmtpPort,
+                CyberCloudResources.MailpitSmtpPort,
+                "tcp",
+                "smtp",
+                isProxied: false
+            )
+            .WithEndpoint(
+                CyberCloudResources.MailpitHttpPort,
+                CyberCloudResources.MailpitHttpPort,
+                "http",
+                "http",
+                isProxied: false
+            )
             .WithHttpHealthCheck("/readyz", 200, "http");
 
         var siloOne = builder
@@ -397,7 +435,10 @@ public static class CyberCloudTopology {
             // https://localhost:5001, which nothing here listens on; a passkey ceremony from the dev server
             // would be refused with "origin not allowed" and nothing in that message names this line.
             // `localhost` is a secure context to every browser, so plain http is fine for the ceremony.
-            .WithEnvironment("CyberCloud__Identity__Origins__0", $"http://localhost:{CyberCloudResources.IdentityAppPort.ToString(CultureInfo.InvariantCulture)}")
+            .WithEnvironment(
+                "CyberCloud__Identity__Origins__0",
+                $"http://localhost:{CyberCloudResources.IdentityAppPort.ToString(CultureInfo.InvariantCulture)}"
+            )
             // The same string the gateway and the feeds host validate against — see the issuer note above.
             .WithEnvironment("CyberCloud__Identity__Issuer", CyberCloudResources.IdentityIssuer)
             // The third of the three (see silo-one), plus the region a signed-up tenant is homed to and
@@ -410,15 +451,27 @@ public static class CyberCloudTopology {
             // out — an ephemeral encryption key would refuse every refresh cookie, with an invalid_grant
             // that reads as a session bug. DevelopmentKeyFile refuses this setting in any other
             // environment and names the vault seam that replaces it.
-            .WithEnvironment("CyberCloud__Identity__DevelopmentKeyDirectory", Path.Combine(builder.AppHostDirectory, ".identity"))
+            .WithEnvironment(
+                "CyberCloud__Identity__DevelopmentKeyDirectory",
+                Path.Combine(builder.AppHostDirectory, ".identity")
+            )
             // An unauthenticated /authorize sends the person to the identity app's dev server, whose proxy
             // forwards the resumed /authorize back here with the cookie. In production the pages are
             // built into this host and this stays empty.
-            .WithEnvironment("CyberCloud__Identity__SignInPageBaseUri", $"http://localhost:{CyberCloudResources.IdentityAppPort.ToString(CultureInfo.InvariantCulture)}")
+            .WithEnvironment(
+                "CyberCloud__Identity__SignInPageBaseUri",
+                $"http://localhost:{CyberCloudResources.IdentityAppPort.ToString(CultureInfo.InvariantCulture)}"
+            )
             // The portal's registration: where a code may be sent and where the browser lands after
             // sign-out. The CORS origin for /token is derived from the first — FirstPartyClients.
-            .WithEnvironment("CyberCloud__Identity__Clients__Portal__RedirectUris__0", $"http://localhost:{CyberCloudResources.PortalPort.ToString(CultureInfo.InvariantCulture)}/auth/callback")
-            .WithEnvironment("CyberCloud__Identity__Clients__Portal__PostLogoutRedirectUris__0", $"http://localhost:{CyberCloudResources.PortalPort.ToString(CultureInfo.InvariantCulture)}/")
+            .WithEnvironment(
+                "CyberCloud__Identity__Clients__Portal__RedirectUris__0",
+                $"http://localhost:{CyberCloudResources.PortalPort.ToString(CultureInfo.InvariantCulture)}/auth/callback"
+            )
+            .WithEnvironment(
+                "CyberCloud__Identity__Clients__Portal__PostLogoutRedirectUris__0",
+                $"http://localhost:{CyberCloudResources.PortalPort.ToString(CultureInfo.InvariantCulture)}/"
+            )
             .WithHttpEndpoint(CyberCloudResources.IdentityPort, isProxied: false)
             .WithHttpHealthCheck("/health")
             .WaitFor(siloOne);
@@ -439,7 +492,10 @@ public static class CyberCloudTopology {
             // connected cluster's install command carries (#36), among other things. The shipped default
             // is https://api.cybercloud.io, which is a host nothing on this laptop can reach; a tenant's
             // agent installed from a local run would dial production. It is this gateway's own address.
-            .WithEnvironment("CyberCloud__Gateway__PublicBaseUri", $"http://localhost:{CyberCloudResources.GatewayPort.ToString(CultureInfo.InvariantCulture)}")
+            .WithEnvironment(
+                "CyberCloud__Gateway__PublicBaseUri",
+                $"http://localhost:{CyberCloudResources.GatewayPort.ToString(CultureInfo.InvariantCulture)}"
+            )
             .WithHttpEndpoint(CyberCloudResources.GatewayPort, isProxied: false)
             .WithHttpHealthCheck("/health")
             .WaitFor(siloOne)
@@ -453,7 +509,10 @@ public static class CyberCloudTopology {
             .AsOrleansClient()
             .WithObjectStore()
             .WithEnvironment("CyberCloud__Feeds__Identity__Issuer", CyberCloudResources.IdentityIssuer)
-            .WithEnvironment("CyberCloud__Feeds__PublicBaseUri", $"http://localhost:{CyberCloudResources.FeedsPort.ToString(CultureInfo.InvariantCulture)}")
+            .WithEnvironment(
+                "CyberCloud__Feeds__PublicBaseUri",
+                $"http://localhost:{CyberCloudResources.FeedsPort.ToString(CultureInfo.InvariantCulture)}"
+            )
             .WithHttpEndpoint(CyberCloudResources.FeedsPort, isProxied: false)
             .WithHttpHealthCheck("/health")
             .WaitFor(siloOne)
@@ -478,18 +537,22 @@ public static class CyberCloudTopology {
         // ⚠ install: false. The portal is a pnpm workspace with a frozen lockfile and a single-version
         // policy (portal/pnpm-workspace.yaml); an install Aspire ran on every start would be one that could
         // write the lockfile, and `pnpm install --frozen-lockfile` is a step a person runs once.
-        if (!string.Equals(builder.Configuration[CyberCloudResources.FrontendsKey], "false", StringComparison.OrdinalIgnoreCase)) {
+        if (!string.Equals(
+                builder.Configuration[CyberCloudResources.FrontendsKey],
+                "false",
+                StringComparison.OrdinalIgnoreCase
+            )) {
             var portalDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "..", "portal"));
 
             builder
                 .AddJavaScriptApp(CyberCloudResources.Portal, portalDirectory, "serve")
-                .WithPnpm(install: false)
+                .WithPnpm(false)
                 .WithHttpEndpoint(CyberCloudResources.PortalPort, isProxied: false)
                 .WaitFor(gateway);
 
             builder
                 .AddJavaScriptApp(CyberCloudResources.IdentityApp, portalDirectory, "serve:identity")
-                .WithPnpm(install: false)
+                .WithPnpm(false)
                 .WithHttpEndpoint(CyberCloudResources.IdentityAppPort, isProxied: false)
                 .WaitFor(identity);
         }

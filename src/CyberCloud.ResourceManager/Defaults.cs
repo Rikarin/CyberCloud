@@ -266,8 +266,11 @@ public sealed class UnavailableSecretWriter : ISecretWriter {
 ///         <b>
 ///             Refuses rather than succeeding without storing, for the reason
 ///             <see cref="UnavailableSecretWriter" /> gives one seam over.
-///         </b> A no-op put would let the feeds host answer <c>201 Created</c> to a <c>dotnet nuget
-///         push</c> whose bytes went nowhere, and a no-op list would let a feed's teardown converge
+///         </b> A no-op put would let the feeds host answer <c>201 Created</c> to a
+///         <c>
+/// dotnet nuget
+///         push
+///         </c> whose bytes went nowhere, and a no-op list would let a feed's teardown converge
 ///         over artefacts it never removed. Either is a data plane reporting success over an absence.
 ///     </para>
 ///     <para>
@@ -307,7 +310,10 @@ public sealed class UnavailableObjectStore : IObjectStore {
         Task.FromResult(Result.Failure(ErrorCode.InternalError, Because));
 
     /// <inheritdoc />
-    public Task<Result<ImmutableArray<string>>> ListAsync(string prefix, CancellationToken cancellationToken = default) =>
+    public Task<Result<ImmutableArray<string>>> ListAsync(
+        string prefix,
+        CancellationToken cancellationToken = default
+    ) =>
         Task.FromResult(Result<ImmutableArray<string>>.Failure(ErrorCode.InternalError, Because));
 }
 
@@ -494,8 +500,11 @@ public sealed class UnavailablePrincipalDirectory : IPrincipalDirectory {
 ///     The resource graph query a host with no ClickHouse endpoint keeps: it refuses by name.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Refuses rather than answering an empty page, for the reason
-///     <see cref="UnavailablePrincipalDirectory" /> refuses rather than answering <c>false</c>.</b>
+///     ⚠
+///     <b>
+///         Refuses rather than answering an empty page, for the reason
+///         <see cref="UnavailablePrincipalDirectory" /> refuses rather than answering <c>false</c>.
+///     </b>
 ///     An empty result from a query endpoint reads as "you have no resources", which is the wrong
 ///     sentence for "nothing is wired"; a caller with a hundred resources and an operator with a
 ///     blank section would each spend an afternoon on it. The real service lives in
@@ -517,8 +526,8 @@ public sealed class UnavailableResourceGraphQuery : IResourceGraphQuery {
                 + "that serves the resource graph sets CyberCloud:ResourceGraph:ClickHouseEndpoint (and "
                 + "AllowInsecureTransport for a plain-http endpoint on a laptop), which registers the "
                 + "ClickHouse-backed IResourceGraphQuery in place of this one — docs/plan/08 § The "
-                + "resource-graph projection. This refuses rather than answering an empty page: \"you "
-                + "have no resources\" is the wrong sentence for \"nothing is wired\"."
+                + """resource-graph projection. This refuses rather than answering an empty page: "you """
+                + """have no resources" is the wrong sentence for "nothing is wired"."""
             )
         );
 }

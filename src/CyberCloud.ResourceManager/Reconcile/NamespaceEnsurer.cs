@@ -510,7 +510,7 @@ public sealed class NamespaceEnsurer(IClock clock) {
         bytes[6] = (byte)((bytes[6] & 0x0F) | 0x80);
         bytes[8] = (byte)((bytes[8] & 0x3F) | 0x80);
 
-        return new(bytes, bigEndian: true);
+        return new(bytes, true);
     }
 
     /// <summary>The namespace document, before the builder injects the labels.</summary>

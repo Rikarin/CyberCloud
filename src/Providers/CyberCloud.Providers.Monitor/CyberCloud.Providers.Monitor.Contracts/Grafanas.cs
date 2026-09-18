@@ -15,8 +15,11 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/16 § Managed Grafana · <b>M2 · 0.8 EM</b>: <i>"one instance per tenant … datasources
-///         pre-wired to that tenant's workspace and nothing else"</i>. Issue #32's third noun of four.
+///         docs/plan/16 § Managed Grafana · <b>M2 · 0.8 EM</b>:
+///         <i>
+///             "one instance per tenant … datasources
+///             pre-wired to that tenant's workspace and nothing else"
+///         </i>. Issue #32's third noun of four.
 ///         A tenant gets an unmodified Grafana OSS in their own namespace, provisioned with the two
 ///         datasources their workspace's <c>listKeys</c> hands out, and a URL to reach it.
 ///     </para>
@@ -25,9 +28,12 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 ///         <b>
 ///             ADR-011, READ FOR A DEPLOYED COMPONENT: ALLOWED, ON A CONDITION THIS TYPE KEEPS, AND
 ///             THE PORTAL'S HALF IS A RULE ABOUT CODE THIS TYPE NEVER TOUCHES.
-///         </b> ADR-011's row: <i>"Grafana | AGPL-3.0 | ⚠ Offerable as a managed instance (we
-///         distribute, we do not modify). Our portal must not embed or link Grafana code — it embeds
-///         rendered dashboards by URL"</i>. Three readings, each checked against what this type does:
+///         </b> ADR-011's row:
+///         <i>
+///             "Grafana | AGPL-3.0 | ⚠ Offerable as a managed instance (we
+///             distribute, we do not modify). Our portal must not embed or link Grafana code — it embeds
+///             rendered dashboards by URL"
+///         </i>. Three readings, each checked against what this type does:
 ///     </para>
 ///     <list type="number">
 ///         <item>
@@ -47,8 +53,10 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 ///             way.
 ///         </item>
 ///         <item>
-///             <b>The build gate's allow-list is for the bundle and this is not a bundle
-///             component.</b> <c>build/Build.Licence.cs</c> scans <c>charts/bundle/</c> and the
+///             <b>
+///                 The build gate's allow-list is for the bundle and this is not a bundle
+///                 component.
+///             </b> <c>build/Build.Licence.cs</c> scans <c>charts/bundle/</c> and the
 ///             platform's own images; a chart under <c>charts/managed/</c> that renders an upstream
 ///             image — <c>haproxy</c> before this, the collector and this beside it — is outside
 ///             both scans. So the exception ADR-011 § Enforcement asks for is written into
@@ -69,16 +77,22 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>IN THE MONITOR FAMILY'S ASSEMBLIES, UNDER ITS OWN PROVIDER NAMESPACE.</b>
-///         docs/plan/03 § Providers lists <c>CyberCloud.Providers.Monitor/ # workspaces, collectors,
-///         alerts, grafanas</c>, and this is the first provider that is not the only
+///         docs/plan/03 § Providers lists
+///         <c>
+/// CyberCloud.Providers.Monitor/ # workspaces, collectors,
+///         alerts, grafanas
+///         </c>, and this is the first provider that is not the only
 ///         <c>IResourceProvider</c> in its assembly. The alternative — a seventeenth family for one
 ///         type — would need a line to this family for the workspace's row keys, and rule 2 of
 ///         § Assembly graph rules refuses it. The namespace is what the catalogue says it is
 ///         (<c>CyberCloud.Dashboard</c>); the assembly is where docs/plan/03 puts it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE WORKSPACE IS A PROPERTY, NOT A PARENT, AND IT IS THE SECOND
-///         <c>SchemaFormat.ResourceId</c> IN THE CATALOGUE.</b> A Grafana is not a child of a
+///         ⚠
+///         <b>
+///             THE WORKSPACE IS A PROPERTY, NOT A PARENT, AND IT IS THE SECOND
+///             <c>SchemaFormat.ResourceId</c> IN THE CATALOGUE.
+///         </b> A Grafana is not a child of a
 ///         workspace — it is another provider's type — so the address cannot carry the workspace and
 ///         a body property has to. Like the alert rule's action group, the reconciler checks what the
 ///         schema cannot: the path is this tenant's, it names a <c>CyberCloud.Monitor/workspaces</c>
@@ -148,8 +162,11 @@ public static class Grafanas {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Fetched by Grafana's own in-process installer, from grafana.com, before the HTTP
-    ///         server comes up, and not pinned by digest.</b> Grafana OSS has no built-in ClickHouse
+    ///         ⚠
+    ///         <b>
+    ///             Fetched by Grafana's own in-process installer, from grafana.com, before the HTTP
+    ///             server comes up, and not pinned by digest.
+    ///         </b> Grafana OSS has no built-in ClickHouse
     ///         datasource; the plugin is Grafana Labs' own, Apache-2.0 (its LICENSE read on
     ///         2026-09-17), and the installer unpacks it into the writable plugins directory on every
     ///         start. Not <c>GF_INSTALL_PLUGINS</c>: at 13.2.2 the image's <c>run.sh</c> logs that
@@ -159,8 +176,11 @@ public static class Grafanas {
     ///         registered before the provisioning file that names it is read.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A cluster with no egress has no Grafana at all, and that is the measured behaviour
-    ///         rather than a guess.</b> A synchronous preinstall that cannot reach grafana.com fails
+    ///         ⚠
+    ///         <b>
+    ///             A cluster with no egress has no Grafana at all, and that is the measured behaviour
+    ///             rather than a guess.
+    ///         </b> A synchronous preinstall that cannot reach grafana.com fails
     ///         the <c>plugin.backgroundinstaller</c> module, every module depending on it, and the
     ///         process exits <c>1</c> before it listens — <c>charts/managed/grafana/SOURCE</c> carries
     ///         the transcript. So the pod crash-loops naming grafana.com instead of coming up Ready with
@@ -193,8 +213,11 @@ public static class Grafanas {
 
     /// <summary>Where Grafana keeps its database and its plugins — an <c>emptyDir</c> here.</summary>
     /// <remarks>
-    ///     ⚠ <b>Ephemeral, on purpose, and that is what makes the provisioning file the source of
-    ///     truth.</b> A dashboard a tenant saves in the UI dies with the pod; the datasources come
+    ///     ⚠
+    ///     <b>
+    ///         Ephemeral, on purpose, and that is what makes the provisioning file the source of
+    ///         truth.
+    ///     </b> A dashboard a tenant saves in the UI dies with the pod; the datasources come
     ///     back from the file on every start. Persistent dashboards are the sub-resource docs/plan/16
     ///     asks for and this type owes — see the class remarks.
     /// </remarks>
@@ -321,7 +344,8 @@ public static class Grafanas {
 
     /// <summary>The handle that reads the admin password back.</summary>
     /// <param name="id">The resource, with its GUID resolved.</param>
-    public static SecretRef AdminPasswordRef(ResourceId id) => new() { Path = SecretPath(id), Field = AdminPasswordField };
+    public static SecretRef AdminPasswordRef(ResourceId id) =>
+        new() { Path = SecretPath(id), Field = AdminPasswordField };
 
     // ── The body ──────────────────────────────────────────────────────────────────────────────
 
@@ -361,8 +385,8 @@ public static class Grafanas {
                     Immutable = true,
                     MaxLength = 512,
                     ExampleJson = "\"/tenants/11111111-1111-4111-8111-111111111111/subscriptions/"
-                    + "33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/"
-                    + "CyberCloud.Monitor/workspaces/prod\""
+                        + "33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/"
+                        + "CyberCloud.Monitor/workspaces/prod\""
                 },
                 new(
                     "/properties/anonymousViewers",
@@ -388,7 +412,8 @@ public static class Grafanas {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     /// <summary>What a <c>url</c> returns.</summary>
     public static ResourceSchema UrlResponse { get; } =
@@ -461,7 +486,9 @@ public static class Grafanas {
         var path = WorkspacePath(desired);
 
         if (!ResourceId.TryParsePath(path, out var workspace)) {
-            return Refuse("The workspace is not a resource id path. Write the full path of the CyberCloud.Monitor/workspaces resource — docs/plan/06 § Identifiers.");
+            return Refuse(
+                "The workspace is not a resource id path. Write the full path of the CyberCloud.Monitor/workspaces resource — docs/plan/06 § Identifiers."
+            );
         }
 
         if (workspace.TenantId != id.TenantId) {
@@ -471,7 +498,11 @@ public static class Grafanas {
             );
         }
 
-        if (!string.Equals(workspace.Type.Namespace, MonitorWorkspaces.ProviderNamespace, StringComparison.OrdinalIgnoreCase)
+        if (!string.Equals(
+                workspace.Type.Namespace,
+                MonitorWorkspaces.ProviderNamespace,
+                StringComparison.OrdinalIgnoreCase
+            )
             || !string.Equals(workspace.Type.Type, MonitorWorkspaces.TypePath, StringComparison.OrdinalIgnoreCase)
             || workspace.Parent is not null) {
             return Refuse(
@@ -503,15 +534,21 @@ public static class Grafanas {
     /// <param name="workspace">The workspace's own name.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>$VAR</c> is Grafana's own provisioning-file interpolation and it happens at
-    ///         start</b>, so the accountID, the database and the key never appear in this text — the
+    ///         ⚠
+    ///         <b>
+    ///             <c>$VAR</c> is Grafana's own provisioning-file interpolation and it happens at
+    ///             start
+    ///         </b>, so the accountID, the database and the key never appear in this text — the
     ///         same arrangement the collector has with <c>${env:…}</c>, for the same reason
     ///         (<see cref="MonitorWorkspaces.WorkspaceEnv" />). Grafana expands <c>$NAME</c> in
     ///         every provisioning value; a literal dollar would be <c>$$</c>, and none is needed.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Two datasources, both <c>editable: false</c>, both pointing at this workspace and
-    ///         nothing else</b> — docs/plan/16's <i>"and nothing else"</i>. The Prometheus one is
+    ///         ⚠
+    ///         <b>
+    ///             Two datasources, both <c>editable: false</c>, both pointing at this workspace and
+    ///             nothing else
+    ///         </b> — docs/plan/16's <i>"and nothing else"</i>. The Prometheus one is
     ///         Grafana's built-in, at the workspace's read-only PromQL endpoint, authenticated as the
     ///         workspace's <c>VMUser</c>. The ClickHouse one is the plugin's, over HTTP at the
     ///         workspace's SQL endpoint with its database as the default. Their <c>uid</c>s are fixed
@@ -614,28 +651,40 @@ public static class Grafanas {
     ///         Postgres behind it, which is a different resource.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>GF_SECURITY_ALLOW_EMBEDDING=true</c> is ADR-011's integration, spelled as
-    ///         Grafana spells it.</b> Without it Grafana sends <c>X-Frame-Options: deny</c> and a panel
+    ///         ⚠
+    ///         <b>
+    ///             <c>GF_SECURITY_ALLOW_EMBEDDING=true</c> is ADR-011's integration, spelled as
+    ///             Grafana spells it.
+    ///         </b> Without it Grafana sends <c>X-Frame-Options: deny</c> and a panel
     ///         URL in an <c>iframe</c> renders nothing. It is unconditional because embedding by URL is
     ///         the only way this platform will ever show a Grafana panel.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The root filesystem is read-only and two <c>emptyDir</c>s make Grafana run
-    ///         anyway.</b> Grafana writes its database and downloaded plugins under
+    ///         ⚠
+    ///         <b>
+    ///             The root filesystem is read-only and two <c>emptyDir</c>s make Grafana run
+    ///             anyway.
+    ///         </b> Grafana writes its database and downloaded plugins under
     ///         <see cref="DataDirectory" /> and scratch under <c>/tmp</c>; everything else in the
     ///         image is read at start. An image rebuilt to write elsewhere fails to start, loudly,
     ///         rather than writing somewhere this spec did not anticipate.
     ///     </para>
     ///     <para>
-    ///         ⚠⚠ <b><c>GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false</c> IS WHAT KEEPS THE PROMETHEUS
-    ///         DATASOURCE ALIVE ON THAT READ-ONLY ROOT, AND THE POD IS READY EITHER WAY.</b> At
+    ///         ⚠⚠
+    ///         <b>
+    ///             <c>GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false</c> IS WHAT KEEPS THE PROMETHEUS
+    ///             DATASOURCE ALIVE ON THAT READ-ONLY ROOT, AND THE POD IS READY EITHER WAY.
+    ///         </b> At
     ///         13.2.2 the Prometheus datasource is not compiled into the server; it is a bundled
     ///         plugin under <c>/usr/share/grafana/data/plugins-bundled</c>, and the installer's
     ///         default is to update every preinstalled plugin without a pinned version on start —
     ///         bundled ones included. Measured on the image before this line existed: the installer
     ///         logged <c>Updating plugin pluginId=prometheus from=13.1.7 to=13.1.9</c>, stopped the
-    ///         plugin's backend process, then failed to reinstall it with <c>unlinkat
-    ///         /usr/share/grafana/data/plugins-bundled/prometheus: read-only file system</c>. From then
+    ///         plugin's backend process, then failed to reinstall it with
+    ///         <c>
+    /// unlinkat
+    ///         /usr/share/grafana/data/plugins-bundled/prometheus: read-only file system
+    ///         </c>. From then
     ///         on <c>/api/health</c> answered <c>200</c> — so the readiness probe, the reconciler and a
     ///         pod-start test that stopped at Ready all called it good — while the provisioned
     ///         <c>Metrics</c> datasource, the default one, answered <c>Plugin not registered</c>.
@@ -656,7 +705,11 @@ public static class Grafanas {
         env.Add(Env("GF_SECURITY_ADMIN_USER", AdminSecretName(name), AdminUserField));
         env.Add(Env("GF_SECURITY_ADMIN_PASSWORD", AdminSecretName(name), AdminPasswordField));
         env.Add(new JsonObject { ["name"] = "GF_SECURITY_ALLOW_EMBEDDING", ["value"] = "true" });
-        env.Add(new JsonObject { ["name"] = "GF_AUTH_ANONYMOUS_ENABLED", ["value"] = AnonymousViewers(desired) ? "true" : "false" });
+        env.Add(
+            new JsonObject {
+                ["name"] = "GF_AUTH_ANONYMOUS_ENABLED", ["value"] = AnonymousViewers(desired) ? "true" : "false"
+            }
+        );
         env.Add(new JsonObject { ["name"] = "GF_AUTH_ANONYMOUS_ORG_ROLE", ["value"] = "Viewer" });
         env.Add(new JsonObject { ["name"] = "GF_PLUGINS_PREINSTALL_SYNC", ["value"] = ClickHousePreinstall });
         env.Add(new JsonObject { ["name"] = "GF_PLUGINS_PREINSTALL_AUTO_UPDATE", ["value"] = "false" });
@@ -707,14 +760,20 @@ public static class Grafanas {
                                     ["limits"] = new JsonObject { ["cpu"] = cpu, ["memory"] = memory }
                                 },
                                 ["volumeMounts"] = new JsonArray {
-                                    new JsonObject { ["name"] = "datasources", ["mountPath"] = ProvisioningDirectory, ["readOnly"] = true },
+                                    new JsonObject {
+                                        ["name"] = "datasources",
+                                        ["mountPath"] = ProvisioningDirectory,
+                                        ["readOnly"] = true
+                                    },
                                     new JsonObject { ["name"] = "data", ["mountPath"] = DataDirectory },
                                     new JsonObject { ["name"] = "tmp", ["mountPath"] = "/tmp" }
                                 }
                             }
                         },
                         ["volumes"] = new JsonArray {
-                            new JsonObject { ["name"] = "datasources", ["configMap"] = new JsonObject { ["name"] = objectName } },
+                            new JsonObject {
+                                ["name"] = "datasources", ["configMap"] = new JsonObject { ["name"] = objectName }
+                            },
                             new JsonObject { ["name"] = "data", ["emptyDir"] = new JsonObject() },
                             new JsonObject { ["name"] = "tmp", ["emptyDir"] = new JsonObject() }
                         }
@@ -798,13 +857,14 @@ public static class Grafanas {
 
         var anonymous = env
             .OfType<JsonObject>()
-            .FirstOrDefault(x => x["name"]?.GetValue<string>() == "GF_AUTH_ANONYMOUS_ENABLED")?["value"]
+            .FirstOrDefault(static x => x["name"]?.GetValue<string>() == "GF_AUTH_ANONYMOUS_ENABLED")?["value"]
             ?.GetValue<string>();
 
         var (cpu, memory) = Resources(desired);
 
         return container["image"]?.GetValue<string>() == Image
-            && template["metadata"]?["annotations"]?[ConfigChecksumAnnotation]?.GetValue<string>() == ConfigHash(workspace)
+            && template["metadata"]?["annotations"]?[ConfigChecksumAnnotation]?.GetValue<string>()
+            == ConfigHash(workspace)
             && anonymous == (AnonymousViewers(desired) ? "true" : "false")
             && container["resources"]?["limits"]?["cpu"]?.GetValue<string>() == cpu
             && container["resources"]?["limits"]?["memory"]?.GetValue<string>() == memory;
@@ -861,7 +921,9 @@ public static class Grafanas {
             : null;
 
     static string Text(JsonElement desired, string name) =>
-        Property(desired, name) is { ValueKind: JsonValueKind.String } value ? value.GetString() ?? string.Empty : string.Empty;
+        Property(desired, name) is { ValueKind: JsonValueKind.String } value
+            ? value.GetString() ?? string.Empty
+            : string.Empty;
 
     static bool Flag(JsonElement desired, string name, bool fallback) =>
         Property(desired, name) is { ValueKind: JsonValueKind.True or JsonValueKind.False } value

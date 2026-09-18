@@ -70,10 +70,10 @@ public sealed class ResourceViews(
     /// <summary>The view and the watch for one owning resource.</summary>
     /// <param name="owner">The resource whose pass is running, GUID resolved.</param>
     public (IResourceView View, IResourceWatch Watch) For(ResourceId owner) =>
-        (
-            new OwnedResourceView(owner, registry, grains, authorizer, clusters, logger),
-            new OwnedResourceWatch(owner, grains, clock)
-        );
+    (
+        new OwnedResourceView(owner, registry, grains, authorizer, clusters, logger),
+        new OwnedResourceWatch(owner, grains, clock)
+    );
 
     /// <summary>
     ///     Decides whether <paramref name="reader" /> may read <paramref name="target" />, by the rule
@@ -145,7 +145,10 @@ public sealed class OwnedResourceView(
     ILogger logger
 ) : IResourceView {
     /// <inheritdoc />
-    public async Task<Result<ResourceSnapshot>> ReadAsync(ResourceId target, CancellationToken cancellationToken = default) {
+    public async Task<Result<ResourceSnapshot>> ReadAsync(
+        ResourceId target,
+        CancellationToken cancellationToken = default
+    ) {
         var viewed = await ViewAsync(target, cancellationToken);
         return viewed.TryGetError(out var error)
             ? Result<ResourceSnapshot>.Failure(error)
@@ -265,7 +268,7 @@ public sealed class OwnedResourceView(
             .GetGrain<IResourceGrain>(GrainKeys.Resource(resolved.Id))
             .GetAsync(
                 registration.Newest.Value,
-                [.. schema.GetValueOrThrow().Properties.Where(x => !x.Secret).Select(x => x.JsonPointer)]
+                [.. schema.GetValueOrThrow().Properties.Where(static x => !x.Secret).Select(static x => x.JsonPointer)]
             );
 
         return snapshot.TryGetError(out var readError)
@@ -282,13 +285,17 @@ public sealed class OwnedResourceWatch(ResourceId owner, IGrainFactory grains, I
     /// <inheritdoc />
     public Task<Result> SubscribeAsync(ResourceTypeName type, CancellationToken cancellationToken = default) =>
         type.IsEmpty
-            ? Task.FromResult(Result.Failure(ErrorCode.InvalidResourceType, "A watch names one resource type, and this one is empty."))
+            ? Task.FromResult(
+                Result.Failure(ErrorCode.InvalidResourceType, "A watch names one resource type, and this one is empty.")
+            )
             : Index(type).SubscribeAsync(new() { ResourceId = owner.Id, Path = owner.Path, Since = clock.UtcNow });
 
     /// <inheritdoc />
     public Task<Result> UnsubscribeAsync(ResourceTypeName type, CancellationToken cancellationToken = default) =>
         type.IsEmpty
-            ? Task.FromResult(Result.Failure(ErrorCode.InvalidResourceType, "A watch names one resource type, and this one is empty."))
+            ? Task.FromResult(
+                Result.Failure(ErrorCode.InvalidResourceType, "A watch names one resource type, and this one is empty.")
+            )
             : Index(type).UnsubscribeAsync(owner.Id);
 
     // ⚠ THE OWNER'S TENANT AND THE OWNER'S SUBSCRIPTION, AND NOTHING THE RECONCILER SAID. "In my

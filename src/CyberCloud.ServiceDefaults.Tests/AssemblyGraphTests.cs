@@ -27,7 +27,7 @@ public sealed class AssemblyGraphTests {
         // reporting "No packages were found for this framework"; this is the assembly-level one,
         // which also catches a reference acquired through a ProjectReference.
         ReferencesOf(Core)
-            .Where(name => !name.StartsWith("System.", StringComparison.Ordinal)
+            .Where(static name => !name.StartsWith("System.", StringComparison.Ordinal)
                 && !string.Equals(name, "netstandard", StringComparison.Ordinal)
             )
             .ShouldBeEmpty(
@@ -61,7 +61,7 @@ public sealed class AssemblyGraphTests {
         // write touches it.
         foreach (var assembly in new[] { Core, Contracts, ServiceDefaults }) {
             ReferencesOf(assembly)
-                .Where(name => name.StartsWith("k8s", StringComparison.OrdinalIgnoreCase)
+                .Where(static name => name.StartsWith("k8s", StringComparison.OrdinalIgnoreCase)
                     || name.Contains("KubernetesClient", StringComparison.OrdinalIgnoreCase)
                 )
                 .ShouldBeEmpty($"{assembly.GetName().Name} binds to the Kubernetes client.");
@@ -91,5 +91,5 @@ public sealed class AssemblyGraphTests {
     }
 
     static IEnumerable<string> ReferencesOf(Assembly assembly) =>
-        assembly.GetReferencedAssemblies().Select(x => x.Name ?? string.Empty);
+        assembly.GetReferencedAssemblies().Select(static x => x.Name ?? string.Empty);
 }

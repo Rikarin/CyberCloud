@@ -344,8 +344,8 @@ public sealed record UsageIngestReceipt {
         "CyberCloud.Security",
         "CC1005:A secret must not be a serialized member of grain state",
         Justification =
-        "Not a secret — it is the echo of UsageEvent.IdempotencyKey, a sha256 of values that "
-        + "travel beside it. See the justification on UsageEvent.IdempotencyKey."
+            "Not a secret — it is the echo of UsageEvent.IdempotencyKey, a sha256 of values that "
+            + "travel beside it. See the justification on UsageEvent.IdempotencyKey."
     )]
     public string IdempotencyKey { get; init; } = string.Empty;
 }

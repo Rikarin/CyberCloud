@@ -9,8 +9,11 @@ namespace CyberCloud.Identity.Host;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The middleware is in the pipeline only when the list is not empty, and the reason is
-///         what <c>CyberCloud.ServiceDefaults</c> leaves behind.</b> <c>AddServiceDefaults</c>
+///         ⚠
+///         <b>
+///             The middleware is in the pipeline only when the list is not empty, and the reason is
+///             what <c>CyberCloud.ServiceDefaults</c> leaves behind.
+///         </b> <c>AddServiceDefaults</c>
 ///         configures <c>ForwardedHeadersOptions</c> with both known lists cleared, and cleared lists
 ///         are not "trust nobody" — <c>ForwardedHeadersMiddleware</c> checks the connection's
 ///         address against them only when at least one has an entry, so on the cleared options it

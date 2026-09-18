@@ -40,10 +40,10 @@ public sealed class ConfigurationTests {
             ["CYC_SUBSCRIPTION"] = "sub-env"
         };
 
-        var settings = CycSettings.Resolve(file, environment, profileFlag: null);
+        var settings = CycSettings.Resolve(file, environment, null);
 
         settings.Profile.ShouldBe("work");
-        settings.Get("subscription", flagValue: "sub-flag").ShouldBe("sub-flag");
+        settings.Get("subscription", "sub-flag").ShouldBe("sub-flag");
         settings.Get("subscription").ShouldBe("sub-env");
         settings.Get("tenant").ShouldBe("contoso");
     }
@@ -53,12 +53,12 @@ public sealed class ConfigurationTests {
         var file = CycConfigFile.Parse(TwoProfiles);
         var empty = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        CycSettings.Resolve(file, empty, profileFlag: "lab").Get("tenant").ShouldBe("fabrikam");
+        CycSettings.Resolve(file, empty, "lab").Get("tenant").ShouldBe("fabrikam");
 
         var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["CYC_PROFILE"] = "lab" };
-        CycSettings.Resolve(file, environment, profileFlag: null).Get("tenant").ShouldBe("fabrikam");
+        CycSettings.Resolve(file, environment, null).Get("tenant").ShouldBe("fabrikam");
 
-        CycSettings.Resolve(file, empty, profileFlag: null).Get("tenant").ShouldBe("contoso");
+        CycSettings.Resolve(file, empty, null).Get("tenant").ShouldBe("contoso");
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public sealed class ConfigurationTests {
         var settings = CycSettings.Resolve(
             CycConfigFile.Parse(TwoProfiles),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
-            profileFlag: "lab"
+            "lab"
         );
 
         settings.Endpoint.ShouldBe(new Uri("https://api.lab.internal/"));
@@ -77,7 +77,7 @@ public sealed class ConfigurationTests {
         var settings = CycSettings.Resolve(
             CycConfigFile.Parse("[default]\nendpoint = not a url\n"),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
-            profileFlag: null
+            null
         );
 
         Should.Throw<CycUsageException>(() => settings.Endpoint);
@@ -95,7 +95,7 @@ public sealed class ConfigurationTests {
 
     [Fact]
     public async Task TheProfileSuppliesTheSubscriptionAndTenantAVerbNeeds() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
 
         using var host = TestHost.Create(transport, config: TwoProfiles);
 
@@ -120,11 +120,11 @@ public sealed class ConfigurationTests {
 
     [Fact]
     public async Task TheEnvironmentSuppliesThemForCi() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
 
         using var host = TestHost.Create(
             transport,
-            environment: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
                 ["CYC_SUBSCRIPTION"] = "sub-ci", ["CYC_TENANT"] = "tenant-ci"
             }
         );

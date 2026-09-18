@@ -50,8 +50,8 @@ sealed class ScriptedTransport : HttpMessageHandler {
                 request.Method,
                 request.RequestUri!,
                 request.Headers.ToDictionary(
-                    x => x.Key,
-                    x => string.Join(",", x.Value),
+                    static x => x.Key,
+                    static x => string.Join(",", x.Value),
                     StringComparer.OrdinalIgnoreCase
                 ),
                 request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken)

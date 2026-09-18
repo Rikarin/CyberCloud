@@ -64,7 +64,7 @@ public sealed class OpenIddictServerOptionsTests {
                 OpenIddictConstants.GrantTypes.ClientCredentials,
                 OpenIddictConstants.GrantTypes.DeviceCode
             ],
-            ignoreOrder: true,
+            true,
             "docs/plan/11 § Protocol's flow table, and nothing outside it"
         );
 
@@ -105,7 +105,7 @@ public sealed class OpenIddictServerOptionsTests {
         // to a relative Uri whose ToString() is "token". Comparing the raw strings would pass for
         // the wrong reason on a value that had lost its path entirely.
         static void ShouldBeAt(ICollection<Uri> configured, string constant) =>
-            configured.Select(x => "/" + x.ToString().TrimStart('/'))
+            configured.Select(static x => "/" + x.ToString().TrimStart('/'))
                 .ShouldContain(constant, $"the constant says {constant}");
 
         ShouldBeAt(options.AuthorizationEndpointUris, IdentityHostOpenIddict.AuthorizationPath);
@@ -189,8 +189,8 @@ public sealed class OpenIddictServerOptionsTests {
         // exists to hold device and user codes. They are listed here anyway, so this test names the
         // whole set the degraded mode demands rather than the part that fails late.
         var custom = Options().Handlers
-            .Where(x => x.Type == OpenIddictServerHandlerType.Custom)
-            .Select(x => x.ContextType)
+            .Where(static x => x.Type == OpenIddictServerHandlerType.Custom)
+            .Select(static x => x.ContextType)
             .ToHashSet();
 
         foreach (var required in new[] {
@@ -212,11 +212,17 @@ public sealed class OpenIddictServerOptionsTests {
         // ⚠ And the three that are ours by choice rather than by demand, by type: the validators
         // that serve a flow rather than refuse one, so a refusing handler put back in their place
         // would fail here by name rather than by a 400 in a browser.
-        var handlers = Options().Handlers.Where(x => x.Type == OpenIddictServerHandlerType.Custom).ToList();
+        var handlers = Options().Handlers.Where(static x => x.Type == OpenIddictServerHandlerType.Custom).ToList();
 
-        handlers.ShouldContain(x => x.ServiceDescriptor.ImplementationType == typeof(DegradedModeHandlers.ValidateAuthorizationRequest));
-        handlers.ShouldContain(x => x.ServiceDescriptor.ImplementationType == typeof(DegradedModeHandlers.ValidateTokenRequest));
-        handlers.ShouldContain(x => x.ServiceDescriptor.ImplementationType == typeof(DegradedModeHandlers.ValidateEndSessionRequest));
+        handlers.ShouldContain(x => x.ServiceDescriptor.ImplementationType
+            == typeof(DegradedModeHandlers.ValidateAuthorizationRequest)
+        );
+        handlers.ShouldContain(x => x.ServiceDescriptor.ImplementationType
+            == typeof(DegradedModeHandlers.ValidateTokenRequest)
+        );
+        handlers.ShouldContain(x => x.ServiceDescriptor.ImplementationType
+            == typeof(DegradedModeHandlers.ValidateEndSessionRequest)
+        );
     }
 
     [Fact]
@@ -228,18 +234,26 @@ public sealed class OpenIddictServerOptionsTests {
         // leaves the refresh token in the portal's response body, which every assertion on the
         // principal passes and only an HTTP test sees. Counting here makes it a start-up-shaped
         // failure.
-        var handlers = Options().Handlers.Where(x => x.Type == OpenIddictServerHandlerType.Custom).ToList();
+        var handlers = Options().Handlers.Where(static x => x.Type == OpenIddictServerHandlerType.Custom).ToList();
 
-        handlers.Count(x => x.ServiceDescriptor.ImplementationType == typeof(DegradedModeHandlers.ExtractRefreshTokenFromCookie))
+        handlers.Count(static x => x.ServiceDescriptor.ImplementationType
+            == typeof(DegradedModeHandlers.ExtractRefreshTokenFromCookie)
+        )
             .ShouldBe(1);
 
-        handlers.Single(x => x.ServiceDescriptor.ImplementationType == typeof(DegradedModeHandlers.ExtractRefreshTokenFromCookie))
+        handlers.Single(static x => x.ServiceDescriptor.ImplementationType
+            == typeof(DegradedModeHandlers.ExtractRefreshTokenFromCookie)
+        )
             .ContextType.ShouldBe(typeof(OpenIddictServerEvents.ExtractTokenRequestContext));
 
-        handlers.Count(x => x.ServiceDescriptor.ImplementationType == typeof(DegradedModeHandlers.MoveRefreshTokenToCookie))
+        handlers.Count(static x => x.ServiceDescriptor.ImplementationType
+            == typeof(DegradedModeHandlers.MoveRefreshTokenToCookie)
+        )
             .ShouldBe(1);
 
-        handlers.Single(x => x.ServiceDescriptor.ImplementationType == typeof(DegradedModeHandlers.MoveRefreshTokenToCookie))
+        handlers.Single(static x => x.ServiceDescriptor.ImplementationType
+            == typeof(DegradedModeHandlers.MoveRefreshTokenToCookie)
+        )
             .ContextType.ShouldBe(typeof(OpenIddictServerEvents.ApplyTokenResponseContext));
     }
 
@@ -261,7 +275,7 @@ public sealed class OpenIddictServerOptionsTests {
             .AddLogging()
             .AddOptions()
             .AddSingleton<IHostEnvironment>(TestEnvironment.Development)
-            .Configure<IdentityHostOptions>(x => x.Issuer = "https://id.example.test")
+            .Configure<IdentityHostOptions>(static x => x.Issuer = "https://id.example.test")
             .AddIdentityHostOpenIddict()
             .BuildServiceProvider()
             .GetRequiredService<IOptions<OpenIddictServerOptions>>()
@@ -287,9 +301,9 @@ public sealed class OpenIddictServerOptionsTests {
         ];
 
         foreach (var scope in scopes) {
-            scope.ShouldNotContain("admin", Case.Insensitive);
-            scope.ShouldNotContain("write", Case.Insensitive);
-            scope.ShouldNotContain("delete", Case.Insensitive);
+            scope.ShouldNotContain("admin");
+            scope.ShouldNotContain("write");
+            scope.ShouldNotContain("delete");
         }
 
         scopes.Distinct(StringComparer.Ordinal).Count().ShouldBe(scopes.Length);
@@ -298,6 +312,6 @@ public sealed class OpenIddictServerOptionsTests {
         // against its registered set and answers invalid_scope for a stranger — which is what the
         // first real client-credentials request for `cyc.api` got, because the nested class declared
         // the four and nothing registered them. A constant is not a registration.
-        Options().Scopes.ShouldBe(scopes, ignoreOrder: true);
+        Options().Scopes.ShouldBe(scopes, true);
     }
 }

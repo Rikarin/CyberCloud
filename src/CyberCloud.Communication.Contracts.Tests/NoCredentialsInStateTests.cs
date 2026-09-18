@@ -1,4 +1,3 @@
-using Orleans;
 using System.Reflection;
 
 namespace CyberCloud.Communication.Contracts.Tests;
@@ -52,7 +51,7 @@ public sealed class NoCredentialsInStateTests {
         var offending = new List<string>();
 
         foreach (var type in Contracts.GetTypes()
-                     .Where(x => x.GetCustomAttribute<GenerateSerializerAttribute>() is not null)) {
+                     .Where(static x => x.GetCustomAttribute<GenerateSerializerAttribute>() is not null)) {
             foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance)) {
                 if (property.GetCustomAttribute<IdAttribute>() is null) {
                     continue;
@@ -80,14 +79,14 @@ public sealed class NoCredentialsInStateTests {
     public void ACarrierSecretRefHasNoMemberAValueCouldRideIn() {
         var members = typeof(CarrierSecretRef)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(x => x.GetCustomAttribute<IdAttribute>() is not null)
-            .Select(x => x.Name)
+            .Where(static x => x.GetCustomAttribute<IdAttribute>() is not null)
+            .Select(static x => x.Name)
             .ToList();
 
         members.ShouldBe(
             ["Path", "Field", "Version"],
-            ignoreOrder: true,
-            "every member is an address. A nullable Value \"for convenience\" would be populated by "
+            true,
+            """every member is an address. A nullable Value "for convenience" would be populated by """
             + "the first caller who found resolving inconvenient, and from then on every backup of "
             + "the durable tier would contain a customer's carrier credential"
         );
@@ -114,12 +113,12 @@ public sealed class NoCredentialsInStateTests {
     public void AMessageSnapshotCarriesNoBody() {
         var members = typeof(MessageSnapshot)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Select(x => x.Name)
+            .Select(static x => x.Name)
             .ToList();
 
         members.ShouldNotContain(
             "Body",
-            "a status object answers \"did it arrive\". The body of an OTP message IS the one-time "
+            """a status object answers "did it arrive". The body of an OTP message IS the one-time """
             + "code and the body of a password-reset message is a bearer token, so a snapshot "
             + "carrying one would put a live credential in front of anyone who can read a status"
         );
@@ -130,9 +129,9 @@ public sealed class NoCredentialsInStateTests {
     [Fact]
     public void EveryWireTypeCarriesAStableAlias() {
         var missing = Contracts.GetTypes()
-            .Where(x => x.GetCustomAttribute<GenerateSerializerAttribute>() is not null)
-            .Where(x => x.GetCustomAttribute<AliasAttribute>() is null)
-            .Select(x => x.Name)
+            .Where(static x => x.GetCustomAttribute<GenerateSerializerAttribute>() is not null)
+            .Where(static x => x.GetCustomAttribute<AliasAttribute>() is null)
+            .Select(static x => x.Name)
             .ToList();
 
         missing.ShouldBeEmpty(
@@ -206,7 +205,7 @@ public sealed class GrainKeyDerivationTests {
 
     [Fact]
     public void ASendWithNoIdempotencyKeyCannotEvenBeAddressed() =>
-        Should.Throw<ArgumentException>(() => CommunicationGrainKeys.Message(Service, "  "))
+        Should.Throw<ArgumentException>(static () => CommunicationGrainKeys.Message(Service, "  "))
             .Message.ShouldContain("retry");
 
     [Fact]

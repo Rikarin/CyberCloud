@@ -56,7 +56,11 @@ public sealed class GrainCommunicationControlPlane(IGrainFactory grains) : IComm
         Service(tenantId, serviceId).DescribeAsync();
 
     /// <inheritdoc />
-    public Task<Result> RetireServiceAsync(Guid tenantId, Guid serviceId, CancellationToken cancellationToken = default) =>
+    public Task<Result> RetireServiceAsync(
+        Guid tenantId,
+        Guid serviceId,
+        CancellationToken cancellationToken = default
+    ) =>
         Service(tenantId, serviceId).RetireAsync();
 
     /// <inheritdoc />

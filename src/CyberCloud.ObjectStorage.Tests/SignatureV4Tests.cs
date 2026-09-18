@@ -27,9 +27,7 @@ public sealed class SignatureV4Tests {
 
     static Dictionary<string, string> Headers(string payloadHash, params (string Name, string Value)[] extra) {
         var headers = new Dictionary<string, string>(StringComparer.Ordinal) {
-            ["host"] = Host,
-            ["x-amz-content-sha256"] = payloadHash,
-            ["x-amz-date"] = "20130524T000000Z"
+            ["host"] = Host, ["x-amz-content-sha256"] = payloadHash, ["x-amz-date"] = "20130524T000000Z"
         };
 
         foreach (var (name, value) in extra) {
@@ -147,11 +145,11 @@ public sealed class SignatureV4Tests {
     [InlineData("!*'()", "%21%2A%27%28%29")]
     [InlineData("ünïcode", "%C3%BCn%C3%AFcode")]
     public void AQueryValueIsEncodedWithExactlyTheUnreservedSet(string decoded, string encoded) =>
-        SignatureV4.Encode(decoded, keepSlash: false).ShouldBe(encoded);
+        SignatureV4.Encode(decoded, false).ShouldBe(encoded);
 
     [Fact]
     public void APathKeepsItsSlashesAndEncodesEverythingElse() =>
-        SignatureV4.Encode("/bucket/tenant/feed/My Package 1.0.nupkg", keepSlash: true)
+        SignatureV4.Encode("/bucket/tenant/feed/My Package 1.0.nupkg", true)
             .ShouldBe("/bucket/tenant/feed/My%20Package%201.0.nupkg");
 
     [Fact]

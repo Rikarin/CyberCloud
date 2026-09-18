@@ -51,7 +51,7 @@ public sealed class TemporaryTree : IDisposable {
 
     public void Dispose() {
         try {
-            Directory.Delete(Root, recursive: true);
+            Directory.Delete(Root, true);
         } catch (IOException) {
             // A leftover temp directory is not worth failing a test over.
         } catch (UnauthorizedAccessException) {
@@ -71,7 +71,7 @@ public sealed class TemporaryTree : IDisposable {
                 .. Directory
                     .EnumerateFiles(directory, "*", SearchOption.AllDirectories)
                     .Select(x => Path.GetRelativePath(directory, x).Replace('\\', '/'))
-                    .OrderBy(x => x, StringComparer.Ordinal)
+                    .OrderBy(static x => x, StringComparer.Ordinal)
             ]
             : [];
 }

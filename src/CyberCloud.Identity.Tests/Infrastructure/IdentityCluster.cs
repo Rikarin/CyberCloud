@@ -12,7 +12,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Orleans.Multitenant;
-using Orleans.Runtime;
 using Orleans.TestingHost;
 using System.Buffers.Text;
 using System.Globalization;
@@ -354,11 +353,13 @@ public sealed class RecordingGrainFactory(IGrainFactory inner) : IGrainFactory {
 
     /// <inheritdoc />
     public TGrainObserverInterface CreateObjectReference<TGrainObserverInterface>(IGrainObserver obj)
-        where TGrainObserverInterface : IGrainObserver => inner.CreateObjectReference<TGrainObserverInterface>(obj);
+        where TGrainObserverInterface : IGrainObserver =>
+        inner.CreateObjectReference<TGrainObserverInterface>(obj);
 
     /// <inheritdoc />
     public void DeleteObjectReference<TGrainObserverInterface>(IGrainObserver obj)
-        where TGrainObserverInterface : IGrainObserver => inner.DeleteObjectReference<TGrainObserverInterface>(obj);
+        where TGrainObserverInterface : IGrainObserver =>
+        inner.DeleteObjectReference<TGrainObserverInterface>(obj);
 
     /// <inheritdoc />
     public TGrainInterface GetGrain<TGrainInterface>(GrainId grainId)
@@ -567,11 +568,11 @@ public sealed class IdentityCluster : IAsyncLifetime {
             // throws — late, inside the grain call — on a silo with no reminder service.
             silo.UseInMemoryReminderService();
 
-            silo.ConfigureServices(services => {
+            silo.ConfigureServices(static services => {
                     // FIRST, so the module's TryAdd keeps them.
                     services.AddSingleton<IClock>(TestClock.Instance);
                     services.AddSingleton<IPasswordHasher>(CheapArgon2.Hasher);
-                    services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
+                    services.TryAddSingleton<ILoggerFactory>(static _ => NullLoggerFactory.Instance);
 
                     // ⚠ Only the DISCOVERY is scripted. IProjectedTokenValidator is left to the
                     // module's own TryAdd, so the real ProjectedTokenValidator verifies real

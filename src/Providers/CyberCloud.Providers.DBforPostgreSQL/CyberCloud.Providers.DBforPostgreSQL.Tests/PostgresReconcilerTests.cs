@@ -44,8 +44,8 @@ public sealed class PostgresReconcilerTests {
 
         var world = new RecordingConnection();
 
-        using var aliceBody = JsonDocument.Parse(PostgresServers.Body(ClusterId, replicas: 2, storageSize: "10Gi"));
-        using var bobBody = JsonDocument.Parse(PostgresServers.Body(ClusterId, replicas: 5, storageSize: "50Gi"));
+        using var aliceBody = JsonDocument.Parse(PostgresServers.Body(ClusterId, 2, "10Gi"));
+        using var bobBody = JsonDocument.Parse(PostgresServers.Body(ClusterId, 5, "50Gi"));
 
         // Interleaved on purpose: A, B, A. A reconciler that remembered anything from its first pass
         // would answer the third pass with B's values.
@@ -56,7 +56,7 @@ public sealed class PostgresReconcilerTests {
         third.IsConverged.ShouldBeTrue(third.ToString());
 
         var applied = world.Applied
-            .Where(x => x.Target.Kind.Kind == "Cluster")
+            .Where(static x => x.Target.Kind.Kind == "Cluster")
             .ToList();
 
         applied.Count.ShouldBe(3);
@@ -164,7 +164,7 @@ public sealed class PostgresReconcilerTests {
 
         (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
 
-        connection.Applied.Select(x => x.Target.Kind.Kind).ShouldBe(ClusterThenPooler);
+        connection.Applied.Select(static x => x.Target.Kind.Kind).ShouldBe(ClusterThenPooler);
 
         // ⚠ ADR-013's seven, on a CUSTOM RESOURCE. The sample proved them on a core-group ConfigMap;
         // the rendered object here goes through the same KubeCommand injection, and that is the point
@@ -296,7 +296,7 @@ public sealed class PostgresReconcilerTests {
         // ⚠ `vector`, not `pgvector`. The allow-list value is the name of the DISTRIBUTION and
         // `CREATE EXTENSION pgvector` fails — see AnExtensionNameIsNotALibraryName.
         spec["bootstrap"]!["initdb"]!["postInitApplicationSQL"]!.AsArray()
-            .Select(x => x!.GetValue<string>())
+            .Select(static x => x!.GetValue<string>())
             .ShouldBe(["CREATE EXTENSION IF NOT EXISTS vector;"]);
 
         // ⚠ AND NO PRELOAD LIST AT ALL. pgvector needs no `shared_preload_libraries` entry, and a
@@ -332,7 +332,7 @@ public sealed class PostgresReconcilerTests {
         var spec = JsonNode.Parse(PostgresServers.ClusterJson("orders", desired.RootElement))!["spec"]!;
 
         spec["bootstrap"]!["initdb"]!["postInitApplicationSQL"]!.AsArray()
-            .Select(x => x!.GetValue<string>())
+            .Select(static x => x!.GetValue<string>())
             .ShouldBe(
                 [
                     "CREATE EXTENSION IF NOT EXISTS vector;",
@@ -343,7 +343,7 @@ public sealed class PostgresReconcilerTests {
             );
 
         spec["postgresql"]!["shared_preload_libraries"]!.AsArray()
-            .Select(x => x!.GetValue<string>())
+            .Select(static x => x!.GetValue<string>())
             .ShouldBe(
                 ["pg_stat_statements", "timescaledb"],
                 "the preload list is the extensions that NEED preloading, under their library names. "
@@ -358,14 +358,14 @@ public sealed class PostgresReconcilerTests {
         // fallback stays — dropping the value would be worse — so this is what stops the allow-list
         // and the catalogue growing apart.
         foreach (var value in PostgresServers.Schema2026.Properties
-                     .Single(x => x.JsonPointer == "/properties/extensions")
+                     .Single(static x => x.JsonPointer == "/properties/extensions")
                      .AllowedValues) {
             PostgresServers.ExtensionCatalogue.ShouldContainKey(value);
         }
 
         PostgresServers.ExtensionCatalogue.Count.ShouldBe(
             PostgresServers.Schema2026.Properties
-                .Single(x => x.JsonPointer == "/properties/extensions")
+                .Single(static x => x.JsonPointer == "/properties/extensions")
                 .AllowedValues.Length,
             "PostgresServers.ExtensionCatalogue has a row for a value /properties/extensions does not "
             + "allow, so a row is either dead or the allow-list lost a value"
@@ -406,7 +406,7 @@ public sealed class PostgresReconcilerTests {
         // ⚠ `timescaledb` alone: pgvector is in the body and needs no preload entry. Which values
         // reach this list is AnExtensionNameIsNotALibraryName's assertion; this one is about where.
         postgresql["shared_preload_libraries"]!.AsArray()
-            .Select(x => x!.GetValue<string>())
+            .Select(static x => x!.GetValue<string>())
             .ShouldBe(["timescaledb"]);
 
         postgresql["parameters"]!.AsObject()
@@ -564,9 +564,10 @@ public sealed class PostgresReconcilerTests {
         await Reconcile(connection, desired.RootElement);
 
         var spec = Spec(connection.Applied[0].Body);
-        spec.ContainsKey("postgresql_synchronous").ShouldBeFalse(
-            "`postgresql_synchronous` is not a field of CloudNativePG's Cluster spec; the apply patch refuses it"
-        );
+        spec.ContainsKey("postgresql_synchronous")
+            .ShouldBeFalse(
+                "`postgresql_synchronous` is not a field of CloudNativePG's Cluster spec; the apply patch refuses it"
+            );
 
         var synchronous = spec["postgresql"]!["synchronous"].ShouldNotBeNull().AsObject();
         synchronous["method"]!.GetValue<string>().ShouldBe("any");
@@ -615,7 +616,10 @@ public sealed class PostgresReconcilerTests {
         // predicted from the replica count would miss. And the operator's own labels, because the
         // selector is the operator's label and not one this platform wrote.
         var context = Context(connection, desired.RootElement);
-        var owner = PostgresServers.ClusterOwner("observed", connection.UidOf(PostgresServers.ClusterRef(context.Namespace, "observed")));
+        var owner = PostgresServers.ClusterOwner(
+            "observed",
+            connection.UidOf(PostgresServers.ClusterRef(context.Namespace, "observed"))
+        );
         var claims = FailedOverClaims
             .Select(name => PlantClaim(connection, context.Namespace, name, "observed", owner))
             .ToList();
@@ -628,10 +632,12 @@ public sealed class PostgresReconcilerTests {
         torn.IsConverged.ShouldBeTrue(torn.ToString());
 
         // The order, as one sequence: the pause, then every detach, then the deletes.
-        var firstDelete = connection.Events.FindIndex(x => x.StartsWith("delete:", StringComparison.Ordinal));
+        var firstDelete = connection.Events.FindIndex(static x => x.StartsWith("delete:", StringComparison.Ordinal));
         firstDelete.ShouldBeGreaterThan(0);
         connection.Events[0].ShouldBe("apply:Cluster/observed(paused)");
-        connection.Events.Take(firstDelete).Count(x => x.StartsWith("detach:", StringComparison.Ordinal)).ShouldBe(4);
+        connection.Events.Take(firstDelete)
+            .Count(static x => x.StartsWith("detach:", StringComparison.Ordinal))
+            .ShouldBe(4);
         connection.Events.Skip(firstDelete).ShouldBe(["delete:Pooler/observed-pooler", "delete:Cluster/observed"]);
 
         foreach (var claim in claims) {
@@ -645,7 +651,7 @@ public sealed class PostgresReconcilerTests {
         var connection = new RecordingConnection();
         using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
         var context = Context(connection, desired.RootElement);
-        PlantClaim(connection, context.Namespace, "observed-1", "observed", owner: null);
+        PlantClaim(connection, context.Namespace, "observed-1", "observed", null);
 
         var torn = await new PostgresServerReconciler(new FixedClock())
             .DeleteAsync(context, TestContext.Current.CancellationToken);
@@ -682,7 +688,10 @@ public sealed class PostgresReconcilerTests {
         (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
 
         var context = Context(connection, desired.RootElement);
-        var owner = PostgresServers.ClusterOwner("observed", connection.UidOf(PostgresServers.ClusterRef(context.Namespace, "observed")));
+        var owner = PostgresServers.ClusterOwner(
+            "observed",
+            connection.UidOf(PostgresServers.ClusterRef(context.Namespace, "observed"))
+        );
         var claim = PlantClaim(connection, context.Namespace, "observed-1", "observed", owner);
 
         var torn = await new PostgresServerReconciler(new FixedClock())
@@ -706,7 +715,10 @@ public sealed class PostgresReconcilerTests {
         (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
 
         var context = Context(connection, desired.RootElement);
-        var owner = PostgresServers.ClusterOwner("observed", connection.UidOf(PostgresServers.ClusterRef(context.Namespace, "observed")));
+        var owner = PostgresServers.ClusterOwner(
+            "observed",
+            connection.UidOf(PostgresServers.ClusterRef(context.Namespace, "observed"))
+        );
         var claim = PlantClaim(connection, context.Namespace, "observed-1", "observed", owner);
 
         connection.ConflictField = ".spec.instances";
@@ -716,7 +728,7 @@ public sealed class PostgresReconcilerTests {
 
         torn.IsConverged.ShouldBeTrue(torn.ToString());
         connection.ControllerOf(claim).ShouldBeNull();
-        connection.Deleted.Select(x => x.Kind.Kind).ShouldBe(["Pooler", "Cluster"]);
+        connection.Deleted.Select(static x => x.Kind.Kind).ShouldBe(["Pooler", "Cluster"]);
     }
 
     [Fact]
@@ -727,18 +739,20 @@ public sealed class PostgresReconcilerTests {
 
         // The world a soft delete leaves: the claims, labelled by the operator and owned by nobody.
         var claims = FailedOverClaims
-            .Select(name => PlantClaim(connection, context.Namespace, name, "observed", owner: null))
+            .Select(name => PlantClaim(connection, context.Namespace, name, "observed", null))
             .ToList();
 
         var back = await Reconcile(connection, desired.RootElement);
 
         back.IsConverged.ShouldBeTrue(back.ToString());
 
-        var applies = connection.Events.Where(x => x.StartsWith("apply:Cluster", StringComparison.Ordinal)).ToList();
-        applies.First().ShouldBe("apply:Cluster/observed(paused)", "the operator saw the Cluster before the claims were its");
+        var applies = connection.Events.Where(static x => x.StartsWith("apply:Cluster", StringComparison.Ordinal))
+            .ToList();
+        applies.First()
+            .ShouldBe("apply:Cluster/observed(paused)", "the operator saw the Cluster before the claims were its");
         applies.Last().ShouldBe("apply:Cluster/observed", "the operator was never released");
 
-        var adoptions = connection.Events.Where(x => x.StartsWith("adopt:", StringComparison.Ordinal)).ToList();
+        var adoptions = connection.Events.Where(static x => x.StartsWith("adopt:", StringComparison.Ordinal)).ToList();
         adoptions.Count.ShouldBe(4);
         connection.Events.IndexOf(adoptions[^1]).ShouldBeLessThan(connection.Events.IndexOf(applies.Last()));
 
@@ -752,7 +766,9 @@ public sealed class PostgresReconcilerTests {
             controller.Kind.ShouldBe("Cluster");
         }
 
-        PostgresServers.IsPaused(connection.Objects[RecordingConnection.Key(PostgresServers.ClusterRef(context.Namespace, "observed"))])
+        PostgresServers.IsPaused(
+            connection.Objects[RecordingConnection.Key(PostgresServers.ClusterRef(context.Namespace, "observed"))]
+        )
             .ShouldBeFalse("a converged restore left the operator paused");
     }
 
@@ -778,23 +794,25 @@ public sealed class PostgresReconcilerTests {
         using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
         var context = Context(connection, desired.RootElement);
 
-        PlantClaim(connection, context.Namespace, "observed-1", "observed", owner: null);
-        PlantClaim(connection, context.Namespace, "observed-3-wal", "observed", owner: null);
+        PlantClaim(connection, context.Namespace, "observed-1", "observed", null);
+        PlantClaim(connection, context.Namespace, "observed-3-wal", "observed", null);
         // Somebody else's server in the same namespace, wearing a name a pattern would match.
-        PlantClaim(connection, context.Namespace, "observed-2", "other", owner: null);
+        PlantClaim(connection, context.Namespace, "observed-2", "other", null);
 
         var retained = await new PostgresServerReconciler(new FixedClock())
             .RetainedVolumesAsync(context, TestContext.Current.CancellationToken);
 
         retained.IsSuccess.ShouldBeTrue(retained.Error?.Message);
-        retained.GetValueOrThrow().Select(x => x.Claim.Name).Order().ShouldBe(["observed-1", "observed-3-wal"]);
+        retained.GetValueOrThrow().Select(static x => x.Claim.Name).Order().ShouldBe(["observed-1", "observed-3-wal"]);
         retained.GetValueOrThrow().ShouldAllBe(x => x.OwnedBy[PostgresServers.ClaimLabel] == "observed");
         connection.Lists.ShouldHaveSingleItem().Selector.ShouldBe("cnpg.io/cluster=observed");
 
         var blind = await new PostgresServerReconciler(new FixedClock())
             .RetainedVolumesAsync(Context(null, desired.RootElement), TestContext.Current.CancellationToken);
 
-        blind.IsFailure.ShouldBeTrue("with no cluster to ask, an empty answer would converge a purge over disks that are still there");
+        blind.IsFailure.ShouldBeTrue(
+            "with no cluster to ask, an empty answer would converge a purge over disks that are still there"
+        );
     }
 
     /// <summary>
@@ -805,7 +823,13 @@ public sealed class PostgresReconcilerTests {
     static readonly string[] FailedOverClaims = ["observed-1", "observed-1-wal", "observed-3", "observed-3-wal"];
 
     /// <summary>Plants a claim as CloudNativePG creates one: its labels, its serial, and its controller.</summary>
-    static ObjectRef PlantClaim(RecordingConnection connection, string ns, string name, string cluster, OwnerRef? owner) {
+    static ObjectRef PlantClaim(
+        RecordingConnection connection,
+        string ns,
+        string name,
+        string cluster,
+        OwnerRef? owner
+    ) {
         var target = new ObjectRef { Kind = RetainedVolume.ClaimKind, Namespace = ns, Name = name };
 
         var metadata = new JsonObject {
@@ -826,7 +850,9 @@ public sealed class PostgresReconcilerTests {
 
         connection.Plant(
             target,
-            new JsonObject { ["apiVersion"] = "v1", ["kind"] = "PersistentVolumeClaim", ["metadata"] = metadata }.ToJsonString()
+            new JsonObject {
+                ["apiVersion"] = "v1", ["kind"] = "PersistentVolumeClaim", ["metadata"] = metadata
+            }.ToJsonString()
         );
 
         return target;
@@ -1077,13 +1103,16 @@ sealed class RecordingConnection : IKubeClusterConnection {
 
         if (RefuseLists is { } refusal) {
             return Task.FromResult(
-                Result<IReadOnlyList<KubeObjectSummary>>.Failure(refusal, $"Cluster {ClusterId:D} did not answer the list.")
+                Result<IReadOnlyList<KubeObjectSummary>>.Failure(
+                    refusal,
+                    $"Cluster {ClusterId:D} did not answer the list."
+                )
             );
         }
 
         var wanted = labelSelector.Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(pair => pair.Split('=', 2))
-            .ToDictionary(x => x[0], x => x.Length > 1 ? x[1] : string.Empty, StringComparer.Ordinal);
+            .Select(static pair => pair.Split('=', 2))
+            .ToDictionary(static x => x[0], static x => x.Length > 1 ? x[1] : string.Empty, StringComparer.Ordinal);
 
         var found = new List<KubeObjectSummary>();
 
@@ -1116,12 +1145,18 @@ sealed class RecordingConnection : IKubeClusterConnection {
     public ErrorCode? RefuseOwnerChanges { get; init; }
 
     /// <summary>The merge patch, as the API server would hold it: the list replaced, or the key gone.</summary>
-    public Task<Result> SetOwnerAsync(ObjectRef target, OwnerRef? owner, CancellationToken cancellationToken = default) {
+    public Task<Result> SetOwnerAsync(
+        ObjectRef target,
+        OwnerRef? owner,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(target);
         OwnerChanges.Add((target, owner));
 
         if (RefuseOwnerChanges is { } refusal) {
-            return Task.FromResult(Result.Failure(refusal, $"Cluster {ClusterId:D} did not accept the change to '{target}'."));
+            return Task.FromResult(
+                Result.Failure(refusal, $"Cluster {ClusterId:D} did not accept the change to '{target}'.")
+            );
         }
 
         if (!Objects.TryGetValue(Key(target), out var json) || JsonNode.Parse(json) is not JsonObject root) {

@@ -1,5 +1,4 @@
 using CyberCloud.Bundle.Cluster.Conformance;
-using CyberCloud.Cluster.Conformance.Infrastructure;
 using CyberCloud.Providers.Compute.Contracts;
 using Shouldly;
 using System.Diagnostics;
@@ -44,36 +43,58 @@ public sealed class KubeVirtComponentInstaller {
         );
 
         var run = await BundleInstaller.RunAsync(
-            "--dry-run --component " + BundleInstaller.KubeVirtComponent
-            + " --component " + BundleInstaller.CdiComponent
-            + " --component " + BundleInstaller.OpenEbsLocalPvComponent,
-            kubeconfig: null,
+            "--dry-run --component "
+            + BundleInstaller.KubeVirtComponent
+            + " --component "
+            + BundleInstaller.CdiComponent
+            + " --component "
+            + BundleInstaller.OpenEbsLocalPvComponent,
+            null,
             TestContext.Current.CancellationToken
         );
 
-        run.ExitCode.ShouldBe(0, "a dry run executes nothing and must succeed on any machine with bash. Its output was:\n" + run.Output);
+        run.ExitCode.ShouldBe(
+            0,
+            "a dry run executes nothing and must succeed on any machine with bash. Its output was:\n" + run.Output
+        );
 
-        var storage = run.Output.IndexOf("\n  " + BundleInstaller.OpenEbsLocalPvComponent + "\n", StringComparison.Ordinal);
+        var storage = run.Output.IndexOf(
+            "\n  " + BundleInstaller.OpenEbsLocalPvComponent + "\n",
+            StringComparison.Ordinal
+        );
         var cdi = run.Output.IndexOf("\n  " + BundleInstaller.CdiComponent + "\n", StringComparison.Ordinal);
         var kubevirt = run.Output.IndexOf("\n  " + BundleInstaller.KubeVirtComponent + "\n", StringComparison.Ordinal);
 
         storage.ShouldBeGreaterThan(-1, run.Output);
-        cdi.ShouldBeGreaterThan(storage, "CDI's DataVolumes need a storage class, and the roster puts phase 25 before phase 30. Output:\n" + run.Output);
-        kubevirt.ShouldBeGreaterThan(cdi, "KubeVirt v1.9.0's template controller needs CDI's DataVolume kind at start — kubevirt/component.yaml § requires. Output:\n" + run.Output);
+        cdi.ShouldBeGreaterThan(
+            storage,
+            "CDI's DataVolumes need a storage class, and the roster puts phase 25 before phase 30. Output:\n"
+            + run.Output
+        );
+        kubevirt.ShouldBeGreaterThan(
+            cdi,
+            "KubeVirt v1.9.0's template controller needs CDI's DataVolume kind at start — kubevirt/component.yaml § requires. Output:\n"
+            + run.Output
+        );
 
         foreach (var component in new[] { BundleInstaller.CdiComponent, BundleInstaller.KubeVirtComponent }) {
             foreach (var entry in BundleInstaller.WaitFor(component)) {
                 run.Output.ShouldContain(
-                    "would run: kubectl wait --timeout=10m " + entry.Replace("{", "\\{").Replace("}", "\\}"),
+                    "would run: kubectl wait --timeout=10m " + entry.Replace("{", """\{""").Replace("}", """\}"""),
                     Case.Sensitive,
-                    $"{component}'s `waitFor:` entry did not become a `kubectl wait` in the dry run. Output:\n" + run.Output
+                    $"{component}'s `waitFor:` entry did not become a `kubectl wait` in the dry run. Output:\n"
+                    + run.Output
                 );
             }
         }
 
         // The other two phase-40 consumers of these groups are NOT attempted: --component selects rows.
         foreach (var other in new[] { "cluster-api", "cluster-api-provider-kubevirt", "kamaji", "cert-manager" }) {
-            run.Output.ShouldNotContain("\n  " + other + "\n", Case.Sensitive, $"`{other}` was attempted and was not asked for. Output:\n" + run.Output);
+            run.Output.ShouldNotContain(
+                "\n  " + other + "\n",
+                Case.Sensitive,
+                $"`{other}` was attempted and was not asked for. Output:\n" + run.Output
+            );
         }
     }
 }
@@ -87,8 +108,11 @@ public sealed class KubeVirtComponentInstaller {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE FIRST TEST IN THIS REPOSITORY TO INSTALL A <c>manifest:</c> COMPONENT, AND THE
-///         FIRST TO PUT A PROVIDER'S RENDER IN FRONT OF THE OPERATOR IT WAS WRITTEN FOR.</b>
+///         ⚠
+///         <b>
+///             THE FIRST TEST IN THIS REPOSITORY TO INSTALL A <c>manifest:</c> COMPONENT, AND THE
+///             FIRST TO PUT A PROVIDER'S RENDER IN FRONT OF THE OPERATOR IT WAS WRITTEN FOR.
+///         </b>
 ///         <c>charts/bundle/bundle.yaml § owed</c>, <c>the-manifest-path-waits-for-nothing</c>, ended
 ///         "no test has yet run a manifest: row, and the lane that could now exists on this
 ///         machine"; every <c>.Cluster.Conformance</c> suite records that its k3s has no operator and
@@ -99,8 +123,11 @@ public sealed class KubeVirtComponentInstaller {
 ///         webhooks are what admit — or refuse — the three charts.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE CLUSTER LANE, NOT THE PR, AND THE NUMBER THAT DECIDED IT WAS READ OFF THE
-///         RUNNER.</b> This class landed in <c>test/CyberCloud.Bundle.Cluster.Conformance</c> and the
+///         ⚠
+///         <b>
+///             THE CLUSTER LANE, NOT THE PR, AND THE NUMBER THAT DECIDED IT WAS READ OFF THE
+///             RUNNER.
+///         </b> This class landed in <c>test/CyberCloud.Bundle.Cluster.Conformance</c> and the
 ///         review of #28 asked what it costs there. gate.yml's <c>test</c> job ran every
 ///         cluster-backed suite one at a time, and on 2026-09-15 that chain took master 26 m 16 s on
 ///         the runner — past the 25-minute budget pr.yml enforces, four minutes short of the job's
@@ -193,10 +220,16 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
     const string DiskName = "data";
     const string MachineName = "probe";
 
-    /// <summary>The size of the image's claim, the disk, and the machine's root clone, all 1Gi: cirros is a few tens of megabytes.</summary>
+    /// <summary>
+    ///     The size of the image's claim, the disk, and the machine's root clone, all 1Gi: cirros is a few tens of
+    ///     megabytes.
+    /// </summary>
     const string OneGibibyte = "1Gi";
 
-    /// <summary>The bundle's own class, named explicitly for the reason <c>OpenEbsLocalPvOnAnEmptyCluster</c> gives: k3s ships a default of its own.</summary>
+    /// <summary>
+    ///     The bundle's own class, named explicitly for the reason <c>OpenEbsLocalPvOnAnEmptyCluster</c> gives: k3s ships
+    ///     a default of its own.
+    /// </summary>
     const string StorageClass = "openebs-hostpath";
 
     /// <summary>The size the machine is rendered at: one core, which is what a one-node k3s has to spare.</summary>
@@ -259,9 +292,12 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
         var started = Stopwatch.StartNew();
 
         var run = await BundleInstaller.RunAsync(
-            "--component " + BundleInstaller.KubeVirtComponent
-            + " --component " + BundleInstaller.CdiComponent
-            + " --component " + BundleInstaller.OpenEbsLocalPvComponent,
+            "--component "
+            + BundleInstaller.KubeVirtComponent
+            + " --component "
+            + BundleInstaller.CdiComponent
+            + " --component "
+            + BundleInstaller.OpenEbsLocalPvComponent,
             cluster.KubeconfigPath,
             token,
             BundleInstaller.ManifestBudget
@@ -278,20 +314,56 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
             + run.Output
         );
 
-        var storageAt = run.Output.IndexOf("\n  " + BundleInstaller.OpenEbsLocalPvComponent + "\n", StringComparison.Ordinal);
+        var storageAt = run.Output.IndexOf(
+            "\n  " + BundleInstaller.OpenEbsLocalPvComponent + "\n",
+            StringComparison.Ordinal
+        );
         var cdiAt = run.Output.IndexOf("\n  " + BundleInstaller.CdiComponent + "\n", StringComparison.Ordinal);
-        var kubevirtAt = run.Output.IndexOf("\n  " + BundleInstaller.KubeVirtComponent + "\n", StringComparison.Ordinal);
+        var kubevirtAt = run.Output.IndexOf(
+            "\n  " + BundleInstaller.KubeVirtComponent + "\n",
+            StringComparison.Ordinal
+        );
 
-        storageAt.ShouldBeLessThan(cdiAt, "the roster carries the order; the command line named KubeVirt first. Output:\n" + run.Output);
-        cdiAt.ShouldBeLessThan(kubevirtAt, "CDI must be Deployed before KubeVirt starts — kubevirt/component.yaml § requires. Output:\n" + run.Output);
+        storageAt.ShouldBeLessThan(
+            cdiAt,
+            "the roster carries the order; the command line named KubeVirt first. Output:\n" + run.Output
+        );
+        cdiAt.ShouldBeLessThan(
+            kubevirtAt,
+            "CDI must be Deployed before KubeVirt starts — kubevirt/component.yaml § requires. Output:\n" + run.Output
+        );
 
         // ── Both operators report Deployed, which is what install.sh waited for ────────────────
-        (await IsServedAsync(client, KubeVirtGroup, "v1", "virtualmachines", token)).ShouldBeTrue("kubevirt.io/v1 is not served after install.sh succeeded. Output:\n" + run.Output);
-        (await IsServedAsync(client, CdiGroup, "v1beta1", "datavolumes", token)).ShouldBeTrue("cdi.kubevirt.io/v1beta1 is not served after install.sh succeeded. Output:\n" + run.Output);
+        (await IsServedAsync(client, KubeVirtGroup, "v1", "virtualmachines", token)).ShouldBeTrue(
+            "kubevirt.io/v1 is not served after install.sh succeeded. Output:\n" + run.Output
+        );
+        (await IsServedAsync(client, CdiGroup, "v1beta1", "datavolumes", token)).ShouldBeTrue(
+            "cdi.kubevirt.io/v1beta1 is not served after install.sh succeeded. Output:\n" + run.Output
+        );
 
-        PhaseOf(await client.CustomObjects.GetNamespacedCustomObjectAsync(KubeVirtGroup, "v1", "kubevirt", "kubevirts", "kubevirt", cancellationToken: token))
-            .ShouldBe("Deployed", "install.sh returned before the KubeVirt resource reported Deployed, so its waitFor: is not the barrier it claims");
-        PhaseOf(await client.CustomObjects.GetClusterCustomObjectAsync(CdiGroup, "v1beta1", "cdis", "cdi", cancellationToken: token))
+        PhaseOf(
+            await client.CustomObjects.GetNamespacedCustomObjectAsync(
+                KubeVirtGroup,
+                "v1",
+                "kubevirt",
+                "kubevirts",
+                "kubevirt",
+                token
+            )
+        )
+            .ShouldBe(
+                "Deployed",
+                "install.sh returned before the KubeVirt resource reported Deployed, so its waitFor: is not the barrier it claims"
+            );
+        PhaseOf(
+            await client.CustomObjects.GetClusterCustomObjectAsync(
+                CdiGroup,
+                "v1beta1",
+                "cdis",
+                "cdi",
+                token
+            )
+        )
             .ShouldBe("Deployed");
 
         // ⚠ READ AND REPORTED, NOT ASSERTED. charts/managed/virtual-machine/conformance.yaml § owed,
@@ -319,18 +391,36 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
         node.Status.Allocatable[KvmDevice].ToInt64().ShouldBeGreaterThan(0);
 
         // ── An image, imported through the chart onto the bundle's own class ───────────────────
-        await client.CoreV1.CreateNamespaceAsync(new V1Namespace { Metadata = new V1ObjectMeta { Name = Probe } }, cancellationToken: token);
+        await client.CoreV1.CreateNamespaceAsync(
+            new V1Namespace { Metadata = new() { Name = Probe } },
+            cancellationToken: token
+        );
 
         var image = await RenderAsync(
             "image",
             ImageName,
-            ["--set", "source.kind=url", "--set", "source.url=" + CirrosDisk, "--set", "size=" + OneGibibyte, "--set", "storageClass=" + StorageClass],
+            [
+                "--set", "source.kind=url", "--set", "source.url=" + CirrosDisk, "--set", "size=" + OneGibibyte,
+                "--set", "storageClass=" + StorageClass
+            ],
             token
         );
 
-        image.ShouldContain("registry:", Case.Sensitive, "a docker:// url did not pick CDI's registry importer. Rendered:\n" + image);
-        image.ShouldContain("cdi.kubevirt.io/storage.bind.immediate.requested", Case.Sensitive, "an image without the immediate-bind annotation never imports on a WaitForFirstConsumer class");
-        image.ShouldContain("ReadWriteOnce", Case.Sensitive, "CDI has no StorageProfile for openebs.io/local and refuses a claim with no access mode — the first real run's finding");
+        image.ShouldContain(
+            "registry:",
+            Case.Sensitive,
+            "a docker:// url did not pick CDI's registry importer. Rendered:\n" + image
+        );
+        image.ShouldContain(
+            "cdi.kubevirt.io/storage.bind.immediate.requested",
+            Case.Sensitive,
+            "an image without the immediate-bind annotation never imports on a WaitForFirstConsumer class"
+        );
+        image.ShouldContain(
+            "ReadWriteOnce",
+            Case.Sensitive,
+            "CDI has no StorageProfile for openebs.io/local and refuses a claim with no access mode — the first real run's finding"
+        );
 
         await ApplyAsync(image, token);
 
@@ -339,7 +429,14 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
         var imported = await Poll(
             ImportBudget,
             async () => {
-                var current = await client.CustomObjects.GetNamespacedCustomObjectAsync(CdiGroup, "v1beta1", Probe, "datavolumes", ImageName, cancellationToken: token);
+                var current = await client.CustomObjects.GetNamespacedCustomObjectAsync(
+                    CdiGroup,
+                    "v1beta1",
+                    Probe,
+                    "datavolumes",
+                    ImageName,
+                    token
+                );
                 return PhaseOf(current) == "Succeeded" ? "imported" : null;
             },
             token
@@ -371,15 +468,30 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
         );
 
         disk.ShouldContain("blank: {}", Case.Sensitive, "a managed disk is a blank DataVolume. Rendered:\n" + disk);
-        disk.ShouldNotContain("cdi.kubevirt.io/storage.bind.immediate.requested", Case.Sensitive, "a disk must bind to its first consumer's node, not to CDI's helper pod's — the chart's own template says why");
-        disk.ShouldContain("ReadWriteOnce", Case.Sensitive, "CDI has no StorageProfile for openebs.io/local; the disk chart writes the access mode for the same reason the image chart does");
+        disk.ShouldNotContain(
+            "cdi.kubevirt.io/storage.bind.immediate.requested",
+            Case.Sensitive,
+            "a disk must bind to its first consumer's node, not to CDI's helper pod's — the chart's own template says why"
+        );
+        disk.ShouldContain(
+            "ReadWriteOnce",
+            Case.Sensitive,
+            "CDI has no StorageProfile for openebs.io/local; the disk chart writes the access mode for the same reason the image chart does"
+        );
 
         await ApplyAsync(disk, token);
 
         var provisioned = await Poll(
             ImportBudget,
             async () => {
-                var current = await client.CustomObjects.GetNamespacedCustomObjectAsync(CdiGroup, "v1beta1", Probe, "datavolumes", DiskName, cancellationToken: token);
+                var current = await client.CustomObjects.GetNamespacedCustomObjectAsync(
+                    CdiGroup,
+                    "v1beta1",
+                    Probe,
+                    "datavolumes",
+                    DiskName,
+                    token
+                );
                 var phase = PhaseOf(current);
                 return Cdi.IsProvisioned(phase) ? phase : null;
             },
@@ -403,11 +515,18 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
         var machine = await RenderAsync(
             "virtual-machine",
             MachineName,
-            ["--set", "image=" + ImageName, "--set", "osDiskSize=" + OneGibibyte, "--set", "size=" + MachineSize, "--set", "dataDisks={" + DiskName + "}"],
+            [
+                "--set", "image=" + ImageName, "--set", "osDiskSize=" + OneGibibyte, "--set", "size=" + MachineSize,
+                "--set", "dataDisks={" + DiskName + "}"
+            ],
             token
         );
 
-        machine.ShouldContain("claimName: \"" + DiskName + "\"", Case.Sensitive, "the disk was not rendered as a claim by its resource name. Rendered:\n" + machine);
+        machine.ShouldContain(
+            "claimName: \"" + DiskName + "\"",
+            Case.Sensitive,
+            "the disk was not rendered as a claim by its resource name. Rendered:\n" + machine
+        );
 
         // ⚠ THE APPLY IS THE WEBHOOK ASSERTION. A derived CRD stub admits anything; kubevirt.io/v1's
         // validating webhook checks the run strategy, every volume against its disk, the data volume
@@ -420,7 +539,14 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
         var running = await Poll(
             RunningBudget,
             async () => {
-                var current = await client.CustomObjects.GetNamespacedCustomObjectAsync(KubeVirtGroup, "v1", Probe, "virtualmachines", MachineName, cancellationToken: token);
+                var current = await client.CustomObjects.GetNamespacedCustomObjectAsync(
+                    KubeVirtGroup,
+                    "v1",
+                    Probe,
+                    "virtualmachines",
+                    MachineName,
+                    token
+                );
                 return PrintableStatusOf(current) == "Running" ? "running" : null;
             },
             token
@@ -437,25 +563,52 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
         var bootTook = bootStarted.Elapsed;
 
         // ── The evidence, off the objects KubeVirt and CDI created rather than off the machine ──
-        PhaseOf(await client.CustomObjects.GetNamespacedCustomObjectAsync(CdiGroup, "v1beta1", Probe, "datavolumes", VirtualMachineRoot, cancellationToken: token))
-            .ShouldBe("Succeeded", "the root disk KubeVirt created from dataVolumeTemplates was not filled by CDI's clone of the image");
+        PhaseOf(
+            await client.CustomObjects.GetNamespacedCustomObjectAsync(
+                CdiGroup,
+                "v1beta1",
+                Probe,
+                "datavolumes",
+                VirtualMachineRoot,
+                token
+            )
+        )
+            .ShouldBe(
+                "Succeeded",
+                "the root disk KubeVirt created from dataVolumeTemplates was not filled by CDI's clone of the image"
+            );
 
         var instance = JsonSerializer.SerializeToElement(
-            await client.CustomObjects.GetNamespacedCustomObjectAsync(KubeVirtGroup, "v1", Probe, "virtualmachineinstances", MachineName, cancellationToken: token)
+            await client.CustomObjects.GetNamespacedCustomObjectAsync(
+                KubeVirtGroup,
+                "v1",
+                Probe,
+                "virtualmachineinstances",
+                MachineName,
+                token
+            )
         );
 
         instance.GetProperty("status").GetProperty("phase").GetString().ShouldBe("Running");
         instance.GetProperty("status").GetProperty("nodeName").GetString().ShouldBe(node.Metadata.Name);
 
-        var launchers = await client.CoreV1.ListNamespacedPodAsync(Probe, labelSelector: "kubevirt.io=virt-launcher", cancellationToken: token);
+        var launchers = await client.CoreV1.ListNamespacedPodAsync(
+            Probe,
+            labelSelector: "kubevirt.io=virt-launcher",
+            cancellationToken: token
+        );
         var launcher = launchers.Items.ShouldHaveSingleItem("exactly one launcher pod runs a running instance");
 
         launcher.Status.Phase.ShouldBe("Running");
 
         // ⚠ KVM, NOT EMULATION. The compute container asked for the device and got it; a KubeVirt with
         // useEmulation on requests none, and a node without the device would have refused the pod.
-        launcher.Spec.Containers.Single(x => x.Name == "compute").Resources.Requests
-            .ShouldContainKey(KvmDevice, "the launcher pod did not request the KVM device, so what ran is not what this lane's row is about");
+        launcher.Spec.Containers.Single(static x => x.Name == "compute")
+            .Resources.Requests
+                .ShouldContainKey(
+                    KvmDevice,
+                    "the launcher pod did not request the KVM device, so what ran is not what this lane's row is about"
+                );
 
         // ── The disk: consumed by the machine, populated by CDI, mounted by the launcher ────────
         //
@@ -463,7 +616,16 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
         // one now: KubeVirt scheduled the launcher, the claim bound to its node, CDI's blank
         // population ran, and the pod mounts the volume. Three objects say so, none of them written
         // by this test.
-        PhaseOf(await client.CustomObjects.GetNamespacedCustomObjectAsync(CdiGroup, "v1beta1", Probe, "datavolumes", DiskName, cancellationToken: token))
+        PhaseOf(
+            await client.CustomObjects.GetNamespacedCustomObjectAsync(
+                CdiGroup,
+                "v1beta1",
+                Probe,
+                "datavolumes",
+                DiskName,
+                token
+            )
+        )
             .ShouldBe(
                 Cdi.Succeeded,
                 $"the disk sat at {provisioned} before the machine consumed it and was not populated once it did. The machine is "
@@ -471,14 +633,19 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
                 + await DescribeAsync(client, CdiGroup, "v1beta1", Probe, "datavolumes", DiskName, token)
             );
 
-        instance.GetProperty("status").GetProperty("volumeStatus").EnumerateArray()
-            .Select(x => x.GetProperty("name").GetString())
+        instance.GetProperty("status")
+            .GetProperty("volumeStatus")
+            .EnumerateArray()
+            .Select(static x => x.GetProperty("name").GetString())
             .ShouldContain(DiskName, "KubeVirt does not list the disk among the instance's volumes");
 
         launcher.Spec.Volumes
-            .Where(x => x.PersistentVolumeClaim is not null)
-            .Select(x => x.PersistentVolumeClaim.ClaimName)
-            .ShouldContain(Disks.ObjectNameOf(DiskName), "the launcher pod does not mount the disk's claim by the name Disks.ObjectNameOf renders");
+            .Where(static x => x.PersistentVolumeClaim is not null)
+            .Select(static x => x.PersistentVolumeClaim.ClaimName)
+            .ShouldContain(
+                Disks.ObjectNameOf(DiskName),
+                "the launcher pod does not mount the disk's claim by the name Disks.ObjectNameOf renders"
+            );
 
         // ── What a tenant would read through the provider ──────────────────────────────────────
         //
@@ -489,19 +656,33 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
         // with is what holds the chart's shape and the C# reading together — ComputeChartDriftTests
         // compares two dictionaries and nothing else does.
         var admitted = JsonSerializer.Serialize(
-            await client.CustomObjects.GetNamespacedCustomObjectAsync(KubeVirtGroup, "v1", Probe, "virtualmachines", MachineName, cancellationToken: token)
+            await client.CustomObjects.GetNamespacedCustomObjectAsync(
+                KubeVirtGroup,
+                "v1",
+                Probe,
+                "virtualmachines",
+                MachineName,
+                token
+            )
         );
 
         using var desired = JsonDocument.Parse(
-            VirtualMachines.Body(Guid.Empty, image: ImageName, size: MachineSize, osDiskSize: OneGibibyte, dataDisks: [DiskName])
+            VirtualMachines.Body(
+                Guid.Empty,
+                ImageName,
+                MachineSize,
+                OneGibibyte,
+                [DiskName]
+            )
         );
 
-        VirtualMachines.Matches(admitted, Probe, desired.RootElement).ShouldBeTrue(
-            "the reconciler would report the admitted VirtualMachine as not yet carrying the desired spec, forever: KubeVirt's "
-            + "mutating webhook changed a field Matches reads, or the chart and VirtualMachines.VirtualMachineJson disagree. "
-            + "The admitted object:\n"
-            + admitted
-        );
+        VirtualMachines.Matches(admitted, Probe, desired.RootElement)
+            .ShouldBeTrue(
+                "the reconciler would report the admitted VirtualMachine as not yet carrying the desired spec, forever: KubeVirt's "
+                + "mutating webhook changed a field Matches reads, or the chart and VirtualMachines.VirtualMachineJson disagree. "
+                + "The admitted object:\n"
+                + admitted
+            );
 
         var readiness = VirtualMachines.ReadinessOf(admitted);
 
@@ -517,10 +698,20 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
         );
     }
 
-    /// <summary>The root DataVolume KubeVirt derives from the chart's template, spelled by the contracts so the chart's helper is held to it.</summary>
+    /// <summary>
+    ///     The root DataVolume KubeVirt derives from the chart's template, spelled by the contracts so the chart's helper
+    ///     is held to it.
+    /// </summary>
     static readonly string VirtualMachineRoot = VirtualMachines.RootDataVolumeName(MachineName);
+
     /// <summary>Whether a group answers a list — a 404 is unambiguous where discovery is not.</summary>
-    static async Task<bool> IsServedAsync(IKubernetes client, string group, string version, string plural, CancellationToken token) {
+    static async Task<bool> IsServedAsync(
+        IKubernetes client,
+        string group,
+        string version,
+        string plural,
+        CancellationToken token
+    ) {
         try {
             await client.CustomObjects.ListClusterCustomObjectAsync(group, version, plural, cancellationToken: token);
             return true;
@@ -543,10 +734,27 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
             ? printable.GetString() ?? string.Empty
             : string.Empty;
 
-    static async Task<string> DescribeAsync(IKubernetes client, string group, string version, string ns, string plural, string name, CancellationToken token) {
+    static async Task<string> DescribeAsync(
+        IKubernetes client,
+        string group,
+        string version,
+        string ns,
+        string plural,
+        string name,
+        CancellationToken token
+    ) {
         try {
-            var current = await client.CustomObjects.GetNamespacedCustomObjectAsync(group, version, ns, plural, name, cancellationToken: token);
-            return JsonSerializer.SerializeToElement(current).TryGetProperty("status", out var status) ? status.GetRawText() : "(no status)";
+            var current = await client.CustomObjects.GetNamespacedCustomObjectAsync(
+                group,
+                version,
+                ns,
+                plural,
+                name,
+                token
+            );
+            return JsonSerializer.SerializeToElement(current).TryGetProperty("status", out var status)
+                ? status.GetRawText()
+                : "(no status)";
         } catch (HttpOperationException ex) {
             return "(unreadable: " + ex.Message + ")";
         }
@@ -560,10 +768,16 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
     ///     stopped rendering a field the operator needs is red here.
     /// </remarks>
     static async Task<string> RenderAsync(string chart, string release, string[] values, CancellationToken token) {
-        var arguments = new List<string> { "template", release, Path.Combine(BundleInstaller.RepositoryRoot, "charts", "managed", chart), "--namespace", Probe };
+        var arguments = new List<string> {
+            "template",
+            release,
+            Path.Combine(BundleInstaller.RepositoryRoot, "charts", "managed", chart),
+            "--namespace",
+            Probe
+        };
         arguments.AddRange(values);
 
-        var (exitCode, output) = await CaptureAsync("helm", arguments, input: null, kubeconfig: null, token);
+        var (exitCode, output) = await CaptureAsync("helm", arguments, null, null, token);
 
         exitCode.ShouldBe(0, $"`helm template charts/managed/{chart}` failed:\n" + output);
 
@@ -571,7 +785,13 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
     }
 
     async Task ApplyAsync(string rendered, CancellationToken token) {
-        var (exitCode, output) = await CaptureAsync("kubectl", ["apply", "--namespace", Probe, "-f", "-"], rendered, cluster.KubeconfigPath, token);
+        var (exitCode, output) = await CaptureAsync(
+            "kubectl",
+            ["apply", "--namespace", Probe, "-f", "-"],
+            rendered,
+            cluster.KubeconfigPath,
+            token
+        );
 
         exitCode.ShouldBe(
             0,
@@ -584,7 +804,13 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
         );
     }
 
-    static async Task<(int ExitCode, string Output)> CaptureAsync(string command, IReadOnlyList<string> arguments, string? input, string? kubeconfig, CancellationToken token) {
+    static async Task<(int ExitCode, string Output)> CaptureAsync(
+        string command,
+        IReadOnlyList<string> arguments,
+        string? input,
+        string? kubeconfig,
+        CancellationToken token
+    ) {
         var start = new ProcessStartInfo(command) {
             WorkingDirectory = BundleInstaller.RepositoryRoot,
             RedirectStandardInput = input is not null,
@@ -601,7 +827,8 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
             start.Environment["KUBECONFIG"] = kubeconfig;
         }
 
-        using var process = new Process { StartInfo = start };
+        using var process = new Process();
+        process.StartInfo = start;
         var output = new StringBuilder();
 
         process.OutputDataReceived += (_, e) => Append(output, e.Data);

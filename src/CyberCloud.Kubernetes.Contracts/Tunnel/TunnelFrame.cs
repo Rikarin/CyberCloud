@@ -6,8 +6,11 @@ namespace CyberCloud.Kubernetes.Contracts.Tunnel;
 /// <summary>What one frame on an agent tunnel is for.</summary>
 /// <remarks>
 ///     docs/plan/09 § Cluster connections, the <c>AgentInitiated</c> row. The agent dials out once
-///     and everything after that is one of these, in either direction. There is no <i>open a
-///     stream</i> kind: every request has exactly one response, and an operation that needs more
+///     and everything after that is one of these, in either direction. There is no
+///     <i>
+///         open a
+///         stream
+///     </i> kind: every request has exactly one response, and an operation that needs more
 ///     than one — a watch — is refused rather than half-carried. See
 ///     <c>charts/agent/conformance.yaml § owed</c>, <c>informers-do-not-cross-the-tunnel</c>.
 /// </remarks>
@@ -45,8 +48,11 @@ public enum TunnelFrameKind {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The payload is a JSON string and not a typed member, and that is what lets the
-///         gateway relay without understanding.</b> The gateway is an Orleans client above
+///         ⚠
+///         <b>
+///             The payload is a JSON string and not a typed member, and that is what lets the
+///             gateway relay without understanding.
+///         </b> The gateway is an Orleans client above
 ///         <c>CyberCloud.Kubernetes</c> (docs/plan/03 § Assembly graph rules, rule 3) and it must not
 ///         bind the types a request carries — an <c>ObjectRef</c> is fine, a <c>ListPage</c> is
 ///         not. So the frame is the envelope and the envelope is opaque: the gateway hashes a
@@ -55,8 +61,11 @@ public enum TunnelFrameKind {
 ///         <see cref="Payload" />, at both ends.
 ///     </para>
 ///     <para>
-///         ⚠ <b>No member here ends in <c>Token</c>, <c>Secret</c> or <c>Key</c>, and that is CC1005
-///         rather than taste.</b> A credential never rides in a frame's typed members: the
+///         ⚠
+///         <b>
+///             No member here ends in <c>Token</c>, <c>Secret</c> or <c>Key</c>, and that is CC1005
+///             rather than taste.
+///         </b> A credential never rides in a frame's typed members: the
 ///         enrollment token is an HTTP header on the upgrade request and the long-lived credential
 ///         is inside the <see cref="TunnelFrameKind.Welcome" /> payload, which is a string.
 ///     </para>
@@ -103,7 +112,8 @@ public sealed record TunnelFrame {
 
     /// <summary>A heartbeat carrying whatever the agent wants to report about itself.</summary>
     /// <param name="payload">The report, as JSON.</param>
-    public static TunnelFrame Heartbeat(string payload = "{}") => new() { Kind = TunnelFrameKind.Heartbeat, Payload = payload };
+    public static TunnelFrame Heartbeat(string payload = "{}") =>
+        new() { Kind = TunnelFrameKind.Heartbeat, Payload = payload };
 
     /// <summary>A goodbye carrying the reason.</summary>
     /// <param name="reason">Why the sender is closing.</param>

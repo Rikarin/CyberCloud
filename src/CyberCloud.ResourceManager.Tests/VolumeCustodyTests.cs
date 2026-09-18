@@ -30,9 +30,8 @@ public sealed class VolumeCustodyTests {
     static readonly ImmutableDictionary<string, string> Ownership =
         ImmutableDictionary<string, string>.Empty.Add("cnpg.io/cluster", "main");
 
-    static readonly OwnerRef OldCluster = new() {
-        ApiVersion = "postgresql.cnpg.io/v1", Kind = "Cluster", Name = "main", Uid = "uid-old"
-    };
+    static readonly OwnerRef OldCluster =
+        new() { ApiVersion = "postgresql.cnpg.io/v1", Kind = "Cluster", Name = "main", Uid = "uid-old" };
 
     static readonly OwnerRef NewCluster = OldCluster with { Uid = "uid-new" };
 
@@ -63,7 +62,12 @@ public sealed class VolumeCustodyTests {
         var data = Claim("main-1");
         cluster.Plant(data, Ownership, OldCluster);
 
-        (await VolumeCustody.DetachAsync(cluster, [Volume(data)], Context(cluster), TestContext.Current.CancellationToken))
+        (await VolumeCustody.DetachAsync(
+                cluster,
+                [Volume(data)],
+                Context(cluster),
+                TestContext.Current.CancellationToken
+            ))
             .GetValueOrThrow()
             .ShouldBe(1);
 
@@ -106,7 +110,7 @@ public sealed class VolumeCustodyTests {
         var cluster = new CustodyCluster();
         var detachedClaim = Claim("main-1");
         var alreadyOwned = Claim("main-1-wal");
-        cluster.Plant(detachedClaim, Ownership, owner: null);
+        cluster.Plant(detachedClaim, Ownership, null);
         cluster.Plant(alreadyOwned, Ownership, NewCluster);
 
         var adopted = await VolumeCustody.AdoptAsync(
@@ -129,7 +133,7 @@ public sealed class VolumeCustodyTests {
         // claims to nothing, and the garbage collector removes a dependent whose owner it cannot find.
         var cluster = new CustodyCluster();
         var claim = Claim("main-1");
-        cluster.Plant(claim, Ownership, owner: null);
+        cluster.Plant(claim, Ownership, null);
 
         var adopted = await VolumeCustody.AdoptAsync(
             cluster,
@@ -183,7 +187,9 @@ public sealed class VolumeCustodyTests {
     [Fact]
     public async Task AClaimOutsideTheResourcesNamespaceIsRefusedByAddressBeforeItIsRead() {
         var cluster = new CustodyCluster();
-        var elsewhere = new ObjectRef { Kind = RetainedVolume.ClaimKind, Namespace = "cc-sub-other-rg", Name = "main-1" };
+        var elsewhere = new ObjectRef {
+            Kind = RetainedVolume.ClaimKind, Namespace = "cc-sub-other-rg", Name = "main-1"
+        };
 
         var detached = await VolumeCustody.DetachAsync(
             cluster,
@@ -239,7 +245,9 @@ public sealed class VolumeCustodyTests {
                 written[key] = value;
             }
 
-            var metadata = new JsonObject { ["name"] = target.Name, ["namespace"] = target.Namespace, ["labels"] = written };
+            var metadata = new JsonObject {
+                ["name"] = target.Name, ["namespace"] = target.Namespace, ["labels"] = written
+            };
 
             if (owner is not null) {
                 metadata["ownerReferences"] = new JsonArray(KubeJson.OwnerReference(owner));
@@ -253,7 +261,10 @@ public sealed class VolumeCustodyTests {
         public OwnerRef? ControllerOf(ObjectRef target) =>
             objects.TryGetValue(Key(target), out var json) ? KubeJson.ControllerOf(JsonNode.Parse(json)) : null;
 
-        public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) =>
+        public Task<Result<ApplyOutcome>> ApplyAsync(
+            KubeCommand command,
+            CancellationToken cancellationToken = default
+        ) =>
             throw new NotSupportedException("A custody move applies nothing.");
 
         public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) {
@@ -274,7 +285,11 @@ public sealed class VolumeCustodyTests {
         ) =>
             throw new NotSupportedException("A custody move deletes nothing.");
 
-        public Task<Result> SetOwnerAsync(ObjectRef target, OwnerRef? owner, CancellationToken cancellationToken = default) {
+        public Task<Result> SetOwnerAsync(
+            ObjectRef target,
+            OwnerRef? owner,
+            CancellationToken cancellationToken = default
+        ) {
             ArgumentNullException.ThrowIfNull(target);
             OwnerChanges.Add((target, owner));
 

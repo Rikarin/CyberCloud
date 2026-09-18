@@ -179,20 +179,20 @@ public sealed class SchemaBuilder {
 
         // Names declared anywhere, for the From(_, computed) resolution that cannot know the type.
         var namesAnywhere = byType.Values
-            .SelectMany(x => x)
-            .Select(x => x.Name)
+            .SelectMany(static x => x)
+            .Select(static x => x.Name)
             .ToHashSet(StringComparer.Ordinal);
 
         // Names that carry a negation, anywhere. Rule 11's lookup table.
         var negatingNames = byType.Values
-            .SelectMany(x => x)
-            .Where(x => x.ContainsNegation)
-            .Select(x => x.Name)
+            .SelectMany(static x => x)
+            .Where(static x => x.ContainsNegation)
+            .Select(static x => x.Name)
             .ToHashSet(StringComparer.Ordinal);
 
         foreach (var type in typeOrder) {
             var members = byType[type];
-            var byName = members.ToDictionary(x => x.Name, StringComparer.Ordinal);
+            var byName = members.ToDictionary(static x => x.Name, StringComparer.Ordinal);
 
             foreach (var member in members) {
                 foreach (var problem in CheckMember(type, member, byName, namesAnywhere, negatingNames)) {
@@ -290,7 +290,7 @@ public sealed class SchemaBuilder {
         } else if (pointer.IsPermission) {
             yield return
                 $"{where} uses `From(\"{tupleset.Tupleset}\", …)` and '{tupleset.Tupleset}' is a "
-                + "permission. A tupleset is read as tuples — \"the object I point to via x\" only "
+                + """permission. A tupleset is read as tuples — "the object I point to via x" only """
                 + "means something if x is written, not computed.";
         } else if (!pointer.IsDirectOnly) {
             yield return
@@ -333,8 +333,8 @@ public sealed class SchemaBuilder {
         if (exclusion.Operand is not RelationRefExpression negated) {
             yield return
                 $"{where} negates `{exclusion.Operand}`. `!` may only be applied to `Rel(name)` — "
-                + "docs/plan/07 § Caching across requests: \"`!Rel(\"suspended\")`, never "
-                + "`!From(…)`\". Negating anything that recurses to another object makes "
+                + """docs/plan/07 § Caching across requests: "`!Rel("suspended")`, never """
+                + """`!From(…)`". Negating anything that recurses to another object makes """
                 + "invalidation a graph problem, which is the second consistency problem that "
                 + "section refuses to take on.";
             yield break;
@@ -351,7 +351,7 @@ public sealed class SchemaBuilder {
                 + (target.IsPermission ? "a permission" : $"computed ({target.Expression})")
                 + ". Negation is legal only over a relation computed from direct tuples on the "
                 + "same object — docs/plan/07 § Caching across requests. That restriction is what "
-                + "keeps invalidation to \"the same object changed\", which the tenant version "
+                + """keeps invalidation to "the same object changed", which the tenant version """
                 + "stamp already covers.";
         }
     }
@@ -363,7 +363,7 @@ public sealed class SchemaBuilder {
                 + $"{member.Expression.GetType().Name}). Negation may appear only as a direct "
                 + "operand of the permission's root `&` — docs/plan/07 § Caching across requests, "
                 + "\"negation may only appear at the top level of a permission\". Write "
-                + "`Rel(\"owner\") & !Rel(\"suspended\")`.";
+                + """`Rel("owner") & !Rel("suspended")`.""";
             yield break;
         }
 
@@ -375,7 +375,7 @@ public sealed class SchemaBuilder {
 
             positives++;
 
-            if (operand.DescendantsAndSelf().Any(x => x is ExclusionExpression)) {
+            if (operand.DescendantsAndSelf().Any(static x => x is ExclusionExpression)) {
                 yield return
                     $"{where} nests a `!` inside `{operand}`. Negation may appear only as a direct "
                     + "operand of the permission's root `&`, never deeper.";

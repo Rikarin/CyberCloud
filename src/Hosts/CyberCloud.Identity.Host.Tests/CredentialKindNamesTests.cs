@@ -88,5 +88,5 @@ public sealed class CredentialKindNamesTests {
     public void AnUnmappedKindThrowsRatherThanGuessing() =>
         // ⚠ Cast from a value no member has. A ToString() fallback would answer "999" here, and a
         // caller would ship a JSON body carrying it.
-        Should.Throw<ArgumentOutOfRangeException>(() => CredentialKindNames.Of((CredentialKind)999));
+        Should.Throw<ArgumentOutOfRangeException>(static () => CredentialKindNames.Of((CredentialKind)999));
 }

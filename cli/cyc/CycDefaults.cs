@@ -16,7 +16,7 @@ static class CycDefaults {
     public static CyberCloudClient Client(CycClientRequest request, TokenCredential credential) {
         ArgumentNullException.ThrowIfNull(request);
 
-        return new CyberCloudClient(
+        return new(
             request.Endpoint,
             credential,
             new CyberCloudClientOptions(ServiceVersionFor(request.ApiVersion))
@@ -62,7 +62,7 @@ static class CycDefaults {
             new DefaultCyberCloudCredentialOptions {
                 ExcludeCliCredential = true,
                 IncludeInteractiveCredential = true,
-                OpenBrowser = (_, _) => throw new CredentialUnavailableException(
+                OpenBrowser = static (_, _) => throw new CredentialUnavailableException(
                     "No sign-in is cached for this authority. Run 'cyc login', or set CYC_TENANT_ID, "
                     + "CYC_CLIENT_ID and CYC_CLIENT_SECRET for a service principal."
                 )

@@ -156,8 +156,11 @@ public interface IAgentTunnelObserver : IGrainObserver {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/09 § Cluster connections, the <c>AgentInitiated</c> row: <i>"the tunnel identity
-///         is bound to the cluster resource id at the gateway"</i>. This grain is that binding. It is
+///         docs/plan/09 § Cluster connections, the <c>AgentInitiated</c> row:
+///         <i>
+///             "the tunnel identity
+///             is bound to the cluster resource id at the gateway"
+///         </i>. This grain is that binding. It is
 ///         keyed by the same null-tenant key as <c>IClusterConnectionGrain</c> —
 ///         <c>cluster/{clusterId:N}</c>, <c>GrainKeys.ClusterConnection</c> — because it is the same
 ///         cluster's second platform grain, and because the analyzers already know that key builder
@@ -174,8 +177,11 @@ public interface IAgentTunnelObserver : IGrainObserver {
 ///         token is the agent, whoever relayed it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The tenancy check on the other side is <see cref="ExchangeAsync" />'s, and it is the
-///         load-bearing one.</b> A tenant grain can address this key — tenant → null-tenant edges are
+///         ⚠
+///         <b>
+///             The tenancy check on the other side is <see cref="ExchangeAsync" />'s, and it is the
+///             load-bearing one.
+///         </b> A tenant grain can address this key — tenant → null-tenant edges are
 ///         allowed platform-wide — so a reconciler in tenant B could route a request down tenant A's
 ///         tunnel if nothing stopped it. <see cref="ExchangeAsync" /> accepts only a null-tenant
 ///         caller, which in production is exactly one thing: the connection grain, after it has made

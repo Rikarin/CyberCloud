@@ -71,13 +71,13 @@ public sealed class OpenSearchMatchesTests {
 
     [Fact]
     public void APoolWhoseReplicaCountMovedDoesNotMatch() {
-        using var body = JsonDocument.Parse(OpenSearchServices.Body(ClusterId, dataNodes: 3));
+        using var body = JsonDocument.Parse(OpenSearchServices.Body(ClusterId, 3));
 
         var readBack = JsonNode.Parse(OpenSearchServices.ClusterJson("logs", body.RootElement))!
             .AsObject();
 
         readBack["spec"]!["nodePools"]!.AsArray()
-            .Single(x => x!["component"]!.GetValue<string>() == "data")!["replicas"] = 5;
+            .Single(static x => x!["component"]!.GetValue<string>() == "data")!["replicas"] = 5;
 
         OpenSearchServices.Matches(readBack.ToJsonString(), body.RootElement).ShouldBeFalse();
     }
@@ -90,14 +90,14 @@ public sealed class OpenSearchMatchesTests {
         // back as drifted forever, and the diff would be the data pool's replica count compared
         // against the masters'.
         using var body = JsonDocument.Parse(
-            OpenSearchServices.Body(ClusterId, dataNodes: 4, masterNodes: 3, coordinatingNodes: 2)
+            OpenSearchServices.Body(ClusterId, 4, masterNodes: 3, coordinatingNodes: 2)
         );
 
         var readBack = JsonNode.Parse(OpenSearchServices.ClusterJson("logs", body.RootElement))!
             .AsObject();
 
         var pools = readBack["spec"]!["nodePools"]!.AsArray();
-        var reversed = new JsonArray([.. pools.Reverse().Select(x => x!.DeepClone())]);
+        var reversed = new JsonArray([.. pools.Reverse().Select(static x => x!.DeepClone())]);
         readBack["spec"]!.AsObject()["nodePools"] = reversed;
 
         OpenSearchServices.Matches(readBack.ToJsonString(), body.RootElement)

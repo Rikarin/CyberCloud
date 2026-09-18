@@ -129,7 +129,7 @@ public sealed class CyberCloudError {
             }
         }
 
-        return new CyberCloudError(code, message, target, details);
+        return new(code, message, target, details);
     }
 
     static bool TryReadString(JsonElement element, string name, out string value) {

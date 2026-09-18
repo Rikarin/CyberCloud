@@ -1,4 +1,3 @@
-using CyberCloud.Core.Contracts;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Credentials;
 using CyberCloud.Identity.Tests.Infrastructure;
@@ -31,7 +30,7 @@ namespace CyberCloud.Identity.Tests;
 [Collection(IdentitySuite.Name)]
 public sealed class TotpCounterReplayTests(IdentityCluster cluster) {
     static TotpEnrollment Enrollment() =>
-        new() { SecretRef = new SecretRef { Path = "tenants/x/users/u/totp", Field = "secret" } };
+        new() { SecretRef = new() { Path = "tenants/x/users/u/totp", Field = "secret" } };
 
     [Fact]
     public async Task ACounterIsSpentOnceAndTheSecondPresentationFails() {
@@ -158,7 +157,7 @@ public sealed class TotpCounterReplayTests(IdentityCluster cluster) {
         // numbers. Carrying the spent list over would refuse the user's first code from their new
         // authenticator, which reads as "the app I just set up does not work".
         (await user.EnrollTotpAsync(
-                Enrollment() with { SecretRef = new SecretRef { Path = "tenants/x/users/u/totp", Field = "secret2" } }
+                Enrollment() with { SecretRef = new() { Path = "tenants/x/users/u/totp", Field = "secret2" } }
             )).IsSuccess.ShouldBeTrue();
 
         (await user.ClaimTotpCounterAsync(counter)).GetValueOrThrow().ShouldBeTrue();

@@ -1,5 +1,4 @@
 using CyberCloud.Core.Time;
-using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
 using System.Collections.Concurrent;
@@ -72,9 +71,9 @@ public sealed class StorageReconcilerTests {
         var connection = new RecordingConnection();
 
         using var aliceBody =
-            JsonDocument.Parse(StorageAccounts.Body(ClusterId, volumeServers: 3, storageSize: "100Gi"));
+            JsonDocument.Parse(StorageAccounts.Body(ClusterId, 3, "100Gi"));
 
-        using var bobBody = JsonDocument.Parse(StorageAccounts.Body(ClusterId, volumeServers: 6, storageSize: "500Gi"));
+        using var bobBody = JsonDocument.Parse(StorageAccounts.Body(ClusterId, 6, "500Gi"));
 
         // Interleaved, so a cache written on the first pass is read on the third.
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
@@ -86,7 +85,7 @@ public sealed class StorageReconcilerTests {
         // Secret then the Seaweed — so an index into the raw list would land on a Secret half the
         // time. Filtering by kind keeps this test about what it has always been about: whether one
         // singleton instance carries one tenant's body into another tenant's pass.
-        var applied = connection.Applied.Where(x => x.Target.Kind.Kind == "Seaweed").ToList();
+        var applied = connection.Applied.Where(static x => x.Target.Kind.Kind == "Seaweed").ToList();
         applied.Count.ShouldBe(4);
 
         Volume(applied[0].Body)["replicas"]!.GetValue<int>().ShouldBe(3);
@@ -135,7 +134,7 @@ public sealed class StorageReconcilerTests {
 
         (await Reconcile(connection, body.RootElement)).ShouldBe(ReconcileOutcome.Converged);
 
-        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target))
+        var applied = connection.Applied.Select(static x => RecordingConnection.Key(x.Target))
             .ToHashSet(StringComparer.Ordinal);
 
         var read = connection.Read.Select(RecordingConnection.Key).ToHashSet(StringComparer.Ordinal);
@@ -169,10 +168,10 @@ public sealed class StorageReconcilerTests {
         using var body = JsonDocument.Parse(StorageAccounts.Body(ClusterId));
 
         await Reconcile(connection, body.RootElement, vault);
-        var first = connection.Applied.Select(x => x.Body).ToArray();
+        var first = connection.Applied.Select(static x => x.Body).ToArray();
 
         await Reconcile(connection, body.RootElement, vault);
-        var second = connection.Applied.Skip(first.Length).Select(x => x.Body).ToArray();
+        var second = connection.Applied.Skip(first.Length).Select(static x => x.Body).ToArray();
 
         second.ShouldBe(first);
 
@@ -297,7 +296,7 @@ public sealed class StorageReconcilerTests {
 
         secretAccessKey.ShouldNotBeNull("the reconciler did not mint a key pair at all");
 
-        var rendered = connection.Applied.Single(x => x.Target.Kind.Kind == "Secret").Body;
+        var rendered = connection.Applied.Single(static x => x.Target.Kind.Kind == "Secret").Body;
 
         // ⚠ Decoded, because the Secret carries `data` rather than `stringData` — see
         // StorageAccounts.ConfigSecretJson for why. A test that searched the base64 for a plain
@@ -414,7 +413,7 @@ public sealed class StorageReconcilerTests {
         // are claims at all rather than node-local disks — volumeServerDisksFor branches on that
         // field and not on storageClassName; and `spec.filer.persistence.enabled` is why the filer
         // has a claim to keep.
-        using var desired = JsonDocument.Parse(StorageAccounts.Body(ClusterId, volumeServers: volumeServers));
+        using var desired = JsonDocument.Parse(StorageAccounts.Body(ClusterId, volumeServers));
 
         var spec = JsonNode.Parse(StorageAccounts.SeaweedJson("observed", desired.RootElement))!["spec"]!.AsObject();
 
@@ -425,10 +424,10 @@ public sealed class StorageReconcilerTests {
 
         var claims = StorageAccounts.RetainedClaims("ns", "observed", desired.RootElement);
 
-        claims.Select(x => x.Claim.Name)
+        claims.Select(static x => x.Claim.Name)
             .ShouldBe(
                 [
-                    .. Enumerable.Range(0, volumeServers).Select(i => $"mount0-observed-volume-{i}"),
+                    .. Enumerable.Range(0, volumeServers).Select(static i => $"mount0-observed-volume-{i}"),
                     // ⚠ The doubled name is real: the operator uses `m.Name + "-filer"` for the
                     // StatefulSet AND for its claim template, and Kubernetes composes
                     // {template}-{set}-{ordinal}.
@@ -472,7 +471,11 @@ public sealed class StorageReconcilerTests {
                     ["name"] = claim.Claim.Name,
                     ["namespace"] = claim.Claim.Namespace,
                     ["labels"] = new JsonObject(
-                        claim.OwnedBy.Select(x => KeyValuePair.Create(x.Key, (JsonNode?)JsonValue.Create(x.Value)))
+                        claim.OwnedBy.Select(static x => KeyValuePair.Create(
+                                x.Key,
+                                (JsonNode?)JsonValue.Create(x.Value)
+                            )
+                        )
                     )
                 }
             }.ToJsonString();
@@ -497,7 +500,7 @@ public sealed class StorageReconcilerTests {
 
     /// <summary>The Seaweed command, found by kind rather than by position.</summary>
     static KubeCommand Seaweed(RecordingConnection connection) =>
-        connection.Applied.Single(x => x.Target.Kind.Kind == "Seaweed");
+        connection.Applied.Single(static x => x.Target.Kind.Kind == "Seaweed");
 
     // ── Harness ───────────────────────────────────────────────────────────────────────────────
 
@@ -768,13 +771,16 @@ sealed class RecordingConnection : IKubeClusterConnection {
 
         if (RefuseListing) {
             return Task.FromResult(
-                Result<IReadOnlyList<KubeObjectSummary>>.Failure(ErrorCode.InternalError, "this connection cannot list.")
+                Result<IReadOnlyList<KubeObjectSummary>>.Failure(
+                    ErrorCode.InternalError,
+                    "this connection cannot list."
+                )
             );
         }
 
         var wanted = labelSelector.Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(pair => pair.Split('=', 2))
-            .ToDictionary(x => x[0], x => x.Length > 1 ? x[1] : string.Empty, StringComparer.Ordinal);
+            .Select(static pair => pair.Split('=', 2))
+            .ToDictionary(static x => x[0], static x => x.Length > 1 ? x[1] : string.Empty, StringComparer.Ordinal);
 
         var found = new List<KubeObjectSummary>();
 
@@ -784,11 +790,17 @@ sealed class RecordingConnection : IKubeClusterConnection {
             }
 
             var labels = ((JsonNode.Parse(json) as JsonObject)?["metadata"] as JsonObject)?["labels"] as JsonObject;
-            var held = labels?.ToDictionary(x => x.Key, x => x.Value?.GetValue<string>() ?? string.Empty, StringComparer.Ordinal)
+            var held = labels?.ToDictionary(
+                static x => x.Key,
+                static x => x.Value?.GetValue<string>() ?? string.Empty,
+                StringComparer.Ordinal
+            )
                 ?? new Dictionary<string, string>(StringComparer.Ordinal);
 
             if (wanted.All(pair => held.TryGetValue(pair.Key, out var value) && value == pair.Value)) {
-                found.Add(new() { Kind = kind, Namespace = ns, Name = key[(key.LastIndexOf('/') + 1)..], Labels = held });
+                found.Add(
+                    new() { Kind = kind, Namespace = ns, Name = key[(key.LastIndexOf('/') + 1)..], Labels = held }
+                );
             }
         }
 

@@ -122,7 +122,10 @@ public sealed class GrainAgentTunnels(IGrainFactory grains, IOptions<AgentTunnel
     }
 
     /// <inheritdoc />
-    public Task<Result<AgentTunnelStatus>> GetStatusAsync(Guid clusterId, CancellationToken cancellationToken = default) {
+    public Task<Result<AgentTunnelStatus>> GetStatusAsync(
+        Guid clusterId,
+        CancellationToken cancellationToken = default
+    ) {
         cancellationToken.ThrowIfCancellationRequested();
         return Grain(clusterId).GetStatusAsync();
     }

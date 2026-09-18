@@ -23,10 +23,16 @@ readonly record struct ResponseHeader(string Name, string Value);
 ///         a second response path, and the first one to forget a header would be found by a customer.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The body is a closed set of kinds, and the content type is a consequence of the kind
-///         rather than a member.</b> docs/plan/18 § Disclosure names the cost of serving
-///         <c>security.txt</c> from this host: <i>"giving the outcome a content type … loosens the
-///         single-response-path invariant"</i>. So the outcome was not given one. <see cref="Text" />
+///         ⚠
+///         <b>
+///             The body is a closed set of kinds, and the content type is a consequence of the kind
+///             rather than a member.
+///         </b> docs/plan/18 § Disclosure names the cost of serving
+///         <c>security.txt</c> from this host:
+///         <i>
+///             "giving the outcome a content type … loosens the
+///             single-response-path invariant"
+///         </i>. So the outcome was not given one. <see cref="Text" />
 ///         is the third kind, it is always <c>text/plain; charset=utf-8</c>, and
 ///         <see cref="Pipeline.ResponseWriter" /> refuses an outcome that sets two kinds rather than picking
 ///         one. A stage cannot name a media type, cannot emit HTML, and cannot route around

@@ -51,7 +51,7 @@ public sealed class StorageBucketDeclarationTests {
         // ⚠ NOT secret, which is the contrast with the account's `listKeys` and the reason this one
         // shares the read permission. docs/plan/07 § Consistency puts a KEY EXPORT in the
         // fully-consistent row; a size and an object count are neither a credential nor a capability.
-        var stats = registration.Actions.Single(x => x.Name == StorageBuckets.StatsAction);
+        var stats = registration.Actions.Single(static x => x.Name == StorageBuckets.StatsAction);
         stats.Secret.ShouldBeFalse();
         stats.Permission.ShouldBe(registration.ReadPermission);
     }
@@ -112,7 +112,7 @@ public sealed class StorageBucketDeclarationTests {
         registry.TryGetType(StorageAccounts.Type, out var account).ShouldBeTrue();
 
         CliTokens.Collisions(
-            registry.Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+            registry.Types.Select(static x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
         )
             .ShouldBeEmpty();
 
@@ -137,7 +137,7 @@ public sealed class StorageBucketDeclarationTests {
         var registry = ProviderRegistry.Build([new StorageProvider()]);
         registry.TryGetType(StorageBuckets.Type, out var registration).ShouldBeTrue();
 
-        registration.Meters.Select(x => x.Meter).ShouldBe([QuotaMeter.Resources]);
+        registration.Meters.Select(static x => x.Meter).ShouldBe([QuotaMeter.Resources]);
 
         registration.Meters.ShouldAllBe(
             x => x.Derivation == null,
@@ -180,7 +180,7 @@ public sealed class StorageBucketDeclarationTests {
 
     [Fact]
     public void EveryDeclaredDefaultIsAValueTheApiWouldAccept() {
-        foreach (var property in StorageBuckets.Schema2026.Properties.Where(x => x.DefaultJson.Length > 0)) {
+        foreach (var property in StorageBuckets.Schema2026.Properties.Where(static x => x.DefaultJson.Length > 0)) {
             using var body = JsonDocument.Parse(
                 Overridden(StorageBuckets.Body(ClusterId), property.JsonPointer, property.DefaultJson)
             );
@@ -201,7 +201,7 @@ public sealed class StorageBucketDeclarationTests {
         // than reaching for the ACCOUNT'S alias of it, which would be a fifth copy one indirection
         // away from looking like one.
         StorageBuckets.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/quota/size")
+            .Single(static x => x.JsonPointer == "/properties/quota/size")
             .Pattern.ShouldBe(KubeQuantity.OptionalPattern);
     }
 
@@ -233,7 +233,7 @@ public sealed class StorageBucketDeclarationTests {
         var node = JsonNode.Parse(body)!.AsObject();
         var segments = pointer.Trim('/').Split('/');
 
-        JsonObject cursor = node;
+        var cursor = node;
         for (var i = 0; i < segments.Length - 1; i++) {
             cursor = cursor[segments[i]]?.AsObject() ?? Insert(cursor, segments[i]);
         }

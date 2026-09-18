@@ -87,13 +87,13 @@ public static class TotpAuthenticator {
         "Security",
         "CA5350:Do Not Use Weak Cryptographic Algorithms",
         Justification =
-        "RFC 6238's default and the only algorithm authenticator apps interoperate on. SHA-1's "
-        + "published weaknesses are collision weaknesses; HMAC-SHA1 depends on neither collision "
-        + "resistance nor preimage resistance of the compression function, and no attack on it is "
-        + "known. The alternative is worse in practice rather than in theory: several widely used "
-        + "apps silently ignore `algorithm=SHA256` in an otpauth URI and generate SHA-1 codes "
-        + "anyway, which produces codes that never verify and a failure nobody can debug from "
-        + "either end. The security parameter that matters here is the 160-bit shared secret."
+            "RFC 6238's default and the only algorithm authenticator apps interoperate on. SHA-1's "
+            + "published weaknesses are collision weaknesses; HMAC-SHA1 depends on neither collision "
+            + "resistance nor preimage resistance of the compression function, and no attack on it is "
+            + "known. The alternative is worse in practice rather than in theory: several widely used "
+            + "apps silently ignore `algorithm=SHA256` in an otpauth URI and generate SHA-1 codes "
+            + "anyway, which produces codes that never verify and a failure nobody can debug from "
+            + "either end. The security parameter that matters here is the 160-bit shared secret."
     )]
     public static string Compute(string base32Secret, long counter) {
         var secret = Base32Decode(base32Secret);

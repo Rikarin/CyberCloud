@@ -1,5 +1,3 @@
-using CyberCloud.ResourceManager.Tests.Infrastructure;
-
 namespace CyberCloud.ResourceManager.Tests;
 
 /// <summary>

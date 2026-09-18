@@ -164,7 +164,7 @@ public sealed class MeterDerivationTests {
     public void AFallbackThatIsNotAQuantityIsRefusedAtDeclarationTimeRatherThanAtReserveTime() {
         // Silo start is where a declaration bug belongs. The alternative is one that surfaces per
         // request, after the caller has been told the shape of the API.
-        Should.Throw<ArgumentException>(() => MeterDerivation.Quantity(
+        Should.Throw<ArgumentException>(static () => MeterDerivation.Quantity(
                 "/properties/disk",
                 QuantityUnit.Gibibytes,
                 "10 gigs"
@@ -180,7 +180,7 @@ public sealed class MeterDerivationTests {
         var derivation = MeterDerivation.Of(
             "replicas × cpu, in cores",
             ["/properties/replicas", "/properties/cpu"],
-            _ => Result<decimal>.Success(1m)
+            static _ => Result<decimal>.Success(1m)
         );
 
         derivation.Expression.ShouldBe("replicas × cpu, in cores");
@@ -189,7 +189,12 @@ public sealed class MeterDerivationTests {
 
     [Fact]
     public void ADerivationThatReadsNothingIsRefused() =>
-        Should.Throw<ArgumentException>(() => MeterDerivation.Of("one", [], _ => Result<decimal>.Success(1m)))
+        Should.Throw<ArgumentException>(static () => MeterDerivation.Of(
+                "one",
+                [],
+                static _ => Result<decimal>.Success(1m)
+            )
+        )
             .Message.ShouldContain("constant");
 }
 
@@ -221,7 +226,7 @@ public sealed class MeterRegistrationTests {
             Derivation = MeterDerivation.Of(
                 "replicas × cpu",
                 ["/properties/replicas", "/properties/cpu"],
-                _ => Result<decimal>.Success(1m)
+                static _ => Result<decimal>.Success(1m)
             )
         };
 

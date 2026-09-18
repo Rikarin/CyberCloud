@@ -12,8 +12,11 @@ namespace CyberCloud.Identity.Grains;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This is <c>UserGrain.IssueOtpAsync</c> and <c>UserGrain.RedeemOtpAsync</c> for a user
-///         who does not exist yet</b>, and every rule those two methods carry is carried here for the
+///         ⚠
+///         <b>
+///             This is <c>UserGrain.IssueOtpAsync</c> and <c>UserGrain.RedeemOtpAsync</c> for a user
+///             who does not exist yet
+///         </b>, and every rule those two methods carry is carried here for the
 ///         same reason: the challenge is written before the send, a retry inside
 ///         <see cref="OtpPolicy.ResendCooldown" /> redelivers the same code, the per-window issue cap
 ///         is charged for a resend and not for a retry, the comparison is constant-time over keyed

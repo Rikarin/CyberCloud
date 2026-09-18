@@ -1,6 +1,5 @@
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Registry;
-using CyberCloud.ResourceManager.Tests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -76,7 +75,7 @@ public sealed class MeteredAmountTests(ResourceManagerCluster cluster) {
         var storageBefore = await Committed(quota, QuotaMeter.StorageGb);
         var countBefore = await Committed(quota, QuotaMeter.Resources);
 
-        var created = await Create(address, TestingProvider.SizedBody(replicas: 3, cpu: "500m", disk: "20Gi"));
+        var created = await Create(address, TestingProvider.SizedBody(3, "500m", "20Gi"));
         created.IsSuccess.ShouldBeTrue(created.Error?.Message);
         await Converge(created.GetValueOrThrow());
 
@@ -133,7 +132,7 @@ public sealed class MeteredAmountTests(ResourceManagerCluster cluster) {
         for (var cycle = 0; cycle < 10; cycle++) {
             var address = Sized($"cycle-{cycle}");
 
-            var created = await Create(address, TestingProvider.SizedBody(replicas: 3, cpu: "333m", disk: "512Mi"));
+            var created = await Create(address, TestingProvider.SizedBody(3, "333m", "512Mi"));
             created.IsSuccess.ShouldBeTrue(created.Error?.Message);
             await Converge(created.GetValueOrThrow());
 
@@ -185,7 +184,7 @@ public sealed class MeteredAmountTests(ResourceManagerCluster cluster) {
         // leases of their own; asserting `Reserved == 0` here would be asserting something about them.
         var reservedBefore = (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Reserved;
 
-        var created = await Create(address, TestingProvider.SizedBody(replicas: 2, cpu: "500m", disk: null));
+        var created = await Create(address, TestingProvider.SizedBody(2, "500m", null));
 
         created.IsFailure.ShouldBeTrue("a meter that cannot determine its amount must not let the write through");
         created.Error!.Code.ShouldBe(ErrorCode.InternalError);
@@ -279,14 +278,14 @@ public sealed class MeteredAmountTests(ResourceManagerCluster cluster) {
                 .ResourceType("things")
                 .ApiVersion(
                     "2026-08-01",
-                    ResourceSchema.Of([new("/location", SchemaKind.Text, Required: true)])
+                    ResourceSchema.Of([new("/location", SchemaKind.Text, true)])
                 )
                 .Meter(
                     QuotaMeter.Vcpu,
                     MeterDerivation.Of(
                         "throws",
                         ["/properties/size"],
-                        _ => throw new InvalidOperationException("a provider bug")
+                        static _ => throw new InvalidOperationException("a provider bug")
                     )
                 );
     }

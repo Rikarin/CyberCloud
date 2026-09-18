@@ -276,25 +276,25 @@ public sealed class AuthorizationCluster : IAsyncLifetime {
         ];
 
         args.AddRange(
-            connections.Select(x =>
+            connections.Select(static x =>
                 $"--{CyberCloudStorageOptions.SectionName}:Durable:Shards:{x.Key}={x.Value}"
             )
         );
 
         var builder = OrleansApplication.CreateSilo(
             [.. args],
-            cluster => cluster.ConfigureServices(services => {
+            static cluster => cluster.ConfigureServices(static services => {
                     // Registered BEFORE AddCyberCloudAuthorization's TryAdd runs, so this wins.
                     services.AddSingleton<ArmableWriteInterceptor>();
-                    services.AddSingleton<IRelationWriteInterceptor>(sp =>
+                    services.AddSingleton<IRelationWriteInterceptor>(static sp =>
                         sp.GetRequiredService<ArmableWriteInterceptor>()
                     );
 
                     // The tenancy refreshers are background loops this suite does not drive.
-                    services.Configure<TenancyRefreshOptions>(o => o.RunBackgroundRefresh = false);
+                    services.Configure<TenancyRefreshOptions>(static o => o.RunBackgroundRefresh = false);
                 }
             ),
-            (cluster, options) =>
+            static (cluster, options) =>
                 cluster.AddCyberCloudTenancy(options).AddCyberCloudAuthorization()
         );
 

@@ -414,7 +414,7 @@ public static class AgentPools {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the pool is billed in."
                 ) {
                     Format = SchemaFormat.Region,
@@ -426,7 +426,7 @@ public static class AgentPools {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The management cluster the machine objects are applied to. Must be "
                     + "the one the cluster is in — nothing checks that, and a pool placed elsewhere "
                     + "produces a MachineDeployment naming a Cluster that is not there, which Cluster "
@@ -435,7 +435,7 @@ public static class AgentPools {
                 new(
                     "/properties/count",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "How many worker VMs the pool runs. ⚠ When autoscaling is on this is "
                     + "the starting size and the autoscaler moves it; quota is reserved against the "
                     + "maximum in that case, not against this."
@@ -443,7 +443,7 @@ public static class AgentPools {
                 new(
                     "/properties/size",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The VM size, from the platform's sizing catalogue. Kubernetes nodes "
                     + "use the s1 family, which is 1 vCPU to 4 GiB. ⚠ Immutable: a Cluster API machine "
                     + "template cannot be resized in place, so changing this would mean replacing every "
@@ -457,7 +457,7 @@ public static class AgentPools {
                 new(
                     "/properties/version",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The Kubernetes minor version the nodes run. ⚠ It may be up to three "
                     + "minors behind the cluster's control plane and may never be ahead of it. This API "
                     + "does not check that — the cluster's version is a different resource — so an "
@@ -468,7 +468,7 @@ public static class AgentPools {
                 new(
                     "/properties/osDiskSize",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The root volume of each VM, in Kubernetes quantity form. It holds the "
                     + "operating system, the container images and every writable layer, so a pool "
                     + "running large images needs more of it than a pool running small ones."
@@ -529,7 +529,8 @@ public static class AgentPools {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 

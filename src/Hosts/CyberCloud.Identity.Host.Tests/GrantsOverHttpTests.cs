@@ -4,7 +4,6 @@ using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Host.RateLimiting;
 using CyberCloud.Identity.Host.Tests.Infrastructure;
 using CyberCloud.Identity.Host.Tokens;
-using CyberCloud.Identity.SignIn;
 using System.Net;
 using System.Text.Json;
 
@@ -48,7 +47,7 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         var (verifier, challenge) = BrowserClient.Pkce();
         var state = BrowserClient.Base64Url(Guid.NewGuid().ToByteArray());
-        var authorize = AuthorizePath(challenge, state, tenant: IdentityHostFixture.Slug);
+        var authorize = AuthorizePath(challenge, state, IdentityHostFixture.Slug);
 
         // ── 1. No cookie: /authorize sends the person to the sign-in page, with itself as the return URL.
         using var unauthenticated = await browser.GetAsync(authorize, Ct);
@@ -57,7 +56,8 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         var signInPage = BrowserClient.Location(unauthenticated);
 
-        signInPage.GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.SignInPagePath);
+        signInPage.GetLeftPart(UriPartial.Path)
+            .ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.SignInPagePath);
 
         // ⚠ The return URL is the /authorize request itself — path and query, byte for byte — and
         // a same-origin path rather than an absolute URL, because that is what the page's
@@ -67,7 +67,12 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         // ── 2. The first factor: a password, naming the tenant by slug.
         using var password = await browser.PostJsonAsync(
             "/api/signin/password",
-            new { email = IdentityHostFixture.Email, password = IdentityHostFixture.Password, returnUrl = authorize, tenant = IdentityHostFixture.Slug },
+            new {
+                email = IdentityHostFixture.Email,
+                password = IdentityHostFixture.Password,
+                returnUrl = authorize,
+                tenant = IdentityHostFixture.Slug
+            },
             Ct
         );
 
@@ -82,14 +87,16 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         // the session was opened in. SignInApi.WithTenantWhenResuming says why the alternative loops.
         var resumed = first.GetProperty("returnUrl").GetString()!;
 
-        resumed.ShouldBe(AuthorizePath(challenge, state, tenant: IdentityHostFixture.Tenant.ToString("D")));
+        resumed.ShouldBe(AuthorizePath(challenge, state, IdentityHostFixture.Tenant.ToString("D")));
         browser.Cookies.ShouldContainKey(IdentityHostAuthentication.CookieName);
 
         // ── 3. A pending second factor is not a session /authorize will mint from.
         using var pending = await browser.GetAsync(authorize, Ct);
 
         pending.StatusCode.ShouldBe(HttpStatusCode.Redirect);
-        BrowserClient.Location(pending).GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.SignInPagePath);
+        BrowserClient.Location(pending)
+            .GetLeftPart(UriPartial.Path)
+            .ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.SignInPagePath);
 
         // ── 4. The second factor: the code the silo delivered through the seam.
         using var send = await browser.PostJsonAsync("/api/signin/otp/send", new { returnUrl = authorize }, Ct);
@@ -120,7 +127,11 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         callbackQuery["state"].ShouldBe(state);
         callbackQuery.ShouldContainKey("code");
-        callbackQuery["iss"].TrimEnd('/').ShouldBe(fixture.BaseAddress.GetLeftPart(UriPartial.Authority), "OpenIddict stamps the issuer on the redirect");
+        callbackQuery["iss"].TrimEnd('/')
+            .ShouldBe(
+                fixture.BaseAddress.GetLeftPart(UriPartial.Authority),
+                "OpenIddict stamps the issuer on the redirect"
+            );
 
         // ── 6. The exchange: a simple cross-origin POST with credentials, answered with CORS headers,
         //       an access token in the body and the refresh token in a cookie.
@@ -145,22 +156,29 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         tokens.GetProperty("token_type").GetString().ShouldBe("Bearer");
         // ⚠ 599 or 600: OpenIddict computes it from the token's exp minus now, and a second can
         // tick between minting and answering.
-        tokens.GetProperty("expires_in").GetInt32().ShouldBeInRange((int)AccessTokenPolicy.AccessTokenLifetime.TotalSeconds - 2, (int)AccessTokenPolicy.AccessTokenLifetime.TotalSeconds);
+        tokens.GetProperty("expires_in")
+            .GetInt32()
+            .ShouldBeInRange(
+                (int)AccessTokenPolicy.AccessTokenLifetime.TotalSeconds - 2,
+                (int)AccessTokenPolicy.AccessTokenLifetime.TotalSeconds
+            );
         // RFC 6749 § 5.1: `scope` is optional when it equals what was asked for, and OpenIddict
         // omits it then. Present or not, it may not differ.
         if (tokens.TryGetProperty("scope", out var granted)) {
             granted.GetString().ShouldBe(Scope);
         }
-        tokens.TryGetProperty("refresh_token", out _).ShouldBeFalse("the browser client's refresh token belongs in the cookie, not the body");
+
+        tokens.TryGetProperty("refresh_token", out _)
+            .ShouldBeFalse("the browser client's refresh token belongs in the cookie, not the body");
 
         var refreshCookie = BrowserClient.SetCookieHeader(exchanged, RefreshCookie.Name);
 
         refreshCookie.ShouldNotBeNull("no __Host-cyc-refresh cookie was set at the exchange");
-        refreshCookie.ShouldContain("httponly", Case.Insensitive);
-        refreshCookie.ShouldContain("secure", Case.Insensitive);
-        refreshCookie.ShouldContain("samesite=lax", Case.Insensitive);
-        refreshCookie.ShouldContain("path=/", Case.Insensitive);
-        refreshCookie.ShouldContain("max-age=1209600", Case.Insensitive);
+        refreshCookie.ShouldContain("httponly");
+        refreshCookie.ShouldContain("secure");
+        refreshCookie.ShouldContain("samesite=lax");
+        refreshCookie.ShouldContain("path=/");
+        refreshCookie.ShouldContain("max-age=1209600");
 
         var accessToken = tokens.GetProperty("access_token").GetString()!;
         var access = BrowserClient.Payload(accessToken);
@@ -169,9 +187,12 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         // ⚠ The serialized token, not the principal: exactly the closed set, and none of the
         // claims that ride beside it in the refresh token or the id_token.
-        var accessClaims = access.EnumerateObject().Select(x => x.Name).ToList();
+        var accessClaims = access.EnumerateObject().Select(static x => x.Name).ToList();
 
-        accessClaims.ShouldAllBe(x => AccessTokenClaims.Permitted.Contains(x), "a claim outside AccessTokenClaims.Permitted reached the wire: " + string.Join(", ", accessClaims));
+        accessClaims.ShouldAllBe(
+            x => AccessTokenClaims.Permitted.Contains(x),
+            "a claim outside AccessTokenClaims.Permitted reached the wire: " + string.Join(", ", accessClaims)
+        );
         accessClaims.ShouldNotContain(AccessTokenPrincipalFactory.RefreshHandleClaim);
         accessClaims.ShouldNotContain(AccessTokenPrincipalFactory.InteractiveSessionClaim);
         accessClaims.ShouldNotContain("email");
@@ -184,7 +205,10 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         access.GetProperty(AccessTokenClaims.AuthorizedParty).GetString().ShouldBe(FirstPartyClients.Portal);
         access.GetProperty(AccessTokenClaims.Scope).GetString().ShouldBe(Scope);
 
-        var amr = access.GetProperty(AccessTokenClaims.AuthenticationMethods).EnumerateArray().Select(x => x.GetString()).ToList();
+        var amr = access.GetProperty(AccessTokenClaims.AuthenticationMethods)
+            .EnumerateArray()
+            .Select(static x => x.GetString())
+            .ToList();
 
         amr.ShouldBe(["pwd", "otp"], "the token session carries the interactive session's methods");
 
@@ -192,13 +216,17 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         var authTime = access.GetProperty(AccessTokenClaims.AuthenticationTime).GetInt64();
 
         // The token session is a real grain, open, tracked on the user, and not the cookie session.
-        var tokenSession = await fixture.For(IdentityHostFixture.Tenant).GetGrain<ISessionGrain>(GrainKeys.Session(tokenSessionId)).GetAsync();
+        var tokenSession = await fixture.For(IdentityHostFixture.Tenant)
+            .GetGrain<ISessionGrain>(GrainKeys.Session(tokenSessionId))
+            .GetAsync();
 
         tokenSession.IsSuccess.ShouldBeTrue();
         tokenSession.GetValueOrThrow().ClientId.ShouldBe(FirstPartyClients.Portal);
         tokenSession.GetValueOrThrow().IsLive.ShouldBeTrue();
 
-        (await fixture.For(IdentityHostFixture.Tenant).GetGrain<IUserGrain>(GrainKeys.User(fixture.UserId)).ListSessionsAsync())
+        (await fixture.For(IdentityHostFixture.Tenant)
+                .GetGrain<IUserGrain>(GrainKeys.User(fixture.UserId))
+                .ListSessionsAsync())
             .GetValueOrThrow()
             .ShouldContain(tokenSessionId);
 
@@ -224,9 +252,15 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         var refreshedAccess = BrowserClient.Payload(refreshedTokens.GetProperty("access_token").GetString()!);
 
-        refreshedAccess.GetProperty(AccessTokenClaims.SessionId).GetString().ShouldBe(tokenSessionId.ToString("N"), "a refresh keeps the token session");
-        refreshedAccess.GetProperty(AccessTokenClaims.AuthenticationTime).GetInt64().ShouldBe(authTime, "auth_time is carried, not recomputed");
-        refreshedAccess.EnumerateObject().Select(x => x.Name).ShouldAllBe(x => AccessTokenClaims.Permitted.Contains(x));
+        refreshedAccess.GetProperty(AccessTokenClaims.SessionId)
+            .GetString()
+            .ShouldBe(tokenSessionId.ToString("N"), "a refresh keeps the token session");
+        refreshedAccess.GetProperty(AccessTokenClaims.AuthenticationTime)
+            .GetInt64()
+            .ShouldBe(authTime, "auth_time is carried, not recomputed");
+        refreshedAccess.EnumerateObject()
+            .Select(static x => x.Name)
+            .ShouldAllBe(x => AccessTokenClaims.Permitted.Contains(x));
 
         // ── 8. A restart on the same key directory: the earlier token still verifies against the same
         //       key set, and the refresh cookie — encrypted with the persisted encryption key — still works.
@@ -237,15 +271,24 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         using var restarted = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.PortalOrigin);
         restarted.SetCookie(RefreshCookie.Name, browser.Cookies[RefreshCookie.Name]);
-        restarted.SetCookie(IdentityHostAuthentication.CookieName, browser.Cookies[IdentityHostAuthentication.CookieName]);
+        restarted.SetCookie(
+            IdentityHostAuthentication.CookieName,
+            browser.Cookies[IdentityHostAuthentication.CookieName]
+        );
 
         using var jwksAfter = await restarted.GetAsync(AccessTokenPolicy.JsonWebKeySetPath, Ct);
 
-        (await jwksAfter.Content.ReadAsStringAsync(Ct)).ShouldBe(keysBefore, "the restarted host published a different key set");
+        (await jwksAfter.Content.ReadAsStringAsync(Ct)).ShouldBe(
+            keysBefore,
+            "the restarted host published a different key set"
+        );
 
         using var refreshedAfterRestart = await Refresh(restarted);
 
-        refreshedAfterRestart.StatusCode.ShouldBe(HttpStatusCode.OK, await refreshedAfterRestart.Content.ReadAsStringAsync(Ct));
+        refreshedAfterRestart.StatusCode.ShouldBe(
+            HttpStatusCode.OK,
+            await refreshedAfterRestart.Content.ReadAsStringAsync(Ct)
+        );
 
         // ── 9. The replay: the cookie the refresh above retired is refused, and the whole chain with it.
         var retired = browser.Cookies[RefreshCookie.Name];
@@ -257,15 +300,21 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         replayed.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await BrowserClient.JsonAsync(replayed, Ct)).GetProperty("error").GetString().ShouldBe("invalid_grant");
-        BrowserClient.SetCookieHeader(replayed, RefreshCookie.Name)!.ShouldContain("max-age=0", Case.Insensitive, "a refused refresh clears the cookie");
+        BrowserClient.SetCookieHeader(replayed, RefreshCookie.Name)!
+            .ShouldContain("max-age=0", Case.Insensitive, "a refused refresh clears the cookie");
 
         restarted.SetCookie(RefreshCookie.Name, live);
 
         using var afterReplay = await Refresh(restarted);
 
-        afterReplay.StatusCode.ShouldBe(HttpStatusCode.BadRequest, "the legitimate generation survived a replay, so the chain was not revoked");
+        afterReplay.StatusCode.ShouldBe(
+            HttpStatusCode.BadRequest,
+            "the legitimate generation survived a replay, so the chain was not revoked"
+        );
 
-        (await fixture.For(IdentityHostFixture.Tenant).GetGrain<ISessionGrain>(GrainKeys.Session(tokenSessionId)).IsLiveAsync())
+        (await fixture.For(IdentityHostFixture.Tenant)
+                .GetGrain<ISessionGrain>(GrainKeys.Session(tokenSessionId))
+                .IsLiveAsync())
             .GetValueOrThrow()
             .ShouldBeFalse();
 
@@ -273,9 +322,15 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         //        and it is the token session, not the sign-in, that the replay ended.
         var (verifier2, challenge2) = BrowserClient.Pkce();
 
-        using var authorizedAgain = await restarted.GetAsync(AuthorizePath(challenge2, "s2", tenant: IdentityHostFixture.Tenant.ToString("D")), Ct);
+        using var authorizedAgain = await restarted.GetAsync(
+            AuthorizePath(challenge2, "s2", IdentityHostFixture.Tenant.ToString("D")),
+            Ct
+        );
 
-        authorizedAgain.StatusCode.ShouldBe(HttpStatusCode.Redirect, await authorizedAgain.Content.ReadAsStringAsync(Ct));
+        authorizedAgain.StatusCode.ShouldBe(
+            HttpStatusCode.Redirect,
+            await authorizedAgain.Content.ReadAsStringAsync(Ct)
+        );
 
         using var exchangedAgain = await restarted.PostFormAsync(
             IdentityHostOpenIddict.TokenPath,
@@ -296,8 +351,10 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         //        session is revoked, and the browser lands on the portal with the state echoed.
         using var loggedOut = await restarted.GetAsync(
             IdentityHostOpenIddict.EndSessionPath
-            + "?client_id=" + FirstPartyClients.Portal
-            + "&post_logout_redirect_uri=" + Uri.EscapeDataString(FirstPartyClients.DevelopmentPortalPostLogoutRedirectUri)
+            + "?client_id="
+            + FirstPartyClients.Portal
+            + "&post_logout_redirect_uri="
+            + Uri.EscapeDataString(FirstPartyClients.DevelopmentPortalPostLogoutRedirectUri)
             + "&state=bye",
             Ct
         );
@@ -308,16 +365,25 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         landed.GetLeftPart(UriPartial.Path).ShouldBe(FirstPartyClients.DevelopmentPortalPostLogoutRedirectUri);
         BrowserClient.Query(landed)["state"].ShouldBe("bye");
-        restarted.Cookies.ShouldNotContainKey(IdentityHostAuthentication.CookieName, "the session cookie survived /logout");
+        restarted.Cookies.ShouldNotContainKey(
+            IdentityHostAuthentication.CookieName,
+            "the session cookie survived /logout"
+        );
         restarted.Cookies.ShouldNotContainKey(RefreshCookie.Name, "the refresh cookie survived /logout");
 
         // And the token session opened at step 10 dies at its next refresh, because its sign-in is gone.
         var orphaned = BrowserClient.SetCookieHeader(exchangedAgain, RefreshCookie.Name)!;
-        restarted.SetCookie(RefreshCookie.Name, orphaned[(RefreshCookie.Name.Length + 1)..orphaned.IndexOf(';', StringComparison.Ordinal)]);
+        restarted.SetCookie(
+            RefreshCookie.Name,
+            orphaned[(RefreshCookie.Name.Length + 1)..orphaned.IndexOf(';', StringComparison.Ordinal)]
+        );
 
         using var afterLogout = await Refresh(restarted);
 
-        afterLogout.StatusCode.ShouldBe(HttpStatusCode.BadRequest, "a token session outlived the sign-in it was bound to");
+        afterLogout.StatusCode.ShouldBe(
+            HttpStatusCode.BadRequest,
+            "a token session outlived the sign-in it was bound to"
+        );
         (await BrowserClient.JsonAsync(afterLogout, Ct)).GetProperty("error").GetString().ShouldBe("invalid_grant");
     }
 
@@ -331,7 +397,12 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         // chose. OpenIddict does that only for a request whose VALIDATION failed, which is why the
         // redirect-URI check lives in the validator and not in the passthrough.
         using var refused = await browser.GetAsync(
-            AuthorizePath(challenge, "s", tenant: IdentityHostFixture.Slug, redirectUri: "https://evil.example/callback"),
+            AuthorizePath(
+                challenge,
+                "s",
+                IdentityHostFixture.Slug,
+                "https://evil.example/callback"
+            ),
             Ct
         );
 
@@ -353,7 +424,7 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         // — state, challenge, redirect_uri — byte for byte, so the exchange still works afterwards.
         using var browser = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.PortalOrigin);
         var (_, challenge) = BrowserClient.Pkce();
-        var request = AuthorizePath(challenge, "s", tenant: "no-such-tenant");
+        var request = AuthorizePath(challenge, "s", "no-such-tenant");
 
         using var redirected = await browser.GetAsync(request, Ct);
 
@@ -362,12 +433,17 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         var signInPage = redirected.Headers.Location!.ToString();
 
         signInPage.ShouldStartWith(IdentityHostFixture.SignInPageBaseUri + "/signin?returnUrl=");
-        BrowserClient.Query(new Uri(signInPage))["returnUrl"].ShouldBe(request.Replace("&tenant=no-such-tenant", "", StringComparison.Ordinal));
+        BrowserClient.Query(new Uri(signInPage))["returnUrl"]
+            .ShouldBe(request.Replace("&tenant=no-such-tenant", "", StringComparison.Ordinal));
 
         // A tenant's own client has no registration outside its tenant, so for it the error page is
         // still the only honest answer — there is no redirect_uri to validate.
         using var refused = await browser.GetAsync(
-            AuthorizePath(challenge, "s", tenant: "no-such-tenant").Replace("client_id=" + FirstPartyClients.Portal, "client_id=some-tenant-app", StringComparison.Ordinal),
+            AuthorizePath(challenge, "s", "no-such-tenant").Replace(
+                "client_id=" + FirstPartyClients.Portal,
+                "client_id=some-tenant-app",
+                StringComparison.Ordinal
+            ),
             Ct
         );
 
@@ -390,7 +466,9 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         var body = await BrowserClient.JsonAsync(refused, Ct);
 
         body.GetProperty("error").GetString().ShouldBe("invalid_request");
-        body.GetProperty("error_description").GetString().ShouldBe(DegradedModeHandlers.ExtractRefreshTokenFromCookie.OriginNotAllowed);
+        body.GetProperty("error_description")
+            .GetString()
+            .ShouldBe(DegradedModeHandlers.ExtractRefreshTokenFromCookie.OriginNotAllowed);
 
         // No CORS headers for an origin outside the first-party list, and the cookie is left alone:
         // a foreign page must not be able to sign the person out of the portal either.
@@ -420,8 +498,11 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         var body = await BrowserClient.JsonAsync(refused, Ct);
 
         body.GetProperty("error").GetString().ShouldBe("invalid_request");
-        body.GetProperty("error_description").GetString().ShouldBe(DegradedModeHandlers.ValidateTokenRequest.OriginNotAllowed);
-        BrowserClient.SetCookieHeader(refused, RefreshCookie.Name).ShouldBeNull("a refresh cookie was planted from a foreign origin");
+        body.GetProperty("error_description")
+            .GetString()
+            .ShouldBe(DegradedModeHandlers.ValidateTokenRequest.OriginNotAllowed);
+        BrowserClient.SetCookieHeader(refused, RefreshCookie.Name)
+            .ShouldBeNull("a refresh cookie was planted from a foreign origin");
         BrowserClient.Header(refused, "Access-Control-Allow-Origin").ShouldBeNull();
         body.TryGetProperty("access_token", out _).ShouldBeFalse();
 
@@ -452,14 +533,20 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         );
 
         refusedRefresh.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await BrowserClient.JsonAsync(refusedRefresh, Ct)).GetProperty("error_description").GetString().ShouldBe(DegradedModeHandlers.ValidateTokenRequest.OriginNotAllowed);
-        BrowserClient.SetCookieHeader(refusedRefresh, RefreshCookie.Name).ShouldBeNull("a refresh cookie was written, or cleared, from a foreign origin");
+        (await BrowserClient.JsonAsync(refusedRefresh, Ct)).GetProperty("error_description")
+            .GetString()
+            .ShouldBe(DegradedModeHandlers.ValidateTokenRequest.OriginNotAllowed);
+        BrowserClient.SetCookieHeader(refusedRefresh, RefreshCookie.Name)
+            .ShouldBeNull("a refresh cookie was written, or cleared, from a foreign origin");
 
         browser.Origin = IdentityHostFixture.PortalOrigin;
 
         using var stillLive = await Refresh(browser);
 
-        stillLive.StatusCode.ShouldBe(HttpStatusCode.OK, "the refused request rotated the chain, so the honest refresh read as a replay");
+        stillLive.StatusCode.ShouldBe(
+            HttpStatusCode.OK,
+            "the refused request rotated the chain, so the honest refresh read as a replay"
+        );
     }
 
     [Fact]
@@ -476,10 +563,26 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         var (wrongVerifier, _) = BrowserClient.Pkce();
 
-        await ShouldRefuse(Exchange(browser, code, wrongVerifier), "invalid_grant", "a wrong code_verifier was accepted");
-        await ShouldRefuse(Exchange(browser, code, verifier: null), "invalid_request", "a missing code_verifier was accepted");
-        await ShouldRefuse(Exchange(browser, code, verifier, redirectUri: "http://localhost:4200/elsewhere"), "invalid_grant", "a redirect_uri other than the one the code was issued for was accepted");
-        await ShouldRefuse(Exchange(browser, code, verifier, clientId: FirstPartyClients.Cli), "invalid_grant", "a client other than the code's presenter was accepted");
+        await ShouldRefuse(
+            Exchange(browser, code, wrongVerifier),
+            "invalid_grant",
+            "a wrong code_verifier was accepted"
+        );
+        await ShouldRefuse(
+            Exchange(browser, code, null),
+            "invalid_request",
+            "a missing code_verifier was accepted"
+        );
+        await ShouldRefuse(
+            Exchange(browser, code, verifier, "http://localhost:4200/elsewhere"),
+            "invalid_grant",
+            "a redirect_uri other than the one the code was issued for was accepted"
+        );
+        await ShouldRefuse(
+            Exchange(browser, code, verifier, clientId: FirstPartyClients.Cli),
+            "invalid_grant",
+            "a client other than the code's presenter was accepted"
+        );
 
         // ⚠ Four refusals, and the code is still unburnt: every one of them is answered before
         // TokenApi.MintForCodeAsync runs, so a thief guessing verifiers cannot spend the code the
@@ -509,8 +612,14 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         exchanged.StatusCode.ShouldBe(HttpStatusCode.OK, tokens.GetRawText());
 
-        var tokenSessionId = Guid.ParseExact(BrowserClient.Payload(tokens.GetProperty("access_token").GetString()!).GetProperty(AccessTokenClaims.SessionId).GetString()!, "N");
-        var tokenSession = fixture.For(IdentityHostFixture.Tenant).GetGrain<ISessionGrain>(GrainKeys.Session(tokenSessionId));
+        var tokenSessionId = Guid.ParseExact(
+            BrowserClient.Payload(tokens.GetProperty("access_token").GetString()!).GetProperty(
+                AccessTokenClaims.SessionId
+            ).GetString()!,
+            "N"
+        );
+        var tokenSession = fixture.For(IdentityHostFixture.Tenant)
+            .GetGrain<ISessionGrain>(GrainKeys.Session(tokenSessionId));
 
         (await tokenSession.IsLiveAsync()).GetValueOrThrow().ShouldBeTrue();
         browser.Cookies.ShouldContainKey(RefreshCookie.Name);
@@ -528,12 +637,17 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         // ⚠ THE ASSERTION THAT MATTERS: the session the FIRST exchange opened is dead, and so is the
         // refresh chain the portal is holding for it.
-        (await tokenSession.IsLiveAsync()).GetValueOrThrow().ShouldBeFalse("the replay was refused but the first exchange's session survived");
-        (await tokenSession.GetAsync()).GetValueOrThrow().RevokedBecause.ShouldBe(RevocationReason.AuthorizationCodeReuseDetected);
+        (await tokenSession.IsLiveAsync()).GetValueOrThrow()
+            .ShouldBeFalse("the replay was refused but the first exchange's session survived");
+        (await tokenSession.GetAsync()).GetValueOrThrow()
+            .RevokedBecause.ShouldBe(RevocationReason.AuthorizationCodeReuseDetected);
 
         using var refreshed = await Refresh(browser);
 
-        refreshed.StatusCode.ShouldBe(HttpStatusCode.BadRequest, "the refresh chain of a session revoked for code reuse still rotated");
+        refreshed.StatusCode.ShouldBe(
+            HttpStatusCode.BadRequest,
+            "the refresh chain of a session revoked for code reuse still rotated"
+        );
         (await BrowserClient.JsonAsync(refreshed, Ct)).GetProperty("error").GetString().ShouldBe("invalid_grant");
 
         // The interactive session is untouched — it is the token session that died — so the person
@@ -560,7 +674,8 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await BrowserClient.JsonAsync(refused, Ct)).GetProperty("error").GetString().ShouldBe("invalid_request");
-        BrowserClient.Header(refused, "Access-Control-Allow-Origin").ShouldBe(IdentityHostFixture.PortalOrigin, "the portal reads this error cross-origin");
+        BrowserClient.Header(refused, "Access-Control-Allow-Origin")
+            .ShouldBe(IdentityHostFixture.PortalOrigin, "the portal reads this error cross-origin");
     }
 
     [Fact]
@@ -569,7 +684,12 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         using var refused = await browser.PostJsonAsync(
             "/api/signin/password",
-            new { email = IdentityHostFixture.Email, password = IdentityHostFixture.Password, returnUrl = "/", tenant = "no-such-tenant" },
+            new {
+                email = IdentityHostFixture.Email,
+                password = IdentityHostFixture.Password,
+                returnUrl = "/",
+                tenant = "no-such-tenant"
+            },
             Ct
         );
 
@@ -591,14 +711,29 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         var origin = fixture.BaseAddress.GetLeftPart(UriPartial.Authority);
 
-        document.GetProperty("authorization_endpoint").GetString().ShouldBe(origin + IdentityHostOpenIddict.AuthorizationPath);
+        document.GetProperty("authorization_endpoint")
+            .GetString()
+            .ShouldBe(origin + IdentityHostOpenIddict.AuthorizationPath);
         document.GetProperty("token_endpoint").GetString().ShouldBe(origin + IdentityHostOpenIddict.TokenPath);
-        document.GetProperty("end_session_endpoint").GetString().ShouldBe(origin + IdentityHostOpenIddict.EndSessionPath);
-        document.GetProperty("userinfo_endpoint").GetString().ShouldBe(origin + IdentityHostOpenIddict.UserInfoPath, "OIDC Core § 5.3 wants /userinfo advertised, and #94 mapped it");
+        document.GetProperty("end_session_endpoint")
+            .GetString()
+            .ShouldBe(origin + IdentityHostOpenIddict.EndSessionPath);
+        document.GetProperty("userinfo_endpoint")
+            .GetString()
+            .ShouldBe(
+                origin + IdentityHostOpenIddict.UserInfoPath,
+                "OIDC Core § 5.3 wants /userinfo advertised, and #94 mapped it"
+            );
         document.GetProperty("jwks_uri").GetString().ShouldBe(origin + AccessTokenPolicy.JsonWebKeySetPath);
-        document.GetProperty("code_challenge_methods_supported").EnumerateArray().Select(x => x.GetString()).ShouldBe(["S256"]);
+        document.GetProperty("code_challenge_methods_supported")
+            .EnumerateArray()
+            .Select(static x => x.GetString())
+            .ShouldBe(["S256"]);
 
-        var grants = document.GetProperty("grant_types_supported").EnumerateArray().Select(x => x.GetString()).ToList();
+        var grants = document.GetProperty("grant_types_supported")
+            .EnumerateArray()
+            .Select(static x => x.GetString())
+            .ToList();
 
         grants.ShouldContain("authorization_code");
         grants.ShouldContain("refresh_token");
@@ -638,16 +773,35 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         userinfo.StatusCode.ShouldBe(HttpStatusCode.OK, claims.GetRawText());
         BrowserClient.Header(userinfo, "Access-Control-Allow-Origin").ShouldBe(IdentityHostFixture.PortalOrigin);
         claims.GetProperty("sub").GetString().ShouldBe(access.GetProperty(AccessTokenClaims.Subject).GetString());
-        claims.GetProperty("sub").GetString().ShouldBe(BrowserClient.Payload(tokens.GetProperty("id_token").GetString()!).GetProperty("sub").GetString(), "OIDC Core § 5.3.2: the sub MUST match the id_token's");
+        claims.GetProperty("sub")
+            .GetString()
+            .ShouldBe(
+                BrowserClient.Payload(tokens.GetProperty("id_token").GetString()!).GetProperty("sub").GetString(),
+                "OIDC Core § 5.3.2: the sub MUST match the id_token's"
+            );
         claims.GetProperty(AccessTokenClaims.TenantId).GetString().ShouldBe(IdentityHostFixture.Tenant.ToString("N"));
         claims.GetProperty(AccessTokenClaims.SubjectType).GetString().ShouldBe(SubjectTypes.User);
         claims.GetProperty("name").GetString().ShouldBe(IdentityHostFixture.DisplayName);
-        claims.GetProperty("email").GetString().ShouldBe(BrowserClient.Payload(tokens.GetProperty("id_token").GetString()!).GetProperty("email").GetString(), "the id_token and /userinfo were minted from the same grain");
+        claims.GetProperty("email")
+            .GetString()
+            .ShouldBe(
+                BrowserClient.Payload(tokens.GetProperty("id_token").GetString()!).GetProperty("email").GetString(),
+                "the id_token and /userinfo were minted from the same grain"
+            );
         claims.GetProperty("email").GetString().ShouldEndWith("@grants.example");
-        claims.EnumerateObject().Select(x => x.Name).ShouldBe(["sub", AccessTokenClaims.TenantId, AccessTokenClaims.SubjectType, "name", "email"], "the userinfo shape changed");
+        claims.EnumerateObject()
+            .Select(static x => x.Name)
+            .ShouldBe(
+                ["sub", AccessTokenClaims.TenantId, AccessTokenClaims.SubjectType, "name", "email"],
+                "the userinfo shape changed"
+            );
 
         // POST works too — OIDC Core § 5.3.1.
-        using var posted = await browser.PostFormAsync(IdentityHostOpenIddict.UserInfoPath, new Dictionary<string, string>(StringComparer.Ordinal), Ct);
+        using var posted = await browser.PostFormAsync(
+            IdentityHostOpenIddict.UserInfoPath,
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            Ct
+        );
 
         posted.StatusCode.ShouldBe(HttpStatusCode.OK, await posted.Content.ReadAsStringAsync(Ct));
 
@@ -655,7 +809,9 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         //    That is the one thing this endpoint knows that the token does not.
         var tokenSessionId = Guid.ParseExact(access.GetProperty(AccessTokenClaims.SessionId).GetString()!, "N");
 
-        (await fixture.For(IdentityHostFixture.Tenant).GetGrain<ISessionGrain>(GrainKeys.Session(tokenSessionId)).RevokeAsync(RevocationReason.AdminAction))
+        (await fixture.For(IdentityHostFixture.Tenant)
+                .GetGrain<ISessionGrain>(GrainKeys.Session(tokenSessionId))
+                .RevokeAsync(RevocationReason.AdminAction))
             .IsSuccess.ShouldBeTrue();
 
         using var afterRevoke = await browser.GetAsync(IdentityHostOpenIddict.UserInfoPath, Ct);
@@ -679,7 +835,13 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         // client, allow is a code, and the allowance is on record for next time.
         using var browser = await SignInAsync();
         var (verifier, challenge) = BrowserClient.Pkce();
-        var authorize = AuthorizePath(challenge, "s-consent", tenant: IdentityHostFixture.Slug, redirectUri: IdentityHostFixture.TenantPublicClientRedirectUri, clientId: IdentityHostFixture.TenantPublicClient);
+        var authorize = AuthorizePath(
+            challenge,
+            "s-consent",
+            IdentityHostFixture.Slug,
+            IdentityHostFixture.TenantPublicClientRedirectUri,
+            IdentityHostFixture.TenantPublicClient
+        );
 
         // ── 1. Nothing on record: to the consent page, with the request as the return URL. ─────
         using var asked = await browser.GetAsync(authorize, Ct);
@@ -688,7 +850,8 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         var consentPage = BrowserClient.Location(asked);
 
-        consentPage.GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath);
+        consentPage.GetLeftPart(UriPartial.Path)
+            .ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath);
         BrowserClient.Query(consentPage)["returnUrl"].ShouldBe(authorize);
 
         // ── 2. What the page renders: the REGISTERED name, and the scopes. ─────────────────────
@@ -699,32 +862,60 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         described.StatusCode.ShouldBe(HttpStatusCode.OK, page.GetRawText());
         page.GetProperty("ready").GetBoolean().ShouldBeTrue(page.GetRawText());
         page.GetProperty("clientName").GetString().ShouldBe(IdentityHostFixture.TenantPublicClientName);
-        page.GetProperty("scopes").EnumerateArray().Select(x => x.GetString()).ShouldBe(Scope.Split(' '));
+        page.GetProperty("scopes").EnumerateArray().Select(static x => x.GetString()).ShouldBe(Scope.Split(' '));
         page.GetProperty("returnUrl").GetString().ShouldBe(authorize);
 
         // A request /authorize would refuse is not described either — the page renders nothing for
         // a redirect URI the registration does not carry, so a phisher's link has no page.
-        using var refusedPage = await browser.GetAsync("/api/consent?returnUrl=" + Uri.EscapeDataString(authorize.Replace(Uri.EscapeDataString(IdentityHostFixture.TenantPublicClientRedirectUri), Uri.EscapeDataString("https://evil.example/cb"), StringComparison.Ordinal)), Ct);
+        using var refusedPage = await browser.GetAsync(
+            "/api/consent?returnUrl="
+            + Uri.EscapeDataString(
+                authorize.Replace(
+                    Uri.EscapeDataString(IdentityHostFixture.TenantPublicClientRedirectUri),
+                    Uri.EscapeDataString("https://evil.example/cb"),
+                    StringComparison.Ordinal
+                )
+            ),
+            Ct
+        );
 
         (await BrowserClient.JsonAsync(refusedPage, Ct)).GetProperty("ready").GetBoolean().ShouldBeFalse();
 
         // ── 3. consent=allow anywhere but the page's POST is no answer. ────────────────────────
         using var linked = await browser.GetAsync(authorize + "&consent=allow", Ct);
 
-        BrowserClient.Location(linked).GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath, "a GET link pre-filled consent");
+        BrowserClient.Location(linked)
+            .GetLeftPart(UriPartial.Path)
+            .ShouldBe(
+                IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath,
+                "a GET link pre-filled consent"
+            );
 
         var form = BrowserClient.Query(new Uri("http://x" + authorize));
 
         browser.Origin = "http://evil.example";
 
-        using var foreignPost = await browser.PostFormAsync(IdentityHostOpenIddict.AuthorizationPath, WithConsent(form, "allow"), Ct);
+        using var foreignPost = await browser.PostFormAsync(
+            IdentityHostOpenIddict.AuthorizationPath,
+            WithConsent(form, "allow"),
+            Ct
+        );
 
-        BrowserClient.Location(foreignPost).GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath, "a form on another origin granted consent with the person's cookie");
+        BrowserClient.Location(foreignPost)
+            .GetLeftPart(UriPartial.Path)
+            .ShouldBe(
+                IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath,
+                "a form on another origin granted consent with the person's cookie"
+            );
 
         // ── 4. Deny, from the page: access_denied at the registered redirect URI, state echoed. ─
         browser.Origin = IdentityHostFixture.SignInPageBaseUri;
 
-        using var denied = await browser.PostFormAsync(IdentityHostOpenIddict.AuthorizationPath, WithConsent(form, "deny"), Ct);
+        using var denied = await browser.PostFormAsync(
+            IdentityHostOpenIddict.AuthorizationPath,
+            WithConsent(form, "deny"),
+            Ct
+        );
 
         denied.StatusCode.ShouldBe(HttpStatusCode.Redirect, await denied.Content.ReadAsStringAsync(Ct));
 
@@ -736,7 +927,11 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         BrowserClient.Query(deniedAt).ShouldNotContainKey("code");
 
         // ── 5. Allow, from the page: the code, exchanged by the tenant client. ─────────────────
-        using var allowed = await browser.PostFormAsync(IdentityHostOpenIddict.AuthorizationPath, WithConsent(form, "allow"), Ct);
+        using var allowed = await browser.PostFormAsync(
+            IdentityHostOpenIddict.AuthorizationPath,
+            WithConsent(form, "allow"),
+            Ct
+        );
 
         allowed.StatusCode.ShouldBe(HttpStatusCode.Redirect, await allowed.Content.ReadAsStringAsync(Ct));
 
@@ -746,29 +941,74 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         BrowserClient.Query(callback)["state"].ShouldBe("s-consent");
 
         using var client = new BrowserClient(fixture.BaseAddress, "https://acme.example");
-        using var exchanged = await Exchange(client, BrowserClient.Query(callback)["code"], verifier, redirectUri: IdentityHostFixture.TenantPublicClientRedirectUri, clientId: IdentityHostFixture.TenantPublicClient);
+        using var exchanged = await Exchange(
+            client,
+            BrowserClient.Query(callback)["code"],
+            verifier,
+            IdentityHostFixture.TenantPublicClientRedirectUri,
+            IdentityHostFixture.TenantPublicClient
+        );
 
         var tokens = await BrowserClient.JsonAsync(exchanged, Ct);
 
         exchanged.StatusCode.ShouldBe(HttpStatusCode.OK, tokens.GetRawText());
-        BrowserClient.Payload(tokens.GetProperty("access_token").GetString()!).GetProperty(AccessTokenClaims.AuthorizedParty).GetString().ShouldBe(IdentityHostFixture.TenantPublicClient);
-        tokens.TryGetProperty("refresh_token", out _).ShouldBeTrue("a tenant client is not the browser client, so its refresh token stays in the body");
+        BrowserClient.Payload(tokens.GetProperty("access_token").GetString()!)
+            .GetProperty(AccessTokenClaims.AuthorizedParty)
+            .GetString()
+            .ShouldBe(IdentityHostFixture.TenantPublicClient);
+        tokens.TryGetProperty("refresh_token", out _)
+            .ShouldBeTrue("a tenant client is not the browser client, so its refresh token stays in the body");
         BrowserClient.SetCookieHeader(exchanged, RefreshCookie.Name).ShouldBeNull();
 
         // ── 6. On record: the next request mints without asking; prompt=consent asks again. ───
         var (_, challenge2) = BrowserClient.Pkce();
 
-        using var again = await browser.GetAsync(AuthorizePath(challenge2, "s-consent-2", tenant: IdentityHostFixture.Slug, redirectUri: IdentityHostFixture.TenantPublicClientRedirectUri, clientId: IdentityHostFixture.TenantPublicClient), Ct);
+        using var again = await browser.GetAsync(
+            AuthorizePath(
+                challenge2,
+                "s-consent-2",
+                IdentityHostFixture.Slug,
+                IdentityHostFixture.TenantPublicClientRedirectUri,
+                IdentityHostFixture.TenantPublicClient
+            ),
+            Ct
+        );
 
-        BrowserClient.Location(again).GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.TenantPublicClientRedirectUri, "a consent on record still asked");
+        BrowserClient.Location(again)
+            .GetLeftPart(UriPartial.Path)
+            .ShouldBe(IdentityHostFixture.TenantPublicClientRedirectUri, "a consent on record still asked");
         BrowserClient.Query(BrowserClient.Location(again)).ShouldContainKey("code");
 
-        using var reprompted = await browser.GetAsync(AuthorizePath(challenge2, "s-consent-3", tenant: IdentityHostFixture.Slug, redirectUri: IdentityHostFixture.TenantPublicClientRedirectUri, clientId: IdentityHostFixture.TenantPublicClient) + "&prompt=consent", Ct);
+        using var reprompted = await browser.GetAsync(
+            AuthorizePath(
+                challenge2,
+                "s-consent-3",
+                IdentityHostFixture.Slug,
+                IdentityHostFixture.TenantPublicClientRedirectUri,
+                IdentityHostFixture.TenantPublicClient
+            )
+            + "&prompt=consent",
+            Ct
+        );
 
-        BrowserClient.Location(reprompted).GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath, "prompt=consent did not ask");
+        BrowserClient.Location(reprompted)
+            .GetLeftPart(UriPartial.Path)
+            .ShouldBe(
+                IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath,
+                "prompt=consent did not ask"
+            );
 
-        (await fixture.For(IdentityHostFixture.Tenant).GetGrain<IConsentGrain>(GrainKeys.ConsentGrant(IdentityHostFixture.Tenant, signedInUserId, IdentityHostFixture.TenantPublicClient)).GetAsync())
-            .GetValueOrThrow().Scopes.ShouldBe(Scope.Split(' '));
+        (await fixture.For(IdentityHostFixture.Tenant)
+                .GetGrain<IConsentGrain>(
+                    GrainKeys.ConsentGrant(
+                        IdentityHostFixture.Tenant,
+                        signedInUserId,
+                        IdentityHostFixture.TenantPublicClient
+                    )
+                )
+                .GetAsync())
+            .GetValueOrThrow()
+            .Scopes.ShouldBe(Scope.Split(' '));
     }
 
     [Fact]
@@ -779,15 +1019,27 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         // the secret — RFC 6749 § 4.1.3 and § 6. One sentence for missing, wrong and unreadable.
         using var browser = await SignInAsync();
         var (verifier, challenge) = BrowserClient.Pkce();
-        var authorize = AuthorizePath(challenge, "s-secret", tenant: IdentityHostFixture.Slug, redirectUri: IdentityHostFixture.TenantConfidentialClientRedirectUri, clientId: IdentityHostFixture.TenantConfidentialClient);
+        var authorize = AuthorizePath(
+            challenge,
+            "s-secret",
+            IdentityHostFixture.Slug,
+            IdentityHostFixture.TenantConfidentialClientRedirectUri,
+            IdentityHostFixture.TenantConfidentialClient
+        );
 
         using var asked = await browser.GetAsync(authorize, Ct);
 
-        BrowserClient.Location(asked).GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath);
+        BrowserClient.Location(asked)
+            .GetLeftPart(UriPartial.Path)
+            .ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath);
 
         browser.Origin = IdentityHostFixture.SignInPageBaseUri;
 
-        using var allowed = await browser.PostFormAsync(IdentityHostOpenIddict.AuthorizationPath, WithConsent(BrowserClient.Query(new Uri("http://x" + authorize)), "allow"), Ct);
+        using var allowed = await browser.PostFormAsync(
+            IdentityHostOpenIddict.AuthorizationPath,
+            WithConsent(BrowserClient.Query(new Uri("http://x" + authorize)), "allow"),
+            Ct
+        );
 
         var code = BrowserClient.Query(BrowserClient.Location(allowed))["code"];
 
@@ -796,10 +1048,36 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         // No secret, a wrong secret: invalid_client, the same sentence, and the code is NOT burnt —
         // the check runs at validation, before TokenApi consumes anything, so a thief's guesses
         // cost the client nothing.
-        await ShouldRefuseClient(Exchange(server, code, verifier, redirectUri: IdentityHostFixture.TenantConfidentialClientRedirectUri, clientId: IdentityHostFixture.TenantConfidentialClient), "a confidential client exchanged a code with no secret");
-        await ShouldRefuseClient(Exchange(server, code, verifier, redirectUri: IdentityHostFixture.TenantConfidentialClientRedirectUri, clientId: IdentityHostFixture.TenantConfidentialClient, clientSecret: "not-it"), "a confidential client exchanged a code with a wrong secret");
+        await ShouldRefuseClient(
+            Exchange(
+                server,
+                code,
+                verifier,
+                IdentityHostFixture.TenantConfidentialClientRedirectUri,
+                IdentityHostFixture.TenantConfidentialClient
+            ),
+            "a confidential client exchanged a code with no secret"
+        );
+        await ShouldRefuseClient(
+            Exchange(
+                server,
+                code,
+                verifier,
+                IdentityHostFixture.TenantConfidentialClientRedirectUri,
+                IdentityHostFixture.TenantConfidentialClient,
+                "not-it"
+            ),
+            "a confidential client exchanged a code with a wrong secret"
+        );
 
-        using var exchanged = await Exchange(server, code, verifier, redirectUri: IdentityHostFixture.TenantConfidentialClientRedirectUri, clientId: IdentityHostFixture.TenantConfidentialClient, clientSecret: IdentityHostFixture.TenantConfidentialClientSecret);
+        using var exchanged = await Exchange(
+            server,
+            code,
+            verifier,
+            IdentityHostFixture.TenantConfidentialClientRedirectUri,
+            IdentityHostFixture.TenantConfidentialClient,
+            IdentityHostFixture.TenantConfidentialClientSecret
+        );
 
         var tokens = await BrowserClient.JsonAsync(exchanged, Ct);
 
@@ -809,10 +1087,21 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         // The refresh grant too, and a refused refresh rotates nothing — the honest one afterwards
         // still works.
-        await ShouldRefuseClient(RefreshInBody(server, refreshToken, IdentityHostFixture.TenantConfidentialClient), "a confidential client refreshed with no secret");
-        await ShouldRefuseClient(RefreshInBody(server, refreshToken, IdentityHostFixture.TenantConfidentialClient, clientSecret: "not-it"), "a confidential client refreshed with a wrong secret");
+        await ShouldRefuseClient(
+            RefreshInBody(server, refreshToken, IdentityHostFixture.TenantConfidentialClient),
+            "a confidential client refreshed with no secret"
+        );
+        await ShouldRefuseClient(
+            RefreshInBody(server, refreshToken, IdentityHostFixture.TenantConfidentialClient, "not-it"),
+            "a confidential client refreshed with a wrong secret"
+        );
 
-        using var refreshed = await RefreshInBody(server, refreshToken, IdentityHostFixture.TenantConfidentialClient, clientSecret: IdentityHostFixture.TenantConfidentialClientSecret);
+        using var refreshed = await RefreshInBody(
+            server,
+            refreshToken,
+            IdentityHostFixture.TenantConfidentialClient,
+            IdentityHostFixture.TenantConfidentialClientSecret
+        );
 
         refreshed.StatusCode.ShouldBe(HttpStatusCode.OK, await refreshed.Content.ReadAsStringAsync(Ct));
 
@@ -820,7 +1109,11 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         var (verifier2, challenge2) = BrowserClient.Pkce();
         var publicCode = await CodeAsync(browser, challenge2, "s-public-secret");
 
-        await ShouldRefuseClient(Exchange(browser, publicCode, verifier2, clientSecret: "a-spa-with-a-secret"), "a public client presenting a secret was accepted", "A public client must not send a client_secret.");
+        await ShouldRefuseClient(
+            Exchange(browser, publicCode, verifier2, clientSecret: "a-spa-with-a-secret"),
+            "a public client presenting a secret was accepted",
+            "A public client must not send a client_secret."
+        );
     }
 
     [Fact]
@@ -836,13 +1129,23 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         string? firstBody = null;
 
         for (var i = 0; i < bucket.Limit; i++) {
-            using var admitted = await browser.PostJsonAsync("/api/signup/begin", new { email = i % 2 == 0 ? IdentityHostFixture.Email : $"nobody-{i}@grants.example", returnUrl = "/" }, Ct);
+            using var admitted = await browser.PostJsonAsync(
+                "/api/signup/begin",
+                new { email = i % 2 == 0 ? IdentityHostFixture.Email : $"nobody-{i}@grants.example", returnUrl = "/" },
+                Ct
+            );
 
-            admitted.StatusCode.ShouldBe(HttpStatusCode.OK, $"request {i + 1} of {bucket.Limit} was refused inside the window");
+            admitted.StatusCode.ShouldBe(
+                HttpStatusCode.OK,
+                $"request {i + 1} of {bucket.Limit} was refused inside the window"
+            );
 
             var body = await admitted.Content.ReadAsStringAsync(Ct);
 
-            (firstBody ??= body).ShouldBe(body, "the answer inside the limit differed between a real address and a made-up one");
+            (firstBody ??= body).ShouldBe(
+                body,
+                "the answer inside the limit differed between a real address and a made-up one"
+            );
         }
 
         // The (limit + 1)th: 429, Retry-After, one sentence — for a real address and for garbage.
@@ -857,14 +1160,21 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
             var body = await BrowserClient.JsonAsync(refused, Ct);
 
             body.GetProperty("message").GetString().ShouldBe(IdentityRateLimits.RefusedMessage);
-            body.GetProperty("retryAfterSeconds").GetInt32().ShouldBe((int)Math.Ceiling(refused.Headers.RetryAfter.Delta.Value.TotalSeconds));
-            BrowserClient.SetCookieHeader(refused, "__Host-cyc-signup").ShouldBeNull("a refused begin issued a sign-up ticket");
+            body.GetProperty("retryAfterSeconds")
+                .GetInt32()
+                .ShouldBe((int)Math.Ceiling(refused.Headers.RetryAfter.Delta.Value.TotalSeconds));
+            BrowserClient.SetCookieHeader(refused, "__Host-cyc-signup")
+                .ShouldBeNull("a refused begin issued a sign-up ticket");
         }
 
         // ── Recovers: the window slides, and the oldest request leaves it. ─────────────────────
         fixture.Clock.Advance(bucket.Window + TimeSpan.FromSeconds(1));
 
-        using var recovered = await browser.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+        using var recovered = await browser.PostJsonAsync(
+            "/api/signup/begin",
+            new { email = IdentityHostFixture.Email, returnUrl = "/" },
+            Ct
+        );
 
         recovered.StatusCode.ShouldBe(HttpStatusCode.OK, "the limit did not recover once the window passed");
         (await recovered.Content.ReadAsStringAsync(Ct)).ShouldBe(firstBody);
@@ -886,19 +1196,27 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         for (var i = 0; i < bucket.Limit; i++) {
             using var counted = await browser.PostJsonAsync("/api/signup/verify", new { code = "000000" }, Ct);
 
-            counted.StatusCode.ShouldBe(HttpStatusCode.OK, $"guess {i + 1} of {bucket.Limit} was refused inside the window");
+            counted.StatusCode.ShouldBe(
+                HttpStatusCode.OK,
+                $"guess {i + 1} of {bucket.Limit} was refused inside the window"
+            );
         }
 
         using var refused = await browser.PostJsonAsync("/api/signup/verify", new { code = "000000" }, Ct);
 
         refused.StatusCode.ShouldBe((HttpStatusCode)429);
-        (await BrowserClient.JsonAsync(refused, Ct)).GetProperty("message").GetString().ShouldBe(IdentityRateLimits.RefusedMessage);
+        (await BrowserClient.JsonAsync(refused, Ct)).GetProperty("message")
+            .GetString()
+            .ShouldBe(IdentityRateLimits.RefusedMessage);
 
         // ⚠ One bucket for every code-verify endpoint: the sign-in OTP endpoint is full too, for
         // this address, though it was never called — that is what "across codes" means.
         using var otp = await browser.PostJsonAsync("/api/signin/otp", new { code = "000000", returnUrl = "/" }, Ct);
 
-        otp.StatusCode.ShouldBe(HttpStatusCode.Unauthorized, "an anonymous caller is a 401 before it is counted — filters run after authorization");
+        otp.StatusCode.ShouldBe(
+            HttpStatusCode.Unauthorized,
+            "an anonymous caller is a 401 before it is counted — filters run after authorization"
+        );
 
         fixture.Clock.Advance(bucket.Window + TimeSpan.FromSeconds(1));
 
@@ -924,51 +1242,100 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         for (var i = 0; i < bucket.Limit; i++) {
             claimant.ForwardedFor = $"203.0.113.{i + 1}";
 
-            using var counted = await claimant.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+            using var counted = await claimant.PostJsonAsync(
+                "/api/signup/begin",
+                new { email = IdentityHostFixture.Email, returnUrl = "/" },
+                Ct
+            );
 
-            counted.StatusCode.ShouldBe(HttpStatusCode.OK, $"request {i + 1} of {bucket.Limit} was refused inside the window");
+            counted.StatusCode.ShouldBe(
+                HttpStatusCode.OK,
+                $"request {i + 1} of {bucket.Limit} was refused inside the window"
+            );
         }
 
         claimant.ForwardedFor = "203.0.113.200";
 
-        using var refusedDespiteTheHeader = await claimant.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+        using var refusedDespiteTheHeader = await claimant.PostJsonAsync(
+            "/api/signup/begin",
+            new { email = IdentityHostFixture.Email, returnUrl = "/" },
+            Ct
+        );
 
-        refusedDespiteTheHeader.StatusCode.ShouldBe((HttpStatusCode)429, "a caller's own X-Forwarded-For bought a fresh bucket on a host that names no proxy");
+        refusedDespiteTheHeader.StatusCode.ShouldBe(
+            (HttpStatusCode)429,
+            "a caller's own X-Forwarded-For bought a fresh bucket on a host that names no proxy"
+        );
 
         // ── The same host, told that 127.0.0.1 is its ingress: the header is the address. ──────
         await fixture.RestartHostAsync($"--{IdentityHostOptions.SectionName}:TrustedProxies:0=127.0.0.1");
 
         try {
-            using var office = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri) { ForwardedFor = "198.51.100.10" };
+            using var office = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri);
+            office.ForwardedFor = "198.51.100.10";
 
             for (var i = 0; i < bucket.Limit; i++) {
-                using var counted = await office.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+                using var counted = await office.PostJsonAsync(
+                    "/api/signup/begin",
+                    new { email = IdentityHostFixture.Email, returnUrl = "/" },
+                    Ct
+                );
 
-                counted.StatusCode.ShouldBe(HttpStatusCode.OK, $"request {i + 1} of {bucket.Limit} was refused inside the window");
+                counted.StatusCode.ShouldBe(
+                    HttpStatusCode.OK,
+                    $"request {i + 1} of {bucket.Limit} was refused inside the window"
+                );
             }
 
-            using var refused = await office.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+            using var refused = await office.PostJsonAsync(
+                "/api/signup/begin",
+                new { email = IdentityHostFixture.Email, returnUrl = "/" },
+                Ct
+            );
 
-            refused.StatusCode.ShouldBe((HttpStatusCode)429, "the forwarded address filled its bucket and was not refused");
+            refused.StatusCode.ShouldBe(
+                (HttpStatusCode)429,
+                "the forwarded address filled its bucket and was not refused"
+            );
 
             // Another person behind the same ingress is another bucket — the property the platform
             // needs — and a request with no header at all is the ingress's own, and its own bucket.
-            using var neighbour = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri) { ForwardedFor = "198.51.100.11" };
-            using var admitted = await neighbour.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+            using var neighbour = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri);
+            neighbour.ForwardedFor = "198.51.100.11";
+            using var admitted = await neighbour.PostJsonAsync(
+                "/api/signup/begin",
+                new { email = IdentityHostFixture.Email, returnUrl = "/" },
+                Ct
+            );
 
             admitted.StatusCode.ShouldBe(HttpStatusCode.OK, "one forwarded address's full bucket refused another's");
 
             using var direct = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri);
-            using var admittedDirect = await direct.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+            using var admittedDirect = await direct.PostJsonAsync(
+                "/api/signup/begin",
+                new { email = IdentityHostFixture.Email, returnUrl = "/" },
+                Ct
+            );
 
-            admittedDirect.StatusCode.ShouldBe(HttpStatusCode.OK, "a request with no forwarded header was counted under a forwarded address");
+            admittedDirect.StatusCode.ShouldBe(
+                HttpStatusCode.OK,
+                "a request with no forwarded header was counted under a forwarded address"
+            );
 
             // ⚠ One hop: a caller who puts their own entry BEFORE the one the ingress appends is
             // counted under the ingress's entry, the rightmost — the filled one.
-            using var spoofer = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri) { ForwardedFor = "203.0.113.99, 198.51.100.10" };
-            using var refusedSpoof = await spoofer.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+            using var spoofer = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri);
+            spoofer.ForwardedFor = "203.0.113.99, 198.51.100.10";
+            using var refusedSpoof = await spoofer.PostJsonAsync(
+                "/api/signup/begin",
+                new { email = IdentityHostFixture.Email, returnUrl = "/" },
+                Ct
+            );
 
-            refusedSpoof.StatusCode.ShouldBe((HttpStatusCode)429, "an entry the caller put before the ingress's own was read as the address");
+            refusedSpoof.StatusCode.ShouldBe(
+                (HttpStatusCode)429,
+                "an entry the caller put before the ingress's own was read as the address"
+            );
         } finally {
             // The collection shares the host; leave it as the fixture started it.
             await fixture.RestartHostAsync();
@@ -990,18 +1357,22 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
     ///     found by running <c>ThePerIpLimitOnCodeVerifyTripsAcrossSignUpsAndRecovers</c> after any
     ///     sign-in test: "guess 60 of 60 was refused inside the window".
     /// </remarks>
-    void EmptyTheBucket(IdentityRateLimitBucket bucket) => fixture.Clock.Advance(bucket.Window + TimeSpan.FromSeconds(1));
+    void EmptyTheBucket(IdentityRateLimitBucket bucket) =>
+        fixture.Clock.Advance(bucket.Window + TimeSpan.FromSeconds(1));
 
     /// <summary>The request's pairs as the consent page posts them back, plus its answer.</summary>
     static Dictionary<string, string> WithConsent(Dictionary<string, string> request, string answer) =>
         new(request, StringComparer.Ordinal) { [AuthorizeApi.ConsentParameter] = answer };
 
     /// <summary>A body-borne refresh — the CLI's and a tenant client's shape.</summary>
-    static Task<HttpResponseMessage> RefreshInBody(BrowserClient client, string refreshToken, string clientId, string? clientSecret = null) {
+    static Task<HttpResponseMessage> RefreshInBody(
+        BrowserClient client,
+        string refreshToken,
+        string clientId,
+        string? clientSecret = null
+    ) {
         var form = new Dictionary<string, string>(StringComparer.Ordinal) {
-            ["grant_type"] = "refresh_token",
-            ["client_id"] = clientId,
-            ["refresh_token"] = refreshToken
+            ["grant_type"] = "refresh_token", ["client_id"] = clientId, ["refresh_token"] = refreshToken
         };
 
         if (clientSecret is not null) {
@@ -1011,7 +1382,11 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         return client.PostFormAsync(IdentityHostOpenIddict.TokenPath, form, Ct);
     }
 
-    static async Task ShouldRefuseClient(Task<HttpResponseMessage> pending, string because, string description = DegradedModeHandlers.ValidateTokenRequest.ClientNotAuthenticated) {
+    static async Task ShouldRefuseClient(
+        Task<HttpResponseMessage> pending,
+        string because,
+        string description = DegradedModeHandlers.ValidateTokenRequest.ClientNotAuthenticated
+    ) {
         using var response = await pending;
         var body = await response.Content.ReadAsStringAsync(Ct);
 
@@ -1063,7 +1438,10 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
     /// <summary>The authorization code <c>/authorize</c> mints for a signed-in tab.</summary>
     static async Task<string> CodeAsync(BrowserClient browser, string challenge, string state) {
-        using var authorized = await browser.GetAsync(AuthorizePath(challenge, state, tenant: IdentityHostFixture.Slug), Ct);
+        using var authorized = await browser.GetAsync(
+            AuthorizePath(challenge, state, IdentityHostFixture.Slug),
+            Ct
+        );
 
         authorized.StatusCode.ShouldBe(HttpStatusCode.Redirect, await authorized.Content.ReadAsStringAsync(Ct));
 
@@ -1105,24 +1483,36 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         JsonDocument.Parse(body).RootElement.GetProperty("error").GetString().ShouldBe(error, because);
     }
 
-    static string AuthorizePath(string challenge, string state, string tenant, string redirectUri = IdentityHostFixture.PortalRedirectUri, string clientId = FirstPartyClients.Portal) =>
+    static string AuthorizePath(
+        string challenge,
+        string state,
+        string tenant,
+        string redirectUri = IdentityHostFixture.PortalRedirectUri,
+        string clientId = FirstPartyClients.Portal
+    ) =>
         IdentityHostOpenIddict.AuthorizationPath
         + "?response_type=code"
-        + "&client_id=" + clientId
-        + "&redirect_uri=" + Uri.EscapeDataString(redirectUri)
-        + "&scope=" + Uri.EscapeDataString(Scope)
-        + "&state=" + state
-        + "&code_challenge=" + challenge
+        + "&client_id="
+        + clientId
+        + "&redirect_uri="
+        + Uri.EscapeDataString(redirectUri)
+        + "&scope="
+        + Uri.EscapeDataString(Scope)
+        + "&state="
+        + state
+        + "&code_challenge="
+        + challenge
         + "&code_challenge_method=S256"
-        + "&nonce=n-" + state
-        + "&tenant=" + Uri.EscapeDataString(tenant);
+        + "&nonce=n-"
+        + state
+        + "&tenant="
+        + Uri.EscapeDataString(tenant);
 
     static Task<HttpResponseMessage> Refresh(BrowserClient browser) =>
         browser.PostFormAsync(
             IdentityHostOpenIddict.TokenPath,
             new Dictionary<string, string>(StringComparer.Ordinal) {
-                ["grant_type"] = "refresh_token",
-                ["client_id"] = FirstPartyClients.Portal
+                ["grant_type"] = "refresh_token", ["client_id"] = FirstPartyClients.Portal
             },
             Ct
         );

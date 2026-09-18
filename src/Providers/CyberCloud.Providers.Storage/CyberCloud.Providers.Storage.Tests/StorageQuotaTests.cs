@@ -34,7 +34,7 @@ public sealed class StorageQuotaTests {
         // WRONG BY COPYING ONE OF THEM. A `replicas × preset` derivation — the shape both providers
         // before this use — would be right about the volume servers and would miss six pods on the
         // default body: three masters, one filer and two gateways, each at 250m and 512Mi.
-        var amounts = Amounts(StorageAccounts.Body(ClusterId, volumeServers: 3, masters: 3));
+        var amounts = Amounts(StorageAccounts.Body(ClusterId, 3, masters: 3));
 
         // 3 × s1.small (1 core) = 3, plus (3 masters + 1 filer + 2 gateways) × 250m = 1.5.
         amounts[QuotaMeter.Vcpu].ShouldBe(4.5m);
@@ -60,8 +60,8 @@ public sealed class StorageQuotaTests {
 
     [Fact]
     public void StorageIsTheVolumeServersProductPlusTheFilersOwnVolume() {
-        var three = Amounts(StorageAccounts.Body(ClusterId, volumeServers: 3, storageSize: "100Gi"));
-        var six = Amounts(StorageAccounts.Body(ClusterId, volumeServers: 6, storageSize: "100Gi"));
+        var three = Amounts(StorageAccounts.Body(ClusterId, 3, "100Gi"));
+        var six = Amounts(StorageAccounts.Body(ClusterId, 6, "100Gi"));
 
         three[QuotaMeter.StorageGb].ShouldBe(310m, "3 × 100Gi + the filer's 10Gi");
         six[QuotaMeter.StorageGb].ShouldBe(610m);
@@ -94,7 +94,7 @@ public sealed class StorageQuotaTests {
 
     [Fact]
     public void AnExplicitOverrideBeatsThePresetAndIsCountedPerVolumeServer() {
-        var amounts = Amounts(WithSizing(StorageAccounts.Body(ClusterId, volumeServers: 3), "500m", "1Gi"));
+        var amounts = Amounts(WithSizing(StorageAccounts.Body(ClusterId, 3), "500m", "1Gi"));
 
         amounts[QuotaMeter.Vcpu].ShouldBe(3m, "500m × 3 volume servers is 1.5, plus 1.5 for the rest");
         amounts[QuotaMeter.MemoryGb].ShouldBe(6m, "1Gi × 3 is 3, plus 6 × 512Mi is 3");
@@ -106,7 +106,7 @@ public sealed class StorageQuotaTests {
         // committed amounts from the STORED body through this same function, so a derivation reading
         // a clock, configuration or a static that changes would return a different number on the
         // delete than the create committed — quota drifting upward on every cycle.
-        var body = StorageAccounts.Body(ClusterId, volumeServers: 6, storageSize: "250Gi");
+        var body = StorageAccounts.Body(ClusterId, 6, "250Gi");
 
         Amounts(body).ShouldBe(Amounts(body));
     }
@@ -122,7 +122,7 @@ public sealed class StorageQuotaTests {
 
         using var body = JsonDocument.Parse(WithSizing(StorageAccounts.Body(ClusterId), "not-a-quantity", "1Gi"));
 
-        var vcpu = registration.Meters.Single(x => x.Meter == QuotaMeter.Vcpu).Derivation!;
+        var vcpu = registration.Meters.Single(static x => x.Meter == QuotaMeter.Vcpu).Derivation!;
 
         vcpu.Amount(body.RootElement)
             .IsFailure.ShouldBeTrue("a body whose cpu quantity does not parse reserved an amount instead of refusing.");
@@ -141,9 +141,9 @@ public sealed class StorageQuotaTests {
                     foreach (var amount in Amounts(
                                  StorageAccounts.Body(
                                      ClusterId,
-                                     volumeServers: volumeServers,
-                                     storageSize: size,
-                                     masters: masters
+                                     volumeServers,
+                                     size,
+                                     masters
                                  )
                              ).Values) {
                         amount.ShouldBeGreaterThan(
@@ -165,7 +165,7 @@ public sealed class StorageQuotaTests {
         using var body = JsonDocument.Parse(bodyJson);
         var found = new Dictionary<QuotaMeter, decimal>();
 
-        foreach (var meter in registration.Meters.Where(x => x.Derivation is not null)) {
+        foreach (var meter in registration.Meters.Where(static x => x.Derivation is not null)) {
             var amount = meter.Derivation!.Amount(body.RootElement);
             amount.IsSuccess.ShouldBeTrue(meter.Meter.ToString());
             found[meter.Meter] = amount.GetValueOrThrow();

@@ -106,7 +106,8 @@ static class AnalyzerHarness {
     /// <param name="source">C# with no markup.</param>
     /// <param name="assemblyName">The compilation's assembly name, when it matters.</param>
     public static Task IsSilentAsync<TAnalyzer>(string source, string? assemblyName = null)
-        where TAnalyzer : DiagnosticAnalyzer, new() => ReportsAsync<TAnalyzer>(source, assemblyName);
+        where TAnalyzer : DiagnosticAnalyzer, new() =>
+        ReportsAsync<TAnalyzer>(source, assemblyName);
 
     /// <summary>
     ///     <see cref="ReportsAsync{TAnalyzer}" /> with the harness's suppression re-run turned off —
@@ -115,7 +116,8 @@ static class AnalyzerHarness {
     /// <typeparam name="TAnalyzer">The analyzer under test.</typeparam>
     /// <param name="source">C# with <c>{|CC1234:span|}</c> markup around each expected report.</param>
     public static Task ReportsWithoutSuppressionCheckAsync<TAnalyzer>(string source)
-        where TAnalyzer : DiagnosticAnalyzer, new() => ReportsAsync<TAnalyzer>(source, null, true);
+        where TAnalyzer : DiagnosticAnalyzer, new() =>
+        ReportsAsync<TAnalyzer>(source, null, true);
 
     /// <summary>
     ///     The test host's <c>TRUSTED_PLATFORM_ASSEMBLIES</c>, as metadata references.

@@ -115,9 +115,9 @@ public static class PropertyVariants {
                 if (Parse(property.ExampleJson) is { } example) {
                     yield return example;
                 } else if (property.Pattern.Length == 0
-                    && property.Format == SchemaFormat.None
-                    && (property.MaxLength is null || property.MaxLength >= Word.Length)
-                    && (property.MinLength is null || property.MinLength <= Word.Length)) {
+                           && property.Format == SchemaFormat.None
+                           && (property.MaxLength is null || property.MaxLength >= Word.Length)
+                           && (property.MinLength is null || property.MinLength <= Word.Length)) {
                     yield return JsonValue.Create(Word);
                 }
 
@@ -178,7 +178,11 @@ public static class PropertyVariants {
     }
 
     static IEnumerable<string> Segments(string pointer) =>
-        pointer.Split('/').Skip(1).Select(x => x.Replace("~1", "/", StringComparison.Ordinal).Replace("~0", "~", StringComparison.Ordinal));
+        pointer.Split('/')
+            .Skip(1)
+            .Select(static x => x.Replace("~1", "/", StringComparison.Ordinal)
+                    .Replace("~0", "~", StringComparison.Ordinal)
+            );
 
     static JsonNode? Read(JsonObject body, string pointer) {
         JsonNode? node = body;
@@ -187,8 +191,8 @@ public static class PropertyVariants {
             if (node is JsonObject map && map.TryGetPropertyValue(segment, out var child)) {
                 node = child;
             } else if (node is JsonArray array
-                && int.TryParse(segment, NumberStyles.None, CultureInfo.InvariantCulture, out var index)
-                && index < array.Count) {
+                       && int.TryParse(segment, NumberStyles.None, CultureInfo.InvariantCulture, out var index)
+                       && index < array.Count) {
                 node = array[index];
             } else {
                 return null;

@@ -1,5 +1,4 @@
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.Providers.Sample.Contracts;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -28,21 +27,21 @@ public sealed class SampleCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Sample/widgets",
-            CreateProvider = () => new SampleProvider(),
+            CreateProvider = static () => new SampleProvider(),
             ReconcilerType = typeof(WidgetReconciler),
-            CreateReconciler = clock => new WidgetReconciler(clock),
+            CreateReconciler = static clock => new WidgetReconciler(clock),
             Type = SampleWidgets.Type,
             ApiVersion = SampleWidgets.V2026,
-            Body = cluster => SampleWidgets.Body(cluster),
+            Body = static cluster => SampleWidgets.Body(cluster),
             // ⚠ Changes `message`, which is a key the reconciler puts in the ConfigMap's data. A body
             // that differed only where the reconciler ignores it would pass the update test while
             // proving the update never reached the cluster.
-            ChangedBody = cluster => SampleWidgets.Body(cluster, "goodbye", enabled: false),
+            ChangedBody = static cluster => SampleWidgets.Body(cluster, "goodbye", false),
             // Drops the required `/properties/message`.
             // ⚠ Built from a valid body with one required property removed, rather than hand-written.
             // A hand-written invalid body drifts out of date the day the schema gains a property, and
             // then tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => Without(SampleWidgets.Body(cluster), "message"),
+            InvalidBody = static cluster => Without(SampleWidgets.Body(cluster), "message"),
             InvalidBodyTarget = "/properties/message",
             ActionName = "ping",
             // One widget owns exactly one ConfigMap, named after the resource, in the resource
@@ -55,7 +54,7 @@ public sealed class SampleCase : IProviderCaseSource {
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return SampleWidgets.Matches(match.ObjectJson, desired.RootElement);
             }

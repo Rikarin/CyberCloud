@@ -58,7 +58,7 @@ public static class LabelSyntax {
     public const string NamePattern = "([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]";
 
     /// <summary>The DNS-1123 subdomain regex the key prefix must match.</summary>
-    public const string PrefixPattern = "[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*";
+    public const string PrefixPattern = """[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*""";
 
     /// <summary>Whether <paramref name="value" /> is a legal label value.</summary>
     /// <param name="value">The candidate. <see langword="null" /> is not legal; empty is.</param>
@@ -284,7 +284,7 @@ public static class LabelSyntax {
         var builder = new StringBuilder(value.Length + 8);
         foreach (var c in value) {
             if (char.IsControl(c)) {
-                builder.Append("\\u").Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
+                builder.Append("""\u""").Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
             } else {
                 builder.Append(c);
             }

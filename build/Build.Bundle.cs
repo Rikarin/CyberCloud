@@ -366,7 +366,11 @@ partial class Build {
     ///         place it lives.
     ///     </para>
     /// </remarks>
-    static IEnumerable<string> WaitForViolations(string relative, AbsolutePath file, Dictionary<string, string> scalars) {
+    static IEnumerable<string> WaitForViolations(
+        string relative,
+        AbsolutePath file,
+        Dictionary<string, string> scalars
+    ) {
         var entries = ReadBundleSequence(file, "waitFor");
         var isManifest = scalars.TryGetValue("install", out var install) && install == "manifest";
 
@@ -600,7 +604,9 @@ partial class Build {
                 + "reach the registry, review what it found, and record the digest";
         }
 
-        foreach (var image in images.Where(image => !ImageReference.IsMatch(image) && !image.EndsWith("@unresolved", StringComparison.Ordinal))) {
+        foreach (var image in images.Where(image => !ImageReference.IsMatch(image)
+                     && !image.EndsWith("@unresolved", StringComparison.Ordinal)
+                 )) {
             yield return
                 $"{relative} lists `{image}` under `images:`, which is not a "
                 + "`repository:tag@sha256:<64 hex>` reference. charts/bundle/images.sh compares its "
@@ -1071,7 +1077,10 @@ partial class Build {
                         + "row, or change the phase";
                 }
 
-                if (!ReadBundleSequence(target.File, "requiredBy").Contains(prefix + component.Name, StringComparer.Ordinal)) {
+                if (!ReadBundleSequence(target.File, "requiredBy").Contains(
+                        prefix + component.Name,
+                        StringComparer.Ordinal
+                    )) {
                     yield return
                         $"{relative} requires `{entry}`, and charts/bundle/{required}/component.yaml's "
                         + $"`requiredBy:` does not list `{prefix}{component.Name}`. Both files carry "
@@ -1091,7 +1100,10 @@ partial class Build {
                     continue;
                 }
 
-                if (!ReadBundleSequence(target.File, "requires").Contains(prefix + component.Name, StringComparer.Ordinal)) {
+                if (!ReadBundleSequence(target.File, "requires").Contains(
+                        prefix + component.Name,
+                        StringComparer.Ordinal
+                    )) {
                     yield return
                         $"{relative} says `{entry}` requires it, and charts/bundle/{dependant}/component.yaml "
                         + $"declares no `requires: {prefix}{component.Name}`. A dependency written on "

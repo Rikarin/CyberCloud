@@ -72,8 +72,11 @@ public interface IResourceManager {
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The filter is not optional, and it is one <c>ListObjects</c> per page with a
-    ///         <c>Check</c> per member as the fallback.</b> Without it a listing is a way to read the
+    ///         ⚠
+    ///         <b>
+    ///             The filter is not optional, and it is one <c>ListObjects</c> per page with a
+    ///             <c>Check</c> per member as the fallback.
+    ///         </b> Without it a listing is a way to read the
     ///         names of resources the caller has no permission on — which is precisely the
     ///         enumeration oracle § The enforcement seam answers <c>404</c> to prevent one resource
     ///         at a time, handed back wholesale. docs/plan/07 § ListObjects is built (issue #37):

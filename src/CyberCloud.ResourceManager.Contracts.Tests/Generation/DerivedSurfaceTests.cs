@@ -70,7 +70,7 @@ public sealed class DerivedSurfaceTests {
         var choices = Flag("create", "--sku-name");
 
         choices.ShouldNotBeNull();
-        choices["choices"]!.AsArray().Select(x => DocumentReader.Text(x)).ShouldContain("s1.large");
+        choices["choices"]!.AsArray().Select(static x => DocumentReader.Text(x)).ShouldContain("s1.large");
     }
 
     [Fact]
@@ -127,18 +127,21 @@ public sealed class DerivedSurfaceTests {
     /// </remarks>
     [Fact]
     public void TheReadEnvelopeReachesNoWriteSurface() {
-        var type = DocumentReader.TypesOf(Document).Single(x => x.ResourceType == Fixtures.Namespace + "/servers");
-        var envelope = DocumentReader.LeavesOf(type.Envelope).Select(x => x.Name).ToList();
+        var type = DocumentReader.TypesOf(Document)
+            .Single(static x => x.ResourceType == Fixtures.Namespace + "/servers");
+        var envelope = DocumentReader.LeavesOf(type.Envelope).Select(static x => x.Name).ToList();
 
         envelope.ShouldBe(["etag", "id", "name", "provisioningState", "type"]);
 
         // The split itself: the write body is the schema with the inherited members and the allOf
         // taken out, and nothing else changed.
         type.Body["allOf"].ShouldBeNull();
-        type.Body["properties"]!.AsObject().Select(x => x.Key).ShouldBe(["location", "properties", "tags"]);
+        type.Body["properties"]!.AsObject().Select(static x => x.Key).ShouldBe(["location", "properties", "tags"]);
         type.Body["additionalProperties"]!.GetValue<bool>().ShouldBeFalse();
-        type.Body["required"]!.AsArray().Select(x => DocumentReader.Text(x)).ShouldBe(["location", "properties"]);
-        DocumentReader.ReadRequiredOf(type.Envelope).ShouldBe(envelope, ignoreOrder: true);
+        type.Body["required"]!.AsArray()
+            .Select(static x => DocumentReader.Text(x))
+            .ShouldBe(["location", "properties"]);
+        DocumentReader.ReadRequiredOf(type.Envelope).ShouldBe(envelope, true);
 
         foreach (var name in envelope) {
             var flag = "--" + CliEmitter.Kebab(name);
@@ -184,13 +187,13 @@ public sealed class DerivedSurfaceTests {
 
         listKeys["rawBody"].ShouldBeNull();
         listKeys["flags"]!.AsArray()
-            .Select(x => DocumentReader.Text(x?["name"]))
+            .Select(static x => DocumentReader.Text(x?["name"]))
             .ShouldContain("--key-name");
     }
 
     [Fact]
     public void AnActionWithNoDeclaredRequestSaysSoRatherThanPretendingItHasNoParameters() {
-        var registry = Fixtures.PostgresWithActions([new("noop", ActionKind.Post, "write", Secret: false)]);
+        var registry = Fixtures.PostgresWithActions([new("noop", ActionKind.Post, "write", false)]);
         var tree = CliEmitter.Emit(OpenApiEmitter.Emit(registry, ApiVersion.Parse(Fixtures.FirstVersion)));
 
         DocumentReader.Flag(tree["groups"]!["dbforpostgresql"]!["commands"]!["servers"]!["verbs"]!["noop"]!["rawBody"])
@@ -249,8 +252,8 @@ public sealed class DerivedSurfaceTests {
                     var path = DocumentReader.Text(verb.Value!["path"]);
 
                     var filled = verb.Value["flags"]!.AsArray()
-                        .Select(x => DocumentReader.Text(x?["pathPlaceholder"]))
-                        .Where(x => x.Length > 0)
+                        .Select(static x => DocumentReader.Text(x?["pathPlaceholder"]))
+                        .Where(static x => x.Length > 0)
                         .ToList();
 
                     // An action's path ends in `/{action}`, which is a literal rather than a
@@ -413,7 +416,7 @@ public sealed class DerivedSurfaceTests {
 
     [Fact]
     public void EveryPropertyIsCoveredSoAnOverrideHasSomethingToBeCheckedAgainst() {
-        var covered = Form["coveredPointers"]!.AsArray().Select(x => DocumentReader.Text(x)).ToList();
+        var covered = Form["coveredPointers"]!.AsArray().Select(static x => DocumentReader.Text(x)).ToList();
 
         covered.ShouldContain("/properties/sku/name");
         covered.ShouldContain("/tags");
@@ -422,7 +425,7 @@ public sealed class DerivedSurfaceTests {
     [Fact]
     public void AnActionWithNoDeclaredRequestBecomesAConfirmRatherThanAnInventedDialog() {
         var restart = Form["actions"]!.AsArray()
-            .Single(x => DocumentReader.Text(x?["name"]) == "restart");
+            .Single(static x => DocumentReader.Text(x?["name"]) == "restart");
 
         DocumentReader.Flag(restart!["confirmOnly"]).ShouldBeTrue();
     }
@@ -441,7 +444,7 @@ public sealed class DerivedSurfaceTests {
         // ⚠ THE ENUM GAP ON THIS SURFACE. Without it this member was a string, the compiler could not
         // catch a typo, and a caller learned the four values from a 400.
         Sdk.ShouldContain("public enum PostgreSQLServerName {");
-        Sdk.ShouldContain("[JsonStringEnumMemberName(\"s1.large\")]");
+        Sdk.ShouldContain("""[JsonStringEnumMemberName("s1.large")]""");
         // ⚠ Unknown = 0, so a default(T) cannot name a real sku and silently send one.
         Sdk.ShouldContain("Unknown = 0");
     }
@@ -488,7 +491,7 @@ public sealed class DerivedSurfaceTests {
         // docs/plan/21 § Generation: the credential types, pipeline policies and convenience methods
         // are hand-written on top. A wrapper would be a second surface with a second set of names.
         Sdk.Split('\n')
-            .Where(x => x.Contains(" class ", StringComparison.Ordinal))
+            .Where(static x => x.Contains(" class ", StringComparison.Ordinal))
             .ShouldAllBe(x => x.Contains("partial", StringComparison.Ordinal)
                 || x.Contains("static class", StringComparison.Ordinal)
             );
@@ -592,7 +595,7 @@ public sealed class DerivedSurfaceTests {
             scopes.ShouldNotBeEmpty();
 
             foreach (var (scope, names) in scopes) {
-                names.ShouldBeUnique(customMessage: scope);
+                names.ShouldBeUnique(scope);
             }
         }
     }
@@ -610,7 +613,9 @@ public sealed class DerivedSurfaceTests {
     public void AContainerIsRequiredOrNullableAsItsParentSaysAndIsNeverInitialised() {
         Sdk.ShouldContain("    public required PropertiesData Properties { get; set; }");
         Sdk.ShouldContain("        public required SkuData Sku { get; set; }");
-        Sdk.ShouldContain("    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);");
+        Sdk.ShouldContain(
+            "    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);"
+        );
         Sdk.ShouldNotContain("Data Properties { get; set; } = new");
         SdkOf(CollidingLeafNames()).ShouldContain("        public PersistenceData? Persistence { get; set; }");
     }
@@ -627,7 +632,7 @@ public sealed class DerivedSurfaceTests {
     /// </remarks>
     [Fact]
     public void TwoSiblingsThatAreOneIdentifierFailRatherThanDeclaringOneNameTwice() {
-        var thrown = Should.Throw<InvalidOperationException>(() => SdkOf(CaseCollidingSiblings()));
+        var thrown = Should.Throw<InvalidOperationException>(static () => SdkOf(CaseCollidingSiblings()));
 
         thrown.Message.ShouldContain("/properties/max_memory");
         thrown.Message.ShouldContain("/properties/maxMemory");
@@ -635,11 +640,12 @@ public sealed class DerivedSurfaceTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>A sibling leaf named for a container's class throws, because a type and a property share one declaration space.</b>
+    ///     ⚠
+    ///     <b>A sibling leaf named for a container's class throws, because a type and a property share one declaration space.</b>
     /// </summary>
     [Fact]
     public void ASiblingLeafNamedForAContainersClassFailsRatherThanColliding() {
-        var thrown = Should.Throw<InvalidOperationException>(() => SdkOf(LeafNamedForASiblingsClass()));
+        var thrown = Should.Throw<InvalidOperationException>(static () => SdkOf(LeafNamedForASiblingsClass()));
 
         thrown.Message.ShouldContain("/properties/persistence (its class)");
         thrown.Message.ShouldContain("/properties/persistenceData");
@@ -651,7 +657,7 @@ public sealed class DerivedSurfaceTests {
     /// </summary>
     [Fact]
     public void ALeafNamedForItsOwnContainerFailsRatherThanBeingCS0542() {
-        var thrown = Should.Throw<InvalidOperationException>(() => SdkOf(LeafNamedForItsOwnContainer()));
+        var thrown = Should.Throw<InvalidOperationException>(static () => SdkOf(LeafNamedForItsOwnContainer()));
 
         thrown.Message.ShouldContain("/properties/persistence/persistenceData");
         thrown.Message.ShouldContain("CS0542");
@@ -689,7 +695,7 @@ public sealed class DerivedSurfaceTests {
     [Fact]
     public void NoSurfaceCarriesAPathATimestampOrAMachineName() {
         foreach (var text in new[] { DeterministicJson.ToText(Cli), DeterministicJson.ToText(Forms), Sdk }) {
-            text.ShouldNotContain(Environment.MachineName, Case.Insensitive);
+            text.ShouldNotContain(Environment.MachineName);
             text.ShouldNotContain(
                 DateTime.UtcNow.Year.ToString(CultureInfo.InvariantCulture)
                 + "-"
@@ -720,7 +726,7 @@ public sealed class DerivedSurfaceTests {
     ///     A registry with two types whose CLI command names and SDK model names both collide.
     /// </summary>
     static FakeRegistry Colliding(DisplayMetadata? nestedDisplay = null) =>
-        new FakeRegistry {
+        new() {
             Namespaces = ["CyberCloud.Streaming"],
             Types = [
                 new ResourceTypeRegistration {
@@ -764,7 +770,7 @@ public sealed class DerivedSurfaceTests {
         sdk.ShouldContain("StreamingKafkaClustersTopics");
 
         // …and the two are genuinely distinct rather than one having replaced the other.
-        var classes = sdk.Split("public sealed partial class ", StringSplitOptions.None).Length - 1;
+        var classes = sdk.Split("public sealed partial class ").Length - 1;
         classes.ShouldBeGreaterThan(1);
     }
 
@@ -788,8 +794,8 @@ public sealed class DerivedSurfaceTests {
         // command per resource type" off by three — and the fix somebody would reach for is to relax
         // the assertion into a range, which is this check no longer catching what it was written for.
         var commands = tree["groups"]!.AsObject()
-            .Where(x => x.Key != CliEmitter.ScopeGroupName)
-            .Sum(group => group.Value!["commands"]!.AsObject().Count);
+            .Where(static x => x.Key != CliEmitter.ScopeGroupName)
+            .Sum(static group => group.Value!["commands"]!.AsObject().Count);
 
         commands.ShouldBe(DocumentReader.TypesOf(document).Length);
 
@@ -806,9 +812,9 @@ public sealed class DerivedSurfaceTests {
         DerivedSurfaces.Generate(
             new Dictionary<string, JsonObject> { [Fixtures.FirstVersion] = document },
             Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()),
-            write: false
+            false
         )
-            .Documents.SelectMany(x => x.Problems)
+            .Documents.SelectMany(static x => x.Problems)
             .ShouldBeEmpty();
     }
 
@@ -842,7 +848,7 @@ public sealed class DerivedSurfaceTests {
         var document = Document;
 
         var collections = document["paths"]!.AsObject()
-            .Where(x => x.Value!["x-cybercloud-collection"] is not null)
+            .Where(static x => x.Value!["x-cybercloud-collection"] is not null)
             .ToList();
 
         collections.ShouldNotBeEmpty("the fixture emits no collection path, so this case proves nothing");
@@ -853,7 +859,7 @@ public sealed class DerivedSurfaceTests {
         }
 
         DocumentReader.TypesOf(document)
-            .GroupBy(x => x.ResourceType, StringComparer.Ordinal)
+            .GroupBy(static x => x.ResourceType, StringComparer.Ordinal)
             .ShouldAllBe(x => x.Count() == 1);
     }
 
@@ -899,7 +905,7 @@ public sealed class DerivedSurfaceTests {
         list["path"]!.GetValue<string>()
             .ShouldBe(
                 DocumentReader.TypesOf(Document)
-                    .Single(x => x.ResourceType == Fixtures.Namespace + "/servers")
+                    .Single(static x => x.ResourceType == Fixtures.Namespace + "/servers")
                     .CollectionPath
             );
 
@@ -910,7 +916,7 @@ public sealed class DerivedSurfaceTests {
         // behaviour: `--all` sends nothing and means "keep following nextLink". `--top` and
         // `--skip-token` are not here — they go on the wire, so they are ordinary flags carrying a
         // `queryParameter`, asserted below.
-        list["pageFlags"]!.AsArray().Select(x => DocumentReader.Text(x)).ShouldBe(["--all"]);
+        list["pageFlags"]!.AsArray().Select(static x => DocumentReader.Text(x)).ShouldBe(["--all"]);
 
         Flag("list", "--name").ShouldBeNull("list addresses a collection and has no resource to name");
         Flag("list", "--resource-group").ShouldNotBeNull();
@@ -930,7 +936,7 @@ public sealed class DerivedSurfaceTests {
         var nested = Cli["groups"]!["dbforpostgresql"]!["commands"]!["servers-databases"]!["verbs"]!["list"]!;
 
         nested["flags"]!.AsArray()
-            .Select(x => DocumentReader.Text(x?["name"]))
+            .Select(static x => DocumentReader.Text(x?["name"]))
             .ShouldContain("--servers-name", "a nested collection is addressed through its parent");
     }
 
@@ -1036,7 +1042,7 @@ public sealed class DerivedSurfaceTests {
     static ResourceSchema CollidingLeafNames() =>
         ResourceSchema.Of(
             [
-                new("/properties", SchemaKind.Nested, Required: true),
+                new("/properties", SchemaKind.Nested, true),
                 new("/properties/mode", SchemaKind.Text, Description: "The top-level one."),
                 new("/properties/persistence", SchemaKind.Nested),
                 new("/properties/persistence/mode", SchemaKind.Text, Description: "The nested one.")
@@ -1050,7 +1056,7 @@ public sealed class DerivedSurfaceTests {
     static ResourceSchema UnseparableLeafNames() =>
         ResourceSchema.Of(
             [
-                new("/properties", SchemaKind.Nested, Required: true),
+                new("/properties", SchemaKind.Nested, true),
                 new("/properties/mode", SchemaKind.Text, Description: "The top-level one."),
                 new("/properties/persistence", SchemaKind.Nested),
                 new("/properties/persistence/mode", SchemaKind.Text, Description: "The nested one."),
@@ -1062,7 +1068,7 @@ public sealed class DerivedSurfaceTests {
     static ResourceSchema CaseCollidingSiblings() =>
         ResourceSchema.Of(
             [
-                new("/properties", SchemaKind.Nested, Required: true),
+                new("/properties", SchemaKind.Nested, true),
                 new("/properties/max_memory", SchemaKind.Text),
                 new("/properties/maxMemory", SchemaKind.Text)
             ]
@@ -1072,7 +1078,7 @@ public sealed class DerivedSurfaceTests {
     static ResourceSchema LeafNamedForASiblingsClass() =>
         ResourceSchema.Of(
             [
-                new("/properties", SchemaKind.Nested, Required: true),
+                new("/properties", SchemaKind.Nested, true),
                 new("/properties/persistence", SchemaKind.Nested),
                 new("/properties/persistence/mode", SchemaKind.Text),
                 new("/properties/persistenceData", SchemaKind.Text)
@@ -1083,7 +1089,7 @@ public sealed class DerivedSurfaceTests {
     static ResourceSchema LeafNamedForItsOwnContainer() =>
         ResourceSchema.Of(
             [
-                new("/properties", SchemaKind.Nested, Required: true),
+                new("/properties", SchemaKind.Nested, true),
                 new("/properties/persistence", SchemaKind.Nested),
                 new("/properties/persistence/persistenceData", SchemaKind.Text)
             ]

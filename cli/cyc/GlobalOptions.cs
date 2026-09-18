@@ -28,18 +28,16 @@ namespace CyberCloud.Cli;
 /// </remarks>
 sealed class GlobalOptions {
     GlobalOptions(IReadOnlyList<string> apiVersions, string newest) {
-        Output = new Option<string>("--output", "-o") {
+        Output = new("--output", "-o") {
             Description = $"How to print the answer: {string.Join(", ", OutputFormats.Names)}. Defaults to table.",
-            DefaultValueFactory = _ => "table"
+            DefaultValueFactory = static _ => "table"
         };
 
         Output.AcceptOnlyFromAmong([.. OutputFormats.Names]);
 
-        Query = new Option<string>("--query") {
-            Description = "A JMESPath expression over the response — docs/plan/21 § Decisions."
-        };
+        Query = new("--query") { Description = "A JMESPath expression over the response — docs/plan/21 § Decisions." };
 
-        ApiVersion = new Option<string>("--api-version") {
+        ApiVersion = new("--api-version") {
             Description =
                 $"The api-version to speak. One of {string.Join(", ", apiVersions)}; defaults to {newest}. "
                 + "There is no 'latest' — docs/plan/10 § API versioning."
@@ -47,15 +45,15 @@ sealed class GlobalOptions {
 
         ApiVersion.AcceptOnlyFromAmong([.. apiVersions]);
 
-        Profile = new Option<string>("--profile") {
+        Profile = new("--profile") {
             Description = "The profile in ~/.cyc/config to read settings from. Also CYC_PROFILE."
         };
 
-        Verbose = new Option<bool>("--verbose") {
+        Verbose = new("--verbose") {
             Description = "Trace each request and response to stderr. ⚠ Credentials are never traced."
         };
 
-        Timeout = new Option<int>("--timeout") {
+        Timeout = new("--timeout") {
             Description = "Give up after this many seconds and exit 5. Covers waiting on a long-running operation."
         };
 
@@ -90,7 +88,7 @@ sealed class GlobalOptions {
     public static GlobalOptions For(VerbTree.VerbTreeCatalog catalog) {
         ArgumentNullException.ThrowIfNull(catalog);
 
-        return new GlobalOptions(catalog.ApiVersions, catalog.Newest);
+        return new(catalog.ApiVersions, catalog.Newest);
     }
 
     /// <summary>Reads the values out of a parse.</summary>
@@ -98,7 +96,7 @@ sealed class GlobalOptions {
     public GlobalValues Read(ParseResult parse) {
         ArgumentNullException.ThrowIfNull(parse);
 
-        return new GlobalValues(
+        return new(
             OutputFormats.Parse(parse.GetValue(Output)),
             parse.GetValue(Query),
             parse.GetValue(ApiVersion),
@@ -149,8 +147,8 @@ sealed class GlobalOptions {
     public void AssertMatchesTree(VerbTree.VerbTreeDocument tree) {
         ArgumentNullException.ThrowIfNull(tree);
 
-        var declared = All.Select(x => x.Name).ToHashSet(StringComparer.Ordinal);
-        var missing = tree.GlobalFlags.Select(x => x.Name).Where(x => !declared.Contains(x)).ToList();
+        var declared = All.Select(static x => x.Name).ToHashSet(StringComparer.Ordinal);
+        var missing = tree.GlobalFlags.Select(static x => x.Name).Where(x => !declared.Contains(x)).ToList();
 
         if (missing.Count > 0) {
             throw new CycUsageException(

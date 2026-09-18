@@ -62,7 +62,7 @@ sealed class CycConfigFile {
     /// <summary>An empty configuration — what a machine with no <c>~/.cyc/config</c> has.</summary>
     public static CycConfigFile Empty { get; } =
         new(
-            path: null,
+            null,
             DefaultProfileName,
             new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase)
         );
@@ -147,7 +147,7 @@ sealed class CycConfigFile {
             profiles[current][key] = value;
         }
 
-        return new CycConfigFile(path, defaultProfile, profiles);
+        return new(path, defaultProfile, profiles);
     }
 
     /// <summary>One setting's value in one profile, or <c>null</c>.</summary>
@@ -184,8 +184,8 @@ sealed class CycConfigFile {
         if (LooksLikeCredential(key)) {
             throw new CycUsageException(
                 $"'{key}' is credential-shaped and ~/.cyc/config is a plaintext file. docs/plan/21 "
-                + "§ Decisions: \"Never a plaintext file — that is how CI credentials leak into "
-                + "container images.\" Sign in with 'cyc login', which stores the refresh token in the "
+                + """§ Decisions: "Never a plaintext file — that is how CI credentials leak into """
+                + """container images." Sign in with 'cyc login', which stores the refresh token in the """
                 + "OS keychain, or pass a service principal through the CYC_CLIENT_* environment "
                 + "variables."
             );
@@ -199,7 +199,7 @@ sealed class CycConfigFile {
 
         copy[profile][key] = value;
 
-        return new CycConfigFile(Path, DefaultProfile, copy);
+        return new(Path, DefaultProfile, copy);
     }
 
     /// <summary>Sets the profile used when nothing names one.</summary>
@@ -207,7 +207,7 @@ sealed class CycConfigFile {
     public CycConfigFile WithDefaultProfile(string profile) {
         ArgumentException.ThrowIfNullOrWhiteSpace(profile);
 
-        return new CycConfigFile(Path, profile, profiles);
+        return new(Path, profile, profiles);
     }
 
     /// <summary>Renders the file.</summary>
@@ -220,10 +220,10 @@ sealed class CycConfigFile {
         text.Append('\n');
         text.Append(CultureInfo.InvariantCulture, $"default = {DefaultProfile}").Append('\n');
 
-        foreach (var profile in profiles.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+        foreach (var profile in profiles.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
             text.Append('\n').Append('[').Append(profile.Key).Append(']').Append('\n');
 
-            foreach (var setting in profile.Value.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+            foreach (var setting in profile.Value.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
                 text.Append(CultureInfo.InvariantCulture, $"{setting.Key} = {setting.Value}").Append('\n');
             }
         }

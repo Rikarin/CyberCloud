@@ -98,8 +98,11 @@ public static class ClusterInfrastructure {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A KUBELET AT 1.35 REFUSES TO START ON A CGROUP v1 HOST, AND A DOCKER DESKTOP ON
-    ///         WINDOWS CAN BE ONE.</b> KEP-4569 moved cgroup v1 into maintenance, and from 1.35 the
+    ///         ⚠
+    ///         <b>
+    ///             A KUBELET AT 1.35 REFUSES TO START ON A CGROUP v1 HOST, AND A DOCKER DESKTOP ON
+    ///             WINDOWS CAN BE ONE.
+    ///         </b> KEP-4569 moved cgroup v1 into maintenance, and from 1.35 the
     ///         kubelet's <c>failCgroupV1</c> defaults to <c>true</c>: the container comes up, the
     ///         kubelet logs <i>"kubelet is configured to not run on a host using cgroup v1"</i>, and
     ///         k3s shuts down. Testcontainers then reports <c>ContainerNotRunningException</c>, every
@@ -116,8 +119,11 @@ public static class ClusterInfrastructure {
     ///         simply true-by-default-and-irrelevant, so the drop-in is unconditional.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The machine that wrote the paragraph above is cgroup v2 now, and the drop-in
-    ///         stays.</b> WSL2's kernel was booting cgroup v1 (hybrid) and Docker Desktop inherited
+    ///         ⚠
+    ///         <b>
+    ///             The machine that wrote the paragraph above is cgroup v2 now, and the drop-in
+    ///             stays.
+    ///         </b> WSL2's kernel was booting cgroup v1 (hybrid) and Docker Desktop inherited
     ///         it; <c>kernelCommandLine = cgroup_no_v1=all</c> in <c>.wslconfig</c>, a
     ///         <c>wsl --shutdown</c> and a Docker restart put <c>docker info</c> at
     ///         <c>Cgroup Version: 2</c> on 2026-09-15, and the kubelet starts with the field left at
@@ -126,7 +132,8 @@ public static class ClusterInfrastructure {
     ///         suite that runs and 21 skips that read as a missing daemon; it costs nothing here.
     ///     </para>
     /// </remarks>
-    public const string KubeletDropInPath = "/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/99-cybercloud-cgroup-v1.conf";
+    public const string KubeletDropInPath =
+        "/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/99-cybercloud-cgroup-v1.conf";
 
     /// <summary>The drop-in's content. See <see cref="KubeletDropInPath" />.</summary>
     public const string KubeletDropIn =
@@ -138,19 +145,28 @@ public static class ClusterInfrastructure {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Without this, KubeVirt is the one bundle component the local topology can never
-    ///         run.</b> <c>Testcontainers.K3s</c> and the AppHost both start k3s with
+    ///         ⚠
+    ///         <b>
+    ///             Without this, KubeVirt is the one bundle component the local topology can never
+    ///             run.
+    ///         </b> <c>Testcontainers.K3s</c> and the AppHost both start k3s with
     ///         <c>--tmpfs /var/run</c>, which Docker mounts with private propagation, and
-    ///         <c>virt-handler</c> refuses to start on such a node: <i>path "/var/run/kubevirt" is
-    ///         mounted on "/var/run" but it is not a shared mount</i> (issue #2, 2026-09-15). A real
+    ///         <c>virt-handler</c> refuses to start on such a node:
+    ///         <i>
+    ///             path "/var/run/kubevirt" is
+    ///             mounted on "/var/run" but it is not a shared mount
+    ///         </i> (issue #2, 2026-09-15). A real
     ///         node has no such problem. <c>mount --make-rshared /var/run</c> inside the container
     ///         before k3s starts is the whole fix; measured the same day on a throwaway container:
     ///         <c>/proc/self/mountinfo</c> shows <c>/var/run … shared:259</c>, <c>/run</c> stays
     ///         private, and k3s logs <i>k3s is up and running</i> five seconds in.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>An entrypoint wrapper and not an exec after start, so that the three recipes are
-    ///         one recipe.</b> Testcontainers could run the mount through <c>ExecAsync</c> in a
+    ///         ⚠
+    ///         <b>
+    ///             An entrypoint wrapper and not an exec after start, so that the three recipes are
+    ///             one recipe.
+    ///         </b> Testcontainers could run the mount through <c>ExecAsync</c> in a
     ///         startup callback; Aspire has no post-start exec at all — <c>WithContainerRuntimeArgs</c>
     ///         reaches <c>docker run</c> and nothing reaches <c>docker exec</c>. A wrapper is the
     ///         same four strings in both, and in a bare <c>docker run</c>: <c>/bin/sh -c '…' k3s</c>
@@ -238,8 +254,8 @@ public static class ClusterInfrastructure {
         + "nothing was checked. "
         + $"{PrerequisiteMarker} a Docker daemon able to run {K3sImage}, {PostgresImage} and {RedisImage}. "
         + $"WOULD PROVE: {wouldProve} "
-        + "This suite is present by name and skipped rather than absent, because \"conformance: "
-        + "green\" must not be readable as \"criterion 3 is met\" on a machine that never ran the "
+        + """This suite is present by name and skipped rather than absent, because "conformance: """
+        + """green" must not be readable as "criterion 3 is met" on a machine that never ran the """
         + "check. docs/plan/03 § Providers, docs/plan/24 § Phase 1. "
         + "What went wrong: "
         + Describe(reason ?? failure);

@@ -75,31 +75,31 @@ public static class SecretShapedText {
         // -----BEGIN OPENSSH PRIVATE KEY-----, RSA, EC, PGP … . Greedy to the end of the string on
         // purpose: a PEM body split across lines has no reliable terminator inside one log event,
         // and half a private key in a log is still a private key in a log.
-        new("PrivateKey", "-----BEGIN[ A-Z]*PRIVATE KEY[ A-Z]*-----[\\s\\S]*", ignoreCase: false),
+        new("PrivateKey", """-----BEGIN[ A-Z]*PRIVATE KEY[ A-Z]*-----[\s\S]*""", false),
 
         // A JWT. This is the single most common real leak on a platform with token exchange
         // (docs/plan/11 § Managed identity): an access token quoted into a diagnostic. The third
         // segment may be empty — an unsigned JWT is still a bearer credential to something.
         new(
             "JsonWebToken",
-            "eyJ[A-Za-z0-9_=-]{8,}\\.[A-Za-z0-9_=-]{8,}\\.[A-Za-z0-9_=-]*",
-            ignoreCase: false
+            """eyJ[A-Za-z0-9_=-]{8,}\.[A-Za-z0-9_=-]{8,}\.[A-Za-z0-9_=-]*""",
+            false
         ),
 
         // OpenBao and Vault service (hvs.) and batch (hvb.) tokens, and the legacy s.XXXX form the
         // root token still uses. docs/plan/18 § Shape: the platform holds a broad token per
         // namespace, so this one is ours and not a tenant's.
-        new("VaultToken", "\\bhv[sb]\\.[A-Za-z0-9_-]{20,}", ignoreCase: false),
-        new("VaultLegacyToken", "\\bs\\.[A-Za-z0-9]{24}\\b", ignoreCase: false),
+        new("VaultToken", """\bhv[sb]\.[A-Za-z0-9_-]{20,}""", false),
+        new("VaultLegacyToken", """\bs\.[A-Za-z0-9]{24}\b""", false),
 
         new(
             "AwsAccessKey",
-            "\\b(?:AKIA|ASIA|ABIA|ACCA|AGPA|AIDA|AIPA|ANPA|ANVA|APKA|AROA|ASCA)[0-9A-Z]{16}\\b",
-            ignoreCase: false
+            """\b(?:AKIA|ASIA|ABIA|ACCA|AGPA|AIDA|AIPA|ANPA|ANVA|APKA|AROA|ASCA)[0-9A-Z]{16}\b""",
+            false
         ),
-        new("GitHubToken", "\\bgh[pousr]_[A-Za-z0-9]{36,}\\b", ignoreCase: false),
-        new("GitHubPersonalAccessToken", "\\bgithub_pat_[A-Za-z0-9_]{22,}\\b", ignoreCase: false),
-        new("SlackToken", "\\bxox[abeprs]-[A-Za-z0-9-]{10,}", ignoreCase: false),
+        new("GitHubToken", """\bgh[pousr]_[A-Za-z0-9]{36,}\b""", false),
+        new("GitHubPersonalAccessToken", """\bgithub_pat_[A-Za-z0-9_]{22,}\b""", false),
+        new("SlackToken", """\bxox[abeprs]-[A-Za-z0-9-]{10,}""", false),
 
         // ⚠ THE ONE MOST LIKELY TO FIRE IN THIS TREE. ConfiguredShardConnections composes the
         // durable tier's connection string through NpgsqlConnectionStringBuilder
@@ -108,21 +108,21 @@ public static class SecretShapedText {
         // "which setting was it" is the whole diagnostic value of the line.
         new(
             "ConnectionStringPassword",
-            "(?:password|pwd)\\s*=\\s*(?<secret>[^;,\\s\"']{3,})",
-            ignoreCase: true
+            """(?:password|pwd)\s*=\s*(?<secret>[^;,\s"']{3,})""",
+            true
         ),
 
         // scheme://user:password@host — how a Redis, Postgres or AMQP endpoint is usually written
         // down, and how one usually reaches a log.
         new(
             "UriCredentials",
-            "[a-zA-Z][a-zA-Z0-9+.-]*://[^\\s/:@]+:(?<secret>[^\\s/@]+)@",
-            ignoreCase: false
+            """[a-zA-Z][a-zA-Z0-9+.-]*://[^\s/:@]+:(?<secret>[^\s/@]+)@""",
+            false
         ),
 
         // An opaque bearer credential — the case the JsonWebToken rule cannot see, such as an
         // OpenBao wrapping token or a third-party engine's licence key on an Authorization header.
-        new("BearerToken", "\\bbearer\\s+(?<secret>[A-Za-z0-9._~+/=-]{16,})", ignoreCase: true)
+        new("BearerToken", """\bbearer\s+(?<secret>[A-Za-z0-9._~+/=-]{16,})""", true)
     ];
 
     /// <summary>
@@ -132,7 +132,7 @@ public static class SecretShapedText {
     public static IReadOnlyList<SecretShapedRule> Rules => RuleSet;
 
     /// <summary>Every rule name, for a test or a dashboard that enumerates the dimension.</summary>
-    public static IReadOnlyList<string> RuleNames { get; } = RuleSet.Select(x => x.Name).ToArray();
+    public static IReadOnlyList<string> RuleNames { get; } = RuleSet.Select(static x => x.Name).ToArray();
 
     /// <summary>
     ///     Replaces every credential-shaped run in <paramref name="text" /> with a marker.

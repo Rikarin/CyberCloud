@@ -58,25 +58,25 @@ public sealed class ManagedClusterCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.ContainerService/managedClusters",
-            CreateProvider = () => new ContainerServiceProvider(),
+            CreateProvider = static () => new ContainerServiceProvider(),
             ReconcilerType = typeof(ManagedClusterReconciler),
-            CreateReconciler = clock => new ManagedClusterReconciler(clock),
+            CreateReconciler = static clock => new ManagedClusterReconciler(clock),
             Type = ManagedClusters.Type,
             ApiVersion = ManagedClusters.V2026,
-            Body = cluster => ManagedClusters.Body(cluster),
+            Body = static cluster => ManagedClusters.Body(cluster),
             // ⚠ Changes `controlPlane.replicas`, which the rendered KamajiControlPlane carries in TWO
             // places — `spec.replicas` and, through the meters, the amount the update re-reserves. A
             // body that differed only where the reconciler ignores it would pass the update test while
             // proving the update never left the grain.
-            ChangedBody = cluster => ManagedClusters.Body(cluster, controlPlaneReplicas: 3),
+            ChangedBody = static cluster => ManagedClusters.Body(cluster, controlPlaneReplicas: 3),
             // Drops the required `/properties/network/podCidr`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written: a
             // hand-written invalid body drifts out of date the day the schema gains a property and then
             // tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => WithoutPodCidr(ManagedClusters.Body(cluster)),
+            InvalidBody = static cluster => WithoutPodCidr(ManagedClusters.Body(cluster)),
             InvalidBodyTarget = "/properties/network/podCidr",
             ActionName = ManagedClusters.ListCredentialsAction,
-            Objects = (id, ns) => [
+            Objects = static (id, ns) => [
                 ManagedClusters.InfrastructureRef(ns, id.Name),
                 ManagedClusters.ControlPlaneRef(ns, id.Name),
                 ManagedClusters.ClusterRef(ns, id.Name)
@@ -96,7 +96,7 @@ public sealed class ManagedClusterCase : IProviderCaseSource {
             // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
             DataPlane = null,
             StoragePrefix = null,
-            OperatorWritten = (id, ns) => [
+            OperatorWritten = static (id, ns) => [
                 (KubeSecret.Ref(ns, ManagedClusters.KubeconfigSecretName(id.Name)),
                     OperatorSecret.Json(
                         KubeSecret.Ref(ns, ManagedClusters.KubeconfigSecretName(id.Name)),
@@ -104,7 +104,7 @@ public sealed class ManagedClusterCase : IProviderCaseSource {
                     )),
                 (ManagedClusters.ClusterRef(ns, id.Name), EndpointedCluster(ns, id.Name))
             ],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return ManagedClusters.Matches(match.ObjectJson, desired.RootElement);
             }
@@ -244,21 +244,21 @@ public sealed class AgentPoolCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.ContainerService/managedClusters/agentPools",
-            CreateProvider = () => new ContainerServiceProvider(),
+            CreateProvider = static () => new ContainerServiceProvider(),
             ReconcilerType = typeof(AgentPoolReconciler),
-            CreateReconciler = clock => new AgentPoolReconciler(clock),
+            CreateReconciler = static clock => new AgentPoolReconciler(clock),
             Type = AgentPools.Type,
             ApiVersion = AgentPools.V2026,
-            Body = cluster => AgentPools.Body(cluster),
+            Body = static cluster => AgentPools.Body(cluster),
             // ⚠ Changes `count`, which the rendered MachineDeployment carries as `spec.replicas` and
             // which all three meters read. A changed body whose difference the renderer can drop would
             // pass the update test while proving nothing about whether the update reached the cluster.
-            ChangedBody = cluster => AgentPools.Body(cluster, count: 5),
+            ChangedBody = static cluster => AgentPools.Body(cluster, 5),
             // Drops the required `/properties/osDiskSize`.
-            InvalidBody = cluster => WithoutOsDiskSize(AgentPools.Body(cluster)),
+            InvalidBody = static cluster => WithoutOsDiskSize(AgentPools.Body(cluster)),
             InvalidBodyTarget = "/properties/osDiskSize",
             ActionName = AgentPools.UpgradeNodeImageAction,
-            Objects = (id, ns) => [
+            Objects = static (id, ns) => [
                 AgentPools.MachineTemplateRef(ns, id),
                 AgentPools.BootstrapRef(ns, id),
                 AgentPools.MachineDeploymentRef(ns, id)
@@ -279,7 +279,7 @@ public sealed class AgentPoolCase : IProviderCaseSource {
             // ⚠ `AgentPoolReconcilerTests` KEEPS ITS OWN ASSERTIONS. What it covers that this still
             // cannot is two clusters in ONE resource group each holding a pool called `workers`; the
             // harness brings up one parent per run and cannot build the collision.
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return AgentPools.Matches(match.ObjectJson, match.Id, desired.RootElement);
             }
@@ -404,15 +404,16 @@ public sealed class ContainerServiceSuiteShapeTests {
     }
 
     static ImmutableArray<ProviderConformanceCase> AncestorsOf<TSource>()
-        where TSource : IProviderCaseSource => TSource.Ancestors;
+        where TSource : IProviderCaseSource =>
+        TSource.Ancestors;
 
     /// <summary>Every <c>[Fact]</c> a test class runs, by name, ordered.</summary>
     /// <param name="suite">The closed test class.</param>
     static ImmutableArray<string> RunnableFactsOf(Type suite) => [
         .. suite
             .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-            .Where(x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
-            .Select(x => x.Name)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Where(static x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
+            .Select(static x => x.Name)
+            .OrderBy(static x => x, StringComparer.Ordinal)
     ];
 }

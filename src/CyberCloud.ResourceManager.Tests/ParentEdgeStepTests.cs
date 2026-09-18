@@ -1,5 +1,3 @@
-using CyberCloud.ResourceManager.Tests.Infrastructure;
-
 namespace CyberCloud.ResourceManager.Tests;
 
 /// <summary>
@@ -72,7 +70,7 @@ public sealed class ParentEdgeStepTests(ResourceManagerCluster cluster) {
         // ⚠ A delta rather than "empty": the quota grain is shared with the rest of the collection
         // and holds every lease those tests took. What matters is that THIS create left none.
         var quota = cluster.Quota(ResourceManagerCluster.Tenant, ResourceManagerCluster.Subscription);
-        var before = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(x => x.LeaseId).ToHashSet();
+        var before = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(static x => x.LeaseId).ToHashSet();
 
         try {
             var refused = await Create(address);
@@ -100,7 +98,7 @@ public sealed class ParentEdgeStepTests(ResourceManagerCluster cluster) {
 
             // ⚠ And the quota came back. A refused create that kept its lease would let a broken
             // tuple store eat a subscription's allowance one retry at a time.
-            var after = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(x => x.LeaseId).ToHashSet();
+            var after = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(static x => x.LeaseId).ToHashSet();
             after.ExceptWith(before);
 
             after.ShouldBeEmpty("the refused create kept its quota lease");
@@ -170,7 +168,7 @@ public sealed class ParentEdgeStepTests(ResourceManagerCluster cluster) {
                 Path = address.Path,
                 ApiVersion = TestingProvider.V2026,
                 Verb = WriteVerb.Put,
-                Body = TestingProvider.Body(size: 7),
+                Body = TestingProvider.Body(7),
                 IfMatch = "\"not-the-etag\"",
                 Caller = ResourceManagerCluster.Caller()
             },

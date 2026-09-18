@@ -11,8 +11,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 /// <remarks>
 ///     <para>
 ///         <b>Why this exists.</b> docs/plan/08 § Soft delete keeps a soft-deleted resource's volumes
-///         because <i>"deleting a <c>StatefulSet</c> does not delete the
-///         <c>PersistentVolumeClaim</c>s its <c>volumeClaimTemplate</c> created"</i>. That sentence
+///         because
+///         <i>
+///             "deleting a <c>StatefulSet</c> does not delete the
+///             <c>PersistentVolumeClaim</c>s its <c>volumeClaimTemplate</c> created"
+///         </i>. That sentence
 ///         is true of a family that renders its own set and false of every operator that creates its
 ///         claims itself and stamps a controller reference on each — CloudNativePG does, through
 ///         <c>SetAsOwnedBy(Controller: true)</c> — because Kubernetes garbage-collects a dependent
@@ -46,8 +49,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///         reclaimer's rule.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Here in the contracts assembly rather than beside <c>VolumeReclaimer</c>, because
-///         the caller is a provider.</b> The reclaimer runs in the manager, on the branch a hard delete
+///         ⚠
+///         <b>
+///             Here in the contracts assembly rather than beside <c>VolumeReclaimer</c>, because
+///             the caller is a provider.
+///         </b> The reclaimer runs in the manager, on the branch a hard delete
 ///         and a purge share; this runs inside a provider's own <c>DeleteAsync</c> and
 ///         <c>ReconcileAsync</c>, where the order relative to the provider's other applies is the
 ///         whole point, and a provider cannot name the manager's assembly.
@@ -172,10 +178,10 @@ public static class VolumeCustody {
                 return Result<int>.Failure(
                     moveError.Code,
                     (owner is null
-                        ? $"'{volume.Claim}' could not be detached from its owner, so the teardown of "
-                        + $"'{context.Id.Path}' stops before deleting anything: "
-                        : $"'{volume.Claim}' could not be handed to '{owner}', so the restore of "
-                        + $"'{context.Id.Path}' stops before the operator can see it: ")
+                            ? $"'{volume.Claim}' could not be detached from its owner, so the teardown of "
+                            + $"'{context.Id.Path}' stops before deleting anything: "
+                            : $"'{volume.Claim}' could not be handed to '{owner}', so the restore of "
+                            + $"'{context.Id.Path}' stops before the operator can see it: ")
                     + moveError.Message
                 );
             }

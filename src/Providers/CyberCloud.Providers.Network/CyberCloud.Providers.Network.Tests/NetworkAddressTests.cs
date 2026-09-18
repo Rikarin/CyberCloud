@@ -113,7 +113,7 @@ public sealed class NetworkAddressTests {
     public void ADefaultRouteOverlapsEverythingInItsOwnFamily() {
         Cidr.TryParse("0.0.0.0/0", out var everything).ShouldBeTrue();
 
-        foreach (var reserved in NetworkAddressing.ReservedRanges.Where(x => !x.Cidr.IsV6)) {
+        foreach (var reserved in NetworkAddressing.ReservedRanges.Where(static x => !x.Cidr.IsV6)) {
             everything.Overlaps(reserved.Cidr).ShouldBeTrue(reserved.Id);
         }
     }
@@ -137,7 +137,7 @@ public sealed class NetworkAddressTests {
 
     [Fact]
     public void EveryReservedRangeHasADistinctIdAndAReasonAWholeSentenceLong() {
-        var ids = NetworkAddressing.ReservedRanges.Select(x => x.Id).ToList();
+        var ids = NetworkAddressing.ReservedRanges.Select(static x => x.Id).ToList();
 
         ids.Distinct(StringComparer.Ordinal)
             .Count()
@@ -160,8 +160,8 @@ public sealed class NetworkAddressTests {
 
     [Fact]
     public void AGlobalRowAppliesInEveryRegionAndARegionalOneDoesNot() {
-        var global = NetworkAddressing.ReservedRanges.First(x => x.Region.Length == 0);
-        var regional = NetworkAddressing.ReservedRanges.First(x => x.Region.Length > 0);
+        var global = NetworkAddressing.ReservedRanges.First(static x => x.Region.Length == 0);
+        var regional = NetworkAddressing.ReservedRanges.First(static x => x.Region.Length > 0);
 
         global.AppliesIn("eu-central").ShouldBeTrue();
         global.AppliesIn("us-east").ShouldBeTrue();
@@ -246,7 +246,7 @@ public sealed class NetworkAddressTests {
 
     [Fact]
     public void ARegionalRowRefusesOnlyInItsOwnRegion() {
-        var regional = NetworkAddressing.ReservedRanges.First(x => x.Region.Length > 0);
+        var regional = NetworkAddressing.ReservedRanges.First(static x => x.Region.Length > 0);
 
         NetworkAddressing.ProblemWith(regional.Prefix, regional.Region, "/x").ShouldNotBeNull();
 
@@ -296,8 +296,8 @@ public sealed class NetworkAddressTests {
         var cluster = Guid.NewGuid();
 
         var regions = NetworkAddressing.ReservedRanges
-            .Select(x => x.Region)
-            .Where(x => x.Length > 0)
+            .Select(static x => x.Region)
+            .Where(static x => x.Length > 0)
             .Append("eu-central")
             .Distinct(StringComparer.Ordinal);
 
@@ -360,7 +360,7 @@ public sealed class NetworkAddressTests {
         // `cidr-shape-is-unenforced`, whose cost is a body that "may send 999.0.0.1/99 and be
         // accepted". Two typed properties instead of one list is what keeps this family out of that.
         var property = VirtualNetworks.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/addressSpace/v4");
+            .Single(static x => x.JsonPointer == "/properties/addressSpace/v4");
 
         property.Pattern.ShouldBe(Cidr.V4Pattern);
         property.Kind.ShouldBe(SchemaKind.Text);
@@ -371,7 +371,7 @@ public sealed class NetworkAddressTests {
             + "CIDR shape is enforced by nothing"
         );
 
-        using var body = JsonDocument.Parse(VirtualNetworks.Body(Guid.NewGuid(), addressSpaceV4: "not-a-cidr"));
+        using var body = JsonDocument.Parse(VirtualNetworks.Body(Guid.NewGuid(), "not-a-cidr"));
 
         VirtualNetworks.Schema2026.Validate(body.RootElement, allowTags: true)
             .TryGetError(out var error)
@@ -383,11 +383,11 @@ public sealed class NetworkAddressTests {
     [Fact]
     public void TheSubnetsPrefixIsPatternedToo() {
         var property = NetworkSubnets.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/addressPrefix/v4");
+            .Single(static x => x.JsonPointer == "/properties/addressPrefix/v4");
 
         property.Pattern.ShouldBe(Cidr.V4Pattern);
 
-        using var body = JsonDocument.Parse(NetworkSubnets.Body(Guid.NewGuid(), prefixV4: "10.0.0.0"));
+        using var body = JsonDocument.Parse(NetworkSubnets.Body(Guid.NewGuid(), "10.0.0.0"));
 
         NetworkSubnets.Schema2026.Validate(body.RootElement, allowTags: true)
             .TryGetError(out var error)
@@ -414,7 +414,7 @@ public sealed class NetworkAddressTests {
             .ShouldBeFalse("and the parser is what actually refuses it — the reconciler's message names the pointer");
 
         // The safe direction, over every example and every reserved range the family declares.
-        foreach (var legal in NetworkAddressing.ReservedRanges.Select(x => x.Prefix)) {
+        foreach (var legal in NetworkAddressing.ReservedRanges.Select(static x => x.Prefix)) {
             var pattern = legal.Contains(':', StringComparison.Ordinal)
                 ? Cidr.V6Pattern
                 : Cidr.V4Pattern;

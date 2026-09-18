@@ -112,7 +112,7 @@ public sealed class ContainerRegistryMatchesTests {
         // database, Redis and the registry owns a ReadWriteOnce claim and runs ONE replica whatever
         // `replicas` says — so a comparison that checked all six against Replicas(body) would report
         // the database as drifted the moment a tenant asked for two of anything, forever.
-        using var body = JsonDocument.Parse(ContainerRegistries.Body(ClusterId, replicas: 4));
+        using var body = JsonDocument.Parse(ContainerRegistries.Body(ClusterId, 4));
 
         foreach (var stateless in new[] {
                      ContainerRegistries.CoreDeploymentJson("images", body.RootElement),
@@ -143,7 +143,7 @@ public sealed class ContainerRegistryMatchesTests {
 
         ContainerRegistries.Matches("not json at all", body.RootElement).ShouldBeFalse();
         ContainerRegistries.Matches("[]", body.RootElement).ShouldBeFalse();
-        ContainerRegistries.Matches("{\"kind\":\"Namespace\"}", body.RootElement).ShouldBeFalse();
+        ContainerRegistries.Matches("""{"kind":"Namespace"}""", body.RootElement).ShouldBeFalse();
     }
 
     [Fact]

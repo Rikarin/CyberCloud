@@ -64,7 +64,7 @@ static class UpdateCheck {
 
         Stamp(host);
 
-        probe ??= _ => Task.FromResult<string?>(null);
+        probe ??= static _ => Task.FromResult<string?>(null);
 
         return RunAsync(host, currentVersion, probe);
     }

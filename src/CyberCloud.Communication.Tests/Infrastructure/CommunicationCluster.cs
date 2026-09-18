@@ -276,7 +276,7 @@ public sealed class CommunicationCluster : IAsyncLifetime {
             silo.AddMemoryGrainStorage(StorageTiers.Durable);
             silo.AddMemoryGrainStorage(StorageTiers.Hot);
 
-            silo.ConfigureServices(services => {
+            silo.ConfigureServices(static services => {
                     // The doubles go in FIRST so the production wiring's TryAdd keeps them.
                     services.AddSingleton<IClock>(TestClock.Instance);
 

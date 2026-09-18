@@ -136,7 +136,7 @@ public static class VolumeReclaimer {
 
         foreach (var volume in volumes) {
             if (volume.CheckAddress(context) is { } addressError) {
-                return ReconcileOutcome.Failed(addressError, false);
+                return ReconcileOutcome.Failed(addressError);
             }
 
             var read = await cluster.GetAsync(volume.Claim, cancellationToken);
@@ -150,7 +150,7 @@ public static class VolumeReclaimer {
             }
 
             if (volume.CheckOwnership(read.GetValueOrThrow().Json, context) is { } ownershipError) {
-                return ReconcileOutcome.Failed(ownershipError, false);
+                return ReconcileOutcome.Failed(ownershipError);
             }
 
             verified.Add(volume);
@@ -224,5 +224,6 @@ public static class VolumeReclaimer {
     static string Count(int volumes) =>
         volumes == 1 ? "1 volume" : $"{volumes.ToString(System.Globalization.CultureInfo.InvariantCulture)} volumes";
 
-    static string Names(ImmutableArray<RetainedVolume> volumes) => string.Join(", ", volumes.Select(x => x.Claim.Name));
+    static string Names(ImmutableArray<RetainedVolume> volumes) =>
+        string.Join(", ", volumes.Select(static x => x.Claim.Name));
 }

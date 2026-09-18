@@ -151,7 +151,8 @@ public static class OpenApiCompatibility {
         Compare(published, regenerated, "", found);
 
         return [
-            .. found.OrderBy(x => x.JsonPointer, StringComparer.Ordinal).ThenBy(x => x.Rule, StringComparer.Ordinal)
+            .. found.OrderBy(static x => x.JsonPointer, StringComparer.Ordinal)
+                .ThenBy(static x => x.Rule, StringComparer.Ordinal)
         ];
     }
 
@@ -232,7 +233,7 @@ public static class OpenApiCompatibility {
         var was = Strings(before["required"]);
         var now = Strings(after["required"]);
 
-        foreach (var name in now.Except(was, StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal)) {
+        foreach (var name in now.Except(was, StringComparer.Ordinal).OrderBy(static x => x, StringComparer.Ordinal)) {
             found.Add(
                 new(
                     pointer + "/required",
@@ -260,7 +261,7 @@ public static class OpenApiCompatibility {
         var was = Strings(before[OpenApiEmitter.ReadRequiredExtension]);
         var now = Strings(after[OpenApiEmitter.ReadRequiredExtension]);
 
-        foreach (var name in was.Except(now, StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal)) {
+        foreach (var name in was.Except(now, StringComparer.Ordinal).OrderBy(static x => x, StringComparer.Ordinal)) {
             found.Add(
                 new(
                     pointer + "/" + OpenApiEmitter.ReadRequiredExtension,
@@ -321,7 +322,8 @@ public static class OpenApiCompatibility {
             var was = Strings(before);
             var now = Strings(after);
 
-            foreach (var value in was.Except(now, StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal)) {
+            foreach (var value in was.Except(now, StringComparer.Ordinal)
+                         .OrderBy(static x => x, StringComparer.Ordinal)) {
                 found.Add(
                     new(
                         pointer,
@@ -407,9 +409,9 @@ public static class OpenApiCompatibility {
             ? []
             : [
                 .. array
-                    .Select(x => x is JsonValue value && value.TryGetValue<string>(out var text) ? text : null)
-                    .Where(x => x is not null)
-                    .Select(x => x!)
+                    .Select(static x => x is JsonValue value && value.TryGetValue<string>(out var text) ? text : null)
+                    .Where(static x => x is not null)
+                    .Select(static x => x!)
             ];
 
     /// <summary>

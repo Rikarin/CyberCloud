@@ -1,10 +1,10 @@
 using CyberCloud.Core.Time;
-using k8s;
-using k8s.Autorest;
-using k8s.Models;
 using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Text;
+using k8s;
+using k8s.Autorest;
+using k8s.Models;
 
 namespace CyberCloud.Kubernetes.Apply;
 
@@ -31,17 +31,20 @@ public interface IAgentCredentialStore {
 ///     What the agent host needs from inside a pod, built where <c>k8s.*</c> is allowed to be named.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>In <c>CyberCloud.Kubernetes.Apply</c> and not beside the tunnel, because
-///     <c>AssemblyGraphTests.OnlyTheApplyLayerNamesKubernetesTypes</c> confines every <c>k8s.*</c>
-///     signature to this namespace.</b> The tunnel namespace stays free of them, which is what
+///     ⚠
+///     <b>
+///         In <c>CyberCloud.Kubernetes.Apply</c> and not beside the tunnel, because
+///         <c>AssemblyGraphTests.OnlyTheApplyLayerNamesKubernetesTypes</c> confines every <c>k8s.*</c>
+///         signature to this namespace.
+///     </b> The tunnel namespace stays free of them, which is what
 ///     lets <c>TunnelAgent</c> be the same bytes in a test and in the pod.
 ///     <para>
-///     ⚠ <b>The agent host binds none of this assembly's Kubernetes types, on purpose.</b>
-///     docs/plan/03 § Assembly graph rules, rule 3 forbids every shipping assembly outside this
-///     family — a host included — from binding <c>k8s.Models</c>, and the Architecture gate reads
-///     the AssemblyRef table to check. So the in-cluster configuration, the API client and the
-///     Secret store are all built here, and the host sees an <see cref="IKubeApiClient" /> and an
-///     <see cref="IAgentCredentialStore" />.
+///         ⚠ <b>The agent host binds none of this assembly's Kubernetes types, on purpose.</b>
+///         docs/plan/03 § Assembly graph rules, rule 3 forbids every shipping assembly outside this
+///         family — a host included — from binding <c>k8s.Models</c>, and the Architecture gate reads
+///         the AssemblyRef table to check. So the in-cluster configuration, the API client and the
+///         Secret store are all built here, and the host sees an <see cref="IKubeApiClient" /> and an
+///         <see cref="IAgentCredentialStore" />.
 ///     </para>
 /// </remarks>
 public static class InClusterAgent {
@@ -73,7 +76,7 @@ public static class InClusterAgent {
         var ns = string.IsNullOrEmpty(config.Namespace) ? "default" : config.Namespace;
 
         return (
-            new KubeApiClient(client, clusterId, clock, ownsClient: false, logger: logger),
+            new KubeApiClient(client, clusterId, clock, false, logger),
             new SecretAgentCredentialStore(
                 client,
                 ns,
@@ -100,7 +103,11 @@ public static class InClusterAgent {
     sealed class SecretAgentCredentialStore(IKubernetes client, string ns, string name) : IAgentCredentialStore {
         public async Task<string?> ReadAsync(CancellationToken cancellationToken = default) {
             try {
-                var secret = await client.CoreV1.ReadNamespacedSecretAsync(name, ns, cancellationToken: cancellationToken)
+                var secret = await client.CoreV1.ReadNamespacedSecretAsync(
+                    name,
+                    ns,
+                    cancellationToken: cancellationToken
+                )
                     .ConfigureAwait(false);
 
                 return secret.Data is { } data && data.TryGetValue(CredentialKey, out var bytes)
@@ -117,7 +124,7 @@ public static class InClusterAgent {
             var secret = new V1Secret {
                 ApiVersion = "v1",
                 Kind = "Secret",
-                Metadata = new V1ObjectMeta { Name = name, NamespaceProperty = ns },
+                Metadata = new() { Name = name, NamespaceProperty = ns },
                 Type = "Opaque",
                 Data = new Dictionary<string, byte[]>(StringComparer.Ordinal) {
                     [CredentialKey] = Encoding.UTF8.GetBytes(credential)

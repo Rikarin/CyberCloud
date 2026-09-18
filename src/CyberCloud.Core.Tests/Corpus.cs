@@ -33,7 +33,7 @@ static class Corpus {
         ("||", "the Orleans.Multitenant escaped separator"),
         ("/", "the resource id path separator AND the grain key separator"),
         ("~", "the Orleans.Multitenant leading-character escape"),
-        ("\\", "a separator on the other operating system, and a JSON escape"),
+        ("""\""", "a separator on the other operating system, and a JSON escape"),
         ("\n", "splits a log line in two; the second half is attacker-controlled"),
         ("\r", "the same, on the other line ending"),
         ("\0", "terminates a C string; everything after it disappears in the wrong consumer"),
@@ -49,8 +49,8 @@ static class Corpus {
         ("｜", "FULLWIDTH VERTICAL LINE — a look-alike for '|'"),
         ("⁄", "FRACTION SLASH — another look-alike for '/'"),
         ("е", "CYRILLIC SMALL LETTER IE — a look-alike for 'e'"),
-        ("​", "ZERO WIDTH SPACE — invisible everywhere"),
-        ("﻿", "ZERO WIDTH NO-BREAK SPACE — invisible everywhere"),
+        ("\u200B", "ZERO WIDTH SPACE — invisible everywhere"),
+        ("\uFEFF", "ZERO WIDTH NO-BREAK SPACE — invisible everywhere"),
         ("A", "upper case, which docs/plan/06 § Identifiers forbids"),
         ("_", "legal in a Kubernetes annotation, illegal in a DNS-1123 label")
     ];
@@ -222,7 +222,7 @@ static class Corpus {
         var builder = new StringBuilder(value.Length + 8);
         foreach (var c in value) {
             if (char.IsControl(c) || c > 0x7E) {
-                builder.Append("\\u").Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
+                builder.Append("""\u""").Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
             } else {
                 builder.Append(c);
             }

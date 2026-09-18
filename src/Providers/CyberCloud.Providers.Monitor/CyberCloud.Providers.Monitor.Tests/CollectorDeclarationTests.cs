@@ -35,7 +35,7 @@ public sealed partial class CollectorDeclarationTests {
         var registry = ProviderRegistry.Build([new MonitorProvider()]);
         registry.TryGetType(MonitorCollectors.Type, out var registration).ShouldBeTrue();
 
-        var action = registration.Actions.Single(x => x.Name == MonitorCollectors.ListEndpointsAction);
+        var action = registration.Actions.Single(static x => x.Name == MonitorCollectors.ListEndpointsAction);
 
         // ⚠ NOT secret, and that is a statement about the collector's ingress rather than an
         // oversight: an in-cluster address is not a credential, and nothing authenticates a workload
@@ -77,12 +77,12 @@ public sealed partial class CollectorDeclarationTests {
         // ⚠ The one cross-property fact ResourceSchema cannot state. A collector with nothing to
         // listen on is a pod that exports nothing; the API accepts the body and the first pass refuses
         // it by name.
-        using var body = JsonDocument.Parse(MonitorCollectors.Body(ClusterId, otlpGrpc: false, otlpHttp: false));
+        using var body = JsonDocument.Parse(MonitorCollectors.Body(ClusterId, false, false));
 
         MonitorCollectors.Schema2026.Validate(body.RootElement, allowTags: true).IsSuccess.ShouldBeTrue();
         MonitorCollectors.ReceiverProblem(body.RootElement).ShouldNotBeNull();
 
-        using var oneOn = JsonDocument.Parse(MonitorCollectors.Body(ClusterId, otlpGrpc: false));
+        using var oneOn = JsonDocument.Parse(MonitorCollectors.Body(ClusterId, false));
         MonitorCollectors.ReceiverProblem(oneOn.RootElement).ShouldBeNull();
     }
 
@@ -95,7 +95,10 @@ public sealed partial class CollectorDeclarationTests {
         // plausible-looking placeholder is what cloud-shell records; this one was resolved against
         // Docker Hub and SOURCE carries the command and the output.
         BundlePin().IsMatch(MonitorCollectors.Image).ShouldBeTrue(MonitorCollectors.Image);
-        MonitorCollectors.Image.ShouldNotContain("0000000000000000", customMessage: "a placeholder digest is a reference nothing can pull");
+        MonitorCollectors.Image.ShouldNotContain(
+            "0000000000000000",
+            customMessage: "a placeholder digest is a reference nothing can pull"
+        );
     }
 
     [Fact]
@@ -104,7 +107,7 @@ public sealed partial class CollectorDeclarationTests {
         // ./build.sh Charts carries it through untouched and compares it with nothing. Two pins is a
         // chart running one digest and a reconciler another.
         var values = Embedded("monitor-collector.values.yaml");
-        var line = values.Split('\n').Single(x => x.StartsWith("image: ", StringComparison.Ordinal));
+        var line = values.Split('\n').Single(static x => x.StartsWith("image: ", StringComparison.Ordinal));
 
         line["image: ".Length..].Trim().ShouldBe(MonitorCollectors.Image);
     }
@@ -133,8 +136,8 @@ public sealed partial class CollectorDeclarationTests {
         // pod held in CreateContainerConfigError naming a ConfigMap that will never appear.
         var helpers = Embedded("monitor-collector.helpers.tpl");
 
-        helpers.ShouldContain("printf \"monitor-%s\" .Values.platform.workspace");
-        helpers.ShouldContain("printf \"monitor-%s-ingest\" .Values.platform.workspace");
+        helpers.ShouldContain("""printf "monitor-%s" .Values.platform.workspace""");
+        helpers.ShouldContain("""printf "monitor-%s-ingest" .Values.platform.workspace""");
 
         MonitorWorkspaces.RowName("x").ShouldBe("monitor-x");
         MonitorWorkspaces.KeySecretName("x").ShouldBe("monitor-x-ingest");
@@ -147,7 +150,8 @@ public sealed partial class CollectorDeclarationTests {
         // the contract's is C#, and the two are the same file only if somebody checks — a drifted
         // exporter key here is a chart that lints clean and a collector that refuses to start.
         var helpers = Embedded("monitor-collector.helpers.tpl");
-        var define = helpers[(helpers.IndexOf("{{- define \"monitorCollector.config\" -}}", StringComparison.Ordinal) + "{{- define \"monitorCollector.config\" -}}".Length)..];
+        var define = helpers[(helpers.IndexOf("""{{- define "monitorCollector.config" -}}""", StringComparison.Ordinal)
+            + """{{- define "monitorCollector.config" -}}""".Length)..];
         define = define[..define.IndexOf("{{- end -}}", StringComparison.Ordinal)];
 
         // The chart's conditionals and includes, resolved the way Helm would for the default body.
@@ -155,15 +159,19 @@ public sealed partial class CollectorDeclarationTests {
             .Replace("{{- if .Values.receivers.otlpGrpc }}", string.Empty, StringComparison.Ordinal)
             .Replace("{{- if .Values.receivers.otlpHttp }}", string.Empty, StringComparison.Ordinal)
             .Replace("{{- end }}", string.Empty, StringComparison.Ordinal)
-            .Replace("{{ include \"monitorCollector.vmUser\" . }}", MonitorWorkspaces.VmUserName("prod"), StringComparison.Ordinal);
+            .Replace(
+                """{{ include "monitorCollector.vmUser" . }}""",
+                MonitorWorkspaces.VmUserName("prod"),
+                StringComparison.Ordinal
+            );
 
-        var chartLines = rendered.Split('\n').Select(x => x.TrimEnd()).Where(x => x.Length > 0).ToArray();
+        var chartLines = rendered.Split('\n').Select(static x => x.TrimEnd()).Where(static x => x.Length > 0).ToArray();
 
         using var body = JsonDocument.Parse(MonitorCollectors.Body(ClusterId));
         var contractLines = MonitorCollectors.CollectorConfig(Address("gateway", "prod"), body.RootElement)
             .Split('\n')
-            .Select(x => x.TrimEnd())
-            .Where(x => x.Length > 0)
+            .Select(static x => x.TrimEnd())
+            .Where(static x => x.Length > 0)
             .ToArray();
 
         chartLines.ShouldBe(contractLines);
@@ -198,15 +206,17 @@ public sealed partial class CollectorDeclarationTests {
         using var body = JsonDocument.Parse(MonitorCollectors.Body(ClusterId));
         var id = Address("gateway", "prod");
 
-        MonitorCollectors.CollectorConfig(id, body.RootElement).ShouldBe(MonitorCollectors.CollectorConfig(id, body.RootElement));
+        MonitorCollectors.CollectorConfig(id, body.RootElement)
+            .ShouldBe(MonitorCollectors.CollectorConfig(id, body.RootElement));
         MonitorCollectors.ConfigHash(id, body.RootElement).ShouldStartWith("sha256:");
 
-        using var httpOnly = JsonDocument.Parse(MonitorCollectors.Body(ClusterId, otlpGrpc: false));
+        using var httpOnly = JsonDocument.Parse(MonitorCollectors.Body(ClusterId, false));
         var config = MonitorCollectors.CollectorConfig(id, httpOnly.RootElement);
 
         config.ShouldNotContain("grpc:");
         config.ShouldContain("http:");
-        MonitorCollectors.ConfigHash(id, httpOnly.RootElement).ShouldNotBe(MonitorCollectors.ConfigHash(id, body.RootElement));
+        MonitorCollectors.ConfigHash(id, httpOnly.RootElement)
+            .ShouldNotBe(MonitorCollectors.ConfigHash(id, body.RootElement));
     }
 
     // ── The Deployment's wiring ───────────────────────────────────────────────────────────────
@@ -214,17 +224,21 @@ public sealed partial class CollectorDeclarationTests {
     [Fact]
     public void TheDeploymentReadsTheWorkspacesRowAndSecretByReferenceAndNoneIsOptional() {
         using var body = JsonDocument.Parse(MonitorCollectors.Body(ClusterId));
-        var deployment = JsonNode.Parse(MonitorCollectors.DeploymentJson(Address("gateway", "prod"), body.RootElement))!;
+        var deployment = JsonNode.Parse(
+            MonitorCollectors.DeploymentJson(Address("gateway", "prod"), body.RootElement)
+        )!;
         var container = deployment["spec"]!["template"]!["spec"]!["containers"]!.AsArray().Single()!;
-        var env = container["env"]!.AsArray().Select(x => x!.AsObject()).ToList();
+        var env = container["env"]!.AsArray().Select(static x => x!.AsObject()).ToList();
 
-        env.Select(x => x["name"]!.GetValue<string>())
+        env.Select(static x => x["name"]!.GetValue<string>())
             .ShouldBe([MonitorWorkspaces.EnvAccountId, MonitorWorkspaces.EnvDatabase, MonitorWorkspaces.EnvIngestKey]);
 
-        env[0]["valueFrom"]!["configMapKeyRef"]!["name"]!.GetValue<string>().ShouldBe(MonitorWorkspaces.RowName("prod"));
+        env[0]["valueFrom"]!["configMapKeyRef"]!["name"]!.GetValue<string>()
+            .ShouldBe(MonitorWorkspaces.RowName("prod"));
         env[0]["valueFrom"]!["configMapKeyRef"]!["key"]!.GetValue<string>().ShouldBe(MonitorWorkspaces.RowKeyAccountId);
         env[1]["valueFrom"]!["configMapKeyRef"]!["key"]!.GetValue<string>().ShouldBe(MonitorWorkspaces.RowKeyDatabase);
-        env[2]["valueFrom"]!["secretKeyRef"]!["name"]!.GetValue<string>().ShouldBe(MonitorWorkspaces.KeySecretName("prod"));
+        env[2]["valueFrom"]!["secretKeyRef"]!["name"]!.GetValue<string>()
+            .ShouldBe(MonitorWorkspaces.KeySecretName("prod"));
         env[2]["valueFrom"]!["secretKeyRef"]!["key"]!.GetValue<string>().ShouldBe(MonitorWorkspaces.IngestKeyField);
 
         // ⚠ Not optional. An optional reference starts the pod with three empty strings and a
@@ -240,8 +254,12 @@ public sealed partial class CollectorDeclarationTests {
 
         container["image"]!.GetValue<string>().ShouldBe(MonitorCollectors.Image);
         container["securityContext"]!["readOnlyRootFilesystem"]!.GetValue<bool>().ShouldBeTrue();
-        deployment["spec"]!["template"]!["spec"]!["securityContext"]!["runAsUser"]!.GetValue<int>().ShouldBe(MonitorCollectors.CollectorUid);
-        container["volumeMounts"]!.AsArray().Single()!["mountPath"]!.GetValue<string>().ShouldBe(MonitorCollectors.ConfigDirectory);
+        deployment["spec"]!["template"]!["spec"]!["securityContext"]!["runAsUser"]!.GetValue<int>()
+            .ShouldBe(MonitorCollectors.CollectorUid);
+        container["volumeMounts"]!.AsArray()
+            .Single()!["mountPath"]!
+            .GetValue<string>()
+            .ShouldBe(MonitorCollectors.ConfigDirectory);
     }
 
     [Fact]
@@ -249,15 +267,19 @@ public sealed partial class CollectorDeclarationTests {
         var id = Address("gateway", "prod");
 
         using var both = JsonDocument.Parse(MonitorCollectors.Body(ClusterId));
-        Ports(MonitorCollectors.ServiceJson(id, both.RootElement)).ShouldBe([MonitorCollectors.OtlpGrpcPort, MonitorCollectors.OtlpHttpPort]);
+        Ports(MonitorCollectors.ServiceJson(id, both.RootElement)).ShouldBe(
+            [MonitorCollectors.OtlpGrpcPort, MonitorCollectors.OtlpHttpPort]
+        );
 
-        using var httpOnly = JsonDocument.Parse(MonitorCollectors.Body(ClusterId, otlpGrpc: false));
+        using var httpOnly = JsonDocument.Parse(MonitorCollectors.Body(ClusterId, false));
         Ports(MonitorCollectors.ServiceJson(id, httpOnly.RootElement)).ShouldBe([MonitorCollectors.OtlpHttpPort]);
 
         // And Matches judges the Service on exactly that set — a receiver switched off that left its
         // port behind is a connection refused a tenant reports as an outage.
-        MonitorCollectors.Matches(MonitorCollectors.ServiceJson(id, both.RootElement), id, httpOnly.RootElement).ShouldBeFalse();
-        MonitorCollectors.Matches(MonitorCollectors.ServiceJson(id, httpOnly.RootElement), id, httpOnly.RootElement).ShouldBeTrue();
+        MonitorCollectors.Matches(MonitorCollectors.ServiceJson(id, both.RootElement), id, httpOnly.RootElement)
+            .ShouldBeFalse();
+        MonitorCollectors.Matches(MonitorCollectors.ServiceJson(id, httpOnly.RootElement), id, httpOnly.RootElement)
+            .ShouldBeTrue();
     }
 
     [Fact]
@@ -267,7 +289,8 @@ public sealed partial class CollectorDeclarationTests {
 
         using var both = JsonDocument.Parse(MonitorCollectors.Body(ClusterId));
         MonitorCollectors.OtlpGrpcEndpoint(ns, id, both.RootElement).ShouldBe("collector-prod-gateway.sub-rg.svc:4317");
-        MonitorCollectors.OtlpHttpEndpoint(ns, id, both.RootElement).ShouldBe("http://collector-prod-gateway.sub-rg.svc:4318");
+        MonitorCollectors.OtlpHttpEndpoint(ns, id, both.RootElement)
+            .ShouldBe("http://collector-prod-gateway.sub-rg.svc:4318");
 
         using var grpcOnly = JsonDocument.Parse(MonitorCollectors.Body(ClusterId, otlpHttp: false));
         MonitorCollectors.OtlpHttpEndpoint(ns, id, grpcOnly.RootElement).ShouldBe(string.Empty);
@@ -280,7 +303,7 @@ public sealed partial class CollectorDeclarationTests {
         MonitorCollectors.ObjectNameOf(Address("gateway", "prod")).ShouldBe("collector-prod-gateway");
         MonitorCollectors.ObjectNameOf(Address("gateway", "staging")).ShouldBe("collector-staging-gateway");
 
-        Should.Throw<ArgumentException>(() => MonitorCollectors.ObjectNameOf(Address("orphan")));
+        Should.Throw<ArgumentException>(static () => MonitorCollectors.ObjectNameOf(Address("orphan")));
     }
 
     [Fact]
@@ -288,22 +311,28 @@ public sealed partial class CollectorDeclarationTests {
         using var body = JsonDocument.Parse(MonitorCollectors.Body(ClusterId));
         var id = Address("gateway", "prod");
 
-        MonitorCollectors.Matches(MonitorCollectors.ConfigMapJson(id, body.RootElement), id, body.RootElement).ShouldBeTrue();
-        MonitorCollectors.Matches(MonitorCollectors.DeploymentJson(id, body.RootElement), id, body.RootElement).ShouldBeTrue();
-        MonitorCollectors.Matches(MonitorCollectors.ServiceJson(id, body.RootElement), id, body.RootElement).ShouldBeTrue();
+        MonitorCollectors.Matches(MonitorCollectors.ConfigMapJson(id, body.RootElement), id, body.RootElement)
+            .ShouldBeTrue();
+        MonitorCollectors.Matches(MonitorCollectors.DeploymentJson(id, body.RootElement), id, body.RootElement)
+            .ShouldBeTrue();
+        MonitorCollectors.Matches(MonitorCollectors.ServiceJson(id, body.RootElement), id, body.RootElement)
+            .ShouldBeTrue();
         MonitorCollectors.Matches("""{"kind":"Pod","metadata":{"name":"x"}}""", id, body.RootElement).ShouldBeFalse();
         MonitorCollectors.Matches("""{"metadata":{"name":"x"}}""", id, body.RootElement).ShouldBeFalse();
 
         // A changed replica count is a Deployment that no longer matches — the hash alone would not see it.
         using var two = JsonDocument.Parse(MonitorCollectors.Body(ClusterId, replicas: 2));
-        MonitorCollectors.Matches(MonitorCollectors.DeploymentJson(id, body.RootElement), id, two.RootElement).ShouldBeFalse();
+        MonitorCollectors.Matches(MonitorCollectors.DeploymentJson(id, body.RootElement), id, two.RootElement)
+            .ShouldBeFalse();
 
         // ⚠ And so is a changed preset: the limits are what the vCPU and memory meters bill for, and a
         // drift the observer cannot see is a tenant billed for a size the pod does not have. The
         // review of #32 noted both pod-shaped types ignored it.
         using var large = JsonDocument.Parse(MonitorCollectors.Body(ClusterId, preset: "c1.large"));
-        MonitorCollectors.Matches(MonitorCollectors.DeploymentJson(id, body.RootElement), id, large.RootElement).ShouldBeFalse();
-        MonitorCollectors.Matches(MonitorCollectors.DeploymentJson(id, large.RootElement), id, large.RootElement).ShouldBeTrue();
+        MonitorCollectors.Matches(MonitorCollectors.DeploymentJson(id, body.RootElement), id, large.RootElement)
+            .ShouldBeFalse();
+        MonitorCollectors.Matches(MonitorCollectors.DeploymentJson(id, large.RootElement), id, large.RootElement)
+            .ShouldBeTrue();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────
@@ -317,19 +346,26 @@ public sealed partial class CollectorDeclarationTests {
             : new ResourceId(tenant, subscription, "prod", MonitorCollectors.Type, name, Guid.NewGuid(), workspace);
     }
 
-    static int[] Ports(string serviceJson) =>
-        [.. JsonNode.Parse(serviceJson)!["spec"]!["ports"]!.AsArray().Select(x => x!["port"]!.GetValue<int>())];
+    static int[] Ports(string serviceJson) => [
+        .. JsonNode.Parse(serviceJson)!["spec"]!["ports"]!.AsArray().Select(static x => x!["port"]!.GetValue<int>())
+    ];
 
     static string Embedded(string logicalName) {
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(logicalName)
-            ?? throw new InvalidOperationException($"{logicalName} is not embedded. See the EmbeddedResource items in this project's .csproj.");
+            ?? throw new InvalidOperationException(
+                $"{logicalName} is not embedded. See the EmbeddedResource items in this project's .csproj."
+            );
 
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd().Replace("\r\n", "\n", StringComparison.Ordinal);
     }
 
     static Regex PresetRow(string preset) =>
-        new($"\"{Regex.Escape(preset)}\"\\s+\\(dict \"cpu\" \"(?<cpu>[^\"]+)\"\\s+\"memory\" \"(?<memory>[^\"]+)\"\\)", RegexOptions.None, TimeSpan.FromSeconds(1));
+        new(
+            $"\"{Regex.Escape(preset)}\"\\s+\\(dict \"cpu\" \"(?<cpu>[^\"]+)\"\\s+\"memory\" \"(?<memory>[^\"]+)\"\\)",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(1)
+        );
 
     [GeneratedRegex(@"^[a-z0-9./_-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$")]
     private static partial Regex BundlePin();

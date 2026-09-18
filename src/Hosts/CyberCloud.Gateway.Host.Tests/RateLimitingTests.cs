@@ -1,8 +1,8 @@
 using CyberCloud.Gateway.Host.Http;
 using CyberCloud.Gateway.Host.RateLimiting;
-using CyberCloud.ServiceDefaults.RateLimiting;
 using CyberCloud.Gateway.Host.Routing;
 using CyberCloud.Gateway.Host.Tests.Infrastructure;
+using CyberCloud.ServiceDefaults.RateLimiting;
 using NSubstitute;
 
 namespace CyberCloud.Gateway.Host.Tests;
@@ -110,7 +110,7 @@ public sealed class RateLimitingTests {
             "PUT",
             GatewayHarness.ResourcePath(GatewayHarness.TenantA),
             gateway.Token(GatewayHarness.TenantA),
-            body: "{\"properties\":{}}"
+            body: """{"properties":{}}"""
         );
 
         response.Header(GatewayHeaders.RemainingSubscriptionWrites).ShouldBe("1199");

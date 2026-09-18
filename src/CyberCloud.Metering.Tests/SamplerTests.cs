@@ -77,7 +77,7 @@ public sealed class SamplerTests(MeteringCluster cluster) {
             .GetValueOrThrow();
 
         pending.Length.ShouldBe(2);
-        pending.Select(x => x.IdempotencyKey).Distinct(StringComparer.Ordinal).Count().ShouldBe(2);
+        pending.Select(static x => x.IdempotencyKey).Distinct(StringComparer.Ordinal).Count().ShouldBe(2);
     }
 
     /// <summary>

@@ -79,7 +79,10 @@ public sealed class RecordingApiClient : IKubeApiClient {
     public List<KubeCommand> Applies { get; } = [];
 
     /// <inheritdoc />
-    public async Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) {
+    public async Task<Result<ApplyOutcome>> ApplyAsync(
+        KubeCommand command,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(command);
 
         if (ThrowOnApply is not null) {

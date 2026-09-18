@@ -6,8 +6,11 @@ namespace CyberCloud.Kubernetes.Tunnel;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Durable, and on <c>durable-grains.txt</c> for a reason the list's own header asks
-///         for.</b> The test there is "can this be rebuilt". <see cref="CredentialHash" /> cannot: the
+///         ⚠
+///         <b>
+///             Durable, and on <c>durable-grains.txt</c> for a reason the list's own header asks
+///             for.
+///         </b> The test there is "can this be rebuilt". <see cref="CredentialHash" /> cannot: the
 ///         plaintext exists in one place, a Secret in the tenant's cluster, and losing the hash
 ///         means every connected cluster's agent presents a credential the platform no longer
 ///         recognises. The rebuild is the tenant re-running <c>listInstallCommand</c> and
@@ -15,8 +18,11 @@ namespace CyberCloud.Kubernetes.Tunnel;
 ///         customer-visible outage rather than a cache miss.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Hashes, never plaintext, and no member here ends in <c>Token</c>, <c>Secret</c> or
-///         <c>Key</c>.</b> CC1005 refuses a secret-shaped member in grain state; what is here would
+///         ⚠
+///         <b>
+///             Hashes, never plaintext, and no member here ends in <c>Token</c>, <c>Secret</c> or
+///             <c>Key</c>.
+///         </b> CC1005 refuses a secret-shaped member in grain state; what is here would
 ///         pass a review even without the rule, because a SHA-256 of a 256-bit random value admits
 ///         nobody. See <c>AgentCredentials</c>.
 ///     </para>

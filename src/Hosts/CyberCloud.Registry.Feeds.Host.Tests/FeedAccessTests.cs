@@ -42,23 +42,30 @@ public sealed class FeedAccessTests(FeedsHostFixture host) {
         var token = TestContext.Current.CancellationToken;
 
         // Bearer — npm's shape.
-        using (var bearer = host.Client(host.Alice))
-        using (var response = await bearer.GetAsync(Index, token)) {
-            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using (var bearer = host.Client(host.Alice)) {
+            using (var response = await bearer.GetAsync(Index, token)) {
+                response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            }
         }
 
         // Basic with the token as the password — Maven's and `dotnet restore`'s shape. The username
         // is whatever the tenant wrote, and is ignored.
-        using (var basic = host.BasicClient(host.Alice, username: "anything-at-all"))
-        using (var response = await basic.GetAsync(Index, token)) {
-            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using (var basic = host.BasicClient(host.Alice, "anything-at-all")) {
+            using (var response = await basic.GetAsync(Index, token)) {
+                response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            }
         }
 
         // X-NuGet-ApiKey — `dotnet nuget push`'s shape.
-        using (var client = host.Client())
-        using (var request = new HttpRequestMessage(HttpMethod.Get, Index).WithHeader("X-NuGet-ApiKey", host.Alice))
-        using (var response = await client.SendAsync(request, token)) {
-            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using (var client = host.Client()) {
+            using (var request = new HttpRequestMessage(HttpMethod.Get, Index).WithHeader(
+                       "X-NuGet-ApiKey",
+                       host.Alice
+                   )) {
+                using (var response = await client.SendAsync(request, token)) {
+                    response.StatusCode.ShouldBe(HttpStatusCode.OK);
+                }
+            }
         }
     }
 
@@ -66,15 +73,21 @@ public sealed class FeedAccessTests(FeedsHostFixture host) {
     public async Task ABasicCredentialWithAnUnknownPasswordIs401AndAMalformedOneToo() {
         var token = TestContext.Current.CancellationToken;
 
-        using (var basic = host.BasicClient("cc_" + Guid.NewGuid().ToString("N")))
-        using (var response = await basic.GetAsync(Index, token)) {
-            response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        using (var basic = host.BasicClient("cc_" + Guid.NewGuid().ToString("N"))) {
+            using (var response = await basic.GetAsync(Index, token)) {
+                response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+            }
         }
 
-        using (var client = host.Client())
-        using (var request = new HttpRequestMessage(HttpMethod.Get, Index).WithHeader("Authorization", "Basic not-base64!"))
-        using (var response = await client.SendAsync(request, token)) {
-            response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        using (var client = host.Client()) {
+            using (var request = new HttpRequestMessage(HttpMethod.Get, Index).WithHeader(
+                       "Authorization",
+                       "Basic not-base64!"
+                   )) {
+                using (var response = await client.SendAsync(request, token)) {
+                    response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+                }
+            }
         }
     }
 
@@ -100,7 +113,8 @@ public sealed class FeedAccessTests(FeedsHostFixture host) {
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
         using var own = await client.GetAsync(
-            FeedsHostFixture.Feed(FeedKind.NuGet, FeedsHostFixture.NuGetFeed, FeedsHostFixture.OtherSubscription) + "/v3/index.json",
+            FeedsHostFixture.Feed(FeedKind.NuGet, FeedsHostFixture.NuGetFeed, FeedsHostFixture.OtherSubscription)
+            + "/v3/index.json",
             TestContext.Current.CancellationToken
         );
 

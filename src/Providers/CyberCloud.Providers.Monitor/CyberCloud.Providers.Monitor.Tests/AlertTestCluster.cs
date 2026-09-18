@@ -24,7 +24,9 @@ namespace CyberCloud.Providers.Monitor.Tests;
 ///     each other's script.
 /// </remarks>
 public sealed class ScriptedQuerySeam : IAlertQuerySeam {
-    readonly ConcurrentDictionary<string, Func<AlertQuery, Result<AlertQueryResult>>> scripts = new(StringComparer.Ordinal);
+    readonly ConcurrentDictionary<string, Func<AlertQuery, Result<AlertQueryResult>>> scripts =
+        new(StringComparer.Ordinal);
+
     readonly ConcurrentQueue<AlertQuery> asked = new();
 
     /// <summary>Every query, in the order it arrived.</summary>
@@ -34,7 +36,9 @@ public sealed class ScriptedQuerySeam : IAlertQuerySeam {
     /// <param name="workspacePath">The workspace's canonical path.</param>
     /// <param name="value">The value.</param>
     public void Answer(string workspacePath, double value) =>
-        scripts[workspacePath] = _ => Result<AlertQueryResult>.Success(new() { Samples = [new() { Labels = "{instance=\"web-1\"}", Value = value }] });
+        scripts[workspacePath] = _ => Result<AlertQueryResult>.Success(
+            new() { Samples = [new() { Labels = """{instance="web-1"}""", Value = value }] }
+        );
 
     /// <summary>Makes every query for a workspace answer these samples.</summary>
     /// <param name="workspacePath">The workspace's canonical path.</param>
@@ -54,8 +58,7 @@ public sealed class ScriptedQuerySeam : IAlertQuerySeam {
     /// </summary>
     /// <param name="workspacePath">The workspace's canonical path.</param>
     /// <param name="error">What is thrown.</param>
-    public void Throw(string workspacePath, Exception error) =>
-        scripts[workspacePath] = _ => throw error;
+    public void Throw(string workspacePath, Exception error) => scripts[workspacePath] = _ => throw error;
 
     /// <summary>
     ///     Makes every query for a workspace take this long on the silo's clock before answering one
@@ -68,7 +71,9 @@ public sealed class ScriptedQuerySeam : IAlertQuerySeam {
     public void Slow(string workspacePath, TimeSpan takes, double value) =>
         scripts[workspacePath] = _ => {
             AlertTestCluster.Clock.Advance(takes);
-            return Result<AlertQueryResult>.Success(new() { Samples = [new() { Labels = "{instance=\"web-1\"}", Value = value }] });
+            return Result<AlertQueryResult>.Success(
+                new() { Samples = [new() { Labels = """{instance="web-1"}""", Value = value }] }
+            );
         };
 
     /// <inheritdoc />
@@ -79,7 +84,10 @@ public sealed class ScriptedQuerySeam : IAlertQuerySeam {
         return Task.FromResult(
             scripts.TryGetValue(query.WorkspacePath, out var script)
                 ? script(query)
-                : Result<AlertQueryResult>.Failure(ErrorCode.InternalError, $"nothing is scripted for workspace '{query.WorkspacePath}'")
+                : Result<AlertQueryResult>.Failure(
+                    ErrorCode.InternalError,
+                    $"nothing is scripted for workspace '{query.WorkspacePath}'"
+                )
         );
     }
 }
@@ -158,8 +166,6 @@ public sealed class AlertTestCluster : IAsyncLifetime {
             await cluster.StopAllSilosAsync();
             await cluster.DisposeAsync();
         }
-
-        GC.SuppressFinalize(this);
     }
 
     // ── Addresses ──────────────────────────────────────────────────────────────────────────────
@@ -246,7 +252,7 @@ public sealed class AlertTestCluster : IAsyncLifetime {
             .GetGrain<IAlertEvaluatorGrain>(GrainKeys.Resource(MonitorAlertRules.EvaluatorIdFor(rule)));
 
         var rows = await table.ReadRows(grain.GetGrainId());
-        var row = rows.Reminders.SingleOrDefault(x => x.ReminderName == AlertEvaluatorGrain.ReminderName);
+        var row = rows.Reminders.SingleOrDefault(static x => x.ReminderName == AlertEvaluatorGrain.ReminderName);
         row.ShouldNotBeNull("there was no reminder row to drop");
 
         (await table.RemoveRow(row.GrainId, row.ReminderName, row.ETag)).ShouldBeTrue();
@@ -261,7 +267,10 @@ public sealed class AlertTestCluster : IAsyncLifetime {
     /// <summary>Runs the rule reconciler's observation over a body.</summary>
     public async Task<ObservedState> ObserveAsync(ResourceId id, string body) {
         using var desired = JsonDocument.Parse(body);
-        return await Reconciler().ObserveAsync(new(id, MonitorWorkspaces.V2026, desired.RootElement, string.Empty, null), Ct);
+        return await Reconciler().ObserveAsync(
+            new(id, MonitorWorkspaces.V2026, desired.RootElement, string.Empty, null),
+            Ct
+        );
     }
 
     /// <summary>Converges a rule and asserts it did.</summary>
@@ -290,7 +299,16 @@ public sealed class AlertTestCluster : IAsyncLifetime {
         using var empty = JsonDocument.Parse("{}");
 
         return new MonitorAlertRuleListInstancesHandler(Alerts).InvokeAsync(
-            new(rule, MonitorWorkspaces.V2026, MonitorAlertRules.ListInstancesAction, empty.RootElement, desired.RootElement, string.Empty, null, new InMemorySecretVault()),
+            new(
+                rule,
+                MonitorWorkspaces.V2026,
+                MonitorAlertRules.ListInstancesAction,
+                empty.RootElement,
+                desired.RootElement,
+                string.Empty,
+                null,
+                new InMemorySecretVault()
+            ),
             Ct
         );
     }
@@ -298,7 +316,16 @@ public sealed class AlertTestCluster : IAsyncLifetime {
     MonitorAlertRuleReconciler Reconciler() => new(Clock, Alerts);
 
     static ReconcileContext Context(ResourceId id, JsonElement desired, RecordingLog? log = null) =>
-        new(id, MonitorWorkspaces.V2026, desired, null, string.Empty, null, new InMemorySecretVault(), log ?? new RecordingLog());
+        new(
+            id,
+            MonitorWorkspaces.V2026,
+            desired,
+            null,
+            string.Empty,
+            null,
+            new InMemorySecretVault(),
+            log ?? new RecordingLog()
+        );
 
     sealed class Configurator : ISiloConfigurator {
         public void Configure(ISiloBuilder silo) {
@@ -306,7 +333,7 @@ public sealed class AlertTestCluster : IAsyncLifetime {
             silo.AddMemoryGrainStorage(StorageTiers.Hot);
             silo.UseInMemoryReminderService();
 
-            silo.ConfigureServices(services => {
+            silo.ConfigureServices(static services => {
                     services.AddSingleton<IClock>(Clock);
                     // Beside the refusing seams, not instead of them — the registry resolves by
                     // name, and every channel here says `provider: in-memory`.

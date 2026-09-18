@@ -32,7 +32,7 @@ public sealed class OpenSearchDeclarationTests {
         // ⚠ `listKeys` does NOT share the read permission. The credential it returns is the OpenSearch
         // ADMIN — the operator generates exactly one and does not scope it — so sharing `read` would
         // make every viewer of a search service a cluster administrator of it.
-        registration.Actions.Single(x => x.Name == OpenSearchServices.ListKeysAction)
+        registration.Actions.Single(static x => x.Name == OpenSearchServices.ListKeysAction)
             .Permission.ShouldNotBe(registration.ReadPermission);
     }
 
@@ -60,7 +60,7 @@ public sealed class OpenSearchDeclarationTests {
             + "have failed."
         );
 
-        registry.Types.Select(x => x.Type.ToString())
+        registry.Types.Select(static x => x.Type.ToString())
             .ShouldContain("CyberCloud.Search/services");
     }
 
@@ -77,7 +77,7 @@ public sealed class OpenSearchDeclarationTests {
 
         // Every derived meter publishes its formula and its read set — the price MeterDerivation
         // charges for putting a delegate on the quota path, and what OpenApiEmitter publishes.
-        foreach (var meter in registration.Meters.Where(x => x.Derivation is not null)) {
+        foreach (var meter in registration.Meters.Where(static x => x.Derivation is not null)) {
             meter.Derivation!.Expression.ShouldNotBeNullOrWhiteSpace(meter.Meter.ToString());
             meter.Derivation.Reads.ShouldNotBeEmpty(meter.Meter.ToString());
 
@@ -113,7 +113,7 @@ public sealed class OpenSearchDeclarationTests {
         // ⚠ SchemaProperty checks its own DefaultJson against its own constraints at construction, so
         // a default outside its @range cannot reach here. What THAT check cannot see is the whole
         // body: this walks each default back into an otherwise-valid body and validates the result.
-        foreach (var property in OpenSearchServices.Schema2026.Properties.Where(x => x.DefaultJson.Length > 0)) {
+        foreach (var property in OpenSearchServices.Schema2026.Properties.Where(static x => x.DefaultJson.Length > 0)) {
             using var body = JsonDocument.Parse(
                 Overridden(OpenSearchServices.Body(ClusterId), property.JsonPointer, property.DefaultJson)
             );
@@ -151,7 +151,7 @@ public sealed class OpenSearchDeclarationTests {
             + "says about masking it."
         );
 
-        OpenSearchServices.ListKeysResponse.Properties.Count(x => x.Secret).ShouldBe(1);
+        OpenSearchServices.ListKeysResponse.Properties.Count(static x => x.Secret).ShouldBe(1);
     }
 
     [Fact]
@@ -186,7 +186,7 @@ public sealed class OpenSearchDeclarationTests {
         // A preset the schema offers and the table does not is a body the API accepts and the meter
         // then refuses — a create that returns 500 for a value the schema advertised.
         OpenSearchServices.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/sizing/preset")
+            .Single(static x => x.JsonPointer == "/properties/sizing/preset")
             .AllowedValues
             .Order(StringComparer.Ordinal)
             .ShouldBe(OpenSearchServices.Presets.Keys.Order(StringComparer.Ordinal));
@@ -211,7 +211,7 @@ public sealed class OpenSearchDeclarationTests {
         // CliEmitter.Emit at generation, and GeneratedSurfaceTests over the embedded verb tree.
         CliTokens.Collisions(
             ProviderRegistry.Build([new SearchProvider()])
-                .Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+                .Types.Select(static x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
         )
             .ShouldBeEmpty();
 
@@ -265,12 +265,12 @@ public sealed class OpenSearchDeclarationTests {
 
         var coordinators = JsonNode.Parse(OpenSearchServices.NodePoolsJson(body.RootElement))!
             .AsArray()
-            .Single(x => x!["component"]!.GetValue<string>() == "coordinators")!;
+            .Single(static x => x!["component"]!.GetValue<string>() == "coordinators")!;
 
-        var roles = coordinators["roles"]!.AsArray().Select(x => x!.GetValue<string>()).ToArray();
+        var roles = coordinators["roles"]!.AsArray().Select(static x => x!.GetValue<string>()).ToArray();
 
         roles.ShouldNotBeEmpty(
-            "an empty roles list reaches the operator's `nodeRolesValue = \"[]\"` branch, and a node "
+            """an empty roles list reaches the operator's `nodeRolesValue = "[]"` branch, and a node """
             + "OpenSearch cannot parse roles for joins as a default node."
         );
 
@@ -289,10 +289,10 @@ public sealed class OpenSearchDeclarationTests {
 
         var masters = JsonNode.Parse(OpenSearchServices.NodePoolsJson(body.RootElement))!
             .AsArray()
-            .Single(x => x!["component"]!.GetValue<string>() == "masters")!;
+            .Single(static x => x!["component"]!.GetValue<string>() == "masters")!;
 
         masters["roles"]!.AsArray()
-            .Select(x => x!.GetValue<string>())
+            .Select(static x => x!.GetValue<string>())
             .ShouldBe(["cluster_manager"]);
 
         // ⚠ And a cluster-manager node gets a volume, because the cluster metadata is the only copy of
@@ -409,7 +409,7 @@ public sealed class OpenSearchDeclarationTests {
     }
 
     /// <summary>The <c>component</c> of each pool, in order.</summary>
-    static string[] Components(JsonArray pools) => [.. pools.Select(x => x!["component"]!.GetValue<string>())];
+    static string[] Components(JsonArray pools) => [.. pools.Select(static x => x!["component"]!.GetValue<string>())];
 
     /// <summary>A body with one pointer replaced by a raw JSON value.</summary>
     static string Overridden(string body, string pointer, string valueJson) {

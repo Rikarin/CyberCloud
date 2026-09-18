@@ -43,7 +43,7 @@ public static class MeteringSiloBuilderExtensions {
     public static ISiloBuilder AddCyberCloudMetering(this ISiloBuilder silo) {
         ArgumentNullException.ThrowIfNull(silo);
 
-        return silo.ConfigureServices(services => {
+        return silo.ConfigureServices(static services => {
                 services.TryAddSingleton<IClock, SystemClock>();
                 services.TryAddSingleton<IUsageSink, UnavailableUsageSink>();
                 services.TryAddSingleton<IMeteredResourceSource, UnavailableMeteredResourceSource>();

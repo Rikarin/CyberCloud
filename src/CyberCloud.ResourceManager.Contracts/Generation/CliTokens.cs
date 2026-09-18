@@ -101,14 +101,14 @@ public static class CliTokens {
         // ⚠ Ordered, so which of a colliding pair is reported as "already" does not depend on the
         // order providers happened to be discovered in. A message that changes between runs is a
         // message somebody stops trusting.
-        foreach (var declaration in declarations.OrderBy(x => x.ResourceType, StringComparer.Ordinal)) {
+        foreach (var declaration in declarations.OrderBy(static x => x.ResourceType, StringComparer.Ordinal)) {
             var group = GroupOf(declaration.ProviderNamespace);
 
             if (!scopes.TryGetValue(group, out var taken)) {
                 // ⚠ Seeded with the group's own key. The group command's token dictionary holds its
                 // own name, so a short name equal to it collides — `cyc network network` throws where
                 // `cyc monitor network` does not.
-                taken = new Dictionary<string, string>(StringComparer.Ordinal) {
+                taken = new(StringComparer.Ordinal) {
                     [group] = $"the group key '{group}' produces from the namespace "
                         + $"'{declaration.ProviderNamespace}'"
                 };

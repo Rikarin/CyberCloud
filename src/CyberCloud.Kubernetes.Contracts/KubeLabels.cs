@@ -144,8 +144,11 @@ public static class KubeLabels {
     ///         is, and the truth stays in the grain.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Two costs of keeping it on the object, named so nobody discovers them in
-    ///         production.</b> First, size: the API server caps an object's annotations at 256 KiB in
+    ///         ⚠
+    ///         <b>
+    ///             Two costs of keeping it on the object, named so nobody discovers them in
+    ///             production.
+    ///         </b> First, size: the API server caps an object's annotations at 256 KiB in
     ///         total, and every co-writer's whole fragment sits there — a peering's is a few hundred
     ///         bytes, so a <c>Vpc</c> holds hundreds before the cap bites, but a co-writer that stored
     ///         a large slice would be refused by the API server on the <i>next</i> co-writer's apply,

@@ -663,8 +663,11 @@ public sealed class ShowEgressHandler(IClock clock) : IResourceActionHandler {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>TWO OBJECTS AND NEITHER IS THIS RESOURCE'S, WHICH IS WHY "WRITTEN" IS A COLUMN AT
-///         ALL.</b> Every other action in this family reads one object the resource owns, and the
+///         ⚠
+///         <b>
+///             TWO OBJECTS AND NEITHER IS THIS RESOURCE'S, WHICH IS WHY "WRITTEN" IS A COLUMN AT
+///             ALL.
+///         </b> Every other action in this family reads one object the resource owns, and the
 ///         object existing is the resource existing. A peering is a slice of two networks' objects,
 ///         either of which can lose the slice without the peering resource changing state — a remote
 ///         network deleted, a hand edit, a co-writer's apply that carried the other peerings' fragments

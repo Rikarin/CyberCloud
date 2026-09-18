@@ -16,8 +16,11 @@ namespace CyberCloud.Providers.RecoveryServices;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE FIRST RECONCILER THAT READS THROUGH <see cref="ReconcileContext.View" />, AND
-///         EVERY ANSWER IT ACTS ON IS ONE THE VIEW GAVE.</b> For each item it asks the view twice:
+///         ⚠
+///         <b>
+///             THE FIRST RECONCILER THAT READS THROUGH <see cref="ReconcileContext.View" />, AND
+///             EVERY ANSWER IT ACTS ON IS ONE THE VIEW GAVE.
+///         </b> For each item it asks the view twice:
 ///         <see cref="IResourceView.ReadAsync" /> for the server's contract — its cluster id, its
 ///         provisioning state and the two backup pointers <see cref="RecoveryVaults.ServerBackupContract" />
 ///         reads — and <see cref="IResourceView.RenderedObjectsAsync" /> for the <i>address</i> of the
@@ -27,9 +30,15 @@ namespace CyberCloud.Providers.RecoveryServices;
 ///         Hard rule exists to make impossible to rely on.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A refused item FAILS the pass, at the item's pointer, and does not converge around
-///         it.</b> docs/plan/15 § Backup as a service: <i>"a backup system nobody can see the status
-///         of is a backup system that is quietly broken"</i>. A vault that reported
+///         ⚠
+///         <b>
+///             A refused item FAILS the pass, at the item's pointer, and does not converge around
+///             it.
+///         </b> docs/plan/15 § Backup as a service:
+///         <i>
+///             "a backup system nobody can see the status
+///             of is a backup system that is quietly broken"
+///         </i>. A vault that reported
 ///         <c>Succeeded</c> while one of its items was another tenant's, deleted, ungranted, on
 ///         another cluster, or a server with backups off would be exactly that. The failure names the
 ///         index — <c>/properties/protectedItems/{i}</c> — so the portal highlights the row, and the
@@ -50,8 +59,11 @@ namespace CyberCloud.Providers.RecoveryServices;
 ///         <c>retention-is-enforced-on-passes</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="IResourceWatch.SubscribeAsync" /> is called on every pass and a refusal
-///         does not fail it.</b> The watch is how the next pass learns which servers changed; a
+///         ⚠
+///         <b>
+///             <see cref="IResourceWatch.SubscribeAsync" /> is called on every pass and a refusal
+///             does not fail it.
+///         </b> The watch is how the next pass learns which servers changed; a
 ///         vault whose subscription could not be recorded still protects what it protects, and the
 ///         drift scan still finds a Cluster that moved. A context built by hand carries
 ///         <c>RefusingResourceWatch</c>, so a pass driven by a test reports the refusal and goes on —
@@ -106,14 +118,20 @@ public sealed class RecoveryVaultReconciler(IClock clock) : IResourceReconciler 
         // ── The watch: idempotent, every pass, never fatal ─────────────────────────────────────
         var subscribed = await context.Watch.SubscribeAsync(RecoveryVaults.PostgresServerType, cancellationToken);
         if (subscribed.TryGetError(out var watchError)) {
-            context.Log.Report("watch", $"could not subscribe to {RecoveryVaults.PostgresServerType} changes: {watchError.Message}");
+            context.Log.Report(
+                "watch",
+                $"could not subscribe to {RecoveryVaults.PostgresServerType} changes: {watchError.Message}"
+            );
         }
 
         if (context.ChangesDropped > 0) {
             // ⚠ The list is a hint about where to look, never the only record — IResourceWatch's
             // remarks. This reconciler rescans every item on every pass anyway, so a dropped event
             // costs nothing here; it is reported so the operation's progress says it happened.
-            context.Log.Report("watch", $"{context.ChangesDropped} change event(s) were dropped since the last pass; every item is re-read regardless");
+            context.Log.Report(
+                "watch",
+                $"{context.ChangesDropped} change event(s) were dropped since the last pass; every item is re-read regardless"
+            );
         }
 
         var paths = RecoveryVaults.ProtectedItemPaths(context.Desired);
@@ -150,11 +168,16 @@ public sealed class RecoveryVaultReconciler(IClock clock) : IResourceReconciler 
             context.Log.Report(
                 "applying",
                 $"scheduling backups of '{item.Name}' ({clusterName}) for vault '{context.Id.Name}'",
-                20 + (60 * index) / Math.Max(kept.Count, 1)
+                20 + 60 * index / Math.Max(kept.Count, 1)
             );
 
-            var applied = await Apply(context, cluster, item.Name, RecoveryVaults.ScheduledBackupJson(context.Id.Name, item.Name, clusterName, context.Desired))
-                .ApplyAsync(cancellationToken);
+            var applied = await Apply(
+                context,
+                cluster,
+                item.Name,
+                RecoveryVaults.ScheduledBackupJson(context.Id.Name, item.Name, clusterName, context.Desired)
+            )
+                    .ApplyAsync(cancellationToken);
 
             if (applied.TryGetError(out var applyError)) {
                 return ReconcileOutcome.FromFailure(applyError);
@@ -171,7 +194,12 @@ public sealed class RecoveryVaultReconciler(IClock clock) : IResourceReconciler 
         }
 
         // ── The schedules of items that left the body ───────────────────────────────────────────
-        var orphaned = await RemoveUnlistedAsync(context, cluster, [.. kept.Select(x => x.Item.Name)], cancellationToken);
+        var orphaned = await RemoveUnlistedAsync(
+            context,
+            cluster,
+            [.. kept.Select(static x => x.Item.Name)],
+            cancellationToken
+        );
         if (orphaned.TryGetError(out var orphanError)) {
             return ReconcileOutcome.FromFailure(orphanError);
         }
@@ -183,7 +211,10 @@ public sealed class RecoveryVaultReconciler(IClock clock) : IResourceReconciler 
 
             if (read.TryGetError(out var readError)) {
                 return readError.Code == ErrorCode.ResourceNotFound
-                    ? ReconcileOutcome.InProgress($"'{target}' was applied and is not readable back yet", TimeSpan.FromSeconds(5))
+                    ? ReconcileOutcome.InProgress(
+                        $"'{target}' was applied and is not readable back yet",
+                        TimeSpan.FromSeconds(5)
+                    )
                     : ReconcileOutcome.FromFailure(readError);
             }
 
@@ -275,7 +306,11 @@ public sealed class RecoveryVaultReconciler(IClock clock) : IResourceReconciler 
             );
         }
 
-        context.Log.Report("deleted", $"the schedules of '{context.Id.Name}' are gone; their recovery points follow by owner reference", 100);
+        context.Log.Report(
+            "deleted",
+            $"the schedules of '{context.Id.Name}' are gone; their recovery points follow by owner reference",
+            100
+        );
         return ReconcileOutcome.Converged;
     }
 
@@ -316,7 +351,7 @@ public sealed class RecoveryVaultReconciler(IClock clock) : IResourceReconciler 
         return new() {
             Exists = true,
             Json = new JsonObject {
-                ["schedules"] = new JsonArray([.. schedules.Select(x => (JsonNode?)x.Name)])
+                ["schedules"] = new JsonArray([.. schedules.Select(static x => (JsonNode?)x.Name)])
             }.ToJsonString(),
             ObservedAt = clock.UtcNow,
             Summary = schedules.Count == expected
@@ -388,8 +423,8 @@ public sealed class RecoveryVaultReconciler(IClock clock) : IResourceReconciler 
                 new Error(
                     ErrorCode.InvalidRequestBody,
                     $"'{path}' has backups disabled (backup.enabled is false), so its Cluster carries no backup "
-                    + "section and CloudNativePG refuses every Backup of it with \"cannot proceed with the "
-                    + "backup as the cluster has no backup section\". Enable backups on the server first.",
+                    + """section and CloudNativePG refuses every Backup of it with "cannot proceed with the """
+                    + """backup as the cluster has no backup section". Enable backups on the server first.""",
                     pointer
                 )
             );
@@ -415,7 +450,9 @@ public sealed class RecoveryVaultReconciler(IClock clock) : IResourceReconciler 
         }
 
         var clusterObject = rendered.GetValueOrThrow()
-            .FirstOrDefault(x => x.Kind.Group == RecoveryVaults.ClusterKind.Group && x.Kind.Kind == RecoveryVaults.ClusterKind.Kind);
+            .FirstOrDefault(static x => x.Kind.Group == RecoveryVaults.ClusterKind.Group
+                && x.Kind.Kind == RecoveryVaults.ClusterKind.Kind
+            );
 
         if (clusterObject is null) {
             // ⚠ InProgress and not a refusal: a server that is Creating has not rendered yet, and one
@@ -484,7 +521,10 @@ public sealed class RecoveryVaultReconciler(IClock clock) : IResourceReconciler 
         var now = clock.UtcNow;
 
         foreach (var summary in listed.GetValueOrThrow()) {
-            var read = await cluster.GetAsync(RecoveryVaults.BackupRef(context.Namespace, summary.Name), cancellationToken);
+            var read = await cluster.GetAsync(
+                RecoveryVaults.BackupRef(context.Namespace, summary.Name),
+                cancellationToken
+            );
             if (read.TryGetError(out var readError)) {
                 if (readError.Code == ErrorCode.ResourceNotFound) {
                     continue;
@@ -498,7 +538,10 @@ public sealed class RecoveryVaultReconciler(IClock clock) : IResourceReconciler 
                 continue;
             }
 
-            context.Log.Report("pruning", $"recovery point '{point.Name}' of '{item}' is older than {retentionDays} day(s) and is being removed");
+            context.Log.Report(
+                "pruning",
+                $"recovery point '{point.Name}' of '{item}' is older than {retentionDays} day(s) and is being removed"
+            );
 
             var deleted = await KubeCommand.For(cluster)
                 .WithTenantId(context.Id.TenantId)
@@ -541,7 +584,10 @@ public sealed class RecoveryVaultReconciler(IClock clock) : IResourceReconciler 
                 continue;
             }
 
-            context.Log.Report("deleting", $"'{item}' left the vault's protected items; deleting schedule '{schedule.Name}'");
+            context.Log.Report(
+                "deleting",
+                $"'{item}' left the vault's protected items; deleting schedule '{schedule.Name}'"
+            );
 
             var deleted = await Apply(context, cluster, item, Placeholder(schedule.Name))
                 .DeleteAsync(CascadePolicy.Background, cancellationToken);
@@ -558,7 +604,12 @@ public sealed class RecoveryVaultReconciler(IClock clock) : IResourceReconciler 
         schedule.Labels.TryGetValue(RecoveryVaults.ProtectedItemLabel, out var item) ? item : schedule.Name;
 
     /// <summary>A command over one of this vault's schedules, carrying the item label.</summary>
-    static IKubeCommandBuilder Apply(ReconcileContext context, IKubeClusterConnection cluster, string item, string json) =>
+    static IKubeCommandBuilder Apply(
+        ReconcileContext context,
+        IKubeClusterConnection cluster,
+        string item,
+        string json
+    ) =>
         KubeCommand.For(cluster)
             .WithTenantId(context.Id.TenantId)
             .WithResourceId(context.Id)
@@ -592,7 +643,8 @@ public sealed class RecoveryVaultReconciler(IClock clock) : IResourceReconciler 
                 context.Log.Report("conflict", outcome.Drift?.Describe() ?? outcome.Message);
 
                 return ReconcileOutcome.InProgress(
-                    outcome.Drift?.Describe() ?? $"another field manager owns part of {what} and it was not overwritten",
+                    outcome.Drift?.Describe()
+                    ?? $"another field manager owns part of {what} and it was not overwritten",
                     TimeSpan.FromSeconds(30)
                 );
 

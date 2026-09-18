@@ -17,37 +17,53 @@ public sealed class VirtualMachinePowerTests {
         var target = VirtualMachines.VirtualMachineRef(ReconcileDriver.NamespaceFor(address), "web");
         using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId));
 
-        await reconciler.ReconcileAsync(Compute.Context(connection, address, body.RootElement), TestContext.Current.CancellationToken);
+        await reconciler.ReconcileAsync(
+            Compute.Context(connection, address, body.RootElement),
+            TestContext.Current.CancellationToken
+        );
 
-        var stopped = await handler.InvokeAsync(Compute.Action(connection, address, body.RootElement, VirtualMachines.StopAction), TestContext.Current.CancellationToken);
+        var stopped = await handler.InvokeAsync(
+            Compute.Action(connection, address, body.RootElement, VirtualMachines.StopAction),
+            TestContext.Current.CancellationToken
+        );
 
         stopped.IsSuccess.ShouldBeTrue(stopped.Error?.Message);
-        VirtualMachines.RunStrategyOf(connection.Objects[RecordingConnection.Key(target)]).ShouldBe(VirtualMachines.RunHalted);
+        VirtualMachines.RunStrategyOf(connection.Objects[RecordingConnection.Key(target)])
+            .ShouldBe(VirtualMachines.RunHalted);
 
         using var answer = JsonDocument.Parse(stopped.GetValueOrThrow());
-        VirtualMachines.PowerResponse.Validate(answer.RootElement).IsSuccess.ShouldBeTrue("the handler's body does not match the response shape it publishes");
+        VirtualMachines.PowerResponse.Validate(answer.RootElement)
+            .IsSuccess.ShouldBeTrue("the handler's body does not match the response shape it publishes");
         answer.RootElement.GetProperty("runStrategyBefore").GetString().ShouldBe(VirtualMachines.RunAlways);
         answer.RootElement.GetProperty("runStrategy").GetString().ShouldBe(VirtualMachines.RunHalted);
 
         // ⚠ THE SEQUENCE THE DESIGN EXISTS FOR: a PUT with an unrelated change after a stop.
         using var retagged = JsonDocument.Parse(VirtualMachineTags(VirtualMachines.Body(Compute.ClusterId)));
-        await reconciler.ReconcileAsync(Compute.Context(connection, address, retagged.RootElement), TestContext.Current.CancellationToken);
-
-        VirtualMachines.RunStrategyOf(connection.Objects[RecordingConnection.Key(target)]).ShouldBe(
-            VirtualMachines.RunHalted,
-            "a reconcile pass booted a machine its tenant had stopped"
+        await reconciler.ReconcileAsync(
+            Compute.Context(connection, address, retagged.RootElement),
+            TestContext.Current.CancellationToken
         );
+
+        VirtualMachines.RunStrategyOf(connection.Objects[RecordingConnection.Key(target)])
+            .ShouldBe(
+                VirtualMachines.RunHalted,
+                "a reconcile pass booted a machine its tenant had stopped"
+            );
 
         // The handler's apply is the WHOLE render, under the reconciler's own field manager — a
         // partial object would prune every other field it owns, and a second manager would conflict on
         // the reconcile-hash annotation.
-        var powerApply = connection.Applied.Where(x => x.Target.Kind.Kind == "VirtualMachine").ToList()[1];
+        var powerApply = connection.Applied.Where(static x => x.Target.Kind.Kind == "VirtualMachine").ToList()[1];
         powerApply.FieldManager.ShouldBe(connection.Applied[0].FieldManager);
         Compute.Spec(powerApply.Body)["template"].ShouldNotBeNull();
 
-        var started = await handler.InvokeAsync(Compute.Action(connection, address, body.RootElement, VirtualMachines.StartAction), TestContext.Current.CancellationToken);
+        var started = await handler.InvokeAsync(
+            Compute.Action(connection, address, body.RootElement, VirtualMachines.StartAction),
+            TestContext.Current.CancellationToken
+        );
         started.IsSuccess.ShouldBeTrue(started.Error?.Message);
-        VirtualMachines.RunStrategyOf(connection.Objects[RecordingConnection.Key(target)]).ShouldBe(VirtualMachines.RunAlways);
+        VirtualMachines.RunStrategyOf(connection.Objects[RecordingConnection.Key(target)])
+            .ShouldBe(VirtualMachines.RunAlways);
     }
 
     [Fact]
@@ -55,11 +71,22 @@ public sealed class VirtualMachinePowerTests {
         var (connection, address, body) = await Provisioned();
         var handler = new VirtualMachinePowerHandler();
 
-        await handler.InvokeAsync(Compute.Action(connection, address, body.RootElement, VirtualMachines.StopAction), TestContext.Current.CancellationToken);
-        var again = await handler.InvokeAsync(Compute.Action(connection, address, body.RootElement, VirtualMachines.StopAction), TestContext.Current.CancellationToken);
+        await handler.InvokeAsync(
+            Compute.Action(connection, address, body.RootElement, VirtualMachines.StopAction),
+            TestContext.Current.CancellationToken
+        );
+        var again = await handler.InvokeAsync(
+            Compute.Action(connection, address, body.RootElement, VirtualMachines.StopAction),
+            TestContext.Current.CancellationToken
+        );
 
-        again.IsSuccess.ShouldBeTrue("a retry of a power action is a 200 that changed nothing, not an error the generated clients have to special-case");
-        JsonDocument.Parse(again.GetValueOrThrow()).RootElement.GetProperty("runStrategyBefore").GetString().ShouldBe(VirtualMachines.RunHalted);
+        again.IsSuccess.ShouldBeTrue(
+            "a retry of a power action is a 200 that changed nothing, not an error the generated clients have to special-case"
+        );
+        JsonDocument.Parse(again.GetValueOrThrow())
+            .RootElement.GetProperty("runStrategyBefore")
+            .GetString()
+            .ShouldBe(VirtualMachines.RunHalted);
     }
 
     [Fact]
@@ -69,20 +96,33 @@ public sealed class VirtualMachinePowerTests {
         var ns = ReconcileDriver.NamespaceFor(address);
         var instance = VirtualMachines.InstanceRef(ns, "web");
 
-        connection.Objects[RecordingConnection.Key(instance)] = "{\"kind\":\"VirtualMachineInstance\"}";
+        connection.Objects[RecordingConnection.Key(instance)] = """{"kind":"VirtualMachineInstance"}""";
 
-        var restarted = await handler.InvokeAsync(Compute.Action(connection, address, body.RootElement, VirtualMachines.RestartAction), TestContext.Current.CancellationToken);
+        var restarted = await handler.InvokeAsync(
+            Compute.Action(connection, address, body.RootElement, VirtualMachines.RestartAction),
+            TestContext.Current.CancellationToken
+        );
 
         restarted.IsSuccess.ShouldBeTrue(restarted.Error?.Message);
         connection.Deleted.ShouldBe([instance]);
-        connection.Objects.ContainsKey(RecordingConnection.Key(VirtualMachines.VirtualMachineRef(ns, "web"))).ShouldBeTrue("a restart deleted the machine rather than its instance");
+        connection.Objects.ContainsKey(RecordingConnection.Key(VirtualMachines.VirtualMachineRef(ns, "web")))
+            .ShouldBeTrue("a restart deleted the machine rather than its instance");
 
         // Between two boots there is no instance, and that is a restart already under way, not an error.
-        (await handler.InvokeAsync(Compute.Action(connection, address, body.RootElement, VirtualMachines.RestartAction), TestContext.Current.CancellationToken))
+        (await handler.InvokeAsync(
+                Compute.Action(connection, address, body.RootElement, VirtualMachines.RestartAction),
+                TestContext.Current.CancellationToken
+            ))
             .IsSuccess.ShouldBeTrue();
 
-        await handler.InvokeAsync(Compute.Action(connection, address, body.RootElement, VirtualMachines.StopAction), TestContext.Current.CancellationToken);
-        var refused = await handler.InvokeAsync(Compute.Action(connection, address, body.RootElement, VirtualMachines.RestartAction), TestContext.Current.CancellationToken);
+        await handler.InvokeAsync(
+            Compute.Action(connection, address, body.RootElement, VirtualMachines.StopAction),
+            TestContext.Current.CancellationToken
+        );
+        var refused = await handler.InvokeAsync(
+            Compute.Action(connection, address, body.RootElement, VirtualMachines.RestartAction),
+            TestContext.Current.CancellationToken
+        );
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Code.ShouldBe(ErrorCode.Conflict);
@@ -95,7 +135,10 @@ public sealed class VirtualMachinePowerTests {
         var address = Compute.Machine("web");
         using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId));
 
-        var result = await new VirtualMachinePowerHandler().InvokeAsync(Compute.Action(connection, address, body.RootElement, VirtualMachines.StartAction), TestContext.Current.CancellationToken);
+        var result = await new VirtualMachinePowerHandler().InvokeAsync(
+            Compute.Action(connection, address, body.RootElement, VirtualMachines.StartAction),
+            TestContext.Current.CancellationToken
+        );
 
         result.IsFailure.ShouldBeTrue();
         result.Error!.Code.ShouldBe(ErrorCode.OperationInProgress);
@@ -111,7 +154,10 @@ public sealed class VirtualMachinePowerTests {
             conflicting.Objects[key] = value;
         }
 
-        var result = await new VirtualMachinePowerHandler().InvokeAsync(Compute.Action(conflicting, address, body.RootElement, VirtualMachines.StopAction), TestContext.Current.CancellationToken);
+        var result = await new VirtualMachinePowerHandler().InvokeAsync(
+            Compute.Action(conflicting, address, body.RootElement, VirtualMachines.StopAction),
+            TestContext.Current.CancellationToken
+        );
 
         result.IsFailure.ShouldBeTrue();
         result.Error!.Code.ShouldBe(ErrorCode.Conflict);
@@ -123,15 +169,21 @@ public sealed class VirtualMachinePowerTests {
         var handler = new VirtualMachinePowerHandler();
 
         handler.Type.ShouldBe(VirtualMachines.Type);
-        handler.Action.ShouldBeEmpty("one handler switches on ActionContext.Action, as the seam documents for listKeys beside regenerateKeys");
+        handler.Action.ShouldBeEmpty(
+            "one handler switches on ActionContext.Action, as the seam documents for listKeys beside regenerateKeys"
+        );
 
         var registry = CyberCloud.ResourceManager.Registry.ProviderRegistry.Build([new ComputeProvider()]);
         registry.TryGetType(VirtualMachines.Type, out var registration).ShouldBeTrue();
 
-        foreach (var action in new[] { VirtualMachines.StartAction, VirtualMachines.StopAction, VirtualMachines.RestartAction }) {
+        foreach (var action in new[] {
+                     VirtualMachines.StartAction, VirtualMachines.StopAction, VirtualMachines.RestartAction
+                 }) {
             registration.TryGetAction(action, out var declared).ShouldBeTrue(action);
             declared.HandlerType.ShouldBe(typeof(VirtualMachinePowerHandler));
-            declared.LongRunning.ShouldBeFalse("a long-running action re-runs the reconciler, which cannot see which action was asked for");
+            declared.LongRunning.ShouldBeFalse(
+                "a long-running action re-runs the reconciler, which cannot see which action was asked for"
+            );
             declared.Response.ShouldBe(VirtualMachines.PowerResponse);
         }
     }
@@ -143,7 +195,10 @@ public sealed class VirtualMachinePowerTests {
         var address = Compute.Machine("web");
         var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId));
 
-        await new VirtualMachineReconciler(new FixedClock()).ReconcileAsync(Compute.Context(connection, address, body.RootElement), TestContext.Current.CancellationToken);
+        await new VirtualMachineReconciler(new FixedClock()).ReconcileAsync(
+            Compute.Context(connection, address, body.RootElement),
+            TestContext.Current.CancellationToken
+        );
 
         return (connection, address, body);
     }

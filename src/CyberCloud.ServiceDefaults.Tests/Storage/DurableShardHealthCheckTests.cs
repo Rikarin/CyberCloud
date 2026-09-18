@@ -135,12 +135,12 @@ public sealed class DurableShardHealthCheckTests {
         // It is the readiness half of BootstrapProviderLivenessTests: the silo keeps taking traffic,
         // on purpose, and the reason is written down where a future edit has to read it.
         using var provider = Wire(
-            services => services.AddHealthChecks()
+            static services => services.AddHealthChecks()
                 .AddCheck(
                     // Standing in for silo-ready, which needs a running silo. The point of the stand-in
                     // is that the readiness answer must be its answer and nothing else's.
                     "silo-ready",
-                    () => HealthCheckResult.Healthy("serving"),
+                    static () => HealthCheckResult.Healthy("serving"),
                     [HealthCheckTags.Ready]
                 ),
             null,
@@ -150,7 +150,7 @@ public sealed class DurableShardHealthCheckTests {
         var health = provider.GetRequiredService<HealthCheckService>();
 
         var ready = await health.CheckHealthAsync(
-            x => x.Tags.Contains(HealthCheckTags.Ready),
+            static x => x.Tags.Contains(HealthCheckTags.Ready),
             TestContext.Current.CancellationToken
         );
 
@@ -176,7 +176,10 @@ public sealed class DurableShardHealthCheckTests {
 
     static async Task<HealthReportEntry> CheckAsync(ServiceProvider provider) {
         var report = await provider.GetRequiredService<HealthCheckService>()
-            .CheckHealthAsync(x => x.Name == DurableShardHealthCheck.Name, TestContext.Current.CancellationToken);
+            .CheckHealthAsync(
+                static x => x.Name == DurableShardHealthCheck.Name,
+                TestContext.Current.CancellationToken
+            );
 
         return report.Entries[DurableShardHealthCheck.Name];
     }

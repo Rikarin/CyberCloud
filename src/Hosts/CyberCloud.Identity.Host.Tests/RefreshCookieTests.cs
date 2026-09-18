@@ -31,12 +31,16 @@ public sealed class RefreshCookieTests(IdentityHostFixture fixture) {
         var header = context.Response.Headers.SetCookie.ToString();
 
         header.ShouldStartWith("__Host-cyc-refresh=the-token;");
-        header.ShouldContain("path=/", Case.Insensitive);
-        header.ShouldContain("secure", Case.Insensitive);
-        header.ShouldContain("samesite=lax", Case.Insensitive);
-        header.ShouldContain("httponly", Case.Insensitive);
-        header.ShouldContain("max-age=1209600", Case.Insensitive);
-        header.ShouldNotContain("domain=", Case.Insensitive, "a Domain attribute makes a __Host- cookie invalid — and would let a subdomain set it");
+        header.ShouldContain("path=/");
+        header.ShouldContain("secure");
+        header.ShouldContain("samesite=lax");
+        header.ShouldContain("httponly");
+        header.ShouldContain("max-age=1209600");
+        header.ShouldNotContain(
+            "domain=",
+            Case.Insensitive,
+            "a Domain attribute makes a __Host- cookie invalid — and would let a subdomain set it"
+        );
 
         RefreshCookie.MaxAge.ShouldBe(AccessTokenPolicy.RefreshTokenLifetime);
         RefreshCookie.MaxAge.ShouldBe(TimeSpan.FromSeconds(1209600));
@@ -54,10 +58,10 @@ public sealed class RefreshCookieTests(IdentityHostFixture fixture) {
         // original beside the deletion; and max-age=0 rather than a past Expires, which is the
         // spelling every browser honours.
         header.ShouldStartWith("__Host-cyc-refresh=;");
-        header.ShouldContain("max-age=0", Case.Insensitive);
-        header.ShouldContain("path=/", Case.Insensitive);
-        header.ShouldContain("secure", Case.Insensitive);
-        header.ShouldContain("httponly", Case.Insensitive);
+        header.ShouldContain("max-age=0");
+        header.ShouldContain("path=/");
+        header.ShouldContain("secure");
+        header.ShouldContain("httponly");
     }
 
     [Fact]
@@ -78,7 +82,11 @@ public sealed class RefreshCookieTests(IdentityHostFixture fixture) {
         var handler = Handler();
 
         // The portal: the token moves out of the body and into the cookie.
-        var (context, http) = Apply(FirstPartyClients.Portal, OpenIddictConstants.GrantTypes.AuthorizationCode, refreshToken: "rt-portal");
+        var (context, http) = Apply(
+            FirstPartyClients.Portal,
+            OpenIddictConstants.GrantTypes.AuthorizationCode,
+            "rt-portal"
+        );
 
         await handler.HandleAsync(context);
 
@@ -86,7 +94,11 @@ public sealed class RefreshCookieTests(IdentityHostFixture fixture) {
         http.Response.Headers.SetCookie.ToString().ShouldStartWith("__Host-cyc-refresh=rt-portal;");
 
         // The CLI: a native app with its own keychain and no cookie jar. The body keeps it.
-        (context, http) = Apply(FirstPartyClients.Cli, OpenIddictConstants.GrantTypes.AuthorizationCode, refreshToken: "rt-cli");
+        (context, http) = Apply(
+            FirstPartyClients.Cli,
+            OpenIddictConstants.GrantTypes.AuthorizationCode,
+            "rt-cli"
+        );
 
         await handler.HandleAsync(context);
 
@@ -94,7 +106,11 @@ public sealed class RefreshCookieTests(IdentityHostFixture fixture) {
         http.Response.Headers.SetCookie.ToString().ShouldBeEmpty();
 
         // A tenant's own client, likewise.
-        (context, http) = Apply("contoso-app", OpenIddictConstants.GrantTypes.AuthorizationCode, refreshToken: "rt-tenant");
+        (context, http) = Apply(
+            "contoso-app",
+            OpenIddictConstants.GrantTypes.AuthorizationCode,
+            "rt-tenant"
+        );
 
         await handler.HandleAsync(context);
 
@@ -112,23 +128,35 @@ public sealed class RefreshCookieTests(IdentityHostFixture fixture) {
 
         // invalid_grant on a refresh: the chain refused the cookie, so the browser should stop
         // presenting it.
-        var (context, http) = Apply(FirstPartyClients.Portal, OpenIddictConstants.GrantTypes.RefreshToken, error: OpenIddictConstants.Errors.InvalidGrant);
+        var (context, http) = Apply(
+            FirstPartyClients.Portal,
+            OpenIddictConstants.GrantTypes.RefreshToken,
+            error: OpenIddictConstants.Errors.InvalidGrant
+        );
 
         await handler.HandleAsync(context);
 
-        http.Response.Headers.SetCookie.ToString().ShouldContain("max-age=0", Case.Insensitive);
+        http.Response.Headers.SetCookie.ToString().ShouldContain("max-age=0");
 
         // ⚠ invalid_request on a refresh — a foreign Origin, a missing parameter — says nothing about
         // the cookie, and clearing it would let a page on another origin sign the person out of the
         // portal with one POST.
-        (context, http) = Apply(FirstPartyClients.Portal, OpenIddictConstants.GrantTypes.RefreshToken, error: OpenIddictConstants.Errors.InvalidRequest);
+        (context, http) = Apply(
+            FirstPartyClients.Portal,
+            OpenIddictConstants.GrantTypes.RefreshToken,
+            error: OpenIddictConstants.Errors.InvalidRequest
+        );
 
         await handler.HandleAsync(context);
 
         http.Response.Headers.SetCookie.ToString().ShouldBeEmpty();
 
         // And a refused code exchange leaves whatever cookie the browser holds alone.
-        (context, http) = Apply(FirstPartyClients.Portal, OpenIddictConstants.GrantTypes.AuthorizationCode, error: OpenIddictConstants.Errors.InvalidGrant);
+        (context, http) = Apply(
+            FirstPartyClients.Portal,
+            OpenIddictConstants.GrantTypes.AuthorizationCode,
+            error: OpenIddictConstants.Errors.InvalidGrant
+        );
 
         await handler.HandleAsync(context);
 
@@ -147,23 +175,38 @@ public sealed class RefreshCookieTests(IdentityHostFixture fixture) {
         // if a response for one ever reaches it the token goes nowhere: not into the cookie, and
         // not into a body the portal's token is never in.
         foreach (var origin in new[] { "http://evil.example", "http://localhost:5100", "null", "" }) {
-            var (context, http) = Apply(FirstPartyClients.Portal, OpenIddictConstants.GrantTypes.AuthorizationCode, refreshToken: "rt-planted", origin: origin);
+            var (context, http) = Apply(
+                FirstPartyClients.Portal,
+                OpenIddictConstants.GrantTypes.AuthorizationCode,
+                "rt-planted",
+                origin: origin
+            );
 
             await handler.HandleAsync(context);
 
             http.Response.Headers.SetCookie.ToString().ShouldBeEmpty($"a cookie was written for Origin '{origin}'");
             context.Response.RefreshToken.ShouldBeNull($"the body kept the token for Origin '{origin}'");
 
-            (context, http) = Apply(FirstPartyClients.Portal, OpenIddictConstants.GrantTypes.RefreshToken, refreshToken: "rt-planted", origin: origin);
+            (context, http) = Apply(
+                FirstPartyClients.Portal,
+                OpenIddictConstants.GrantTypes.RefreshToken,
+                "rt-planted",
+                origin: origin
+            );
 
             await handler.HandleAsync(context);
 
-            http.Response.Headers.SetCookie.ToString().ShouldBeEmpty($"a cookie was written on a refresh for Origin '{origin}'");
+            http.Response.Headers.SetCookie.ToString()
+                .ShouldBeEmpty($"a cookie was written on a refresh for Origin '{origin}'");
             context.Response.RefreshToken.ShouldBeNull();
         }
 
         // The portal's own origin, the same response: the cookie, as ever.
-        var (own, ownHttp) = Apply(FirstPartyClients.Portal, OpenIddictConstants.GrantTypes.AuthorizationCode, refreshToken: "rt-mine");
+        var (own, ownHttp) = Apply(
+            FirstPartyClients.Portal,
+            OpenIddictConstants.GrantTypes.AuthorizationCode,
+            "rt-mine"
+        );
 
         await handler.HandleAsync(own);
 
@@ -171,7 +214,12 @@ public sealed class RefreshCookieTests(IdentityHostFixture fixture) {
         own.Response.RefreshToken.ShouldBeNull();
 
         // The CLI has no origin and no cookie; the rule is the browser client's alone.
-        var (cli, cliHttp) = Apply(FirstPartyClients.Cli, OpenIddictConstants.GrantTypes.AuthorizationCode, refreshToken: "rt-cli", origin: "");
+        var (cli, cliHttp) = Apply(
+            FirstPartyClients.Cli,
+            OpenIddictConstants.GrantTypes.AuthorizationCode,
+            "rt-cli",
+            origin: ""
+        );
 
         await handler.HandleAsync(cli);
 
@@ -197,8 +245,8 @@ public sealed class RefreshCookieTests(IdentityHostFixture fixture) {
         }
 
         var transaction = new OpenIddictServerTransaction {
-            Request = new OpenIddictRequest { ClientId = clientId, GrantType = grantType },
-            Response = new OpenIddictResponse { RefreshToken = refreshToken, Error = error },
+            Request = new() { ClientId = clientId, GrantType = grantType },
+            Response = new() { RefreshToken = refreshToken, Error = error },
             Options = fixture.Services.GetRequiredService<IOptions<OpenIddictServerOptions>>().Value,
             Logger = NullLogger.Instance,
             EndpointType = OpenIddictServerEndpointType.Token

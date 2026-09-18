@@ -44,7 +44,7 @@ public sealed class ProviderRegistry : IProviderRegistry {
     ProviderRegistry(ImmutableArray<ResourceTypeRegistration> types, ImmutableArray<string> namespaces) {
         Types = types;
         Namespaces = namespaces;
-        byType = types.ToFrozenDictionary(x => Key(x.Type), StringComparer.Ordinal);
+        byType = types.ToFrozenDictionary(static x => Key(x.Type), StringComparer.Ordinal);
     }
 
     /// <summary>Builds the registry from every provider in the process.</summary>
@@ -207,7 +207,7 @@ public sealed class ProviderRegistry : IProviderRegistry {
         // reference that would let a provider's suite see more, which is why the whole-tree answer
         // lives here and in CliEmitter.Emit rather than in fourteen test files.
         var collisions = CliTokens.Collisions(
-            types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+            types.Select(static x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
         );
 
         if (collisions.Length > 0) {
@@ -215,7 +215,7 @@ public sealed class ProviderRegistry : IProviderRegistry {
         }
 
         return new(
-            [.. types.OrderBy(x => Key(x.Type), StringComparer.Ordinal)],
+            [.. types.OrderBy(static x => Key(x.Type), StringComparer.Ordinal)],
             [.. namespaces]
         );
     }

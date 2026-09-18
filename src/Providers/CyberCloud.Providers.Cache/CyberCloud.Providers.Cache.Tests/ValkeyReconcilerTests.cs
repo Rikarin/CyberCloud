@@ -1,5 +1,4 @@
 using CyberCloud.Core.Time;
-using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
 using System.Collections.Concurrent;
@@ -63,12 +62,8 @@ public sealed class ValkeyReconcilerTests {
         // mode (which changes the storage block AND two customConfig lines) and the volume size. A
         // cache that kept one of them would be caught; a cache that kept a whole rendered document
         // would be caught three times over.
-        using var aliceBody = JsonDocument.Parse(
-            ValkeyCaches.Body(ClusterId, replicas: 3, persistence: "AOF", size: "8Gi")
-        );
-        using var bobBody = JsonDocument.Parse(
-            ValkeyCaches.Body(ClusterId, replicas: 5, persistence: "None", size: "64Gi")
-        );
+        using var aliceBody = JsonDocument.Parse(ValkeyCaches.Body(ClusterId, 3, "AOF", "8Gi"));
+        using var bobBody = JsonDocument.Parse(ValkeyCaches.Body(ClusterId, 5, "None", "64Gi"));
 
         // Interleaved on purpose: A, B, A. A reconciler that remembered anything from its first pass
         // would answer the third pass with B's values.
@@ -276,7 +271,7 @@ public sealed class ValkeyReconcilerTests {
         var secret = JsonNode.Parse(connection.Applied[0].Body)!.AsObject();
 
         secret["type"]!.GetValue<string>().ShouldBe("Opaque");
-        secret["data"]!.AsObject().Select(x => x.Key).ShouldBe(["password"]);
+        secret["data"]!.AsObject().Select(static x => x.Key).ShouldBe(["password"]);
 
         // ⚠ `data` and not `stringData`. The API server folds stringData into data and never returns
         // it, so a Secret written that way reads back with no `password` at all — and
@@ -343,7 +338,7 @@ public sealed class ValkeyReconcilerTests {
         // spotahome's checker calls GetRedisPassword on every loop, so a Secret removed underneath a
         // live RedisFailover makes the controller error out mid-teardown against the object it is
         // trying to remove.
-        connection.Deleted.Select(x => x.Kind.Kind).ShouldBe(["RedisFailover", "Secret"]);
+        connection.Deleted.Select(static x => x.Kind.Kind).ShouldBe(["RedisFailover", "Secret"]);
     }
 
     [Fact]
@@ -413,7 +408,7 @@ public sealed class ValkeyReconcilerTests {
         redis["resources"]!["requests"]!["cpu"]!.GetValue<string>().ShouldBe("2");
         redis["resources"]!["limits"]!["memory"]!.GetValue<string>().ShouldBe("16Gi");
 
-        var config = redis["customConfig"]!.AsArray().Select(x => x!.GetValue<string>()).ToList();
+        var config = redis["customConfig"]!.AsArray().Select(static x => x!.GetValue<string>()).ToList();
 
         // 16Gi × 0.75, in bytes.
         config.ShouldContain("maxmemory 12884901888");
@@ -441,7 +436,7 @@ public sealed class ValkeyReconcilerTests {
         await Reconcile(connection, desired.RootElement);
 
         var config = Redis(connection.Applied[1].Body)["customConfig"]!.AsArray()
-            .Select(x => x!.GetValue<string>())
+            .Select(static x => x!.GetValue<string>())
             .ToList();
 
         config.ShouldContain(first);
@@ -463,7 +458,7 @@ public sealed class ValkeyReconcilerTests {
         var image = Redis(connection.Applied[1].Body)["image"]!.GetValue<string>();
 
         image.ShouldStartWith("valkey/valkey:");
-        image.ShouldNotContain("redis", Case.Insensitive);
+        image.ShouldNotContain("redis");
     }
 
     [Fact]
@@ -502,7 +497,7 @@ public sealed class ValkeyReconcilerTests {
         // renders. The template half is read back out of the applied document here rather than
         // restated, because a rename in Storage() that did not reach RetainedClaims is a purge that
         // silently reclaims nothing.
-        using var desired = JsonDocument.Parse(ValkeyCaches.Body(ClusterId, replicas: 2));
+        using var desired = JsonDocument.Parse(ValkeyCaches.Body(ClusterId, 2));
 
         var storage = Redis(ValkeyCaches.RedisFailoverJson("observed", desired.RootElement))["storage"]!.AsObject();
 
@@ -515,7 +510,7 @@ public sealed class ValkeyReconcilerTests {
         var claims = ValkeyCaches.RetainedClaims("ns", "observed", desired.RootElement);
 
         claims.Length.ShouldBe(2);
-        claims.Select(x => x.Claim.Name)
+        claims.Select(static x => x.Claim.Name)
             .ShouldBe(
                 [
                     RetainedVolume.NameFor(template, "rfr-observed", 0),
@@ -564,7 +559,7 @@ public sealed class ValkeyReconcilerTests {
         // Kubernetes' {volume}-{set}-{ordinal} and the labels are the operator's own selector, which
         // the controller copies onto every claim its template makes.
         var connection = new RecordingConnection();
-        using var desired = JsonDocument.Parse(ValkeyCaches.Body(ClusterId, replicas: 2));
+        using var desired = JsonDocument.Parse(ValkeyCaches.Body(ClusterId, 2));
         var context = Context(connection, desired.RootElement);
 
         var planted = ValkeyCaches.RetainedClaims(context.Namespace, "observed", desired.RootElement);
@@ -576,7 +571,11 @@ public sealed class ValkeyReconcilerTests {
                     ["name"] = claim.Claim.Name,
                     ["namespace"] = claim.Claim.Namespace,
                     ["labels"] = new JsonObject(
-                        claim.OwnedBy.Select(x => KeyValuePair.Create(x.Key, (JsonNode?)JsonValue.Create(x.Value)))
+                        claim.OwnedBy.Select(static x => KeyValuePair.Create(
+                                x.Key,
+                                (JsonNode?)JsonValue.Create(x.Value)
+                            )
+                        )
                     )
                 }
             }.ToJsonString();

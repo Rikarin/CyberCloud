@@ -66,7 +66,7 @@ public sealed class ManagedClusterDeclarationTests {
         // CliEmitter.Emit at generation, and GeneratedSurfaceTests over the embedded verb tree.
         CliTokens.Collisions(
             ProviderRegistry.Build([new ContainerServiceProvider()])
-                .Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+                .Types.Select(static x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
         )
             .ShouldBeEmpty();
     }
@@ -79,14 +79,14 @@ public sealed class ManagedClusterDeclarationTests {
         // and MeterCatalog bills BillingMeter.ClusterHours off it, described as "Managed Kubernetes
         // clusters × hours". Nine families shipped without declaring it because none of them is a
         // cluster.
-        var drawn = Registration(ManagedClusters.Type).Meters.Select(x => x.Meter).ToList();
+        var drawn = Registration(ManagedClusters.Type).Meters.Select(static x => x.Meter).ToList();
 
         drawn.ShouldContain(QuotaMeter.Clusters);
         drawn.ShouldContain(QuotaMeter.Resources);
 
         // ⚠ And the CHILD does not draw it. A node pool is not a cluster, and a family whose two types
         // both drew it would double every tenant's cluster count on the first pool.
-        Registration(AgentPools.Type).Meters.Select(x => x.Meter).ShouldNotContain(QuotaMeter.Clusters);
+        Registration(AgentPools.Type).Meters.Select(static x => x.Meter).ShouldNotContain(QuotaMeter.Clusters);
     }
 
     [Fact]
@@ -95,8 +95,8 @@ public sealed class ManagedClusterDeclarationTests {
         // state is in a cluster-scoped DataStore this platform names rather than creates. The day
         // ADR-009's dedicated-etcd-per-tenant is honoured, a storage meter appears here and THIS TEST
         // is what says the change landed.
-        Derived(ManagedClusters.Type).Select(x => x.Meter).ShouldNotContain(QuotaMeter.StorageGb);
-        Derived(AgentPools.Type).Select(x => x.Meter).ShouldContain(QuotaMeter.StorageGb);
+        Derived(ManagedClusters.Type).Select(static x => x.Meter).ShouldNotContain(QuotaMeter.StorageGb);
+        Derived(AgentPools.Type).Select(static x => x.Meter).ShouldContain(QuotaMeter.StorageGb);
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public sealed class ManagedClusterDeclarationTests {
     [Fact]
     public void ThePresetEnumAndThePresetTableAreTheSameSet() {
         var declared = AgentPools.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/size")
+            .Single(static x => x.JsonPointer == "/properties/size")
             .AllowedValues;
 
         declared.Order(StringComparer.Ordinal)
@@ -389,7 +389,7 @@ public sealed class ManagedClusterDeclarationTests {
     }
 
     static IReadOnlyList<MeterRegistration> Derived(ResourceTypeName type) =>
-        [.. Registration(type).Meters.Where(x => x.Derivation is not null)];
+        [.. Registration(type).Meters.Where(static x => x.Derivation is not null)];
 
     static System.Text.Json.Nodes.JsonNode Node(string json) => System.Text.Json.Nodes.JsonNode.Parse(json)!;
 }

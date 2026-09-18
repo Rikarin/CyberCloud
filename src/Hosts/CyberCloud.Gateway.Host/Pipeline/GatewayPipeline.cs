@@ -51,8 +51,8 @@ sealed class GatewayPipeline {
 
         this.logger = logger;
 
-        var ordered = registered.OrderBy(x => x.Stage).ToImmutableArray();
-        var present = ordered.Select(x => x.Stage).ToImmutableArray();
+        var ordered = registered.OrderBy(static x => x.Stage).ToImmutableArray();
+        var present = ordered.Select(static x => x.Stage).ToImmutableArray();
 
         if (!present.SequenceEqual(Stoppable)) {
             throw new InvalidOperationException(

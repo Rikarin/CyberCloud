@@ -33,7 +33,7 @@ static class ExtensionCommands {
     public static Command Build(CycHost host, GlobalOptions globals, VerbTreeDocument tree) {
         ArgumentNullException.ThrowIfNull(host);
 
-        return new Command(
+        return new(
             "extension",
             "Install and list out-of-process extensions. An extension runs as you, with your credentials — see 'add'."
         ) { Add(host, globals, tree), List(host, globals, tree), Remove(host, globals, tree) };
@@ -163,7 +163,7 @@ static class ExtensionCommands {
                     );
                 }
 
-                foreach (var record in store.Records.OrderBy(x => x.Name, StringComparer.Ordinal)) {
+                foreach (var record in store.Records.OrderBy(static x => x.Name, StringComparer.Ordinal)) {
                     var state = StateOf(store, record, reserved, unsafeDirectories.Count > 0);
 
                     if (!string.Equals(state, "ok", StringComparison.Ordinal)) {
@@ -231,7 +231,7 @@ static class ExtensionCommands {
                 if (!store.Remove(verb)) {
                     var installed = store.Records.Count == 0
                         ? "Nothing is installed."
-                        : $"Installed: {string.Join(", ", store.Records.Select(x => x.Name).Order(StringComparer.Ordinal))}.";
+                        : $"Installed: {string.Join(", ", store.Records.Select(static x => x.Name).Order(StringComparer.Ordinal))}.";
 
                     throw new CycUsageException($"No extension named '{verb}' is installed. {installed}");
                 }
@@ -242,7 +242,7 @@ static class ExtensionCommands {
                     Payload.Object(
                         [
                             new KeyValuePair<string, Payload>("name", Payload.Text(verb)),
-                            new KeyValuePair<string, Payload>("removed", Payload.Boolean(value: true))
+                            new KeyValuePair<string, Payload>("removed", Payload.Boolean(true))
                         ]
                     )
                 );

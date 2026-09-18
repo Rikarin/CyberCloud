@@ -53,7 +53,7 @@ public sealed class HubTicketOverHttpTests {
         socket.State.ShouldBe(WebSocketState.Open);
 
         // SignalR's handshake: the client names the protocol, the server answers `{}` for "fine".
-        await OverHttpGateway.SendFrameAsync(socket, "{\"protocol\":\"json\",\"version\":1}");
+        await OverHttpGateway.SendFrameAsync(socket, """{"protocol":"json","version":1}""");
         (await OverHttpGateway.ReceiveFrameAsync(socket)).ShouldBe("{}");
 
         // The portal's first call, exactly as it sends it.
@@ -74,7 +74,9 @@ public sealed class HubTicketOverHttpTests {
 
         completion.GetProperty("invocationId").GetString().ShouldBe("1");
         // A HubException's message travels to the client verbatim, which is the point of throwing one.
-        completion.GetProperty("error").GetString()!.ShouldContain("session grain is docs/plan/19 and is not implemented");
+        completion.GetProperty("error")
+            .GetString()!
+            .ShouldContain("session grain is docs/plan/19 and is not implemented");
 
         await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", CancellationToken.None);
     }
@@ -97,7 +99,9 @@ public sealed class HubTicketOverHttpTests {
         var token = gateway.Harness.Token(GatewayHarness.TenantA);
 
         (await UpgradeStatusAsync(gateway, $"/hubs/{HubNames.Terminal}")).ShouldBe(HttpStatusCode.Unauthorized);
-        (await UpgradeStatusAsync(gateway, $"/hubs/{HubNames.Terminal}?access_token={token}")).ShouldBe(HttpStatusCode.Unauthorized);
+        (await UpgradeStatusAsync(gateway, $"/hubs/{HubNames.Terminal}?access_token={token}")).ShouldBe(
+            HttpStatusCode.Unauthorized
+        );
         (await UpgradeStatusAsync(gateway, $"/hubs/{HubNames.Terminal}?{HubTickets.QueryParameter}={token}"))
             .ShouldBe(HttpStatusCode.Unauthorized);
     }
@@ -115,7 +119,11 @@ public sealed class HubTicketOverHttpTests {
     public async Task MintingOverHttpNeedsTheBearerHeader() {
         await using var gateway = await OverHttpGateway.StartAsync();
 
-        using var response = await gateway.Http.PostAsync($"/hubs/{HubNames.Terminal}/ticket", content: null, TestContext.Current.CancellationToken);
+        using var response = await gateway.Http.PostAsync(
+            $"/hubs/{HubNames.Terminal}/ticket",
+            null,
+            TestContext.Current.CancellationToken
+        );
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         response.Headers.WwwAuthenticate.ToString().ShouldBe("Bearer");

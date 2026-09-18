@@ -1,5 +1,4 @@
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.Core.Resources;
 using CyberCloud.Providers.ContainerRegistry.Contracts;
 using Shouldly;
@@ -59,30 +58,30 @@ public sealed class ContainerRegistryCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.ContainerRegistry/registries",
-            CreateProvider = () => new ContainerRegistryProvider(),
+            CreateProvider = static () => new ContainerRegistryProvider(),
             ReconcilerType = typeof(ContainerRegistryReconciler),
-            CreateReconciler = clock => new ContainerRegistryReconciler(clock),
+            CreateReconciler = static clock => new ContainerRegistryReconciler(clock),
             Type = ContainerRegistries.Type,
             ApiVersion = ContainerRegistries.V2026,
-            Body = cluster => ContainerRegistries.Body(cluster),
+            Body = static cluster => ContainerRegistries.Body(cluster),
             // ⚠ Changes `replicas`, which the rendered objects carry in THREE places — core's, the
             // portal's and the job service's `spec.replicas` — and which the meters read as well. A
             // body that differed only where the reconciler ignores it (`purgeProtection`, say, which
             // reaches no object at all) would pass the update test while proving the update never left
             // the grain.
-            ChangedBody = cluster => ContainerRegistries.Body(cluster, replicas: 3),
+            ChangedBody = static cluster => ContainerRegistries.Body(cluster, 3),
             // Drops the required `/properties/storage/size`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written: a
             // hand-written invalid body drifts out of date the day the schema gains a property and then
             // tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => WithoutStorageSize(ContainerRegistries.Body(cluster)),
+            InvalidBody = static cluster => WithoutStorageSize(ContainerRegistries.Body(cluster)),
             InvalidBodyTarget = "/properties/storage/size",
             ActionName = ContainerRegistries.ListCredentialsAction,
             // ⚠ ALL FIFTEEN, IN APPLY ORDER, AND THE ORDER IS PART OF THE ASSERTION. The suite's delete
             // assertion only proves what is listed here is gone, and a credentials Secret surviving its
             // registry is exactly the thing that must not — so the object applied first and deleted
             // last is listed first.
-            Objects = (id, ns) => [
+            Objects = static (id, ns) => [
                 ContainerRegistries.CredentialsSecretRef(ns, id.Name),
                 ContainerRegistries.ConfigMapRef(ns, id.Name),
                 ContainerRegistries.DatabaseServiceRef(ns, id.Name),
@@ -106,7 +105,7 @@ public sealed class ContainerRegistryCase : IProviderCaseSource {
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return ContainerRegistries.Matches(match.ObjectJson, desired.RootElement);
             }
@@ -156,12 +155,12 @@ public sealed class ContainerRegistrySuiteShapeTests {
 
         var applied = ContainerRegistryReconciler
             .Targets("ns", "reg", body.RootElement)
-            .Select(x => x.ToString())
+            .Select(static x => x.ToString())
             .ToArray();
 
         var listed = ContainerRegistryCase.ProviderCase
             .Objects(Address, "ns")
-            .Select(x => x.ToString())
+            .Select(static x => x.ToString())
             .ToArray();
 
         listed.ShouldBe(

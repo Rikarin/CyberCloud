@@ -50,21 +50,21 @@ public sealed class RabbitmqCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Messaging/rabbitmqClusters",
-            CreateProvider = () => new MessagingProvider(),
+            CreateProvider = static () => new MessagingProvider(),
             ReconcilerType = typeof(RabbitmqClusterReconciler),
-            CreateReconciler = clock => new RabbitmqClusterReconciler(clock),
+            CreateReconciler = static clock => new RabbitmqClusterReconciler(clock),
             Type = RabbitmqClusters.Type,
             ApiVersion = RabbitmqClusters.V2026,
-            Body = cluster => RabbitmqClusters.Body(cluster),
+            Body = static cluster => RabbitmqClusters.Body(cluster),
             // ⚠ Changes `nodes`, which is the field the operator's own controller is most likely to
             // fight over — it declares a scale subresource — and the one whose read-back is an
             // equality comparison rather than a containment one.
-            ChangedBody = cluster => RabbitmqClusters.Body(cluster, nodes: 5),
+            ChangedBody = static cluster => RabbitmqClusters.Body(cluster, 5),
             // Drops the required `/properties/storage/size`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written:
             // a hand-written invalid body drifts out of date the day the schema gains a property and
             // then tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => WithoutStorageSize(RabbitmqClusters.Body(cluster)),
+            InvalidBody = static cluster => WithoutStorageSize(RabbitmqClusters.Body(cluster)),
             InvalidBodyTarget = "/properties/storage/size",
             ActionName = RabbitmqClusters.ListKeysAction,
             // ⚠ ONE, AND NOTHING ABOUT IT IS CONDITIONAL. `Objects` is handed the address and the
@@ -72,14 +72,14 @@ public sealed class RabbitmqCase : IProviderCaseSource {
             // constraint that forced NatsCase's body to pin `monitoring.enabled`. This type has no
             // conditional object to pin, because the operator owns everything a setting could turn
             // on or off.
-            Objects = (id, ns) => [RabbitmqClusters.ClusterRef(ns, id.Name)],
+            Objects = static (id, ns) => [RabbitmqClusters.ClusterRef(ns, id.Name)],
             // ⚠ The cluster-operator's default-user Secret. The real object carries seven keys; the
             // two returned are here and the other five are not, so a handler that started echoing
             // `host` or `port` back instead of computing them would fail rather than pass by accident.
             // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
             DataPlane = null,
             StoragePrefix = null,
-            OperatorWritten = (id, ns) => [
+            OperatorWritten = static (id, ns) => [
                 (KubeSecret.Ref(ns, RabbitmqClusters.DefaultUserSecretName(id.Name)),
                     OperatorSecret.Json(
                         KubeSecret.Ref(ns, RabbitmqClusters.DefaultUserSecretName(id.Name)),
@@ -89,7 +89,7 @@ public sealed class RabbitmqCase : IProviderCaseSource {
                         ]
                     ))
             ],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return RabbitmqClusters.Matches(match.ObjectJson, desired.RootElement);
             }

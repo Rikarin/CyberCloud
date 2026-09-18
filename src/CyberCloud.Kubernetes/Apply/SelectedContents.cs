@@ -43,8 +43,11 @@ public static class SelectedContents {
     ///         for "everything", and it says so in its own remarks.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>An empty namespace is NOT refused any more, and it was until
-    ///         <c>CyberCloud.Storage/accounts/fileShares</c>.</b> It used to be, on the same reasoning
+    ///         ⚠
+    ///         <b>
+    ///             An empty namespace is NOT refused any more, and it was until
+    ///             <c>CyberCloud.Storage/accounts/fileShares</c>.
+    ///         </b> It used to be, on the same reasoning
     ///         as the selector — but a <c>PersistentVolume</c> has no namespace to fill in, and the
     ///         share's teardown lists the released volumes of an account by label before it removes
     ///         the driver that reclaims them. The k3s-backed suite found the refusal: every share

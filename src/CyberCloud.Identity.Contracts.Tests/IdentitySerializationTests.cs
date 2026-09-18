@@ -23,7 +23,7 @@ public sealed class IdentitySerializationTests : IDisposable {
     /// <summary>Builds a serializer over every contract assembly a silo would load.</summary>
     public IdentitySerializationTests() {
         var services = new ServiceCollection();
-        services.AddSerializer(builder => builder
+        services.AddSerializer(static builder => builder
                 .AddAssembly(typeof(UserProfile).Assembly)
                 .AddAssembly(typeof(ResultSurrogate).Assembly)
         );
@@ -177,8 +177,8 @@ public sealed class IdentitySerializationTests : IDisposable {
 
         typeof(SecretRef)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Select(x => x.Name)
-            .ShouldBe(["Path", "Field", "Version", "IsEmpty"], ignoreOrder: true);
+            .Select(static x => x.Name)
+            .ShouldBe(["Path", "Field", "Version", "IsEmpty"], true);
     }
 
     /// <summary>
@@ -265,23 +265,23 @@ public sealed class IdentitySerializationTests : IDisposable {
 
     [Fact]
     public void TheSecretBearingWireTypesKeepTheIdNumbersTheyPublished() {
-        var types = SecretBearingBaseline.Select(x => x.Type).ToHashSet(StringComparer.Ordinal);
+        var types = SecretBearingBaseline.Select(static x => x.Type).ToHashSet(StringComparer.Ordinal);
 
         var actual = typeof(UserProfile).Assembly
             .GetTypes()
             .Where(t => types.Contains(t.Name))
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetMembers(BindingFlags.Public | BindingFlags.Instance)
-                    .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
-                    .Where(x => x.id is not null)
+                    .Select(static member => (member, id: member.GetCustomAttribute<IdAttribute>()))
+                    .Where(static x => x.id is not null)
                     .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
             )
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
-            .ThenBy(x => x.Id)
+            .OrderBy(static x => x.Type, StringComparer.Ordinal)
+            .ThenBy(static x => x.Id)
             .ToList();
 
         actual.ShouldBe(
-            SecretBearingBaseline.OrderBy(x => x.Type, StringComparer.Ordinal).ThenBy(x => x.Id).ToList(),
+            SecretBearingBaseline.OrderBy(static x => x.Type, StringComparer.Ordinal).ThenBy(static x => x.Id).ToList(),
             "docs/plan/05 § Serialization and schema evolution: [Id(n)] numbers are never reused and "
             + "never reordered. If this fails because a member was added, append it with the next "
             + "unused number. If it fails for any other reason, the wire contract just broke."
@@ -440,15 +440,15 @@ public sealed class IdentitySerializationTests : IDisposable {
         // contract to keep, are not unique, and would drown the list they were recorded in.
         var actual = typeof(UserProfile).Assembly
             .GetTypes()
-            .Where(x => x.GetCustomAttribute<GeneratedCodeAttribute>() is null)
-            .Select(x => x.GetCustomAttribute<AliasAttribute>()?.Alias)
-            .Where(x => x is not null)
-            .Select(x => x!)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Where(static x => x.GetCustomAttribute<GeneratedCodeAttribute>() is null)
+            .Select(static x => x.GetCustomAttribute<AliasAttribute>()?.Alias)
+            .Where(static x => x is not null)
+            .Select(static x => x!)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
 
         actual.ShouldBe(
-            PublishedAliases.OrderBy(x => x, StringComparer.Ordinal).ToList(),
+            PublishedAliases.OrderBy(static x => x, StringComparer.Ordinal).ToList(),
             "an alias string changed, or an [Alias] type was added or removed without recording it. "
             + "All three are wire-contract changes — docs/plan/04 § Failure and upgrade makes the "
             + "alias, not the CLR name, what the far side looks up."
@@ -461,14 +461,14 @@ public sealed class IdentitySerializationTests : IDisposable {
         // aliases are actually distinct, which the analyzer cannot see.
         var aliased = typeof(UserProfile).Assembly
             .GetTypes()
-            .Where(x => x.GetCustomAttribute<GenerateSerializerAttribute>() is not null)
-            .Select(x => (x.Name, Alias: x.GetCustomAttribute<AliasAttribute>()?.Alias))
+            .Where(static x => x.GetCustomAttribute<GenerateSerializerAttribute>() is not null)
+            .Select(static x => (x.Name, Alias: x.GetCustomAttribute<AliasAttribute>()?.Alias))
             .ToList();
 
         aliased.ShouldNotBeEmpty();
         aliased.ShouldAllBe(x => x.Alias != null);
 
-        aliased.Select(x => x.Alias).Distinct(StringComparer.Ordinal).Count().ShouldBe(aliased.Count);
+        aliased.Select(static x => x.Alias).Distinct(StringComparer.Ordinal).Count().ShouldBe(aliased.Count);
         aliased.ShouldAllBe(x => x.Alias!.StartsWith("CyberCloud.Identity.", StringComparison.Ordinal));
     }
 

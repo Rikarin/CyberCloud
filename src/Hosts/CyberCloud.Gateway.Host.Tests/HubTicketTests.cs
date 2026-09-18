@@ -32,7 +32,12 @@ public sealed class HubTicketTests {
     public async Task ATicketIsMintedForTheCallerAndForOneHub() {
         var gateway = new GatewayHarness();
 
-        var minted = await gateway.SendAsync("POST", "/hubs/terminal/ticket", gateway.Token(GatewayHarness.TenantA), "");
+        var minted = await gateway.SendAsync(
+            "POST",
+            "/hubs/terminal/ticket",
+            gateway.Token(GatewayHarness.TenantA),
+            ""
+        );
 
         minted.Status.ShouldBe(StatusCodes.Status200OK);
         minted.Header("Cache-Control").ShouldBe("no-store");
@@ -40,7 +45,10 @@ public sealed class HubTicketTests {
         var body = JsonDocument.Parse(minted.Body).RootElement;
         body.GetProperty("hub").GetString().ShouldBe("/hubs/terminal");
         body.GetProperty("ticket").GetString()!.Length.ShouldBe(43); // 32 bytes, base64url, no padding
-        DateTimeOffset.Parse(body.GetProperty("expiresAt").GetString()!, System.Globalization.CultureInfo.InvariantCulture)
+        DateTimeOffset.Parse(
+            body.GetProperty("expiresAt").GetString()!,
+            System.Globalization.CultureInfo.InvariantCulture
+        )
             .ShouldBe(gateway.Clock.UtcNow + HubTickets.Lifetime);
 
         // A mint is counted like the write it is, not exempted like the hub it opens.
@@ -58,7 +66,7 @@ public sealed class HubTicketTests {
             ""
         );
 
-        var upgrade = await gateway.SendAsync("GET", "/hubs/terminal", token: null, query: "ticket=" + TicketOf(minted));
+        var upgrade = await gateway.SendAsync("GET", "/hubs/terminal", null, "ticket=" + TicketOf(minted));
 
         // No outcome was written: the request left the pipeline for SignalR, as a hub request does,
         // and did so through every stage — including stage 3, which built the caller.
@@ -86,7 +94,12 @@ public sealed class HubTicketTests {
         // Two tenants mint, and the second ticket is redeemed first. The property is that a ticket is
         // keyed by its own bytes and nothing else — not "the last claims parked", not "the first".
         var gateway = new GatewayHarness();
-        var byA = await gateway.SendAsync("POST", "/hubs/terminal/ticket", gateway.Token(GatewayHarness.TenantA, "user-7"), "");
+        var byA = await gateway.SendAsync(
+            "POST",
+            "/hubs/terminal/ticket",
+            gateway.Token(GatewayHarness.TenantA, "user-7"),
+            ""
+        );
         var byB = await gateway.SendAsync(
             "POST",
             "/hubs/terminal/ticket",
@@ -111,10 +124,17 @@ public sealed class HubTicketTests {
     [Fact]
     public async Task ATicketIsSpentByItsFirstUse() {
         var gateway = new GatewayHarness();
-        var minted = await gateway.SendAsync("POST", "/hubs/terminal/ticket", gateway.Token(GatewayHarness.TenantA), "");
+        var minted = await gateway.SendAsync(
+            "POST",
+            "/hubs/terminal/ticket",
+            gateway.Token(GatewayHarness.TenantA),
+            ""
+        );
         var ticket = TicketOf(minted);
 
-        (await gateway.SendAsync("GET", "/hubs/terminal", null, "ticket=" + ticket)).Status.ShouldBe(StatusCodes.Status200OK);
+        (await gateway.SendAsync("GET", "/hubs/terminal", null, "ticket=" + ticket)).Status.ShouldBe(
+            StatusCodes.Status200OK
+        );
 
         var second = await gateway.SendAsync("GET", "/hubs/terminal", null, "ticket=" + ticket);
 
@@ -131,7 +151,12 @@ public sealed class HubTicketTests {
     [Fact]
     public async Task ATicketExpiresWithItsLifetime() {
         var gateway = new GatewayHarness();
-        var minted = await gateway.SendAsync("POST", "/hubs/terminal/ticket", gateway.Token(GatewayHarness.TenantA), "");
+        var minted = await gateway.SendAsync(
+            "POST",
+            "/hubs/terminal/ticket",
+            gateway.Token(GatewayHarness.TenantA),
+            ""
+        );
 
         gateway.Clock.Advance(HubTickets.Lifetime + TimeSpan.FromSeconds(1));
 
@@ -165,7 +190,12 @@ public sealed class HubTicketTests {
     [Fact]
     public async Task ATicketOpensOnlyTheHubItWasMintedFor() {
         var gateway = new GatewayHarness();
-        var minted = await gateway.SendAsync("POST", "/hubs/resources/ticket", gateway.Token(GatewayHarness.TenantA), "");
+        var minted = await gateway.SendAsync(
+            "POST",
+            "/hubs/resources/ticket",
+            gateway.Token(GatewayHarness.TenantA),
+            ""
+        );
         var ticket = TicketOf(minted);
 
         var wrongHub = await gateway.SendAsync("GET", "/hubs/terminal", null, "ticket=" + ticket);
@@ -179,7 +209,12 @@ public sealed class HubTicketTests {
     [Fact]
     public async Task ATicketCannotMintAnotherTicket() {
         var gateway = new GatewayHarness();
-        var minted = await gateway.SendAsync("POST", "/hubs/terminal/ticket", gateway.Token(GatewayHarness.TenantA), "");
+        var minted = await gateway.SendAsync(
+            "POST",
+            "/hubs/terminal/ticket",
+            gateway.Token(GatewayHarness.TenantA),
+            ""
+        );
 
         // The ticket route is not a hub path, so the query is not read there — the request is the
         // anonymous POST it looks like, and gets the 401 an absent header gets.
@@ -209,7 +244,12 @@ public sealed class HubTicketTests {
     [Fact]
     public async Task AHeaderWhenPresentDecidesAloneAndATicketIsNotASecondChance() {
         var gateway = new GatewayHarness();
-        var minted = await gateway.SendAsync("POST", "/hubs/terminal/ticket", gateway.Token(GatewayHarness.TenantA), "");
+        var minted = await gateway.SendAsync(
+            "POST",
+            "/hubs/terminal/ticket",
+            gateway.Token(GatewayHarness.TenantA),
+            ""
+        );
         var ticket = TicketOf(minted);
 
         var refused = await gateway.SendAsync("GET", "/hubs/terminal", "cc_forged", "ticket=" + ticket);
@@ -217,14 +257,18 @@ public sealed class HubTicketTests {
         refused.Status.ShouldBe(StatusCodes.Status401Unauthorized);
 
         // The ticket was not read, so it is still good.
-        (await gateway.SendAsync("GET", "/hubs/terminal", null, "ticket=" + ticket)).Status.ShouldBe(StatusCodes.Status200OK);
+        (await gateway.SendAsync("GET", "/hubs/terminal", null, "ticket=" + ticket)).Status.ShouldBe(
+            StatusCodes.Status200OK
+        );
     }
 
     [Fact]
     public async Task MintingNeedsATokenAndIsPostOnly() {
         var gateway = new GatewayHarness();
 
-        (await gateway.SendAsync("POST", "/hubs/terminal/ticket", null, "")).Status.ShouldBe(StatusCodes.Status401Unauthorized);
+        (await gateway.SendAsync("POST", "/hubs/terminal/ticket", null, "")).Status.ShouldBe(
+            StatusCodes.Status401Unauthorized
+        );
         (await gateway.SendAsync("GET", "/hubs/terminal/ticket", gateway.Token(GatewayHarness.TenantA), "")).Status
             .ShouldBe(StatusCodes.Status404NotFound);
         (await gateway.SendAsync("POST", "/hubs/nope/ticket", gateway.Token(GatewayHarness.TenantA), "")).Status
@@ -234,9 +278,15 @@ public sealed class HubTicketTests {
     [Fact]
     public void TheRouterKnowsTheThreeShapesUnderAHubAndNothingElse() {
         GatewayRouter.Resolve("/hubs/terminal", "GET", Guid.Empty).GetValueOrThrow().Kind.ShouldBe(RouteKind.Hub);
-        GatewayRouter.Resolve("/hubs/terminal/negotiate", "POST", Guid.Empty).GetValueOrThrow().Kind.ShouldBe(RouteKind.Hub);
-        GatewayRouter.Resolve("/hubs/terminal/ticket", "POST", Guid.Empty).GetValueOrThrow().Kind.ShouldBe(RouteKind.HubTicket);
-        GatewayRouter.Resolve("/hubs/terminal/ticket", "POST", Guid.Empty).GetValueOrThrow().HubName.ShouldBe("terminal");
+        GatewayRouter.Resolve("/hubs/terminal/negotiate", "POST", Guid.Empty)
+            .GetValueOrThrow()
+            .Kind.ShouldBe(RouteKind.Hub);
+        GatewayRouter.Resolve("/hubs/terminal/ticket", "POST", Guid.Empty)
+            .GetValueOrThrow()
+            .Kind.ShouldBe(RouteKind.HubTicket);
+        GatewayRouter.Resolve("/hubs/terminal/ticket", "POST", Guid.Empty)
+            .GetValueOrThrow()
+            .HubName.ShouldBe("terminal");
         GatewayRouter.Resolve("/hubs/terminal/ticket", "GET", Guid.Empty).IsFailure.ShouldBeTrue();
         GatewayRouter.Resolve("/hubs/terminal/other", "GET", Guid.Empty).IsFailure.ShouldBeTrue();
         GatewayRouter.Resolve("/hubs/terminal/ticket/more", "POST", Guid.Empty).IsFailure.ShouldBeTrue();
@@ -253,7 +303,12 @@ public sealed class HubTicketTests {
         // to every SignalR client that negotiated. It is the hub.
         var gateway = new GatewayHarness();
 
-        var response = await gateway.SendAsync("POST", "/hubs/resources/negotiate", gateway.Token(GatewayHarness.TenantA), "");
+        var response = await gateway.SendAsync(
+            "POST",
+            "/hubs/resources/negotiate",
+            gateway.Token(GatewayHarness.TenantA),
+            ""
+        );
 
         response.Status.ShouldBe(StatusCodes.Status200OK);
         response.Body.ShouldBeEmpty();

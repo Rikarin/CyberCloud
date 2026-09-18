@@ -172,7 +172,7 @@ static class ExtensionLauncher {
     static void Kill(Process child) {
         try {
             if (!child.HasExited) {
-                child.Kill(entireProcessTree: true);
+                child.Kill(true);
             }
         } catch (Exception e) when (e is InvalidOperationException
                                         or NotSupportedException

@@ -61,7 +61,7 @@ public static class TenancySiloBuilderExtensions {
     public static ISiloBuilder AddCyberCloudTenantSeparation(this ISiloBuilder silo) {
         ArgumentNullException.ThrowIfNull(silo);
 
-        silo.ConfigureServices(services => {
+        silo.ConfigureServices(static services => {
                 // Defaults that DENY. See IPlatformOperatorAuthority — a stand-in that allowed would be
                 // a hole with a comment on it. A host that wants the platform edge registers a real one
                 // before this call.
@@ -73,8 +73,8 @@ public static class TenancySiloBuilderExtensions {
         );
 
         return silo.AddMultitenantCommunicationSeparation(
-            sp => sp.GetRequiredService<PlatformCrossTenantAuthorizer>(),
-            sp => sp.GetRequiredService<CyberCloudGrainCallTenantSeparator>()
+            static sp => sp.GetRequiredService<PlatformCrossTenantAuthorizer>(),
+            static sp => sp.GetRequiredService<CyberCloudGrainCallTenantSeparator>()
         );
     }
 
@@ -129,7 +129,7 @@ public static class TenancySiloBuilderExtensions {
                 // silo's answer.
                 services.AddKeyedSingleton<IControllable>(
                     ShardMapPropagation.ProviderName,
-                    (sp, _) => new ShardMapMirrorController(sp.GetRequiredService<ShardMapRefresher>())
+                    static (sp, _) => new ShardMapMirrorController(sp.GetRequiredService<ShardMapRefresher>())
                 );
 
                 services.AddSingleton<TenantDirectoryCache>();

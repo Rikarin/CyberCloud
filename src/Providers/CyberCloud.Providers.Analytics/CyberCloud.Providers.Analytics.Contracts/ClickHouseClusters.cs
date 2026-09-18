@@ -612,8 +612,8 @@ public static class ClickHouseClusters {
                     "/properties/monitoring/enabled",
                     SchemaKind.Boolean,
                     Description: "Whether ClickHouse's own Prometheus endpoint is served on port 9363. "
-                    + "On by default — docs/plan/12: \"a managed service the tenant cannot see the "
-                    + "health of is a black box they will not trust with production\". ⚠ It makes the "
+                    + """On by default — docs/plan/12: "a managed service the tenant cannot see the """
+                    + """health of is a black box they will not trust with production". ⚠ It makes the """
                     + "metrics exist; the object that scrapes them is not built — see "
                     + "conformance.yaml § owed."
                 ) { DefaultJson = "true" }
@@ -675,7 +675,8 @@ public static class ClickHouseClusters {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 

@@ -197,7 +197,7 @@ public sealed class DriftScanner(IClock clock) {
 
             var diverged = (owned ?? [])
                 .Where(x => !string.Equals(x.ReconcileHash, resource.DesiredHash, StringComparison.Ordinal))
-                .Select(x => x.Target)
+                .Select(static x => x.Target)
                 .ToList();
 
             var reasons = new List<string>();
@@ -227,13 +227,13 @@ public sealed class DriftScanner(IClock clock) {
 
                 if (onThisObject.Count == 0) {
                     leftBehind.Add(record.Target);
-                } else if (!onThisObject.Any(x => string.Equals(x.Hash, fragment.Hash, StringComparison.Ordinal))) {
+                } else if (!onThisObject.Exists(x => string.Equals(x.Hash, fragment.Hash, StringComparison.Ordinal))) {
                     changed.Add(record.Target);
                 }
             }
 
             foreach (var slice in expectedFragments) {
-                if (!(coWritten ?? []).Any(x => x.Record.Target == slice.Target)) {
+                if (!(coWritten ?? []).Exists(x => x.Record.Target == slice.Target)) {
                     missing.Add(slice.Target);
                 }
             }
@@ -291,7 +291,7 @@ public sealed class DriftScanner(IClock clock) {
                     Kind = DriftKind.Orphan,
                     ResourceId = pair.Key,
                     ResourcePath = pair.Value[0].ResourcePath,
-                    Objects = [.. pair.Value.Select(x => x.Target)],
+                    Objects = [.. pair.Value.Select(static x => x.Target)],
                     Detail = $"{pair.Value.Count.ToString(CultureInfo.InvariantCulture)} labelled "
                         + $"objects carry resource-id {pair.Key:D} and no resource grain owns it. They "
                         + "are running and nothing is metering them."
@@ -317,7 +317,7 @@ public sealed class DriftScanner(IClock clock) {
                     Kind = DriftKind.Orphan,
                     ResourceId = pair.Key,
                     ResourcePath = pair.Value[0].Fragment.Path,
-                    Objects = [.. pair.Value.Select(x => x.Record.Target)],
+                    Objects = [.. pair.Value.Select(static x => x.Record.Target)],
                     Detail = $"{pair.Value.Count.ToString(CultureInfo.InvariantCulture)} object(s) carry "
                         + $"a fragment of resource {pair.Key:D}'s and no resource grain owns it. The "
                         + "objects are their owners'; the fragment is a slice no co-writer will ever "

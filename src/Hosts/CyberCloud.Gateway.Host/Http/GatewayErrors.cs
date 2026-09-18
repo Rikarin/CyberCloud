@@ -49,7 +49,7 @@ static class GatewayErrors {
         new(
             ErrorCode.InvalidApiVersion,
             supplied.Length == 0
-                ? $"The 'api-version' query parameter is required on every request. The current "
+                ? "The 'api-version' query parameter is required on every request. The current "
                 + $"version is '{current}'. docs/plan/10 § API versioning."
                 : $"'{supplied}' is not an api-version this platform serves. The current version is "
                 + $"'{current}'. Versions are dates and are immutable, so a version that once worked "

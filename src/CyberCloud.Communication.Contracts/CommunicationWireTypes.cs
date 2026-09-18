@@ -259,8 +259,11 @@ public sealed record ChannelConfiguration {
     ///     this configuration, or empty for one written without a resource behind it.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A service holds one configuration per <see cref="ChannelKind" />, and this is what
-    ///     stops two resources from fighting over it.</b> The tenant-facing provider declares the
+    ///     ⚠
+    ///     <b>
+    ///         A service holds one configuration per <see cref="ChannelKind" />, and this is what
+    ///         stops two resources from fighting over it.
+    ///     </b> The tenant-facing provider declares the
     ///     kind as a body property rather than as the resource's name — the shared conformance
     ///     suite names resources itself, so a name that had to spell the kind would fail every
     ///     provider's suite — which means two <c>channels</c> resources can both say
@@ -483,10 +486,10 @@ public sealed record SendRequest {
         "CyberCloud.Security",
         "CC1005:A secret must not be a serialized member of grain state",
         Justification =
-        "Not a secret. This is the client-supplied idempotency key of docs/plan/17 § The parts "
-        + "that are actually the work — a value the caller chooses so that a retry repeats it, "
-        + "deliberately logged, traced and used as half a grain key. A credential is the thing "
-        + "you must not repeat; this is the thing you must. The name is docs/plan/17's."
+            "Not a secret. This is the client-supplied idempotency key of docs/plan/17 § The parts "
+            + "that are actually the work — a value the caller chooses so that a retry repeats it, "
+            + "deliberately logged, traced and used as half a grain key. A credential is the thing "
+            + "you must not repeat; this is the thing you must. The name is docs/plan/17's."
     )]
     public string IdempotencyKey { get; init; } = string.Empty;
 }

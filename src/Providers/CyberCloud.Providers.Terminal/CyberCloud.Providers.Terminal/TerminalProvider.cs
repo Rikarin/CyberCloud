@@ -147,13 +147,13 @@ public sealed class TerminalProvider : IResourceProvider {
             .Display(
                 "Cloud terminal",
                 "Cloud terminals",
-                shortName: ShortName,
-                summary: "A browser shell running in this subscription's own cluster, holding a "
+                ShortName,
+                "A browser shell running in this subscription's own cluster, holding a "
                 + "managed identity, with a persistent home directory and no stored credential."
             )
             .Chart(CloudConsoles.ChartName)
             .SupportsTags()
-            .RequiresCluster(CloudConsoles.ClusterIdPointer);
+            .RequiresCluster();
     }
 
     /// <summary>What a console reserves against <see cref="QuotaMeter.StorageGb" />.</summary>
@@ -168,7 +168,7 @@ public sealed class TerminalProvider : IResourceProvider {
         MeterDerivation.Of(
             "home.size, in GiB",
             ["/properties/home/size"],
-            body => KubeQuantity.TryGibibytes(CloudConsoles.HomeSize(body), out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(CloudConsoles.HomeSize(body), out var gibibytes)
                 ? Result<decimal>.Success(gibibytes)
                 : Result<decimal>.Failure(
                     ErrorCode.InternalError,

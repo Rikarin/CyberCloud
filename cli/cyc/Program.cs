@@ -46,7 +46,7 @@ static class Program {
             // ⚠ The last line of defence. Anything that escapes CycApplication — a failure building
             // the host itself, an unreadable config file — still leaves the process with one of the
             // six documented codes rather than an unhandled-exception 134.
-            return ErrorWriter.Report(console, Output.OutputFormat.Table, failure, verbose: args.Contains("--verbose"));
+            return ErrorWriter.Report(console, Output.OutputFormat.Table, failure, args.Contains("--verbose"));
         }
     }
 

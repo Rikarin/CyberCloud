@@ -133,7 +133,7 @@ public sealed class CommunicationServiceGrain(
             return Task.FromResult(NotFound<ChannelConfiguration>());
         }
 
-        var found = state.State.Channels.FirstOrDefault(x => x.Channel == channel);
+        var found = state.State.Channels.Find(x => x.Channel == channel);
 
         return Task.FromResult(
             found is null

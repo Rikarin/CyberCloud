@@ -12,8 +12,8 @@ public sealed class RetryTests {
     /// </summary>
     [Fact]
     public async Task A_429_waits_the_Retry_After_the_service_asked_for() {
-        var transport = new ScriptedTransport((request, index) => index == 0
-                ? Responses.TooManyRequests(retryAfterSeconds: 1)
+        var transport = new ScriptedTransport(static (request, index) => index == 0
+                ? Responses.TooManyRequests(1)
                 : Responses.Json(HttpStatusCode.OK, TestClient.WidgetBody)
         );
 
@@ -32,7 +32,7 @@ public sealed class RetryTests {
 
     [Fact]
     public async Task A_5xx_is_retried_with_backoff() {
-        var transport = new ScriptedTransport((request, index) => index < 2
+        var transport = new ScriptedTransport(static (request, index) => index < 2
                 ? Responses.Json(
                     HttpStatusCode.ServiceUnavailable,
                     """{"error":{"code":"InternalError","message":"Restarting."}}"""
@@ -74,7 +74,7 @@ public sealed class RetryTests {
 
     [Fact]
     public async Task A_retried_request_still_carries_its_body() {
-        var transport = new ScriptedTransport((request, index) => index == 0
+        var transport = new ScriptedTransport(static (request, index) => index == 0
                 ? Responses.Json(HttpStatusCode.ServiceUnavailable, "{}")
                 : Responses.Accepted(TestClient.OperationUri)
         );
@@ -99,8 +99,8 @@ public sealed class CorrelationTests {
     /// </summary>
     [Fact]
     public async Task Every_attempt_of_one_call_carries_the_same_correlation_id() {
-        var transport = new ScriptedTransport((request, index) => index < 2
-                ? Responses.TooManyRequests(retryAfterSeconds: 0)
+        var transport = new ScriptedTransport(static (request, index) => index < 2
+                ? Responses.TooManyRequests(0)
                 : Responses.Json(HttpStatusCode.OK, TestClient.WidgetBody)
         );
 
@@ -110,7 +110,7 @@ public sealed class CorrelationTests {
 
         transport.RequestCount.ShouldBe(3);
 
-        var ids = transport.Requests.Select(x => x.CorrelationId).ToList();
+        var ids = transport.Requests.Select(static x => x.CorrelationId).ToList();
 
         ids.ShouldAllBe(x => x != null);
         ids.Distinct(StringComparer.Ordinal).Count().ShouldBe(1);
@@ -118,7 +118,7 @@ public sealed class CorrelationTests {
 
     [Fact]
     public async Task Two_calls_carry_two_ids() {
-        var transport = new ScriptedTransport((request, index) => Responses.Json(
+        var transport = new ScriptedTransport(static (request, index) => Responses.Json(
                 HttpStatusCode.OK,
                 TestClient.WidgetBody
             )
@@ -140,13 +140,15 @@ public sealed class CorrelationTests {
     public async Task An_ambient_activity_supplies_the_correlation_id() {
         using var source = new ActivitySource("CyberCloud.Sdk.Tests");
         using var listener = new ActivityListener {
-            ShouldListenTo = x => x.Name == "CyberCloud.Sdk.Tests",
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData
+            ShouldListenTo = static x => x.Name == "CyberCloud.Sdk.Tests",
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData
         };
+        listener.ShouldListenTo = x => x.Name == "CyberCloud.Sdk.Tests";
+        listener.Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData;
 
         ActivitySource.AddActivityListener(listener);
 
-        var transport = new ScriptedTransport((request, index) => Responses.Json(
+        var transport = new ScriptedTransport(static (request, index) => Responses.Json(
                 HttpStatusCode.OK,
                 TestClient.WidgetBody
             )
@@ -163,7 +165,7 @@ public sealed class CorrelationTests {
 
     [Fact]
     public async Task Every_request_carries_the_api_version() {
-        var transport = new ScriptedTransport((request, index) => Responses.Json(
+        var transport = new ScriptedTransport(static (request, index) => Responses.Json(
                 HttpStatusCode.OK,
                 TestClient.WidgetBody
             )
@@ -183,7 +185,7 @@ public sealed class CorrelationTests {
     /// </summary>
     [Fact]
     public async Task A_url_that_already_names_the_api_version_is_left_alone() {
-        var transport = new ScriptedTransport((request, index) => index switch {
+        var transport = new ScriptedTransport(static (request, index) => index switch {
                 0 => Responses.Accepted(TestClient.OperationUri),
                 _ => Responses.Operation("Succeeded"),
             }
@@ -249,7 +251,7 @@ public sealed class ErrorTargetSurvivesTests {
             new HttpResponseMessage(HttpStatusCode.BadGateway) { Content = new StringContent("<html>502</html>") }
         );
 
-        using var client = TestClient.Create(transport, configure: options => options.Retry.MaxRetries = 0);
+        using var client = TestClient.Create(transport, configure: static options => options.Retry.MaxRetries = 0);
 
         var thrown = await Should.ThrowAsync<CyberCloudRequestFailedException>(async () => await client.Widgets()
                 .GetAsync("main", Cancel.Token)
@@ -265,7 +267,7 @@ public sealed class ErrorTargetSurvivesTests {
 public sealed class ResponseTests {
     [Fact]
     public async Task A_found_resource_has_a_value() {
-        var transport = new ScriptedTransport((request, index) => Responses.Json(
+        var transport = new ScriptedTransport(static (request, index) => Responses.Json(
                 HttpStatusCode.OK,
                 TestClient.WidgetBody
             )
@@ -286,7 +288,7 @@ public sealed class ResponseTests {
     /// </summary>
     [Fact]
     public async Task A_missing_resource_is_an_answer_rather_than_an_exception() {
-        var transport = new ScriptedTransport((request, index) =>
+        var transport = new ScriptedTransport(static (request, index) =>
             Responses.Json(
                 HttpStatusCode.NotFound,
                 """{"error":{"code":"ResourceNotFound","message":"No such widget."}}"""
@@ -304,7 +306,7 @@ public sealed class ResponseTests {
 
     [Fact]
     public async Task A_response_converts_implicitly_to_its_value() {
-        var transport = new ScriptedTransport((request, index) => Responses.Json(
+        var transport = new ScriptedTransport(static (request, index) => Responses.Json(
                 HttpStatusCode.OK,
                 TestClient.WidgetBody
             )
@@ -323,13 +325,13 @@ public sealed class PageableTests {
         Responses.Json(
             HttpStatusCode.OK,
             $$"""
-              {"value":[{{TestClient.WidgetNamed(name, location: name)}}]{{(nextLink is null ? "" : $",\"nextLink\":\"{nextLink}\"")}}}
+              {"value":[{{TestClient.WidgetNamed(name, name)}}]{{(nextLink is null ? "" : $",\"nextLink\":\"{nextLink}\"")}}}
               """
         );
 
     [Fact]
     public async Task Every_page_is_enumerated_and_pages_are_fetched_lazily() {
-        var transport = new ScriptedTransport((request, index) => index switch {
+        var transport = new ScriptedTransport(static (request, index) => index switch {
                 0 => PageOf("one", "https://api.cybercloud.test/widgets?page=2&api-version=2026-08-01"),
                 1 => PageOf("two", "https://api.cybercloud.test/widgets?page=3&api-version=2026-08-01"),
                 _ => PageOf("three", null),
@@ -344,7 +346,7 @@ public sealed class PageableTests {
             seen.Add((widget.Data.Location, transport.RequestCount));
         }
 
-        seen.Select(x => x.Location).ShouldBe(["one", "two", "three"]);
+        seen.Select(static x => x.Location).ShouldBe(["one", "two", "three"]);
 
         // Lazy: the third page has not been fetched when the first item is yielded.
         seen[0].RequestsSoFar.ShouldBe(1);
@@ -353,7 +355,7 @@ public sealed class PageableTests {
 
     [Fact]
     public async Task AsPages_exposes_the_continuation_token() {
-        var transport = new ScriptedTransport((request, index) => index == 0
+        var transport = new ScriptedTransport(static (request, index) => index == 0
                 ? PageOf("one", "https://api.cybercloud.test/widgets?page=2&api-version=2026-08-01")
                 : PageOf("two", null)
         );
@@ -374,9 +376,9 @@ public sealed class PageableTests {
     /// <summary>A <c>429</c> between pages is the pipeline's problem, not the consumer's.</summary>
     [Fact]
     public async Task A_429_between_pages_is_retried_underneath() {
-        var transport = new ScriptedTransport((request, index) => index switch {
+        var transport = new ScriptedTransport(static (request, index) => index switch {
                 0 => PageOf("one", "https://api.cybercloud.test/widgets?page=2&api-version=2026-08-01"),
-                1 => Responses.TooManyRequests(retryAfterSeconds: 0),
+                1 => Responses.TooManyRequests(0),
                 _ => PageOf("two", null),
             }
         );

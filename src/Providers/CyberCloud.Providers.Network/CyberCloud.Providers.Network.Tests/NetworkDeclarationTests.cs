@@ -17,7 +17,7 @@ public sealed class NetworkDeclarationTests {
 
         registry.Types.Length.ShouldBe(7);
 
-        registry.Types.Select(x => x.Type.ToString())
+        registry.Types.Select(static x => x.Type.ToString())
             .ShouldBe(
                 [
                     "CyberCloud.Network/virtualNetworks",
@@ -39,7 +39,7 @@ public sealed class NetworkDeclarationTests {
                     // off is the LOCAL side of the exchange, and the body names the remote.
                     "CyberCloud.Network/virtualNetworks/peerings"
                 ],
-                ignoreOrder: true
+                true
             );
     }
 
@@ -56,12 +56,12 @@ public sealed class NetworkDeclarationTests {
         // declared through `Meter(PublicIps, "/properties/count")` by somebody being helpful would
         // turn every create into a 500. `Meters(...)` is the pointerless overload and this pins it.
         foreach (var type in Build().Types) {
-            var meters = type.Meters.Select(x => x.Meter).ToList();
+            var meters = type.Meters.Select(static x => x.Meter).ToList();
 
             meters.ShouldContain(QuotaMeter.Resources, type.Type.ToString());
 
             if (type.Type == PublicIpAddresses.Type) {
-                meters.ShouldBe([QuotaMeter.PublicIps, QuotaMeter.Resources], ignoreOrder: true);
+                meters.ShouldBe([QuotaMeter.PublicIps, QuotaMeter.Resources], true);
             } else {
                 meters.ShouldNotContain(
                     QuotaMeter.PublicIps,
@@ -102,12 +102,12 @@ public sealed class NetworkDeclarationTests {
         // `if config.EnableLb` and ADR-019 sets ENABLE_LB=false. So the proxy is a pod, and a pod is
         // vCPU and memory somebody is charged for.
         foreach (var type in Build().Types) {
-            var meters = type.Meters.Select(x => x.Meter).ToList();
+            var meters = type.Meters.Select(static x => x.Meter).ToList();
 
             if (type.Type == LoadBalancers.Type) {
                 meters.ShouldBe(
                     [QuotaMeter.Vcpu, QuotaMeter.MemoryGb, QuotaMeter.Resources],
-                    ignoreOrder: true
+                    true
                 );
 
                 continue;
@@ -121,7 +121,7 @@ public sealed class NetworkDeclarationTests {
         // one ConfigMap and HAProxy in TCP mode buffers in memory — a storage meter would reserve
         // disk nothing allocates.
         foreach (var type in Build().Types) {
-            type.Meters.Select(x => x.Meter)
+            type.Meters.Select(static x => x.Meter)
                 .ShouldNotContain(
                     QuotaMeter.StorageGb,
                     type.Type.ToString()
@@ -231,7 +231,7 @@ public sealed class NetworkDeclarationTests {
         // ⚠ `peering` AND NOT `peer`, for the same argument a fourth time.
         ShortNames().ShouldBe(
             ["vnet", "subnet", "secgroup", "publicip", "loadbalancer", "natgateway", "peering"],
-            ignoreOrder: true
+            true
         );
     }
 
@@ -363,7 +363,7 @@ public sealed class NetworkDeclarationTests {
         // chart description, so it is the one place an optimistic sentence would spread from. Deriving
         // it from the constant rather than restating it is what makes that impossible; this asserts
         // the derivation is real.
-        var network = Build().Types.Single(x => x.Type == VirtualNetworks.Type);
+        var network = Build().Types.Single(static x => x.Type == VirtualNetworks.Type);
 
         network.Display.Summary.ShouldContain(VirtualNetworks.IsolationClaim, Case.Sensitive);
     }
@@ -380,7 +380,7 @@ public sealed class NetworkDeclarationTests {
         // ⚠ THE TEST THAT MAKES docs/plan/14'S WARNING CHECKABLE. Every word here is one a reader
         // completes with a stronger guarantee than Open vSwitch provides. The claim says
         // "network-layer tenant separation … on shared hardware", which is what is true.
-        VirtualNetworks.IsolationClaim.ShouldNotContain(forbidden, Case.Insensitive);
+        VirtualNetworks.IsolationClaim.ShouldNotContain(forbidden);
 
         foreach (var type in Build().Types) {
             type.Display.Summary.ShouldNotContain(forbidden, Case.Insensitive, type.Type.ToString());
@@ -392,7 +392,7 @@ public sealed class NetworkDeclarationTests {
         // ⚠ The positive half. A claim that merely avoids the forbidden words could still imply more
         // by omission; docs/plan/14's caveat is specifically that Kube-OVN is NOT a hardware boundary
         // and that "a kernel bug in OVS is a cross-tenant risk", so the sentence has to say so.
-        VirtualNetworks.IsolationClaim.ShouldContain("shared hardware", Case.Insensitive);
+        VirtualNetworks.IsolationClaim.ShouldContain("shared hardware");
     }
 
     [Fact]
@@ -401,7 +401,7 @@ public sealed class NetworkDeclarationTests {
 
         limits.Length.ShouldBeGreaterThanOrEqualTo(4);
 
-        limits.Select(x => x.Id).Distinct(StringComparer.Ordinal).Count().ShouldBe(limits.Length);
+        limits.Select(static x => x.Id).Distinct(StringComparer.Ordinal).Count().ShouldBe(limits.Length);
 
         limits.ShouldContain(x => x.Id == "not-a-hardware-boundary");
 
@@ -425,7 +425,7 @@ public sealed class NetworkDeclarationTests {
         // ⚠ The limits are an ARRAY OF SENTENCES rather than an array of rows, because
         // SchemaProperty.ElementKind refuses an array of objects. The structured table the platform
         // holds is flattened on the way out; this pins the shape so the reason stays visible.
-        var limits = response.Properties.Single(x => x.JsonPointer == "/limits");
+        var limits = response.Properties.Single(static x => x.JsonPointer == "/limits");
 
         limits.Kind.ShouldBe(SchemaKind.Array);
         limits.ElementKind.ShouldBe(SchemaKind.Text);
@@ -433,7 +433,7 @@ public sealed class NetworkDeclarationTests {
 
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────────
 
-    static IEnumerable<string> ShortNames() => Build().Types.Select(x => x.Display.Alias);
+    static IEnumerable<string> ShortNames() => Build().Types.Select(static x => x.Display.Alias);
 
     /// <summary>
     ///     What this provider puts into the <c>cyc</c> token namespace, read off the built registry.
@@ -447,7 +447,7 @@ public sealed class NetworkDeclarationTests {
     ///     embedded tree in <c>dotnet test</c>. None of the three is a list.
     /// </remarks>
     static IEnumerable<CliDeclaration> Declarations() =>
-        Build().Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias));
+        Build().Types.Select(static x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias));
 
     static ProviderRegistry Build() => ProviderRegistry.Build([new NetworkProvider()]);
 }

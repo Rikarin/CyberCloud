@@ -12,8 +12,11 @@ namespace CyberCloud.ResourceGraph.Tests.Query;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The golden file is the SQL, its parameters and its output columns, and a change to
-///         any of the three is a deliberate edit to the file.</b> Set
+///         ⚠
+///         <b>
+///             The golden file is the SQL, its parameters and its output columns, and a change to
+///             any of the three is a deliberate edit to the file.
+///         </b> Set
 ///         <c>CYBERCLOUD_UPDATE_GOLDEN=1</c> to rewrite every <c>.sql</c> from the current translator
 ///         and read the diff; the diff is the review. A case's first line may be
 ///         <c>// offset: N</c> to translate as the page after <c>N</c> rows.
@@ -31,7 +34,8 @@ public sealed class KqlTranslationGoldenTests {
 
     public static readonly ImmutableArray<string> Caller = ["user:alice", "group:eng#member"];
 
-    static readonly string GoldenDirectory = Path.Combine(RepositoryRoot(), "src", "CyberCloud.ResourceGraph.Tests", "Query", "Golden");
+    static readonly string GoldenDirectory =
+        Path.Combine(RepositoryRoot(), "src", "CyberCloud.ResourceGraph.Tests", "Query", "Golden");
 
     /// <summary>Every case's file name without its extension, as xUnit theory rows.</summary>
     public static TheoryData<string> Cases {
@@ -59,34 +63,59 @@ public sealed class KqlTranslationGoldenTests {
 
         // ── The invariants every case carries ──────────────────────────────────────────────────
         query.Sql.ShouldContain("is_deleted = 0", customMessage: "a tombstone is never a result");
-        query.Sql.ShouldContain($"hasAny(access, {{{KqlTranslator.AccessParameter}:Array(String)}})", customMessage: "the access filter is not optional");
-        query.Sql.ShouldContain(ResourceGraphTable.Qualified(Tenant), customMessage: "the caller's tenant database and no other");
-        query.Parameters.ShouldContain(x => x.Name == KqlTranslator.AccessParameter && x.Value == "['user:alice','group:eng#member']");
-        query.Sql.ShouldEndWith(" LIMIT " + (query.PageSize + 1).ToString(CultureInfo.InvariantCulture) + (offset > 0 ? " OFFSET " + offset.ToString(CultureInfo.InvariantCulture) : ""));
+        query.Sql.ShouldContain(
+            $"hasAny(access, {{{KqlTranslator.AccessParameter}:Array(String)}})",
+            customMessage: "the access filter is not optional"
+        );
+        query.Sql.ShouldContain(
+            ResourceGraphTable.Qualified(Tenant),
+            customMessage: "the caller's tenant database and no other"
+        );
+        query.Parameters.ShouldContain(x => x.Name == KqlTranslator.AccessParameter
+            && x.Value == "['user:alice','group:eng#member']"
+        );
+        query.Sql.ShouldEndWith(
+            " LIMIT "
+            + (query.PageSize + 1).ToString(CultureInfo.InvariantCulture)
+            + (offset > 0 ? " OFFSET " + offset.ToString(CultureInfo.InvariantCulture) : "")
+        );
 
         // ⚠ Every string literal the query spelled is a parameter value and never SQL text. The
         // SQL does carry quotes of its own — concat(provider, '/', type), = '' — so the assertion is
         // about the caller's literals, read back off the parse tree, and not about the quote character.
         foreach (var literal in StringLiterals(kql)) {
-            query.Sql.ShouldNotContain("'" + literal + "'", customMessage: $"the literal '{literal}' reached the SQL text");
-            query.Parameters.ShouldContain(x => x.Value.Contains(literal, StringComparison.Ordinal), $"the literal '{literal}' is bound by no parameter");
+            query.Sql.ShouldNotContain(
+                "'" + literal + "'",
+                customMessage: $"the literal '{literal}' reached the SQL text"
+            );
+            query.Parameters.ShouldContain(
+                x => x.Value.Contains(literal, StringComparison.Ordinal),
+                $"the literal '{literal}' is bound by no parameter"
+            );
         }
 
         // ── The bytes ──────────────────────────────────────────────────────────────────────────
         var rendered = Render(query);
         var goldenPath = Path.Combine(GoldenDirectory, name + ".sql");
 
-        if (string.Equals(Environment.GetEnvironmentVariable("CYBERCLOUD_UPDATE_GOLDEN"), "1", StringComparison.Ordinal)) {
+        if (string.Equals(
+                Environment.GetEnvironmentVariable("CYBERCLOUD_UPDATE_GOLDEN"),
+                "1",
+                StringComparison.Ordinal
+            )) {
             File.WriteAllText(goldenPath, rendered, new UTF8Encoding(false));
         }
 
-        File.Exists(goldenPath).ShouldBeTrue($"{name}.sql is missing; run with CYBERCLOUD_UPDATE_GOLDEN=1 to write it, then read it");
+        File.Exists(goldenPath)
+            .ShouldBeTrue($"{name}.sql is missing; run with CYBERCLOUD_UPDATE_GOLDEN=1 to write it, then read it");
 
-        File.ReadAllText(goldenPath).ReplaceLineEndings("\n").ShouldBe(
-            rendered,
-            $"{name}.kql translates differently from {name}.sql. If the new translation is the intended one, "
-            + "rerun with CYBERCLOUD_UPDATE_GOLDEN=1 and review the diff."
-        );
+        File.ReadAllText(goldenPath)
+            .ReplaceLineEndings("\n")
+            .ShouldBe(
+                rendered,
+                $"{name}.kql translates differently from {name}.sql. If the new translation is the intended one, "
+                + "rerun with CYBERCLOUD_UPDATE_GOLDEN=1 and review the diff."
+            );
     }
 
     [Fact]
@@ -113,7 +142,7 @@ public sealed class KqlTranslationGoldenTests {
     }
 
     /// <summary>The fixed context every case translates under.</summary>
-    public static KqlTranslationContext Context(long offset = 0) => new(Tenant, Caller, PageSize: 50, offset);
+    public static KqlTranslationContext Context(long offset = 0) => new(Tenant, Caller, 50, offset);
 
     /// <summary>Every non-empty string literal in the query, as the parser reads it (quotes and doubling removed).</summary>
     public static IReadOnlyList<string> StringLiterals(string kql) {
@@ -124,7 +153,9 @@ public sealed class KqlTranslationGoldenTests {
         void Collect(Kusto.Language.Syntax.SyntaxNode node) {
             for (var i = 0; i < node.ChildCount; i++) {
                 switch (node.GetChild(i)) {
-                    case Kusto.Language.Syntax.SyntaxToken { Kind: Kusto.Language.Syntax.SyntaxKind.StringLiteralToken } token when token.ValueText.Length > 0:
+                    case Kusto.Language.Syntax.SyntaxToken {
+                        Kind: Kusto.Language.Syntax.SyntaxKind.StringLiteralToken
+                    } token when token.ValueText.Length > 0:
                         literals.Add(token.ValueText);
                         break;
                     case Kusto.Language.Syntax.SyntaxNode child:
@@ -149,11 +180,17 @@ public sealed class KqlTranslationGoldenTests {
         built.Append(query.Sql).Append("\n\n-- parameters\n");
 
         foreach (var parameter in query.Parameters) {
-            built.Append("-- ").Append(parameter.Name).Append(':').Append(parameter.ClickHouseType).Append(" = ").Append(parameter.Value).Append('\n');
+            built.Append("-- ")
+                .Append(parameter.Name)
+                .Append(':')
+                .Append(parameter.ClickHouseType)
+                .Append(" = ")
+                .Append(parameter.Value)
+                .Append('\n');
         }
 
         built.Append("\n-- columns\n-- ");
-        built.AppendJoin(", ", query.Columns.Select(x => x.Name + ":" + x.Type));
+        built.AppendJoin(", ", query.Columns.Select(static x => x.Name + ":" + x.Type));
         built.Append('\n');
 
         return built.ToString();
@@ -167,6 +204,8 @@ public sealed class KqlTranslationGoldenTests {
         }
 
         return directory?.FullName
-            ?? throw new InvalidOperationException("No CyberCloud.slnx above " + AppContext.BaseDirectory + ", so the golden files cannot be found.");
+            ?? throw new InvalidOperationException(
+                "No CyberCloud.slnx above " + AppContext.BaseDirectory + ", so the golden files cannot be found."
+            );
     }
 }

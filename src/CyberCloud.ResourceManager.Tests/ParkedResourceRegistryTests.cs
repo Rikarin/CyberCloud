@@ -1,5 +1,3 @@
-using CyberCloud.ResourceManager.Tests.Infrastructure;
-
 namespace CyberCloud.ResourceManager.Tests;
 
 /// <summary>
@@ -44,7 +42,7 @@ public sealed class ParkedResourceRegistryTests(ResourceManagerCluster cluster) 
 
         var listed = (await Registry(address).ListAsync()).GetValueOrThrow();
 
-        listed.Select(x => x.ResourceId).ShouldBe([address.Id]);
+        listed.Select(static x => x.ResourceId).ShouldBe([address.Id]);
         listed[0].Path.ShouldBe(address.Path);
         listed[0].AddressOf().Name.ShouldBe("kept");
         listed[0].AddressOf().CanonicalPath.ShouldBe(address.CanonicalPath);
@@ -155,9 +153,9 @@ public sealed class ParkedResourceRegistryTests(ResourceManagerCluster cluster) 
         var vaults = (await Registry(topLevel).ListOfTypeAsync(ResourceCollectionId.Of(topLevel)))
             .GetValueOrThrow();
 
-        first.Select(x => x.AddressOf().Name).ShouldBe(["one"]);
-        second.Select(x => x.AddressOf().Name).ShouldBe(["two"]);
-        vaults.Select(x => x.AddressOf().Name).ShouldBe(["a-vault"]);
+        first.Select(static x => x.AddressOf().Name).ShouldBe(["one"]);
+        second.Select(static x => x.AddressOf().Name).ShouldBe(["two"]);
+        vaults.Select(static x => x.AddressOf().Name).ShouldBe(["a-vault"]);
 
         // …and the calibration: all three are in the group, so the three short answers above are the
         // filter working rather than three empty registries.
@@ -196,9 +194,9 @@ public sealed class ParkedResourceRegistryTests(ResourceManagerCluster cluster) 
 
         var listed = (await Registry(Vault(group, "apple")).ListAsync()).GetValueOrThrow();
 
-        listed.Select(x => x.AddressOf().Name).ShouldBe(["apple", "banana", "cherry"]);
-        listed.Select(x => x.AddressOf().CanonicalPath)
-            .ShouldBe(listed.Select(x => x.AddressOf().CanonicalPath).Order(StringComparer.Ordinal));
+        listed.Select(static x => x.AddressOf().Name).ShouldBe(["apple", "banana", "cherry"]);
+        listed.Select(static x => x.AddressOf().CanonicalPath)
+            .ShouldBe(listed.Select(static x => x.AddressOf().CanonicalPath).Order(StringComparer.Ordinal));
     }
 
     IParkedResourceRegistryGrain Registry(ResourceId address) => cluster.Parked(address);

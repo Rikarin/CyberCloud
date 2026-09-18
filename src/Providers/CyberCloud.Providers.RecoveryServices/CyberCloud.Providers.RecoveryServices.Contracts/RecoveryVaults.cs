@@ -9,13 +9,19 @@ namespace CyberCloud.Providers.RecoveryServices.Contracts;
 
 /// <summary>
 ///     Everything addressable about <c>CyberCloud.RecoveryServices/vaults</c> — docs/plan/15 § Backup
-///     as a service's <i>"policy resource that binds protected resources to schedules and
-///     retention"</i>, as the type whose reconciler reaches other providers' resources.
+///     as a service's
+///     <i>
+///         "policy resource that binds protected resources to schedules and
+///         retention"
+///     </i>, as the type whose reconciler reaches other providers' resources.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE FIRST TYPE WHOSE RECONCILER READS ANOTHER PROVIDER'S RESOURCE, AND THE SEAM IT
-///         READS THROUGH IS THE WHOLE DESIGN.</b> A protected item is a resource id path in the
+///         ⚠
+///         <b>
+///             THE FIRST TYPE WHOSE RECONCILER READS ANOTHER PROVIDER'S RESOURCE, AND THE SEAM IT
+///             READS THROUGH IS THE WHOLE DESIGN.
+///         </b> A protected item is a resource id path in the
 ///         vault's own body. The reconciler hands it to <c>ReconcileContext.View</c> (issue #90,
 ///         docs/plan/08 § What the resource manager deliberately does not do) and gets back two
 ///         things and nothing else: the other provider's public contract — the snapshot the gateway
@@ -31,11 +37,17 @@ namespace CyberCloud.Providers.RecoveryServices.Contracts;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>ONE BACKEND OF docs/plan/15's FOUR SHIPS, AND THE BRIEF NAMED TWO.</b> § Backup as a
-///         service lists <i>"Velero for namespace-scoped Kubernetes state, volume snapshots for
-///         block, engine-native backup for databases, bucket replication for object"</i>, and #30's
-///         brief asked for PostgreSQL servers and file shares first — <i>"the two whose backing
-///         objects have a snapshot story: CNPG's Backup/ScheduledBackup CRs and a PVC
-///         VolumeSnapshot"</i>. Read against the sources, the second half is not true on this
+///         service lists
+///         <i>
+///             "Velero for namespace-scoped Kubernetes state, volume snapshots for
+///             block, engine-native backup for databases, bucket replication for object"
+///         </i>, and #30's
+///         brief asked for PostgreSQL servers and file shares first —
+///         <i>
+///             "the two whose backing
+///             objects have a snapshot story: CNPG's Backup/ScheduledBackup CRs and a PVC
+///             VolumeSnapshot"
+///         </i>. Read against the sources, the second half is not true on this
 ///         platform: <c>pkg/driver/driver.go</c> of seaweedfs-csi-driver v1.4.20 — the driver
 ///         behind every file share's claim — advertises <c>CREATE_DELETE_VOLUME</c>,
 ///         <c>EXPAND_VOLUME</c>, <c>SINGLE_NODE_MULTI_WRITER</c> and <c>PUBLISH_UNPUBLISH_VOLUME</c>
@@ -50,23 +62,32 @@ namespace CyberCloud.Providers.RecoveryServices.Contracts;
 ///         <c>file-shares-have-no-snapshot-story</c>. docs/plan/15 is corrected in place.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE STORE IS THE SERVER'S, AND THE VAULT OWNS THE SCHEDULE, THE RECOVERY-POINT RECORD
-///         AND THE RESTORE.</b> CloudNativePG keeps a cluster's backup destination and its
+///         ⚠
+///         <b>
+///             THE STORE IS THE SERVER'S, AND THE VAULT OWNS THE SCHEDULE, THE RECOVERY-POINT RECORD
+///             AND THE RESTORE.
+///         </b> CloudNativePG keeps a cluster's backup destination and its
 ///         <c>retentionPolicy</c> on the <c>Cluster</c> — <c>spec.backup.barmanObjectStore</c> — and
 ///         a <c>ScheduledBackup</c> names only the cluster, the cron and the method. The view is
 ///         read-only by design, so the vault cannot write a destination into a server it protects;
 ///         it renders the schedule beside the server, under its own id, and reads the server's
 ///         contract to refuse what it could not keep: a server with <c>backup.enabled: false</c>
 ///         renders a <c>Cluster</c> with no <c>backup</c> section, on which every <c>Backup</c> fails
-///         with CloudNativePG's <i>"cannot proceed with the backup as the cluster has no backup
-///         section"</i>; a server whose <c>backup.retentionDays</c> is shorter than the vault's
+///         with CloudNativePG's
+///         <i>
+///             "cannot proceed with the backup as the cluster has no backup
+///             section"
+///         </i>; a server whose <c>backup.retentionDays</c> is shorter than the vault's
 ///         <c>retentionDays</c> has barman expiring bytes the vault would still list as restorable.
 ///         Both are refused at <c>/properties/protectedItems/{i}</c> rather than converged into a
 ///         vault that reports backups it does not have.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A RECOVERY POINT IS A <c>Backup</c> OBJECT THE OPERATOR LABELLED, NOT A RECORD THIS
-///         PLATFORM KEEPS.</b> <c>internal/controller/scheduledbackup_controller.go</c> at v1.30.0
+///         ⚠
+///         <b>
+///             A RECOVERY POINT IS A <c>Backup</c> OBJECT THE OPERATOR LABELLED, NOT A RECORD THIS
+///             PLATFORM KEEPS.
+///         </b> <c>internal/controller/scheduledbackup_controller.go</c> at v1.30.0
 ///         stamps <c>cnpg.io/scheduled-backup: {scheduledBackup.Name}</c> and
 ///         <c>cnpg.io/cluster: {cluster}</c> onto every <c>Backup</c> it creates, so the vault's
 ///         recovery points are one selected listing per protected item
@@ -78,8 +99,11 @@ namespace CyberCloud.Providers.RecoveryServices.Contracts;
 ///         spells it once.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>backupOwnerReference: self</c>, so deleting the vault deletes its recovery
-///         points.</b> The three values are <c>none</c>, <c>self</c> and <c>cluster</c>. <c>none</c>
+///         ⚠
+///         <b>
+///             <c>backupOwnerReference: self</c>, so deleting the vault deletes its recovery
+///             points.
+///         </b> The three values are <c>none</c>, <c>self</c> and <c>cluster</c>. <c>none</c>
 ///         leaves Backup objects nobody addresses once the vault is gone — the untracked state
 ///         <c>reclaimPolicy: Delete</c> was chosen against on the file share; <c>cluster</c> ties
 ///         them to the server's life rather than the vault's, which is the wrong owner for a policy
@@ -89,8 +113,11 @@ namespace CyberCloud.Providers.RecoveryServices.Contracts;
 ///         <c>conformance.yaml § owed</c>, <c>deleting-the-vault-deletes-its-recovery-points</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Protected items live in the vault's own resource group, and the reason is the action
-///         seam rather than the view.</b> <c>ActionContext</c> carries no <c>IResourceView</c>, so
+///         ⚠
+///         <b>
+///             Protected items live in the vault's own resource group, and the reason is the action
+///             seam rather than the view.
+///         </b> <c>ActionContext</c> carries no <c>IResourceView</c>, so
 ///         <c>listRecoveryPoints</c> and <c>restore</c> find the vault's objects by listing the
 ///         namespace the dispatcher hands them — the vault's own — and the namespace of a resource
 ///         in another group is a rule (<c>ReconcileDriver.NamespaceFor</c>) that lives in the manager
@@ -124,9 +151,12 @@ public static class RecoveryVaults {
 
     /// <summary>The action that lists the recovery points every protected item has.</summary>
     /// <remarks>
-    ///     docs/plan/15 § Backup as a service: <i>"A protected resource shows its backup status on
-    ///     its own blade — a backup system nobody can see the status of is a backup system that is
-    ///     quietly broken."</i> This is the vault's side of that blade. <c>read</c>, because nothing
+    ///     docs/plan/15 § Backup as a service:
+    ///     <i>
+    ///         "A protected resource shows its backup status on
+    ///         its own blade — a backup system nobody can see the status of is a backup system that is
+    ///         quietly broken."
+    ///     </i> This is the vault's side of that blade. <c>read</c>, because nothing
     ///     in the response is a credential — a recovery point is a name, a phase and two timestamps.
     /// </remarks>
     public const string ListRecoveryPointsAction = "listRecoveryPoints";
@@ -137,8 +167,11 @@ public static class RecoveryVaults {
     /// <summary>The action that restores a recovery point into a <b>new</b> cluster.</summary>
     /// <remarks>
     ///     <para>
-    ///         docs/plan/15 § Backup as a service: <i>"Restore always creates a new resource.
-    ///         Restore-in-place is how people lose the good copy while trying to recover it."</i>
+    ///         docs/plan/15 § Backup as a service:
+    ///         <i>
+    ///             "Restore always creates a new resource.
+    ///             Restore-in-place is how people lose the good copy while trying to recover it."
+    ///         </i>
     ///         The handler renders a CloudNativePG <c>Cluster</c> named by the caller, bootstrapped
     ///         from the recovery point (<c>bootstrap.recovery.backup.name</c>), beside the protected
     ///         server and never into it.
@@ -153,8 +186,11 @@ public static class RecoveryVaults {
     ///         points.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>write</c>, and what comes back is a cluster object rather than a platform
-    ///         resource.</b> The vault cannot <c>PUT</c> a <c>CyberCloud.DBforPostgreSQL/servers</c>
+    ///         ⚠
+    ///         <b>
+    ///             <c>write</c>, and what comes back is a cluster object rather than a platform
+    ///             resource.
+    ///         </b> The vault cannot <c>PUT</c> a <c>CyberCloud.DBforPostgreSQL/servers</c>
     ///         — the seam has no member that writes, by design — and that type has no property that
     ///         says "bootstrap me from this recovery point". So the restored cluster is a scratch
     ///         object in the resource group's namespace: reachable from the tenant's pods, carrying
@@ -198,9 +234,12 @@ public static class RecoveryVaults {
     ///     The most items one vault may protect, and the reason is the view's price.
     /// </summary>
     /// <remarks>
-    ///     <see cref="IResourceView" />'s remarks: <i>"Every call is a grain hop to the index, a fully
-    ///     consistent ReBAC walk over durable rows, and a grain hop to the resource, inside the
-    ///     reconciler's 30-second budget"</i>, and <see cref="IResourceView.RenderedObjectsAsync" />
+    ///     <see cref="IResourceView" />'s remarks:
+    ///     <i>
+    ///         "Every call is a grain hop to the index, a fully
+    ///         consistent ReBAC walk over durable rows, and a grain hop to the resource, inside the
+    ///         reconciler's 30-second budget"
+    ///     </i>, and <see cref="IResourceView.RenderedObjectsAsync" />
     ///     adds a namespace listing. Two view calls, one listing, one apply and one read per item
     ///     puts sixteen items at roughly eighty round trips, which fits the budget on a real cluster
     ///     with room. A seventeenth is refused at its own pointer rather than accepted into a vault
@@ -212,9 +251,12 @@ public static class RecoveryVaults {
 
     /// <summary>The CloudNativePG <c>ScheduledBackup</c> — one per protected item, and the only kind this type applies.</summary>
     /// <remarks>
-    ///     <c>api/v1/scheduledbackup_types.go</c> at v1.30.0: <c>{suspend, immediate, schedule,
+    ///     <c>api/v1/scheduledbackup_types.go</c> at v1.30.0:
+    ///     <c>
+    /// {suspend, immediate, schedule,
     ///     cluster, backupOwnerReference, target, method, pluginConfiguration, online,
-    ///     onlineConfiguration}</c>. Namespaced; plural <c>scheduledbackups</c>.
+    ///     onlineConfiguration}
+    ///     </c>. Namespaced; plural <c>scheduledbackups</c>.
     /// </remarks>
     public static GroupVersionKind ScheduledBackupKind { get; } =
         new() { Group = "postgresql.cnpg.io", Version = "v1", Kind = "ScheduledBackup", Plural = "scheduledbackups" };
@@ -235,7 +277,10 @@ public static class RecoveryVaults {
     public static GroupVersionKind ClusterKind { get; } =
         new() { Group = "postgresql.cnpg.io", Version = "v1", Kind = "Cluster", Plural = "clusters" };
 
-    /// <summary>The label the ScheduledBackup controller stamps on every Backup it creates. <c>utils.ParentScheduledBackupLabelName</c>.</summary>
+    /// <summary>
+    ///     The label the ScheduledBackup controller stamps on every Backup it creates.
+    ///     <c>utils.ParentScheduledBackupLabelName</c>.
+    /// </summary>
     public const string ParentScheduledBackupLabel = "cnpg.io/scheduled-backup";
 
     /// <summary>The label the ScheduledBackup controller stamps with the cluster's name. <c>utils.ClusterLabelName</c>.</summary>
@@ -299,8 +344,11 @@ public static class RecoveryVaults {
     ///         kept so <c>kubectl get scheduledbackups</c> still reads as something a person can place.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The digest is there whether or not the names fit, because a hyphen join is not
-    ///         unique.</b> A resource name may carry hyphens, so vault <c>a</c> protecting <c>b-c</c>
+    ///         ⚠
+    ///         <b>
+    ///             The digest is there whether or not the names fit, because a hyphen join is not
+    ///             unique.
+    ///         </b> A resource name may carry hyphens, so vault <c>a</c> protecting <c>b-c</c>
     ///         and vault <c>a-b</c> protecting <c>c</c> both spelled <c>a-b-c</c> in the first cut —
     ///         and both vaults apply under one field manager,
     ///         <c>cybercloud/cybercloud.recoveryservices</c>, so the API server would not even
@@ -349,22 +397,34 @@ public static class RecoveryVaults {
 
     /// <summary>The selector that finds one item's recovery points: the operator's own label, the ScheduledBackup's name.</summary>
     /// <param name="scheduledBackup">The ScheduledBackup's name.</param>
-    public static string RecoveryPointSelector(string scheduledBackup) => ParentScheduledBackupLabel + "=" + scheduledBackup;
+    public static string RecoveryPointSelector(string scheduledBackup) =>
+        ParentScheduledBackupLabel + "=" + scheduledBackup;
 
     /// <summary>The selector that finds every ScheduledBackup one vault owns in a namespace.</summary>
     /// <param name="vaultId">The vault's GUID.</param>
     public static string Selector(Guid vaultId) =>
-        KubeLabels.ResourceType + "=" + KubeLabels.ResourceTypeValue(Type)
-        + "," + KubeLabels.ResourceId + "=" + KubeLabels.GuidValue(vaultId);
+        KubeLabels.ResourceType
+        + "="
+        + KubeLabels.ResourceTypeValue(Type)
+        + ","
+        + KubeLabels.ResourceId
+        + "="
+        + KubeLabels.GuidValue(vaultId);
 
     // ── The body shape ────────────────────────────────────────────────────────────────────────
 
-    /// <summary>A five-field cron expression — minute, hour, day of month, month, day of week — in numbers and the four operators.</summary>
+    /// <summary>
+    ///     A five-field cron expression — minute, hour, day of month, month, day of week — in numbers and the four
+    ///     operators.
+    /// </summary>
     /// <remarks>
     ///     ⚠ Five fields at the API and six on the object. CloudNativePG parses a ScheduledBackup's
     ///     schedule with <c>robfig/cron</c>'s <c>cron.Parse</c>, whose grammar leads with a
-    ///     <i>seconds</i> field — the CRD's own comment: <i>"The schedule does not follow the same
-    ///     format used in Kubernetes CronJobs as it includes an additional seconds specifier"</i>.
+    ///     <i>seconds</i> field — the CRD's own comment:
+    ///     <i>
+    ///         "The schedule does not follow the same
+    ///         format used in Kubernetes CronJobs as it includes an additional seconds specifier"
+    ///     </i>.
     ///     A tenant writes the format every other cron on earth uses and <see cref="ScheduledBackupJson" />
     ///     prepends the <c>0</c>. Names (<c>MON</c>, <c>JAN</c>) and descriptors (<c>@daily</c>) are
     ///     refused: they would pass the pattern into a field this platform never parses, and the
@@ -375,8 +435,11 @@ public static class RecoveryVaults {
     /// <summary>The body shape at <see cref="V2026" />.</summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>ONE POLICY PER VAULT, AND docs/plan/15 SAYS "SCHEDULES AND RETENTION" IN THE
-    ///         PLURAL.</b> An array of objects is not expressible in a <see cref="ResourceSchema" />
+    ///         ⚠
+    ///         <b>
+    ///             ONE POLICY PER VAULT, AND docs/plan/15 SAYS "SCHEDULES AND RETENTION" IN THE
+    ///             PLURAL.
+    ///         </b> An array of objects is not expressible in a <see cref="ResourceSchema" />
     ///         — <see cref="SchemaKind.Array" />'s remarks say why the flat pointer list refuses it —
     ///         so a vault with several policies would be a <c>vaults/backupPolicies</c> child type,
     ///         which is Azure's shape and a second chart, reconciler and conformance case. The
@@ -384,8 +447,11 @@ public static class RecoveryVaults {
     ///         schedules, the child type is the next api-version and this block becomes its default.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>protectedItems</c> is an array of resource id paths, and the API does not check
-    ///         the shape of each — the reconciler does.</b> <see cref="SchemaFormat.ResourceId" /> on
+    ///         ⚠
+    ///         <b>
+    ///             <c>protectedItems</c> is an array of resource id paths, and the API does not check
+    ///             the shape of each — the reconciler does.
+    ///         </b> <see cref="SchemaFormat.ResourceId" /> on
     ///         the element is what the registry would carry, and <c>./build.sh Charts</c> refuses
     ///         <c>@format</c> and <c>@length</c> on a <c>{array}</c> @param because JSON Schema ignores
     ///         both on anything but a string — the finding <c>charts/managed/kafka/conformance.yaml</c>
@@ -410,7 +476,7 @@ public static class RecoveryVaults {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the vault is billed in."
                 ) {
                     Format = SchemaFormat.Region,
@@ -422,7 +488,7 @@ public static class RecoveryVaults {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster the vault's protected items are placed on. Every protected "
                     + "item must be on this cluster; one placed elsewhere is refused by name when the "
                     + "vault is reconciled."
@@ -436,7 +502,7 @@ public static class RecoveryVaults {
                 new(
                     "/properties/policy/schedule",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "When a recovery point is taken, as a five-field cron expression in UTC: "
                     + "minute, hour, day of month, month, day of week. Numbers, `*`, `,`, `-` and `/` "
                     + "only. Rendered to CloudNativePG with the seconds field it requires prepended."
@@ -452,7 +518,7 @@ public static class RecoveryVaults {
                 new(
                     "/properties/protectedItems",
                     SchemaKind.Array,
-                    Required: true,
+                    true,
                     Description: "The resources this vault protects, as full resource id paths. Each must "
                     + "be a CyberCloud.DBforPostgreSQL/servers resource in this vault's resource group, "
                     + "on this vault's cluster, with backups enabled, that the vault has been granted "
@@ -463,9 +529,9 @@ public static class RecoveryVaults {
                     // property. The chart surface refuses them on an array, and ItemOf is where the
                     // shape is checked instead.
                     ElementKind = SchemaKind.Text,
-                    ExampleJson = "[\"/tenants/11111111-1111-4111-8111-111111111111/subscriptions/"
-                    + "33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/"
-                    + "CyberCloud.DBforPostgreSQL/servers/main\"]"
+                    ExampleJson = """["/tenants/11111111-1111-4111-8111-111111111111/subscriptions/"""
+                        + "33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/"
+                        + """CyberCloud.DBforPostgreSQL/servers/main"]"""
                 }
             ]
         );
@@ -480,12 +546,22 @@ public static class RecoveryVaults {
     public static ResourceSchema ListRecoveryPointsResponse { get; } =
         ResourceSchema.Of(
             [
-                new("/count", SchemaKind.WholeNumber, Required: true, Description: "How many recovery points the vault holds, across every protected item."),
-                new("/completed", SchemaKind.WholeNumber, Required: true, Description: "How many of them are restorable — CloudNativePG phase `completed`."),
+                new(
+                    "/count",
+                    SchemaKind.WholeNumber,
+                    true,
+                    Description: "How many recovery points the vault holds, across every protected item."
+                ),
+                new(
+                    "/completed",
+                    SchemaKind.WholeNumber,
+                    true,
+                    Description: "How many of them are restorable — CloudNativePG phase `completed`."
+                ),
                 new(
                     "/recoveryPoints",
                     SchemaKind.Array,
-                    Required: true,
+                    true,
                     Description: "One line per recovery point, newest first: "
                     + "'{item} {name} {phase} started {startedAt} stopped {stoppedAt} method {method}', "
                     + "followed by ': {error}' when the operator recorded one. The name is what recover takes."
@@ -500,14 +576,14 @@ public static class RecoveryVaults {
                 new(
                     "/recoveryPoint",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The recovery point to restore, by the name listRecoveryPoints gives it. "
                     + "It must be one of this vault's and its phase must be `completed`."
                 ) { MaxLength = ResourceNaming.MaxLength },
                 new(
                     "/targetName",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The name of the NEW cluster the recovery point is restored into, in the "
                     + "vault's resource group. Refused when a cluster of that name already exists — a "
                     + "restore never overwrites."
@@ -519,16 +595,42 @@ public static class RecoveryVaults {
     public static ResourceSchema RecoverResponse { get; } =
         ResourceSchema.Of(
             [
-                new("/kind", SchemaKind.Text, Required: true, Description: "What was created. Always `Cluster` — a CloudNativePG cluster object."),
-                new("/name", SchemaKind.Text, Required: true, Description: "The restored cluster's name, as asked for."),
-                new("/namespace", SchemaKind.Text, Required: true, Description: "The namespace it was created in — the vault's resource group's."),
-                new("/recoveryPoint", SchemaKind.Text, Required: true, Description: "The recovery point it was bootstrapped from."),
-                new("/source", SchemaKind.Text, Required: true, Description: "The protected item the recovery point was taken of, as its resource id path.")
+                new(
+                    "/kind",
+                    SchemaKind.Text,
+                    true,
+                    Description: "What was created. Always `Cluster` — a CloudNativePG cluster object."
+                ),
+                new(
+                    "/name",
+                    SchemaKind.Text,
+                    true,
+                    Description: "The restored cluster's name, as asked for."
+                ),
+                new(
+                    "/namespace",
+                    SchemaKind.Text,
+                    true,
+                    Description: "The namespace it was created in — the vault's resource group's."
+                ),
+                new(
+                    "/recoveryPoint",
+                    SchemaKind.Text,
+                    true,
+                    Description: "The recovery point it was bootstrapped from."
+                ),
+                new(
+                    "/source",
+                    SchemaKind.Text,
+                    true,
+                    Description: "The protected item the recovery point was taken of, as its resource id path."
+                )
             ]
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -541,7 +643,8 @@ public static class RecoveryVaults {
 
     /// <summary>How many days a body keeps a recovery point.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static int RetentionDays(JsonElement desired) => Number(Member(desired, "policy"), "retentionDays", DefaultRetentionDays);
+    public static int RetentionDays(JsonElement desired) =>
+        Number(Member(desired, "policy"), "retentionDays", DefaultRetentionDays);
 
     /// <summary>The protected item paths a body names, in body order, unparsed.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -551,12 +654,17 @@ public static class RecoveryVaults {
             return [];
         }
 
-        return [.. array.EnumerateArray().Where(x => x.ValueKind is JsonValueKind.String).Select(x => x.GetString() ?? string.Empty)];
+        return [
+            .. array.EnumerateArray()
+                .Where(static x => x.ValueKind is JsonValueKind.String)
+                .Select(static x => x.GetString() ?? string.Empty)
+        ];
     }
 
     /// <summary>The JSON pointer of the item at <paramref name="index" /> — where a refusal of it is targeted.</summary>
     /// <param name="index">The item's position in <c>protectedItems</c>.</param>
-    public static string ItemPointer(int index) => "/properties/protectedItems/" + index.ToString(CultureInfo.InvariantCulture);
+    public static string ItemPointer(int index) =>
+        "/properties/protectedItems/" + index.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
     ///     Parses one protected item path and checks the three things the schema's format cannot:
@@ -568,8 +676,11 @@ public static class RecoveryVaults {
     /// <param name="path">The path, as the body carries it.</param>
     /// <returns>The parsed address with no GUID, or <c>InvalidRequestBody</c> targeting the item.</returns>
     /// <remarks>
-    ///     ⚠ <b>The tenant check is the one the view would make anyway, and it is made here too so
-    ///     the refusal has a pointer.</b> The view answers <c>ResourceNotFound</c> for another
+    ///     ⚠
+    ///     <b>
+    ///         The tenant check is the one the view would make anyway, and it is made here too so
+    ///         the refusal has a pointer.
+    ///     </b> The view answers <c>ResourceNotFound</c> for another
     ///     tenant's path — deliberately indistinguishable from an absent one — and a vault that
     ///     passed that answer on would tell a tenant "does not exist" about a path they can see is
     ///     spelled with somebody else's tenant id. Refusing the spelling at the API is not an
@@ -629,8 +740,11 @@ public static class RecoveryVaults {
     /// <param name="serverBody">The server's body, as <see cref="ResourceSnapshot.Body" /> carries it.</param>
     /// <returns>Whether the server archives at all, and for how many days it keeps a base backup.</returns>
     /// <remarks>
-    ///     ⚠ <b>The defaults are the other provider's, copied from its published document and not from
-    ///     its code.</b> The write path stores a body as sent, so a server created with no
+    ///     ⚠
+    ///     <b>
+    ///         The defaults are the other provider's, copied from its published document and not from
+    ///         its code.
+    ///     </b> The write path stores a body as sent, so a server created with no
     ///     <c>backup</c> block has <c>enabled: true</c> and <c>retentionDays: 14</c> by that type's
     ///     schema defaults, and a reader that treated absence as <c>false</c> would refuse every
     ///     server created from the portal's defaults. The two numbers are pinned against the document
@@ -645,7 +759,9 @@ public static class RecoveryVaults {
             return (ServerBackupEnabledDefault, ServerRetentionDaysDefault);
         }
 
-        var backup = (parsed as JsonObject)?["properties"] is JsonObject properties ? properties["backup"] as JsonObject : null;
+        var backup = (parsed as JsonObject)?["properties"] is JsonObject properties
+            ? properties["backup"] as JsonObject
+            : null;
 
         var enabled = backup?["enabled"] is JsonValue flag && flag.TryGetValue<bool>(out var value)
             ? value
@@ -665,7 +781,8 @@ public static class RecoveryVaults {
     public const int ServerRetentionDaysDefault = 14;
 
     /// <summary>The pointers this vault reads off a protected server's contract, for the test that pins them.</summary>
-    public static ImmutableArray<string> ServerContractPointers { get; } = ["/properties/backup/enabled", "/properties/backup/retentionDays"];
+    public static ImmutableArray<string> ServerContractPointers { get; } =
+        ["/properties/backup/enabled", "/properties/backup/retentionDays"];
 
     // ── The objects a desired body becomes ────────────────────────────────────────────────────
 
@@ -676,8 +793,11 @@ public static class RecoveryVaults {
     /// <param name="desired">The vault's validated desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>immediate: true</c>: protection begins with a recovery point, not with a wait
-    ///         for the first tick.</b> A vault created at 09:00 with the default schedule would
+    ///         ⚠
+    ///         <b>
+    ///             <c>immediate: true</c>: protection begins with a recovery point, not with a wait
+    ///             for the first tick.
+    ///         </b> A vault created at 09:00 with the default schedule would
     ///         otherwise hold nothing until 02:00 the next day, and a tenant who checked it at 10:00
     ///         would read "0 recovery points" as the vault not working. The first Backup also
     ///         surfaces a store that cannot take one — a server whose <c>destinationPath</c> was
@@ -735,7 +855,9 @@ public static class RecoveryVaults {
 
         var source = (JsonNode.Parse(sourceClusterJson) as JsonObject)?["spec"] as JsonObject;
 
-        var storage = new JsonObject { ["size"] = (source?["storage"] as JsonObject)?["size"]?.GetValue<string>() ?? "20Gi" };
+        var storage = new JsonObject {
+            ["size"] = (source?["storage"] as JsonObject)?["size"]?.GetValue<string>() ?? "20Gi"
+        };
         if ((source?["storage"] as JsonObject)?["storageClass"]?.GetValue<string>() is { Length: > 0 } storageClass) {
             storage["storageClass"] = storageClass;
         }
@@ -752,7 +874,9 @@ public static class RecoveryVaults {
             spec["imageName"] = image;
         }
 
-        return new JsonObject { ["metadata"] = new JsonObject { ["name"] = targetName }, ["spec"] = spec }.ToJsonString();
+        return new JsonObject {
+            ["metadata"] = new JsonObject { ["name"] = targetName }, ["spec"] = spec
+        }.ToJsonString();
     }
 
     /// <summary>
@@ -858,7 +982,8 @@ public static class RecoveryVaults {
     /// <summary>One recovery point, as <see cref="ListRecoveryPointsResponse" />'s <c>/recoveryPoints</c> spells it.</summary>
     /// <param name="point">The point.</param>
     public static string RecoveryPointLine(RecoveryPoint point) {
-        var line = $"{point.Item} {point.Name} {point.Phase} started {Spell(point.StartedAt)} stopped {Spell(point.StoppedAt)} method {point.Method}";
+        var line =
+            $"{point.Item} {point.Name} {point.Phase} started {Spell(point.StartedAt)} stopped {Spell(point.StoppedAt)} method {point.Method}";
         return point.Error.Length > 0 ? line + ": " + point.Error : line;
     }
 
@@ -866,14 +991,14 @@ public static class RecoveryVaults {
     /// <param name="points">Every point found, in any order; newest first in the answer.</param>
     public static string RecoveryPointsJson(IEnumerable<RecoveryPoint> points) {
         var ordered = points
-            .OrderByDescending(x => x.StartedAt ?? x.CreatedAt ?? DateTimeOffset.MinValue)
-            .ThenBy(x => x.Name, StringComparer.Ordinal)
+            .OrderByDescending(static x => x.StartedAt ?? x.CreatedAt ?? DateTimeOffset.MinValue)
+            .ThenBy(static x => x.Name, StringComparer.Ordinal)
             .ToList();
 
         return new JsonObject {
             ["count"] = ordered.Count,
-            ["completed"] = ordered.Count(x => x.IsCompleted),
-            ["recoveryPoints"] = new JsonArray([.. ordered.Select(x => (JsonNode?)RecoveryPointLine(x))])
+            ["completed"] = ordered.Count(static x => x.IsCompleted),
+            ["recoveryPoints"] = new JsonArray([.. ordered.Select(static x => (JsonNode?)RecoveryPointLine(x))])
         }.ToJsonString();
     }
 
@@ -903,7 +1028,8 @@ public static class RecoveryVaults {
             return string.Empty;
         }
 
-        return (((parsed as JsonObject)?["spec"] as JsonObject)?["cluster"] as JsonObject)?["name"]?.GetValue<string>() ?? string.Empty;
+        return (((parsed as JsonObject)?["spec"] as JsonObject)?["cluster"] as JsonObject)?["name"]?.GetValue<string>()
+            ?? string.Empty;
     }
 
     /// <summary>The ScheduledBackup a Backup was made by, off the operator's own label, or empty.</summary>
@@ -916,7 +1042,8 @@ public static class RecoveryVaults {
             return string.Empty;
         }
 
-        return (((parsed as JsonObject)?["metadata"] as JsonObject)?["labels"] as JsonObject)?[ParentScheduledBackupLabel]?.GetValue<string>()
+        return (((parsed as JsonObject)?["metadata"] as JsonObject)?["labels"]
+            as JsonObject)?[ParentScheduledBackupLabel]?.GetValue<string>()
             ?? string.Empty;
     }
 
@@ -957,16 +1084,18 @@ public static class RecoveryVaults {
             ["name"] = name,
             ["namespace"] = ns,
             ["creationTimestamp"] = startedAt.ToString("O", CultureInfo.InvariantCulture),
-            ["labels"] = new JsonObject {
-                [ParentScheduledBackupLabel] = scheduledBackup,
-                [ClusterLabel] = cluster
-            }
+            ["labels"] = new JsonObject { [ParentScheduledBackupLabel] = scheduledBackup, [ClusterLabel] = cluster }
         };
 
         if (ownerUid is not null) {
             metadata["ownerReferences"] = new JsonArray(
                 KubeJson.OwnerReference(
-                    new() { ApiVersion = ScheduledBackupKind.ApiVersion, Kind = ScheduledBackupKind.Kind, Name = scheduledBackup, Uid = ownerUid }
+                    new() {
+                        ApiVersion = ScheduledBackupKind.ApiVersion,
+                        Kind = ScheduledBackupKind.Kind,
+                        Name = scheduledBackup,
+                        Uid = ownerUid
+                    }
                 )
             );
         }
@@ -989,7 +1118,9 @@ public static class RecoveryVaults {
             ["apiVersion"] = BackupKind.ApiVersion,
             ["kind"] = BackupKind.Kind,
             ["metadata"] = metadata,
-            ["spec"] = new JsonObject { ["cluster"] = new JsonObject { ["name"] = cluster }, ["method"] = BackupMethod },
+            ["spec"] = new JsonObject {
+                ["cluster"] = new JsonObject { ["name"] = cluster }, ["method"] = BackupMethod
+            },
             ["status"] = status
         }.ToJsonString();
     }
@@ -1015,7 +1146,7 @@ public static class RecoveryVaults {
             ["properties"] = new JsonObject {
                 ["clusterId"] = clusterId.ToString("D", CultureInfo.InvariantCulture),
                 ["policy"] = new JsonObject { ["schedule"] = schedule, ["retentionDays"] = retentionDays },
-                ["protectedItems"] = new JsonArray([.. protectedItems.Select(x => (JsonNode?)x)])
+                ["protectedItems"] = new JsonArray([.. protectedItems.Select(static x => (JsonNode?)x)])
             }
         }.ToJsonString();
 
@@ -1044,16 +1175,25 @@ public static class RecoveryVaults {
             : string.Empty;
 
     static int Number(JsonElement? section, string name, int fallback) =>
-        section is { } s && s.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.Number && value.TryGetInt32(out var number)
+        section is { } s
+        && s.TryGetProperty(name, out var value)
+        && value.ValueKind is JsonValueKind.Number
+        && value.TryGetInt32(out var number)
             ? number
             : fallback;
 
     static DateTimeOffset? Stamp(JsonNode? node) =>
         node is JsonValue value
         && value.TryGetValue<string>(out var text)
-        && DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var at)
+        && DateTimeOffset.TryParse(
+            text,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var at
+        )
             ? at
             : null;
 
-    static string Spell(DateTimeOffset? at) => at is { } value ? value.ToString("O", CultureInfo.InvariantCulture) : "-";
+    static string Spell(DateTimeOffset? at) =>
+        at is { } value ? value.ToString("O", CultureInfo.InvariantCulture) : "-";
 }

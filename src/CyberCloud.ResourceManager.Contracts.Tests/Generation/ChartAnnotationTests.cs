@@ -1,6 +1,5 @@
 using CyberCloud.ResourceManager.Contracts.Generation;
 using System.Collections.Immutable;
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace CyberCloud.ResourceManager.Contracts.Tests.Generation;
@@ -46,14 +45,14 @@ public sealed class ChartAnnotationTests {
     static ResourceSchema Postgres() =>
         ResourceSchema.Of(
             [
-                new("/properties", SchemaKind.Nested, Required: true, Description: "The configuration."),
-                new("/properties/version", SchemaKind.Text, Required: true, Description: "Major PostgreSQL version.") {
+                new("/properties", SchemaKind.Nested, true, Description: "The configuration."),
+                new("/properties/version", SchemaKind.Text, true, Description: "Major PostgreSQL version.") {
                     AllowedValues = ["16", "17", "18"], DefaultJson = "\"17\""
                 },
                 new(
                     "/properties/replicas",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "Instances, including the primary."
                 ) { Minimum = 1, Maximum = 5, DefaultJson = "2" },
                 new(
@@ -75,7 +74,7 @@ public sealed class ChartAnnotationTests {
                     Pattern = @"(\d+(\.\d+)?(m|k|M|G|Ki|Mi|Gi)?)?", DefaultJson = "\"\""
                 },
                 new("/properties/storage", SchemaKind.Nested, Description: "The data volume."),
-                new("/properties/storage/size", SchemaKind.Text, Required: true, Description: "Data volume size.") {
+                new("/properties/storage/size", SchemaKind.Text, true, Description: "Data volume size.") {
                     Pattern = @"\d+(\.\d+)?(m|k|M|G|Ki|Mi|Gi)?", DefaultJson = "\"20Gi\"", ExampleJson = "\"20Gi\""
                 },
                 new("/properties/storage/class", SchemaKind.Text, Description: "StorageClass name.") {
@@ -163,8 +162,7 @@ public sealed class ChartAnnotationTests {
     ///     <see cref="TheClusterIdIsPlacementAndIsExcludedFromTheChartItPlacesInto" /> and
     ///     <see cref="ThePlacementPointerReachesTheEmitterFromTheRegistrationRatherThanTheSchema" />.
     /// </remarks>
-    static ChartAnnotationBlock Emit(ResourceSchema schema) =>
-        ChartAnnotationEmitter.Emit(schema, clusterIdPointer: string.Empty);
+    static ChartAnnotationBlock Emit(ResourceSchema schema) => ChartAnnotationEmitter.Emit(schema, string.Empty);
 
     /// <summary>
     ///     The hand-written region of charts/managed/postgres/values.yaml: the header comment and the
@@ -209,7 +207,7 @@ public sealed class ChartAnnotationTests {
         using var tree = new ChartTree();
         tree.Write("managed/postgres", "CyberCloud.DBforPostgreSQL/servers", "2026-08-01", ValuesFile(Block));
 
-        var report = ChartSurfaces.Generate(new FakeRegistry(), tree.Root, write: false);
+        var report = ChartSurfaces.Generate(new FakeRegistry(), tree.Root, false);
 
         report.Pairs.ShouldBe(0);
         report.ManagedCharts.ShouldBe(1);
@@ -223,14 +221,14 @@ public sealed class ChartAnnotationTests {
         // missing. A count of zero with no names is the pass nobody reads.
         report.Unpaired.ShouldHaveSingleItem();
         report.Unpaired[0].ShouldContain("managed/postgres");
-        report.Unpaired[0].ShouldContain(".Chart(\"managed/postgres\")");
+        report.Unpaired[0].ShouldContain(""".Chart("managed/postgres")""");
     }
 
     [Fact]
     public void ATypeNamingAChartThatIsNotInTheTreeIsTheOtherHalfOfTheSameMismatch() {
         using var tree = new ChartTree();
 
-        var report = ChartSurfaces.Generate(Registry("managed/postgres"), tree.Root, write: false);
+        var report = ChartSurfaces.Generate(Registry("managed/postgres"), tree.Root, false);
 
         report.Pairs.ShouldBe(0);
         report.IsVacuous.ShouldBeTrue();
@@ -247,7 +245,7 @@ public sealed class ChartAnnotationTests {
         using var tree = new ChartTree();
         tree.Write("managed/postgres", "CyberCloud.DBforPostgreSQL/servers", "2026-08-01", ValuesFile(Block));
 
-        var report = ChartSurfaces.Generate(Registry("managed/postgres"), tree.Root, write: false);
+        var report = ChartSurfaces.Generate(Registry("managed/postgres"), tree.Root, false);
 
         report.IsVacuous.ShouldBeFalse();
         report.Pairs.ShouldBe(1);
@@ -269,7 +267,7 @@ public sealed class ChartAnnotationTests {
         using var tree = new ChartTree();
         tree.Write("managed/postgres", "CyberCloud.DBforPostgreSQL/servers", "2026-08-01", ValuesFile(Block));
 
-        var report = ChartSurfaces.Generate(Placed("managed/postgres"), tree.Root, write: true);
+        var report = ChartSurfaces.Generate(Placed("managed/postgres"), tree.Root, true);
 
         report.Documents[0].Problems.ShouldBeEmpty();
         report.Documents[0].Drifted.ShouldBeTrue();
@@ -291,7 +289,7 @@ public sealed class ChartAnnotationTests {
         using var tree = new ChartTree();
         tree.Write("managed/postgres", "CyberCloud.Sample/widgets", "2026-08-01", ValuesFile(Block));
 
-        var report = ChartSurfaces.Generate(Registry("managed/postgres"), tree.Root, write: true);
+        var report = ChartSurfaces.Generate(Registry("managed/postgres"), tree.Root, true);
 
         report.IsClean.ShouldBeFalse();
         report.Documents[0].Problems.ShouldContain(x => x.Contains("disagree", StringComparison.Ordinal));
@@ -304,7 +302,7 @@ public sealed class ChartAnnotationTests {
         using var tree = new ChartTree();
         tree.Write("managed/postgres", "CyberCloud.DBforPostgreSQL/servers", "2019-01-01", ValuesFile(Block));
 
-        var report = ChartSurfaces.Generate(Registry("managed/postgres"), tree.Root, write: true);
+        var report = ChartSurfaces.Generate(Registry("managed/postgres"), tree.Root, true);
 
         report.IsClean.ShouldBeFalse();
         report.Documents[0].Problems.ShouldContain(x => x.Contains("2019-01-01", StringComparison.Ordinal));
@@ -494,7 +492,7 @@ public sealed class ChartAnnotationTests {
         );
 
         reader.ShouldContain(
-            "if (present && annotation.Type is not \"string\")",
+            """if (present && annotation.Type is not "string")""",
             Case.Sensitive,
             "build/Build.Charts.cs no longer gates the three string refinements on `{string}`, so the "
             + "emitter's mirror of that gate is describing a rule that is gone."
@@ -601,7 +599,7 @@ public sealed class ChartAnnotationTests {
             }
 
             var name = lines[i].TrimStart()["## @param ".Length..].Split(' ')[0];
-            var key = lines.Skip(i + 1).First(x => !x.TrimStart().StartsWith("## @", StringComparison.Ordinal));
+            var key = lines.Skip(i + 1).First(static x => !x.TrimStart().StartsWith("## @", StringComparison.Ordinal));
 
             key.TrimStart().ShouldStartWith(name + ":");
         }
@@ -676,11 +674,11 @@ public sealed class ChartAnnotationTests {
         // two disagreeing is a build failure. Emitting them from one string is what makes that check
         // pass by construction rather than by luck.
         var names = Regex.Matches(Block, @"^\s*## @param (?<name>\S+) ", RegexOptions.Multiline)
-            .Select(x => x.Groups["name"].Value)
+            .Select(static x => x.Groups["name"].Value)
             .ToList();
 
         var keys = Regex.Matches(Block, @"^\s*(?<key>[A-Za-z_][A-Za-z0-9_]*):", RegexOptions.Multiline)
-            .Select(x => x.Groups["key"].Value)
+            .Select(static x => x.Groups["key"].Value)
             .ToList();
 
         // The 27 rows under /properties. `/properties` itself is the values file's root and is not a
@@ -781,10 +779,10 @@ public sealed class ChartAnnotationTests {
         // first version of the recursive merge dropped each nested slice's own `key:` line, which
         // `helm lint` reported as a nil pointer three templates away from the cause.
         var lines = rewritten.Text.Split('\n');
-        var key = Array.FindIndex(lines, x => x == "  password: \"\"");
+        var key = Array.FindIndex(lines, static x => x == "  password: \"\"");
 
         key.ShouldBeGreaterThan(0);
-        lines.Take(key).Last(x => x.Length > 0 && x[0] != ' ' && x[0] != '#').ShouldBe("bootstrap:");
+        lines.Take(key).Last(static x => x.Length > 0 && x[0] != ' ' && x[0] != '#').ShouldBe("bootstrap:");
 
         // The root-level @internal rows are still there as well — the fix did not trade one for the
         // other.
@@ -824,19 +822,18 @@ public sealed class ChartAnnotationTests {
         // document, whose `properties` are sorted ordinally for determinism; a values.yaml sorted that
         // way would open with `backup` and close with `version`, which is a configuration file nobody
         // can read. Declaration order is available because this emitter reads the registry.
-        var roots = Regex.Matches(Block, @"^(?<key>[A-Za-z_][A-Za-z0-9_]*):", RegexOptions.Multiline)
-            .Select(x => x.Groups["key"].Value)
+        var roots = Regex.Matches(Block, "^(?<key>[A-Za-z_][A-Za-z0-9_]*):", RegexOptions.Multiline)
+            .Select(static x => x.Groups["key"].Value)
             .ToList();
 
         roots[0].ShouldBe("version");
         roots[1].ShouldBe("replicas");
         roots[^1].ShouldBe("monitoring");
-        roots.ShouldNotBe(roots.OrderBy(x => x, StringComparer.Ordinal).ToList());
+        roots.ShouldNotBe(roots.OrderBy(static x => x, StringComparer.Ordinal).ToList());
     }
 
     [Fact]
-    public void NothingEmittedCarriesAPathATimestampOrAMachineName() =>
-        Block.ShouldNotContain(Environment.MachineName, Case.Insensitive);
+    public void NothingEmittedCarriesAPathATimestampOrAMachineName() => Block.ShouldNotContain(Environment.MachineName);
 
     // ── (f) A fact the registry gained that the chart block silently drops ─────────────────────
 
@@ -902,7 +899,7 @@ public sealed class ChartAnnotationTests {
         // and a quote opens a scalar. Every one of them is inert on a `## @pattern` line — the line is
         // a comment, and this is the one directive that takes the rest of the line verbatim. A
         // vocabulary that refused them could not spell the first pattern anybody wrote.
-        var pattern = @"^[a-z]#(one|two):\{3\}""x""$";
+        var pattern = """^[a-z]#(one|two):\{3\}"x"$""";
 
         var block = Emit(
             ResourceSchema.Of(
@@ -1048,7 +1045,7 @@ public sealed class ChartAnnotationTests {
                         ElementKind = SchemaKind.Text,
                         Pattern = "(?=[a-z])[a-z0-9]+",
                         MinLength = 10,
-                        DefaultJson = "[\"abc\"]"
+                        DefaultJson = """["abc"]"""
                     }
                 ]
             }
@@ -1118,7 +1115,7 @@ public sealed class ChartAnnotationTests {
         );
 
         block.Problems.ShouldBeEmpty();
-        block.Text.ShouldContain("## @example [\"pgvector\",\"postgis\"]");
+        block.Text.ShouldContain("""## @example ["pgvector","postgis"]""");
         Subset.Problems(block.Text).ShouldBeEmpty();
     }
 
@@ -1139,8 +1136,8 @@ public sealed class ChartAnnotationTests {
         // stays green and the constraint never reaches values.schema.json.
         var reader = ReaderSource();
 
-        Table(reader, "Directives").ShouldBe(Subset.Directives, ignoreOrder: false);
-        Table(reader, "FormatNames").ShouldBe(Subset.Formats, ignoreOrder: false);
+        Table(reader, "Directives").ShouldBe(Subset.Directives, false);
+        Table(reader, "FormatNames").ShouldBe(Subset.Formats, false);
 
         foreach (var directive in Subset.Directives) {
             reader.ShouldContain(
@@ -1161,9 +1158,9 @@ public sealed class ChartAnnotationTests {
         Table("static readonly string[] Directives = [\n  \"enum\",\n];", "Directives")
             .ShouldBe(["enum"]);
 
-        Should.Throw<Exception>(() =>
-            Table("static readonly string[] Directives = [\"enum\"];", "Directives")
-                .ShouldBe(Subset.Directives, ignoreOrder: false)
+        Should.Throw<Exception>(static () =>
+            Table("""static readonly string[] Directives = ["enum"];""", "Directives")
+                .ShouldBe(Subset.Directives, false)
         );
     }
 
@@ -1198,7 +1195,7 @@ public sealed class ChartAnnotationTests {
 
         return [
             .. Regex.Matches(declaration.Groups["body"].Value, "\"(?<member>[^\"]*)\"")
-                .Select(x => x.Groups["member"].Value)
+                .Select(static x => x.Groups["member"].Value)
         ];
     }
 
@@ -1256,12 +1253,12 @@ public sealed class ChartAnnotationTests {
         // ⚠ And nothing else moved. An exclusion that also dropped a neighbour would be a chart
         // silently missing a knob, which is the failure this whole surface exists to prevent.
         var kept = Regex.Matches(Block, @"^\s*## @param (?<name>\S+) ", RegexOptions.Multiline)
-            .Select(x => x.Groups["name"].Value)
-            .Where(x => x != "clusterId")
+            .Select(static x => x.Groups["name"].Value)
+            .Where(static x => x != "clusterId")
             .ToList();
 
         Regex.Matches(placed.Text, @"^\s*## @param (?<name>\S+) ", RegexOptions.Multiline)
-            .Select(x => x.Groups["name"].Value)
+            .Select(static x => x.Groups["name"].Value)
             .ToList()
             .ShouldBe(kept);
     }
@@ -1334,7 +1331,7 @@ public sealed class ChartAnnotationTests {
     // ── Fixtures ───────────────────────────────────────────────────────────────────────────────
 
     static FakeRegistry Registry(string chart) =>
-        new FakeRegistry {
+        new() {
             Namespaces = ["CyberCloud.DBforPostgreSQL"],
             Types = [
                 new ResourceTypeRegistration {
@@ -1355,7 +1352,7 @@ public sealed class ChartAnnotationTests {
     ///     <c>clusterId</c> row and a chart without one.
     /// </remarks>
     static FakeRegistry Placed(string chart) =>
-        new FakeRegistry {
+        new() {
             Namespaces = ["CyberCloud.DBforPostgreSQL"],
             Types = [
                 new ResourceTypeRegistration {
@@ -1404,7 +1401,7 @@ public sealed class ChartAnnotationTests {
 
         public void Dispose() {
             if (Directory.Exists(Root)) {
-                Directory.Delete(Root, recursive: true);
+                Directory.Delete(Root, true);
             }
         }
     }
@@ -1455,7 +1452,7 @@ public sealed class ChartAnnotationTests {
         static readonly Regex Param =
             new(@"^(?<name>[A-Za-z_][A-Za-z0-9_]*) \{(?<type>[A-Za-z]+)\} (?<description>\S.*)$");
 
-        static readonly Regex Key = new(@"^(?<key>[A-Za-z_][A-Za-z0-9_]*):[ ]*(?<value>.*)$");
+        static readonly Regex Key = new("^(?<key>[A-Za-z_][A-Za-z0-9_]*):[ ]*(?<value>.*)$");
 
         /// <summary>⚠ Both bounds. `1..` is malformed, not an open range — build/Build.Charts.cs.</summary>
         static readonly Regex Range = new(@"^-?\d+(?:\.\d+)?\.\.-?\d+(?:\.\d+)?$");
@@ -1572,9 +1569,9 @@ public sealed class ChartAnnotationTests {
                             break;
 
                         case "enum":
-                            var members = argument.Split('|').Select(x => x.Trim()).ToList();
+                            var members = argument.Split('|').Select(static x => x.Trim()).ToList();
 
-                            if (members.Any(x => x.Length == 0)
+                            if (members.Exists(static x => x.Length == 0)
                                 || members.Distinct(StringComparer.Ordinal).Count() != members.Count) {
                                 problems.Add($"{line}: `@enum` has an empty or repeated member.");
                             }
@@ -1587,9 +1584,6 @@ public sealed class ChartAnnotationTests {
 
                         case "internal" when argument.Length == 0:
                             problems.Add($"{line}: `@internal` needs a reason.");
-                            break;
-
-                        default:
                             break;
                     }
 

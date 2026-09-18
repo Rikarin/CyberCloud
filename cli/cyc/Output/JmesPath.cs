@@ -182,7 +182,7 @@ static class JmesPath {
         public override Payload Evaluate(Payload current) {
             var value = source.Evaluate(current);
 
-            return value.IsObject ? Payload.Array([.. value.Members.Select(x => x.Value)]) : Payload.Missing;
+            return value.IsObject ? Payload.Array([.. value.Members.Select(static x => x.Value)]) : Payload.Missing;
         }
     }
 
@@ -383,7 +383,7 @@ static class JmesPath {
                         throw TypeError(0, "an object", values[0]);
                     }
 
-                    return Payload.Array([.. values[0].Members.Select(x => Payload.Text(x.Key))]);
+                    return Payload.Array([.. values[0].Members.Select(static x => Payload.Text(x.Key))]);
 
                 case "values":
                     Arity(1, values.Count);
@@ -392,7 +392,7 @@ static class JmesPath {
                         throw TypeError(0, "an object", values[0]);
                     }
 
-                    return Payload.Array([.. values[0].Members.Select(x => x.Value)]);
+                    return Payload.Array([.. values[0].Members.Select(static x => x.Value)]);
 
                 case "to_string":
                     Arity(1, values.Count);
@@ -402,7 +402,7 @@ static class JmesPath {
                     return Payload.Text(
                         values[0].ValueKind == JsonValueKind.String
                             ? values[0].AsString()!
-                            : values[0].ToJson(indented: false)
+                            : values[0].ToJson(false)
                     );
 
                 case "join": {
@@ -465,7 +465,7 @@ static class JmesPath {
                         throw TypeError(0, "an array", values[0]);
                     }
 
-                    return Payload.Array([.. Ordered([.. values[0].Items], x => x)]);
+                    return Payload.Array([.. Ordered([.. values[0].Items], static x => x)]);
 
                 case "sort_by": {
                     Arity(2, values.Count);
@@ -500,7 +500,7 @@ static class JmesPath {
                         throw TypeError(0, "an array of numbers or an array of strings", values[0]);
                     }
 
-                    var sorted = Ordered([.. values[0].Items], x => x);
+                    var sorted = Ordered([.. values[0].Items], static x => x);
 
                     // The spec's answer for an empty array, and the reason `max(value[*].replicas)` on
                     // a page with no resources is null rather than an error.
@@ -530,20 +530,20 @@ static class JmesPath {
         List<Payload> Ordered(List<Payload> items, Func<Payload, Payload> key) {
             var keys = items.Select(key).ToList();
 
-            if (keys.TrueForAll(x => x.AsNumber() is not null)) {
+            if (keys.TrueForAll(static x => x.AsNumber() is not null)) {
                 return [
                     .. items.Select((x, i) => (Item: x, Key: keys[i].AsNumber()!.Value))
-                        .OrderBy(x => x.Key)
-                        .Select(x => x.Item)
+                        .OrderBy(static x => x.Key)
+                        .Select(static x => x.Item)
                 ];
             }
 
-            if (keys.TrueForAll(x => x.AsString() is not null)) {
+            if (keys.TrueForAll(static x => x.AsString() is not null)) {
                 return [
                     .. items
                         .Select((x, i) => (Item: x, Key: keys[i].AsString()!))
-                        .OrderBy(x => x.Key, StringComparer.Ordinal)
-                        .Select(x => x.Item)
+                        .OrderBy(static x => x.Key, StringComparer.Ordinal)
+                        .Select(static x => x.Item)
                 ];
             }
 
@@ -650,7 +650,7 @@ static class JmesPath {
         }
 
         Node ParseComparison() {
-            var left = ParseChain(new CurrentNode(), root: true);
+            var left = ParseChain(new CurrentNode(), true);
 
             SkipSpace();
 
@@ -659,7 +659,7 @@ static class JmesPath {
                     continue;
                 }
 
-                return new ComparisonNode(left, comparator, ParseChain(new CurrentNode(), root: true));
+                return new ComparisonNode(left, comparator, ParseChain(new CurrentNode(), true));
             }
 
             return left;
@@ -727,9 +727,9 @@ static class JmesPath {
                 return source;
             }
 
-            var projected = ParseChain(new CurrentNode(), root: false);
+            var projected = ParseChain(new CurrentNode(), false);
 
-            return new ProjectionNode(source, projected, flatten: projected is FlattenNode);
+            return new ProjectionNode(source, projected, projected is FlattenNode);
         }
 
         Node ParsePrimary(Node current) {
@@ -755,7 +755,7 @@ static class JmesPath {
                 case '&':
                     position++;
 
-                    return new ExpressionReferenceNode(ParseChain(new CurrentNode(), root: true));
+                    return new ExpressionReferenceNode(ParseChain(new CurrentNode(), true));
 
                 case '(': {
                     position++;
@@ -827,7 +827,7 @@ static class JmesPath {
                 var parts = new List<Node>();
 
                 do {
-                    parts.Add(ParseChain(new CurrentNode(), root: true));
+                    parts.Add(ParseChain(new CurrentNode(), true));
                     SkipSpace();
                 } while (Match(","));
 
@@ -868,7 +868,7 @@ static class JmesPath {
             if (Peek(']')) {
                 position++;
 
-                return new IndexNode(source, (int)first!.Value);
+                return new IndexNode(source, first!.Value);
             }
 
             Expect(':');
@@ -883,7 +883,7 @@ static class JmesPath {
                 SkipSpace();
 
                 if (!Peek(']')) {
-                    step = (int)ParseNumber();
+                    step = ParseNumber();
                 }
             }
 
@@ -895,7 +895,7 @@ static class JmesPath {
 
             projection = true;
 
-            return new SliceNode(source, (int?)first, (int?)second, step);
+            return new SliceNode(source, first, second, step);
         }
 
         Node ParseMultiSelectHash(Node source) {
@@ -908,7 +908,7 @@ static class JmesPath {
                 var key = Peek('"') ? ParseQuotedIdentifier() : ParseIdentifier();
                 SkipSpace();
                 Expect(':');
-                parts.Add(new KeyValuePair<string, Node>(key, ParseChain(new CurrentNode(), root: true)));
+                parts.Add(new KeyValuePair<string, Node>(key, ParseChain(new CurrentNode(), true)));
                 SkipSpace();
             } while (Match(","));
 
@@ -1013,7 +1013,7 @@ static class JmesPath {
                 throw Error("a `literal` is not closed");
             }
 
-            var json = text[start..position].Replace("\\`", "`", StringComparison.Ordinal);
+            var json = text[start..position].Replace("""\`""", "`", StringComparison.Ordinal);
             position++;
 
             try {

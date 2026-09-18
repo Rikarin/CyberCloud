@@ -1,5 +1,4 @@
 using CyberCloud.ResourceManager.Conformance;
-using CyberCloud.ResourceManager.Tests.Infrastructure;
 using System.Text.Json;
 
 namespace CyberCloud.ResourceManager.Tests;

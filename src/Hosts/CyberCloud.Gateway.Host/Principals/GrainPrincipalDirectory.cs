@@ -25,8 +25,11 @@ namespace CyberCloud.Gateway.Host.Principals;
 ///         because a silo never serves a grant.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The id must be the <c>N</c> form of a GUID, because that is what the token carries
-///         and what the grain is keyed by.</b> <c>AccessTokenPrincipalFactory</c> mints <c>sub</c> as
+///         ⚠
+///         <b>
+///             The id must be the <c>N</c> form of a GUID, because that is what the token carries
+///             and what the grain is keyed by.
+///         </b> <c>AccessTokenPrincipalFactory</c> mints <c>sub</c> as
 ///         the principal's GUID in <c>N</c> form, so that is the subject id every tuple written for a
 ///         real caller uses, and <c>GrainKeys.User</c> and its siblings build their keys from the same
 ///         form. Any other spelling — the <c>D</c> form, a name, a partial id — names a subject no

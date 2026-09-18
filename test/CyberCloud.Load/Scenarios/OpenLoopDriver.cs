@@ -23,7 +23,11 @@ namespace CyberCloud.Load.Scenarios;
 ///         deliberately and separately.
 ///     </para>
 /// </remarks>
-public sealed class OpenLoopDriver(double requestsPerSecond, TimeSpan warmUp, TimeSpan window, int inFlightCap = 2_000) {
+public sealed class OpenLoopDriver(
+    double requestsPerSecond,
+    TimeSpan warmUp,
+    TimeSpan window,
+    int inFlightCap = 2_000) {
     readonly ConcurrentBag<double> latencies = [];
     readonly ConcurrentBag<(double At, double Ms)> timeline = [];
     int errors;
@@ -42,7 +46,10 @@ public sealed class OpenLoopDriver(double requestsPerSecond, TimeSpan warmUp, Ti
     /// </param>
     /// <param name="cancellationToken">The test's token.</param>
     /// <returns>The distribution over the measured window.</returns>
-    public async Task<Distribution> RunAsync(Func<int, CancellationToken, Task<string?>> request, CancellationToken cancellationToken) {
+    public async Task<Distribution> RunAsync(
+        Func<int, CancellationToken, Task<string?>> request,
+        CancellationToken cancellationToken
+    ) {
         ArgumentNullException.ThrowIfNull(request);
 
         var interval = TimeSpan.FromSeconds(1 / requestsPerSecond);
@@ -71,7 +78,7 @@ public sealed class OpenLoopDriver(double requestsPerSecond, TimeSpan warmUp, Ti
                 if (measured) {
                     Interlocked.Increment(ref shed);
                     Interlocked.Increment(ref errors);
-                    Failures.AddOrUpdate("shed by the in-flight cap", 1, (_, n) => n + 1);
+                    Failures.AddOrUpdate("shed by the in-flight cap", 1, static (_, n) => n + 1);
                 }
 
                 continue;
@@ -81,7 +88,9 @@ public sealed class OpenLoopDriver(double requestsPerSecond, TimeSpan warmUp, Ti
 
             var issuedAt = (clock.Elapsed - warmUp).TotalSeconds;
 
-            pending.Add(Task.Run(async () => {
+            pending.Add(
+                Task.Run(
+                    async () => {
                         var started = Stopwatch.GetTimestamp();
 
                         try {
@@ -97,12 +106,12 @@ public sealed class OpenLoopDriver(double requestsPerSecond, TimeSpan warmUp, Ti
                                 timeline.Add((issuedAt, took));
                             } else {
                                 Interlocked.Increment(ref errors);
-                                Failures.AddOrUpdate(failure, 1, (_, n) => n + 1);
+                                Failures.AddOrUpdate(failure, 1, static (_, n) => n + 1);
                             }
                         } catch (Exception ex) when (ex is not OperationCanceledException) {
                             if (measured) {
                                 Interlocked.Increment(ref errors);
-                                Failures.AddOrUpdate(ex.GetType().Name, 1, (_, n) => n + 1);
+                                Failures.AddOrUpdate(ex.GetType().Name, 1, static (_, n) => n + 1);
                             }
                         } finally {
                             Interlocked.Decrement(ref inFlight);
@@ -135,13 +144,13 @@ public sealed class OpenLoopDriver(double requestsPerSecond, TimeSpan warmUp, Ti
         }
 
         var width = bucket.TotalSeconds;
-        var buckets = new double[(int)Math.Floor(timeline.Max(x => x.At) / width) + 1];
+        var buckets = new double[(int)Math.Floor(timeline.Max(static x => x.At) / width) + 1];
 
         foreach (var (at, ms) in timeline) {
             var index = Math.Clamp((int)Math.Floor(at / width), 0, buckets.Length - 1);
             buckets[index] = Math.Max(buckets[index], ms);
         }
 
-        return buckets.Select(x => Math.Round(x)).ToList();
+        return buckets.Select(static x => Math.Round(x)).ToList();
     }
 }

@@ -1,4 +1,3 @@
-using CyberCloud.Core;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Grains;
 using CyberCloud.Identity.Tests.Infrastructure;
@@ -11,8 +10,11 @@ namespace CyberCloud.Identity.Tests;
 ///     opened stays revoked. docs/plan/11 § Protocol.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The property is "the first exchange's session can be killed by the second", not "the
-///     second exchange fails".</b> The host's part of the story — refusing the replay and calling
+///     ⚠
+///     <b>
+///         The property is "the first exchange's session can be killed by the second", not "the
+///         second exchange fails".
+///     </b> The host's part of the story — refusing the replay and calling
 ///     <c>RevokeAsync</c> on what this grain hands back — is <c>GrantsOverHttpTests</c>'; what the
 ///     grain owes is that the record names the right session and that the race between the two
 ///     exchanges cannot lose the revocation. The last fact lives in <c>SessionGrain.OpenAsync</c>
@@ -55,7 +57,8 @@ public sealed class AuthorizationCodeReuseTests(IdentityCluster cluster) {
         var session = Guid.NewGuid();
 
         (await a.ConsumeAsync(session, InFiveMinutes)).GetValueOrThrow().FirstUse.ShouldBeTrue();
-        (await b.ConsumeAsync(session, InFiveMinutes)).GetValueOrThrow().FirstUse.ShouldBeTrue("a second code was read as a replay of the first");
+        (await b.ConsumeAsync(session, InFiveMinutes)).GetValueOrThrow()
+            .FirstUse.ShouldBeTrue("a second code was read as a replay of the first");
     }
 
     [Fact]
@@ -82,14 +85,18 @@ public sealed class AuthorizationCodeReuseTests(IdentityCluster cluster) {
         (await code.ConsumeAsync(Guid.NewGuid(), expiresAt)).GetValueOrThrow().FirstUse.ShouldBeTrue();
 
         TestClock.Instance.Advance(AccessTokenPolicy.AuthorizationCodeLifetime);
-        (await code.IsConsumedAsync()).GetValueOrThrow().ShouldBeTrue("the record was forgotten at the code's own expiry, before the skew grace");
+        (await code.IsConsumedAsync()).GetValueOrThrow()
+            .ShouldBeTrue("the record was forgotten at the code's own expiry, before the skew grace");
 
         TestClock.Instance.Advance(AuthorizationCodeGrain.Grace);
         (await code.IsConsumedAsync()).GetValueOrThrow().ShouldBeFalse();
 
         // A stale record is absent: the same id consumes again. OpenIddict refuses the expired code
         // before the host asks, so this branch is the tier's tidiness rather than a hole.
-        var again = await code.ConsumeAsync(Guid.NewGuid(), TestClock.Instance.UtcNow + AccessTokenPolicy.AuthorizationCodeLifetime);
+        var again = await code.ConsumeAsync(
+            Guid.NewGuid(),
+            TestClock.Instance.UtcNow + AccessTokenPolicy.AuthorizationCodeLifetime
+        );
 
         again.GetValueOrThrow().FirstUse.ShouldBeTrue();
     }
@@ -105,7 +112,13 @@ public sealed class AuthorizationCodeReuseTests(IdentityCluster cluster) {
 
         (await session.RevokeAsync(RevocationReason.AuthorizationCodeReuseDetected)).IsSuccess.ShouldBeTrue();
 
-        var opened = await session.OpenAsync(Guid.NewGuid(), "cyc-portal", "device", "digest", [AuthenticationMethod.Password]);
+        var opened = await session.OpenAsync(
+            Guid.NewGuid(),
+            "cyc-portal",
+            "device",
+            "digest",
+            [AuthenticationMethod.Password]
+        );
 
         opened.IsFailure.ShouldBeTrue("a session revoked before it opened was opened over the revocation");
         opened.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);

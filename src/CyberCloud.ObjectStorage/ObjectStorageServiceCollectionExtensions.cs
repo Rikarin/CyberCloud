@@ -23,8 +23,11 @@ public static class ObjectStorageServiceCollectionExtensions {
     ///         the same as unconfigured.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>AddSingleton</c>, not <c>TryAdd</c>, and the order with
-    ///         <c>AddCyberCloudResourceManager</c> does not matter.</b> The manager registers its
+    ///         ⚠
+    ///         <b>
+    ///             <c>AddSingleton</c>, not <c>TryAdd</c>, and the order with
+    ///             <c>AddCyberCloudResourceManager</c> does not matter.
+    ///         </b> The manager registers its
     ///         refusing default with <c>TryAdd</c>; this registration is the host's deliberate
     ///         choice and has to win whichever line comes first. <c>ObjectStorageWiringTests</c>
     ///         asserts both orders.

@@ -192,7 +192,7 @@ public sealed class MintOnceTests(OpenBaoFixture vault) {
         await vault.WritePolicyAsync(
             "minter",
             $"path \"{OpenBaoFixture.KvMount}/data/tenants/7c31/*\" "
-            + "{ capabilities = [\"create\", \"update\", \"read\"] }"
+            + """{ capabilities = ["create", "update", "read"] }"""
         );
 
         return (await vault.IssueTokenAsync(["minter"])).Token;

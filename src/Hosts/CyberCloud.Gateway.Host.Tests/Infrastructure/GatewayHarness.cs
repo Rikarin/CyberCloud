@@ -1,12 +1,11 @@
 using CyberCloud.Gateway.Host.Authentication;
 using CyberCloud.Gateway.Host.Hubs;
-using CyberCloud.Gateway.Host.Operations;
 using CyberCloud.Gateway.Host.Pipeline;
 using CyberCloud.Gateway.Host.Pipeline.Stages;
 using CyberCloud.Gateway.Host.RateLimiting;
-using CyberCloud.ServiceDefaults.RateLimiting;
 using CyberCloud.Gateway.Host.Regions;
 using CyberCloud.ResourceManager.Contracts.Registry;
+using CyberCloud.ServiceDefaults.RateLimiting;
 using CyberCloud.Tenancy.Directory;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -131,8 +130,8 @@ sealed class GatewayHarness {
         string tenantARegion,
         TenantStatus status
     ) {
-        Counters = new InMemoryRateLimitCounters(Clock);
-        Tickets = new InMemoryHubTicketStore(Clock);
+        Counters = new(Clock);
+        Tickets = new(Clock);
         tokens = new(Clock);
 
         Options = new() {
@@ -270,7 +269,7 @@ sealed class GatewayHarness {
             http.Response.StatusCode,
             Encoding.UTF8.GetString(response.ToArray()),
             http.Response.Headers,
-            [.. context.Snapshot().Reached.Select(x => x.ToString())],
+            [.. context.Snapshot().Reached.Select(static x => x.ToString())],
             context.Caller
         );
     }

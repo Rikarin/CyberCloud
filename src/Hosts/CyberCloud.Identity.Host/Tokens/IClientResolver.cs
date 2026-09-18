@@ -23,5 +23,9 @@ public interface IClientResolver {
     ///     whose application has gone. ⚠ One answer for all three, because the endpoint that asks is
     ///     unauthenticated and the difference would enumerate a tenant's registrations.
     /// </returns>
-    Task<ApplicationRegistration?> ResolveAsync(Guid tenantId, string? clientId, CancellationToken cancellationToken = default);
+    Task<ApplicationRegistration?> ResolveAsync(
+        Guid tenantId,
+        string? clientId,
+        CancellationToken cancellationToken = default
+    );
 }

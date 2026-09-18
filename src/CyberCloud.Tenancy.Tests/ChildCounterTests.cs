@@ -1,5 +1,4 @@
 using CyberCloud.Core.Resources;
-using CyberCloud.Tenancy.Contracts;
 using CyberCloud.Tenancy.Tests.Infrastructure;
 using Shouldly;
 

@@ -187,5 +187,5 @@ public sealed class ParkedResourceRegistryGrain(
     ///     A <see cref="Dictionary{TKey,TValue}" />'s own order is not one.
     /// </remarks>
     static IReadOnlyList<ParkedResource> Ordered(IEnumerable<ParkedResource> entries) =>
-        [.. entries.OrderBy(entry => entry.AddressOf().CanonicalPath, StringComparer.Ordinal)];
+        [.. entries.OrderBy(static entry => entry.AddressOf().CanonicalPath, StringComparer.Ordinal)];
 }

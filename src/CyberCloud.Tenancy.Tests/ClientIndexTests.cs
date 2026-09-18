@@ -1,4 +1,3 @@
-using CyberCloud.Core.Resources;
 using CyberCloud.Tenancy.Contracts;
 using CyberCloud.Tenancy.Tests.Infrastructure;
 using Shouldly;
@@ -10,8 +9,11 @@ namespace CyberCloud.Tenancy.Tests;
 ///     requires. docs/plan/11 § Protocol.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The same state machine as the email index, so this suite pins what is different rather
-///     than re-proving the machine.</b> What is different: the value is an opaque, case-sensitive
+///     ⚠
+///     <b>
+///         The same state machine as the email index, so this suite pins what is different rather
+///         than re-proving the machine.
+///     </b> What is different: the value is an opaque, case-sensitive
 ///     client id rather than a folded address; the bound value is an application GUID; and the whole
 ///     point is that a <i>second</i> application cannot take a live client id. The machine's own
 ///     interruption behaviour — lease expiry, idempotent re-claim, mismatched-id conflict — is
@@ -101,7 +103,8 @@ public sealed class ClientIndexTests(TenancyCluster cluster) {
         (await cluster.ClientIndexGrain(two, "portal").ResolveAsync()).IsFailure.ShouldBeTrue();
         (await cluster.ClientIndexGrain(two, "portal").TryClaimAsync("portal", OtherApp)).IsSuccess.ShouldBeTrue();
 
-        cluster.ClientIndexGrain(one, "portal").GetGrainId()
+        cluster.ClientIndexGrain(one, "portal")
+            .GetGrainId()
             .ShouldNotBe(cluster.ClientIndexGrain(two, "portal").GetGrainId());
     }
 

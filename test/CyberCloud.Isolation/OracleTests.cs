@@ -148,7 +148,7 @@ public sealed class OracleTests(IsolationCluster cluster) {
         var quota = cluster.For(IsolationCluster.Victim)
             .GetGrain<IQuotaGrain>(GrainKeys.Subscription(IsolationCluster.VictimSubscription));
 
-        var before = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(x => x.LeaseId).ToHashSet();
+        var before = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(static x => x.LeaseId).ToHashSet();
 
         var theirs = Victim(target, "quota-probe");
 
@@ -167,7 +167,7 @@ public sealed class OracleTests(IsolationCluster cluster) {
             refused.IsFailure.ShouldBeTrue();
         }
 
-        var after = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(x => x.LeaseId).ToHashSet();
+        var after = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(static x => x.LeaseId).ToHashSet();
         after.ExceptWith(before);
 
         after.ShouldBeEmpty("a refused cross-tenant create reserved quota in the victim's subscription");

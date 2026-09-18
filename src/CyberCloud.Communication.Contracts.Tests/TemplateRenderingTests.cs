@@ -28,7 +28,7 @@ public sealed class TemplateRenderingTests {
         var refused = TemplateRenderer.Render(Otp(), "en-US", []);
 
         refused.IsFailure.ShouldBeTrue(
-            "the alternative is a customer receiving \"Your code is {code}\" — a wasted message, a "
+            """the alternative is a customer receiving "Your code is {code}" — a wasted message, a """
             + "support ticket, and a complaint, all of which cost more than a refusal"
         );
 

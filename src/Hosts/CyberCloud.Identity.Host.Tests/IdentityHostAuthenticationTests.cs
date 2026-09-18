@@ -39,7 +39,7 @@ public sealed class IdentityHostAuthenticationTests {
             "The identity host authenticates with a session cookie and nothing else. A second scheme "
             + "here — a JWT bearer handler, an API-key handler — makes this origin accept a credential "
             + "the two-host split exists to keep off it (docs/plan/11 § Hosts). Registered: "
-            + string.Join(", ", schemes.Select(x => x.Name))
+            + string.Join(", ", schemes.Select(static x => x.Name))
         );
 
         schemes[0].Name.ShouldBe(IdentityHostAuthentication.SchemeName);
@@ -54,9 +54,9 @@ public sealed class IdentityHostAuthenticationTests {
         // token must not authenticate anything here. Named by type rather than by scheme name,
         // because a handler can be registered under any name.
         foreach (var scheme in schemes) {
-            scheme.HandlerType.Name.ShouldNotContain("JwtBearer", Case.Insensitive);
-            scheme.HandlerType.Name.ShouldNotContain("Validation", Case.Insensitive);
-            scheme.HandlerType.FullName!.ShouldNotContain("OpenIddict.Validation", Case.Insensitive);
+            scheme.HandlerType.Name.ShouldNotContain("JwtBearer");
+            scheme.HandlerType.Name.ShouldNotContain("Validation");
+            scheme.HandlerType.FullName!.ShouldNotContain("OpenIddict.Validation");
         }
     }
 
@@ -69,7 +69,7 @@ public sealed class IdentityHostAuthenticationTests {
         // accept a bearer token here does not compile.
         var referenced = typeof(IdentityHostAuthentication).Assembly
             .GetReferencedAssemblies()
-            .Select(x => x.Name ?? string.Empty)
+            .Select(static x => x.Name ?? string.Empty)
             .ToList();
 
         referenced.ShouldNotContain(
@@ -138,8 +138,8 @@ public sealed class IdentityHostAuthenticationTests {
         // and IdentityHostOpenIddict names the four endpoint constants it does publish.
         var paths = typeof(IdentityHostOpenIddict)
             .GetFields(BindingFlags.Public | BindingFlags.Static)
-            .Where(x => x.IsLiteral && x.FieldType == typeof(string))
-            .Select(x => (string)x.GetRawConstantValue()!)
+            .Where(static x => x.IsLiteral && x.FieldType == typeof(string))
+            .Select(static x => (string)x.GetRawConstantValue()!)
             .ToList();
 
         paths.ShouldNotContain(x => x.Contains("introspect", StringComparison.OrdinalIgnoreCase));

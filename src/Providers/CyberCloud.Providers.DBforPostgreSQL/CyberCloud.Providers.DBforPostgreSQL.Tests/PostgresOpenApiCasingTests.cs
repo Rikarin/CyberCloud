@@ -57,7 +57,8 @@ public sealed class PostgresOpenApiCasingTests {
             "no path carries the provider namespace and type as declared"
         );
 
-        foreach (var path in paths.Where(x => x.Contains("dbforpostgresql", StringComparison.OrdinalIgnoreCase))) {
+        foreach (var path in paths.Where(static x => x.Contains("dbforpostgresql", StringComparison.OrdinalIgnoreCase)
+                 )) {
             path.Contains("CyberCloud.DBforPostgreSQL", StringComparison.Ordinal).ShouldBeTrue(path);
         }
     }
@@ -89,7 +90,7 @@ public sealed class PostgresOpenApiCasingTests {
         return OpenApiEmitter.Emit(registry, OpenApiEmitter.ApiVersionsOf(registry).Single());
     }
 
-    static ImmutableArray<string> Paths() => [.. Document()["paths"]!.AsObject().Select(x => x.Key)];
+    static ImmutableArray<string> Paths() => [.. Document()["paths"]!.AsObject().Select(static x => x.Key)];
 
     static void Collect(JsonNode? node, HashSet<string> names) {
         switch (node) {
@@ -106,9 +107,6 @@ public sealed class PostgresOpenApiCasingTests {
                     Collect(item, names);
                 }
 
-                break;
-
-            default:
                 break;
         }
     }

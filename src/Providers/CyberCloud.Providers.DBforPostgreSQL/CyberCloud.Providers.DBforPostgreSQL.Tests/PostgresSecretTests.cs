@@ -99,7 +99,9 @@ public sealed class PostgresSecretTests {
 
         initdb.ContainsKey("password").ShouldBeFalse();
         rendered.Contains("password", StringComparison.OrdinalIgnoreCase)
-            .ShouldBeFalse("the rendered Cluster mentions a password. The credential is the operator's and travels only through listKeys.");
+            .ShouldBeFalse(
+                "the rendered Cluster mentions a password. The credential is the operator's and travels only through listKeys."
+            );
     }
 
     // ⚠ A FOURTH TEST WAS HERE AND IT IS GONE ON PURPOSE. It projected a desired body through

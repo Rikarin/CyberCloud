@@ -24,7 +24,11 @@ public interface IResourceAccessResolver {
     ///     not answer. ⚠ An empty list is a success: a resource nobody has been granted is one nobody
     ///     lists, and that is not the same as not knowing.
     /// </returns>
-    Task<Result<ImmutableArray<string>>> ReadersOfAsync(Guid tenantId, Guid resourceId, CancellationToken cancellationToken = default);
+    Task<Result<ImmutableArray<string>>> ReadersOfAsync(
+        Guid tenantId,
+        Guid resourceId,
+        CancellationToken cancellationToken = default
+    );
 }
 
 /// <summary>
@@ -33,8 +37,11 @@ public interface IResourceAccessResolver {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b><c>ICheckGrain.ListRoleAssignmentsAsync(includeInherited: true)</c> and not a second
-///         walk written here, for the reason <c>ReBacRoleAssignmentStore</c> gives.</b> That view
+///         ⚠
+///         <b>
+///             <c>ICheckGrain.ListRoleAssignmentsAsync(includeInherited: true)</c> and not a second
+///             walk written here, for the reason <c>ReBacRoleAssignmentStore</c> gives.
+///         </b> That view
 ///         reports an inherited role only where the resource's own rewrite inherits it — a walk of
 ///         <c>parent</c> edges written beside it would be a second opinion about which roles inherit,
 ///         and the one nobody re-reads when the schema changes. Every role on the schema
@@ -64,17 +71,22 @@ public sealed class ReBacResourceAccessResolver : IResourceAccessResolver {
     }
 
     /// <inheritdoc />
-    public async Task<Result<ImmutableArray<string>>> ReadersOfAsync(Guid tenantId, Guid resourceId, CancellationToken cancellationToken = default) {
+    public async Task<Result<ImmutableArray<string>>> ReadersOfAsync(
+        Guid tenantId,
+        Guid resourceId,
+        CancellationToken cancellationToken = default
+    ) {
         var check = grains
             .ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture))
-            .GetGrain<ICheckGrain>(GrainKeys.CheckCache(ObjectTypes.Resource, resourceId.ToString("N", CultureInfo.InvariantCulture)));
+            .GetGrain<ICheckGrain>(
+                GrainKeys.CheckCache(ObjectTypes.Resource, resourceId.ToString("N", CultureInfo.InvariantCulture))
+            );
 
         Result<IReadOnlyList<RoleAssignment>> listed;
 
         try {
             listed = await check.ListRoleAssignmentsAsync(true).WaitAsync(cancellationToken);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException) {
+        } catch (Exception exception) when (exception is not OperationCanceledException) {
             // ⚠ A grain call that THROWS is the engine not answering — a SiloUnavailableException
             // while the tenant's silo restarts, a timeout past the cluster's ResponseTimeout — and
             // the contract above promises a failure for that, not an exception the projector has
@@ -92,7 +104,7 @@ public sealed class ReBacResourceAccessResolver : IResourceAccessResolver {
         }
 
         var readers = listed.GetValueOrThrow()
-            .Select(assignment => assignment.Principal.ToString())
+            .Select(static assignment => assignment.Principal.ToString())
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToImmutableArray();

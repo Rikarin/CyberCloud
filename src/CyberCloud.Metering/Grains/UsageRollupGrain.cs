@@ -207,10 +207,10 @@ public sealed class UsageRollupGrain(
         var currentHour = UsageWindow.HourAt(clock.UtcNow).Start;
 
         var open = state.State.Pending
-            .Select(x => UsageWindow.HourAt(x.WindowStart).Start)
+            .Select(static x => UsageWindow.HourAt(x.WindowStart).Start)
             .Where(x => x < currentHour)
             .Distinct()
-            .OrderBy(x => x)
+            .OrderBy(static x => x)
             .ToList();
 
         var written = ImmutableArray.CreateBuilder<UsageAggregate>();
@@ -327,7 +327,7 @@ public sealed class UsageRollupGrain(
         if (!record.IsKeyConsistent()) {
             return Result.Failure(
                 ErrorCode.InvalidRequestBody,
-                $"The record's idempotency key is not the one its contents produce. docs/plan/22 "
+                "The record's idempotency key is not the one its contents produce. docs/plan/22 "
                 + "§ The pipeline makes the key deterministic — sha256(resourceId | meter | "
                 + "windowStart | windowEnd) — precisely so a redelivery collapses; a key that does "
                 + "not match its record breaks dedup in whichever direction it happens to point. "
@@ -348,11 +348,11 @@ public sealed class UsageRollupGrain(
     /// </remarks>
     ImmutableArray<UsageAggregate> Aggregate(List<UsageEvent> records, UsageWindow hour) => [
         .. records
-            .GroupBy(x => (x.ResourceId, x.Meter))
-            .OrderBy(x => x.Key.ResourceId)
-            .ThenBy(x => x.Key.Meter)
+            .GroupBy(static x => (x.ResourceId, x.Meter))
+            .OrderBy(static x => x.Key.ResourceId)
+            .ThenBy(static x => x.Key.Meter)
             .Select(group => {
-                    var last = group.OrderBy(x => x.WindowStart).Last();
+                    var last = group.OrderBy(static x => x.WindowStart).Last();
 
                     return new UsageAggregate {
                         TenantId = tenantId,
@@ -363,7 +363,7 @@ public sealed class UsageRollupGrain(
                         Region = last.Region,
                         HourStart = hour.Start,
                         HourEnd = hour.End,
-                        Quantity = group.Sum(x => x.Quantity),
+                        Quantity = group.Sum(static x => x.Quantity),
                         SampleCount = group.Count()
                     };
                 }
@@ -374,7 +374,7 @@ public sealed class UsageRollupGrain(
     bool Prune(DateTimeOffset now) {
         var horizon = now - DedupRetention;
 
-        var deadKeys = state.State.SeenKeys.Where(x => x.Value < horizon).Select(x => x.Key).ToList();
+        var deadKeys = state.State.SeenKeys.Where(x => x.Value < horizon).Select(static x => x.Key).ToList();
         foreach (var key in deadKeys) {
             state.State.SeenKeys.Remove(key);
         }

@@ -108,7 +108,7 @@ public sealed class OperationStatus {
             if (root.ValueKind is not JsonValueKind.Object
                 || !root.TryGetProperty("status", out var status)
                 || status.ValueKind is not JsonValueKind.String
-                || !Enum.TryParse<OperationState>(status.GetString(), ignoreCase: false, out var state)) {
+                || !Enum.TryParse<OperationState>(status.GetString(), false, out var state)) {
                 throw new CyberCloudRequestFailedException(
                     "The operation status response has no recognised 'status'. Expected one of "
                     + string.Join(", ", Enum.GetNames<OperationState>())
@@ -124,7 +124,7 @@ public sealed class OperationStatus {
                 ? CyberCloudError.TryParse(Encoding.UTF8.GetBytes(e.GetRawText()))
                 : null;
 
-            return new OperationStatus(state, percent, ReadProgress(root), error);
+            return new(state, percent, ReadProgress(root), error);
         }
     }
 

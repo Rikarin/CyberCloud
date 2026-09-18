@@ -470,7 +470,7 @@ public static class PublicIpAddresses {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the address is allocated in. ⚠ It must be a region whose "
                     + "operator has an external pool — nothing checks that, and an address in a region "
                     + "with none never becomes ready."
@@ -484,7 +484,7 @@ public static class PublicIpAddresses {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster whose external pool the address is allocated from. ⚠ An "
                     + "address is only reachable from the fabric that announces it, so a load balancer "
                     + "in another cluster cannot use it."
@@ -523,7 +523,8 @@ public static class PublicIpAddresses {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     /// <summary>
     ///     What a <c>POST …/showAllocation</c> returns.
@@ -552,7 +553,7 @@ public static class PublicIpAddresses {
                 new(
                     "/v4",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The IPv4 address the fabric allocated, or empty when it has not "
                     + "allocated one yet."
                 ),
@@ -571,7 +572,7 @@ public static class PublicIpAddresses {
                 new(
                     "/ready",
                     SchemaKind.Boolean,
-                    Required: true,
+                    true,
                     Description: "Whether the fabric has finished announcing the address. ⚠ False with "
                     + "an address already reported is the ordinary state for a few seconds after "
                     + "create."
@@ -587,7 +588,7 @@ public static class PublicIpAddresses {
                 new(
                     "/sampledAt",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "When the platform read the object, RFC 3339. ⚠ The read time rather "
                     + "than the time the fabric wrote the figures, because the object carries no "
                     + "timestamp on them."
@@ -751,7 +752,7 @@ public static class PublicIpAddresses {
         }
 
         return parsed is JsonObject document
-            && document["kind"]?.GetValue<string>() is (null or "OvnEip")
+            && document["kind"]?.GetValue<string>() is null or "OvnEip"
             && document["spec"] is JsonObject spec
                 ? spec
                 : null;

@@ -27,8 +27,11 @@ namespace CyberCloud.Sdk;
 ///         operation's value.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Registered in the generated file's <c>JsonSerializerContext</c>, not in
-///         <see cref="SdkJsonContext" />.</b> The closed instantiation names the file's enum, so
+///         ⚠
+///         <b>
+///             Registered in the generated file's <c>JsonSerializerContext</c>, not in
+///             <see cref="SdkJsonContext" />.
+///         </b> The closed instantiation names the file's enum, so
 ///         only that file can declare it — and that context needs
 ///         <c>UseStringEnumConverter = true</c>, because the wire's <c>"Creating"</c> reaches the
 ///         enum through the <c>[JsonStringEnumMemberName]</c> the emitter puts on every member.

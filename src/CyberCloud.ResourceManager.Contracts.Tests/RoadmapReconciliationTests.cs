@@ -89,13 +89,13 @@ public sealed class RoadmapReconciliationTests {
         var rows = LandedTableRows(root);
 
         var listed = rows
-            .SelectMany(x => QualifiedName.Matches(x).Select(match => match.Groups["name"].Value))
+            .SelectMany(static x => QualifiedName.Matches(x).Select(static match => match.Groups["name"].Value))
             .ToArray();
 
         listed
-            .GroupBy(x => x, StringComparer.Ordinal)
-            .Where(x => x.Count() > 1)
-            .Select(x => x.Key)
+            .GroupBy(static x => x, StringComparer.Ordinal)
+            .Where(static x => x.Count() > 1)
+            .Select(static x => x.Key)
             .ShouldBeEmpty(
                 "a resource type is listed twice in docs/plan/24 § What has landed, so its per-phase counts cannot both be right"
             );
@@ -146,7 +146,7 @@ public sealed class RoadmapReconciliationTests {
 
         var documents = new DirectoryInfo(Path.Combine(root, "openapi"))
             .EnumerateFiles("????-??-??.json")
-            .Select(x => x.Name)
+            .Select(static x => x.Name)
             .Order(StringComparer.Ordinal)
             .ToArray();
 
@@ -164,8 +164,8 @@ public sealed class RoadmapReconciliationTests {
 
         // ── The per-phase table: the rows sum to the total, and the total is the published count ──
         var rows = LandedTableRows(root);
-        var total = rows.Where(x => x.Contains("**Total**", StringComparison.Ordinal)).ToArray();
-        var phases = rows.Where(x => !x.Contains("**Total**", StringComparison.Ordinal)).ToArray();
+        var total = rows.Where(static x => x.Contains("**Total**", StringComparison.Ordinal)).ToArray();
+        var phases = rows.Where(static x => !x.Contains("**Total**", StringComparison.Ordinal)).ToArray();
 
         total.Length.ShouldBe(1, $"docs/plan/24's '{LandedTableHeader}' table has no single **Total** row to check");
         phases.ShouldNotBeEmpty("docs/plan/24's § What has landed table lists no phases");
@@ -202,7 +202,7 @@ public sealed class RoadmapReconciliationTests {
         }
 
         // ── The pinned command, and the number printed under it ───────────────────────────────────
-        var opens = Array.FindIndex(lines, x => string.Equals(x, "```console", StringComparison.Ordinal));
+        var opens = Array.FindIndex(lines, static x => string.Equals(x, "```console", StringComparison.Ordinal));
 
         opens.ShouldBeGreaterThanOrEqualTo(
             0,
@@ -211,7 +211,7 @@ public sealed class RoadmapReconciliationTests {
             + "than a result."
         );
 
-        var closes = Array.FindIndex(lines, opens + 1, x => string.Equals(x, "```", StringComparison.Ordinal));
+        var closes = Array.FindIndex(lines, opens + 1, static x => string.Equals(x, "```", StringComparison.Ordinal));
 
         closes.ShouldBeGreaterThan(opens + 1, "docs/plan/24's recount block is empty or unterminated");
 
@@ -248,7 +248,7 @@ public sealed class RoadmapReconciliationTests {
 
         var types = PublishedType
             .Matches(File.ReadAllText(document))
-            .Select(x => x.Groups["type"].Value)
+            .Select(static x => x.Groups["type"].Value)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -268,7 +268,7 @@ public sealed class RoadmapReconciliationTests {
     /// <summary>The body rows of docs/plan/24 § What has landed's phase table, separator excluded.</summary>
     static string[] LandedTableRows(string root) {
         var lines = RoadmapLines(root);
-        var header = Array.FindIndex(lines, x => x.StartsWith(LandedTableHeader, StringComparison.Ordinal));
+        var header = Array.FindIndex(lines, static x => x.StartsWith(LandedTableHeader, StringComparison.Ordinal));
 
         header.ShouldBeGreaterThanOrEqualTo(
             0,
@@ -279,7 +279,7 @@ public sealed class RoadmapReconciliationTests {
         // header + 1 is the |---|---|---| separator every Markdown table carries.
         return lines
             .Skip(header + 2)
-            .TakeWhile(x => x.StartsWith('|'))
+            .TakeWhile(static x => x.StartsWith('|'))
             .ToArray();
     }
 

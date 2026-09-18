@@ -163,13 +163,13 @@ public static class AccessTokenPrincipalFactory {
             principal.ServicePrincipalId,
             SubjectTypes.ServicePrincipal,
             principal.TenantId,
-            sessionId: null,
+            null,
             clientId,
             audience,
             scopes,
             authenticatedAt,
             [AuthenticationMethod.ClientCredential],
-            impersonatedBy: Guid.Empty
+            Guid.Empty
         );
     }
 
@@ -200,9 +200,9 @@ public static class AccessTokenPrincipalFactory {
         // production, which is the outcome docs/plan/11 § Protocol wants: authorization is a ReBAC
         // Check, and there is nothing in the token to check against.
         var identity = new ClaimsIdentity(
-            authenticationType: "CyberCloud.AccessToken",
-            nameType: AccessTokenClaims.Subject,
-            roleType: "urn:cybercloud:roles-are-not-in-the-token"
+            "CyberCloud.AccessToken",
+            AccessTokenClaims.Subject,
+            "urn:cybercloud:roles-are-not-in-the-token"
         );
 
         Add(identity, AccessTokenClaims.Subject, N(subjectId));
@@ -248,7 +248,7 @@ public static class AccessTokenPrincipalFactory {
             AccessTokenClaims.AuthenticationTime,
             authenticatedAt.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
             ClaimValueTypes.Integer64,
-            identityToken: true
+            true
         );
 
         foreach (var method in methods) {
@@ -269,7 +269,7 @@ public static class AccessTokenPrincipalFactory {
         // method intends to build. The two differ the moment somebody adds an AddClaim above without
         // reading the remarks, and this is the line that turns that into a failure here instead of a
         // token in the wild carrying a claim the gateway will not recognise.
-        if (AccessTokenClaims.EnsurePermitted(principal.Claims.Select(x => x.Type)).TryGetError(out var error)) {
+        if (AccessTokenClaims.EnsurePermitted(principal.Claims.Select(static x => x.Type)).TryGetError(out var error)) {
             throw new InvalidOperationException(error.Message);
         }
 
@@ -331,7 +331,11 @@ public static class AccessTokenPrincipalFactory {
     ///         factory may put in an access token.
     ///     </para>
     /// </remarks>
-    public static ClaimsPrincipal AppendRefreshOnly(ClaimsPrincipal principal, string refreshHandle, Guid interactiveSessionId) {
+    public static ClaimsPrincipal AppendRefreshOnly(
+        ClaimsPrincipal principal,
+        string refreshHandle,
+        Guid interactiveSessionId
+    ) {
         ArgumentNullException.ThrowIfNull(principal);
         ArgumentException.ThrowIfNullOrEmpty(refreshHandle);
 
@@ -362,8 +366,7 @@ public static class AccessTokenPrincipalFactory {
         var identity = (ClaimsIdentity)principal.Identity!;
 
         foreach (var (type, value) in new[] {
-                     (OpenIddictConstants.Claims.Email, email),
-                     (OpenIddictConstants.Claims.Name, name)
+                     (OpenIddictConstants.Claims.Email, email), (OpenIddictConstants.Claims.Name, name)
                  }) {
             if (string.IsNullOrEmpty(value)) {
                 continue;

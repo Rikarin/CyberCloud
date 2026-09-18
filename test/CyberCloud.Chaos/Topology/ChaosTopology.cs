@@ -1,6 +1,5 @@
 using CyberCloud.Authorization.Contracts;
 using CyberCloud.Cluster.Conformance.Infrastructure;
-using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.Sample;
 using CyberCloud.Providers.Sample.Contracts;
@@ -10,12 +9,10 @@ using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ServiceDefaults;
 using CyberCloud.ServiceDefaults.Storage;
 using CyberCloud.Tenancy.Shards;
-using DotNet.Testcontainers.Containers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using Orleans.Multitenant;
-using Orleans.Runtime;
 using Orleans.TestingHost;
 using StackExchange.Redis;
 using System.Diagnostics;
@@ -41,8 +38,7 @@ namespace CyberCloud.Chaos.Topology;
 public sealed record TenantWorld(Guid Tenant, Guid Subscription, string Group, Guid Cluster, CallerContext Caller) {
     /// <summary>The address a widget of this name has in this tenant.</summary>
     /// <param name="name">The widget's name. DNS-1123, per docs/plan/06 § Identifiers.</param>
-    public ResourceId Widget(string name) =>
-        new(Tenant, Subscription, Group, SampleWidgets.Type, name, Guid.Empty);
+    public ResourceId Widget(string name) => new(Tenant, Subscription, Group, SampleWidgets.Type, name, Guid.Empty);
 
     /// <summary>The widget collection — what a GET of the type lists.</summary>
     public ResourceCollectionId Widgets => ResourceCollectionId.Of(Widget("any"));
@@ -70,8 +66,11 @@ public sealed record TenantWorld(Guid Tenant, Guid Subscription, string Group, G
 ///         <c>CyberCloud.Tenancy.Tests</c>' <c>TenancyCluster</c> uses, for the same reasons.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The write path is the real <c>ResourceManagerService</c> over the real
-///         <c>ReBacResourceAuthorizer</c>, composed on the client exactly as the gateway composes it</b>
+///         ⚠
+///         <b>
+///             The write path is the real <c>ResourceManagerService</c> over the real
+///             <c>ReBacResourceAuthorizer</c>, composed on the client exactly as the gateway composes it
+///         </b>
 ///         — <c>AddCyberCloudResourceManager()</c> on a service collection holding the cluster
 ///         client. Tenants are created through <c>IScopeManager.CreateTenantAsync</c>, the platform
 ///         administration path, under an operator grant written the way
@@ -89,21 +88,27 @@ public sealed class ChaosTopology : IAsyncLifetime {
     /// <summary>The shard every null-tenant grain lives on: the shard map, the tenant directory, cluster connections.</summary>
     public const string PlatformShard = "platform-00";
 
-    /// <summary>How many silos the cluster starts with. Three, so killing one leaves a cluster and a second kill is still a kill.</summary>
+    /// <summary>
+    ///     How many silos the cluster starts with. Three, so killing one leaves a cluster and a second kill is still a
+    ///     kill.
+    /// </summary>
     public const int InitialSilos = 3;
 
     /// <summary>The operator every tenant here is created by — a service principal holding <c>platform:root#operator</c>.</summary>
     public const string OperatorId = "chaos-operator";
 
-    /// <summary>The durable tier's Npgsql pool per shard — a deployment knob turned, and named in the results file's topology block.</summary>
+    /// <summary>
+    ///     The durable tier's Npgsql pool per shard — a deployment knob turned, and named in the results file's topology
+    ///     block.
+    /// </summary>
     public const int PoolSize = 20;
 
     const string Region = "eu-central";
 
     readonly RedisContainer redis = new RedisBuilder(ClusterInfrastructure.RedisImage)
         // docs/plan/05 § Hot: noeviction, and an AOF so a Redis restart is not a FLUSHALL of its own.
-        .WithCommand("--maxmemory-policy", "noeviction", "--appendonly", "yes")
-        .Build();
+            .WithCommand("--maxmemory-policy", "noeviction", "--appendonly", "yes")
+            .Build();
 
     readonly Dictionary<string, PostgreSqlContainer> shards = new(StringComparer.Ordinal) {
         [ShardA] = NewShard(), [ShardB] = NewShard(), [PlatformShard] = NewShard()
@@ -151,7 +156,8 @@ public sealed class ChaosTopology : IAsyncLifetime {
 
     /// <summary>The shard a tenant's durable state is on, by the same placement the silos use.</summary>
     /// <param name="tenant">The tenant.</param>
-    public static string ShardOf(Guid tenant) => new GrainBackedShardMapCache(ChaosState.Storage).DurableShardFor(D(tenant));
+    public static string ShardOf(Guid tenant) =>
+        new GrainBackedShardMapCache(ChaosState.Storage).DurableShardFor(D(tenant));
 
     /// <summary>A fresh tenant id whose durable state lands on <paramref name="shard" />.</summary>
     /// <param name="shard"><see cref="ShardA" /> or <see cref="ShardB" />.</param>
@@ -178,11 +184,20 @@ public sealed class ChaosTopology : IAsyncLifetime {
             ["hotTier"] = ClusterInfrastructure.RedisImage,
             ["durableTier"] = ClusterInfrastructure.PostgresImage,
             ["cluster"] = ClusterInfrastructure.K3sImage,
-            ["clusterHealthWindow"] = ChaosSiloConfigurator.HealthStalenessWindow.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) + " s",
-            ["clusterPingInterval"] = ChaosSiloConfigurator.PingInterval.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) + " s",
+            ["clusterHealthWindow"] = ChaosSiloConfigurator.HealthStalenessWindow.TotalSeconds.ToString(
+                "0",
+                CultureInfo.InvariantCulture
+            )
+                + " s",
+            ["clusterPingInterval"] = ChaosSiloConfigurator.PingInterval.TotalSeconds.ToString(
+                "0",
+                CultureInfo.InvariantCulture
+            )
+                + " s",
             ["membershipProbes"] = "shipped defaults",
             ["npgsqlPoolSize"] = PoolSize.ToString(CultureInfo.InvariantCulture),
-            ["reminderPeriod"] = OperationGrain.ReminderPeriod.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) + " s"
+            ["reminderPeriod"] = OperationGrain.ReminderPeriod.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)
+                + " s"
         };
 
     /// <inheritdoc />
@@ -250,7 +265,7 @@ public sealed class ChaosTopology : IAsyncLifetime {
 
         // ── The write path, composed as the gateway composes it. ──────────────────────────────────
         var services = new ServiceCollection();
-        services.AddLogging(logging => logging.SetMinimumLevel(LogLevel.Warning));
+        services.AddLogging(static logging => logging.SetMinimumLevel(LogLevel.Warning));
         services.AddSingleton<IGrainFactory>(Cluster.Client);
         services.AddSingleton(Cluster.Client);
         services.AddSingleton(ChaosState.Clock);
@@ -284,7 +299,10 @@ public sealed class ChaosTopology : IAsyncLifetime {
         Raw?.Dispose();
 
         await Task.WhenAll(
-            [redis.DisposeAsync().AsTask(), k3s.DisposeAsync().AsTask(), .. shards.Values.Select(x => x.DisposeAsync().AsTask())]
+            [
+                redis.DisposeAsync().AsTask(), k3s.DisposeAsync().AsTask(),
+                .. shards.Values.Select(static x => x.DisposeAsync().AsTask())
+            ]
         );
     }
 
@@ -330,14 +348,22 @@ public sealed class ChaosTopology : IAsyncLifetime {
         const string group = "chaos";
 
         var sub = await Scopes.CreateAsync(
-            new() { Path = ScopeId.Subscription(tenant, subscription).Path, Body = """{"displayName":"chaos"}""", Caller = caller },
+            new() {
+                Path = ScopeId.Subscription(tenant, subscription).Path,
+                Body = """{"displayName":"chaos"}""",
+                Caller = caller
+            },
             cancellationToken
         );
 
         sub.IsSuccess.ShouldBeTrue($"the subscription for '{label}' could not be created: {sub.Error?.Message}");
 
         var rg = await Scopes.CreateAsync(
-            new() { Path = ScopeId.Group(tenant, subscription, group).Path, Body = $$"""{"location":"{{Region}}"}""", Caller = caller },
+            new() {
+                Path = ScopeId.Group(tenant, subscription, group).Path,
+                Body = $$"""{"location":"{{Region}}"}""",
+                Caller = caller
+            },
             cancellationToken
         );
 
@@ -348,7 +374,7 @@ public sealed class ChaosTopology : IAsyncLifetime {
         // what any invariant here is about.
         var quota = For(tenant).GetGrain<IQuotaGrain>(GrainKeys.Subscription(subscription));
 
-        foreach (var meter in Enum.GetValues<QuotaMeter>().Where(x => x != QuotaMeter.Unknown)) {
+        foreach (var meter in Enum.GetValues<QuotaMeter>().Where(static x => x != QuotaMeter.Unknown)) {
             (await quota.SetLimitAsync(meter, 1_000_000m)).IsSuccess.ShouldBeTrue();
         }
 
@@ -363,20 +389,32 @@ public sealed class ChaosTopology : IAsyncLifetime {
     /// <param name="label">A short DNS-1123 label for the group name.</param>
     /// <param name="cancellationToken">The test's token.</param>
     /// <returns>The same tenant, addressed through the new subscription.</returns>
-    public async Task<TenantWorld> AddSubscriptionAsync(TenantWorld world, string label, CancellationToken cancellationToken) {
+    public async Task<TenantWorld> AddSubscriptionAsync(
+        TenantWorld world,
+        string label,
+        CancellationToken cancellationToken
+    ) {
         ArgumentNullException.ThrowIfNull(world);
 
         var subscription = Guid.NewGuid();
 
         var sub = await Scopes.CreateAsync(
-            new() { Path = ScopeId.Subscription(world.Tenant, subscription).Path, Body = $$"""{"displayName":"{{label}}"}""", Caller = world.Caller },
+            new() {
+                Path = ScopeId.Subscription(world.Tenant, subscription).Path,
+                Body = $$"""{"displayName":"{{label}}"}""",
+                Caller = world.Caller
+            },
             cancellationToken
         );
 
         sub.IsSuccess.ShouldBeTrue($"the subscription '{label}' could not be created: {sub.Error?.Message}");
 
         var rg = await Scopes.CreateAsync(
-            new() { Path = ScopeId.Group(world.Tenant, subscription, label).Path, Body = $$"""{"location":"{{Region}}"}""", Caller = world.Caller },
+            new() {
+                Path = ScopeId.Group(world.Tenant, subscription, label).Path,
+                Body = $$"""{"location":"{{Region}}"}""",
+                Caller = world.Caller
+            },
             cancellationToken
         );
 
@@ -384,7 +422,7 @@ public sealed class ChaosTopology : IAsyncLifetime {
 
         var quota = For(world.Tenant).GetGrain<IQuotaGrain>(GrainKeys.Subscription(subscription));
 
-        foreach (var meter in Enum.GetValues<QuotaMeter>().Where(x => x != QuotaMeter.Unknown)) {
+        foreach (var meter in Enum.GetValues<QuotaMeter>().Where(static x => x != QuotaMeter.Unknown)) {
             (await quota.SetLimitAsync(meter, 1_000_000m)).IsSuccess.ShouldBeTrue();
         }
 
@@ -405,15 +443,18 @@ public sealed class ChaosTopology : IAsyncLifetime {
         )
             .GetValueOrThrow();
 
-        var written = await For(world.Tenant).GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(world.Tenant)).WriteAsync(tuple);
-        written.IsSuccess.ShouldBeTrue($"the owner grant for {subjectType}:{subjectId} could not be written: {written.Error?.Message}");
+        var written = await For(world.Tenant).GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(world.Tenant))
+            .WriteAsync(tuple);
+        written.IsSuccess.ShouldBeTrue(
+            $"the owner grant for {subjectType}:{subjectId} could not be written: {written.Error?.Message}"
+        );
     }
 
     /// <summary>The primary silo's gateway port, for a client outside the testing host — the real gateway.</summary>
     /// <remarks>
-    ///     Listening on loopback only because <see cref="ConnectionTransportType.TcpSocket"/> is
-    ///     asked for above; the primary is the silo <see cref="KillASecondarySiloAsync"/> and
-    ///     <see cref="RestartSiloAsync"/> leave alone, so the port outlives every fault.
+    ///     Listening on loopback only because <see cref="ConnectionTransportType.TcpSocket" /> is
+    ///     asked for above; the primary is the silo <see cref="KillASecondarySiloAsync" /> and
+    ///     <see cref="RestartSiloAsync" /> leave alone, so the port outlives every fault.
     /// </remarks>
     public int GatewayPort => Cluster.Primary.GatewayAddress.Endpoint.Port;
 
@@ -477,7 +518,11 @@ public sealed class ChaosTopology : IAsyncLifetime {
     /// <param name="world">The tenant.</param>
     /// <param name="name">The widget's name.</param>
     /// <param name="cancellationToken">The test's token.</param>
-    public Task<Result<ResourceSnapshot>> ReadWidgetAsync(TenantWorld world, string name, CancellationToken cancellationToken) {
+    public Task<Result<ResourceSnapshot>> ReadWidgetAsync(
+        TenantWorld world,
+        string name,
+        CancellationToken cancellationToken
+    ) {
         ArgumentNullException.ThrowIfNull(world);
 
         return Manager.ReadAsync(
@@ -518,7 +563,9 @@ public sealed class ChaosTopology : IAsyncLifetime {
                 var driven = await Operation(tenant, operationId).DriveAsync();
 
                 if (driven.TryGetError(out var error)) {
-                    throw new InvalidOperationException($"operation {operationId:D} cannot be driven: {error.Code} — {error.Message}");
+                    throw new InvalidOperationException(
+                        $"operation {operationId:D} cannot be driven: {error.Code} — {error.Message}"
+                    );
                 }
 
                 last = driven.GetValueOrThrow();
@@ -545,7 +592,10 @@ public sealed class ChaosTopology : IAsyncLifetime {
     /// </summary>
     /// <param name="tenant">The tenant.</param>
     /// <param name="operationId">The operation.</param>
-    /// <param name="budget">How long to watch. ⚠ At least two of <see cref="OperationGrain.ReminderPeriod" />; the first pass is a reminder tick away.</param>
+    /// <param name="budget">
+    ///     How long to watch. ⚠ At least two of <see cref="OperationGrain.ReminderPeriod" />; the first pass
+    ///     is a reminder tick away.
+    /// </param>
     /// <param name="cancellationToken">The test's token.</param>
     /// <returns>The state, attempt count, and activation count the durable row last showed, and when it turned terminal.</returns>
     /// <remarks>
@@ -564,7 +614,8 @@ public sealed class ChaosTopology : IAsyncLifetime {
     ///         Every attempt this returns is the platform's.
     ///     </para>
     /// </remarks>
-    public async Task<(OperationState State, int Attempts, int Activations, TimeSpan? TerminalAt)> ObserveUntilTerminalAsync(
+    public async Task<
+        (OperationState State, int Attempts, int Activations, TimeSpan? TerminalAt)> ObserveUntilTerminalAsync(
         Guid tenant,
         Guid operationId,
         TimeSpan budget,
@@ -582,7 +633,9 @@ public sealed class ChaosTopology : IAsyncLifetime {
                 // The operation's own row is the one whose payload is an OperationGrainState — a
                 // Spec and an attempt count; nothing else keyed by this GUID has both.
                 if (row.Payload.Length == 0
-                    || System.Text.Json.Nodes.JsonNode.Parse(row.Payload) is not System.Text.Json.Nodes.JsonObject payload
+                    || System.Text.Json.Nodes.JsonNode.Parse(
+                        row.Payload
+                    ) is not System.Text.Json.Nodes.JsonObject payload
                     || payload["Spec"] is null
                     || payload["Attempts"] is null) {
                     continue;
@@ -618,7 +671,8 @@ public sealed class ChaosTopology : IAsyncLifetime {
             );
 
             return found.Items.Count == 1;
-        } catch (k8s.Autorest.HttpOperationException ex) when (ex.Response?.StatusCode == System.Net.HttpStatusCode.NotFound) {
+        } catch (k8s.Autorest.HttpOperationException ex) when (ex.Response?.StatusCode
+                                                               == System.Net.HttpStatusCode.NotFound) {
             return false;
         }
     }
@@ -627,13 +681,24 @@ public sealed class ChaosTopology : IAsyncLifetime {
     /// <param name="world">The tenant.</param>
     /// <param name="name">The widget's name, which is the ConfigMap's.</param>
     /// <param name="cancellationToken">The test's token.</param>
-    public async Task<string?> ConfigMapMessageAsync(TenantWorld world, string name, CancellationToken cancellationToken) {
+    public async Task<string?> ConfigMapMessageAsync(
+        TenantWorld world,
+        string name,
+        CancellationToken cancellationToken
+    ) {
         ArgumentNullException.ThrowIfNull(world);
 
         try {
-            var found = await Raw.CoreV1.ReadNamespacedConfigMapAsync(name, world.Namespace, cancellationToken: cancellationToken);
-            return found.Data is not null && found.Data.TryGetValue("message", out var message) ? message : string.Empty;
-        } catch (k8s.Autorest.HttpOperationException ex) when (ex.Response?.StatusCode == System.Net.HttpStatusCode.NotFound) {
+            var found = await Raw.CoreV1.ReadNamespacedConfigMapAsync(
+                name,
+                world.Namespace,
+                cancellationToken: cancellationToken
+            );
+            return found.Data is not null && found.Data.TryGetValue("message", out var message)
+                ? message
+                : string.Empty;
+        } catch (k8s.Autorest.HttpOperationException ex) when (ex.Response?.StatusCode
+                                                               == System.Net.HttpStatusCode.NotFound) {
             return null;
         }
     }
@@ -657,7 +722,11 @@ public sealed class ChaosTopology : IAsyncLifetime {
     /// <param name="tenant">The tenant id.</param>
     /// <param name="label">A short DNS-1123 label for the slug.</param>
     /// <param name="cancellationToken">The test's token.</param>
-    public Task<Result<ScopeSnapshot>> TryCreateTenantAsync(Guid tenant, string label, CancellationToken cancellationToken) =>
+    public Task<Result<ScopeSnapshot>> TryCreateTenantAsync(
+        Guid tenant,
+        string label,
+        CancellationToken cancellationToken
+    ) =>
         Scopes.CreateTenantAsync(
             new() {
                 TenantId = tenant,
@@ -680,7 +749,11 @@ public sealed class ChaosTopology : IAsyncLifetime {
     /// <param name="world">The tenant.</param>
     /// <param name="name">The widget's name.</param>
     /// <param name="cancellationToken">The test's token.</param>
-    public Task DeleteConfigMapBehindTheReconcilersBackAsync(TenantWorld world, string name, CancellationToken cancellationToken) {
+    public Task DeleteConfigMapBehindTheReconcilersBackAsync(
+        TenantWorld world,
+        string name,
+        CancellationToken cancellationToken
+    ) {
         ArgumentNullException.ThrowIfNull(world);
 
         return Raw.CoreV1.DeleteNamespacedConfigMapAsync(name, world.Namespace, cancellationToken: cancellationToken);
@@ -688,7 +761,10 @@ public sealed class ChaosTopology : IAsyncLifetime {
 
     // ── Faults ─────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Kills one secondary silo the way a pod that went away dies: no graceful stop, no deactivation, nothing flushed.</summary>
+    /// <summary>
+    ///     Kills one secondary silo the way a pod that went away dies: no graceful stop, no deactivation, nothing
+    ///     flushed.
+    /// </summary>
     /// <returns>The address that died, for the log.</returns>
     /// <remarks>
     ///     ⚠ A secondary, never the primary: under <c>UseLocalhostClustering</c> and the testing host's
@@ -705,7 +781,7 @@ public sealed class ChaosTopology : IAsyncLifetime {
 
     /// <summary>Starts a replacement silo, wired like the others, on a port nothing has used.</summary>
     public async Task<SiloAddress> StartASiloAsync() {
-        var handle = await Cluster.StartAdditionalSiloAsync(startAdditionalSiloOnNewPort: true);
+        var handle = await Cluster.StartAdditionalSiloAsync(true);
         ChaosSiloLog.Mark($"started {handle.SiloAddress}");
         return handle.SiloAddress;
     }
@@ -760,15 +836,15 @@ public sealed class ChaosTopology : IAsyncLifetime {
         }
 
         var stopTook = stopping.Elapsed;
-        var replacement = await Cluster.StartAdditionalSiloAsync(startAdditionalSiloOnNewPort: true);
+        var replacement = await Cluster.StartAdditionalSiloAsync(true);
         return (replacement.SiloAddress, stopTook);
     }
 
     /// <summary>The secondary silos' addresses — the ones a rolling restart walks.</summary>
-    public IReadOnlyList<SiloAddress> SecondarySilos => [.. Cluster.SecondarySilos.Select(x => x.SiloAddress)];
+    public IReadOnlyList<SiloAddress> SecondarySilos => [.. Cluster.SecondarySilos.Select(static x => x.SiloAddress)];
 
     /// <summary>The silos currently in the cluster, by address.</summary>
-    public IReadOnlyList<SiloAddress> Silos => [.. Cluster.Silos.Select(x => x.SiloAddress)];
+    public IReadOnlyList<SiloAddress> Silos => [.. Cluster.Silos.Select(static x => x.SiloAddress)];
 
     /// <summary>Stops a PostgreSQL shard's container. Its port mapping survives, so a restart is the same shard.</summary>
     /// <param name="shard">The shard's name.</param>
@@ -814,7 +890,10 @@ public sealed class ChaosTopology : IAsyncLifetime {
             }
         }
 
-        throw new InvalidOperationException("the k3s did not answer within three minutes of being started again.", last);
+        throw new InvalidOperationException(
+            "the k3s did not answer within three minutes of being started again.",
+            last
+        );
     }
 
     /// <summary>FLUSHALL on the hot tier's Redis. Returns how many keys there were to lose.</summary>
@@ -876,7 +955,7 @@ public sealed class ChaosTopology : IAsyncLifetime {
     /// <summary>Total activations across the cluster, from the management grain's statistics.</summary>
     public async Task<int> ActivationCountAsync() {
         var stats = await Management.GetRuntimeStatistics(null);
-        return stats.Sum(x => x.ActivationCount);
+        return stats.Sum(static x => x.ActivationCount);
     }
 
     /// <summary>The durable rows on one shard whose grain id carries <paramref name="fragment" />.</summary>
@@ -910,7 +989,9 @@ public sealed class ChaosTopology : IAsyncLifetime {
     async Task RefreshShardMapsAsync(CancellationToken cancellationToken) {
         foreach (var silo in Cluster.Silos) {
             var refresher = Cluster.GetSiloServiceProvider(silo.SiloAddress).GetRequiredService<ShardMapRefresher>();
-            (await refresher.RefreshAsync(cancellationToken)).ShouldBeTrue("a silo could not read the shard map it was just given.");
+            (await refresher.RefreshAsync(cancellationToken)).ShouldBeTrue(
+                "a silo could not read the shard map it was just given."
+            );
         }
     }
 
@@ -932,7 +1013,10 @@ public sealed class ChaosTopology : IAsyncLifetime {
             }
         }
 
-        throw new InvalidOperationException("the shard did not accept a connection within two minutes of being started again.", last);
+        throw new InvalidOperationException(
+            "the shard did not accept a connection within two minutes of being started again.",
+            last
+        );
     }
 
     static PostgreSqlContainer NewShard() =>

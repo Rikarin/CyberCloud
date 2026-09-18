@@ -113,7 +113,9 @@ public readonly record struct ResourceGraphAddress(Guid TenantId) {
     public static Result<ResourceGraphAddress> ParsePath(string? path) {
         if (string.IsNullOrEmpty(path)) {
             return Invalid(
-                "A resource graph query is a POST to '/tenants/{t}" + Suffix + "' — docs/plan/08 § The "
+                "A resource graph query is a POST to '/tenants/{t}"
+                + Suffix
+                + "' — docs/plan/08 § The "
                 + "resource-graph projection."
             );
         }
@@ -122,7 +124,7 @@ public readonly record struct ResourceGraphAddress(Guid TenantId) {
             return Invalid(
                 $"'{path}' is not the resource graph's address. The only address under "
                 + $"'{ProviderNamespace}' is '/tenants/{{t}}{Suffix}', and a query is a POST to it "
-                + "with { \"query\": \"resources | …\" } as the body — docs/plan/08 § The resource-graph "
+                + """with { "query": "resources | …" } as the body — docs/plan/08 § The resource-graph """
                 + "projection."
             );
         }

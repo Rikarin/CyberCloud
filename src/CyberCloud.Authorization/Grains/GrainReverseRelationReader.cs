@@ -13,8 +13,11 @@ namespace CyberCloud.Authorization.Grains;
 ///     it asks for, inside one tenant.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The tenant is captured, for the reason <see cref="GrainRelationReader" /> captures
-///     it.</b> A reverse entry names an object in the same tenant as the subject it was written
+///     ⚠
+///     <b>
+///         The tenant is captured, for the reason <see cref="GrainRelationReader" /> captures
+///         it.
+///     </b> A reverse entry names an object in the same tenant as the subject it was written
 ///     against — there is no field for another — so a walk that never spells the tenant per call
 ///     has no expression in it that could read across one. The index reader is handed in rather
 ///     than built here so the walk and its verifying check share one, and one cache of slices.

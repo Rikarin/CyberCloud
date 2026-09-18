@@ -403,13 +403,13 @@ public sealed class NetworkProvider : IResourceProvider {
             .Display(
                 "Virtual network",
                 "Virtual networks",
-                shortName: "vnet",
-                summary: "A private routing domain on Kube-OVN with its own address space. "
+                "vnet",
+                "A private routing domain on Kube-OVN with its own address space. "
                 + VirtualNetworks.IsolationClaim
             )
             .Chart(VirtualNetworks.ChartName)
             .SupportsTags()
-            .RequiresCluster(VirtualNetworks.ClusterIdPointer)
+            .RequiresCluster()
             // ── The child, docs/plan/14 § Virtual networks' `subnets/{name}` ───────────────────
             //
             // ⚠ EVERY CAPABILITY BELOW IS ONE THE SHARED CONFORMANCE SUITE HAS AN ASSERTION FOR. A
@@ -445,13 +445,13 @@ public sealed class NetworkProvider : IResourceProvider {
             .Display(
                 "Subnet",
                 "Subnets",
-                shortName: "subnet",
-                summary: "A range inside a virtual network that workloads are given addresses from, "
+                "subnet",
+                "A range inside a virtual network that workloads are given addresses from, "
                 + "with optional outbound NAT and optional isolation from other subnets."
             )
             .Chart(NetworkSubnets.ChartName)
             .SupportsTags()
-            .RequiresCluster(NetworkSubnets.ClusterIdPointer)
+            .RequiresCluster()
             // ── The second child, docs/plan/14 § Virtual networks' `securityGroups/{name}` ─────
             //
             // ⚠ THE TYPE THE `not-a-firewall-by-default` ISOLATION LIMIT HAS BEEN POINTING AT SINCE
@@ -485,13 +485,13 @@ public sealed class NetworkProvider : IResourceProvider {
             .Display(
                 "Security group",
                 "Security groups",
-                shortName: "secgroup",
-                summary: "A deny-by-default set of allow rules that become OVN ACLs on the ports in a "
+                "secgroup",
+                "A deny-by-default set of allow rules that become OVN ACLs on the ports in a "
                 + "virtual network. A workload may carry several."
             )
             .Chart(NetworkSecurityGroups.ChartName)
             .SupportsTags()
-            .RequiresCluster(NetworkSecurityGroups.ClusterIdPointer)
+            .RequiresCluster()
             // ── The fourth type, and the first that is NOT a child — docs/plan/14 § Everything else ─
             //
             // ⚠ TOP LEVEL, WHICH IS THE OPPOSITE OF WHERE A READER OF THIS FAMILY WOULD PUT IT. Its
@@ -539,13 +539,13 @@ public sealed class NetworkProvider : IResourceProvider {
             .Display(
                 "Public IP address",
                 "Public IP addresses",
-                shortName: "publicip",
-                summary: "A public address allocated from the region's pool, which a load balancer or "
+                "publicip",
+                "A public address allocated from the region's pool, which a load balancer or "
                 + "a gateway can later be given. On its own it carries no traffic."
             )
             .Chart(PublicIpAddresses.ChartName)
             .SupportsTags()
-            .RequiresCluster(PublicIpAddresses.ClusterIdPointer)
+            .RequiresCluster()
             // ── The fifth type — docs/plan/14 § Load balancing ────────────────────────────────
             //
             // ⚠ A CHILD, WHICH IS NOT HOW docs/plan/14 SPELLS IT, AND THE SUBSTRATE IS WHY. That
@@ -594,14 +594,14 @@ public sealed class NetworkProvider : IResourceProvider {
             .Display(
                 "Load balancer",
                 "Load balancers",
-                shortName: "loadbalancer",
-                summary: "An L4 TCP proxy on an address inside a virtual network, spreading "
+                "loadbalancer",
+                "An L4 TCP proxy on an address inside a virtual network, spreading "
                 + "connections across a pool of workload addresses with health checks and a "
                 + "connection limit."
             )
             .Chart(LoadBalancers.ChartName)
             .SupportsTags()
-            .RequiresCluster(LoadBalancers.ClusterIdPointer)
+            .RequiresCluster()
             // ── The sixth type — docs/plan/14 § Everything else, `natGateways` ─────────────────
             //
             // ⚠ A CHILD, ON THE LOAD BALANCER'S ARGUMENT: every OvnSnatRule names a subnet of one
@@ -632,14 +632,14 @@ public sealed class NetworkProvider : IResourceProvider {
             .Display(
                 "NAT gateway",
                 "NAT gateways",
-                shortName: "natgateway",
-                summary: "Outbound-only internet access for one subnet of a virtual network, "
+                "natgateway",
+                "Outbound-only internet access for one subnet of a virtual network, "
                 + "translated to a public IP address the tenant holds. Inbound traffic is not "
                 + "admitted."
             )
             .Chart(NatGateways.ChartName)
             .SupportsTags()
-            .RequiresCluster(NatGateways.ClusterIdPointer)
+            .RequiresCluster()
             // ── The seventh type — docs/plan/14 § Virtual networks' `peerings/{name}` ──────────
             //
             // ⚠ THE FIRST TYPE IN THE TREE THAT OWNS NO OBJECT. Every capability below is one the
@@ -669,14 +669,14 @@ public sealed class NetworkProvider : IResourceProvider {
             .Display(
                 "Peering",
                 "Peerings",
-                shortName: "peering",
-                summary: "A route exchange between this virtual network and another in the same "
+                "peering",
+                "A route exchange between this virtual network and another in the same "
                 + "resource group, so workloads in either reach the other's range by private "
                 + "address. Both networks stay separately owned."
             )
             .Chart(VirtualNetworkPeerings.ChartName)
             .SupportsTags()
-            .RequiresCluster(VirtualNetworkPeerings.ClusterIdPointer);
+            .RequiresCluster();
     }
 
     // ── What a load balancer draws ─────────────────────────────────────────────────────────────
@@ -698,7 +698,7 @@ public sealed class NetworkProvider : IResourceProvider {
         MeterDerivation.Of(
             "sizing.preset's cpu, in cores",
             ["/properties/sizing/preset"],
-            body => KubeQuantity.TryParse(LoadBalancers.Resources(body).Cpu, out var cores)
+            static body => KubeQuantity.TryParse(LoadBalancers.Resources(body).Cpu, out var cores)
                 ? Result<decimal>.Success(cores)
                 : Result<decimal>.Failure(
                     ErrorCode.InternalError,
@@ -712,7 +712,7 @@ public sealed class NetworkProvider : IResourceProvider {
         MeterDerivation.Of(
             "sizing.preset's memory, in GiB",
             ["/properties/sizing/preset"],
-            body => KubeQuantity.TryGibibytes(LoadBalancers.Resources(body).Memory, out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(LoadBalancers.Resources(body).Memory, out var gibibytes)
                 ? Result<decimal>.Success(gibibytes)
                 : Result<decimal>.Failure(
                     ErrorCode.InternalError,

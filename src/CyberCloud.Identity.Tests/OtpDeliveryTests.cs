@@ -1,7 +1,6 @@
 using CyberCloud.Communication;
 using CyberCloud.Communication.Contracts;
 using CyberCloud.Communication.Providers;
-using CyberCloud.Core;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Time;
 using CyberCloud.Identity.Contracts;
@@ -38,8 +37,11 @@ namespace CyberCloud.Identity.Tests;
 ///         records.
 ///     </para>
 ///     <para>
-///         ⚠ <b>And the real suppression list, because the platform's codes travel the tenant's
-///         path.</b> docs/plan/17 § The parts that are actually the work has suppression
+///         ⚠
+///         <b>
+///             And the real suppression list, because the platform's codes travel the tenant's
+///             path.
+///         </b> docs/plan/17 § The parts that are actually the work has suppression
 ///         <i>"honoured before dispatch"</i>, and issue #33 warns that the platform's own transactional
 ///         mail fails with it. <c>CyberCloud.Providers.Communication.Tests.SuppressionEnforcementTests</c>
 ///         drives the tenant's sends against the list; this suite is the only place that sends a
@@ -158,8 +160,8 @@ public sealed class OtpDeliveryTests(OtpDeliveryCluster cluster) {
         cluster.Sms.Calls.ShouldBe(2);
 
         cluster.Sms.Sent
-            .Select(x => x.Destination)
-            .ShouldBe(["+420777123456", "+420777999999"], ignoreOrder: true);
+            .Select(static x => x.Destination)
+            .ShouldBe(["+420777123456", "+420777999999"], true);
     }
 
     // ── The key itself, asserted rather than inferred ──────────────────────────────────────────
@@ -188,7 +190,7 @@ public sealed class OtpDeliveryTests(OtpDeliveryCluster cluster) {
 
         key.ShouldNotContain("424242");
         key.ShouldStartWith("otp-");
-        key.ShouldContain(OtpPurpose.SignIn.ToString());
+        key.ShouldContain(nameof(OtpPurpose.SignIn));
     }
 
     // ── The refusals ──────────────────────────────────────────────────────────────────────────
@@ -250,10 +252,19 @@ public sealed class OtpDeliveryTests(OtpDeliveryCluster cluster) {
         // IWebhookRouter, placed directly because the property under test is the adapter's path
         // and not the router's. ⚠ Its own number: the fixture's list outlives one test, and the
         // number every other test sends to must stay clear.
-        (await cluster.SuppressionList.SuppressAsync(ChannelKind.Sms, "+420777000111", SuppressionReason.OptOut, "STOP", Guid.Empty))
+        (await cluster.SuppressionList.SuppressAsync(
+                ChannelKind.Sms,
+                "+420777000111",
+                SuppressionReason.OptOut,
+                "STOP",
+                Guid.Empty
+            ))
             .IsSuccess.ShouldBeTrue();
 
-        var refused = await cluster.Delivery.DeliverAsync(Sms(NewUser(), "424242") with { Destination = "+420777000111" }, Ct);
+        var refused = await cluster.Delivery.DeliverAsync(
+            Sms(NewUser(), "424242") with { Destination = "+420777000111" },
+            Ct
+        );
 
         refused.IsFailure.ShouldBeTrue("a one-time code was sent to a number that opted out");
         refused.Error!.Code.ShouldBe(ErrorCode.PolicyViolation);
@@ -414,7 +425,7 @@ public sealed class OtpDeliveryCluster : IAsyncLifetime {
             silo.AddMemoryGrainStorage(StorageTiers.Durable);
             silo.AddMemoryGrainStorage(StorageTiers.Hot);
 
-            silo.ConfigureServices(services => {
+            silo.ConfigureServices(static services => {
                     // The doubles go in FIRST so the module's TryAdd keeps them, and BESIDE the
                     // refusing seams rather than instead of them — every channel here names
                     // "in-memory", so the registry resolves by name.

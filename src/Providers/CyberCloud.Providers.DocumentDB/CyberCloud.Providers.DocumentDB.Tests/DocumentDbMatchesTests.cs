@@ -161,7 +161,7 @@ public sealed class DocumentDbMatchesTests {
 
     [Fact]
     public void DriftOnAFieldThisProviderOWNSIsStillReportedOnEveryKind() {
-        using var desired = JsonDocument.Parse(DocumentDbAccounts.Body(ClusterId, instances: 3));
+        using var desired = JsonDocument.Parse(DocumentDbAccounts.Body(ClusterId, 3));
 
         var cluster = JsonNode.Parse(DocumentDbAccounts.ClusterJson("orders", desired.RootElement))!.AsObject();
         cluster["kind"] = "Cluster";
@@ -216,13 +216,13 @@ public sealed class DocumentDbMatchesTests {
         // type dispatches over FOUR kinds, so a `_ =>` that guessed at the most likely one would let
         // a ConfigMap somebody's policy injected read back as a converged Cluster.
         DocumentDbAccounts.Matches(
-            "{\"kind\":\"ConfigMap\",\"spec\":{}}",
+            """{"kind":"ConfigMap","spec":{}}""",
             desired.RootElement
         )
             .ShouldBeFalse();
 
         DocumentDbAccounts.Matches(
-            "{\"kind\":\"StatefulSet\",\"spec\":{\"replicas\":2}}",
+            """{"kind":"StatefulSet","spec":{"replicas":2}}""",
             desired.RootElement
         )
             .ShouldBeFalse();

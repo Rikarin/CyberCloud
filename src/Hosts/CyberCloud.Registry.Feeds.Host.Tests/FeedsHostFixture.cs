@@ -123,7 +123,8 @@ public sealed class FeedsHostFixture : IAsyncLifetime {
     /// <summary>A client with the given token as the password of a Basic credential.</summary>
     public HttpClient BasicClient(string token, string username = "token") {
         var client = new HttpClient { BaseAddress = BaseAddress };
-        client.DefaultRequestHeaders.Authorization = new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(username + ":" + token)));
+        client.DefaultRequestHeaders.Authorization =
+            new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(username + ":" + token)));
         return client;
     }
 
@@ -170,7 +171,8 @@ public sealed class FeedsHostFixture : IAsyncLifetime {
             }
         );
 
-        await host.Services.GetRequiredService<Volo.Abp.IAbpApplicationWithExternalServiceProvider>().InitializeAsync(host.Services);
+        await host.Services.GetRequiredService<Volo.Abp.IAbpApplicationWithExternalServiceProvider>()
+            .InitializeAsync(host.Services);
         host.MapFeeds();
         await host.StartAsync(token);
 
@@ -228,13 +230,18 @@ public sealed class FeedsHostFixture : IAsyncLifetime {
 
         accepted.IsSuccess.ShouldBeTrue("the fixture could not create a feed: " + accepted.Error?.Message);
 
-        var operation = For(tenant).GetGrain<IOperationGrain>(GrainKeys.Operation(accepted.GetValueOrThrow().OperationId));
+        var operation = For(tenant).GetGrain<IOperationGrain>(
+            GrainKeys.Operation(accepted.GetValueOrThrow().OperationId)
+        );
 
         for (var drive = 0; drive < 8; drive++) {
             var status = (await operation.DriveAsync()).GetValueOrThrow();
 
             if (status.IsTerminal) {
-                status.State.ShouldBe(OperationState.Succeeded, $"the feed's create ended {status.State}: {status.Error?.Message}");
+                status.State.ShouldBe(
+                    OperationState.Succeeded,
+                    $"the feed's create ended {status.State}: {status.Error?.Message}"
+                );
                 break;
             }
         }
@@ -259,13 +266,18 @@ public sealed class FeedsHostFixture : IAsyncLifetime {
 
         accepted.IsSuccess.ShouldBeTrue("the fixture could not delete a feed: " + accepted.Error?.Message);
 
-        var operation = For(tenant).GetGrain<IOperationGrain>(GrainKeys.Operation(accepted.GetValueOrThrow().OperationId));
+        var operation = For(tenant).GetGrain<IOperationGrain>(
+            GrainKeys.Operation(accepted.GetValueOrThrow().OperationId)
+        );
 
         for (var drive = 0; drive < 8; drive++) {
             var status = (await operation.DriveAsync()).GetValueOrThrow();
 
             if (status.IsTerminal) {
-                status.State.ShouldBe(OperationState.Succeeded, $"the feed's delete ended {status.State}: {status.Error?.Message}");
+                status.State.ShouldBe(
+                    OperationState.Succeeded,
+                    $"the feed's delete ended {status.State}: {status.Error?.Message}"
+                );
                 break;
             }
         }
@@ -274,23 +286,29 @@ public sealed class FeedsHostFixture : IAsyncLifetime {
     TenantGrainFactory For(Guid tenant) => Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
 
     async Task CreateScopesAsync(Guid tenant, Guid subscription) {
-        var created = await For(tenant).GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(subscription)).CreateAsync("feeds");
+        var created = await For(tenant).GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(subscription))
+            .CreateAsync("feeds");
         created.IsSuccess.ShouldBeTrue(created.Error?.Message);
 
-        var group = await For(tenant).GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(subscription, Group)).CreateAsync(tenant, "eu-central");
+        var group = await For(tenant).GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(subscription, Group))
+            .CreateAsync(tenant, "eu-central");
         group.IsSuccess.ShouldBeTrue(group.Error?.Message);
     }
 
     async Task GrantAsync(Guid tenant, Guid subscription, string relation, string user) {
         var tuple = RelationTuple.Create(
-            Authorization.Contracts.ObjectRef.Of(ObjectTypes.ResourceGroup, subscription.ToString("N", CultureInfo.InvariantCulture) + "-" + Group),
+            ObjectRef.Of(
+                ObjectTypes.ResourceGroup,
+                subscription.ToString("N", CultureInfo.InvariantCulture) + "-" + Group
+            ),
             relation,
             SubjectRef.Of(ObjectTypes.User, user)
         );
 
         tuple.IsSuccess.ShouldBeTrue(tuple.Error?.Message);
 
-        var written = await For(tenant).GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(tenant)).WriteAsync(tuple.GetValueOrThrow());
+        var written = await For(tenant).GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(tenant))
+            .WriteAsync(tuple.GetValueOrThrow());
         written.IsSuccess.ShouldBeTrue(written.Error?.Message);
     }
 
@@ -303,7 +321,7 @@ public sealed class FeedsHostFixture : IAsyncLifetime {
             silo.AddMemoryGrainStorage(StorageTiers.Hot);
             silo.UseInMemoryReminderService();
 
-            silo.ConfigureServices(services => {
+            silo.ConfigureServices(static services => {
                     services.AddSingleton<IClock, SystemClock>();
                     services.AddSingleton<IResourceProvider, ContainerRegistryProvider>();
                     services.AddSingleton<ArtifactFeedReconciler>();
@@ -319,7 +337,7 @@ public sealed class FeedsHostFixture : IAsyncLifetime {
                     services.AddSingleton<ISecretResolver>(vault);
                     services.AddSingleton<ISecretWriter>(vault);
 
-                    services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
+                    services.TryAddSingleton<ILoggerFactory>(static _ => NullLoggerFactory.Instance);
                 }
             );
 
@@ -349,11 +367,17 @@ public sealed class IssuedTokens : IBearerTokenValidator {
     }
 
     /// <inheritdoc />
-    public Task<Result<TokenClaims>> ValidateAsync(string token, Microsoft.AspNetCore.Http.HttpContext http, CancellationToken cancellationToken = default) =>
+    public Task<Result<TokenClaims>> ValidateAsync(
+        string token,
+        Microsoft.AspNetCore.Http.HttpContext http,
+        CancellationToken cancellationToken = default
+    ) =>
         Task.FromResult(
             issued.TryGetValue(token, out var claims)
                 ? Result<TokenClaims>.Success(claims)
-                : Result<TokenClaims>.Failure(BearerTokenErrors.Unauthenticated("the bearer token was not issued by this platform"))
+                : Result<TokenClaims>.Failure(
+                    BearerTokenErrors.Unauthenticated("the bearer token was not issued by this platform")
+                )
         );
 }
 

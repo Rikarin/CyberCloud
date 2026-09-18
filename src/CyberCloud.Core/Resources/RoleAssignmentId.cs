@@ -315,7 +315,9 @@ public readonly record struct RoleAssignmentId(ScopeId Scope, ResourceId Resourc
         if (string.IsNullOrEmpty(path)) {
             return Invalid(
                 "A role assignment path is required. It looks like "
-                + "'{scope}" + Suffix + "{role}-{principalType}-{principalId}', where the scope is a "
+                + "'{scope}"
+                + Suffix
+                + "{role}-{principalType}-{principalId}', where the scope is a "
                 + "tenant, a subscription, a resource group or a resource — docs/plan/07 § Azure RBAC, "
                 + "expressed in it."
             );
@@ -324,9 +326,7 @@ public readonly record struct RoleAssignmentId(ScopeId Scope, ResourceId Resourc
         var at = path.LastIndexOf(Suffix, StringComparison.OrdinalIgnoreCase);
 
         if (at <= 0) {
-            return Invalid(
-                $"'{path}' is not a role assignment path: it does not contain '{Suffix}' after a scope."
-            );
+            return Invalid($"'{path}' is not a role assignment path: it does not contain '{Suffix}' after a scope.");
         }
 
         var scopePath = path[..at];
@@ -479,7 +479,9 @@ public readonly record struct RoleAssignmentCollectionId(ScopeId Scope, Resource
         if (string.IsNullOrEmpty(path)) {
             return Invalid(
                 "A role assignment collection path is required. It looks like "
-                + "'{scope}" + RoleAssignmentId.CollectionSuffix + "', where the scope is a tenant, a "
+                + "'{scope}"
+                + RoleAssignmentId.CollectionSuffix
+                + "', where the scope is a tenant, a "
                 + "subscription, a resource group or a resource — docs/plan/07 § Azure RBAC, expressed "
                 + "in it."
             );

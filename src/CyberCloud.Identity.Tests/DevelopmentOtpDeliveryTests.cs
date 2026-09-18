@@ -1,7 +1,6 @@
 using CyberCloud.Core;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Seams;
-using CyberCloud.Identity.SignIn;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -79,11 +78,14 @@ public sealed class DevelopmentOtpDeliveryTests {
         // ⚠ docs/plan/11 § Auditing: "no email, name or IP in a log message. They go in structured
         // fields". Both halves: the rendered line carries no part of the address, and the scope the
         // seam opened carries the whole of it under the property name a redaction policy can target.
-        entry.Message.ShouldNotContain("wilhelmina", Case.Insensitive);
-        entry.Message.ShouldNotContain("featherstonehaugh", Case.Insensitive);
-        entry.Message.ShouldNotContain("example.com", Case.Insensitive);
+        entry.Message.ShouldNotContain("wilhelmina");
+        entry.Message.ShouldNotContain("featherstonehaugh");
+        entry.Message.ShouldNotContain("example.com");
 
-        entry.State.ShouldNotContainKey(DevelopmentOtpDelivery.DestinationProperty, "the address is not a template argument");
+        entry.State.ShouldNotContainKey(
+            DevelopmentOtpDelivery.DestinationProperty,
+            "the address is not a template argument"
+        );
         entry.Scope.ShouldContainKeyAndValue(DevelopmentOtpDelivery.DestinationProperty, Delivery.Destination);
     }
 
@@ -100,7 +102,8 @@ public sealed class DevelopmentOtpDeliveryTests {
         var delivered = await seam.DeliverAsync(Delivery, TestContext.Current.CancellationToken);
 
         delivered.IsSuccess.ShouldBeTrue();
-        mail.Deliveries.ShouldHaveSingleItem().ShouldBeSameAs(Delivery, "the same delivery, code and all, reaches the inbox");
+        mail.Deliveries.ShouldHaveSingleItem()
+            .ShouldBeSameAs(Delivery, "the same delivery, code and all, reaches the inbox");
 
         // ⚠ The console line is kept: a person reading the dashboard should still find the code.
         var entry = logger.Entries.ShouldHaveSingleItem();
@@ -135,14 +138,21 @@ public sealed class DevelopmentOtpDeliveryTests {
         warning.EventId.ShouldBe(1122);
         warning.Level.ShouldBe(LogLevel.Warning);
         warning.Message.ShouldContain("NOT mailed");
-        warning.Message.ShouldContain(nameof(ErrorCode.PolicyViolation), Case.Sensitive, "the kind of refusal is in the line");
+        warning.Message.ShouldContain(
+            nameof(ErrorCode.PolicyViolation),
+            Case.Sensitive,
+            "the kind of refusal is in the line"
+        );
 
         // ⚠ docs/plan/11 § Auditing, applied to the refusal as well as to the code: the module's
         // sentence — which here IS the address — is a scope property, and no part of it is rendered.
         warning.Message.ShouldNotContain("wilhelmina", Case.Insensitive, "still no address in a message");
-        warning.Message.ShouldNotContain("featherstonehaugh", Case.Insensitive);
+        warning.Message.ShouldNotContain("featherstonehaugh");
         warning.Message.ShouldNotContain("suppression list", Case.Insensitive, "and not the sentence that carried it");
-        warning.State.ShouldNotContainKey(DevelopmentOtpDelivery.ReasonProperty, "the reason is not a template argument");
+        warning.State.ShouldNotContainKey(
+            DevelopmentOtpDelivery.ReasonProperty,
+            "the reason is not a template argument"
+        );
         warning.Scope.ShouldContainKeyAndValue(DevelopmentOtpDelivery.ReasonProperty, reason);
         warning.Scope.ShouldContainKeyAndValue(DevelopmentOtpDelivery.DestinationProperty, Delivery.Destination);
     }
@@ -189,7 +199,7 @@ public sealed class DevelopmentOtpDeliveryTests {
         public IDisposable BeginScope<TState>(TState state)
             where TState : notnull {
             var properties = state is IEnumerable<KeyValuePair<string, object>> pairs
-                ? pairs.ToDictionary(x => x.Key, x => (object?)x.Value, StringComparer.Ordinal)
+                ? pairs.ToDictionary(static x => x.Key, static x => (object?)x.Value, StringComparer.Ordinal)
                 : new Dictionary<string, object?>(StringComparer.Ordinal);
 
             scopes.Push(properties);
@@ -208,7 +218,7 @@ public sealed class DevelopmentOtpDeliveryTests {
             ArgumentNullException.ThrowIfNull(formatter);
 
             var properties = state is IEnumerable<KeyValuePair<string, object?>> pairs
-                ? pairs.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal)
+                ? pairs.ToDictionary(static x => x.Key, static x => x.Value, StringComparer.Ordinal)
                 : new Dictionary<string, object?>(StringComparer.Ordinal);
 
             var scope = scopes.Count == 0

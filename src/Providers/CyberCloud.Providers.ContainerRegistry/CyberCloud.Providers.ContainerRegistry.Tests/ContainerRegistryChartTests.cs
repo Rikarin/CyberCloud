@@ -120,9 +120,9 @@ public sealed partial class ContainerRegistryChartTests {
         var shipped = ApiPointers(ChartSchema()).ToList();
 
         var registry = ContainerRegistries.Schema2026.Properties
-            .Where(x => x.JsonPointer.StartsWith("/properties/", StringComparison.Ordinal))
-            .Where(x => x.JsonPointer != ContainerRegistries.ClusterIdPointer)
-            .Select(x => x.JsonPointer)
+            .Where(static x => x.JsonPointer.StartsWith("/properties/", StringComparison.Ordinal))
+            .Where(static x => x.JsonPointer != ContainerRegistries.ClusterIdPointer)
+            .Select(static x => x.JsonPointer)
             .ToList();
 
         foreach (var pointer in shipped) {

@@ -643,7 +643,8 @@ public sealed class UserGrain(
     }
 
     Result<T> NotFound<T>()
-        where T : notnull => Result<T>.Failure(ErrorCode.ResourceNotFound, $"User {userId:D} does not exist.");
+        where T : notnull =>
+        Result<T>.Failure(ErrorCode.ResourceNotFound, $"User {userId:D} does not exist.");
 
     Result NotFound() => Result.Failure(ErrorCode.ResourceNotFound, $"User {userId:D} does not exist.");
 }

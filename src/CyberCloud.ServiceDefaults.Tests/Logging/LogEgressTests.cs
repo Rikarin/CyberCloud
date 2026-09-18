@@ -90,7 +90,7 @@ public class LogEgressTests {
         // reason above, so this is not what closes the hole — it keeps the service collection from
         // describing egress paths that do not exist, so that the next reader of this wiring is not
         // told the same untrue thing this comment used to tell.
-        builder.Services.Count(x => x.ServiceType == typeof(ILoggerProvider)).ShouldBe(0);
+        builder.Services.Count(static x => x.ServiceType == typeof(ILoggerProvider)).ShouldBe(0);
     }
 
     [Fact]

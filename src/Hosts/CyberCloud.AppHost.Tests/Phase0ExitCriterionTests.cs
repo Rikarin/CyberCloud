@@ -35,7 +35,7 @@ public sealed class Phase0ExitCriterionTests(LocalTopology topology) {
         // threshold here would be a flaky test masquerading as a budget. Printing it is what makes
         // a regression visible in the log of the run that caused it.
         TestContext.Current.TestOutputHelper?.WriteLine(
-            $"AppHost cold start (StartAsync until both silos healthy): "
+            "AppHost cold start (StartAsync until both silos healthy): "
             + $"{topology.ColdStart.TotalSeconds:F1} s"
         );
 
@@ -102,13 +102,13 @@ public sealed class Phase0ExitCriterionTests(LocalTopology topology) {
         TestContext.Current.TestOutputHelper?.WriteLine(
             string.Join(
                 Environment.NewLine,
-                rows.Select(x => $"{x.Key}: {string.Join(", ", x.Value)}")
+                rows.Select(static x => $"{x.Key}: {string.Join(", ", x.Value)}")
             )
         );
 
         var helloOn = rows.ToDictionary(
-            x => x.Key,
-            x => x.Value.Count(type => type.Contains("hello", StringComparison.OrdinalIgnoreCase)),
+            static x => x.Key,
+            static x => x.Value.Count(static type => type.Contains("hello", StringComparison.OrdinalIgnoreCase)),
             StringComparer.Ordinal
         );
 
@@ -145,7 +145,8 @@ public sealed class Phase0ExitCriterionTests(LocalTopology topology) {
                 HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
         };
 
-        using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
+        using var http = new HttpClient(handler);
+        http.Timeout = TimeSpan.FromSeconds(30);
 
         var response = await http.GetAsync(
             new Uri($"https://127.0.0.1:{CyberCloudResources.K3sApiPort}/version"),

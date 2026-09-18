@@ -28,8 +28,8 @@ public sealed class NatsQuotaTests {
         // resources block and each gets its own volume from the claim template.
         // NatsClusters.StatefulSetJson writes both figures once because a pod template is per-set,
         // not because the cost is.
-        var one = Amounts(NatsClusters.Body(ClusterId, servers: 1, storageSize: "10Gi"));
-        var three = Amounts(NatsClusters.Body(ClusterId, servers: 3, storageSize: "10Gi"));
+        var one = Amounts(NatsClusters.Body(ClusterId, 1, "10Gi"));
+        var three = Amounts(NatsClusters.Body(ClusterId, 3, "10Gi"));
 
         three[QuotaMeter.Vcpu].ShouldBe(one[QuotaMeter.Vcpu] * 3);
         three[QuotaMeter.MemoryGb].ShouldBe(one[QuotaMeter.MemoryGb] * 3);
@@ -44,7 +44,7 @@ public sealed class NatsQuotaTests {
         // The amount comes from the preset, which is what a pointer cannot reach.
         NatsClusters.Body(ClusterId).ShouldNotContain("sizing");
 
-        var amounts = Amounts(NatsClusters.Body(ClusterId, servers: 3));
+        var amounts = Amounts(NatsClusters.Body(ClusterId, 3));
 
         // c1.small is 1 vCPU and 2Gi, three servers.
         amounts[QuotaMeter.Vcpu].ShouldBe(3m);
@@ -54,7 +54,7 @@ public sealed class NatsQuotaTests {
 
     [Fact]
     public void AnExplicitOverrideBeatsThePresetAndIsCountedPerServer() {
-        var amounts = Amounts(WithSizing(NatsClusters.Body(ClusterId, servers: 3), "500m", "1Gi"));
+        var amounts = Amounts(WithSizing(NatsClusters.Body(ClusterId, 3), "500m", "1Gi"));
 
         amounts[QuotaMeter.Vcpu].ShouldBe(1.5m, "500m × 3 is 1.5 cores, not 1 and not 2");
         amounts[QuotaMeter.MemoryGb].ShouldBe(3m);
@@ -67,7 +67,7 @@ public sealed class NatsQuotaTests {
         // a clock, configuration or a static that changes would return a different number on the
         // delete than the create committed — quota drifting upward on every cycle. This cannot prove
         // purity, but it catches the shapes that fail it most often.
-        var body = NatsClusters.Body(ClusterId, servers: 5, storageSize: "25Gi");
+        var body = NatsClusters.Body(ClusterId, 5, "25Gi");
 
         Amounts(body).ShouldBe(Amounts(body));
     }
@@ -84,7 +84,7 @@ public sealed class NatsQuotaTests {
 
         using var body = JsonDocument.Parse(WithSizing(NatsClusters.Body(ClusterId), "not-a-quantity", "1Gi"));
 
-        var vcpu = registration.Meters.Single(x => x.Meter == QuotaMeter.Vcpu).Derivation!;
+        var vcpu = registration.Meters.Single(static x => x.Meter == QuotaMeter.Vcpu).Derivation!;
 
         vcpu.Amount(body.RootElement)
             .IsFailure.ShouldBeTrue("a body whose cpu quantity does not parse reserved an amount instead of refusing.");
@@ -101,9 +101,7 @@ public sealed class NatsQuotaTests {
         // has that shape, across the extremes of the schema's own ranges.
         foreach (var servers in new[] { 1, 5 }) {
             foreach (var size in new[] { "1", "10Gi" }) {
-                foreach (var amount in Amounts(
-                             NatsClusters.Body(ClusterId, servers: servers, storageSize: size)
-                         ).Values) {
+                foreach (var amount in Amounts(NatsClusters.Body(ClusterId, servers, size)).Values) {
                     amount.ShouldBeGreaterThan(
                         0m,
                         $"servers={servers}, storage={size} derives a zero amount, which "
@@ -122,7 +120,7 @@ public sealed class NatsQuotaTests {
         using var body = JsonDocument.Parse(bodyJson);
         var found = new Dictionary<QuotaMeter, decimal>();
 
-        foreach (var meter in registration.Meters.Where(x => x.Derivation is not null)) {
+        foreach (var meter in registration.Meters.Where(static x => x.Derivation is not null)) {
             var amount = meter.Derivation!.Amount(body.RootElement);
             amount.IsSuccess.ShouldBeTrue(meter.Meter.ToString());
             found[meter.Meter] = amount.GetValueOrThrow();

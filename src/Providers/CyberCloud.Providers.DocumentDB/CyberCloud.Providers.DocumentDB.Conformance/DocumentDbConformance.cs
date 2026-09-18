@@ -43,26 +43,26 @@ public sealed class DocumentDbCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.DocumentDB/accounts",
-            CreateProvider = () => new DocumentDbProvider(),
+            CreateProvider = static () => new DocumentDbProvider(),
             ReconcilerType = typeof(DocumentDbAccountReconciler),
-            CreateReconciler = clock => new DocumentDbAccountReconciler(clock),
+            CreateReconciler = static clock => new DocumentDbAccountReconciler(clock),
             Type = DocumentDbAccounts.Type,
             ApiVersion = DocumentDbAccounts.V2026,
-            Body = cluster => DocumentDbAccounts.Body(cluster),
+            Body = static cluster => DocumentDbAccounts.Body(cluster),
             // ⚠ Changes `postgres.instances`, which the rendered Cluster carries AND which the quota
             // meters re-reserve on the update. ⚠ Not `gateway.replicas`, which would have been the
             // tempting choice: it moves the Deployment, which is the object with no operator, so a
             // harness that silently stopped applying the Cluster would still pass. Changing the
             // operator-backed object is what makes the update assertion about the harder half.
-            ChangedBody = cluster => DocumentDbAccounts.Body(cluster, instances: 3),
+            ChangedBody = static cluster => DocumentDbAccounts.Body(cluster, 3),
             // Drops the required `/properties/storage/size`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written:
             // a hand-written invalid body drifts out of date the day the schema gains a property and
             // then tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => WithoutStorageSize(DocumentDbAccounts.Body(cluster)),
+            InvalidBody = static cluster => WithoutStorageSize(DocumentDbAccounts.Body(cluster)),
             InvalidBodyTarget = "/properties/storage/size",
             ActionName = DocumentDbAccounts.ListKeysAction,
-            Objects = (id, ns) => [
+            Objects = static (id, ns) => [
                 DocumentDbAccounts.ClusterRef(ns, id.Name),
                 DocumentDbAccounts.DeploymentRef(ns, id.Name),
                 DocumentDbAccounts.ServiceRef(ns, id.Name),
@@ -75,7 +75,7 @@ public sealed class DocumentDbCase : IProviderCaseSource {
             // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
             DataPlane = null,
             StoragePrefix = null,
-            OperatorWritten = (id, ns) => [
+            OperatorWritten = static (id, ns) => [
                 (KubeSecret.Ref(ns, DocumentDbAccounts.SuperuserSecretName(id.Name)),
                     OperatorSecret.Json(
                         KubeSecret.Ref(ns, DocumentDbAccounts.SuperuserSecretName(id.Name)),
@@ -85,7 +85,7 @@ public sealed class DocumentDbCase : IProviderCaseSource {
                         ]
                     ))
             ],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return DocumentDbAccounts.Matches(match.ObjectJson, desired.RootElement);
             }

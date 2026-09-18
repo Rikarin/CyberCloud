@@ -104,7 +104,7 @@ public sealed class ConsoleSessionTests {
 
         Session(first).ShouldBe(Session(second));
 
-        connection.Objects.Keys.Count(x => x.StartsWith("Pod/", StringComparison.Ordinal)).ShouldBe(1);
+        connection.Objects.Keys.Count(static x => x.StartsWith("Pod/", StringComparison.Ordinal)).ShouldBe(1);
     }
 
     [Fact]
@@ -185,7 +185,7 @@ public sealed class ConsoleSessionTests {
         var again = await ConsoleReconcilerTests.Connect(connection, desired.RootElement);
         again.IsSuccess.ShouldBeTrue();
 
-        var pod = connection.Applied.Last(x => x.Target.Kind.Kind == "Pod");
+        var pod = connection.Applied.Last(static x => x.Target.Kind.Kind == "Pod");
 
         JsonNode.Parse(pod.Body)!["spec"]!["volumes"]!
             .AsArray()[0]!["persistentVolumeClaim"]!["claimName"]!
@@ -221,11 +221,11 @@ public sealed class ConsoleSessionTests {
 
         JsonNode.Parse(connected.GetValueOrThrow())!
             .AsObject()
-            .Select(x => x.Key)
+            .Select(static x => x.Key)
             .Order(StringComparer.Ordinal)
             .ShouldBe(
                 CloudConsoles.ConnectResponse.Properties
-                    .Select(x => x.JsonPointer[1..])
+                    .Select(static x => x.JsonPointer[1..])
                     .Order(StringComparer.Ordinal)
             );
 
@@ -237,8 +237,8 @@ public sealed class ConsoleSessionTests {
 
         JsonNode.Parse(terminated.GetValueOrThrow())!
             .AsObject()
-            .Select(x => x.Key)
-            .ShouldBe(CloudConsoles.TerminateResponse.Properties.Select(x => x.JsonPointer[1..]));
+            .Select(static x => x.Key)
+            .ShouldBe(CloudConsoles.TerminateResponse.Properties.Select(static x => x.JsonPointer[1..]));
     }
 
     static string Session(Result<string> connected) =>

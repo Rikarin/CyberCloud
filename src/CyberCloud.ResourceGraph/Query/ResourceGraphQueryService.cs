@@ -36,8 +36,11 @@ namespace CyberCloud.ResourceGraph.Query;
 ///         count of the whole result, for the reason <c>ResourceListPage</c> gives.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What the store says goes to the log, and the caller gets one of two sentences
-///         (#54 review).</b> ClickHouse answers a statement it refuses with its exception text, and
+///         ⚠
+///         <b>
+///             What the store says goes to the log, and the caller gets one of two sentences
+///             (#54 review).
+///         </b> ClickHouse answers a statement it refuses with its exception text, and
 ///         that text quotes the whole statement: the tenant database, every storage column,
 ///         <c>is_deleted</c>, the <c>hasAny(access, […])</c> filter with the caller's usersets
 ///         substituted in, and the endpoint's URL. The first cut passed it through as the <c>500</c>
@@ -92,7 +95,10 @@ public sealed class ResourceGraphQueryService : IResourceGraphQuery {
     }
 
     /// <inheritdoc />
-    public async Task<Result<ResourceGraphQueryPage>> QueryAsync(ResourceGraphQueryRequest request, CancellationToken cancellationToken = default) {
+    public async Task<Result<ResourceGraphQueryPage>> QueryAsync(
+        ResourceGraphQueryRequest request,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(request);
 
         if (request.Caller.TenantId == Guid.Empty) {
@@ -108,7 +114,11 @@ public sealed class ResourceGraphQueryService : IResourceGraphQuery {
         var subjects = await access.SubjectsOfAsync(request.Caller, cancellationToken);
 
         if (subjects.TryGetError(out var accessError)) {
-            return Failed(request, "the caller's access could not be resolved, so the query was not run", accessError.Message);
+            return Failed(
+                request,
+                "the caller's access could not be resolved, so the query was not run",
+                accessError.Message
+            );
         }
 
         var translated = KqlTranslator.Translate(
@@ -128,7 +138,12 @@ public sealed class ResourceGraphQueryService : IResourceGraphQuery {
 
         var query = translated.GetValueOrThrow();
 
-        var executed = await clickHouse.ExecuteAsync(query.Sql + " FORMAT JSON", query.ParameterValues, Settings(), cancellationToken);
+        var executed = await clickHouse.ExecuteAsync(
+            query.Sql + " FORMAT JSON",
+            query.ParameterValues,
+            Settings(),
+            cancellationToken
+        );
 
         if (executed.TryGetError(out var executionError)) {
             if (ClickHouseClient.IsBudgetExceeded(executionError)) {
@@ -154,8 +169,7 @@ public sealed class ResourceGraphQueryService : IResourceGraphQuery {
 
         try {
             return Result<ResourceGraphQueryPage>.Success(Page(request, query, executed.GetValueOrThrow()));
-        }
-        catch (JsonException exception) {
+        } catch (JsonException exception) {
             var body = executed.GetValueOrThrow();
 
             return Failed(
@@ -185,7 +199,8 @@ public sealed class ResourceGraphQueryService : IResourceGraphQuery {
     /// <summary>The per-query settings — see the remarks on this type.</summary>
     Dictionary<string, string> Settings() =>
         new(StringComparer.Ordinal) {
-            ["max_execution_time"] = Math.Max(1, (long)options.QueryTimeout.TotalSeconds).ToString(CultureInfo.InvariantCulture),
+            ["max_execution_time"] = Math.Max(1, (long)options.QueryTimeout.TotalSeconds)
+                .ToString(CultureInfo.InvariantCulture),
             ["max_rows_to_read"] = options.QueryMaxRowsToRead.ToString(CultureInfo.InvariantCulture),
             ["readonly"] = "2",
             ["prefer_column_name_to_alias"] = "1"

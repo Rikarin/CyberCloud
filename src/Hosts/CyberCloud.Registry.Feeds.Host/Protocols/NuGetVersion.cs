@@ -21,7 +21,8 @@ namespace CyberCloud.Registry.Feeds.Host.Protocols;
 ///         numeric before alphanumeric.
 ///     </para>
 /// </remarks>
-public sealed record NuGetVersion(int Major, int Minor, int Patch, int Revision, string Prerelease) : IComparable<NuGetVersion> {
+public sealed record NuGetVersion(int Major, int Minor, int Patch, int Revision, string Prerelease) :
+    IComparable<NuGetVersion> {
     /// <summary>The normalised spelling — what the flat container and the registration use.</summary>
     public string Normalized =>
         string.Create(
@@ -61,22 +62,32 @@ public sealed record NuGetVersion(int Major, int Minor, int Patch, int Revision,
             prerelease = value[(dash + 1)..];
             value = value[..dash];
 
-            if (prerelease.Length == 0 || prerelease.Split('.').Any(x => x.Length == 0 || !x.All(IsIdentifierCharacter))) {
-                return Result<NuGetVersion>.Failure(ErrorCode.InvalidRequestBody, $"'{text}' has a prerelease label that is not dot-separated identifiers.");
+            if (prerelease.Length == 0
+                || prerelease.Split('.').Any(static x => x.Length == 0 || !x.All(IsIdentifierCharacter))) {
+                return Result<NuGetVersion>.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    $"'{text}' has a prerelease label that is not dot-separated identifiers."
+                );
             }
         }
 
         var parts = value.Split('.');
 
         if (parts.Length is < 1 or > 4) {
-            return Result<NuGetVersion>.Failure(ErrorCode.InvalidRequestBody, $"'{text}' does not have one to four numeric parts.");
+            return Result<NuGetVersion>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"'{text}' does not have one to four numeric parts."
+            );
         }
 
         var numbers = new int[4];
 
         for (var i = 0; i < parts.Length; i++) {
             if (!int.TryParse(parts[i], NumberStyles.None, CultureInfo.InvariantCulture, out numbers[i])) {
-                return Result<NuGetVersion>.Failure(ErrorCode.InvalidRequestBody, $"'{text}' has a part that is not a non-negative integer.");
+                return Result<NuGetVersion>.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    $"'{text}' has a part that is not a non-negative integer."
+                );
             }
         }
 

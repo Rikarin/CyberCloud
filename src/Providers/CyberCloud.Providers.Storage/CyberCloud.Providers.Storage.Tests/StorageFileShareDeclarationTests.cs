@@ -32,7 +32,7 @@ public sealed class StorageFileShareDeclarationTests {
         registration.ReconcilerType.ShouldBe(typeof(StorageFileShareReconciler));
         registration.ReconcilerType.ShouldNotBe(typeof(StorageBucketReconciler));
 
-        var action = registration.Actions.Single(x => x.Name == StorageFileShares.ListMountTargetsAction);
+        var action = registration.Actions.Single(static x => x.Name == StorageFileShares.ListMountTargetsAction);
         action.Secret.ShouldBeFalse("a mount target is an address, not a credential");
         action.Permission.ShouldBe(registration.ReadPermission);
         action.HandlerType.ShouldBe(typeof(StorageFileShareListMountTargetsHandler));
@@ -47,8 +47,9 @@ public sealed class StorageFileShareDeclarationTests {
         var registry = ProviderRegistry.Build([new StorageProvider()]);
         registry.TryGetType(StorageBuckets.Type, out var bucket).ShouldBeTrue();
 
-        bucket.Actions.Single(x => x.Name == StorageBuckets.StatsAction).HandlerType
-            .ShouldBe(typeof(StorageBucketStatsHandler));
+        bucket.Actions.Single(static x => x.Name == StorageBuckets.StatsAction)
+            .HandlerType
+                .ShouldBe(typeof(StorageBucketStatsHandler));
     }
 
     [Fact]
@@ -65,7 +66,7 @@ public sealed class StorageFileShareDeclarationTests {
         var registry = ProviderRegistry.Build([new StorageProvider()]);
 
         CliTokens.Collisions(
-            registry.Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+            registry.Types.Select(static x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
         )
             .ShouldBeEmpty();
 
@@ -82,7 +83,7 @@ public sealed class StorageFileShareDeclarationTests {
         var registry = ProviderRegistry.Build([new StorageProvider()]);
         registry.TryGetType(StorageFileShares.Type, out var registration).ShouldBeTrue();
 
-        registration.Meters.Select(x => x.Meter).ShouldBe([QuotaMeter.Resources]);
+        registration.Meters.Select(static x => x.Meter).ShouldBe([QuotaMeter.Resources]);
         registration.Meters.ShouldAllBe(x => x.Derivation == null);
     }
 
@@ -103,9 +104,11 @@ public sealed class StorageFileShareDeclarationTests {
             }
         }
 
-        StorageFileShares.Pointers2026.ShouldBe([
-            "/location", "/properties", "/properties/clusterId", "/properties/quota", "/properties/quota/size"
-        ]);
+        StorageFileShares.Pointers2026.ShouldBe(
+            [
+                "/location", "/properties", "/properties/clusterId", "/properties/quota", "/properties/quota/size"
+            ]
+        );
     }
 
     [Fact]
@@ -143,7 +146,7 @@ public sealed class StorageFileShareDeclarationTests {
 
     [Fact]
     public void EveryDeclaredDefaultIsAValueTheApiWouldAccept() {
-        foreach (var property in StorageFileShares.Schema2026.Properties.Where(x => x.DefaultJson.Length > 0)) {
+        foreach (var property in StorageFileShares.Schema2026.Properties.Where(static x => x.DefaultJson.Length > 0)) {
             using var body = JsonDocument.Parse(
                 Overridden(StorageFileShares.Body(ClusterId), property.JsonPointer, property.DefaultJson)
             );
@@ -155,12 +158,15 @@ public sealed class StorageFileShareDeclarationTests {
 
     [Fact]
     public void TheSizeIsRequiredAndUsesTheSharedQuantityGrammar() {
-        var size = StorageFileShares.Schema2026.Properties.Single(x => x.JsonPointer == "/properties/quota/size");
+        var size = StorageFileShares.Schema2026.Properties.Single(static x => x.JsonPointer == "/properties/quota/size"
+        );
 
         size.Required.ShouldBeTrue("a share with no size is a claim with no request, which the API server refuses");
         size.Pattern.ShouldBe(KubeQuantity.Pattern);
 
-        using var missing = JsonDocument.Parse("{\"location\":\"eu-central\",\"properties\":{\"clusterId\":\"" + ClusterId + "\"}}");
+        using var missing = JsonDocument.Parse(
+            "{\"location\":\"eu-central\",\"properties\":{\"clusterId\":\"" + ClusterId + "\"}}"
+        );
         StorageFileShares.Schema2026.Validate(missing.RootElement, allowTags: true).IsFailure.ShouldBeTrue();
     }
 
@@ -168,7 +174,7 @@ public sealed class StorageFileShareDeclarationTests {
     public void TheResponseShapeIsWhatTheHandlerWrites() {
         // ⚠ The dispatcher validates the handler's body against this; a pointer renamed on one side
         // only is a 500 on every call. The names are literals for the reason every casing test gives.
-        StorageFileShares.ListMountTargetsResponse.Properties.Select(x => x.JsonPointer)
+        StorageFileShares.ListMountTargetsResponse.Properties.Select(static x => x.JsonPointer)
             .ShouldBe(["/claimName", "/accessMode", "/filer", "/path", "/collection"]);
 
         StorageFileShares.ListMountTargetsResponse.Properties.ShouldAllBe(x => x.Required && !x.Secret);
@@ -179,7 +185,7 @@ public sealed class StorageFileShareDeclarationTests {
         var node = JsonNode.Parse(body)!.AsObject();
         var segments = pointer.Trim('/').Split('/');
 
-        JsonObject cursor = node;
+        var cursor = node;
         for (var i = 0; i < segments.Length - 1; i++) {
             cursor = cursor[segments[i]]?.AsObject() ?? Insert(cursor, segments[i]);
         }

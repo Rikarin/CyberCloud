@@ -311,7 +311,7 @@ public static class OrleansApplication {
                 .ReadFrom.Configuration(builder.Configuration)
                 .ReadFrom.Services(services)
                 .Enrich.FromLogContext()
-                .WriteTo.ScrubbingSecrets(sinks => {
+                .WriteTo.ScrubbingSecrets(static sinks => {
                         // stdout, which in a cluster is the node's log collector. Formerly
                         // `Serilog:WriteTo: [{ Name: Console }]` in every host's appsettings.json.
                         sinks.Console();

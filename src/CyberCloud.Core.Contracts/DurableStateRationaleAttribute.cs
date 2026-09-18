@@ -40,7 +40,7 @@ namespace CyberCloud.Core.Contracts;
 ///     Why this grain's durable binding is not a reviewed entry in <c>durable-grains.txt</c>. Written
 ///     for a reviewer, not for a log line.
 /// </param>
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+[AttributeUsage(AttributeTargets.Class, Inherited = false)]
 public sealed class DurableStateRationaleAttribute(string reason) : Attribute {
     /// <summary>Why this grain is off the reviewed list. Never empty — the gate checks.</summary>
     public string Reason { get; } = reason;

@@ -177,8 +177,11 @@ public interface IShardMapGrain : IGrainWithStringKey {
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Half of what docs/plan/05 § The shard map describes, and the half that is
-    ///         safe.</b> That section describes <c>PinAsync</c> as the operator-run move of one
+    ///         ⚠
+    ///         <b>
+    ///             Half of what docs/plan/05 § The shard map describes, and the half that is
+    ///             safe.
+    ///         </b> That section describes <c>PinAsync</c> as the operator-run move of one
     ///         outsized tenant: "It quiesces the tenant (rejects writes with <c>503 Retry-After</c>),
     ///         copies the grain rows, flips the map, and un-quiesces." Only the flip is a map edit,
     ///         and flipping without the copy repoints a live tenant at an empty database. The copy is

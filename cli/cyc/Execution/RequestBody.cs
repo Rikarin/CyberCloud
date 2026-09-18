@@ -82,7 +82,9 @@ static class RequestBody {
     static IReadOnlyList<string> Segments(string pointer) => [
         .. pointer
             .Split('/', StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => x.Replace("~1", "/", StringComparison.Ordinal).Replace("~0", "~", StringComparison.Ordinal))
+            .Select(static x => x.Replace("~1", "/", StringComparison.Ordinal)
+                    .Replace("~0", "~", StringComparison.Ordinal)
+            )
     ];
 
     /// <summary>One node of the body under construction: either a leaf a flag writes, or a branch.</summary>
@@ -101,10 +103,10 @@ static class RequestBody {
             }
 
             var name = segments[0];
-            var child = children.FirstOrDefault(x => string.Equals(x.Key, name, StringComparison.Ordinal)).Value;
+            var child = children.Find(x => string.Equals(x.Key, name, StringComparison.Ordinal)).Value;
 
             if (child is null) {
-                child = new Branch();
+                child = new();
                 children.Add(new KeyValuePair<string, Branch>(name, child));
             }
 

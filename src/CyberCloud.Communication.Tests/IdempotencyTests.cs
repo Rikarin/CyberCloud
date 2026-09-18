@@ -99,7 +99,7 @@ public sealed class IdempotencyTests(CommunicationCluster cluster) {
 
         _ = await cluster.SendAsync(
             CommunicationCluster.Tenant,
-            CommunicationCluster.Request(service, "otp-42", "+420777123456")
+            CommunicationCluster.Request(service, "otp-42")
         );
 
         var different = await cluster.SendAsync(
@@ -205,7 +205,11 @@ public sealed class IdempotencyTests(CommunicationCluster cluster) {
         // IMessageGrain.RetryAsync exists to hand to a caller who does.
         stuck.Status.ShouldBe(MessageStatus.Queued, stuck.Detail);
         stuck.ProviderMessageId.ShouldBeEmpty();
-        stuck.Detail.ShouldContain("never answered", Case.Sensitive, "the carrier's own sentence is what a status reader sees");
+        stuck.Detail.ShouldContain(
+            "never answered",
+            Case.Sensitive,
+            "the carrier's own sentence is what a status reader sees"
+        );
 
         // The reservation stays held: the message may have left, so the day's cap counts it.
         (await cluster.Limits(service).ReadAsync(ChannelKind.Sms)).GetValueOrThrow().Messages.ShouldBe(1);
@@ -237,7 +241,8 @@ public sealed class IdempotencyTests(CommunicationCluster cluster) {
 
         TestProviders.Sms.Fail = true;
 
-        (await cluster.SendAsync(CommunicationCluster.Tenant, request)).GetValueOrThrow().Status.ShouldBe(MessageStatus.Failed);
+        (await cluster.SendAsync(CommunicationCluster.Tenant, request)).GetValueOrThrow()
+            .Status.ShouldBe(MessageStatus.Failed);
 
         TestProviders.Sms.Fail = false;
 

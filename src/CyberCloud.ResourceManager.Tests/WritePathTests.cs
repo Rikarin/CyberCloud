@@ -1,5 +1,3 @@
-using CyberCloud.ResourceManager.Tests.Infrastructure;
-
 namespace CyberCloud.ResourceManager.Tests;
 
 /// <summary>
@@ -37,7 +35,7 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
         traces.Add(created.GetValueOrThrow().Trace);
 
         await Converge(created.GetValueOrThrow());
-        var updated = await Write(ResourceManagerCluster.Address("order-a"), TestingProvider.Body(size: 4));
+        var updated = await Write(ResourceManagerCluster.Address("order-a"), TestingProvider.Body(4));
         traces.Add(updated.GetValueOrThrow().Trace);
 
         SwitchableAuthorizer.GrantOnly();
@@ -72,7 +70,7 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
         var quota = cluster.Quota(ResourceManagerCluster.Tenant, ResourceManagerCluster.Subscription);
 
         var before = await quota.GetUsageAsync(QuotaMeter.Vcpu);
-        var leasesBefore = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(x => x.LeaseId).ToHashSet();
+        var leasesBefore = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(static x => x.LeaseId).ToHashSet();
 
         SwitchableAuthorizer.GrantOnly();
         var refused = await Write(address);
@@ -92,7 +90,7 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
         // ⚠ Compared against a before-set rather than asserted empty. Every test in this collection
         // shares one quota grain, so leases from other tests are live; what this test is about is that
         // THIS request took none.
-        var leasesAfter = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(x => x.LeaseId).ToHashSet();
+        var leasesAfter = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(static x => x.LeaseId).ToHashSet();
 
         leasesAfter.ExceptWith(leasesBefore);
         leasesAfter.ShouldBeEmpty("a write refused at step 3 must not have reserved anything at step 6");
@@ -128,14 +126,14 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
         (await cluster.Index(address).TryClaimAsync(address, rival)).IsSuccess.ShouldBeTrue();
 
         var quota = cluster.Quota(ResourceManagerCluster.Tenant, ResourceManagerCluster.Subscription);
-        var leasesBefore = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(x => x.LeaseId).ToHashSet();
+        var leasesBefore = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(static x => x.LeaseId).ToHashSet();
 
         var refused = await Write(address);
 
         refused.IsFailure.ShouldBeTrue("the name is claimed by somebody else");
         refused.Error!.Code.ShouldBe(ErrorCode.ResourceAlreadyExists);
 
-        var leasesAfter = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(x => x.LeaseId).ToHashSet();
+        var leasesAfter = (await quota.ListLeasesAsync()).GetValueOrThrow().Select(static x => x.LeaseId).ToHashSet();
         leasesAfter.ExceptWith(leasesBefore);
 
         leasesAfter.ShouldBeEmpty("the lease taken at step 6 is released when step 7 refuses");
@@ -211,7 +209,7 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
         var first = await Write(address);
         await Converge(first.GetValueOrThrow());
 
-        var changed = await Write(address, TestingProvider.Body(size: 4, label: "second"));
+        var changed = await Write(address, TestingProvider.Body(4, "second"));
 
         changed.IsSuccess.ShouldBeTrue(changed.Error?.Message);
         changed.GetValueOrThrow().NoOp.ShouldBeFalse();
@@ -224,7 +222,7 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
         ResourceManagerCluster.ResetDoubles();
         var address = ResourceManagerCluster.Address("replacing-put");
 
-        var first = await Write(address, TestingProvider.Body(size: 2, label: "keep-me"));
+        var first = await Write(address, TestingProvider.Body(2, "keep-me"));
         await Converge(first.GetValueOrThrow());
 
         // The same body without `label`. PUT replaces this version's slice, so the label goes.
@@ -243,7 +241,7 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
         ResourceManagerCluster.ResetDoubles();
         var address = ResourceManagerCluster.Address("merging-patch");
 
-        var first = await Write(address, TestingProvider.Body(size: 2, label: "keep-me"));
+        var first = await Write(address, TestingProvider.Body(2, "keep-me"));
         await Converge(first.GetValueOrThrow());
 
         var patched = await cluster.Manager.WriteAsync(
@@ -526,12 +524,17 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
 
         // ⚠ THE GRAIN'S COUNT, NOT ZERO. Until #54 every event went out with Version = 0, so a
         // projector keyed on (resource_id, version) would have dropped every event after the first.
-        change.Version.ShouldBeGreaterThan(0, "the event carries ResourceGrainState.Version through ResourceSnapshot.Version");
+        change.Version.ShouldBeGreaterThan(
+            0,
+            "the event carries ResourceGrainState.Version through ResourceSnapshot.Version"
+        );
         change.ResourceId.ShouldBe(accepted.GetValueOrThrow().Resource.Id);
 
         // docs/plan/04 § Streams' grammar, with the provider's dot and the type folded into tokens
         // so the tenant, provider, type and id sit at fixed positions.
-        change.Subject.ShouldBe($"cc.{ResourceManagerCluster.Tenant:N}.res.cybercloud_testing.widgets.{change.ResourceId:N}");
+        change.Subject.ShouldBe(
+            $"cc.{ResourceManagerCluster.Tenant:N}.res.cybercloud_testing.widgets.{change.ResourceId:N}"
+        );
     }
 
     [Fact]
@@ -560,17 +563,27 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
 
         var emitted = RecordingChangeSink.Published.Where(x => x.ResourceId == resourceId).ToList();
 
-        emitted.Select(x => x.Change).ShouldBe(
-            [ResourceChangeKind.Created, ResourceChangeKind.StateChanged, ResourceChangeKind.Deleting, ResourceChangeKind.Deleted],
-            "the gateway's two and the silo's two, in the order the resource lived them"
+        emitted.Select(static x => x.Change)
+            .ShouldBe(
+                [
+                    ResourceChangeKind.Created, ResourceChangeKind.StateChanged, ResourceChangeKind.Deleting,
+                    ResourceChangeKind.Deleted
+                ],
+                "the gateway's two and the silo's two, in the order the resource lived them"
+            );
+
+        emitted[1].ProvisioningState.ShouldBe(
+            ProvisioningState.Succeeded,
+            "StateChanged carries the state the reconcile reached"
+        );
+        emitted[3].ProvisioningState.ShouldBe(
+            ProvisioningState.Deleting,
+            "Deleted carries the last state the grain held"
         );
 
-        emitted[1].ProvisioningState.ShouldBe(ProvisioningState.Succeeded, "StateChanged carries the state the reconcile reached");
-        emitted[3].ProvisioningState.ShouldBe(ProvisioningState.Deleting, "Deleted carries the last state the grain held");
-
         // Strictly increasing, so a consumer that holds one can drop everything at or below it.
-        emitted.Select(x => x.Version).ShouldBe(emitted.Select(x => x.Version).Order().ToList());
-        emitted.Select(x => x.Version).Distinct().Count().ShouldBe(4, "no two transitions share a version");
+        emitted.Select(static x => x.Version).ShouldBe(emitted.Select(static x => x.Version).Order().ToList());
+        emitted.Select(static x => x.Version).Distinct().Count().ShouldBe(4, "no two transitions share a version");
         emitted.ShouldAllBe(x => x.Subject == emitted[0].Subject, "one resource is one subject for its whole life");
     }
 
@@ -644,7 +657,7 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
                 Path = address.Path,
                 ApiVersion = TestingProvider.V2026,
                 Verb = WriteVerb.Put,
-                Body = TestingProvider.Body(size: 7),
+                Body = TestingProvider.Body(7),
                 IfMatch = "not-the-current-etag",
                 Caller = ResourceManagerCluster.Caller()
             },

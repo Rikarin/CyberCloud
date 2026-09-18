@@ -50,8 +50,11 @@ public sealed record AgentEnrollment {
 ///         resource manager's <c>GrainAgentTunnels</c> implements it over the grain.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The plaintext token is minted here and hashed here, on the calling side of the
-///         grain.</b> The grain is armed with a hash; the plaintext goes into the
+///         ⚠
+///         <b>
+///             The plaintext token is minted here and hashed here, on the calling side of the
+///             grain.
+///         </b> The grain is armed with a hash; the plaintext goes into the
 ///         <see cref="AgentEnrollment" /> and out through one action response. See
 ///         <see cref="AgentCredentials" /> for why that ordering is the security property.
 ///     </para>
@@ -104,7 +107,10 @@ public sealed class UnavailableAgentTunnels : IAgentTunnels {
         Task.FromResult(Result<AgentEnrollment>.Failure(Unavailable(clusterId, "enroll an agent for")));
 
     /// <inheritdoc />
-    public Task<Result<AgentTunnelStatus>> GetStatusAsync(Guid clusterId, CancellationToken cancellationToken = default) =>
+    public Task<Result<AgentTunnelStatus>> GetStatusAsync(
+        Guid clusterId,
+        CancellationToken cancellationToken = default
+    ) =>
         Task.FromResult(Result<AgentTunnelStatus>.Failure(Unavailable(clusterId, "read the agent status of")));
 
     /// <inheritdoc />

@@ -205,7 +205,9 @@ public sealed class PlatformBootstrapTask(
 
         var service = grains
             .ForTenant(N(PlatformTenant, "D"))
-            .GetGrain<ICommunicationServiceGrain>(CommunicationGrainKeys.Service(PlatformCommunicationService.ServiceId));
+            .GetGrain<ICommunicationServiceGrain>(
+                CommunicationGrainKeys.Service(PlatformCommunicationService.ServiceId)
+            );
 
         var created = await service.CreateAsync(PlatformTenant, PlatformCommunicationService.Name);
 

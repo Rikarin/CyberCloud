@@ -179,7 +179,7 @@ public sealed class CollectionRoutingTests {
             "GET",
             CollectionPath(GatewayHarness.TenantA),
             gateway.Token(GatewayHarness.TenantA),
-            query: "api-version=" + OneTypeRegistry.TheVersion + "&$top=not-a-number&$skipToken=abc"
+            "api-version=" + OneTypeRegistry.TheVersion + "&$top=not-a-number&$skipToken=abc"
         );
 
         response.Status.ShouldBe(StatusCodes.Status200OK, response.Body);
@@ -214,9 +214,9 @@ public sealed class CollectionRoutingTests {
         );
 
         more.Body.ShouldContain("nextLink");
-        more.Body.ShouldContain("%2F", Case.Insensitive);
+        more.Body.ShouldContain("%2F");
 
-        gateway.Manager.OnList = _ => Result<ResourceListPage>.Success(new());
+        gateway.Manager.OnList = static _ => Result<ResourceListPage>.Success(new());
 
         var last = await gateway.SendAsync(
             "GET",
@@ -263,7 +263,7 @@ public sealed class CollectionRoutingTests {
             "GET",
             CollectionPath(GatewayHarness.TenantA),
             gateway.Token(GatewayHarness.TenantA),
-            query: "api-version=" + OneTypeRegistry.TheVersion + "&$top=10"
+            "api-version=" + OneTypeRegistry.TheVersion + "&$top=10"
         );
 
         paged.Status.ShouldBe(StatusCodes.Status200OK, paged.Body);
@@ -311,7 +311,7 @@ public sealed class CollectionRoutingTests {
             "GET",
             CollectionPath(GatewayHarness.TenantA),
             gateway.Token(GatewayHarness.TenantA),
-            query: "api-version=" + OneTypeRegistry.TheVersion + top
+            "api-version=" + OneTypeRegistry.TheVersion + top
         );
 
         paged.Status.ShouldBe(StatusCodes.Status200OK, paged.Body);

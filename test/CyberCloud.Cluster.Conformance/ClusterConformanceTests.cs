@@ -1,5 +1,4 @@
 using CyberCloud.Cluster.Conformance.Infrastructure;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Drift;
 using CyberCloud.ResourceManager.Reconcile;
@@ -172,14 +171,14 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             managed.ShouldNotBeNull($"'{target}' carries no managedFields, so it was not server-side applied.");
 
             var ours = managed!
-                .Select(x => x!.AsObject())
+                .Select(static x => x!.AsObject())
                 .Where(x => x["manager"]?.GetValue<string>() == FieldManagerOf(harness))
                 .ToList();
 
             ours.ShouldNotBeEmpty(
                 $"the API server recorded no field-manager entry for '{FieldManagerOf(harness)}' on "
                 + $"'{target}'. managedFields holds: "
-                + string.Join(", ", managed.Select(x => x!["manager"]?.GetValue<string>()))
+                + string.Join(", ", managed.Select(static x => x!["manager"]?.GetValue<string>()))
             );
 
             ours.ShouldContain(
@@ -342,7 +341,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         );
 
         if (!recoverable) {
-            (await ClaimsOfResourceAsync(harness, accepted.Resource.Id, token, expectSome: false)).ShouldBeEmpty(
+            (await ClaimsOfResourceAsync(harness, accepted.Resource.Id, token, false)).ShouldBeEmpty(
                 "this type declares no recovery window, so its delete is final — and a final "
                 + "teardown that leaves the claims returns the tenant's quota and keeps their disks."
             );
@@ -355,7 +354,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
 
         kept.Keys.ShouldBe(
             claims.Keys,
-            ignoreOrder: true,
+            true,
             "a soft delete removed a claim on a real API server. Deleting a StatefulSet is not "
             + "supposed to delete the claims its volumeClaimTemplate made, and that behaviour is the "
             + "whole of what this type's recovery window hands back."
@@ -378,7 +377,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             $"the purge ended {ended.State}: {ended.Error?.Message}"
         );
 
-        (await ClaimsOfResourceAsync(harness, accepted.Resource.Id, token, expectSome: false)).ShouldBeEmpty(
+        (await ClaimsOfResourceAsync(harness, accepted.Resource.Id, token, false)).ShouldBeEmpty(
             "the purge left the volumes behind. docs/plan/08 § Soft delete: ending a window has to "
             + "remove exactly what a teardown keeps, or a purged resource returns its quota, frees "
             + "its name and leaves its disks allocated with nothing pointing at them."
@@ -436,8 +435,8 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             );
 
             found = listed.Body.Items.ToDictionary<V1PersistentVolumeClaim, string, IDictionary<string, string>?>(
-                x => x.Metadata.Name,
-                x => x.Metadata.Labels,
+                static x => x.Metadata.Name,
+                static x => x.Metadata.Labels,
                 StringComparer.Ordinal
             );
 
@@ -518,7 +517,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             + "did not take a field we own. What the API server answered: "
             + string.Join(
                 ", ",
-                harness.Connection.Outcomes.Select(x => x.Result.ToString() + " " + x.Message)
+                harness.Connection.Outcomes.Select(static x => x.Result.ToString() + " " + x.Message)
             )
         );
 
@@ -683,8 +682,8 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
 
         var inventory = new ListBackedClusterObjectInventory(
             harness.Api,
-            [.. objectsUnderTest.Select(x => x.Kind).Distinct()],
-            objectsUnderTest.All(x => x.IsClusterScoped)
+            [.. objectsUnderTest.Select(static x => x.Kind).Distinct()],
+            objectsUnderTest.All(static x => x.IsClusterScoped)
                 ? string.Empty
                 : ClusterConformanceHarness<TSource>.Namespace
         );
@@ -749,7 +748,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         var after = new DriftScanner(harness.Clock).Scan(
             ClusterConformanceHarness<TSource>.ClusterId,
             (await inventory.ListManagedAsync(ClusterConformanceHarness<TSource>.ClusterId, token))
-                .GetValueOrThrow(),
+            .GetValueOrThrow(),
             [
                 new ExpectedResource(
                     accepted.Resource.Id,
@@ -803,8 +802,8 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             .ListNamespacedConfigMapWithHttpMessagesAsync(ns, cancellationToken: token);
 
         var ambient = ImmutableArray.Create(
-            Occupant("ServiceAccount", accounts.Body.Items.Single(x => x.Metadata.Name == "default")),
-            Occupant("ConfigMap", maps.Body.Items.Single(x => x.Metadata.Name == "kube-root-ca.crt"))
+            Occupant("ServiceAccount", accounts.Body.Items.Single(static x => x.Metadata.Name == "default")),
+            Occupant("ConfigMap", maps.Body.Items.Single(static x => x.Metadata.Name == "kube-root-ca.crt"))
         );
 
         // ⚠ AND BOTH ARE UNLABELLED, which is what makes them indistinguishable from a tenant's own
@@ -859,7 +858,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             ClusterConformanceHarness<TSource>.ClusterId,
             ns,
             [],
-            [.. occupants.Select(x => Occupant(x))]
+            [.. occupants.Select(static x => Occupant(x))]
         );
 
         // ⚠ THIS ARM WAS REACHED FOR THE FIRST TIME ON 2026-09-17, AND WHAT IT ASSERTED WAS FALSE FOR
@@ -874,24 +873,27 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         // namespace that held nothing but Kubernetes' own two objects — which IS deletable, and
         // correctly so. So the verdict is asserted against what the raw listing actually holds, in
         // both directions, rather than against a leftover the suite never promised to leave.
-        var significant = occupants.Where(x => !NamespaceReclaim.IsAmbient(Occupant(x))).ToList();
+        var significant = occupants.Where(static x => !NamespaceReclaim.IsAmbient(Occupant(x))).ToList();
 
         if (significant.Count > 0) {
             verdict.Deletable.ShouldBeFalse(
                 $"the namespace holds {significant.Count} object(s) beyond Kubernetes' own — "
-                + string.Join(", ", significant.Select(x => x.Kind.Kind + "/" + x.Name))
+                + string.Join(", ", significant.Select(static x => x.Kind.Kind + "/" + x.Name))
                 + " — so a reclaim must refuse, and it did not: "
                 + verdict.Explain()
             );
 
             // ⚠ The ordinal-first one, because the refusal samples its names sorted and takes five.
-            var named = significant.Select(x => x.Kind.Kind + "/" + x.Name).Order(StringComparer.Ordinal).First();
+            var named = significant.Select(static x => x.Kind.Kind + "/" + x.Name)
+                .Order(StringComparer.Ordinal)
+                .First();
 
-            verdict.Explain().ShouldContain(
-                named,
-                Shouldly.Case.Sensitive,
-                "the refusal must name what it found, so an operator knows what would be deleted."
-            );
+            verdict.Explain()
+                .ShouldContain(
+                    named,
+                    Shouldly.Case.Sensitive,
+                    "the refusal must name what it found, so an operator knows what would be deleted."
+                );
         } else {
             verdict.Deletable.ShouldBeTrue(
                 "the namespace holds nothing but Kubernetes' own ServiceAccount/default and "
@@ -958,7 +960,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             + "durable, or the grain never wrote."
         );
 
-        var operationPayload = operationRows.Select(x => x.Payload).First(x => x.Length > 0);
+        var operationPayload = operationRows.Select(static x => x.Payload).First(static x => x.Length > 0);
 
         // ⚠ THE ROUND TRIP, THROUGH THE SHIPPED SERIALIZER. Deserializing the stored bytes with
         // SystemTextJsonGrainStorageSerializer — the same instance type DurableTierConfigurator
@@ -998,7 +1000,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         resourceRows.ShouldNotBeEmpty("no row in PostgreSQL carries the resource grain's state.");
 
         var resourceState = serializer.Deserialize<ResourceState>(
-            BinaryData.FromString(resourceRows.Select(x => x.Payload).First(x => x.Length > 0))
+            BinaryData.FromString(resourceRows.Select(static x => x.Payload).First(static x => x.Length > 0))
         );
 
         resourceState.Path.ShouldBe(ClusterConformanceHarness<TSource>.Address(name).Path);
@@ -1114,18 +1116,27 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     /// <param name="name">The resource name the test wrote under.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>EVERY TEST HERE WRITES INTO ONE ACCOUNT, AND A TYPE WHOSE OBJECTS ARE SHARED
-    ///         BETWEEN SIBLINGS CANNOT PASS "DELETE → GONE" WITH A SIBLING LEFT BEHIND.</b> The harness
+    ///         ⚠
+    ///         <b>
+    ///             EVERY TEST HERE WRITES INTO ONE ACCOUNT, AND A TYPE WHOSE OBJECTS ARE SHARED
+    ///             BETWEEN SIBLINGS CANNOT PASS "DELETE → GONE" WITH A SIBLING LEFT BEHIND.
+    ///         </b> The harness
     ///         creates the ancestors once, so <c>real-drift</c>, <c>real-conflict</c>,
     ///         <c>real-roundtrip</c> and the lifecycle's own resource are all children of the same
     ///         parent. For eleven families that was invisible: each resource's objects are its own,
     ///         and a sibling's leftovers are not in its <c>Objects</c>. <c>CyberCloud.Storage/accounts/fileShares</c>
-    ///         is the first type to list an object <i>every share of the account applies and the last
-    ///         one out removes</i> — the account's <c>SeaweedCSIDriver</c> — and its lifecycle failed
+    ///         is the first type to list an object
+    ///         <i>
+    ///             every share of the account applies and the last
+    ///             one out removes
+    ///         </i> — the account's <c>SeaweedCSIDriver</c> — and its lifecycle failed
     ///         here on the first run that ever reached a real API server: the drift test had left
     ///         <c>real-drift</c> standing, the lifecycle's teardown correctly saw a sibling and kept
-    ///         the driver, and the suite reported the driver as <i>"still in the real cluster after a
-    ///         converged teardown"</i>. The reconciler was right and the suite was leaking.
+    ///         the driver, and the suite reported the driver as
+    ///         <i>
+    ///             "still in the real cluster after a
+    ///             converged teardown"
+    ///         </i>. The reconciler was right and the suite was leaking.
     ///     </para>
     ///     <para>
     ///         So a test that creates a resource and is not itself about its deletion tears it down
@@ -1145,7 +1156,9 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             TestContext.Current.CancellationToken
         );
 
-        deleted.IsSuccess.ShouldBeTrue($"'{name}' could not be deleted at the end of the test: {deleted.Error?.Message}");
+        deleted.IsSuccess.ShouldBeTrue(
+            $"'{name}' could not be deleted at the end of the test: {deleted.Error?.Message}"
+        );
 
         var teardown = await ConvergeAsync(harness, deleted.GetValueOrThrow().OperationId);
         teardown.State.ShouldBe(
@@ -1290,11 +1303,10 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         var type = KubeLabels.ResourceTypeValue(ClusterConformanceHarness<TSource>.Case.Type);
 
         return harness.Connection.Applied
-                .FirstOrDefault(
-                    x => x.Labels.TryGetValue(KubeLabels.ResourceType, out var value)
-                        && string.Equals(value, type, StringComparison.Ordinal)
-                )
-                ?.FieldManager
+            .FirstOrDefault(x => x.Labels.TryGetValue(KubeLabels.ResourceType, out var value)
+                && string.Equals(value, type, StringComparison.Ordinal)
+            )
+            ?.FieldManager
             ?? string.Empty;
     }
 

@@ -181,8 +181,8 @@ public sealed class NamespaceContentsTests {
 
         found.Count.ShouldBe(2);
 
-        found.Single(x => x.Name == "ours").Labels[KubeLabels.ManagedBy].ShouldBe(KubeLabels.ManagedByValue);
-        found.Single(x => x.Name == "theirs").Labels.ShouldBeEmpty();
+        found.Single(static x => x.Name == "ours").Labels[KubeLabels.ManagedBy].ShouldBe(KubeLabels.ManagedByValue);
+        found.Single(static x => x.Name == "theirs").Labels.ShouldBeEmpty();
 
         found[0].Kind.Kind.ShouldBe("PersistentVolumeClaim");
         found[0].Namespace.ShouldBe(Namespace);

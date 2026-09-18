@@ -41,7 +41,7 @@ public sealed class RabbitmqDeclarationTests {
         // ⚠ `listKeys` does NOT share the read permission. docs/plan/07 § Consistency puts a key
         // export in the fully-consistent row by name; sharing `read` would make every viewer of a
         // cluster a holder of its credentials, and the change that would do it is one word.
-        registration.Actions.Single(x => x.Name == RabbitmqClusters.ListKeysAction)
+        registration.Actions.Single(static x => x.Name == RabbitmqClusters.ListKeysAction)
             .Permission.ShouldNotBe(registration.ReadPermission);
     }
 
@@ -64,7 +64,7 @@ public sealed class RabbitmqDeclarationTests {
         registration.Display.Alias.ShouldBe("rabbitmq");
 
         CliTokens.Collisions(
-            registry.Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+            registry.Types.Select(static x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
         )
             .ShouldBeEmpty();
 
@@ -72,7 +72,7 @@ public sealed class RabbitmqDeclarationTests {
         // disagree: CliEmitter.Emit builds the tree the CLI actually embeds, and a throw here is the
         // build refusing rather than a silo refusing. Kept from the test this replaces, where it was
         // the only half that could not go stale.
-        Should.NotThrow(() => CliEmitter.Emit(Document()));
+        Should.NotThrow(static () => CliEmitter.Emit(Document()));
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public sealed class RabbitmqDeclarationTests {
 
         // Every derived meter publishes its formula and its read set — the price MeterDerivation
         // charges for putting a delegate on the quota path, and what OpenApiEmitter publishes.
-        foreach (var meter in registration.Meters.Where(x => x.Derivation is not null)) {
+        foreach (var meter in registration.Meters.Where(static x => x.Derivation is not null)) {
             meter.Derivation!.Expression.ShouldNotBeNullOrWhiteSpace(meter.Meter.ToString());
             meter.Derivation.Reads.ShouldNotBeEmpty(meter.Meter.ToString());
 
@@ -112,7 +112,7 @@ public sealed class RabbitmqDeclarationTests {
         // ⚠ IT MATTERS MORE ON THIS TYPE THAN ON ITS SIBLINGS, because one of the defaults is the
         // reason the row exists. `queues.defaultType` defaulting to anything other than `quorum`
         // would be a cluster that replicates nothing while every other file still says it does.
-        foreach (var property in RabbitmqClusters.Schema2026.Properties.Where(x => x.DefaultJson.Length > 0)) {
+        foreach (var property in RabbitmqClusters.Schema2026.Properties.Where(static x => x.DefaultJson.Length > 0)) {
             using var body = JsonDocument.Parse(
                 Overridden(RabbitmqClusters.Body(ClusterId), property.JsonPointer, property.DefaultJson)
             );
@@ -137,7 +137,7 @@ public sealed class RabbitmqDeclarationTests {
         // ⚠ AND THE SCHEMA HALF IS A LITERAL. Reading it off RabbitmqClusters.QueueTypes or off a
         // constant the renderer also reads would compare the schema to itself.
         RabbitmqClusters.Schema2026.Properties
-            .Single(x => x.JsonPointer == RabbitmqClusters.DefaultQueueTypePointer)
+            .Single(static x => x.JsonPointer == RabbitmqClusters.DefaultQueueTypePointer)
             .DefaultJson.ShouldBe("\"quorum\"");
 
         // The reader's fallback, exercised through a body that declares no `queues` block at all.
@@ -315,7 +315,7 @@ public sealed class RabbitmqDeclarationTests {
         // type it is worse than that: an unresolved preset renders no resources block, which this
         // CRD replaces with a Burstable default rather than leaving empty.
         var declared = RabbitmqClusters.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/sizing/preset")
+            .Single(static x => x.JsonPointer == "/properties/sizing/preset")
             .AllowedValues;
 
         declared.Order(StringComparer.Ordinal)
@@ -332,7 +332,7 @@ public sealed class RabbitmqDeclarationTests {
         // Sorting is idempotency: two bodies asking for the same set in different orders must render
         // the same document, or a reconciler alternating between them writes on every pass.
         var declared = RabbitmqClusters.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/plugins/additional");
+            .Single(static x => x.JsonPointer == "/properties/plugins/additional");
 
         declared.ElementKind.ShouldBe(SchemaKind.Text);
         declared.AllowedValues.Order(StringComparer.Ordinal)
@@ -349,7 +349,7 @@ public sealed class RabbitmqDeclarationTests {
     }
 
     /// <summary>A body asking for a list of plugins.</summary>
-    string WithPlugins(params string[] plugins) {
+    static string WithPlugins(params string[] plugins) {
         var node = JsonNode.Parse(RabbitmqClusters.Body(ClusterId))!.AsObject();
         var listed = new JsonArray();
         foreach (var plugin in plugins) {

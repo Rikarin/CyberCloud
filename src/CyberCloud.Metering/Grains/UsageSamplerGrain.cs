@@ -178,8 +178,8 @@ public sealed class UsageSamplerGrain(
                 WindowEnd = window.End,
                 ResourcesSeen = found.Length,
                 Emitted = emitted.Length,
-                Accepted = outcomes.Count(x => x.Outcome == UsageIngestOutcome.Accepted),
-                Duplicates = outcomes.Count(x => x.Outcome == UsageIngestOutcome.Duplicate)
+                Accepted = outcomes.Count(static x => x.Outcome == UsageIngestOutcome.Accepted),
+                Duplicates = outcomes.Count(static x => x.Outcome == UsageIngestOutcome.Duplicate)
             }
         );
     }

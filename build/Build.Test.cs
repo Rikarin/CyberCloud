@@ -994,11 +994,12 @@ partial class Build {
             .Select(suite => (Suite: suite, Report: TestResultsDirectory / $"{suite}.trx"))
             .Where(x => x.Report.FileExists())
             .Select(x => (
-                x.Suite,
-                Executed: Counter(x.Report, "executed"),
-                Skipped: NotExecuted(x.Report),
-                Prerequisite: PrerequisiteSkips(x.Report)
-            ))
+                    x.Suite,
+                    Executed: Counter(x.Report, "executed"),
+                    Skipped: NotExecuted(x.Report),
+                    Prerequisite: PrerequisiteSkips(x.Report)
+                )
+            )
             .OrderBy(x => x.Suite, StringComparer.Ordinal)
             .ToList();
 
@@ -1021,8 +1022,8 @@ partial class Build {
         var hollow = rows
             .Where(x => x.Skipped >= x.Executed || x.Prerequisite.Count > 0)
             .Select(x => x.Prerequisite.Count > 0
-                ? $"{x.Suite} skipped {x.Prerequisite.Count} case(s) for a missing prerequisite — the first says: \"{x.Prerequisite[0]}\""
-                : $"{x.Suite} ran {x.Executed} and skipped {x.Skipped}"
+                    ? $"{x.Suite} skipped {x.Prerequisite.Count} case(s) for a missing prerequisite — the first says: \"{x.Prerequisite[0]}\""
+                    : $"{x.Suite} ran {x.Executed} and skipped {x.Skipped}"
             )
             .ToList();
 
@@ -1053,8 +1054,11 @@ partial class Build {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The convention this reads is the one every cluster-backed skip in the tree
-    ///         follows</b>: <c>ClusterInfrastructure.SkipMessage</c>, <c>EmptyClusterFixture.Skip</c>,
+    ///         ⚠
+    ///         <b>
+    ///             The convention this reads is the one every cluster-backed skip in the tree
+    ///             follows
+    ///         </b>: <c>ClusterInfrastructure.SkipMessage</c>, <c>EmptyClusterFixture.Skip</c>,
     ///         <c>M1StoryClusterFixture.Skip</c> and <c>BundleInstaller.SkipWithoutBash</c> all say
     ///         <c>SKIPPED — …: … NEEDS: … WOULD PROVE: …</c>, and the one skip a working lane makes
     ///         honestly — "created no PersistentVolumeClaim on a real cluster" — does not, because
@@ -1087,8 +1091,11 @@ partial class Build {
             return XDocument.Load(report)
                 .Descendants()
                 .Where(x => x.Name.LocalName == "UnitTestResult"
-                    && string.Equals(x.Attribute("outcome")?.Value, "NotExecuted", StringComparison.Ordinal))
-                .Select(x => x.Descendants().FirstOrDefault(y => y.Name.LocalName == "StdOut")?.Value?.Trim() ?? string.Empty)
+                    && string.Equals(x.Attribute("outcome")?.Value, "NotExecuted", StringComparison.Ordinal)
+                )
+                .Select(x => x.Descendants().FirstOrDefault(y => y.Name.LocalName == "StdOut")?.Value?.Trim()
+                    ?? string.Empty
+                )
                 .Where(x => x.Contains(PrerequisiteMarker, StringComparison.Ordinal))
                 .ToList();
         } catch (Exception unreadable) when (unreadable is IOException or System.Xml.XmlException) {
@@ -1113,8 +1120,8 @@ partial class Build {
     static bool DockerEndpointIsPresent =>
         !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOCKER_HOST"))
         || (OperatingSystem.IsWindows()
-            ? File.Exists(@"\\.\pipe\docker_engine")
-            : File.Exists("/var/run/docker.sock"));
+                ? File.Exists(@"\\.\pipe\docker_engine")
+                : File.Exists("/var/run/docker.sock"));
 
     /// <summary>
     ///     The skip count in one xunit TRX report, or <c>0</c> if it cannot be read.

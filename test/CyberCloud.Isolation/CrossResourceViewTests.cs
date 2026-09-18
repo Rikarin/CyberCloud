@@ -1,6 +1,5 @@
 using CyberCloud.Authorization.Contracts;
 using CyberCloud.Conformance.Harness;
-using CyberCloud.Providers.Sample.Contracts;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Reconcile;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -77,7 +76,8 @@ public sealed class CrossResourceViewTests(IsolationCluster cluster) {
         // And the other way: the victim's GUID with the attacker's tenant. The GUID is real, the
         // tenant-qualified grain for it in the attacker's tenant is empty.
         var byGuid = victim with { TenantId = IsolationCluster.Attacker };
-        var stillRefused = await cluster.Views.For(attacker).View.ReadAsync(byGuid, TestContext.Current.CancellationToken);
+        var stillRefused = await cluster.Views.For(attacker)
+            .View.ReadAsync(byGuid, TestContext.Current.CancellationToken);
 
         stillRefused.IsFailure.ShouldBeTrue();
         stillRefused.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
@@ -90,7 +90,12 @@ public sealed class CrossResourceViewTests(IsolationCluster cluster) {
         // argument docs/plan/07 § The enforcement seam makes for a user, made for a resource.
         var reader = await VictimResourceAsync(Widgets, "ungranted-reader");
         var target = await VictimResourceAsync(Probes, "ungranted-target");
-        var absent = IsolationCluster.Address(Probes, "ungranted-absent", IsolationCluster.Victim, IsolationCluster.VictimSubscription);
+        var absent = IsolationCluster.Address(
+            Probes,
+            "ungranted-absent",
+            IsolationCluster.Victim,
+            IsolationCluster.VictimSubscription
+        );
 
         var (view, _) = cluster.Views.For(reader);
 
@@ -113,7 +118,9 @@ public sealed class CrossResourceViewTests(IsolationCluster cluster) {
 
         // ── Before the grant: nothing ───────────────────────────────────────────────────────────
         var (view, _) = cluster.Views.For(reader);
-        (await view.ReadAsync(target, TestContext.Current.CancellationToken)).IsFailure.ShouldBeTrue("the fixture leaked a grant");
+        (await view.ReadAsync(target, TestContext.Current.CancellationToken)).IsFailure.ShouldBeTrue(
+            "the fixture leaked a grant"
+        );
 
         // ── The grant, written the way a tenant writes it: reader on the GROUP to resource:{reader} ──
         var granted = await GrantReaderToResourceAsync(
@@ -123,7 +130,9 @@ public sealed class CrossResourceViewTests(IsolationCluster cluster) {
             IsolationCluster.VictimUser
         );
 
-        granted.IsSuccess.ShouldBeTrue("a group owner could not grant reader to a resource in their own tenant: " + granted.Error?.Message);
+        granted.IsSuccess.ShouldBeTrue(
+            "a group owner could not grant reader to a resource in their own tenant: " + granted.Error?.Message
+        );
         granted.GetValueOrThrow().PrincipalType.ShouldBe(ObjectTypes.Resource);
         granted.GetValueOrThrow().PrincipalId.ShouldBe(reader.Id.ToString("N", CultureInfo.InvariantCulture));
 
@@ -135,7 +144,10 @@ public sealed class CrossResourceViewTests(IsolationCluster cluster) {
         snapshot.Id.ShouldBe(target.Id);
         snapshot.Path.ShouldBe(target.Path);
         snapshot.ApiVersion.ShouldBe(Probes.ApiVersion);
-        snapshot.Body.ShouldContain("\"note\"", customMessage: "the other provider's public contract is what comes back");
+        snapshot.Body.ShouldContain(
+            "\"note\"",
+            customMessage: "the other provider's public contract is what comes back"
+        );
 
         // By path as well as by id — the view resolves through the tenant's index like a GET.
         var byPath = await view.ReadAsync(target.WithId(Guid.Empty), TestContext.Current.CancellationToken);
@@ -222,7 +234,8 @@ public sealed class CrossResourceViewTests(IsolationCluster cluster) {
 
         var read = await view.ReadAsync(target, TestContext.Current.CancellationToken);
         read.IsSuccess.ShouldBeTrue(read.Error?.Message);
-        read.GetValueOrThrow().ClusterId.ShouldBe(IsolationCluster.ClusterId, "the target is placed, so the list has somewhere to fail");
+        read.GetValueOrThrow()
+            .ClusterId.ShouldBe(IsolationCluster.ClusterId, "the target is placed, so the list has somewhere to fail");
 
         var rendered = await view.RenderedObjectsAsync(target, TestContext.Current.CancellationToken);
 
@@ -241,12 +254,17 @@ public sealed class CrossResourceViewTests(IsolationCluster cluster) {
         // would have to defeat.
         var members = typeof(IResourceView).GetMembers(BindingFlags.Public | BindingFlags.Instance);
 
-        members.Select(x => x.Name).Order(StringComparer.Ordinal)
+        members.Select(static x => x.Name)
+            .Order(StringComparer.Ordinal)
             .ShouldBe([nameof(IResourceView.ReadAsync), nameof(IResourceView.RenderedObjectsAsync)]);
 
         foreach (var method in typeof(IResourceView).GetMethods()) {
-            method.GetParameters().Select(x => x.ParameterType)
-                .ShouldBe([typeof(ResourceId), typeof(CancellationToken)], $"{method.Name} takes something a write could ride in on");
+            method.GetParameters()
+                .Select(static x => x.ParameterType)
+                .ShouldBe(
+                    [typeof(ResourceId), typeof(CancellationToken)],
+                    $"{method.Name} takes something a write could ride in on"
+                );
 
             method.ReturnType.ShouldBeOneOf(
                 typeof(Task<Result<ResourceSnapshot>>),
@@ -259,7 +277,7 @@ public sealed class CrossResourceViewTests(IsolationCluster cluster) {
         // real principal, so a context that carried IRoleAssignmentStore would let a pass grant
         // itself reader on its own subscription, and rule 8 of the Assembly graph gate is what keeps
         // a reconciler from taking the same seam by constructor instead.
-        var handed = typeof(ReconcileContext).GetProperties().Select(x => x.PropertyType).ToList();
+        var handed = typeof(ReconcileContext).GetProperties().Select(static x => x.PropertyType).ToList();
 
         handed.ShouldNotContain(typeof(IResourceManager));
         handed.ShouldNotContain(typeof(IResourceGrain));
@@ -287,7 +305,12 @@ public sealed class CrossResourceViewTests(IsolationCluster cluster) {
 
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
-    Task<Result<RoleAssignmentSnapshot>> GrantReaderToResourceAsync(Guid tenant, Guid subscription, Guid resourceId, string user) {
+    Task<Result<RoleAssignmentSnapshot>> GrantReaderToResourceAsync(
+        Guid tenant,
+        Guid subscription,
+        Guid resourceId,
+        string user
+    ) {
         var principal = resourceId.ToString("N", CultureInfo.InvariantCulture);
 
         var assignment = RoleAssignmentId.OnScope(
@@ -298,7 +321,8 @@ public sealed class CrossResourceViewTests(IsolationCluster cluster) {
         return cluster.Roles.AssignAsync(
             new() {
                 Path = assignment.Path,
-                Body = $$$"""{"{{{RoleAssignmentBodyProperties.PrincipalId}}}":"{{{principal}}}","{{{RoleAssignmentBodyProperties.PrincipalType}}}":"{{{ObjectTypes.Resource}}}","{{{RoleAssignmentBodyProperties.RoleDefinitionId}}}":"reader"}""",
+                Body =
+                    $$$"""{"{{{RoleAssignmentBodyProperties.PrincipalId}}}":"{{{principal}}}","{{{RoleAssignmentBodyProperties.PrincipalType}}}":"{{{ObjectTypes.Resource}}}","{{{RoleAssignmentBodyProperties.RoleDefinitionId}}}":"reader"}""",
                 Caller = IsolationCluster.Caller(tenant, user)
             },
             TestContext.Current.CancellationToken
@@ -306,20 +330,38 @@ public sealed class CrossResourceViewTests(IsolationCluster cluster) {
     }
 
     async Task<ResourceId> VictimResourceAsync(IsolationTarget target, string name) {
-        var id = await cluster.CreateAsync(target, name, IsolationCluster.Victim, IsolationCluster.VictimSubscription, IsolationCluster.VictimUser);
-        return IsolationCluster.Address(target, name, IsolationCluster.Victim, IsolationCluster.VictimSubscription).WithId(id);
+        var id = await cluster.CreateAsync(
+            target,
+            name,
+            IsolationCluster.Victim,
+            IsolationCluster.VictimSubscription,
+            IsolationCluster.VictimUser
+        );
+        return IsolationCluster.Address(target, name, IsolationCluster.Victim, IsolationCluster.VictimSubscription)
+            .WithId(id);
     }
 
     async Task<ResourceId> AttackerResourceAsync(IsolationTarget target, string name) {
-        var id = await cluster.CreateAsync(target, name, IsolationCluster.Attacker, IsolationCluster.AttackerSubscription, IsolationCluster.AttackerUser);
-        return IsolationCluster.Address(target, name, IsolationCluster.Attacker, IsolationCluster.AttackerSubscription).WithId(id);
+        var id = await cluster.CreateAsync(
+            target,
+            name,
+            IsolationCluster.Attacker,
+            IsolationCluster.AttackerSubscription,
+            IsolationCluster.AttackerUser
+        );
+        return IsolationCluster.Address(target, name, IsolationCluster.Attacker, IsolationCluster.AttackerSubscription)
+            .WithId(id);
     }
 
     static void ShouldBeInvisible<T>(Result<T> refused, ResourceId victim)
         where T : notnull {
         refused.IsFailure.ShouldBeTrue($"'{victim.Path}' was viewable from another tenant's resource");
         refused.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
-        refused.Error.Code.ShouldNotBe(ErrorCode.AuthorizationFailed, "403 across a tenant boundary confirms the resource exists");
-        refused.Error.Message.Contains("permission", StringComparison.OrdinalIgnoreCase).ShouldBeFalse(refused.Error.Message);
+        refused.Error.Code.ShouldNotBe(
+            ErrorCode.AuthorizationFailed,
+            "403 across a tenant boundary confirms the resource exists"
+        );
+        refused.Error.Message.Contains("permission", StringComparison.OrdinalIgnoreCase)
+            .ShouldBeFalse(refused.Error.Message);
     }
 }

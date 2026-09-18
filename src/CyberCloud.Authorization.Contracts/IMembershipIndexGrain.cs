@@ -18,9 +18,12 @@ namespace CyberCloud.Authorization.Contracts;
 ///         write against a userset has to consult to find the subjects it reaches.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Written by <see cref="ITupleStoreGrain" /> on every write and every delete, in the
-///         same journalled sequence as the two indexes docs/plan/07 § Storage lists, and by nothing
-///         else.</b> The document's index is fed by a stream and lags a write by "tens of
+///         ⚠
+///         <b>
+///             Written by <see cref="ITupleStoreGrain" /> on every write and every delete, in the
+///             same journalled sequence as the two indexes docs/plan/07 § Storage lists, and by nothing
+///             else.
+///         </b> The document's index is fed by a stream and lags a write by "tens of
 ///         milliseconds"; this one is a step of the write itself, before the tenant's relation
 ///         version moves, so a token covers the index the way it covers the reverse half and a
 ///         check never has to compare versions to trust it. What that costs is stated on
@@ -28,8 +31,11 @@ namespace CyberCloud.Authorization.Contracts;
 ///         it and every member below it, one grain write each, in the write path.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The store orders the index differently for a write and for a delete, and the
-///         difference is what keeps a crash fail-closed.</b> A write lands the index <i>last</i>, so a
+///         ⚠
+///         <b>
+///             The store orders the index differently for a write and for a delete, and the
+///             difference is what keeps a crash fail-closed.
+///         </b> A write lands the index <i>last</i>, so a
 ///         crash before it leaves a grant the forward walk sees and the index does not — a deny
 ///         until the sweeper replays it. A delete lands the index <i>first</i>, so a crash after it
 ///         leaves a revoke the index honours and the forward half has not yet applied. Either way

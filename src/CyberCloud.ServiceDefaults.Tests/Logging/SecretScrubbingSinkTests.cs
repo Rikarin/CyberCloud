@@ -94,7 +94,7 @@ public class SecretScrubbingSinkTests {
         // template's own text, which is immutable on a LogEvent. It is also the shape a hurried
         // diagnostic takes, because interpolation is what a keyboard does by default.
 #pragma warning disable CA2254 // The literal template is the point of this test.
-        logger.Warning($"could not parse Host=db;Password=Tr0ub4dor;Pooling=true");
+        logger.Warning("could not parse Host=db;Password=Tr0ub4dor;Pooling=true");
 #pragma warning restore CA2254
 
         var rendered = sink.Rendered();
@@ -113,7 +113,7 @@ public class SecretScrubbingSinkTests {
 
         Exception thrown;
         try {
-            throw new InvalidOperationException($"connect failed: redis://default:9dK2mQ7xZ@cache-0:6379");
+            throw new InvalidOperationException("connect failed: redis://default:9dK2mQ7xZ@cache-0:6379");
         } catch (InvalidOperationException e) {
             thrown = e;
         }
@@ -243,7 +243,7 @@ public class SecretScrubbingSinkTests {
         var measurements = new List<(string Rule, long Value)>();
 
         using var listener = new MeterListener();
-        listener.InstrumentPublished = (instrument, l) => {
+        listener.InstrumentPublished = static (instrument, l) => {
             if (instrument.Meter.Name == SecretScrubbingSink.MeterName
                 && instrument.Name == SecretScrubbingSink.CounterName) {
                 l.EnableMeasurementEvents(instrument);
@@ -251,7 +251,7 @@ public class SecretScrubbingSinkTests {
         };
 
         listener.SetMeasurementEventCallback<long>((_, value, tags, _) => {
-                var rule = tags.ToArray().Single(x => x.Key == "rule").Value?.ToString() ?? "";
+                var rule = tags.ToArray().Single(static x => x.Key == "rule").Value?.ToString() ?? "";
                 measurements.Add((rule, value));
             }
         );
@@ -263,7 +263,6 @@ public class SecretScrubbingSinkTests {
             logger.Information("token {Token}", Jwt);
         }
 
-        listener.Dispose();
 
         // ⚠ Without this the control is a redactor and not a canary: the leak is stopped and nobody
         // is told, so the code that produced it keeps producing it.

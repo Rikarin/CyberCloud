@@ -76,7 +76,7 @@ public static class IdentityHostServices {
         // one is a host change, and TryAdd means it wins without touching this line.
         services.TryAddSingleton<ILockoutCounter, InMemoryLockoutCounter>();
 
-        services.TryAddSingleton<SignInOptions>(_ => SignInOptions.Default);
+        services.TryAddSingleton(static _ => SignInOptions.Default);
         services.TryAddSingleton<SignInService>();
 
         // ⚠ Still UnavailableTotpSecrets — no vault is wired anywhere in this repository, so every
@@ -113,7 +113,7 @@ public static class IdentityHostServices {
         // CyberCloud.ServiceDefaults.RateLimiting so the window arithmetic is written once; what is
         // this host's is the buckets (IdentityRateLimits) and the 429 they answer. TryAdd, so a test
         // can hand the limiter counters over a clock it drives.
-        if (services.Any(x => x.ServiceType == typeof(IConnectionMultiplexer))) {
+        if (services.Any(static x => x.ServiceType == typeof(IConnectionMultiplexer))) {
             services.TryAddSingleton<IRateLimitCounters, RedisRateLimitCounters>();
         } else {
             services.TryAddSingleton<IRateLimitCounters, InMemoryRateLimitCounters>();
@@ -128,7 +128,11 @@ public static class IdentityHostServices {
         // `options` bound above, so a registration made through IdentityComposition's configure seam
         // is seen. A bad entry throws when the middleware is constructed, which is start-up.
         services.AddOptions<ForwardedHeadersOptions>()
-            .PostConfigure<IOptions<IdentityHostOptions>>((forwarded, identity) => TrustedProxies.Apply(forwarded, identity.Value));
+            .PostConfigure<IOptions<IdentityHostOptions>>(static (forwarded, identity) => TrustedProxies.Apply(
+                    forwarded,
+                    identity.Value
+                )
+            );
 
         // ⚠ The data-protection key ring follows the signing keys onto disk when a development key
         // directory is configured, and for the same reason: it protects the session cookie and the
@@ -137,9 +141,12 @@ public static class IdentityHostServices {
         // refuses the directory outside Development, so this configure cannot run there.
         services.AddDataProtection();
         services.AddOptions<KeyManagementOptions>()
-            .Configure<DevelopmentKeyFile, ILoggerFactory>((keys, file, loggers) => {
+            .Configure<DevelopmentKeyFile, ILoggerFactory>(static (keys, file, loggers) => {
                     if (file.IsConfigured) {
-                        keys.XmlRepository = new FileSystemXmlRepository(new DirectoryInfo(file.DataProtectionDirectory), loggers);
+                        keys.XmlRepository = new FileSystemXmlRepository(
+                            new DirectoryInfo(file.DataProtectionDirectory),
+                            loggers
+                        );
                     }
                 }
             );

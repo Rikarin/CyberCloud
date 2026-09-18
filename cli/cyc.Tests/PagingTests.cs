@@ -31,8 +31,8 @@ public sealed class PagingTests {
         // ⚠ The wire names, sigil and all. The flag is `--skip-token` and the parameter is
         // `$skipToken`; a host deriving one from the other would be re-deriving a convention the
         // emitter owns.
-        list.Flags.Single(x => x.Name == "--top").QueryParameter.ShouldBe("$top");
-        list.Flags.Single(x => x.Name == "--skip-token").QueryParameter.ShouldBe("$skipToken");
+        list.Flags.Single(static x => x.Name == "--top").QueryParameter.ShouldBe("$top");
+        list.Flags.Single(static x => x.Name == "--skip-token").QueryParameter.ShouldBe("$skipToken");
 
         // ⚠ NOT `--api-version`. Every operation declares it, so reading the collection's parameters
         // emitted a required verb flag shadowing the global one of that name — the verb would have
@@ -48,7 +48,7 @@ public sealed class PagingTests {
 
     [Fact]
     public async Task PagingFlagsAreSentAsQueryParameters() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, """{"value":[]}"""));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, """{"value":[]}"""));
         using var host = TestHost.Create(transport);
 
         var code = await host.RunAsync(
@@ -83,7 +83,7 @@ public sealed class PagingTests {
 
     [Fact]
     public async Task APagingFlagThatWasNotTypedIsNotSent() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, """{"value":[]}"""));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, """{"value":[]}"""));
         using var host = TestHost.Create(transport);
 
         await host.RunAsync(
@@ -108,7 +108,7 @@ public sealed class PagingTests {
 
     [Fact]
     public async Task OnePageWithMoreBehindItSaysSoOnStderr() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(
                 HttpStatusCode.OK,
                 """{"value":[{"name":"w1"}],"nextLink":"https://api.cybercloud.io/next?api-version=2026-08-01"}"""
             )
@@ -144,7 +144,7 @@ public sealed class PagingTests {
 
     [Fact]
     public async Task OneCompletePageSaysNothing() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(
                 HttpStatusCode.OK,
                 """{"value":[{"name":"w1"}]}"""
             )
@@ -170,7 +170,7 @@ public sealed class PagingTests {
 
     [Fact]
     public async Task AllFollowsNextLinkToTheEndAndPrintsOneList() {
-        var transport = new ScriptedTransport((_, index) => index switch {
+        var transport = new ScriptedTransport(static (_, index) => index switch {
                 0 => Responses.Json(
                     HttpStatusCode.OK,
                     """{"value":[{"name":"w1"}],"nextLink":"https://api.cybercloud.io/p2?api-version=2026-08-01&$skipToken=w1"}"""
@@ -212,7 +212,7 @@ public sealed class PagingTests {
 
         printed.RootElement.GetProperty("value")
             .EnumerateArray()
-            .Select(x => x.GetProperty("name").GetString())
+            .Select(static x => x.GetProperty("name").GetString())
             .ShouldBe(["w1", "w2", "w3"]);
 
         // ⚠ No nextLink on the result, because there is no next page. Echoing the last one would
@@ -222,7 +222,7 @@ public sealed class PagingTests {
 
     [Fact]
     public async Task AFailureOnALaterPageIsReportedRatherThanTruncatingTheList() {
-        var transport = new ScriptedTransport((_, index) => index == 0
+        var transport = new ScriptedTransport(static (_, index) => index == 0
                 ? Responses.Json(
                     HttpStatusCode.OK,
                     """{"value":[{"name":"w1"}],"nextLink":"https://api.cybercloud.io/p2?api-version=2026-08-01"}"""
@@ -255,7 +255,7 @@ public sealed class PagingTests {
 
     [Fact]
     public async Task ANestedTypeCanBeAddressedAtAll() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
         using var host = TestHost.Create(transport);
 
         // ⚠ THE REGRESSION FOR A HARD-CODED TABLE OF FOUR. `ResourceVerb` filled placeholders from a
@@ -290,7 +290,7 @@ public sealed class PagingTests {
 
     [Fact]
     public async Task ANestedTypesListAddressesItsParentToo() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, """{"value":[]}"""));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, """{"value":[]}"""));
         using var host = TestHost.Create(transport);
 
         var code = await host.RunAsync(
@@ -335,7 +335,7 @@ public sealed class PagingTests {
 public sealed class ScopeCommandTests {
     [Fact]
     public async Task ASubscriptionIsCreatedAtTheAddressTheFlagNames() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(
                 HttpStatusCode.Created,
                 """{"id":"/tenants/t/subscriptions/s1","name":"Platform","type":"CyberCloud.Resources/subscriptions"}"""
             )
@@ -376,7 +376,7 @@ public sealed class ScopeCommandTests {
 
     [Fact]
     public async Task AScopeCreateWithoutANameIsRefusedRatherThanTakingTheProfiles() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.Created, "{}"));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.Created, "{}"));
 
         using var host = TestHost.Create(
             transport,
@@ -403,7 +403,7 @@ public sealed class ScopeCommandTests {
 
     [Fact]
     public async Task AResourceGroupIsAddressedThroughItsSubscription() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
         using var host = TestHost.Create(transport);
 
         var code = await host.RunAsync(
@@ -431,7 +431,7 @@ public sealed class ScopeCommandTests {
 
     [Fact]
     public async Task TheTenantCanBeReadFromTheProfileAndNotCreated() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
         using var host = TestHost.Create(transport, config: "[default]\ntenant = t\n");
 
         (await host.RunAsync("scope", "tenant", "show", "--output", "none")).ShouldBe((int)ExitCode.Ok);
@@ -444,8 +444,11 @@ public sealed class ScopeCommandTests {
     }
 
     /// <summary>
-    ///     ⚠ <b><c>cyc scope subscription list</c> and <c>cyc scope resource-group list</c> page
-    ///     the two scope collections from the profile's context and nothing else.</b>
+    ///     ⚠
+    ///     <b>
+    ///         <c>cyc scope subscription list</c> and <c>cyc scope resource-group list</c> page
+    ///         the two scope collections from the profile's context and nothing else.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     The collection path ends on the parent, so the verb names no scope of its own: the
@@ -456,7 +459,7 @@ public sealed class ScopeCommandTests {
     /// </remarks>
     [Fact]
     public async Task TheScopeCollectionsAreListedFromTheProfileAndPaged() {
-        var transport = new ScriptedTransport((_, index) => index switch {
+        var transport = new ScriptedTransport(static (_, index) => index switch {
                 0 => Responses.Json(
                     HttpStatusCode.OK,
                     """{"value":[{"id":"/tenants/t/subscriptions/s1","name":"One","type":"CyberCloud.Resources/subscriptions"}],"nextLink":"https://api.cybercloud.io/tenants/t/subscriptions?api-version=2026-08-01&$top=1&$skipToken=s1"}"""
@@ -479,11 +482,13 @@ public sealed class ScopeCommandTests {
         transport.Requests[0].Uri.Query.ShouldContain("%24top=1");
         // ⚠ The second request is the nextLink verbatim — the host follows the URL it was handed
         // and reassembles nothing, which is why the continuation arrives unencoded here.
-        transport.Requests[1].Uri.PathAndQuery.ShouldBe("/tenants/t/subscriptions?api-version=2026-08-01&$top=1&$skipToken=s1");
+        transport.Requests[1].Uri.PathAndQuery.ShouldBe(
+            "/tenants/t/subscriptions?api-version=2026-08-01&$top=1&$skipToken=s1"
+        );
         host.Stdout.ShouldContain("\"One\"");
         host.Stdout.ShouldContain("\"Two\"");
 
-        var groups = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, """{"value":[]}"""));
+        var groups = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, """{"value":[]}"""));
         using var groupHost = TestHost.Create(groups, config: "[default]\ntenant = t\nsubscription = s\n");
 
         (await groupHost.RunAsync("scope", "resource-group", "list", "--output", "none")).ShouldBe((int)ExitCode.Ok);

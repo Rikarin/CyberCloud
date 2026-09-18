@@ -111,7 +111,7 @@ public sealed class ScriptedSmtpServer : IAsyncDisposable {
             return;
         }
 
-        var reader = new StreamReader(stream, Encoding.ASCII, false, 1024, leaveOpen: true);
+        var reader = new StreamReader(stream, Encoding.ASCII, false, 1024, true);
         await WriteAsync(stream, Greeting, ct);
 
         while (await reader.ReadLineAsync(ct) is { } line) {
@@ -143,13 +143,13 @@ public sealed class ScriptedSmtpServer : IAsyncDisposable {
 
                 case "STARTTLS":
                     await WriteAsync(stream, "220 2.0.0 Ready to start TLS", ct);
-                    var tls = new SslStream(stream, leaveInnerStreamOpen: false);
+                    var tls = new SslStream(stream, false);
                     using (var certificate = SelfSigned()) {
                         await tls.AuthenticateAsServerAsync(certificate, false, false);
                     }
 
                     stream = tls;
-                    reader = new StreamReader(stream, Encoding.ASCII, false, 1024, leaveOpen: true);
+                    reader = new(stream, Encoding.ASCII, false, 1024, true);
                     break;
 
                 case "AUTH":

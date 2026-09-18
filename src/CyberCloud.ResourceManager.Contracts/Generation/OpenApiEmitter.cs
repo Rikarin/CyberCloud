@@ -81,6 +81,7 @@ public static class OpenApiEmitter {
     const string ErrorResponseSchema = "ErrorResponse";
     const string ErrorSchema = "Error";
     const string ErrorCodeSchema = "ErrorCode";
+
     /// <summary>The three components <c>GET /operations/{operationId}</c> answers with.</summary>
     /// <remarks>
     ///     ⚠ Public for the same reason <see cref="ScopeSchema" /> is: <see cref="TypeScriptEmitter" />
@@ -126,8 +127,11 @@ public static class OpenApiEmitter {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Every type's schema <c>allOf</c>s this and repeats its five members, and both
-    ///         halves are needed — issue #85.</b> Until that issue the document referenced the write
+    ///         ⚠
+    ///         <b>
+    ///             Every type's schema <c>allOf</c>s this and repeats its five members, and both
+    ///             halves are needed — issue #85.
+    ///         </b> Until that issue the document referenced the write
     ///         body as every <c>GET</c> <c>200</c> and every list element, and the write body said
     ///         <c>additionalProperties: false</c> over <c>location</c>, <c>properties</c> and
     ///         <c>tags</c>, so a client validating what <c>ResponseBodies.Resource</c> serves rejected
@@ -137,8 +141,11 @@ public static class OpenApiEmitter {
     ///         only the <c>properties</c> beside it and never a subschema's.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>One schema in both directions, with <c>readOnly</c> on the five, rather than a
-    ///         read schema per type — and the compatibility gate is why.</b> A separate
+    ///         ⚠
+    ///         <b>
+    ///             One schema in both directions, with <c>readOnly</c> on the five, rather than a
+    ///             read schema per type — and the compatibility gate is why.
+    ///         </b> A separate
     ///         <c>{Type}.Resource</c> pointed at from the <c>200</c> would move the <c>$ref</c> the
     ///         published document already carries there, and <see cref="OpenApiCompatibility" />
     ///         reports a changed scalar as breaking whatever it was changed to. Adding properties,
@@ -148,8 +155,11 @@ public static class OpenApiEmitter {
     ///         <c>type</c> are <c>readOnly</c>, used for the <c>PUT</c> body and the <c>200</c> alike.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>None of the five is <c>required</c>, although a read always carries all five,
-    ///         and <c>x-cybercloud-read-required</c> is where that fact goes instead.</b> The same
+    ///         ⚠
+    ///         <b>
+    ///             None of the five is <c>required</c>, although a read always carries all five,
+    ///             and <c>x-cybercloud-read-required</c> is where that fact goes instead.
+    ///         </b> The same
     ///         schema validates a <c>PUT</c>, and this platform refuses a read-only member on a write
     ///         rather than ignoring it — docs/plan/08 § The write path, end to end — whereas
     ///         OpenAPI 3.1.1 § Validating readOnly and writeOnly makes "required and read-only" work
@@ -323,7 +333,7 @@ public static class OpenApiEmitter {
         var schemas = EnvelopeSchemas();
         var serving = 0;
 
-        foreach (var type in registry.Types.OrderBy(x => x.Type.ToString(), StringComparer.Ordinal)) {
+        foreach (var type in registry.Types.OrderBy(static x => x.Type.ToString(), StringComparer.Ordinal)) {
             var schema = type.SchemaFor(version);
             if (schema.TryGetError(out _)) {
                 // This type did not exist at this date. Not an error — see ApiVersionsOf.
@@ -357,7 +367,7 @@ public static class OpenApiEmitter {
             schemas[collectionComponent] = CollectionSchema(type, component, collectionComponent);
             paths[CollectionPathOf(type.Type)] = CollectionPathItem(type, collectionComponent, retiresOn);
 
-            foreach (var action in type.Actions.OrderBy(x => x.Name, StringComparer.Ordinal)) {
+            foreach (var action in type.Actions.OrderBy(static x => x.Name, StringComparer.Ordinal)) {
                 // ⚠ An action's request and response are components rather than inline schemas, for
                 // the reason every other body is one: an SDK generator names a model after the
                 // component key, and an inline schema gets an invented name that changes when the
@@ -480,15 +490,15 @@ public static class OpenApiEmitter {
         }
 
         var namespaces = new JsonArray();
-        foreach (var declared in registry.Namespaces.OrderBy(x => x, StringComparer.Ordinal)) {
+        foreach (var declared in registry.Namespaces.OrderBy(static x => x, StringComparer.Ordinal)) {
             namespaces.Add(declared);
         }
 
         var types = new JsonArray();
-        foreach (var type in registry.Types.OrderBy(x => x.Type.ToString(), StringComparer.Ordinal)) {
+        foreach (var type in registry.Types.OrderBy(static x => x.Type.ToString(), StringComparer.Ordinal)) {
             var declaredVersions = new JsonArray();
-            foreach (var version in type.ApiVersions.Select(x => x.Version.Value)
-                         .OrderBy(x => x, StringComparer.Ordinal)) {
+            foreach (var version in type.ApiVersions.Select(static x => x.Version.Value)
+                         .OrderBy(static x => x, StringComparer.Ordinal)) {
                 declaredVersions.Add(version);
             }
 
@@ -772,8 +782,8 @@ public static class OpenApiEmitter {
         var meters = new JsonArray();
 
         foreach (var meter in type.Meters
-                     .OrderBy(x => x.Meter.ToString(), StringComparer.Ordinal)
-                     .ThenBy(x => x.AmountPointer, StringComparer.Ordinal)) {
+                     .OrderBy(static x => x.Meter.ToString(), StringComparer.Ordinal)
+                     .ThenBy(static x => x.AmountPointer, StringComparer.Ordinal)) {
             var reads = new JsonArray();
             foreach (var pointer in meter.Reads) {
                 reads.Add(pointer);
@@ -884,8 +894,8 @@ public static class OpenApiEmitter {
                 + type.Type
                 + ". ⚠ The page holds what the caller may read: a "
                 + "listing runs a permission check per member (docs/plan/07 § The enforcement seam), "
-                + "so a short or empty page means \"that is what you may see\" and never \"that is "
-                + "all there is\". Stop when nextLink is absent, never when a page is smaller than "
+                + """so a short or empty page means "that is what you may see" and never "that is """
+                + """all there is". Stop when nextLink is absent, never when a page is smaller than """
                 + "you asked for.",
             ["properties"] = new JsonObject {
                 ["nextLink"] = new JsonObject {
@@ -1238,7 +1248,7 @@ public static class OpenApiEmitter {
                 "Lists the subscriptions in the tenant the token names, one page at a time. The "
                 + "page holds the subscriptions the caller may read — any role on a subscription "
                 + "is enough, and no permission on the tenant itself is needed — so a short or "
-                + "empty page means \"that is what you may see\" and never \"that is all there is\". "
+                + """empty page means "that is what you may see" and never "that is all there is". """
                 + "Stop when nextLink is absent."
             ),
             [ResourceGroupCollectionPathTemplate] = ScopeCollectionPathItem(
@@ -1271,16 +1281,22 @@ public static class OpenApiEmitter {
     /// <param name="description">The <c>GET</c>'s description.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>No <c>put</c>, no <c>patch</c>, no <c>delete</c>, and their absence is a
-    ///         decision</b>: a scope is created by <c>PUT</c> at its own address, so a write here
+    ///         ⚠
+    ///         <b>
+    ///             No <c>put</c>, no <c>patch</c>, no <c>delete</c>, and their absence is a
+    ///             decision
+    ///         </b>: a scope is created by <c>PUT</c> at its own address, so a write here
     ///         would be a second way to create one whose id the platform chose — which
     ///         <c>TenantCreateRequest.TenantId</c>'s remarks say makes every retry a new scope. The
     ///         gateway answers <c>400</c> with the item address, and this document must not claim
     ///         otherwise.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Both <see cref="ScopeExtension" /> and <see cref="ScopeCollectionExtension" />,
-    ///         and the pair is what keeps this from reading as a fourth scope</b> — the remarks on
+    ///         ⚠
+    ///         <b>
+    ///             Both <see cref="ScopeExtension" /> and <see cref="ScopeCollectionExtension" />,
+    ///             and the pair is what keeps this from reading as a fourth scope
+    ///         </b> — the remarks on
     ///         the second constant. The paging pair is the same two parameters
     ///         <see cref="CollectionParameters" /> writes for a resource collection, spelled once
     ///         there and taken from it here, so <c>cyc</c>'s <c>--top</c> and <c>--skip-token</c>
@@ -1440,8 +1456,8 @@ public static class OpenApiEmitter {
                 ["description"] =
                     "A tenant, a management group, a subscription or a resource group, as the API "
                     + "renders it. ⚠ There is no provisioningState: a scope is one grain activation and "
-                    + "converges before the call returns, which is the visible half of \"a scope is "
-                    + "not a resource\".",
+                    + """converges before the call returns, which is the visible half of "a scope is """
+                    + """not a resource".""",
                 ["properties"] = new JsonObject {
                     ["id"] = new JsonObject {
                         ["type"] = "string", ["description"] = "The scope's own path — docs/plan/06 § Identifiers."
@@ -1451,7 +1467,7 @@ public static class OpenApiEmitter {
                         ["description"] =
                             "The region: a tenant's home region or a group's default. ⚠ Absent rather "
                             + "than empty where the scope has none, so a client tests for the "
-                            + "property instead of comparing against \"\"."
+                            + """property instead of comparing against ""."""
                     },
                     [ScopeBodyProperties.ManagementGroup] = new JsonObject {
                         ["type"] = "string",
@@ -1488,8 +1504,8 @@ public static class OpenApiEmitter {
                     "One page of scopes — a tenant's subscriptions, a tenant's management groups or a "
                     + "subscription's resource groups. ⚠ The page holds what the caller may read: a listing runs a "
                     + "permission check per member (docs/plan/07 § The enforcement seam), so a "
-                    + "short or empty page means \"that is what you may see\" and never \"that is "
-                    + "all there is\". Stop when nextLink is absent, never when a page is smaller "
+                    + """short or empty page means "that is what you may see" and never "that is """
+                    + """all there is". Stop when nextLink is absent, never when a page is smaller """
                     + "than you asked for.",
                 ["properties"] = new JsonObject {
                     ["nextLink"] = new JsonObject {
@@ -1660,8 +1676,11 @@ public static class OpenApiEmitter {
     ///         wrote does not have to poll to learn it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A long-running action's <c>202</c> carries whatever the read after the start
-    ///         returned, and that read can fail.</b> <c>ResourceManagerService.ActionAsync</c>
+    ///         ⚠
+    ///         <b>
+    ///             A long-running action's <c>202</c> carries whatever the read after the start
+    ///             returned, and that read can fail.
+    ///         </b> <c>ResourceManagerService.ActionAsync</c>
     ///         starts the operation, then reads the resource, and serves an empty snapshot when the
     ///         read does not succeed — a body with no <c>location</c>, which this schema requires,
     ///         and a <c>provisioningState</c> of <c>Unknown</c>, which its enum omits. The
@@ -1815,9 +1834,9 @@ public static class OpenApiEmitter {
     static JsonObject EnvelopeProperties() {
         var states = new JsonArray();
         foreach (var state in Enum.GetValues<ProvisioningState>()
-                     .Where(x => x is not ProvisioningState.Unknown)
-                     .Select(x => x.ToString())
-                     .OrderBy(x => x, StringComparer.Ordinal)) {
+                     .Where(static x => x is not ProvisioningState.Unknown)
+                     .Select(static x => x.ToString())
+                     .OrderBy(static x => x, StringComparer.Ordinal)) {
             states.Add(state);
         }
 
@@ -2009,7 +2028,7 @@ public static class OpenApiEmitter {
         var required = new JsonArray();
 
         if (byParent.TryGetValue(pointer, out var children)) {
-            foreach (var child in children.OrderBy(x => x.Name, StringComparer.Ordinal)) {
+            foreach (var child in children.OrderBy(static x => x.Name, StringComparer.Ordinal)) {
                 properties[child.Name] = PropertyAt(child, byParent, rejectsUnknown);
 
                 if (child.Required) {
@@ -2297,8 +2316,8 @@ public static class OpenApiEmitter {
             var codes = new JsonArray();
 
             foreach (var code in ErrorCode.WithStatus(status)
-                         .Select(x => x.Value)
-                         .OrderBy(x => x, StringComparer.Ordinal)) {
+                         .Select(static x => x.Value)
+                         .OrderBy(static x => x, StringComparer.Ordinal)) {
                 codes.Add(code);
             }
 
@@ -2365,20 +2384,20 @@ public static class OpenApiEmitter {
     /// </summary>
     static JsonObject EnvelopeSchemas() {
         var readRequired = new JsonArray();
-        foreach (var member in EnvelopeMembers.OrderBy(x => x, StringComparer.Ordinal)) {
+        foreach (var member in EnvelopeMembers.OrderBy(static x => x, StringComparer.Ordinal)) {
             readRequired.Add(member);
         }
 
         var codes = new JsonArray();
-        foreach (var code in ErrorCode.All.Select(x => x.Value).OrderBy(x => x, StringComparer.Ordinal)) {
+        foreach (var code in ErrorCode.All.Select(static x => x.Value).OrderBy(static x => x, StringComparer.Ordinal)) {
             codes.Add(code);
         }
 
         var states = new JsonArray();
         foreach (var state in Enum.GetValues<OperationState>()
-                     .Where(x => x is not OperationState.Unknown)
-                     .Select(x => x.ToString())
-                     .OrderBy(x => x, StringComparer.Ordinal)) {
+                     .Where(static x => x is not OperationState.Unknown)
+                     .Select(static x => x.ToString())
+                     .OrderBy(static x => x, StringComparer.Ordinal)) {
             states.Add(state);
         }
 
@@ -2388,7 +2407,7 @@ public static class OpenApiEmitter {
         // switches on the code needs it and the compatibility diff treats a hint as prose — a code's
         // status moving is caught by the response list changing, which is contract.
         var statuses = new JsonObject();
-        foreach (var code in ErrorCode.All.OrderBy(x => x.Value, StringComparer.Ordinal)) {
+        foreach (var code in ErrorCode.All.OrderBy(static x => x.Value, StringComparer.Ordinal)) {
             statuses[code.Value] = code.HttpStatus;
         }
 
@@ -2502,7 +2521,13 @@ public static class OpenApiEmitter {
                 // rather than the keyword for the compatibility diff's reason: a name added to a
                 // published `required` is what that diff calls required-added, whatever the truth
                 // of it. See ResourceEnvelopeSchema's remarks.
-                [ReadRequiredExtension] = new JsonArray { "id", "percentComplete", "progress", "startTime", "status" }
+                [ReadRequiredExtension] = new JsonArray {
+                    "id",
+                    "percentComplete",
+                    "progress",
+                    "startTime",
+                    "status"
+                }
             },
             [ResourceEnvelopeSchema] = new JsonObject {
                 ["type"] = "object",
@@ -2560,7 +2585,7 @@ public static class OpenApiEmitter {
     static JsonObject Sorted(JsonObject value) {
         var sorted = new JsonObject();
 
-        foreach (var member in value.ToList().OrderBy(x => x.Key, StringComparer.Ordinal)) {
+        foreach (var member in value.ToList().OrderBy(static x => x.Key, StringComparer.Ordinal)) {
             // Detached from the old parent first: a JsonNode belongs to one parent and re-adding an
             // attached node throws.
             value.Remove(member.Key);

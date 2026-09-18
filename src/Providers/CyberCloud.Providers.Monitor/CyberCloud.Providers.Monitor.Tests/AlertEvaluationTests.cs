@@ -1,5 +1,4 @@
 using CyberCloud.Providers.Monitor.Alerting;
-using System.Collections.Immutable;
 
 namespace CyberCloud.Providers.Monitor.Tests;
 
@@ -10,22 +9,35 @@ namespace CyberCloud.Providers.Monitor.Tests;
 public sealed class AlertEvaluationTests {
     static readonly DateTimeOffset T0 = new(2026, 9, 15, 14, 0, 0, TimeSpan.Zero);
 
-    static AlertRuleSpec Rule(TimeSpan? @for = null, AlertOperator op = AlertOperator.GreaterThan, double threshold = 5) =>
+    static AlertRuleSpec Rule(
+        TimeSpan? @for = null,
+        AlertOperator op = AlertOperator.GreaterThan,
+        double threshold = 5
+    ) =>
         new() {
             RuleId = Guid.NewGuid(),
             Name = "errors-high",
             Workspace = "prod",
             Enabled = true,
             Severity = AlertSeverity.Warning,
-            Condition = new() { Signal = AlertSignal.Metrics, Query = "q", Operator = op, Threshold = threshold, Lookback = TimeSpan.FromMinutes(5) },
+            Condition = new() {
+                Signal = AlertSignal.Metrics,
+                Query = "q",
+                Operator = op,
+                Threshold = threshold,
+                Lookback = TimeSpan.FromMinutes(5)
+            },
             Interval = TimeSpan.FromMinutes(1),
             For = @for ?? TimeSpan.Zero
         };
 
     static Result<AlertQueryResult> Value(params double[] values) =>
-        Result<AlertQueryResult>.Success(new() { Samples = [.. values.Select(x => new AlertSample { Labels = "{}", Value = x })] });
+        Result<AlertQueryResult>.Success(
+            new() { Samples = [.. values.Select(x => new AlertSample { Labels = "{}", Value = x })] }
+        );
 
-    static Result<AlertQueryResult> Down() => Result<AlertQueryResult>.Failure(ErrorCode.InternalError, "the store is down");
+    static Result<AlertQueryResult> Down() =>
+        Result<AlertQueryResult>.Failure(ErrorCode.InternalError, "the store is down");
 
     [Fact]
     public void AZeroForFiresOnTheFirstEvaluationThatMeetsTheCondition() {
@@ -39,7 +51,7 @@ public sealed class AlertEvaluationTests {
 
     [Fact]
     public void AForHoldsTheRulePendingUntilTheConditionHasHeldThatLong() {
-        var rule = Rule(@for: TimeSpan.FromMinutes(2));
+        var rule = Rule(TimeSpan.FromMinutes(2));
 
         var first = AlertEvaluation.Decide(rule, AlertRuleState.Ok, null, Value(7), T0);
         first.State.ShouldBe(AlertRuleState.Pending);
@@ -59,7 +71,7 @@ public sealed class AlertEvaluationTests {
 
     [Fact]
     public void AConditionThatStopsHoldingWhilePendingReturnsToOkWithoutATransition() {
-        var rule = Rule(@for: TimeSpan.FromMinutes(2));
+        var rule = Rule(TimeSpan.FromMinutes(2));
 
         var decision = AlertEvaluation.Decide(rule, AlertRuleState.Pending, T0, Value(1), T0.AddMinutes(1));
 
@@ -96,7 +108,7 @@ public sealed class AlertEvaluationTests {
         // an outage of the thing monitored. Every state stays where it was, with its PendingSince.
         var since = state == AlertRuleState.Pending ? T0 : (DateTimeOffset?)null;
 
-        var decision = AlertEvaluation.Decide(Rule(@for: TimeSpan.FromMinutes(2)), state, since, Down(), T0.AddHours(1));
+        var decision = AlertEvaluation.Decide(Rule(TimeSpan.FromMinutes(2)), state, since, Down(), T0.AddHours(1));
 
         decision.State.ShouldBe(state);
         decision.PendingSince.ShouldBe(since);
@@ -119,7 +131,13 @@ public sealed class AlertEvaluationTests {
         above.Transition.ShouldBe(AlertTransition.Fired);
         above.Value.ShouldBe(9, "a greater-than names the largest offending value, not the first");
 
-        var below = AlertEvaluation.Decide(Rule(op: AlertOperator.LessThan, threshold: 5), AlertRuleState.Ok, null, Value(7, 2, 4), T0);
+        var below = AlertEvaluation.Decide(
+            Rule(op: AlertOperator.LessThan, threshold: 5),
+            AlertRuleState.Ok,
+            null,
+            Value(7, 2, 4),
+            T0
+        );
         below.Transition.ShouldBe(AlertTransition.Fired);
         below.Value.ShouldBe(2, "a less-than names the smallest offending value");
     }

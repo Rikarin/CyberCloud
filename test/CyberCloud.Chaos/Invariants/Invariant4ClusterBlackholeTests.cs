@@ -4,8 +4,11 @@ using System.Diagnostics;
 namespace CyberCloud.Chaos.Invariants;
 
 /// <summary>
-///     docs/plan/23 § The chaos invariants, 4: <i>blackhole a managed cluster → its resources go
-///     Degraded, reconciles suspend, no operations fail, clean resumption on restore.</i>
+///     docs/plan/23 § The chaos invariants, 4:
+///     <i>
+///         blackhole a managed cluster → its resources go
+///         Degraded, reconciles suspend, no operations fail, clean resumption on restore.
+///     </i>
 ///     docs/plan/09 § Testing the fabric asks for the same run in the same words.
 /// </summary>
 /// <remarks>
@@ -51,7 +54,12 @@ public sealed class Invariant4ClusterBlackholeTests(ChaosTopology topology) {
 
         // ── Before: one widget converged, which is the cluster answering. ─────────────────────
         var first = (await topology.PutWidgetAsync(world, "bh-first", "v1", token)).GetValueOrThrow();
-        (await topology.DriveUntilTerminalAsync(world.Tenant, first.OperationId, ConvergeBudget, token)).Last?.State.ShouldBe(OperationState.Succeeded);
+        (await topology.DriveUntilTerminalAsync(
+                world.Tenant,
+                first.OperationId,
+                ConvergeBudget,
+                token
+            )).Last?.State.ShouldBe(OperationState.Succeeded);
 
         // ── The blackhole, with a create and an update in flight. ─────────────────────────────
         TimeSpan? degradedAfter = null;
@@ -157,7 +165,9 @@ public sealed class Invariant4ClusterBlackholeTests(ChaosTopology topology) {
             var (last, _) = await topology.DriveUntilTerminalAsync(world.Tenant, operationId, ConvergeBudget, token);
 
             if (last?.State != OperationState.Succeeded) {
-                resumed.Add($"{name} → {last?.State.ToString() ?? "never answered"}: {last?.Error?.Message ?? last?.LastProgress?.Detail}");
+                resumed.Add(
+                    $"{name} → {last?.State.ToString() ?? "never answered"}: {last?.Error?.Message ?? last?.LastProgress?.Detail}"
+                );
             }
         }
 
@@ -167,12 +177,20 @@ public sealed class Invariant4ClusterBlackholeTests(ChaosTopology topology) {
 
         // ── The object deleted behind the reconciler's back comes back on the next write. ─────
         await topology.DeleteConfigMapBehindTheReconcilersBackAsync(world, "bh-first", token);
-        (await topology.ConfigMapExistsAsync(world, "bh-first", token)).ShouldBeFalse("the raw delete did not remove the ConfigMap.");
+        (await topology.ConfigMapExistsAsync(world, "bh-first", token)).ShouldBeFalse(
+            "the raw delete did not remove the ConfigMap."
+        );
 
         var repair = (await topology.PutWidgetAsync(world, "bh-first", "v3", token)).GetValueOrThrow();
-        var (repaired, _) = await topology.DriveUntilTerminalAsync(world.Tenant, repair.OperationId, ConvergeBudget, token);
+        var (repaired, _) = await topology.DriveUntilTerminalAsync(
+            world.Tenant,
+            repair.OperationId,
+            ConvergeBudget,
+            token
+        );
         var repairedMessage = await topology.ConfigMapMessageAsync(world, "bh-first", token);
-        var driftCorrected = repaired?.State == OperationState.Succeeded && string.Equals(repairedMessage, "v3", StringComparison.Ordinal);
+        var driftCorrected = repaired?.State == OperationState.Succeeded
+            && string.Equals(repairedMessage, "v3", StringComparison.Ordinal);
 
         var numbers = new Dictionary<string, double>(StringComparer.Ordinal) {
             ["healthWindowSeconds"] = ChaosSiloConfigurator.HealthStalenessWindow.TotalSeconds,
@@ -192,7 +210,7 @@ public sealed class Invariant4ClusterBlackholeTests(ChaosTopology topology) {
         };
 
         var detail =
-            $"k3s stopped with a create and an update in flight: the connection went Degraded after "
+            "k3s stopped with a create and an update in flight: the connection went Degraded after "
             + $"{(degradedAfter is { } d2 ? $"{d2.TotalSeconds:F1} s" : "NEVER")} (window {ChaosSiloConfigurator.HealthStalenessWindow.TotalSeconds:F0} s), "
             + $"{retryingPasses} of {passesDriven} passes were retrying before the window closed and {suspendedPasses} were suspended after, {failedOperations.Count} operations failed, and "
             + $"{resourceReadFailedDuringBlackhole}/{resourceReads} resource reads during the window showed Failed; after restore the API server answered "
@@ -220,9 +238,16 @@ public sealed class Invariant4ClusterBlackholeTests(ChaosTopology topology) {
             topology.Report.Violated(4, detail, numbers);
         }
 
-        degradedAfter.ShouldNotBeNull($"no pass was suspended within {DegradeBudget} of the cluster going away, so the connection never went Degraded. Last: {lastProgress}");
-        suspendedPasses.ShouldBeGreaterThan(0, "no pass was suspended after the cluster went Degraded — docs/plan/09 § Connection health: reconciles are suspended, not failed.");
-        failedOperations.ShouldBeEmpty("docs/plan/23 § The chaos invariants, 4: no operations fail. Failed: " + string.Join("; ", failedOperations));
+        degradedAfter.ShouldNotBeNull(
+            $"no pass was suspended within {DegradeBudget} of the cluster going away, so the connection never went Degraded. Last: {lastProgress}"
+        );
+        suspendedPasses.ShouldBeGreaterThan(
+            0,
+            "no pass was suspended after the cluster went Degraded — docs/plan/09 § Connection health: reconciles are suspended, not failed."
+        );
+        failedOperations.ShouldBeEmpty(
+            "docs/plan/23 § The chaos invariants, 4: no operations fail. Failed: " + string.Join("; ", failedOperations)
+        );
 
         resourceReadFailedDuringBlackhole.ShouldBe(
             0,
@@ -230,14 +255,26 @@ public sealed class Invariant4ClusterBlackholeTests(ChaosTopology topology) {
             + "resources during the blackhole answered ProvisioningState.Failed while their operations were Running and suspended — a tenant "
             + "reading the resource sees 'provisioning failed' for a network outage, which docs/plan/09 § Connection health says must not appear."
         );
-        healthyAfter.ShouldNotBeNull($"every pass was still suspended {HealthyBudget} after the cluster came back, so the connection never went Healthy again.");
+        healthyAfter.ShouldNotBeNull(
+            $"every pass was still suspended {HealthyBudget} after the cluster came back, so the connection never went Healthy again."
+        );
         resumed.ShouldBeEmpty("clean resumption: " + string.Join("; ", resumed));
-        secondPresent.ShouldBeTrue("the create that was in flight during the blackhole says Succeeded and its ConfigMap is not in the cluster.");
-        firstMessage.ShouldBe("v2", "the update that was in flight during the blackhole says Succeeded and the ConfigMap does not carry it.");
-        driftCorrected.ShouldBeTrue($"the ConfigMap deleted behind the reconciler's back was not restored: operation {repaired?.State}, message '{repairedMessage}'.");
+        secondPresent.ShouldBeTrue(
+            "the create that was in flight during the blackhole says Succeeded and its ConfigMap is not in the cluster."
+        );
+        firstMessage.ShouldBe(
+            "v2",
+            "the update that was in flight during the blackhole says Succeeded and the ConfigMap does not carry it."
+        );
+        driftCorrected.ShouldBeTrue(
+            $"the ConfigMap deleted behind the reconciler's back was not restored: operation {repaired?.State}, message '{repairedMessage}'."
+        );
     }
 
-    /// <summary>Whether the operation's last pass was suspended by a Degraded connection — the sentence docs/plan/09 § Connection health mandates.</summary>
+    /// <summary>
+    ///     Whether the operation's last pass was suspended by a Degraded connection — the sentence docs/plan/09 §
+    ///     Connection health mandates.
+    /// </summary>
     static bool IsSuspended(OperationStatus status) =>
         status.LastProgress?.Detail.Contains("Cannot reach your cluster", StringComparison.Ordinal) == true
         || string.Equals(status.LastProgress?.Step, "waiting-for-cluster", StringComparison.Ordinal);

@@ -147,8 +147,8 @@ public sealed class SecretNeverLeaksTests(OpenBaoFixture vault) {
         // Activity is still a tag the exporter would have taken had the request been sampled. A test
         // that let the default sampling decide would pass on the runs where nothing was recorded.
         using var listener = new ActivityListener {
-            ShouldListenTo = _ => true,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            ShouldListenTo = static _ => true,
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
             ActivityStopped = activity => {
                 foreach (var tag in activity.TagObjects) {
                     tags.Add($"{tag.Key}={tag.Value}");
@@ -156,6 +156,15 @@ public sealed class SecretNeverLeaksTests(OpenBaoFixture vault) {
 
                 tags.Add(activity.DisplayName);
             }
+        };
+        listener.ShouldListenTo = _ => true;
+        listener.Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData;
+        listener.ActivityStopped = activity => {
+            foreach (var tag in activity.TagObjects) {
+                tags.Add($"{tag.Key}={tag.Value}");
+            }
+
+            tags.Add(activity.DisplayName);
         };
 
         ActivitySource.AddActivityListener(listener);
@@ -204,7 +213,8 @@ public sealed class CapturingLogger : ILogger<OpenBaoSecretResolver> {
 
     /// <inheritdoc />
     public IDisposable? BeginScope<TState>(TState state)
-        where TState : notnull => null;
+        where TState : notnull =>
+        null;
 
     /// <inheritdoc />
     public bool IsEnabled(LogLevel logLevel) => true;

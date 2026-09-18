@@ -29,8 +29,11 @@ namespace CyberCloud.Tenancy.Shards;
 ///         knows about, which is the opposite of the intended blast radius.
 ///     </para>
 ///     <para>
-///         ⚠ <b>It is also the silo's <see cref="IShardMapMirror" />, and that is the one time the
-///         refresh is pulled rather than polled.</b> A tenant create records its assignment and then
+///         ⚠
+///         <b>
+///             It is also the silo's <see cref="IShardMapMirror" />, and that is the one time the
+///             refresh is pulled rather than polled.
+///         </b> A tenant create records its assignment and then
 ///         needs every silo to have it before the tenant's first durable row — a pinned tenant's
 ///         record is not the hash the un-refreshed cache would fall back to, and a silo activating
 ///         the tenant's first grain on the hash would split the tenant across two shards.

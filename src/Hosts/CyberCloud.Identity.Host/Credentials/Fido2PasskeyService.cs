@@ -59,7 +59,7 @@ public sealed class Fido2PasskeyService(IFido2 fido2, IClock clock) : IPasskeySe
                 // second credential for an account it already holds one for, rather than producing a
                 // duplicate the user then has to tell apart in a list.
                 ExcludeCredentials = [
-                    .. request.Existing.Select(x => new PublicKeyCredentialDescriptor(Decode(x.CredentialId)))
+                    .. request.Existing.Select(static x => new PublicKeyCredentialDescriptor(Decode(x.CredentialId)))
                 ],
                 AuthenticatorSelection = new() {
                     // ⚠ Required, not preferred. A resident (discoverable) credential with user
@@ -115,7 +115,7 @@ public sealed class Fido2PasskeyService(IFido2 fido2, IClock clock) : IPasskeySe
                     // IUserGrain.AddPasskeyAsync, which is single-threaded per user and therefore the
                     // only place that can answer without a race. Answering here would need a lookup
                     // this service has no grain factory for, by design — see the .csproj.
-                    IsCredentialIdUniqueToUserCallback = (_, _) => Task.FromResult(true)
+                    IsCredentialIdUniqueToUserCallback = static (_, _) => Task.FromResult(true)
                 }
             );
 
@@ -154,7 +154,7 @@ public sealed class Fido2PasskeyService(IFido2 fido2, IClock clock) : IPasskeySe
         var options = fido2.GetAssertionOptions(
             new() {
                 AllowedCredentials = [
-                    .. credentials.Select(x => new PublicKeyCredentialDescriptor(Decode(x.CredentialId)))
+                    .. credentials.Select(static x => new PublicKeyCredentialDescriptor(Decode(x.CredentialId)))
                 ],
                 UserVerification = UserVerificationRequirement.Required
             }
@@ -196,7 +196,7 @@ public sealed class Fido2PasskeyService(IFido2 fido2, IClock clock) : IPasskeySe
                     StoredSignatureCounter = credential.SignCount,
                     // The credential was looked up by its id before this call, so the handle-owns-id
                     // question is already answered by how we got here.
-                    IsUserHandleOwnerOfCredentialIdCallback = (_, _) => Task.FromResult(true)
+                    IsUserHandleOwnerOfCredentialIdCallback = static (_, _) => Task.FromResult(true)
                 }
             );
 

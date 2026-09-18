@@ -206,7 +206,7 @@ public sealed class ContainerRegistryProvider : IResourceProvider {
                 ContainerRegistries.ListCredentialsAction,
                 ActionKind.Post,
                 ContainerRegistries.ListCredentialsPermission,
-                secret: true,
+                true,
                 response: ContainerRegistries.ListCredentialsResponse,
                 // ⚠ SYNCHRONOUS WITH A HANDLER, AND THE THREE-WAY CHOICE WAS DELIBERATE. A
                 // long-running action answers 202 and drives the reconciler through the operation
@@ -221,8 +221,8 @@ public sealed class ContainerRegistryProvider : IResourceProvider {
             .Display(
                 "Container registry",
                 "Container registries",
-                shortName: ShortName,
-                summary: "A private OCI container registry on Harbor, with a web portal, an image "
+                ShortName,
+                "A private OCI container registry on Harbor, with a web portal, an image "
                 + "store and a seven-day recovery window."
             )
             .Chart(ContainerRegistries.ChartName)
@@ -252,7 +252,7 @@ public sealed class ContainerRegistryProvider : IResourceProvider {
                 ContainerRegistries.PurgePermission,
                 ContainerRegistries.PurgeProtectionPointer
             )
-            .RequiresCluster(ContainerRegistries.ClusterIdPointer)
+            .RequiresCluster()
             // ── Artifact feeds — docs/plan/13 § Artifact feeds, issue #29 ───────────────────────
             //
             // ⚠ THE SAME NAMESPACE AND NO SHARED IMPLEMENTATION, WHICH IS WHAT charts/managed/harbor
@@ -289,8 +289,8 @@ public sealed class ContainerRegistryProvider : IResourceProvider {
             .Display(
                 "Artifact feed",
                 "Artifact feeds",
-                shortName: FeedShortName,
-                summary: "A NuGet, npm or Maven package feed served by the platform's feeds host, "
+                FeedShortName,
+                "A NuGet, npm or Maven package feed served by the platform's feeds host, "
                 + "with artefacts on the platform's object storage."
             )
             .Chart(ArtifactFeeds.ChartName)
@@ -330,7 +330,7 @@ public sealed class ContainerRegistryProvider : IResourceProvider {
                 "/properties/sizing/preset",
                 "/properties/sizing/cpu"
             ],
-            body => KubeQuantity.TryParse(ContainerRegistries.Resources(body).Cpu, out var cores)
+            static body => KubeQuantity.TryParse(ContainerRegistries.Resources(body).Cpu, out var cores)
                 && KubeQuantity.TryParse(ContainerRegistries.ControlPlaneCpu, out var share)
                     ? Result<decimal>.Success(cores + ControlPlanePods(body) * share)
                     : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
@@ -345,7 +345,7 @@ public sealed class ContainerRegistryProvider : IResourceProvider {
                 "/properties/sizing/preset",
                 "/properties/sizing/memory"
             ],
-            body =>
+            static body =>
                 KubeQuantity.TryGibibytes(ContainerRegistries.Resources(body).Memory, out var gibibytes)
                 && KubeQuantity.TryGibibytes(ContainerRegistries.ControlPlaneMemory, out var share)
                     ? Result<decimal>.Success(gibibytes + ControlPlanePods(body) * share)
@@ -366,7 +366,7 @@ public sealed class ContainerRegistryProvider : IResourceProvider {
         MeterDerivation.Of(
             "storage.size + 10Gi for the metadata database + 1Gi for the job queue, in GiB",
             ["/properties/storage/size"],
-            body =>
+            static body =>
                 KubeQuantity.TryGibibytes(ContainerRegistries.StorageSize(body), out var images)
                 && KubeQuantity.TryGibibytes(ContainerRegistries.DatabaseVolumeSize, out var database)
                 && KubeQuantity.TryGibibytes(ContainerRegistries.RedisVolumeSize, out var queue)

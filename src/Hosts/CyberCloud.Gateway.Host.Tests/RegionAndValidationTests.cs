@@ -82,7 +82,7 @@ public sealed class ValidationTests {
             "PUT",
             GatewayHarness.ResourcePath(GatewayHarness.TenantA),
             gateway.Token(GatewayHarness.TenantA),
-            body: "{\"properties\":"
+            body: """{"properties":"""
         );
 
         response.Status.ShouldBe(StatusCodes.Status400BadRequest);
@@ -145,7 +145,7 @@ public sealed class ValidationTests {
             "PUT",
             GatewayHarness.ResourcePath(GatewayHarness.TenantA),
             token,
-            body: "{\"properties\":{}}"
+            body: """{"properties":{}}"""
         );
 
         write.Status.ShouldBe(StatusCodes.Status403Forbidden);

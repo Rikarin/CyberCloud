@@ -17,7 +17,7 @@ namespace CyberCloud.Cli.Tests;
 public sealed class PipelineTests {
     [Fact]
     public async Task ARestCallIsAuthenticatedCorrelatedAndVersioned() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, """{"value":[]}"""));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, """{"value":[]}"""));
         using var host = TestHost.Create(transport);
 
         var code = await host.RunAsync("rest", "--uri", "/tenants/t/subscriptions", "--output", "json");
@@ -33,7 +33,7 @@ public sealed class PipelineTests {
 
     [Fact]
     public async Task ARestWriteSendsTheBodyItWasGiven() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
         using var host = TestHost.Create(transport);
 
         var code = await host.RunAsync(
@@ -64,7 +64,7 @@ public sealed class PipelineTests {
 
     [Fact]
     public async Task AGeneratedVerbSendsOnlyTheFlagsThatWereGiven() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
         using var host = TestHost.Create(transport);
 
         await host.RunAsync(
@@ -96,7 +96,7 @@ public sealed class PipelineTests {
 
     [Fact]
     public async Task FlagsAreWrittenAtTheirJsonPointers() {
-        var transport = new ScriptedTransport((_, index) => index == 0
+        var transport = new ScriptedTransport(static (_, index) => index == 0
                 ? Responses.Accepted("https://api.cybercloud.io/operations/op-1")
                 : Responses.Json(HttpStatusCode.OK, """{"status":"Succeeded"}""")
         );
@@ -147,7 +147,7 @@ public sealed class PipelineTests {
         properties.GetProperty("enabled").GetBoolean().ShouldBeTrue();
         properties.GetProperty("allowedCidrs")
             .EnumerateArray()
-            .Select(x => x.GetString())
+            .Select(static x => x.GetString())
             .ShouldBe(["10.0.0.0/8", "10.1.0.0/16"]);
         root.GetProperty("tags").GetProperty("env").GetString().ShouldBe("prod");
         root.GetProperty("tags").GetProperty("owner").GetString().ShouldBe("platform");
@@ -156,7 +156,7 @@ public sealed class PipelineTests {
     [Fact]
     public async Task AnErrorTargetIsReportedAsTheFlagThatCarriedIt() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, _) => Responses.Error(
+            new ScriptedTransport(static (_, _) => Responses.Error(
                     HttpStatusCode.BadRequest,
                     "InvalidSku",
                     "'gold' is not a tier this subscription may use.",
@@ -190,7 +190,7 @@ public sealed class PipelineTests {
 
     [Fact]
     public async Task ARetriedRequestKeepsOneCorrelationId() {
-        var transport = new ScriptedTransport((_, index) => index == 0
+        var transport = new ScriptedTransport(static (_, index) => index == 0
                 ? Throttled()
                 : Responses.Json(HttpStatusCode.OK, "{}")
         );

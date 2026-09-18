@@ -45,12 +45,12 @@ public sealed class TelemetryAndUpdateTests {
         using var host = TestHost.Create();
         var asked = 0;
 
-        var settings = CycSettings.Resolve(host.Host.Config, host.Host.Environment, profileFlag: null);
+        var settings = CycSettings.Resolve(host.Host.Config, host.Host.Environment, null);
 
         TelemetryConsent.EnsureAsked(
             host.Host,
             settings,
-            interactive: true,
+            true,
             () => {
                 asked++;
 
@@ -65,7 +65,7 @@ public sealed class TelemetryAndUpdateTests {
         var after = CycSettings.Resolve(
             CycConfigFile.Read(Path.Combine(host.StateDirectory, "config")),
             host.Host.Environment,
-            profileFlag: null
+            null
         );
 
         TelemetryConsent.IsEnabled(after).ShouldBeTrue();
@@ -73,7 +73,7 @@ public sealed class TelemetryAndUpdateTests {
         TelemetryConsent.EnsureAsked(
             host.Host,
             after,
-            interactive: true,
+            true,
             () => {
                 asked++;
 
@@ -92,14 +92,14 @@ public sealed class TelemetryAndUpdateTests {
     [InlineData("maybe")]
     public void AnythingThatIsNotYesIsNo(string? answer) {
         using var host = TestHost.Create();
-        var settings = CycSettings.Resolve(host.Host.Config, host.Host.Environment, profileFlag: null);
+        var settings = CycSettings.Resolve(host.Host.Config, host.Host.Environment, null);
 
-        TelemetryConsent.EnsureAsked(host.Host, settings, interactive: true, () => answer);
+        TelemetryConsent.EnsureAsked(host.Host, settings, true, () => answer);
 
         var after = CycSettings.Resolve(
             CycConfigFile.Read(Path.Combine(host.StateDirectory, "config")),
             host.Host.Environment,
-            profileFlag: null
+            null
         );
 
         TelemetryConsent.IsEnabled(after).ShouldBeFalse();
@@ -127,7 +127,7 @@ public sealed class TelemetryAndUpdateTests {
         var clock = new TestClock(DateTimeOffset.Parse("2026-08-11T09:00:00Z", CultureInfo.InvariantCulture));
         using var host = TestHost.Create(time: clock);
 
-        await UpdateCheck.Start(host.Host, "1.0.0", _ => Task.FromResult<string?>("1.1.0"));
+        await UpdateCheck.Start(host.Host, "1.0.0", static _ => Task.FromResult<string?>("1.1.0"));
 
         host.Stderr.ShouldContain("1.1.0 is available");
 
@@ -141,7 +141,7 @@ public sealed class TelemetryAndUpdateTests {
         var clock = new TestClock(DateTimeOffset.Parse("2026-08-11T09:00:00Z", CultureInfo.InvariantCulture));
         using var host = TestHost.Create(time: clock);
 
-        await UpdateCheck.Start(host.Host, "1.0.0", _ => throw new HttpRequestException("no route to host"));
+        await UpdateCheck.Start(host.Host, "1.0.0", static _ => throw new HttpRequestException("no route to host"));
 
         host.Stderr.ShouldBeEmpty();
     }
@@ -154,7 +154,7 @@ public sealed class TelemetryAndUpdateTests {
             }
         );
 
-        UpdateCheck.Start(host.Host, "1.0.0", _ => throw new ShouldAssertException("the probe ran"));
+        UpdateCheck.Start(host.Host, "1.0.0", static _ => throw new ShouldAssertException("the probe ran"));
 
         Directory.GetFiles(host.StateDirectory).ShouldBeEmpty();
     }

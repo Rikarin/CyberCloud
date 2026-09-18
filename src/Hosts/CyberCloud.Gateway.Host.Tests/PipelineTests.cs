@@ -98,7 +98,7 @@ public sealed class PipelineTests {
     /// </summary>
     [Fact]
     public void APipelineMissingAStageRefusesToBeComposed() {
-        Should.Throw<InvalidOperationException>(() =>
+        Should.Throw<InvalidOperationException>(static () =>
             new GatewayPipeline([new Pipeline.Stages.CorrelationStage()], NullLogger<GatewayPipeline>.Instance)
         )
             .Message.ShouldContain("cross-tenant hole");
@@ -167,7 +167,7 @@ public sealed class PipelineTests {
     public async Task AFaultingStageProducesA500WithNoDetailInTheBody() {
         var gateway = new GatewayHarness();
 
-        gateway.Manager.OnRead = _ => throw new InvalidOperationException(
+        gateway.Manager.OnRead = static _ => throw new InvalidOperationException(
             "connection to postgres shard 3 at 10.4.2.11:5432 refused"
         );
 

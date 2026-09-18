@@ -131,7 +131,7 @@ static class ExtensionDispatch {
     static void Verify(CycHost host, ExtensionStore store, ExtensionRecord record) {
         if (ExtensionStore.UnsafeDirectories(host) is { Count: > 0 } unsafeDirectories) {
             throw new CycClientException(
-                $"cyc will not run an extension out of a directory anyone but you can write to: "
+                "cyc will not run an extension out of a directory anyone but you can write to: "
                 + $"{string.Join(", ", unsafeDirectories)}. Anything writable there runs as you, with your cloud "
                 + "credentials. Run 'chmod go-w' on it, then try again."
             );

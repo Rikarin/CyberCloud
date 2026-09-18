@@ -171,8 +171,11 @@ public interface IScopeManager {
     ///         is Azure's <c>GET /subscriptions</c> semantics: what the caller holds any role on.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The two collections differ in one check, and the difference is the oracle
-    ///         rule.</b> The subscription collection has no parent check at all: its parent is the
+    ///         ⚠
+    ///         <b>
+    ///             The two collections differ in one check, and the difference is the oracle
+    ///             rule.
+    ///         </b> The subscription collection has no parent check at all: its parent is the
     ///         tenant the token names, whose existence is not news to the caller, and a tenant owner
     ///         is not required — a caller holding <c>reader</c> on one subscription sees that one.
     ///         The resource-group collection checks <c>read</c> on the subscription first and
@@ -444,7 +447,10 @@ public interface IScopeRelationWriter {
     ///     <c>{scope}#parent@{newParent}</c>. Idempotent — a re-drive finds the first tuple gone and the
     ///     second present, and both halves accept that.
     /// </summary>
-    /// <param name="scope">The scope being moved. A subscription, in practice; see <see cref="LinkToParentAsync(ScopeId, ScopeId, CancellationToken)" />.</param>
+    /// <param name="scope">
+    ///     The scope being moved. A subscription, in practice; see
+    ///     <see cref="LinkToParentAsync(ScopeId, ScopeId, CancellationToken)" />.
+    /// </param>
     /// <param name="currentParent">The parent it hangs off now.</param>
     /// <param name="newParent">The parent it should hang off.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
@@ -456,7 +462,12 @@ public interface IScopeRelationWriter {
     ///     a subscription its owner has just moved away from it; docs/plan/07 § Consistency wants a
     ///     revocation to be the half that is never late.
     /// </remarks>
-    Task<Result> RelinkParentAsync(ScopeId scope, ScopeId currentParent, ScopeId newParent, CancellationToken cancellationToken = default);
+    Task<Result> RelinkParentAsync(
+        ScopeId scope,
+        ScopeId currentParent,
+        ScopeId newParent,
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>
     ///     Deletes every tuple on a scope's object — its <c>parent</c> edge and every role written at

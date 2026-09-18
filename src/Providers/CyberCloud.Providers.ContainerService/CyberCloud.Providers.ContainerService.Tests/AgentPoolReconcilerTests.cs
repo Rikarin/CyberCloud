@@ -1,4 +1,3 @@
-using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
@@ -53,8 +52,8 @@ public sealed class AgentPoolReconcilerTests {
         var alice = Address("workers", "prod-cluster", TenantA, SubscriptionA);
         var bob = Address("workers", "prod-cluster", TenantB, SubscriptionB);
 
-        using var aliceBody = JsonDocument.Parse(AgentPools.Body(ClusterId, count: 2, size: "s1.nano"));
-        using var bobBody = JsonDocument.Parse(AgentPools.Body(ClusterId, count: 7, size: "s1.large"));
+        using var aliceBody = JsonDocument.Parse(AgentPools.Body(ClusterId, 2, "s1.nano"));
+        using var bobBody = JsonDocument.Parse(AgentPools.Body(ClusterId, 7, "s1.large"));
 
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
         await Pass(reconciler, connection, bob, bobBody.RootElement);
@@ -62,7 +61,7 @@ public sealed class AgentPoolReconcilerTests {
         await Pass(reconciler, connection, bob, bobBody.RootElement);
 
         var deployments = connection.Applied
-            .Where(x => x.Target.Kind.Kind == "MachineDeployment")
+            .Where(static x => x.Target.Kind.Kind == "MachineDeployment")
             .ToList();
 
         deployments.Count.ShouldBe(4);
@@ -97,7 +96,7 @@ public sealed class AgentPoolReconcilerTests {
         await Pass(reconciler, connection, second, body.RootElement);
 
         var deployments = connection.Applied
-            .Where(x => x.Target.Kind.Kind == "MachineDeployment")
+            .Where(static x => x.Target.Kind.Kind == "MachineDeployment")
             .ToList();
 
         deployments[0].Target.Namespace.ShouldBe(deployments[1].Target.Namespace);
@@ -131,7 +130,7 @@ public sealed class AgentPoolReconcilerTests {
             body.RootElement
         );
 
-        foreach (var applied in connection.Applied.Where(x => x.Target.Kind.Kind == "MachineDeployment")) {
+        foreach (var applied in connection.Applied.Where(static x => x.Target.Kind.Kind == "MachineDeployment")) {
             Spec(applied.Body)["clusterName"]!.GetValue<string>().ShouldBe("prod-cluster");
 
             // ⚠ TWICE, and Cluster API requires both. A pool whose two disagreed would be adopted by
@@ -158,7 +157,7 @@ public sealed class AgentPoolReconcilerTests {
             body.RootElement
         );
 
-        var deployment = connection.Applied.Single(x => x.Target.Kind.Kind == "MachineDeployment");
+        var deployment = connection.Applied.Single(static x => x.Target.Kind.Kind == "MachineDeployment");
         var spec = Spec(deployment.Body);
 
         var selector = spec["selector"]!["matchLabels"]!.ToJsonString();
@@ -220,13 +219,13 @@ public sealed class AgentPoolReconcilerTests {
             body.RootElement
         );
 
-        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target))
+        var applied = connection.Applied.Select(static x => RecordingConnection.Key(x.Target))
             .ToHashSet(StringComparer.Ordinal);
 
         var read = connection.Read.Select(RecordingConnection.Key).ToHashSet(StringComparer.Ordinal);
 
         applied.Count.ShouldBe(3);
-        read.ShouldBe(applied, ignoreOrder: true);
+        read.ShouldBe(applied, true);
     }
 
     [Fact]
@@ -241,7 +240,7 @@ public sealed class AgentPoolReconcilerTests {
             body.RootElement
         );
 
-        connection.Applied.Select(x => x.Target.Kind.Kind)
+        connection.Applied.Select(static x => x.Target.Kind.Kind)
             .ShouldBe(["KubevirtMachineTemplate", "KubeadmConfigTemplate", "MachineDeployment"]);
     }
 
@@ -260,7 +259,7 @@ public sealed class AgentPoolReconcilerTests {
         // A Cluster somebody else put there, which the delete must leave alone.
         var ns = ReconcileDriver.NamespaceFor(address);
         var foreign = ManagedClusters.ClusterRef(ns, "prod-cluster");
-        connection.Objects[RecordingConnection.Key(foreign)] = "{\"kind\":\"Cluster\"}";
+        connection.Objects[RecordingConnection.Key(foreign)] = """{"kind":"Cluster"}""";
 
         var outcome = await reconciler.DeleteAsync(
             Context(connection, address, body.RootElement),
@@ -273,7 +272,7 @@ public sealed class AgentPoolReconcilerTests {
 
         // ⚠ The MachineDeployment first, which is the reverse of the apply order: Cluster API owns the
         // teardown of the machines it created from it.
-        connection.Deleted.Select(x => x.Kind.Kind)
+        connection.Deleted.Select(static x => x.Kind.Kind)
             .ShouldBe(["MachineDeployment", "KubeadmConfigTemplate", "KubevirtMachineTemplate"]);
     }
 
@@ -286,11 +285,11 @@ public sealed class AgentPoolReconcilerTests {
         using var body = JsonDocument.Parse(AgentPools.Body(ClusterId));
 
         await Pass(reconciler, connection, address, body.RootElement);
-        var first = connection.Applied.Select(x => x.Body).ToList();
+        var first = connection.Applied.Select(static x => x.Body).ToList();
 
         await Pass(reconciler, connection, address, body.RootElement);
 
-        connection.Applied.Skip(3).Select(x => x.Body).ShouldBe(first);
+        connection.Applied.Skip(3).Select(static x => x.Body).ShouldBe(first);
     }
 
     [Fact]
@@ -302,7 +301,7 @@ public sealed class AgentPoolReconcilerTests {
         using var withoutAutoscaler = JsonDocument.Parse(AgentPools.Body(ClusterId));
         await Pass(reconciler, off, address, withoutAutoscaler.RootElement);
 
-        Metadata(off.Applied.Single(x => x.Target.Kind.Kind == "MachineDeployment").Body)
+        Metadata(off.Applied.Single(static x => x.Target.Kind.Kind == "MachineDeployment").Body)
             .ShouldNotContainKey(AgentPools.AutoscaleMinAnnotation);
 
         var on = new RecordingConnection();
@@ -311,7 +310,7 @@ public sealed class AgentPoolReconcilerTests {
 
         await Pass(reconciler, on, address, withAutoscaler.RootElement);
 
-        var annotations = Metadata(on.Applied.Single(x => x.Target.Kind.Kind == "MachineDeployment").Body);
+        var annotations = Metadata(on.Applied.Single(static x => x.Target.Kind.Kind == "MachineDeployment").Body);
 
         annotations[AgentPools.AutoscaleMinAnnotation]!.GetValue<string>().ShouldBe("2");
         annotations[AgentPools.AutoscaleMaxAnnotation]!.GetValue<string>().ShouldBe("9");
@@ -333,7 +332,7 @@ public sealed class AgentPoolReconcilerTests {
             body.RootElement
         );
 
-        var template = connection.Applied.Single(x => x.Target.Kind.Kind == "KubevirtMachineTemplate");
+        var template = connection.Applied.Single(static x => x.Target.Kind.Kind == "KubevirtMachineTemplate");
 
         foreach (var forbidden in new[] { "cloudInit", "cloudinit", "sshKeys", "userData" }) {
             template.Body.ShouldNotContain(forbidden, Case.Insensitive, forbidden);

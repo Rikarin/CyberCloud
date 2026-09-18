@@ -87,7 +87,7 @@ public sealed class StaticShardMapCache : IShardMapCache {
     public StaticShardMapCache(CyberCloudStorageOptions options) {
         ArgumentNullException.ThrowIfNull(options);
 
-        durableShards = [.. options.Durable.Shards.Keys.OrderBy(x => x, StringComparer.Ordinal)];
+        durableShards = [.. options.Durable.Shards.Keys.OrderBy(static x => x, StringComparer.Ordinal)];
         durablePins = options.Durable.Pins;
         hotOverrides = options.Hot.HashTagOverrides;
         nullTenantShard = options.Durable.NullTenantShard;

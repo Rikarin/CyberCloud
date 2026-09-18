@@ -1,5 +1,4 @@
 using CyberCloud.ResourceManager.Actions;
-using CyberCloud.ResourceManager.Tests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -93,7 +92,7 @@ public sealed class InheritedLockTests(ResourceManagerCluster cluster) {
                     Path = address.Path,
                     ApiVersion = TestingProvider.V2026,
                     Verb = WriteVerb.Put,
-                    Body = TestingProvider.Body(size: 4),
+                    Body = TestingProvider.Body(4),
                     Caller = ResourceManagerCluster.Caller()
                 },
                 TestContext.Current.CancellationToken
@@ -205,7 +204,7 @@ public sealed class InheritedLockTests(ResourceManagerCluster cluster) {
                     Path = address.Path,
                     ApiVersion = TestingProvider.V2026,
                     Verb = WriteVerb.Put,
-                    Body = TestingProvider.Body(size: 5),
+                    Body = TestingProvider.Body(5),
                     Caller = ResourceManagerCluster.Caller()
                 },
                 TestContext.Current.CancellationToken
@@ -257,7 +256,7 @@ public sealed class InheritedLockTests(ResourceManagerCluster cluster) {
     ///     authorization defect.
     /// </remarks>
     ResourceManagerService ManagerWithRealLocks() =>
-        new ResourceManagerService(
+        new(
             cluster.Registry,
             new SwitchableAuthorizer(),
             new RecordingRelationWriter(),

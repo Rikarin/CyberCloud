@@ -67,7 +67,7 @@ public sealed class CommandLineTests {
 
         var run = Generator.Run(
             tree,
-            check: false,
+            false,
             Generator.SampleProviderAssembly,
             Generator.ProviderlessAssembly
         );
@@ -86,7 +86,7 @@ public sealed class CommandLineTests {
     public void AProviderAssemblyThatIsNotThereIsAnExitCodeRatherThanAStackTrace() {
         using var tree = new TemporaryTree();
 
-        var run = Generator.Run(tree, check: false, Path.Combine(tree.Root, "CyberCloud.Providers.Nope.dll"));
+        var run = Generator.Run(tree, false, Path.Combine(tree.Root, "CyberCloud.Providers.Nope.dll"));
 
         // ⚠ 3, not 0. docs/plan/23's Generated surfaces gate treats 0 as "the facts are in the
         // report"; a run that never loaded a provider assembly has no facts, and reporting one
@@ -106,7 +106,7 @@ public sealed class CommandLineTests {
         var junk = Path.Combine(tree.Root, "CyberCloud.Providers.Broken.dll");
         File.WriteAllBytes(junk, [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07]);
 
-        var run = Generator.Run(tree, check: false, junk);
+        var run = Generator.Run(tree, false, junk);
 
         run.ExitCode.ShouldBe(Failed);
         run.Error.ShouldNotBeEmpty();
@@ -122,7 +122,7 @@ public sealed class CommandLineTests {
 
         var run = Generator.Run(
             tree,
-            check: false,
+            false,
             Generator.SampleProviderAssembly,
             Generator.SampleProviderAssembly
         );
@@ -145,7 +145,7 @@ public sealed class CommandLineTests {
         using var withDerived = new TemporaryTree();
         using var withoutDerived = new TemporaryTree();
 
-        var derived = Generator.Run(withDerived, check: false, Generator.SampleProviderAssembly).Output;
+        var derived = Generator.Run(withDerived, false, Generator.SampleProviderAssembly).Output;
 
         derived.ShouldContain("Four of ADR-012's five surfaces");
         derived.ShouldContain("no chart's @param block was compared");

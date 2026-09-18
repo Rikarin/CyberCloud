@@ -218,11 +218,16 @@ public sealed class ReBacResourceAuthorizer(IGrainFactory grains, ILogger<ReBacR
         }
 
         var within = parentResourceId == Guid.Empty
-            ? CyberCloud.Authorization.Contracts.ObjectRef.Of(ResourceGroupObjectType, GroupObjectId(collection.Member("a")))
+            ? CyberCloud.Authorization.Contracts.ObjectRef.Of(
+                ResourceGroupObjectType,
+                GroupObjectId(collection.Member("a"))
+            )
             : CyberCloud.Authorization.Contracts.ObjectRef.Of(ResourceObjectType, parentResourceId);
 
         var grain = grains.ForTenant(collection.TenantId.ToString("D", CultureInfo.InvariantCulture))
-            .GetGrain<IListObjectsGrain>(GrainKeys.ListObjects(subject.GetValueOrThrow().Type, subject.GetValueOrThrow().Id));
+            .GetGrain<IListObjectsGrain>(
+                GrainKeys.ListObjects(subject.GetValueOrThrow().Type, subject.GetValueOrThrow().Id)
+            );
 
         HashSet<Guid> readable = [];
         var continuation = string.Empty;

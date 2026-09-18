@@ -148,11 +148,11 @@ public sealed class MariaDbProvider : IResourceProvider {
                 MariaDbServers.ListKeysAction,
                 ActionKind.Post,
                 MariaDbServers.ListKeysPermission,
-                secret: true,
+                true,
                 response: MariaDbServers.ListKeysResponse,
                 handler: typeof(MariaDbServerListKeysHandler)
             )
-            .Display("MariaDB server", "MariaDB servers", shortName: ShortName, summary: Summary)
+            .Display("MariaDB server", "MariaDB servers", ShortName, Summary)
             // docs/plan/12 § The pattern, once, piece 1 — and ADR-012's fifth surface, which is the
             // one binding that ties this registration to charts/managed/mariadb.
             .Chart(MariaDbServers.ChartName)
@@ -160,7 +160,7 @@ public sealed class MariaDbProvider : IResourceProvider {
             // databases whose recovery windows differed would be a difference a tenant has to look up.
             .SupportsSoftDelete(MariaDbServers.SoftDeleteDays)
             .SupportsTags()
-            .RequiresCluster(MariaDbServers.ClusterIdPointer);
+            .RequiresCluster();
     }
 
     // ── What a server draws ────────────────────────────────────────────────────────────────────
@@ -195,7 +195,7 @@ public sealed class MariaDbProvider : IResourceProvider {
                 "/properties/sizing/preset",
                 "/properties/sizing/cpu"
             ],
-            body => KubeQuantity.TryParse(MariaDbServers.Resources(body).Cpu, out var cores)
+            static body => KubeQuantity.TryParse(MariaDbServers.Resources(body).Cpu, out var cores)
                 ? Result<decimal>.Success(MariaDbServers.Replicas(body) * cores)
                 : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
         );
@@ -210,7 +210,7 @@ public sealed class MariaDbProvider : IResourceProvider {
                 "/properties/sizing/preset",
                 "/properties/sizing/memory"
             ],
-            body => KubeQuantity.TryGibibytes(MariaDbServers.Resources(body).Memory, out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(MariaDbServers.Resources(body).Memory, out var gibibytes)
                 ? Result<decimal>.Success(MariaDbServers.Replicas(body) * gibibytes)
                 : Unresolvable("memory", "sizing.memory or the sizing.preset behind it")
         );
@@ -225,7 +225,7 @@ public sealed class MariaDbProvider : IResourceProvider {
         MeterDerivation.Of(
             "instances × storage.size, in GiB, where instances is 3 under Galera and 1 otherwise",
             ["/properties/highAvailability", "/properties/storage/size"],
-            body => KubeQuantity.TryGibibytes(MariaDbServers.StorageSize(body), out var data)
+            static body => KubeQuantity.TryGibibytes(MariaDbServers.StorageSize(body), out var data)
                 ? Result<decimal>.Success(MariaDbServers.Replicas(body) * data)
                 : Unresolvable("storage", "storage.size")
         );

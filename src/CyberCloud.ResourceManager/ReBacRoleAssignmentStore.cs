@@ -227,7 +227,8 @@ public sealed class ReBacRoleAssignmentStore(IGrainFactory grains, ILogger<ReBac
     /// <remarks>
     ///     A scope object's id is the scope spelled forwards — <c>tenant:{N}</c>,
     ///     <c>managementGroup:{name}</c>, <c>subscription:{N}</c>, <c>resourceGroup:{N}-{name}</c> —
-    ///     so four of the five reverse with no lookup. A resource object's id is a GUID with no path in it, and its own grain is
+    ///     so four of the five reverse with no lookup. A resource object's id is a GUID with no path in it, and its own grain
+    ///     is
     ///     what knows the path: one <c>IResourceGrain.GetAsync</c> with no api-version and no
     ///     pointers, which projects nothing and answers the envelope. ⚠ The empty api-version is
     ///     deliberate — the read wants the address and not a body, and an unknown version projects

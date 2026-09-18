@@ -1,5 +1,3 @@
-using CyberCloud.ResourceManager.Tests.Infrastructure;
-
 namespace CyberCloud.ResourceManager.Tests;
 
 /// <summary>
@@ -98,8 +96,8 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
         var widgets = await List(Collection(widget));
         var vaults = await List(Collection(vault));
 
-        widgets.Resources.Select(x => x.Path).ShouldBe([widget.Path]);
-        vaults.Resources.Select(x => x.Path).ShouldBe([vault.Path]);
+        widgets.Resources.Select(static x => x.Path).ShouldBe([widget.Path]);
+        vaults.Resources.Select(static x => x.Path).ShouldBe([vault.Path]);
     }
 
     /// <summary>
@@ -134,7 +132,7 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
 
         var page = await List(Collection(underFirst));
 
-        page.Resources.Select(x => x.Path).ShouldBe([underFirst.Path]);
+        page.Resources.Select(static x => x.Path).ShouldBe([underFirst.Path]);
     }
 
     /// <summary>
@@ -216,7 +214,7 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
 
         var page = await List(Collection(mine));
 
-        page.Resources.Select(x => x.Path).ShouldBe([mine.Path]);
+        page.Resources.Select(static x => x.Path).ShouldBe([mine.Path]);
         page.Resources.ShouldNotContain(
             x => x.Path == theirs.Path,
             "a listing that returns a resource the caller cannot read is an enumeration oracle"
@@ -224,8 +222,11 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>When the engine does not answer for the collection, the filter is asked once per
-    ///     member and never once per group.</b>
+    ///     ⚠
+    ///     <b>
+    ///         When the engine does not answer for the collection, the filter is asked once per
+    ///         member and never once per group.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     The cheap wrong implementation is one check against the resource group, which every
@@ -257,8 +258,11 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>When the engine answers for the collection, no member is checked at all, and the
-    ///     answer is scoped to the object the members hang off.</b>
+    ///     ⚠
+    ///     <b>
+    ///         When the engine answers for the collection, no member is checked at all, and the
+    ///         answer is scoped to the object the members hang off.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -268,8 +272,11 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     ///         the per-member path hid would be a regression dressed as an optimization.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The scope is <see cref="Guid.Empty" /> for a top-level collection and the parent's
-    ///         GUID for a nested one.</b> The engine scopes its walk to that object at depth 1, so a
+    ///         ⚠
+    ///         <b>
+    ///             The scope is <see cref="Guid.Empty" /> for a top-level collection and the parent's
+    ///             GUID for a nested one.
+    ///         </b> The engine scopes its walk to that object at depth 1, so a
     ///         nested listing that passed the group instead would find the parent's children two
     ///         levels down — and list nothing. Asserted on the double's record of what it was handed.
     ///     </para>
@@ -297,7 +304,7 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
 
         var page = await List(Collection(Address("batch-a", group)));
 
-        page.Resources.Select(x => x.Name).ShouldBe(["batch-a", "batch-c"]);
+        page.Resources.Select(static x => x.Name).ShouldBe(["batch-a", "batch-c"]);
         SwitchableAuthorizer.Asked.ShouldBeEmpty("the engine answered for the page, so no member was checked");
 
         SwitchableAuthorizer.CollectionsAsked.TryDequeue(out var topLevel).ShouldBeTrue();
@@ -306,7 +313,7 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
 
         var children = await List(Collection(child));
 
-        children.Resources.Select(x => x.Name).ShouldBe(["batch-child"]);
+        children.Resources.Select(static x => x.Name).ShouldBe(["batch-child"]);
         SwitchableAuthorizer.CollectionsAsked.TryDequeue(out var nested).ShouldBeTrue();
         nested.Parent.ShouldBe(created[0], "a nested collection hangs off its parent resource");
         nested.Candidates.ShouldBe(1);
@@ -380,14 +387,14 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
 
         var collection = Collection(Address("page-a", group));
 
-        var first = await List(collection, top: 2);
+        var first = await List(collection, 2);
 
         first.Resources.ShouldBeEmpty("both members on this page are hidden from this caller");
         first.HasMore.ShouldBeTrue("an empty page is not the end of the collection");
 
-        var second = await List(collection, top: 2, continuation: first.Continuation);
+        var second = await List(collection, 2, first.Continuation);
 
-        second.Resources.Select(x => x.Name).ShouldBe(["page-c", "page-d"]);
+        second.Resources.Select(static x => x.Name).ShouldBe(["page-c", "page-d"]);
     }
 
     /// <summary>

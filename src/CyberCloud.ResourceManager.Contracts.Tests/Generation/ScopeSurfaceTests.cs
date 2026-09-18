@@ -56,7 +56,7 @@ public sealed class ScopeSurfaceTests {
     [Fact]
     public void EveryResourcePathBeginsWithTheResourceGroupScopesPath() {
         var document = Document;
-        var group = DocumentReader.ScopesOf(document).Single(x => x.Kind == "resourceGroup");
+        var group = DocumentReader.ScopesOf(document).Single(static x => x.Kind == "resourceGroup");
 
         foreach (var type in DocumentReader.TypesOf(document)) {
             type.Path.ShouldStartWith(group.Path + "/providers/");
@@ -80,7 +80,7 @@ public sealed class ScopeSurfaceTests {
         var document = Document;
 
         DocumentReader.TypesOf(document)
-            .Select(x => x.Path)
+            .Select(static x => x.Path)
             .ShouldNotContain("/tenants/{tenantId}/subscriptions/{subscriptionId}");
 
         foreach (var scope in DocumentReader.ScopesOf(document)) {
@@ -105,7 +105,7 @@ public sealed class ScopeSurfaceTests {
     [Fact]
     public void TheTenantIsReadableAndNotCreatableEverywhere() {
         var document = Document;
-        var tenant = DocumentReader.ScopesOf(document).Single(x => x.Kind == "tenant");
+        var tenant = DocumentReader.ScopesOf(document).Single(static x => x.Kind == "tenant");
 
         tenant.Creatable.ShouldBeFalse();
         document["paths"]![tenant.Path]!["put"].ShouldBeNull();
@@ -141,7 +141,7 @@ public sealed class ScopeSurfaceTests {
 
         var flags = create["flags"]!.AsArray();
 
-        var name = flags.Single(x => DocumentReader.Text(x?["name"]) == "--name")!;
+        var name = flags.Single(static x => DocumentReader.Text(x?["name"]) == "--name")!;
 
         name["required"]!.GetValue<bool>().ShouldBeTrue();
         DocumentReader.Text(name["pathPlaceholder"]).ShouldBe("subscriptionId");
@@ -149,14 +149,16 @@ public sealed class ScopeSurfaceTests {
 
         // The tenant above it stays context, which is the asymmetry: your tenant is where you are,
         // the subscription id is what you are typing.
-        var tenant = flags.Single(x => DocumentReader.Text(x?["name"]) == "--tenant")!;
+        var tenant = flags.Single(static x => DocumentReader.Text(x?["name"]) == "--tenant")!;
 
         tenant["required"]!.GetValue<bool>().ShouldBeFalse();
         DocumentReader.Text(tenant["env"]).ShouldBe("CYC_TENANT");
 
         // …and the body property is a flag, which is the whole point of generating this rather than
         // telling people to use `cyc rest`.
-        DocumentReader.Text(flags.Single(x => DocumentReader.Text(x?["name"]) == "--display-name")!["jsonPointer"])
+        DocumentReader.Text(
+            flags.Single(static x => DocumentReader.Text(x?["name"]) == "--display-name")!["jsonPointer"]
+        )
             .ShouldBe("/" + ScopeBodyProperties.DisplayName);
     }
 
@@ -241,17 +243,17 @@ public sealed class ScopeSurfaceTests {
         var document = Document;
         var scopes = DocumentReader.ScopesOf(document);
 
-        DocumentReader.LeavesOf(scopes.Single(x => x.Kind == "subscription").Body)
-            .Select(x => x.Name)
+        DocumentReader.LeavesOf(scopes.Single(static x => x.Kind == "subscription").Body)
+            .Select(static x => x.Name)
             .ShouldBe([ScopeBodyProperties.DisplayName, ScopeBodyProperties.ManagementGroup]);
 
-        DocumentReader.LeavesOf(scopes.Single(x => x.Kind == "resourceGroup").Body)
-            .Select(x => x.Name)
+        DocumentReader.LeavesOf(scopes.Single(static x => x.Kind == "resourceGroup").Body)
+            .Select(static x => x.Name)
             .ShouldBe([ScopeBodyProperties.Location]);
 
         // The fourth scope (issue #39): a display name and the parent group, both optional.
-        DocumentReader.LeavesOf(scopes.Single(x => x.Kind == "managementGroup").Body)
-            .Select(x => x.Name)
+        DocumentReader.LeavesOf(scopes.Single(static x => x.Kind == "managementGroup").Body)
+            .Select(static x => x.Name)
             .ShouldBe([ScopeBodyProperties.DisplayName, ScopeBodyProperties.ManagementGroup]);
     }
 
@@ -307,26 +309,33 @@ public sealed class ScopeSurfaceTests {
 
         // Ordered by path, ordinally — which puts the management group (issue #39) between the
         // tenant and the subscription, because 'm' sorts before 's'.
-        scopes.Select(x => x.Kind).ShouldBe(["tenant", "managementGroup", "subscription", "resourceGroup"]);
+        scopes.Select(static x => x.Kind).ShouldBe(["tenant", "managementGroup", "subscription", "resourceGroup"]);
 
-        scopes.Single(x => x.Kind == "subscription").CollectionPath.ShouldBe(OpenApiEmitter.SubscriptionCollectionPathTemplate);
-        scopes.Single(x => x.Kind == "resourceGroup").CollectionPath.ShouldBe(OpenApiEmitter.ResourceGroupCollectionPathTemplate);
-        scopes.Single(x => x.Kind == "managementGroup").CollectionPath.ShouldBe(OpenApiEmitter.ManagementGroupCollectionPathTemplate);
+        scopes.Single(static x => x.Kind == "subscription")
+            .CollectionPath.ShouldBe(OpenApiEmitter.SubscriptionCollectionPathTemplate);
+        scopes.Single(static x => x.Kind == "resourceGroup")
+            .CollectionPath.ShouldBe(OpenApiEmitter.ResourceGroupCollectionPathTemplate);
+        scopes.Single(static x => x.Kind == "managementGroup")
+            .CollectionPath.ShouldBe(OpenApiEmitter.ManagementGroupCollectionPathTemplate);
 
         // ⚠ The tenant has none, and the absence is the contract: the only tenant a request can
         // address is its own, so there is nothing to enumerate.
-        scopes.Single(x => x.Kind == "tenant").CollectionPath.ShouldBe("");
+        scopes.Single(static x => x.Kind == "tenant").CollectionPath.ShouldBe("");
 
         // The paging pair, read off the document rather than assumed — the same two a resource
         // collection declares, so cyc's --top and --skip-token are one flag pair everywhere.
-        scopes.Single(x => x.Kind == "subscription").CollectionQuery
-            .Select(x => x.Name)
-            .ShouldBe(["$skipToken", "$top", "api-version"]);
+        scopes.Single(static x => x.Kind == "subscription")
+            .CollectionQuery
+                .Select(static x => x.Name)
+                .ShouldBe(["$skipToken", "$top", "api-version"]);
     }
 
     /// <summary>
-    ///     ⚠ <b><c>cyc scope subscription list</c> and <c>cyc scope resource-group list</c> exist,
-    ///     page, and name no scope of their own.</b>
+    ///     ⚠
+    ///     <b>
+    ///         <c>cyc scope subscription list</c> and <c>cyc scope resource-group list</c> exist,
+    ///         page, and name no scope of their own.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     The collection path ends on the parent, so the verb's flags are the ancestors' profile
@@ -344,7 +353,7 @@ public sealed class ScopeSurfaceTests {
         subscriptions["method"]!.GetValue<string>().ShouldBe("GET");
         subscriptions["paged"]!.GetValue<bool>().ShouldBeTrue();
         subscriptions["longRunning"]!.GetValue<bool>().ShouldBeFalse();
-        subscriptions["pageFlags"]!.AsArray().Select(x => x!.GetValue<string>()).ShouldBe(["--all"]);
+        subscriptions["pageFlags"]!.AsArray().Select(static x => x!.GetValue<string>()).ShouldBe(["--all"]);
 
         Flags(subscriptions).ShouldBe(["--skip-token", "--tenant", "--top"]);
 
@@ -355,14 +364,15 @@ public sealed class ScopeSurfaceTests {
         // ⚠ --subscription on the resource-group list is the profile-backed ancestor flag and not
         // the scope's own required --name: a group's subscription is context, its name is not.
         groups["flags"]!.AsArray()
-            .Single(x => x!["name"]!.GetValue<string>() == "--subscription")!["required"]!
+            .Single(static x => x!["name"]!.GetValue<string>() == "--subscription")!["required"]!
             .GetValue<bool>()
             .ShouldBeFalse();
 
         commands["tenant"]!["verbs"]!.AsObject().ShouldNotContainKey("list");
 
-        static List<string> Flags(JsonNode verb) =>
-            [.. verb["flags"]!.AsArray().Select(x => x!["name"]!.GetValue<string>()).Order(StringComparer.Ordinal)];
+        static List<string> Flags(JsonNode verb) => [
+            .. verb["flags"]!.AsArray().Select(static x => x!["name"]!.GetValue<string>()).Order(StringComparer.Ordinal)
+        ];
     }
 
     /// <summary>
@@ -380,23 +390,41 @@ public sealed class ScopeSurfaceTests {
         var document = Document;
 
         var sdk = SdkEmitter.Emit(document);
-        sdk.ShouldContain("public partial AsyncPageable<ScopeResource> ListSubscriptionsAsync(\n        string tenantId,");
-        sdk.ShouldContain("public partial AsyncPageable<ScopeResource> ListResourceGroupsAsync(\n        string tenantId,\n        string subscriptionId,");
-        sdk.ShouldContain("public const string SubscriptionCollectionPathTemplate = \"" + OpenApiEmitter.SubscriptionCollectionPathTemplate + "\";");
+        sdk.ShouldContain(
+            "public partial AsyncPageable<ScopeResource> ListSubscriptionsAsync(\n        string tenantId,"
+        );
+        sdk.ShouldContain(
+            "public partial AsyncPageable<ScopeResource> ListResourceGroupsAsync(\n        string tenantId,\n        string subscriptionId,"
+        );
+        sdk.ShouldContain(
+            "public const string SubscriptionCollectionPathTemplate = \""
+            + OpenApiEmitter.SubscriptionCollectionPathTemplate
+            + "\";"
+        );
         sdk.ShouldNotContain("ListTenantsAsync");
 
         var client = TypeScriptEmitter.Emit(document)["src/client.ts"];
-        client.ShouldContain("listSubscriptions(tenantId: string, page: PageRequest = {}): Promise<ApiResponse<Page<ScopeResource>>>");
-        client.ShouldContain("listResourceGroups(tenantId: string, subscriptionId: string, page: PageRequest = {}): Promise<ApiResponse<Page<ScopeResource>>>");
+        client.ShouldContain(
+            "listSubscriptions(tenantId: string, page: PageRequest = {}): Promise<ApiResponse<Page<ScopeResource>>>"
+        );
+        client.ShouldContain(
+            "listResourceGroups(tenantId: string, subscriptionId: string, page: PageRequest = {}): Promise<ApiResponse<Page<ScopeResource>>>"
+        );
         client.ShouldNotContain("listTenants(");
 
         var python = PythonSdkEmitter.Emit(document)["cybercloud/v2026_08_01/client.py"];
         python.ShouldContain("def list(self, tenant_id: str, *, top: Optional[int] = None) -> Pager[ScopeResource]:");
-        python.ShouldContain("def list(self, tenant_id: str, subscription_id: str, *, top: Optional[int] = None) -> Pager[ScopeResource]:");
+        python.ShouldContain(
+            "def list(self, tenant_id: str, subscription_id: str, *, top: Optional[int] = None) -> Pager[ScopeResource]:"
+        );
 
         var go = GoSdkEmitter.Emit(document)["api20260801/client.go"];
-        go.ShouldContain("func (c *SubscriptionsClient) List(tenantID string, options *ListOptions) *Pager[ScopeResource] {");
-        go.ShouldContain("func (c *ResourceGroupsClient) List(tenantID, subscriptionID string, options *ListOptions) *Pager[ScopeResource] {");
+        go.ShouldContain(
+            "func (c *SubscriptionsClient) List(tenantID string, options *ListOptions) *Pager[ScopeResource] {"
+        );
+        go.ShouldContain(
+            "func (c *ResourceGroupsClient) List(tenantID, subscriptionID string, options *ListOptions) *Pager[ScopeResource] {"
+        );
         go.ShouldNotContain("func (c *TenantsClient) List(");
     }
 }

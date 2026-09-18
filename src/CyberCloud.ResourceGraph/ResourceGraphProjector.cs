@@ -14,8 +14,11 @@ namespace CyberCloud.ResourceGraph;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>One durable consumer for the fleet, not one per tenant — and "per tenant" is where
-///         the row lands, not how it is pulled.</b> A JetStream consumer per tenant needs a list of
+///         ⚠
+///         <b>
+///             One durable consumer for the fleet, not one per tenant — and "per tenant" is where
+///             the row lands, not how it is pulled.
+///         </b> A JetStream consumer per tenant needs a list of
 ///         tenants to create them from, and nothing in this platform holds one (the store's memo says
 ///         the same about databases). One durable consumer with <c>cc.*.res.&gt;</c> as its filter,
 ///         pulled by every silo, delivers each message to exactly one silo; the tenant is the second
@@ -37,8 +40,11 @@ namespace CyberCloud.ResourceGraph;
 ///         that produced it can be found.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A failure to reach ClickHouse or the tenant's check grain is a NAK with a delay,
-///         and the loop does not die on it.</b> The projection is eventually consistent by design;
+///         ⚠
+///         <b>
+///             A failure to reach ClickHouse or the tenant's check grain is a NAK with a delay,
+///             and the loop does not die on it.
+///         </b> The projection is eventually consistent by design;
 ///         a ClickHouse that is restarting is a projection that is late, and the message waits on
 ///         the stream. What would be wrong is a projector that acknowledged what it could not write —
 ///         that row would be gone from the stream and absent from the table, with nothing left to
@@ -132,11 +138,9 @@ public sealed class ResourceGraphProjector : BackgroundService {
                 await foreach (var message in consumer.ConsumeAsync<byte[]>(cancellationToken: stoppingToken)) {
                     await HandleAsync(message, stoppingToken);
                 }
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
+            } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
                 return;
-            }
-            catch (Exception exception) {
+            } catch (Exception exception) {
                 // ⚠ Every exception, for the reason the remarks give: with StopHost as the host's
                 // behaviour this catch is the line between "the projector reconnects" and "the silo
                 // stops". The URL is logged without its credential.
@@ -150,8 +154,7 @@ public sealed class ResourceGraphProjector : BackgroundService {
 
                 try {
                     await Task.Delay(ReconnectDelay, stoppingToken);
-                }
-                catch (OperationCanceledException) {
+                } catch (OperationCanceledException) {
                     return;
                 }
             }
@@ -172,7 +175,10 @@ public sealed class ResourceGraphProjector : BackgroundService {
     ///     Public so a test can drive the projection without a stream between it and the assertion;
     ///     the consume loop calls exactly this.
     /// </remarks>
-    public async Task<Result<ProjectionOutcome>> ProjectAsync(ResourceChangedEvent change, CancellationToken cancellationToken = default) {
+    public async Task<Result<ProjectionOutcome>> ProjectAsync(
+        ResourceChangedEvent change,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(change);
 
         if (change.TenantId == Guid.Empty || change.ResourceId == Guid.Empty) {
@@ -221,7 +227,9 @@ public sealed class ResourceGraphProjector : BackgroundService {
             DesiredHash = change.DesiredHash,
             Version = change.Version,
             Change = change.Change.ToString(),
-            IsDeleted = change.Change is ResourceChangeKind.Deleted or ResourceChangeKind.SoftDeleted ? (byte)1 : (byte)0,
+            IsDeleted = change.Change is ResourceChangeKind.Deleted or ResourceChangeKind.SoftDeleted
+                ? (byte)1
+                : (byte)0,
             Access = readers,
             ProjectedAt = clock.UtcNow
         };
@@ -231,7 +239,10 @@ public sealed class ResourceGraphProjector : BackgroundService {
 
     async Task HandleAsync(INatsJSMsg<byte[]> message, CancellationToken cancellationToken) {
         if (!ResourceChangedLog.TryTenantOf(message.Subject, out var subjectTenant)) {
-            logger.LogError("resource-changed on '{Subject}' carries no tenant token and was terminated", message.Subject);
+            logger.LogError(
+                "resource-changed on '{Subject}' carries no tenant token and was terminated",
+                message.Subject
+            );
             await message.AckTerminateAsync(cancellationToken: cancellationToken);
             return;
         }
@@ -239,7 +250,11 @@ public sealed class ResourceGraphProjector : BackgroundService {
         var decoded = ResourceChangedJson.Decode(message.Data ?? []);
 
         if (decoded.TryGetError(out var decodeError)) {
-            logger.LogError("resource-changed on '{Subject}' was terminated: {Message}", message.Subject, decodeError.Message);
+            logger.LogError(
+                "resource-changed on '{Subject}' was terminated: {Message}",
+                message.Subject,
+                decodeError.Message
+            );
             await message.AckTerminateAsync(cancellationToken: cancellationToken);
             return;
         }
@@ -279,8 +294,7 @@ public sealed class ResourceGraphProjector : BackgroundService {
 
         try {
             projected = await ProjectAsync(change, cancellationToken);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException) {
+        } catch (Exception exception) when (exception is not OperationCanceledException) {
             // The resolver turns a grain call that throws into a Result and the store does the
             // same for a body that is not JSON — the two the review found escaping — and this is
             // the belt for whatever neither foresaw. The message is redelivered exactly as a
@@ -309,7 +323,11 @@ public sealed class ResourceGraphProjector : BackgroundService {
         }
 
         if (projected.GetValueOrThrow() == ProjectionOutcome.Dropped) {
-            logger.LogDebug("resource-changed on '{Subject}' at version {Version} was already projected", message.Subject, change.Version);
+            logger.LogDebug(
+                "resource-changed on '{Subject}' at version {Version} was already projected",
+                message.Subject,
+                change.Version
+            );
         }
 
         await message.AckAsync(cancellationToken: cancellationToken);

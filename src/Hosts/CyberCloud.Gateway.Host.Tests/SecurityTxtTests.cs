@@ -13,8 +13,11 @@ namespace CyberCloud.Gateway.Host.Tests;
 ///     non-JSON body, and the committed file will not go stale without the build going red first.
 /// </summary>
 /// <remarks>
-///     ⚠ <b><see cref="ExpiresIsAtLeastThirtyDaysOut" /> reads the real clock, on purpose, and is the
-///     only test in this suite that does.</b> Every other test here drives a <c>FakeClock</c>; this
+///     ⚠
+///     <b>
+///         <see cref="ExpiresIsAtLeastThirtyDaysOut" /> reads the real clock, on purpose, and is the
+///         only test in this suite that does.
+///     </b> Every other test here drives a <c>FakeClock</c>; this
 ///     one asks whether the bytes that ship are good for another thirty days from <i>today</i>,
 ///     because that is the question. It will go red one day, by design, and the fix is in
 ///     <see cref="SecurityTxt" />'s remarks.
@@ -28,7 +31,7 @@ public sealed class SecurityTxtTests {
     public async Task TheFileIsServedAsPlainTextWithNoTokenAndNoApiVersion() {
         var gateway = new GatewayHarness();
 
-        var response = await gateway.SendAsync("GET", SecurityTxt.Path, token: null, query: "");
+        var response = await gateway.SendAsync("GET", SecurityTxt.Path, null, "");
 
         response.Status.ShouldBe(StatusCodes.Status200OK);
         response.Header("Content-Type").ShouldBe("text/plain; charset=utf-8");
@@ -48,8 +51,8 @@ public sealed class SecurityTxtTests {
         var response = await gateway.SendAsync(
             "GET",
             SecurityTxt.Path,
-            token: null,
-            query: "",
+            null,
+            "",
             headers: (GatewayHeaders.CorrelationRequestId, "scanner-run-7")
         );
 
@@ -136,7 +139,9 @@ public sealed class SecurityTxtTests {
 
     [Fact]
     public void TheRouterAdmitsExactlyOneWellKnownPathAndOnlyOnGet() {
-        GatewayRouter.Resolve(SecurityTxt.Path, "GET", Guid.Empty).GetValueOrThrow().Kind.ShouldBe(RouteKind.SecurityTxt);
+        GatewayRouter.Resolve(SecurityTxt.Path, "GET", Guid.Empty)
+            .GetValueOrThrow()
+            .Kind.ShouldBe(RouteKind.SecurityTxt);
 
         GatewayRouter.Resolve(SecurityTxt.Path, "POST", Guid.Empty).TryGetError(out var post).ShouldBeTrue();
         post.Code.ShouldBe(ErrorCode.ResourceNotFound);
@@ -164,7 +169,11 @@ public sealed class SecurityTxtTests {
             Text = text ? "Contact: mailto:x@example" : null
         };
 
-        var refused = await Should.ThrowAsync<InvalidOperationException>(() => ResponseWriter.WriteAsync(context, outcome));
+        var refused = await Should.ThrowAsync<InvalidOperationException>(() => ResponseWriter.WriteAsync(
+                context,
+                outcome
+            )
+        );
 
         refused.Message.ShouldContain("body kinds");
         context.Http.Response.Headers.ContentType.ToString().ShouldBeEmpty();
@@ -211,14 +220,17 @@ public sealed class SecurityTxtTests {
         One("Canonical").ShouldBe("https://api.cybercloud.io" + SecurityTxt.Path);
 
         // § 4 — UTF-8, no byte-order mark, LF or CRLF only.
-        SecurityTxt.Content.ShouldNotStartWith("﻿");
+        SecurityTxt.Content.ShouldNotStartWith("\uFEFF");
         SecurityTxt.Content.ShouldNotContain("\r\r");
     }
 
     /// <summary>
-    ///     The build gate docs/plan/18 § Disclosure asks for: <i>"a <c>security.txt</c> with a stale
-    ///     <c>Expires</c> is worse than none. Shipping one means shipping the thing that fails the
-    ///     build before it expires, in the same commit."</i> Thirty days is the notice period.
+    ///     The build gate docs/plan/18 § Disclosure asks for:
+    ///     <i>
+    ///         "a <c>security.txt</c> with a stale
+    ///         <c>Expires</c> is worse than none. Shipping one means shipping the thing that fails the
+    ///         build before it expires, in the same commit."
+    ///     </i> Thirty days is the notice period.
     /// </summary>
     /// <remarks>
     ///     ⚠ Real clock. When this goes red, the file has not lapsed yet — it has thirty days
@@ -242,8 +254,11 @@ public sealed class SecurityTxtTests {
     }
 
     /// <summary>
-    ///     RFC 9116 § 2.5.5: <i>"It is RECOMMENDED that the value of this field be less than a year
-    ///     into the future"</i>. An <c>Expires</c> set far out is a file nobody rereads, which is the
+    ///     RFC 9116 § 2.5.5:
+    ///     <i>
+    ///         "It is RECOMMENDED that the value of this field be less than a year
+    ///         into the future"
+    ///     </i>. An <c>Expires</c> set far out is a file nobody rereads, which is the
     ///     failure the field exists to prevent — so the recommendation is enforced.
     /// </summary>
     [Fact]

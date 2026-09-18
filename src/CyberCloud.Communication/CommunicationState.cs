@@ -75,9 +75,9 @@ public sealed class ProviderMessageIndexState {
         "CyberCloud.Security",
         "CC1005:A secret must not be a serialized member of grain state",
         Justification =
-        "Not a secret. This is the client-supplied idempotency key of docs/plan/17 § The parts "
-        + "that are actually the work, which is already half of the message grain's id and is "
-        + "deliberately logged and traced. Renaming it would lose the term docs/plan/17 uses."
+            "Not a secret. This is the client-supplied idempotency key of docs/plan/17 § The parts "
+            + "that are actually the work, which is already half of the message grain's id and is "
+            + "deliberately logged and traced. Renaming it would lose the term docs/plan/17 uses."
     )]
     public string IdempotencyKey { get; set; } = string.Empty;
 

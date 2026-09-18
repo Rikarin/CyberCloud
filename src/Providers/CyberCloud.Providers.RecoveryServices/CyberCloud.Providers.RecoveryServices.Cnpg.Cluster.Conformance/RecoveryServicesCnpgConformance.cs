@@ -1,20 +1,19 @@
 using CyberCloud.Bundle.Cluster.Conformance;
 using CyberCloud.Cluster.Conformance.Infrastructure;
 using CyberCloud.Conformance;
-using CyberCloud.Core;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.RecoveryServices.Conformance;
 using CyberCloud.Providers.RecoveryServices.Contracts;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Contracts;
-using k8s;
-using k8s.Autorest;
 using Shouldly;
 using System.Collections.Immutable;
 using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using k8s;
+using k8s.Autorest;
 
 namespace CyberCloud.Providers.RecoveryServices.CnpgConformance;
 
@@ -58,13 +57,15 @@ public sealed class CloudNativePgInstalled : IAsyncLifetime {
         var token = TestContext.Current.CancellationToken;
 
         if (!BundleInstaller.OnPath("bash") || !BundleInstaller.OnPath("helm")) {
-            Failure = "install.sh is a bash script whose cloudnative-pg row is one `helm upgrade --install`; one of `bash` or `helm` is not on PATH.";
+            Failure =
+                "install.sh is a bash script whose cloudnative-pg row is one `helm upgrade --install`; one of `bash` or `helm` is not on PATH.";
             return;
         }
 
         var endpoints = await ClusterInfrastructure.TryStartAsync(token);
         if (endpoints is null) {
-            Failure = "the shared k3s did not come up: " + ClusterInfrastructure.SkipMessage("CyberCloud.RecoveryServices/vaults", "nothing yet");
+            Failure = "the shared k3s did not come up: "
+                + ClusterInfrastructure.SkipMessage("CyberCloud.RecoveryServices/vaults", "nothing yet");
             return;
         }
 
@@ -78,13 +79,19 @@ public sealed class CloudNativePgInstalled : IAsyncLifetime {
 
             // ⚠ A FILE, because install.sh is a separate process and helm reads $KUBECONFIG. Deleted in
             // DisposeAsync — it holds a working client certificate for the container.
-            kubeconfigPath = Path.Combine(Path.GetTempPath(), "cybercloud-vault-" + Guid.NewGuid().ToString("N") + ".kubeconfig");
+            kubeconfigPath = Path.Combine(
+                Path.GetTempPath(),
+                "cybercloud-vault-" + Guid.NewGuid().ToString("N") + ".kubeconfig"
+            );
             await File.WriteAllTextAsync(kubeconfigPath, endpoints.Kubeconfig, token);
 
             // ⚠ Both components, the storage row first by the roster's order and not the command
             // line's — CloudNativePgOnAnEmptyCluster asserts that ordering; here it is relied on.
             var run = await BundleInstaller.RunAsync(
-                "--component " + BundleInstaller.CloudNativePgComponent + " --component " + BundleInstaller.OpenEbsLocalPvComponent,
+                "--component "
+                + BundleInstaller.CloudNativePgComponent
+                + " --component "
+                + BundleInstaller.OpenEbsLocalPvComponent,
                 kubeconfigPath,
                 token
             );
@@ -92,12 +99,14 @@ public sealed class CloudNativePgInstalled : IAsyncLifetime {
             Output = run.Output;
 
             if (run.ExitCode != 0) {
-                Failure = $"charts/bundle/install.sh exited {run.ExitCode} installing cloudnative-pg and openebs-localpv onto the shared k3s.";
+                Failure =
+                    $"charts/bundle/install.sh exited {run.ExitCode} installing cloudnative-pg and openebs-localpv onto the shared k3s.";
                 return;
             }
 
             if (!await IsServedAsync(raw, token)) {
-                Failure = "install.sh succeeded and postgresql.cnpg.io/v1 is still not served, so the component's `serves:` line is not true of the cluster it installed.";
+                Failure =
+                    "install.sh succeeded and postgresql.cnpg.io/v1 is still not served, so the component's `serves:` line is not true of the cluster it installed.";
             }
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             Failure = ex.GetType().Name + ": " + ex.Message;
@@ -166,7 +175,9 @@ public sealed class CloudNativePgInstalled : IAsyncLifetime {
 public sealed class RecoveryVaultOnOperatorCase : IProviderCaseSource {
     /// <summary>The companion, with backups off.</summary>
     public static CompanionCase ProtectedServer { get; } =
-        RecoveryVaultCase.ProtectedServer with { Body = cluster => WithBackupsOff(RecoveryVaultCase.ProtectedServer.BodyFor(cluster)) };
+        RecoveryVaultCase.ProtectedServer with {
+            Body = static cluster => WithBackupsOff(RecoveryVaultCase.ProtectedServer.BodyFor(cluster))
+        };
 
     /// <inheritdoc />
     public static ProviderConformanceCase ProviderCase => RecoveryVaultCase.ProviderCase;
@@ -200,8 +211,11 @@ public sealed class RecoveryVaultOnOperatorCase : IProviderCaseSource {
 ///         by CloudNativePG's ScheduledBackup webhook (six-field cron, <c>backupOwnerReference: self</c>),
 ///         the controller creates a <c>Backup</c> the platform never wrote, labels it
 ///         <c>cnpg.io/scheduled-backup</c> with the schedule's name and makes the schedule its owner,
-///         the Backup controller fails it with <i>"cannot proceed with the backup as the cluster has no
-///         backup section"</i>, and <c>RecoveryVaultListRecoveryPointsHandler</c> over the real
+///         the Backup controller fails it with
+///         <i>
+///             "cannot proceed with the backup as the cluster has no
+///             backup section"
+///         </i>, and <c>RecoveryVaultListRecoveryPointsHandler</c> over the real
 ///         connection lists it with that phase and that reason. Every claim <c>SOURCE</c> makes about
 ///         the operator's labelling is measured here.
 ///     </para>
@@ -213,7 +227,9 @@ public sealed class RecoveryVaultOnOperatorCase : IProviderCaseSource {
 /// </remarks>
 /// <param name="cnpg">The install, which must have run first.</param>
 /// <param name="fixture">The harness.</param>
-public sealed class RecoveryVaultAgainstCloudNativePg(CloudNativePgInstalled cnpg, ClusterConformanceFixture<RecoveryVaultOnOperatorCase> fixture)
+public sealed class RecoveryVaultAgainstCloudNativePg(
+    CloudNativePgInstalled cnpg,
+    ClusterConformanceFixture<RecoveryVaultOnOperatorCase> fixture)
     : IClassFixture<ClusterConformanceFixture<RecoveryVaultOnOperatorCase>> {
     static readonly TimeSpan PointBudget = TimeSpan.FromMinutes(3);
     static readonly TimeSpan BetweenDrives = TimeSpan.FromSeconds(1);
@@ -240,20 +256,25 @@ public sealed class RecoveryVaultAgainstCloudNativePg(CloudNativePgInstalled cnp
                 Path = ClusterConformanceHarness<RecoveryVaultOnOperatorCase>.Address(Name).Path,
                 ApiVersion = RecoveryVaults.V2026,
                 Verb = WriteVerb.Put,
-                Body = RecoveryVaultCase.ProviderCase.Body(ClusterConformanceHarness<RecoveryVaultOnOperatorCase>.ClusterId),
+                Body = RecoveryVaultCase.ProviderCase.Body(
+                    ClusterConformanceHarness<RecoveryVaultOnOperatorCase>.ClusterId
+                ),
                 Caller = ClusterConformanceHarness<RecoveryVaultOnOperatorCase>.Caller()
             },
             token
         );
 
         accepted.IsSuccess.ShouldBeTrue(accepted.Error?.Message);
-        var vault = ClusterConformanceHarness<RecoveryVaultOnOperatorCase>.Address(Name).WithId(accepted.GetValueOrThrow().Resource.Id);
+        var vault = ClusterConformanceHarness<RecoveryVaultOnOperatorCase>.Address(Name)
+            .WithId(accepted.GetValueOrThrow().Resource.Id);
 
         var status = await ConvergeAsync(harness, accepted.GetValueOrThrow().OperationId);
 
         status.State.ShouldBe(
             OperationState.Failed,
-            "a vault protecting a server with backups off reported " + status.State + " against the real operator; "
+            "a vault protecting a server with backups off reported "
+            + status.State
+            + " against the real operator; "
             + "CloudNativePG fails every Backup of such a cluster, and the vault is supposed to say so before it schedules one"
         );
         status.Error.ShouldNotBeNull();
@@ -261,7 +282,9 @@ public sealed class RecoveryVaultAgainstCloudNativePg(CloudNativePgInstalled cnp
         status.Error.Message.ShouldContain("backups disabled");
 
         // ── The operator's half: the vault's rendering, applied by hand, under the vault's labels ─
-        using var desired = JsonDocument.Parse(RecoveryVaultCase.ProviderCase.Body(ClusterConformanceHarness<RecoveryVaultOnOperatorCase>.ClusterId));
+        using var desired = JsonDocument.Parse(
+            RecoveryVaultCase.ProviderCase.Body(ClusterConformanceHarness<RecoveryVaultOnOperatorCase>.ClusterId)
+        );
         var schedule = RecoveryVaults.ScheduledBackupNameOf(Name, item);
 
         var applied = await KubeCommand.For(harness.Connection)
@@ -294,7 +317,8 @@ public sealed class RecoveryVaultAgainstCloudNativePg(CloudNativePgInstalled cnp
                 );
 
                 var items = JsonNode.Parse(listed.ToString()!)?["items"]?.AsArray();
-                var settled = items?.OfType<JsonObject>().FirstOrDefault(x => x["status"]?["phase"]?.GetValue<string>() is { Length: > 0 });
+                var settled = items?.OfType<JsonObject>()
+                    .FirstOrDefault(static x => x["status"]?["phase"]?.GetValue<string>() is { Length: > 0 });
 
                 if (settled is not null) {
                     backup = settled;
@@ -316,19 +340,37 @@ public sealed class RecoveryVaultAgainstCloudNativePg(CloudNativePgInstalled cnp
             var labels = backup["metadata"]!["labels"]!.AsObject();
             labels[RecoveryVaults.ParentScheduledBackupLabel]!.GetValue<string>().ShouldBe(schedule);
             labels[RecoveryVaults.ClusterLabel]!.GetValue<string>().ShouldBe(item);
-            labels.Select(x => x.Key).ShouldNotContain(x => x.StartsWith(KubeLabels.Prefix + "/", StringComparison.Ordinal));
+            labels.Select(static x => x.Key)
+                .ShouldNotContain(x => x.StartsWith(KubeLabels.Prefix + "/", StringComparison.Ordinal));
 
-            var owner = backup["metadata"]!["ownerReferences"]?.AsArray().Select(x => x!.AsObject()).SingleOrDefault(x => x["kind"]?.GetValue<string>() == "ScheduledBackup");
-            owner.ShouldNotBeNull("backupOwnerReference: self did not make the schedule the Backup's owner, so deleting the vault would orphan its points");
+            var owner = backup["metadata"]!["ownerReferences"]?.AsArray()
+                .Select(static x => x!.AsObject())
+                .SingleOrDefault(static x => x["kind"]?.GetValue<string>() == "ScheduledBackup");
+            owner.ShouldNotBeNull(
+                "backupOwnerReference: self did not make the schedule the Backup's owner, so deleting the vault would orphan its points"
+            );
             owner["name"]!.GetValue<string>().ShouldBe(schedule);
 
             var phase = backup["status"]!["phase"]!.GetValue<string>();
-            phase.ShouldBe("failed", "a Backup of a cluster with no backup section is supposed to fail on the controller's prerequisite check; it reported " + phase);
+            phase.ShouldBe(
+                "failed",
+                "a Backup of a cluster with no backup section is supposed to fail on the controller's prerequisite check; it reported "
+                + phase
+            );
             backup["status"]!["error"]!.GetValue<string>().ShouldContain("no backup section");
 
             // ── The listing, through the vault's own handler over the real connection ────────────
             var answer = await new RecoveryVaultListRecoveryPointsHandler().InvokeAsync(
-                new(vault, RecoveryVaults.V2026, RecoveryVaults.ListRecoveryPointsAction, desired.RootElement, desired.RootElement, ns, harness.Connection, new UnavailableSecretResolver()),
+                new(
+                    vault,
+                    RecoveryVaults.V2026,
+                    RecoveryVaults.ListRecoveryPointsAction,
+                    desired.RootElement,
+                    desired.RootElement,
+                    ns,
+                    harness.Connection,
+                    new UnavailableSecretResolver()
+                ),
                 token
             );
 
@@ -339,10 +381,13 @@ public sealed class RecoveryVaultAgainstCloudNativePg(CloudNativePgInstalled cnp
             response["completed"]!.GetValue<int>().ShouldBe(0);
 
             var pointName = backup["metadata"]!["name"]!.GetValue<string>();
-            var line = response["recoveryPoints"]!.AsArray().Select(x => x!.GetValue<string>())
+            var line = response["recoveryPoints"]!.AsArray()
+                .Select(static x => x!.GetValue<string>())
                 .SingleOrDefault(x => x.Contains(" " + pointName + " ", StringComparison.Ordinal));
 
-            line.ShouldNotBeNull($"listRecoveryPoints did not list '{pointName}', which the controller labelled with the vault's schedule");
+            line.ShouldNotBeNull(
+                $"listRecoveryPoints did not list '{pointName}', which the controller labelled with the vault's schedule"
+            );
             line.ShouldStartWith(item + " " + pointName + " failed ");
             line.ShouldContain("no backup section");
 
@@ -351,7 +396,11 @@ public sealed class RecoveryVaultAgainstCloudNativePg(CloudNativePgInstalled cnp
             // The vault's own teardown, against the real API server: it lists its schedules by label
             // and deletes them, and the operator's Backups follow by owner reference.
             var deleted = await harness.Manager.DeleteAsync(
-                new() { Path = vault.Path, ApiVersion = RecoveryVaults.V2026, Caller = ClusterConformanceHarness<RecoveryVaultOnOperatorCase>.Caller() },
+                new() {
+                    Path = vault.Path,
+                    ApiVersion = RecoveryVaults.V2026,
+                    Caller = ClusterConformanceHarness<RecoveryVaultOnOperatorCase>.Caller()
+                },
                 token
             );
 
@@ -364,7 +413,10 @@ public sealed class RecoveryVaultAgainstCloudNativePg(CloudNativePgInstalled cnp
             .ShouldBeTrue("the vault's teardown left its schedule standing on the real API server");
     }
 
-    static async Task<OperationStatus> ConvergeAsync(ClusterConformanceHarness<RecoveryVaultOnOperatorCase> harness, Guid operationId) {
+    static async Task<OperationStatus> ConvergeAsync(
+        ClusterConformanceHarness<RecoveryVaultOnOperatorCase> harness,
+        Guid operationId
+    ) {
         var operation = harness.Operation(ConformanceIds.Tenant, operationId);
         OperationStatus? last = null;
 

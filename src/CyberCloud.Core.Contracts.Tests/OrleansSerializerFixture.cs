@@ -35,7 +35,7 @@ public sealed class OrleansSerializerFixture : IDisposable {
     /// <summary>Builds the service provider and resolves the serializer.</summary>
     public OrleansSerializerFixture() {
         var services = new ServiceCollection();
-        services.AddSerializer(builder =>
+        services.AddSerializer(static builder =>
             builder.AddAssembly(typeof(ResultSurrogate).Assembly)
         );
 

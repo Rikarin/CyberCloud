@@ -49,13 +49,18 @@ public sealed class FakeAgentTunnels(IClock clock) : IAgentTunnels {
     /// <param name="clusterId">The cluster.</param>
     /// <param name="token">A plaintext token.</param>
     public bool WouldAdmit(Guid clusterId, string token) =>
-        enrollmentHashes.TryGetValue(clusterId, out var hash) && AgentCredentials.HashesMatch(hash, AgentCredentials.Hash(token));
+        enrollmentHashes.TryGetValue(clusterId, out var hash)
+        && AgentCredentials.HashesMatch(hash, AgentCredentials.Hash(token));
 
     /// <summary>The agent's first (or next) heartbeat — the event the resource converges on.</summary>
     /// <param name="clusterId">The cluster.</param>
     /// <param name="agentVersion">What the agent reports.</param>
     /// <param name="kubernetesVersion">What the API server reports.</param>
-    public void Heartbeat(Guid clusterId, string agentVersion = "conformance-agent", string kubernetesVersion = "v1.35.0") {
+    public void Heartbeat(
+        Guid clusterId,
+        string agentVersion = "conformance-agent",
+        string kubernetesVersion = "v1.35.0"
+    ) {
         var now = clock.UtcNow;
 
         statuses.AddOrUpdate(
@@ -126,7 +131,10 @@ public sealed class FakeAgentTunnels(IClock clock) : IAgentTunnels {
     }
 
     /// <inheritdoc />
-    public Task<Result<AgentTunnelStatus>> GetStatusAsync(Guid clusterId, CancellationToken cancellationToken = default) =>
+    public Task<Result<AgentTunnelStatus>> GetStatusAsync(
+        Guid clusterId,
+        CancellationToken cancellationToken = default
+    ) =>
         Task.FromResult(
             Result<AgentTunnelStatus>.Success(
                 statuses.TryGetValue(clusterId, out var status) ? status : new() { ClusterId = clusterId }
@@ -165,7 +173,10 @@ public sealed class RecordingClusterConnectionRegistrar : IClusterConnectionRegi
     public void Reset() => Attached.Clear();
 
     /// <inheritdoc />
-    public Task<Result> AttachAsync(ClusterConnectionDescriptor descriptor, CancellationToken cancellationToken = default) {
+    public Task<Result> AttachAsync(
+        ClusterConnectionDescriptor descriptor,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(descriptor);
         Attached.Enqueue(descriptor);
         return Task.FromResult(Result.Success);

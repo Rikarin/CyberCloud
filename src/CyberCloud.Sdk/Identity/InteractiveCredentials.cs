@@ -340,7 +340,7 @@ public sealed class InteractiveBrowserCredential : TokenEndpointCredential {
             Append(query, "tenant_id", tenant);
         }
 
-        return new Uri(query.ToString().TrimEnd('&'));
+        return new(query.ToString().TrimEnd('&'));
 
         static void Append(StringBuilder builder, string name, string value) =>
             builder.Append(name).Append('=').Append(Uri.EscapeDataString(value)).Append('&');

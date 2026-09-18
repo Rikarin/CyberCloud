@@ -21,7 +21,7 @@ static class ConfigCommands {
     public static Command Build(CycHost host, GlobalOptions globals, VerbTreeDocument tree) {
         ArgumentNullException.ThrowIfNull(host);
 
-        return new Command("config", "Read and write ~/.cyc/config.") {
+        return new("config", "Read and write ~/.cyc/config.") {
             Get(host, globals, tree),
             Set(host, globals, tree),
             List(host, globals, tree),
@@ -95,8 +95,8 @@ static class ConfigCommands {
                 invocation.Render(
                     Payload.Array(
                         [
-                            .. settings.OrderBy(x => x.Key, StringComparer.Ordinal)
-                                .Select(x => Payload.Object(
+                            .. settings.OrderBy(static x => x.Key, StringComparer.Ordinal)
+                                .Select(static x => Payload.Object(
                                         [
                                             new KeyValuePair<string, Payload>("key", Payload.Text(x.Key)),
                                             new KeyValuePair<string, Payload>("value", Payload.Text(x.Value)),
@@ -150,7 +150,7 @@ static class ConfigCommands {
     /// </summary>
     static Command Telemetry(CycHost host, GlobalOptions globals, VerbTreeDocument tree) {
         var state = new Argument<string>("state") {
-            Description = "on, off, or status.", DefaultValueFactory = _ => "status"
+            Description = "on, off, or status.", DefaultValueFactory = static _ => "status"
         };
 
         state.AcceptOnlyFromAmong("on", "off", "status");

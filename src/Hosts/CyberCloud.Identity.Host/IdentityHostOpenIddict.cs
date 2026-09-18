@@ -129,8 +129,11 @@ public static class IdentityHostOpenIddict {
     ///         manager needs a store implementation per object type — an application store (the
     ///         <c>client_id</c> index it would read through, <c>IClientIndexGrain</c>, exists now;
     ///         the store over it does not), a token store, an authorization store. Without them the
-    ///         server threw <i>"The core services must be
-    ///         registered"</i> on the first token request, which is the state this host shipped in
+    ///         server threw
+    ///         <i>
+    ///             "The core services must be
+    ///             registered"
+    ///         </i> on the first token request, which is the state this host shipped in
     ///         for as long as nothing called <c>/token</c>. The degraded mode turns those checks off
     ///         and requires a custom validator per endpoint instead; <see cref="DegradedModeHandlers" />
     ///         is the set, and <c>OpenIddictServerOptionsTests.EveryEndpointHasTheValidatorDegradedModeDemands</c>
@@ -146,8 +149,11 @@ public static class IdentityHostOpenIddict {
     ///         on both of its paths so the two cannot disagree.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The CORS policy for <c>/token</c> is registered beside the server and applied
-    ///         by the endpoints.</b> The portal calls <c>/token</c> and <c>/logout</c> cross-origin
+    ///         ⚠
+    ///         <b>
+    ///             The CORS policy for <c>/token</c> is registered beside the server and applied
+    ///             by the endpoints.
+    ///         </b> The portal calls <c>/token</c> and <c>/logout</c> cross-origin
     ///         with credentials — docs/plan/10 § Authentication inputs, and docs/plan/20 § SSR says
     ///         the render process holds no tokens, so nothing may proxy the call — and the allowed
     ///         origins are derived from the browser client's redirect URIs
@@ -174,9 +180,9 @@ public static class IdentityHostOpenIddict {
         // options pipeline rather than read here because the section is bound by AddIdentityHostApi,
         // and this method must not care which order the two are called in.
         services.AddOptions<OpenIddictServerOptions>()
-            .Configure<IOptions<IdentityHostOptions>>((options, host) => {
+            .Configure<IOptions<IdentityHostOptions>>(static (options, host) => {
                     if (!string.IsNullOrEmpty(host.Value.Issuer)) {
-                        options.Issuer = new Uri(host.Value.Issuer, UriKind.Absolute);
+                        options.Issuer = new(host.Value.Issuer, UriKind.Absolute);
                     }
                 }
             );
@@ -187,7 +193,7 @@ public static class IdentityHostOpenIddict {
         // the environment rather than on a setting so that no production configuration can turn it
         // off by mistake — a value somebody can set is a value somebody will set.
         services.AddOptions<OpenIddictServerAspNetCoreOptions>()
-            .Configure<IHostEnvironment>((options, environment) =>
+            .Configure<IHostEnvironment>(static (options, environment) =>
                 options.DisableTransportSecurityRequirement = environment.IsDevelopment()
             );
 
@@ -195,7 +201,7 @@ public static class IdentityHostOpenIddict {
         // with RequireCors — and no default policy, so an endpoint that does not ask gets nothing.
         services.AddCors();
         services.AddOptions<CorsOptions>()
-            .Configure<FirstPartyClients>((cors, clients) => cors.AddPolicy(
+            .Configure<FirstPartyClients>(static (cors, clients) => cors.AddPolicy(
                     FirstPartyClients.CorsPolicy,
                     policy => policy
                         .WithOrigins([.. clients.AllowedOrigins])
@@ -207,7 +213,7 @@ public static class IdentityHostOpenIddict {
 
         services
             .AddOpenIddict()
-            .AddServer(options => {
+            .AddServer(static options => {
                     options.EnableDegradedMode();
 
                     foreach (var handler in DegradedModeHandlers.All) {
@@ -236,7 +242,7 @@ public static class IdentityHostOpenIddict {
                     // value PKCE exists to keep off the wire, in the /authorize query that lands in
                     // every access log. The discovery document says S256 and nothing else, so a
                     // client library that reads it picks the right one without being told.
-                    options.Configure(server => {
+                    options.Configure(static server => {
                             server.CodeChallengeMethods.Clear();
                             server.CodeChallengeMethods.Add(OpenIddictConstants.CodeChallengeMethods.Sha256);
                         }

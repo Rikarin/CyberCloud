@@ -1,6 +1,5 @@
 using CyberCloud.ResourceManager.Contracts.Generation;
 using CyberCloud.ResourceManager.Registry;
-using CyberCloud.Tenancy.Contracts;
 using System.Text.Json;
 
 namespace CyberCloud.Providers.Mail.Tests;
@@ -66,7 +65,7 @@ public sealed class MailDeclarationTests {
         registration.Display.Alias.ShouldBe("domain");
 
         CliTokens.Collisions(
-            registry.Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+            registry.Types.Select(static x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
         )
             .ShouldBeEmpty();
     }
@@ -85,7 +84,8 @@ public sealed class MailDeclarationTests {
         // ⚠ THE DRIFT THIS CATCHES IS AN ACCESSOR READING A POINTER THE SCHEMA DOES NOT DECLARE,
         // which is a property a tenant can never set and whose fallback is therefore the ONLY value
         // it ever has. That reads as a working default rather than as a bug.
-        var pointers = MailDomains.Schema2026.Properties.Select(x => x.JsonPointer).ToHashSet(StringComparer.Ordinal);
+        var pointers = MailDomains.Schema2026.Properties.Select(static x => x.JsonPointer)
+            .ToHashSet(StringComparer.Ordinal);
 
         foreach (var expected in new[] {
                      "/properties/domain", "/properties/version", "/properties/sizing/preset", "/properties/sizing/cpu",

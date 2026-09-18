@@ -40,7 +40,7 @@ static class RestCommand {
         ArgumentNullException.ThrowIfNull(host);
 
         var method = new Option<string>("--method", "-m") {
-            Description = "The HTTP method. Defaults to GET.", DefaultValueFactory = _ => "GET"
+            Description = "The HTTP method. Defaults to GET.", DefaultValueFactory = static _ => "GET"
         };
 
         method.AcceptOnlyFromAmong("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS");
@@ -93,7 +93,7 @@ static class RestCommand {
                 }
 
                 if (response.IsError) {
-                    throw CycRequestException.From(response, flag: null);
+                    throw CycRequestException.From(response, null);
                 }
 
                 using var parsed = ResponseBody.Parse(response);
@@ -122,7 +122,7 @@ static class RestCommand {
         // the test below.
         if (!Uri.TryCreate(value, UriKind.Absolute, out var absolute)
             || (absolute.Scheme != Uri.UriSchemeHttp && absolute.Scheme != Uri.UriSchemeHttps)) {
-            return new Uri(endpoint, value);
+            return new(endpoint, value);
         }
 
         if (!string.Equals(absolute.Host, endpoint.Host, StringComparison.OrdinalIgnoreCase)) {

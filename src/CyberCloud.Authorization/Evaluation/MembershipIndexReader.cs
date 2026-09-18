@@ -33,8 +33,11 @@ namespace CyberCloud.Authorization.Evaluation;
 ///         evaluator denies that path too, so the two agree.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A slice that was never written, or was written under another schema version, is
-///         not read at all.</b> Both come back with a <see cref="MembershipIndexSnapshot.SchemaVersion" />
+///         ⚠
+///         <b>
+///             A slice that was never written, or was written under another schema version, is
+///             not read at all.
+///         </b> Both come back with a <see cref="MembershipIndexSnapshot.SchemaVersion" />
 ///         that is not this schema's — <c>0</c> for one no write has touched — and neither is a
 ///         closure over the tuples as they stand: the first says nothing about tuples that predate
 ///         the index, which is every tuple in a tenant that was upgraded to it or restored without
@@ -156,7 +159,10 @@ public sealed class MembershipIndexReader : IMembershipIndex {
         return true;
     }
 
-    /// <summary>A slice as read, with <see cref="Slice.Snapshot" /> null for one unwritten or stamped with another schema version.</summary>
+    /// <summary>
+    ///     A slice as read, with <see cref="Slice.Snapshot" /> null for one unwritten or stamped with another schema
+    ///     version.
+    /// </summary>
     async ValueTask<Result<Slice>> SliceAsync(ObjectRef subjectObject, CancellationToken cancellationToken) {
         if (slices.TryGetValue(subjectObject, out var cached)) {
             return Result<Slice>.Success(new(cached));

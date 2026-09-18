@@ -23,14 +23,20 @@ public static class ResourceGraphServiceCollectionExtensions {
     /// <returns>The same collection, for chaining.</returns>
     /// <exception cref="ArgumentException">The section has no NATS URL.</exception>
     /// <remarks>
-    ///     ⚠ <b>Call it only when <see cref="ResourceGraphOptions.IsPublisherConfigured" /> is
-    ///     true</b>, the way the hosts call <c>AddS3ObjectStore</c>: an unconfigured section leaves
+    ///     ⚠
+    ///     <b>
+    ///         Call it only when <see cref="ResourceGraphOptions.IsPublisherConfigured" /> is
+    ///         true
+    ///     </b>, the way the hosts call <c>AddS3ObjectStore</c>: an unconfigured section leaves
     ///     <c>LoggingResourceChangedSink</c> in place, and this method refuses an empty URL rather
     ///     than registering a sink that would fail every publish with a connection error naming an
     ///     address nobody set. <c>AddSingleton</c>, not <c>TryAdd</c>, so the order against
     ///     <c>AddCyberCloudResourceManager</c>'s <c>TryAdd</c> does not matter.
     /// </remarks>
-    public static IServiceCollection AddResourceChangedPublisher(this IServiceCollection services, ResourceGraphOptions options) {
+    public static IServiceCollection AddResourceChangedPublisher(
+        this IServiceCollection services,
+        ResourceGraphOptions options
+    ) {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
 
@@ -74,7 +80,10 @@ public static class ResourceGraphServiceCollectionExtensions {
     ///         host may call both.
     ///     </para>
     /// </remarks>
-    public static IServiceCollection AddResourceGraphProjector(this IServiceCollection services, ResourceGraphOptions options) {
+    public static IServiceCollection AddResourceGraphProjector(
+        this IServiceCollection services,
+        ResourceGraphOptions options
+    ) {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
 
@@ -95,7 +104,7 @@ public static class ResourceGraphServiceCollectionExtensions {
         services.TryAddSingleton<IResourceAccessResolver, ReBacResourceAccessResolver>();
         AddClickHouse(services, options);
         services.AddSingleton<ResourceGraphProjector>();
-        services.AddHostedService(provider => provider.GetRequiredService<ResourceGraphProjector>());
+        services.AddHostedService(static provider => provider.GetRequiredService<ResourceGraphProjector>());
 
         return services;
     }
@@ -107,7 +116,10 @@ public static class ResourceGraphServiceCollectionExtensions {
     /// <param name="services">The container.</param>
     /// <param name="options">The bound section, with the ClickHouse half set.</param>
     /// <returns>The same collection, for chaining.</returns>
-    /// <exception cref="ArgumentException">The section has no ClickHouse endpoint, or names a plain-HTTP one without opting in.</exception>
+    /// <exception cref="ArgumentException">
+    ///     The section has no ClickHouse endpoint, or names a plain-HTTP one without opting
+    ///     in.
+    /// </exception>
     /// <remarks>
     ///     <para>
     ///         ⚠ <b>Needs no NATS URL, and runs no projector.</b> A query reads the table; who fills
@@ -126,7 +138,10 @@ public static class ResourceGraphServiceCollectionExtensions {
     ///         is for the projector.
     ///     </para>
     /// </remarks>
-    public static IServiceCollection AddResourceGraphQuery(this IServiceCollection services, ResourceGraphOptions options) {
+    public static IServiceCollection AddResourceGraphQuery(
+        this IServiceCollection services,
+        ResourceGraphOptions options
+    ) {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
 
@@ -143,7 +158,8 @@ public static class ResourceGraphServiceCollectionExtensions {
         services.TryAddSingleton(options);
         services.TryAddSingleton<ICallerAccessResolver, MembershipIndexCallerAccessResolver>();
         AddClickHouse(services, options);
-        services.Replace(ServiceDescriptor.Singleton<IResourceGraphQuery>(provider => new ResourceGraphQueryService(
+        services.Replace(
+            ServiceDescriptor.Singleton<IResourceGraphQuery>(provider => new ResourceGraphQueryService(
                     provider.GetRequiredService<ClickHouseClient>(),
                     provider.GetRequiredService<ClickHouseResourceGraphStore>(),
                     provider.GetRequiredService<ICallerAccessResolver>(),
@@ -162,7 +178,8 @@ public static class ResourceGraphServiceCollectionExtensions {
     ///     <c>CyberCloud.ObjectStorage</c>.
     /// </summary>
     static void AddClickHouse(IServiceCollection services, ResourceGraphOptions options) {
-        services.TryAddSingleton(_ => new ClickHouseClient(new HttpClient { Timeout = options.RequestTimeout }, options));
+        services.TryAddSingleton(_ => new ClickHouseClient(new HttpClient { Timeout = options.RequestTimeout }, options)
+        );
         services.TryAddSingleton<ClickHouseResourceGraphStore>();
     }
 }

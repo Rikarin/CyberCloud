@@ -298,8 +298,8 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
         Module?.ConfigureHandlers(services, Grains);
 
         foreach (var handler in Registry.Types
-                     .SelectMany(x => x.Actions)
-                     .Select(x => x.HandlerType)
+                     .SelectMany(static x => x.Actions)
+                     .Select(static x => x.HandlerType)
                      .OfType<Type>()
                      .Distinct()) {
             services.AddSingleton(handler);
@@ -434,7 +434,7 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
 
     /// <summary>The <c>/</c>-separated ancestor names an address for the type under test carries.</summary>
     public static string AncestorPath =>
-        string.Join('/', Ancestors.Select((_, level) => ConformanceIds.AncestorName(level)));
+        string.Join('/', Ancestors.Select(static (_, level) => ConformanceIds.AncestorName(level)));
 
     /// <summary>Builds an address for the type under test.</summary>
     /// <param name="name">The resource name. DNS-1123, per docs/plan/06 § Identifiers.</param>
@@ -472,8 +472,11 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
     ///     ancestor at its level.
     /// </exception>
     /// <remarks>
-    ///     ⚠ <b>The first thing anything touching a sibling goes through, for the reason
-    ///     <see cref="Ancestors" /> is.</b> Without it a sibling from another provider fails inside
+    ///     ⚠
+    ///     <b>
+    ///         The first thing anything touching a sibling goes through, for the reason
+    ///         <see cref="Ancestors" /> is.
+    ///     </b> Without it a sibling from another provider fails inside
     ///     <c>ResourceManagerService</c> with the registry's message about an unknown type, on the
     ///     fixture's first create, naming neither the case nor the member; and a sibling nested past
     ///     the chain fails inside <c>ResourceId</c>'s constructor about parent-name counts. Each
@@ -641,7 +644,7 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
         await LiftQuotaAsync(ConformanceIds.Tenant, ConformanceIds.Subscription);
         await LiftQuotaAsync(ConformanceIds.OtherTenant, ConformanceIds.OtherSubscription);
 
-        Views = new ResourceViews(
+        Views = new(
             Registry,
             cluster.GrainFactory,
             Authorizer,
@@ -726,7 +729,12 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
 
         foreach (var companion in Companions) {
             var provider = companion.ProviderCase.CreateProvider();
-            if (providers.Any(x => string.Equals(x.ProviderNamespace, provider.ProviderNamespace, StringComparison.OrdinalIgnoreCase))) {
+            if (providers.Exists(x => string.Equals(
+                        x.ProviderNamespace,
+                        provider.ProviderNamespace,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )) {
                 continue;
             }
 
@@ -758,7 +766,8 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                 }
             }
 
-            var duplicate = declared.GroupBy(x => x.Name, StringComparer.Ordinal).FirstOrDefault(x => x.Count() > 1);
+            var duplicate = declared.GroupBy(static x => x.Name, StringComparer.Ordinal)
+                .FirstOrDefault(static x => x.Count() > 1);
             if (duplicate is not null) {
                 throw new InvalidOperationException(
                     $"'{Case.DisplayName}' declares two companions named '{duplicate.Key}'. Each is a resource in "
@@ -969,7 +978,7 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
             silo.AddMemoryGrainStorage(StorageTiers.Hot);
             silo.UseInMemoryReminderService();
 
-            silo.ConfigureServices(services => {
+            silo.ConfigureServices(static services => {
                     services.AddSingleton<IClock>(ConformanceState<TSource>.Clock);
                     services.AddSingleton<IResourceAuthorizer>(ConformanceState<TSource>.Authorizer);
                     services.AddSingleton<ILockResolver>(ConformanceState<TSource>.Locks);
@@ -1008,7 +1017,7 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     // itself, and the reconciler as a SINGLETON BY CONCRETE TYPE — clause 2 makes one
                     // instance per process correct, and the registry stores the concrete type because
                     // that is what ReconcileDriver resolves.
-                    services.AddSingleton<IResourceProvider>(_ => TSource.ProviderCase.CreateProvider());
+                    services.AddSingleton(static _ => TSource.ProviderCase.CreateProvider());
                     services.AddSingleton(TSource.ProviderCase.ReconcilerType);
 
                     // ⚠ AND EVERY COMPANION'S PROVIDER AND RECONCILER, because the silo's registry is
@@ -1017,12 +1026,12 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     // client side alone would be creatable and invisible. One provider per namespace,
                     // for the reason Providers() gives.
                     foreach (var provider in Providers().Skip(1)) {
-                        services.AddSingleton<IResourceProvider>(provider);
+                        services.AddSingleton(provider);
                     }
 
                     foreach (var reconciler in Companions
-                                 .Select(x => x.ProviderCase.ReconcilerType)
-                                 .Where(x => x != TSource.ProviderCase.ReconcilerType)
+                                 .Select(static x => x.ProviderCase.ReconcilerType)
+                                 .Where(static x => x != TSource.ProviderCase.ReconcilerType)
                                  .Distinct()) {
                         services.AddSingleton(reconciler);
                     }
@@ -1038,9 +1047,9 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     // too, and a sibling of a different type than the case's — a network beside a
                     // peering — is driven by a reconciler nothing else here registers.
                     foreach (var reconciler in TSource.Ancestors
-                                 .Select(x => x.ReconcilerType)
-                                 .Concat(TSource.Siblings.Select(x => x.Case.ReconcilerType))
-                                 .Where(x => x != TSource.ProviderCase.ReconcilerType)
+                                 .Select(static x => x.ReconcilerType)
+                                 .Concat(TSource.Siblings.Select(static x => x.Case.ReconcilerType))
+                                 .Where(static x => x != TSource.ProviderCase.ReconcilerType)
                                  .Distinct()) {
                         services.AddSingleton(reconciler);
                     }
@@ -1051,14 +1060,14 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     // with a message about the container, naming the harness rather than the case.
                     foreach (var handler in ProviderRegistry.Build(Providers())
                                  .Types
-                                     .SelectMany(x => x.Actions)
-                                     .Select(x => x.HandlerType)
+                                     .SelectMany(static x => x.Actions)
+                                     .Select(static x => x.HandlerType)
                                      .OfType<Type>()
                                      .Distinct()) {
                         services.AddSingleton(handler);
                     }
 
-                    services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
+                    services.TryAddSingleton<ILoggerFactory>(static _ => NullLoggerFactory.Instance);
                 }
             );
 

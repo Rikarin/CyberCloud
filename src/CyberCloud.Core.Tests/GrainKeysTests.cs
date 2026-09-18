@@ -184,7 +184,7 @@ public class GrainKeysTests {
             };
 
             var actual = Corpus.EveryGrainKeyShapeFor(id)
-                .Select(k => GrainKeys.Parse(k).GetValueOrThrow().Kind)
+                .Select(static k => GrainKeys.Parse(k).GetValueOrThrow().Kind)
                 .ToArray();
 
             actual.ShouldBe(expected);
@@ -249,7 +249,7 @@ public class GrainKeysTests {
         }
 
         // Sanity: the corpus really did exercise all eight shapes.
-        seen.Values.Select(x => x.Kind).Distinct().Count().ShouldBe(8);
+        seen.Values.Select(static x => x.Kind).Distinct().Count().ShouldBe(8);
     }
 
     [Fact]
@@ -418,7 +418,7 @@ public class GrainKeysTests {
         // docs/plan/06 § Grain keys — IClusterConnectionGrain is the one null-tenant grain, and
         // ADR-002's table (docs/plan/02 § ADR-002) records that the null-tenant branch is a DIFFERENT
         // encoding: no tenant prefix, no '~' rule, and the whole key has its '|' doubled.
-        foreach (var id in Corpus.ResourceIds(200, 3).Select(x => x.Id)) {
+        foreach (var id in Corpus.ResourceIds(200, 3).Select(static x => x.Id)) {
             var key = GrainKeys.ClusterConnection(id);
 
             // Qualified with the null tenant, the key passes through as itself…
@@ -626,8 +626,8 @@ public class GrainKeysTests {
         GrainKeys.Parse("consent/" + parsed.Digest + "/extra").IsFailure.ShouldBeTrue();
 
         // And a client id a key cannot carry throws here as it does at ClientIndex.
-        Should.Throw<ArgumentException>(() => GrainKeys.ConsentGrant(Tenant, Resource, "with\nnewline"));
-        Should.Throw<ArgumentException>(() => GrainKeys.ConsentGrant(Tenant, Resource, ""));
+        Should.Throw<ArgumentException>(static () => GrainKeys.ConsentGrant(Tenant, Resource, "with\nnewline"));
+        Should.Throw<ArgumentException>(static () => GrainKeys.ConsentGrant(Tenant, Resource, ""));
     }
 
     [Fact]
@@ -694,7 +694,7 @@ public class GrainKeysTests {
 
     [Fact]
     public void AWatchOnNoTypeIsRefused() {
-        Should.Throw<ArgumentException>(() => GrainKeys.WatchIndex(Subscription, default));
+        Should.Throw<ArgumentException>(static () => GrainKeys.WatchIndex(Subscription, default));
     }
 
     // ── The email index: hash(tenantId + normalized email), per tenant ────────────────────────
@@ -717,7 +717,7 @@ public class GrainKeysTests {
     [InlineData("Alice@Example.Com")]
     [InlineData("  alice@example.com  ")]
     [InlineData("\talice@example.com\n")]
-    [InlineData(" alice@example.com ")]
+    [InlineData("\u00A0alice@example.com\u00A0")]
     public void CaseAndSurroundingWhitespaceDoNotChangeTheKey(string email) =>
         GrainKeys.EmailIndex(Tenant, email)
             .ShouldBe(GrainKeys.EmailIndex(Tenant, "alice@example.com"));
@@ -974,7 +974,7 @@ public class GrainKeysTests {
             (GrainKeys.ClusterConnection(Resource), GrainKeyKind.ClusterConnection)
         };
 
-        kinds.Select(x => x.Item1).Distinct(StringComparer.Ordinal).Count().ShouldBe(kinds.Length);
+        kinds.Select(static x => x.Item1).Distinct(StringComparer.Ordinal).Count().ShouldBe(kinds.Length);
 
         foreach (var (key, kind) in kinds) {
             GrainKeys.Parse(key).GetValueOrThrow().Kind.ShouldBe(kind);
@@ -1256,7 +1256,7 @@ public class GrainKeysTests {
         // component of both four-segment shapes is the same name, so a hole in either factory is a
         // hole in the pair.
         Should.Throw<ArgumentException>(
-            () => GrainKeys.ParkedResourceRegistry(Subscription, "pr/od"),
+            static () => GrainKeys.ParkedResourceRegistry(Subscription, "pr/od"),
             "a resource group name containing '/' must not be constructible into a registry key"
         );
 
@@ -1299,16 +1299,16 @@ public class GrainKeysTests {
             new[] { group, parked, sweeper }.Distinct(StringComparer.Ordinal).Count().ShouldBe(3);
 
             var decoded = new[] { group, parked, sweeper }
-                .Select(x => GrainKeys.Parse(x).GetValueOrThrow())
+                .Select(static x => GrainKeys.Parse(x).GetValueOrThrow())
                 .ToArray();
 
-            decoded.Select(x => x.Kind)
+            decoded.Select(static x => x.Kind)
                 .ShouldBe(
                     [GrainKeyKind.ResourceGroup, GrainKeyKind.ParkedResourceRegistry, GrainKeyKind.ExpirySweeper]
                 );
 
-            decoded.Select(x => x.Id).Distinct().ShouldBe([id.SubscriptionId]);
-            decoded.Select(x => x.Name).Distinct(StringComparer.Ordinal).ShouldBe([id.ResourceGroup]);
+            decoded.Select(static x => x.Id).Distinct().ShouldBe([id.SubscriptionId]);
+            decoded.Select(static x => x.Name).Distinct(StringComparer.Ordinal).ShouldBe([id.ResourceGroup]);
 
             GrainKeys.IsTenantQualificationSafe(sweeper).ShouldBeTrue();
         }
@@ -1353,7 +1353,7 @@ public class GrainKeysTests {
         // one caller-controlled component of all three shapes is the same name, so a hole in any
         // one factory is a hole in the set.
         Should.Throw<ArgumentException>(
-            () => GrainKeys.ExpirySweeper(Subscription, "pr/od"),
+            static () => GrainKeys.ExpirySweeper(Subscription, "pr/od"),
             "a resource group name containing '/' must not be constructible into a sweeper key"
         );
 
@@ -1413,7 +1413,7 @@ public class GrainKeysTests {
     [Fact]
     public void TheManagementGroupFactoryRefusesAnInjectedName() =>
         Should.Throw<ArgumentException>(
-            () => GrainKeys.ManagementGroup("plat/form"),
+            static () => GrainKeys.ManagementGroup("plat/form"),
             "a management group name containing '/' must not be constructible into a key"
         );
 
@@ -1426,5 +1426,5 @@ public class GrainKeysTests {
     /// </summary>
     [Fact]
     public void TheClosedSetHasTwentyNineShapes() =>
-        Enum.GetValues<GrainKeyKind>().Count(x => x != GrainKeyKind.None).ShouldBe(29);
+        Enum.GetValues<GrainKeyKind>().Count(static x => x != GrainKeyKind.None).ShouldBe(29);
 }

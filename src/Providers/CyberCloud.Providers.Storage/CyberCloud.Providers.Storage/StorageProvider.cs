@@ -13,8 +13,11 @@ namespace CyberCloud.Providers.Storage;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THREE TYPES SINCE 2026-09-15, AND THE THIRD IS docs/plan/15 § The three kinds' second
-///         row rather than a third child kind of the first.</b> <c>accounts/fileShares</c> is the RWX
+///         ⚠
+///         <b>
+///             THREE TYPES SINCE 2026-09-15, AND THE THIRD IS docs/plan/15 § The three kinds' second
+///             row rather than a third child kind of the first.
+///         </b> <c>accounts/fileShares</c> is the RWX
 ///         shape — a <c>ReadWriteMany</c> claim the SeaweedFS CSI driver binds against the account's
 ///         filer — and it is a child of the account for the reason <see cref="StorageFileShares" />
 ///         gives: the only filer this platform runs is the one inside an account. The paragraphs below
@@ -188,7 +191,7 @@ public sealed class StorageProvider : IResourceProvider {
                 StorageAccounts.ListKeysAction,
                 ActionKind.Post,
                 StorageAccounts.ListKeysPermission,
-                secret: true,
+                true,
                 response: StorageAccounts.ListKeysResponse,
                 // ⚠ THE FIRST HANDLER IN THE CATALOGUE, AND IT IS THE PARAMETER THAT TURNS EVERY
                 // DECLARATION ABOVE INTO SOMETHING THAT RUNS. Before it existed, a POST to this
@@ -217,8 +220,8 @@ public sealed class StorageProvider : IResourceProvider {
             .Display(
                 "Storage account",
                 "Storage accounts",
-                shortName: "objectstore",
-                summary: "A managed S3-compatible object store on SeaweedFS, with replicated volume "
+                "objectstore",
+                "A managed S3-compatible object store on SeaweedFS, with replicated volume "
                 + "servers, a filer and a scalable S3 gateway."
             )
             .Chart(StorageAccounts.ChartName)
@@ -227,7 +230,7 @@ public sealed class StorageProvider : IResourceProvider {
             // it buys is every object still on disk. See the remarks on this class.
             .SupportsSoftDelete(StorageAccounts.SoftDeleteDays)
             .SupportsTags()
-            .RequiresCluster(StorageAccounts.ClusterIdPointer)
+            .RequiresCluster()
             // ── The child, docs/plan/15 § The three kinds' other half ─────────────────────────
             //
             // ⚠ THE FIRST CHILD TYPE IN A SHIPPING PROVIDER, AND IT COSTS ONE CHAINED BLOCK. Every
@@ -283,13 +286,13 @@ public sealed class StorageProvider : IResourceProvider {
             .Display(
                 "Bucket",
                 "Buckets",
-                shortName: "bucket",
-                summary: "An S3 bucket inside a managed object-storage account, with an optional size "
+                "bucket",
+                "An S3 bucket inside a managed object-storage account, with an optional size "
                 + "limit and optional object versioning."
             )
             .Chart(StorageBuckets.ChartName)
             .SupportsTags()
-            .RequiresCluster(StorageBuckets.ClusterIdPointer)
+            .RequiresCluster()
             // ── The RWX shape, docs/plan/15 § The three kinds' second row ────────────────────
             //
             // ⚠ A SECOND CHILD OF THE SAME PARENT, AND IT COSTS THE SAME ONE CHAINED BLOCK. What is
@@ -327,13 +330,13 @@ public sealed class StorageProvider : IResourceProvider {
             .Display(
                 "File share",
                 "File shares",
-                shortName: "fileshare",
-                summary: "A ReadWriteMany file share on a managed object-storage account's filer, "
+                "fileshare",
+                "A ReadWriteMany file share on a managed object-storage account's filer, "
                 + "mounted into pods through the SeaweedFS CSI driver with an enforced size."
             )
             .Chart(StorageFileShares.ChartName)
             .SupportsTags()
-            .RequiresCluster(StorageFileShares.ClusterIdPointer);
+            .RequiresCluster();
     }
 
     // ── What an account draws ──────────────────────────────────────────────────────────────────
@@ -367,7 +370,7 @@ public sealed class StorageProvider : IResourceProvider {
                 "/properties/masters",
                 "/properties/gateway/replicas"
             ],
-            body => KubeQuantity.TryParse(StorageAccounts.Resources(body).Cpu, out var cores)
+            static body => KubeQuantity.TryParse(StorageAccounts.Resources(body).Cpu, out var cores)
                 && KubeQuantity.TryParse(StorageAccounts.ControlPlaneCpu, out var share)
                     ? Result<decimal>.Success(
                         StorageAccounts.VolumeServers(body) * cores + ControlPlanePods(body) * share
@@ -387,7 +390,7 @@ public sealed class StorageProvider : IResourceProvider {
                 "/properties/masters",
                 "/properties/gateway/replicas"
             ],
-            body => KubeQuantity.TryGibibytes(StorageAccounts.Resources(body).Memory, out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(StorageAccounts.Resources(body).Memory, out var gibibytes)
                 && KubeQuantity.TryGibibytes(StorageAccounts.ControlPlaneMemory, out var share)
                     ? Result<decimal>.Success(
                         StorageAccounts.VolumeServers(body) * gibibytes + ControlPlanePods(body) * share
@@ -417,7 +420,7 @@ public sealed class StorageProvider : IResourceProvider {
         MeterDerivation.Of(
             "volumeServers × storage.size + 10Gi for the filer, in GiB",
             ["/properties/volumeServers", "/properties/storage/size"],
-            body => KubeQuantity.TryGibibytes(StorageAccounts.StorageSize(body), out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(StorageAccounts.StorageSize(body), out var gibibytes)
                 && KubeQuantity.TryGibibytes(StorageAccounts.FilerVolumeSize, out var filer)
                     ? Result<decimal>.Success(StorageAccounts.VolumeServers(body) * gibibytes + filer)
                     : Unresolvable("storage", "storage.size")

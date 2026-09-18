@@ -164,7 +164,7 @@ public sealed class StorageMatchesTests {
         StorageAccounts.Matches("{not json", desired.RootElement).ShouldBeFalse();
         StorageAccounts.Matches("[]", desired.RootElement).ShouldBeFalse();
         StorageAccounts.Matches("{}", desired.RootElement).ShouldBeFalse();
-        StorageAccounts.Matches("{\"kind\":\"ConfigMap\",\"spec\":{}}", desired.RootElement).ShouldBeFalse();
+        StorageAccounts.Matches("""{"kind":"ConfigMap","spec":{}}""", desired.RootElement).ShouldBeFalse();
     }
 
     // ── The share's claim, which is the first BUILT-IN kind the catalogue compares a quantity on ──

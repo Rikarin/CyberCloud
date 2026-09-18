@@ -278,8 +278,7 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         RemoveLeaves(root, fragment);
 
         foreach (var annotation in new[] {
-                     KubeLabels.FragmentAnnotation(writer),
-                     KubeLabels.FragmentHashAnnotation(writer),
+                     KubeLabels.FragmentAnnotation(writer), KubeLabels.FragmentHashAnnotation(writer),
                      KubeLabels.FragmentPathAnnotation(writer)
                  }) {
             annotations.Remove(annotation);
@@ -534,7 +533,9 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
             );
         }
 
-        var against = command.CheckCoOwnedAgainst(new() { Ref = command.Target, Json = before, ResourceVersion = VersionOf(key) });
+        var against = command.CheckCoOwnedAgainst(
+            new() { Ref = command.Target, Json = before, ResourceVersion = VersionOf(key) }
+        );
         if (against.TryGetError(out var ownerError)) {
             return Result<ApplyOutcome>.Failure(ownerError);
         }
@@ -579,7 +580,9 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         }
 
         var annotations = metadata["annotations"] as JsonObject ?? [];
-        foreach (var stale in annotations.Where(x => KubeLabels.IsFragmentAnnotation(x.Key)).Select(x => x.Key).ToList()) {
+        foreach (var stale in annotations.Where(static x => KubeLabels.IsFragmentAnnotation(x.Key))
+                     .Select(static x => x.Key)
+                     .ToList()) {
             annotations.Remove(stale);
         }
 
@@ -678,7 +681,10 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         return target.Count == 0;
     }
 
-    /// <summary>Sets on <paramref name="target" /> every leaf <paramref name="union" /> carries — objects recurse, arrays and scalars replace.</summary>
+    /// <summary>
+    ///     Sets on <paramref name="target" /> every leaf <paramref name="union" /> carries — objects recurse, arrays and
+    ///     scalars replace.
+    /// </summary>
     /// <param name="target">The document edited in place.</param>
     /// <param name="union">The fields to set.</param>
     static void SetLeaves(JsonObject target, JsonObject union) {
@@ -696,7 +702,10 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         }
     }
 
-    /// <summary>Replaces every leaf <paramref name="owned" /> sets on <paramref name="target" /> with <paramref name="junk" />.</summary>
+    /// <summary>
+    ///     Replaces every leaf <paramref name="owned" /> sets on <paramref name="target" /> with
+    ///     <paramref name="junk" />.
+    /// </summary>
     /// <param name="target">The document edited in place.</param>
     /// <param name="owned">The fields whose values go.</param>
     /// <param name="junk">The value each becomes.</param>
@@ -714,7 +723,8 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     void Bump(string key) => versions[key] = versions.GetValueOrDefault(key) + 1;
 
     /// <summary>The object's current version as the API server would spell it — a decimal string.</summary>
-    string VersionOf(string key) => versions.GetValueOrDefault(key, 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+    string VersionOf(string key) =>
+        versions.GetValueOrDefault(key, 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <inheritdoc />
     public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) {
@@ -810,7 +820,10 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
             }
 
             var names = owners.OfType<JsonObject>()
-                .Any(owner => owner["uid"] is JsonValue value && value.TryGetValue<string>(out var uid) && uid == ownerUid);
+                .Any(owner => owner["uid"] is JsonValue value
+                    && value.TryGetValue<string>(out var uid)
+                    && uid == ownerUid
+                );
 
             if (!names) {
                 continue;
@@ -819,7 +832,9 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
             if (policy == CascadePolicy.Orphan) {
                 var kept = new JsonArray();
                 foreach (var owner in owners.OfType<JsonObject>()) {
-                    if (owner["uid"] is not JsonValue value || !value.TryGetValue<string>(out var uid) || uid != ownerUid) {
+                    if (owner["uid"] is not JsonValue value
+                        || !value.TryGetValue<string>(out var uid)
+                        || uid != ownerUid) {
                         kept.Add(owner.DeepClone());
                     }
                 }
@@ -867,8 +882,8 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         }
 
         var wanted = labelSelector.Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(pair => pair.Split('=', 2))
-            .ToDictionary(x => x[0], x => x.Length > 1 ? x[1] : string.Empty, StringComparer.Ordinal);
+            .Select(static pair => pair.Split('=', 2))
+            .ToDictionary(static x => x[0], static x => x.Length > 1 ? x[1] : string.Empty, StringComparer.Ordinal);
 
         var found = new List<KubeObjectSummary>();
 
@@ -897,11 +912,17 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     ///     The merge patch as the API server would hold it: the list replaced by the one owner, or
     ///     the key removed. Nothing else on the object moves.
     /// </remarks>
-    public Task<Result> SetOwnerAsync(ObjectRef target, OwnerRef? owner, CancellationToken cancellationToken = default) {
+    public Task<Result> SetOwnerAsync(
+        ObjectRef target,
+        OwnerRef? owner,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(target);
 
         if (!objects.TryGetValue(Key(target), out var json) || JsonNode.Parse(json) is not JsonObject root) {
-            return Task.FromResult(Result.Failure(ErrorCode.ResourceNotFound, $"'{target}' is not in cluster {clusterId:D}."));
+            return Task.FromResult(
+                Result.Failure(ErrorCode.ResourceNotFound, $"'{target}' is not in cluster {clusterId:D}.")
+            );
         }
 
         if (root["metadata"] is not JsonObject metadata) {
@@ -971,7 +992,7 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         if (!definition.Versions.TryGetValue(target.Kind.Version, out var version)
             || !string.Equals(definition.Plural, target.Kind.Plural, StringComparison.Ordinal)
             || definition.IsClusterScoped != target.IsClusterScoped) {
-            var served = string.Join(", ", definition.Versions.Keys.OrderBy(x => x, StringComparer.Ordinal));
+            var served = string.Join(", ", definition.Versions.Keys.OrderBy(static x => x, StringComparer.Ordinal));
 
             return Result<string>.Failure(
                 ErrorCode.InvalidResourceType,
@@ -1000,7 +1021,9 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         // An undeclared field fails the typed-patch step before validation runs, and the API server
         // reports only that; the shape is KubeFailures.TypedPatchFailurePrefix, which this
         // repository measured as a 500 rather than a 422. Everything else is the 422's sentence.
-        var undeclared = causes.Where(x => x.EndsWith(": field not declared in schema", StringComparison.Ordinal)).ToList();
+        var undeclared = causes.Where(static x => x.EndsWith(": field not declared in schema", StringComparison.Ordinal)
+        )
+            .ToList();
 
         var message = undeclared.Count > 0
             ? $"Cluster {cluster} refused to apply {target} because the API server could not type-check the "
@@ -1044,12 +1067,15 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
             root["metadata"] = metadata;
         }
 
-        var existing = objects.TryGetValue(key, out var previous) ? KubeJson.UidOf(JsonNode.Parse(previous)) : string.Empty;
+        var existing = objects.TryGetValue(key, out var previous)
+            ? KubeJson.UidOf(JsonNode.Parse(previous))
+            : string.Empty;
 
         if (existing.Length > 0) {
             metadata["uid"] = existing;
         } else if (KubeJson.UidOf(root).Length == 0) {
-            metadata["uid"] = $"{clusterId:N}-{Interlocked.Increment(ref minted).ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+            metadata["uid"] =
+                $"{clusterId:N}-{Interlocked.Increment(ref minted).ToString(System.Globalization.CultureInfo.InvariantCulture)}";
         }
 
         return root.ToJsonString();
@@ -1190,7 +1216,7 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     static void Strip(JsonNode node) {
         switch (node) {
             case JsonObject map:
-                foreach (var key in map.Select(x => x.Key).ToList()) {
+                foreach (var key in map.Select(static x => x.Key).ToList()) {
                     if (map[key] is not { } child) {
                         continue;
                     }
@@ -1205,7 +1231,7 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
                 break;
 
             case JsonArray array:
-                foreach (var child in array.Where(x => x is not null)) {
+                foreach (var child in array.Where(static x => x is not null)) {
                     Strip(child!);
                 }
 

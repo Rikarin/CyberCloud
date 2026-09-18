@@ -5,13 +5,19 @@ using System.Globalization;
 namespace CyberCloud.Load.Scenarios;
 
 /// <summary>
-///     docs/plan/23 § The load scenarios, row 4: <i>2 000 000 resident grains → silo working set
-///     ≤ 12 GB; no activation thrash</i>, at a tenth of the grains.
+///     docs/plan/23 § The load scenarios, row 4:
+///     <i>
+///         2 000 000 resident grains → silo working set
+///         ≤ 12 GB; no activation thrash
+///     </i>, at a tenth of the grains.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The working set is the test process's, which holds three silos, the cluster client
-///         and the gateway</b>, so the number is an upper bound on what one silo would hold for the
+///         ⚠
+///         <b>
+///             The working set is the test process's, which holds three silos, the cluster client
+///             and the gateway
+///         </b>, so the number is an upper bound on what one silo would hold for the
 ///         same activations, and it is the number reported because there is no other one to report:
 ///         the testing host runs its silos in-process. The build prints it beside the 12 GB budget
 ///         with the scale, and the two are not compared as equals — 200 000 grains against a budget
@@ -47,7 +53,7 @@ public sealed class ResidentGrainsTests(LoadTopology topology) {
         var token = TestContext.Current.CancellationToken;
         var output = TestContext.Current.TestOutputHelper;
         var platform = topology.Platform;
-        var tenants = topology.Subscriptions.Select(x => x.Tenant).Distinct().ToList();
+        var tenants = topology.Subscriptions.Select(static x => x.Tenant).Distinct().ToList();
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
@@ -57,16 +63,21 @@ public sealed class ResidentGrainsTests(LoadTopology topology) {
         var activationsBefore = await ResourceActivationsAsync();
 
         // ── Make them resident. ───────────────────────────────────────────────────────────────
-        var ids = Enumerable.Range(0, Resident).Select(i => (Tenant: tenants[i % tenants.Count], Id: Guid.NewGuid())).ToList();
+        var ids = Enumerable.Range(0, Resident)
+            .Select(i => (Tenant: tenants[i % tenants.Count], Id: Guid.NewGuid()))
+            .ToList();
         var activating = Stopwatch.StartNew();
         using var gate = new SemaphoreSlim(Concurrency);
         var faults = 0;
 
-        await Task.WhenAll(ids.Select(async x => {
+        await Task.WhenAll(
+            ids.Select(async x => {
                     await gate.WaitAsync(token);
 
                     try {
-                        _ = await platform.For(x.Tenant).GetGrain<IResourceGrain>(GrainKeys.Resource(x.Id)).GetAsync(SampleWidgets.V2026, []);
+                        _ = await platform.For(x.Tenant)
+                            .GetGrain<IResourceGrain>(GrainKeys.Resource(x.Id))
+                            .GetAsync(SampleWidgets.V2026, []);
                     } catch (Exception ex) when (ex is not OperationCanceledException) {
                         Interlocked.Increment(ref faults);
                     } finally {
@@ -89,7 +100,7 @@ public sealed class ResidentGrainsTests(LoadTopology topology) {
         Console.WriteLine(
             $"[CyberCloud.Load] {Resident} touched in {activatedIn.TotalSeconds:F0} s ({faults} faults): resource activations {activationsBefore} → {activationsAfter}; "
             + $"working set {Gb(workingSetBefore):F2} → {Gb(workingSetAfter):F2} GB; activations per silo: "
-            + $"{string.Join(", ", perSilo.Select(x => x.ActivationCount.ToString(CultureInfo.InvariantCulture)))}; total activation count {totalActivations}"
+            + $"{string.Join(", ", perSilo.Select(static x => x.ActivationCount.ToString(CultureInfo.InvariantCulture)))}; total activation count {totalActivations}"
         );
         output?.WriteLine($"{Resident} touched; the numbers are on the console.");
 
@@ -98,13 +109,16 @@ public sealed class ResidentGrainsTests(LoadTopology topology) {
         var afterIdle = await ResourceActivationsAsync();
         var collected = Math.Max(0, activationsAfter - afterIdle);
 
-        var sample = ids.Where((_, i) => i % 100 == 0).ToList();
+        var sample = ids.Where(static (_, i) => i % 100 == 0).ToList();
 
-        await Task.WhenAll(sample.Select(async x => {
+        await Task.WhenAll(
+            sample.Select(async x => {
                     await gate.WaitAsync(token);
 
                     try {
-                        _ = await platform.For(x.Tenant).GetGrain<IResourceGrain>(GrainKeys.Resource(x.Id)).GetAsync(SampleWidgets.V2026, []);
+                        _ = await platform.For(x.Tenant)
+                            .GetGrain<IResourceGrain>(GrainKeys.Resource(x.Id))
+                            .GetAsync(SampleWidgets.V2026, []);
                     } finally {
                         gate.Release();
                     }
@@ -116,7 +130,9 @@ public sealed class ResidentGrainsTests(LoadTopology topology) {
         var reactivated = Math.Max(0, afterTouch - afterIdle);
         var churnPerMinute = (collected + reactivated) / Idle.TotalMinutes;
 
-        output?.WriteLine($"after {Idle.TotalSeconds:F0} s idle: {afterIdle} ({collected} collected); after re-touching {sample.Count}: {afterTouch} ({reactivated} re-activated); churn {churnPerMinute:F1}/min");
+        output?.WriteLine(
+            $"after {Idle.TotalSeconds:F0} s idle: {afterIdle} ({collected} collected); after re-touching {sample.Count}: {afterTouch} ({reactivated} re-activated); churn {churnPerMinute:F1}/min"
+        );
 
         var deltaGb = Gb(workingSetAfter - workingSetBefore);
 
@@ -127,7 +143,13 @@ public sealed class ResidentGrainsTests(LoadTopology topology) {
         topology.Report.Aside(WorkingSetMetric, "activationsByType", await ActivationsByTypeAsync());
         topology.Report.Aside(WorkingSetMetric, "workingSetBeforeGb", Math.Round(Gb(workingSetBefore), 3));
         topology.Report.Aside(WorkingSetMetric, "workingSetDeltaGb", Math.Round(deltaGb, 3));
-        topology.Report.Aside(WorkingSetMetric, "bytesPerActivationFloor", activationsAfter - activationsBefore <= 0 ? 0 : Math.Round((double)(workingSetAfter - workingSetBefore) / (activationsAfter - activationsBefore)));
+        topology.Report.Aside(
+            WorkingSetMetric,
+            "bytesPerActivationFloor",
+            activationsAfter - activationsBefore <= 0
+                ? 0
+                : Math.Round((double)(workingSetAfter - workingSetBefore) / (activationsAfter - activationsBefore))
+        );
         topology.Report.Aside(WorkingSetMetric, "activationSeconds", Math.Round(activatedIn.TotalSeconds, 1));
         topology.Report.Measured(ChurnMetric, Math.Round(churnPerMinute, 1));
         topology.Report.Aside(ChurnMetric, "collectedWhileIdle", collected);
@@ -141,10 +163,16 @@ public sealed class ResidentGrainsTests(LoadTopology topology) {
             + $"gateway — so an upper bound; the delta over the population was {deltaGb:F2} GB, {Math.Round((double)(workingSetAfter - workingSetBefore) / Math.Max(1, activationsAfter - activationsBefore)):F0} bytes per activation."
         );
 
-        topology.Report.Note(ChurnMetric, $"activations collected during {Idle.TotalSeconds:F0} s idle plus activations re-created when {sample.Count} of the set were touched again, per minute.");
+        topology.Report.Note(
+            ChurnMetric,
+            $"activations collected during {Idle.TotalSeconds:F0} s idle plus activations re-created when {sample.Count} of the set were touched again, per minute."
+        );
 
         faults.ShouldBe(0, "some activations faulted, so the count is not the population.");
-        (activationsAfter - activationsBefore).ShouldBeGreaterThan((int)(Resident * 0.95), $"only {activationsAfter - activationsBefore} of {Resident} grains became resident.");
+        (activationsAfter - activationsBefore).ShouldBeGreaterThan(
+            (int)(Resident * 0.95),
+            $"only {activationsAfter - activationsBefore} of {Resident} grains became resident."
+        );
     }
 
     /// <summary>Resource-grain activations across the cluster.</summary>
@@ -162,9 +190,9 @@ public sealed class ResidentGrainsTests(LoadTopology topology) {
         var statistics = await topology.Platform.Management.GetSimpleGrainStatistics();
 
         return statistics
-            .Where(x => x.GrainType.Contains("ResourceGrain", StringComparison.Ordinal))
-            .GroupBy(x => x.GrainType, StringComparer.Ordinal)
-            .Sum(g => g.Max(x => x.ActivationCount));
+            .Where(static x => x.GrainType.Contains("ResourceGrain", StringComparison.Ordinal))
+            .GroupBy(static x => x.GrainType, StringComparer.Ordinal)
+            .Sum(static g => g.Max(static x => x.ActivationCount));
     }
 
     /// <summary>
@@ -178,11 +206,11 @@ public sealed class ResidentGrainsTests(LoadTopology topology) {
         return string.Join(
             "; ",
             statistics
-                .GroupBy(x => x.GrainType, StringComparer.Ordinal)
-                .Select(g => (Type: ClassName(g.Key), Count: g.Max(x => x.ActivationCount)))
-                .Where(x => x.Count >= 1_000)
-                .OrderByDescending(x => x.Count)
-                .Select(x => $"{x.Type} {x.Count.ToString(CultureInfo.InvariantCulture)}")
+                .GroupBy(static x => x.GrainType, StringComparer.Ordinal)
+                .Select(static g => (Type: ClassName(g.Key), Count: g.Max(static x => x.ActivationCount)))
+                .Where(static x => x.Count >= 1_000)
+                .OrderByDescending(static x => x.Count)
+                .Select(static x => $"{x.Type} {x.Count.ToString(CultureInfo.InvariantCulture)}")
         );
     }
 

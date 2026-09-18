@@ -32,7 +32,7 @@ public sealed class ClickHouseDeclarationTests {
         // ⚠ `listKeys` does NOT share the read permission. docs/plan/07 § Consistency puts a key
         // export in the fully-consistent row by name; sharing `read` would make every viewer of a
         // cluster a holder of its database credentials.
-        registration.Actions.Single(x => x.Name == ClickHouseClusters.ListKeysAction)
+        registration.Actions.Single(static x => x.Name == ClickHouseClusters.ListKeysAction)
             .Permission.ShouldNotBe(registration.ReadPermission);
     }
 
@@ -55,7 +55,7 @@ public sealed class ClickHouseDeclarationTests {
         // CliEmitter.Emit at generation, and GeneratedSurfaceTests over the embedded verb tree.
         CliTokens.Collisions(
             ProviderRegistry.Build([new AnalyticsProvider()])
-                .Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+                .Types.Select(static x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
         )
             .ShouldBeEmpty();
 
@@ -78,7 +78,7 @@ public sealed class ClickHouseDeclarationTests {
             registration.Meters.ShouldContain(x => x.Meter == meter, meter.ToString());
         }
 
-        foreach (var meter in registration.Meters.Where(x => x.Derivation is not null)) {
+        foreach (var meter in registration.Meters.Where(static x => x.Derivation is not null)) {
             meter.Derivation!.Expression.ShouldNotBeNullOrWhiteSpace(meter.Meter.ToString());
             meter.Derivation.Reads.ShouldNotBeEmpty(meter.Meter.ToString());
 
@@ -117,7 +117,7 @@ public sealed class ClickHouseDeclarationTests {
         // ⚠ SchemaProperty checks its own DefaultJson against its own constraints at construction, so
         // a default outside its @range cannot reach here. What THAT check cannot see is the whole
         // body: this walks each default back into an otherwise-valid body and validates the result.
-        foreach (var property in ClickHouseClusters.Schema2026.Properties.Where(x => x.DefaultJson.Length > 0)) {
+        foreach (var property in ClickHouseClusters.Schema2026.Properties.Where(static x => x.DefaultJson.Length > 0)) {
             using var body = JsonDocument.Parse(
                 Overridden(ClickHouseClusters.Body(ClusterId), property.JsonPointer, property.DefaultJson)
             );
@@ -153,7 +153,7 @@ public sealed class ClickHouseDeclarationTests {
             + "says about masking it."
         );
 
-        ClickHouseClusters.ListKeysResponse.Properties.Count(x => x.Secret).ShouldBe(1);
+        ClickHouseClusters.ListKeysResponse.Properties.Count(static x => x.Secret).ShouldBe(1);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public sealed class ClickHouseDeclarationTests {
         // A preset the schema offers and the table does not is a body the API accepts and the meter
         // then refuses — a create that returns 500 for a value the schema advertised.
         ClickHouseClusters.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/sizing/preset")
+            .Single(static x => x.JsonPointer == "/properties/sizing/preset")
             .AllowedValues
             .Order(StringComparer.Ordinal)
             .ShouldBe(ClickHouseClusters.Presets.Keys.Order(StringComparer.Ordinal));
@@ -215,7 +215,7 @@ public sealed class ClickHouseDeclarationTests {
         // reads as a saving. It is not: the schema is the tenant's problem (docs/plan/12), a
         // ReplicatedMergeTree is the ordinary thing to create, and a Keeper that appeared later would
         // arrive after the tables that needed it.
-        using var body = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId, shards: 1, replicas: 1));
+        using var body = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId, 1, 1));
 
         var keeper = JsonNode.Parse(ClickHouseClusters.KeeperJson("events", body.RootElement))!["spec"]!;
 
@@ -229,7 +229,7 @@ public sealed class ClickHouseDeclarationTests {
         // ⚠ Raft replicates one log to every member; there is nothing to split, and the CHK layout has
         // no shardsCount. Writing one would be a field the CRD does not declare, which
         // x-kubernetes-preserve-unknown-fields would happily accept and the operator would ignore.
-        using var body = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId, shards: 4));
+        using var body = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId, 4));
 
         var layout = JsonNode.Parse(ClickHouseClusters.KeeperJson("events", body.RootElement))!["spec"]!
             ["configuration"]!["clusters"]!
@@ -269,11 +269,11 @@ public sealed class ClickHouseDeclarationTests {
             var templates = spec["templates"]!;
 
             templates["podTemplates"]!.AsArray()
-                .Select(x => x!["name"]!.GetValue<string>())
+                .Select(static x => x!["name"]!.GetValue<string>())
                 .ShouldContain(defaults["podTemplate"]!.GetValue<string>());
 
             templates["volumeClaimTemplates"]!.AsArray()
-                .Select(x => x!["name"]!.GetValue<string>())
+                .Select(static x => x!["name"]!.GetValue<string>())
                 .ShouldContain(defaults["dataVolumeClaimTemplate"]!.GetValue<string>());
         }
     }
@@ -287,7 +287,7 @@ public sealed class ClickHouseDeclarationTests {
         // non-obvious half is `schemaPolicy`, which is where the operator asks the platform how much
         // of a tenant's schema to copy onto a new replica — leaving it unset leaves that answer with
         // the operator rather than making it the platform's opinion about somebody else's tables.
-        using var body = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId, shards: 3, replicas: 3));
+        using var body = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId, 3, 3));
 
         foreach (var json in new[] {
                      ClickHouseClusters.ClickHouseJson("events", body.RootElement),

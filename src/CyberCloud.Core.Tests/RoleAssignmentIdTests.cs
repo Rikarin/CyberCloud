@@ -125,10 +125,20 @@ public class RoleAssignmentIdTests {
 
     [Theory]
     [InlineData("reader-user-alice", "reader", "user", "alice")]
-    [InlineData("owner-servicePrincipal-7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d", "owner", "servicePrincipal", "7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d")]
+    [InlineData(
+        "owner-servicePrincipal-7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d",
+        "owner",
+        "servicePrincipal",
+        "7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d"
+    )]
     [InlineData("contributor-group-eng", "contributor", "group", "eng")]
     // ⚠ The id may carry hyphens; only the first two are structural.
-    [InlineData("reader-user-2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3", "reader", "user", "2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3")]
+    [InlineData(
+        "reader-user-2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3",
+        "reader",
+        "user",
+        "2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3"
+    )]
     public void ANameSplitsIntoRolePrincipalTypeAndPrincipalId(string name, string role, string type, string id) {
         var parsed = RoleAssignmentName.Parse(name).GetValueOrThrow();
 
@@ -182,8 +192,7 @@ public class RoleAssignmentIdTests {
     [Fact]
     public void NoScopePathIsAnAssignmentPath() {
         foreach (var path in new[] {
-                     ScopeId.Tenant(Tenant).Path,
-                     ScopeId.Subscription(Tenant, Subscription).Path,
+                     ScopeId.Tenant(Tenant).Path, ScopeId.Subscription(Tenant, Subscription).Path,
                      ScopeId.Group(Tenant, Subscription, "prod").Path
                  }) {
             RoleAssignmentId.IsUnderNamespace(path).ShouldBeFalse();
@@ -197,7 +206,9 @@ public class RoleAssignmentIdTests {
         "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.DBforPostgreSQL/servers/pg/databases/orders"
     )]
     // ⚠ A resource whose NAME is 'roleAssignments' under another namespace is that provider's.
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Cache/roleAssignments/reader-user-alice")]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Cache/roleAssignments/reader-user-alice"
+    )]
     public void AResourcePathUnderAnyOtherNamespaceIsNotUnderThisOne(string template) {
         var path = Fill(template);
 
@@ -224,18 +235,28 @@ public class RoleAssignmentIdTests {
 
     [Theory]
     // No name at all — the collection, which is the OTHER grammar (RoleAssignmentCollectionId) and not this one.
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments")]
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/")]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments"
+    )]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/"
+    )]
     // A segment after the name.
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader-user-alice/x")]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader-user-alice/x"
+    )]
     // Another type under the reserved namespace.
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleDefinitions/reader")]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleDefinitions/reader"
+    )]
     // No scope in front of it.
     [InlineData("/providers/CyberCloud.Authorization/roleAssignments/reader-user-alice")]
     // A scope that is neither a scope nor a resource.
     [InlineData("/tenants/{t}/subscriptions/providers/CyberCloud.Authorization/roleAssignments/reader-user-alice")]
     // A malformed name.
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader")]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader"
+    )]
     public void AMalformedAssignmentPathIsRefusedAndIsStillUnderTheNamespace(string template) {
         var path = Fill(template);
 
@@ -249,13 +270,14 @@ public class RoleAssignmentIdTests {
 
     [Fact]
     public void AnAssignmentOnAnUnknownScopeCannotBeBuilt() =>
-        Should.Throw<ArgumentException>(() => RoleAssignmentId.OnScope(default, Reader));
+        Should.Throw<ArgumentException>(static () => RoleAssignmentId.OnScope(default, Reader));
 
     // ── The collection (issue #86) ─────────────────────────────────────────────────────────────
 
     [Fact]
     public void EveryScopeKindsCollectionRoundTripsAndIsTheMembersInverse() {
-        foreach (var assignment in EveryShape().Select(path => RoleAssignmentId.ParsePath(path).GetValueOrThrow())) {
+        foreach (var assignment in EveryShape().Select(static path => RoleAssignmentId.ParsePath(path).GetValueOrThrow()
+                 )) {
             var collection = RoleAssignmentCollectionId.Of(assignment);
 
             collection.Path.ShouldBe(assignment.ScopePath + RoleAssignmentId.CollectionSuffix);
@@ -288,7 +310,8 @@ public class RoleAssignmentIdTests {
 
     [Fact]
     public void TheCollectionSuffixIsMatchedCaseInsensitivelyLikeEveryStructuralLiteral() {
-        var spelled = ScopeId.Group(Tenant, Subscription, "prod").Path + "/PROVIDERS/cybercloud.authorization/ROLEASSIGNMENTS";
+        var spelled = ScopeId.Group(Tenant, Subscription, "prod").Path
+            + "/PROVIDERS/cybercloud.authorization/ROLEASSIGNMENTS";
 
         var parsed = RoleAssignmentCollectionId.ParsePath(spelled).GetValueOrThrow();
 
@@ -311,17 +334,25 @@ public class RoleAssignmentIdTests {
 
     [Theory]
     // A trailing slash — neither an assignment nor the collection.
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/")]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/"
+    )]
     // A name after the suffix is an assignment, not the collection.
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader-user-alice")]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader-user-alice"
+    )]
     // Another type under the reserved namespace.
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleDefinitions")]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleDefinitions"
+    )]
     // No scope in front of it.
     [InlineData("/providers/CyberCloud.Authorization/roleAssignments")]
     // A scope that is neither a scope nor a resource.
     [InlineData("/tenants/{t}/subscriptions/providers/CyberCloud.Authorization/roleAssignments")]
     // A resource collection is not a scope.
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Cache/redis/providers/CyberCloud.Authorization/roleAssignments")]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Cache/redis/providers/CyberCloud.Authorization/roleAssignments"
+    )]
     [InlineData("")]
     public void AMalformedCollectionPathIsRefused(string template) {
         var path = Fill(template);
@@ -332,7 +363,7 @@ public class RoleAssignmentIdTests {
 
     [Fact]
     public void ACollectionOnAnUnknownScopeCannotBeBuilt() =>
-        Should.Throw<ArgumentException>(() => RoleAssignmentCollectionId.OnScope(default));
+        Should.Throw<ArgumentException>(static () => RoleAssignmentCollectionId.OnScope(default));
 
     static IEnumerable<string> EveryShape() {
         yield return RoleAssignmentId.OnScope(ScopeId.Tenant(Tenant), Reader).Path;

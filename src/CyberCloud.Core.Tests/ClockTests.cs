@@ -35,15 +35,15 @@ public class ClockTests {
 
     [Fact]
     public void ANullTimeProviderIsARejectedProgrammerError() =>
-        Should.Throw<ArgumentNullException>(() => new SystemClock(null!));
+        Should.Throw<ArgumentNullException>(static () => new SystemClock(null!));
 
     [Fact]
     public void TheInterfaceExposesNothingButTheInstant() {
         // Narrowing TimeProvider to one property is the point (see the remarks on IClock): a grain
         // that can start a timer outside Orleans' scheduler breaks its own single-threaded
         // contract, so the timer surface must not be reachable through this interface.
-        typeof(IClock).GetProperties().Select(x => x.Name).ShouldBe([nameof(IClock.UtcNow)]);
-        typeof(IClock).GetMethods().Select(x => x.Name).ShouldBe(["get_UtcNow"]);
+        typeof(IClock).GetProperties().Select(static x => x.Name).ShouldBe([nameof(IClock.UtcNow)]);
+        typeof(IClock).GetMethods().Select(static x => x.Name).ShouldBe(["get_UtcNow"]);
     }
 
     sealed class FrozenTimeProvider(DateTimeOffset instant) : TimeProvider {

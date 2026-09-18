@@ -41,8 +41,11 @@ namespace CyberCloud.Providers.ContainerService.Contracts;
 ///         previous one.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Sixty minutes to run the install command, and the number is the operation's rather
-///         than this type's.</b> docs/plan/08 § The reconcile loop caps an operation at an hour,
+///         ⚠
+///         <b>
+///             Sixty minutes to run the install command, and the number is the operation's rather
+///             than this type's.
+///         </b> docs/plan/08 § The reconcile loop caps an operation at an hour,
 ///         and a create that is still waiting for a heartbeat at that point is <c>Failed</c>. A
 ///         tenant who takes longer re-issues the <c>PUT</c>, which is idempotent, and gets a fresh
 ///         hour. <c>charts/agent/conformance.yaml § owed</c>, <c>an-hour-to-install</c>.
@@ -94,7 +97,7 @@ public static class ConnectedClusters {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the cluster is billed in. ⚠ Where the cluster physically is "
                     + "is the tenant's business; this is the region whose gateway the agent dials and "
                     + "whose silos hold the connection."
@@ -138,7 +141,7 @@ public static class ConnectedClusters {
                 new(
                     "/command",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Secret: true,
                     Description: "The helm command to run against the cluster being connected, with "
                     + "the one-time token inline. Run it from a workstation with cluster-admin on that "
@@ -147,7 +150,7 @@ public static class ConnectedClusters {
                 new(
                     "/token",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Secret: true,
                     Description: "The one-time enrollment token, separately, for an install that does "
                     + "not use helm. It admits exactly one agent connection and is spent by it."
@@ -155,21 +158,21 @@ public static class ConnectedClusters {
                 new(
                     "/expiresAt",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "When the token stops being accepted, RFC 3339. Twenty-four hours "
                     + "from the call; ask again for a fresh one."
                 ) { Format = SchemaFormat.DateTime },
                 new(
                     "/tunnelEndpoint",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The WebSocket URL the agent dials — wss://{gateway}/agent/v1/tunnel. "
                     + "The cluster needs outbound HTTPS to it and nothing inbound."
                 ) { Format = SchemaFormat.Uri },
                 new(
                     "/chart",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The chart reference the command installs: the OCI reference this "
                     + "deployment publishes the agent chart under, or charts/agent — the path in a "
                     + "checkout of the CyberCloud repository — when it has not published one, in "
@@ -179,7 +182,8 @@ public static class ConnectedClusters {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -220,12 +224,21 @@ public static class ConnectedClusters {
             ? (int)enrollment.HeartbeatInterval.TotalSeconds
             : DefaultHeartbeatSeconds;
 
-        return "helm upgrade --install " + ReleaseName + " " + Quote(enrollment.ChartReference)
-            + " --namespace " + AgentNamespace + " --create-namespace"
-            + " --set-string platform.tunnelEndpoint=" + Quote(enrollment.TunnelEndpoint)
-            + " --set-string cluster.id=" + enrollment.ClusterId.ToString("D", CultureInfo.InvariantCulture)
-            + " --set-string cluster.enrollmentToken=" + Quote(enrollment.EnrollmentToken)
-            + " --set agent.heartbeatSeconds=" + heartbeatSeconds.ToString(CultureInfo.InvariantCulture)
+        return "helm upgrade --install "
+            + ReleaseName
+            + " "
+            + Quote(enrollment.ChartReference)
+            + " --namespace "
+            + AgentNamespace
+            + " --create-namespace"
+            + " --set-string platform.tunnelEndpoint="
+            + Quote(enrollment.TunnelEndpoint)
+            + " --set-string cluster.id="
+            + enrollment.ClusterId.ToString("D", CultureInfo.InvariantCulture)
+            + " --set-string cluster.enrollmentToken="
+            + Quote(enrollment.EnrollmentToken)
+            + " --set agent.heartbeatSeconds="
+            + heartbeatSeconds.ToString(CultureInfo.InvariantCulture)
             + image;
     }
 
@@ -243,5 +256,5 @@ public static class ConnectedClusters {
             ["properties"] = new JsonObject { ["distribution"] = distribution, ["heartbeatSeconds"] = heartbeatSeconds }
         }.ToJsonString();
 
-    static string Quote(string value) => "'" + value.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
+    static string Quote(string value) => "'" + value.Replace("'", """'\''""", StringComparison.Ordinal) + "'";
 }

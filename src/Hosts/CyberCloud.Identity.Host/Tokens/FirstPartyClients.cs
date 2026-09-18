@@ -105,9 +105,12 @@ public sealed class FirstPartyClients {
         // origin that may present the refresh cookie.
         AllowedOrigins = [
             .. portal.RedirectUris
-                .Select(x => Uri.TryCreate(x, UriKind.Absolute, out var uri) ? uri.GetLeftPart(UriPartial.Authority) : null)
-                .Where(x => x is not null)
-                .Select(x => x!)
+                .Select(static x => Uri.TryCreate(x, UriKind.Absolute, out var uri)
+                        ? uri.GetLeftPart(UriPartial.Authority)
+                        : null
+                )
+                .Where(static x => x is not null)
+                .Select(static x => x!)
                 .Distinct(StringComparer.Ordinal)
         ];
     }

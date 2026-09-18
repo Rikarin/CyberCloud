@@ -62,7 +62,9 @@ public sealed class InMemoryObjectStore : IObjectStore {
 
         return Task.FromResult(
             objects.TryGetValue(key, out var stored)
-                ? Result<StoredObject>.Success(new(new MemoryStream(stored.Bytes, writable: false), stored.Bytes.Length, stored.ContentType))
+                ? Result<StoredObject>.Success(
+                    new(new MemoryStream(stored.Bytes, false), stored.Bytes.Length, stored.ContentType)
+                )
                 : Result<StoredObject>.Failure(ErrorCode.ResourceNotFound, $"'{key}' holds nothing.")
         );
     }
@@ -78,7 +80,10 @@ public sealed class InMemoryObjectStore : IObjectStore {
     }
 
     /// <inheritdoc />
-    public Task<Result<ImmutableArray<string>>> ListAsync(string prefix, CancellationToken cancellationToken = default) {
+    public Task<Result<ImmutableArray<string>>> ListAsync(
+        string prefix,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(prefix);
 
         return Task.FromResult(

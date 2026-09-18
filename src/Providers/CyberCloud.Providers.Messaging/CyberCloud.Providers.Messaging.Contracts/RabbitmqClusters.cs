@@ -473,7 +473,7 @@ public static class RabbitmqClusters {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the cluster is billed in."
                 ) {
                     Format = SchemaFormat.Region,
@@ -485,7 +485,7 @@ public static class RabbitmqClusters {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster whose namespace holds the RabbitmqCluster."
                 ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
@@ -493,7 +493,7 @@ public static class RabbitmqClusters {
                 new(
                     "/properties/version",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "RabbitMQ version. Minor upgrades are applied automatically in the "
                     + "maintenance window; a major upgrade is an explicit update to this field. Only "
                     + "4.x is offered: classic queue mirroring was removed in 4.0, so on every "
@@ -502,7 +502,7 @@ public static class RabbitmqClusters {
                 new(
                     "/properties/nodes",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "Number of RabbitMQ nodes. Use an odd number of at least three: a "
                     + "quorum queue is a Raft group, so a group of two tolerates no failures and an "
                     + "even count buys nothing over the odd count below it. One is offered for "
@@ -543,7 +543,7 @@ public static class RabbitmqClusters {
                 new(
                     "/properties/storage/size",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "Message-store volume size per node, in Kubernetes quantity form. "
                     + "Grows online; never shrinks. A quorum queue keeps its whole Raft log on every "
                     + "member, so this is the same figure on every node rather than a share of one."
@@ -595,7 +595,7 @@ public static class RabbitmqClusters {
                     ElementKind = SchemaKind.Text,
                     AllowedValues = [.. AdditionalPlugins],
                     DefaultJson = "[]",
-                    ExampleJson = "[\"rabbitmq_stream\"]"
+                    ExampleJson = """["rabbitmq_stream"]"""
                 }
             ]
         );
@@ -630,7 +630,7 @@ public static class RabbitmqClusters {
                 new(
                     "/url",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The in-cluster AMQP URL, amqp://host:port. ⚠ There is no external "
                     + "address to return — this type declares no external listener at all, for the "
                     + "reason its schema gives."
@@ -638,16 +638,16 @@ public static class RabbitmqClusters {
                 new(
                     "/managementUrl",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The in-cluster management UI and HTTP API, http://host:port. "
                     + "docs/plan/12 fronts this with the portal's authenticated proxy; it is never a "
                     + "public route."
                 ),
-                new("/user", SchemaKind.Text, Required: true, Description: "The generated broker user."),
+                new("/user", SchemaKind.Text, true, Description: "The generated broker user."),
                 new(
                     "/password",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Secret: true,
                     Description: "The generated user's password, read from the cluster's default-user "
                     + "Secret for this call only. ⚠ Neither this value nor the user name is chosen by "
@@ -658,7 +658,8 @@ public static class RabbitmqClusters {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 

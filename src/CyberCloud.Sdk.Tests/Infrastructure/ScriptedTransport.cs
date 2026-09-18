@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Net.Http.Headers;
 
 namespace CyberCloud.Sdk.Tests;
 
@@ -53,8 +52,8 @@ public sealed class ScriptedTransport : HttpMessageHandler {
                 request.Method,
                 request.RequestUri!,
                 request.Headers.ToDictionary(
-                    x => x.Key,
-                    x => string.Join(",", x.Value),
+                    static x => x.Key,
+                    static x => string.Join(",", x.Value),
                     StringComparer.OrdinalIgnoreCase
                 ),
                 request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken)
@@ -108,7 +107,7 @@ public static class Responses {
         var response = new HttpResponseMessage(HttpStatusCode.Accepted);
 
         response.Headers.TryAddWithoutValidation(CyberCloudHeaders.AsyncOperation, operationUri);
-        response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(retryAfterSeconds));
+        response.Headers.RetryAfter = new(TimeSpan.FromSeconds(retryAfterSeconds));
         response.Headers.TryAddWithoutValidation(CyberCloudHeaders.RequestId, "req-accepted");
         response.Content = new StringContent(string.Empty);
 
@@ -120,7 +119,7 @@ public static class Responses {
             HttpStatusCode.TooManyRequests,
             """{"error":{"code":"TooManyRequests","message":"Slow down."}}"""
         );
-        response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(retryAfterSeconds));
+        response.Headers.RetryAfter = new(TimeSpan.FromSeconds(retryAfterSeconds));
 
         return response;
     }
@@ -133,7 +132,7 @@ public static class Responses {
     ) {
         var entries = string.Join(
             ",",
-            (progress ?? []).Select(x =>
+            (progress ?? []).Select(static x =>
                 $$"""{"at":"2026-08-11T10:00:00Z","step":"{{x.Step}}","message":"{{x.Message}}","percentComplete":{{x.Percent}}}"""
             )
         );

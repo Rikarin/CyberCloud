@@ -33,14 +33,14 @@ public sealed class ServicePrincipalCredentialTests(IdentityCluster cluster) {
         // holds public thumbprints.
         var suspicious = typeof(ServicePrincipalDescriptor)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(x => x.PropertyType == typeof(string) || x.PropertyType == typeof(List<string>))
-            .Where(x => x.Name.Contains("Secret", StringComparison.OrdinalIgnoreCase)
+            .Where(static x => x.PropertyType == typeof(string) || x.PropertyType == typeof(List<string>))
+            .Where(static x => x.Name.Contains("Secret", StringComparison.OrdinalIgnoreCase)
                 || x.Name.Contains("Password", StringComparison.OrdinalIgnoreCase)
                 || x.Name.Contains("Credential", StringComparison.OrdinalIgnoreCase)
                 || x.Name.Contains("Key", StringComparison.OrdinalIgnoreCase)
                 || x.Name.Contains("Token", StringComparison.OrdinalIgnoreCase)
             )
-            .Select(x => x.Name)
+            .Select(static x => x.Name)
             .ToList();
 
         suspicious.ShouldBeEmpty(

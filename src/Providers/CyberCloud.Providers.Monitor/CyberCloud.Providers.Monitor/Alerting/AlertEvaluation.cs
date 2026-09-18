@@ -25,7 +25,11 @@ public enum AlertTransition {
 ///     The value the decision was made on — the worst offending sample when the condition is met,
 ///     the first sample when it is not, <see langword="null" /> when the query returned nothing.
 /// </param>
-public sealed record AlertDecision(AlertRuleState State, DateTimeOffset? PendingSince, AlertTransition Transition, double? Value);
+public sealed record AlertDecision(
+    AlertRuleState State,
+    DateTimeOffset? PendingSince,
+    AlertTransition Transition,
+    double? Value);
 
 /// <summary>
 ///     The three-state machine every alerting product converges on — <c>ok → pending → firing → ok</c>
@@ -48,8 +52,11 @@ public sealed record AlertDecision(AlertRuleState State, DateTimeOffset? Pending
 ///         the api-version that grows the tree.
 ///     </para>
 ///     <para>
-///         ⚠ <b>No samples is "not met", and the reason is stated because the other reading is
-///         defensible.</b> Azure lets a rule choose what an empty result means; here an empty
+///         ⚠
+///         <b>
+///             No samples is "not met", and the reason is stated because the other reading is
+///             defensible.
+///         </b> Azure lets a rule choose what an empty result means; here an empty
 ///         result resolves a firing rule and never fires one. A query that matches nothing is most
 ///         often a series that stopped being written, and paging on that is a separate rule
 ///         (<c>absent()</c> in MetricsQL says so explicitly) rather than a default every rule pays
@@ -80,11 +87,18 @@ public static class AlertEvaluation {
         ArgumentNullException.ThrowIfNull(spec);
 
         if (!answer.TryGetValue(out var result)) {
-            return new(state == AlertRuleState.Unknown ? AlertRuleState.Ok : state, pendingSince, AlertTransition.None, null);
+            return new(
+                state == AlertRuleState.Unknown ? AlertRuleState.Ok : state,
+                pendingSince,
+                AlertTransition.None,
+                null
+            );
         }
 
         var samples = result.Samples.IsDefault ? [] : result.Samples;
-        var offending = samples.Where(x => spec.Condition.IsMetBy(x.Value)).Select(x => x.Value).ToImmutableArray();
+        var offending = samples.Where(x => spec.Condition.IsMetBy(x.Value))
+            .Select(static x => x.Value)
+            .ToImmutableArray();
         var met = offending.Length > 0;
 
         double? value = met

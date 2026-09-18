@@ -353,7 +353,7 @@ public static class NatsClusters {
             StoreVolume,
             name,
             Servers(desired),
-            PodLabels(name).ToImmutableDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal),
+            PodLabels(name).ToImmutableDictionary(static x => x.Key, static x => x.Value, StringComparer.Ordinal),
             "one server's JetStream file store — its streams, its consumers and their messages"
         );
     }
@@ -610,8 +610,8 @@ public static class NatsClusters {
                 new(
                     "/properties/leafNodes",
                     SchemaKind.Nested,
-                    Description: "Leaf-node connectivity — docs/plan/12: \"so a tenant's edge can "
-                    + "attach\"."
+                    Description: """Leaf-node connectivity — docs/plan/12: "so a tenant's edge can """
+                    + """attach"."""
                 ),
                 new(
                     "/properties/leafNodes/enabled",
@@ -646,7 +646,7 @@ public static class NatsClusters {
                     // registry-versus-surface gap KafkaClusters reports at the same property, for the
                     // same reason, and this is its second sighting. Declaring it would make
                     // `./build.sh Charts` red for every future run.
-                    ElementKind = SchemaKind.Text, DefaultJson = "[]", ExampleJson = "[\"203.0.113.0/24\"]"
+                    ElementKind = SchemaKind.Text, DefaultJson = "[]", ExampleJson = """["203.0.113.0/24"]"""
                 },
                 new(
                     "/properties/monitoring",
@@ -657,8 +657,8 @@ public static class NatsClusters {
                     "/properties/monitoring/enabled",
                     SchemaKind.Boolean,
                     Description: "Whether a PodMonitor selects these servers' monitoring endpoint. On "
-                    + "by default — docs/plan/12: \"a managed service the tenant cannot see the health "
-                    + "of is a black box they will not trust with production\". The endpoint itself is "
+                    + """by default — docs/plan/12: "a managed service the tenant cannot see the health """
+                    + """of is a black box they will not trust with production". The endpoint itself is """
                     + "always served; this decides whether anything scrapes it."
                 ) { DefaultJson = "true" }
             ]
@@ -708,7 +708,8 @@ public static class NatsClusters {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 

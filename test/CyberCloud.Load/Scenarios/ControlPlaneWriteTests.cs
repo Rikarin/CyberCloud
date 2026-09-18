@@ -6,8 +6,11 @@ using System.Net;
 namespace CyberCloud.Load.Scenarios;
 
 /// <summary>
-///     docs/plan/23 § The load scenarios, row 2: <i>500 writes/s sustained → write p99 &lt; 60 ms;
-///     reconcile queue does not grow unboundedly</i>, driven at a tenth of the rate through the real
+///     docs/plan/23 § The load scenarios, row 2:
+///     <i>
+///         500 writes/s sustained → write p99 &lt; 60 ms;
+///         reconcile queue does not grow unboundedly
+///     </i>, driven at a tenth of the rate through the real
 ///     gateway.
 /// </summary>
 /// <remarks>
@@ -48,7 +51,7 @@ public sealed class ControlPlaneWriteTests(LoadTopology topology) {
         var token = TestContext.Current.CancellationToken;
         var output = TestContext.Current.TestOutputHelper;
         var subscriptions = topology.Subscriptions;
-        var callersBySubscription = subscriptions.ToDictionary(x => x.Subscription, x => topology.CallersOf(x));
+        var callersBySubscription = subscriptions.ToDictionary(static x => x.Subscription, x => topology.CallersOf(x));
         var run = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..6];
 
         // ── The queue sampler, alongside the writes. ──────────────────────────────────────────
@@ -56,7 +59,8 @@ public sealed class ControlPlaneWriteTests(LoadTopology topology) {
         using var sampling = CancellationTokenSource.CreateLinkedTokenSource(token);
         var clock = Stopwatch.StartNew();
 
-        var sampler = Task.Run(async () => {
+        var sampler = Task.Run(
+            async () => {
                 while (!sampling.IsCancellationRequested) {
                     var (depth, total) = await DepthAsync(run, token);
                     samples.Add((clock.Elapsed, depth, total));
@@ -75,10 +79,11 @@ public sealed class ControlPlaneWriteTests(LoadTopology topology) {
         // ── The writes. ───────────────────────────────────────────────────────────────────────
         var driver = new OpenLoopDriver(Rate, WarmUp, Window);
 
-        var distribution = await driver.RunAsync(async (i, ct) => {
+        var distribution = await driver.RunAsync(
+            async (i, ct) => {
                 var world = subscriptions[i % subscriptions.Count];
                 var callers = callersBySubscription[world.Subscription];
-                var caller = callers[(i / subscriptions.Count) % callers.Count];
+                var caller = callers[i / subscriptions.Count % callers.Count];
 
                 using var response = await topology.Http.SendAsync(
                     topology.Put(caller, world, $"load-{run}-{i.ToString(CultureInfo.InvariantCulture)}", "load"),
@@ -122,12 +127,30 @@ public sealed class ControlPlaneWriteTests(LoadTopology topology) {
         var slopePerMinute = Slope(steady);
 
         topology.Report.Measured(LatencyMetric, distribution.P99, distribution);
-        topology.Report.Aside(LatencyMetric, "worstMsPerTenSeconds", string.Join(" ", driver.WorstPer(TimeSpan.FromSeconds(10)).Select(x => x.ToString("0", CultureInfo.InvariantCulture))));
-        topology.Report.Aside(LatencyMetric, "errorRate", distribution.Samples + distribution.Errors == 0 ? 0 : Math.Round((double)distribution.Errors / (distribution.Samples + distribution.Errors), 4));
+        topology.Report.Aside(
+            LatencyMetric,
+            "worstMsPerTenSeconds",
+            string.Join(
+                " ",
+                driver.WorstPer(TimeSpan.FromSeconds(10))
+                    .Select(static x => x.ToString("0", CultureInfo.InvariantCulture))
+            )
+        );
+        topology.Report.Aside(
+            LatencyMetric,
+            "errorRate",
+            distribution.Samples + distribution.Errors == 0
+                ? 0
+                : Math.Round((double)distribution.Errors / (distribution.Samples + distribution.Errors), 4)
+        );
         topology.Report.Measured(QueueMetric, Math.Round(slopePerMinute, 2));
         topology.Report.Aside(QueueMetric, "created", finalTotal);
-        topology.Report.Aside(QueueMetric, "peakDepth", samples.Count == 0 ? 0 : samples.Max(x => x.Depth));
-        topology.Report.Aside(QueueMetric, "depthAtEndOfWrites", samples.Where(x => x.At <= writesEnded).Select(x => x.Depth).LastOrDefault());
+        topology.Report.Aside(QueueMetric, "peakDepth", samples.Count == 0 ? 0 : samples.Max(static x => x.Depth));
+        topology.Report.Aside(
+            QueueMetric,
+            "depthAtEndOfWrites",
+            samples.Where(x => x.At <= writesEnded).Select(static x => x.Depth).LastOrDefault()
+        );
         topology.Report.Aside(QueueMetric, "steadySamples", steady.Count);
         topology.Report.Aside(QueueMetric, "drainSeconds", drained is { } d ? Math.Round(d.TotalSeconds, 1) : -1);
         topology.Report.Aside(QueueMetric, "depthAfterDrainBudget", finalDepth);
@@ -137,22 +160,36 @@ public sealed class ControlPlaneWriteTests(LoadTopology topology) {
             LatencyMetric,
             $"PUT of a new widget (a create, answered 202) through CyberCloud.Gateway.Host over loopback HTTP at {Rate.ToString("0", CultureInfo.InvariantCulture)} writes/s "
             + $"(a tenth of the row's 500) for {Window.TotalSeconds:F0} s after {WarmUp.TotalSeconds:F0} s of warm-up, across {subscriptions.Count} subscriptions on 2 shards; failures: "
-            + (driver.Failures.IsEmpty ? "none" : string.Join(", ", driver.Failures.Select(x => $"{x.Value} × {x.Key}")))
+            + (driver.Failures.IsEmpty
+                    ? "none"
+                    : string.Join(", ", driver.Failures.Select(static x => $"{x.Value} × {x.Key}")))
         );
 
         topology.Report.Note(
             QueueMetric,
             $"depth = accepted creates not yet terminal, sampled every {SampleEvery.TotalSeconds:F0} s through the real listing; slope is least-squares over the "
             + $"{steady.Count} samples from {ReminderPeriod.TotalSeconds:F0} s into the writes to their end, in items/min; the queue is drained by the one-minute "
-            + $"reminder alone (nothing drives a pass); peak {(samples.Count == 0 ? 0 : samples.Max(x => x.Depth))}, drained to zero "
+            + $"reminder alone (nothing drives a pass); peak {(samples.Count == 0 ? 0 : samples.Max(static x => x.Depth))}, drained to zero "
             + $"{(drained is { } d2 ? $"{d2.TotalSeconds:F0} s" : "NOT within " + DrainBudget.TotalMinutes.ToString("0", CultureInfo.InvariantCulture) + " min")} after the writes stopped, "
             + $"{failed} of {finalTotal} creates ended Failed."
         );
 
-        distribution.AchievedRate.ShouldBeGreaterThan(Rate * 0.9, $"the driver reached {distribution.AchievedRate:F0} writes/s of the {Rate:F0} asked for.");
-        distribution.Errors.ShouldBeLessThan((int)(0.005 * (distribution.Samples + distribution.Errors)) + 1, "more than 0.5 % of writes failed: " + string.Join(", ", driver.Failures.Select(x => $"{x.Value} × {x.Key}")));
-        steady.Count.ShouldBeGreaterThanOrEqualTo(4, "too few queue samples after the first reminder period to fit a slope to.");
-        drained.ShouldNotBeNull($"the reconcile queue did not drain to zero within {DrainBudget.TotalMinutes:F0} minutes of the writes stopping ({finalDepth} of {finalTotal} still not terminal).");
+        distribution.AchievedRate.ShouldBeGreaterThan(
+            Rate * 0.9,
+            $"the driver reached {distribution.AchievedRate:F0} writes/s of the {Rate:F0} asked for."
+        );
+        distribution.Errors.ShouldBeLessThan(
+            (int)(0.005 * (distribution.Samples + distribution.Errors)) + 1,
+            "more than 0.5 % of writes failed: "
+            + string.Join(", ", driver.Failures.Select(static x => $"{x.Value} × {x.Key}"))
+        );
+        steady.Count.ShouldBeGreaterThanOrEqualTo(
+            4,
+            "too few queue samples after the first reminder period to fit a slope to."
+        );
+        drained.ShouldNotBeNull(
+            $"the reconcile queue did not drain to zero within {DrainBudget.TotalMinutes:F0} minutes of the writes stopping ({finalDepth} of {finalTotal} still not terminal)."
+        );
     }
 
     /// <summary>The number of this run's creates that are not terminal, and how many there are in total.</summary>
@@ -226,8 +263,8 @@ public sealed class ControlPlaneWriteTests(LoadTopology topology) {
             return 0;
         }
 
-        var xs = samples.Select(x => x.At.TotalMinutes).ToArray();
-        var ys = samples.Select(x => (double)x.Depth).ToArray();
+        var xs = samples.Select(static x => x.At.TotalMinutes).ToArray();
+        var ys = samples.Select(static x => (double)x.Depth).ToArray();
         var meanX = xs.Average();
         var meanY = ys.Average();
         var numerator = xs.Zip(ys, (x, y) => (x - meanX) * (y - meanY)).Sum();

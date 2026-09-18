@@ -355,7 +355,7 @@ public static class NetworkSubnets {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the subnet lives in. ⚠ It selects which reserved ranges "
                     + "the prefix is checked against, and it must be the network's own region — "
                     + "nothing checks that."
@@ -369,7 +369,7 @@ public static class NetworkSubnets {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster whose fabric carries the subnet. Must be the cluster the "
                     + "network is in — nothing checks that, and a subnet placed elsewhere binds to a "
                     + "Vpc that does not exist there."
@@ -382,7 +382,7 @@ public static class NetworkSubnets {
                 new(
                     "/properties/addressPrefix/v4",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The IPv4 prefix, in CIDR form. ⚠ Host bits are cleared by the "
                     + "fabric, so 10.20.1.7/24 is stored as 10.20.1.0/24 and both name the same "
                     + "network. It may not overlap a range the platform reserves, which is refused "
@@ -440,7 +440,8 @@ public static class NetworkSubnets {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     /// <summary>
     ///     What a <c>POST …/listAddressUsage</c> returns.
@@ -474,20 +475,20 @@ public static class NetworkSubnets {
                 new(
                     "/v4/total",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "How many IPv4 addresses the prefix contains that may be allocated, "
                     + "excluding the network address, the broadcast address and the gateway."
                 ),
                 new(
                     "/v4/used",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "How many IPv4 addresses are currently allocated to ports."
                 ),
                 new(
                     "/v4/available",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "How many IPv4 addresses remain. ⚠ Zero here is the answer to 'why "
                     + "will nothing schedule in this subnet'."
                 ),
@@ -508,7 +509,7 @@ public static class NetworkSubnets {
                 new(
                     "/sampledAt",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "When the fabric last reported these figures, RFC 3339. ⚠ Returned "
                     + "because a count with no timestamp is a count a caller will read as live, and "
                     + "these come from the Subnet object's status rather than from a live query."
@@ -735,7 +736,7 @@ public static class NetworkSubnets {
         }
 
         return parsed is JsonObject document
-            && document["kind"]?.GetValue<string>() is (null or "Subnet")
+            && document["kind"]?.GetValue<string>() is null or "Subnet"
             && document["spec"] is JsonObject spec
                 ? spec
                 : null;

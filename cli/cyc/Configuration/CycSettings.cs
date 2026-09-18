@@ -55,7 +55,7 @@ sealed class CycSettings {
             ?? environment.GetValueOrDefault(EnvironmentPrefix + "PROFILE")
             ?? file.DefaultProfile;
 
-        return new CycSettings(file, environment, name);
+        return new(file, environment, name);
     }
 
     /// <summary>

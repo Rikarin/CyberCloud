@@ -33,8 +33,8 @@ public sealed class ClickHouseQuotaTests {
         // creates one StatefulSet per (shard, replica) pair, so a meter that multiplied by `replicas`
         // alone would be exactly right on the default body — one shard — and would reserve a third of
         // a three-shard cluster.
-        var one = Amounts(ClickHouseClusters.Body(ClusterId, shards: 1, replicas: 2));
-        var three = Amounts(ClickHouseClusters.Body(ClusterId, shards: 3, replicas: 2));
+        var one = Amounts(ClickHouseClusters.Body(ClusterId, 1, 2));
+        var three = Amounts(ClickHouseClusters.Body(ClusterId, 3, 2));
 
         // 2 servers × m1.small (500m) = 1, plus 3 keepers × 250m = 0.75.
         one[QuotaMeter.Vcpu].ShouldBe(1.75m);
@@ -44,7 +44,7 @@ public sealed class ClickHouseQuotaTests {
 
         // ⚠ And the same body with the factors SWAPPED draws the same amounts, which is what says the
         // derivation multiplies rather than picking one.
-        Amounts(ClickHouseClusters.Body(ClusterId, shards: 2, replicas: 3))[QuotaMeter.Vcpu]
+        Amounts(ClickHouseClusters.Body(ClusterId, 2, 3))[QuotaMeter.Vcpu]
             .ShouldBe(three[QuotaMeter.Vcpu]);
     }
 
@@ -64,8 +64,8 @@ public sealed class ClickHouseQuotaTests {
 
     [Fact]
     public void StorageIsTheServerProductPlusEveryKeepersOwnVolume() {
-        var small = Amounts(ClickHouseClusters.Body(ClusterId, shards: 1, replicas: 2, storageSize: "100Gi"));
-        var big = Amounts(ClickHouseClusters.Body(ClusterId, shards: 3, replicas: 2, storageSize: "100Gi"));
+        var small = Amounts(ClickHouseClusters.Body(ClusterId, 1, 2, "100Gi"));
+        var big = Amounts(ClickHouseClusters.Body(ClusterId, 3, 2, "100Gi"));
 
         small[QuotaMeter.StorageGb].ShouldBe(230m, "2 × 100Gi + 3 Keepers × 10Gi");
         big[QuotaMeter.StorageGb].ShouldBe(630m, "6 × 100Gi + 3 Keepers × 10Gi");
@@ -79,8 +79,8 @@ public sealed class ClickHouseQuotaTests {
         // a SeaweedFS replication code decides how copies are spread ACROSS the same PVCs. A
         // ClickHouse replica is a whole second copy of the shard on ITS OWN volume, provisioned by its
         // own StatefulSet. The rule both obey: charge for the disks the cluster provisions, once each.
-        var one = Amounts(ClickHouseClusters.Body(ClusterId, shards: 1, replicas: 1, storageSize: "100Gi"));
-        var two = Amounts(ClickHouseClusters.Body(ClusterId, shards: 1, replicas: 2, storageSize: "100Gi"));
+        var one = Amounts(ClickHouseClusters.Body(ClusterId, 1, 1, "100Gi"));
+        var two = Amounts(ClickHouseClusters.Body(ClusterId, 1, 2, "100Gi"));
 
         (two[QuotaMeter.StorageGb] - one[QuotaMeter.StorageGb]).ShouldBe(
             100m,
@@ -101,7 +101,7 @@ public sealed class ClickHouseQuotaTests {
 
     [Fact]
     public void AnExplicitOverrideBeatsThePresetAndIsCountedPerServer() {
-        var amounts = Amounts(WithSizing(ClickHouseClusters.Body(ClusterId, shards: 2, replicas: 2), "1", "4Gi"));
+        var amounts = Amounts(WithSizing(ClickHouseClusters.Body(ClusterId, 2, 2), "1", "4Gi"));
 
         amounts[QuotaMeter.Vcpu].ShouldBe(4.75m, "1 core × 4 servers is 4, plus 3 Keepers × 250m");
         amounts[QuotaMeter.MemoryGb].ShouldBe(17.5m, "4Gi × 4 is 16, plus 3 × 512Mi is 1.5");
@@ -113,7 +113,7 @@ public sealed class ClickHouseQuotaTests {
         // committed amounts from the STORED body through this same function, so a derivation reading
         // a clock, configuration or a static that changes would return a different number on the
         // delete than the create committed — quota drifting upward on every cycle.
-        var body = ClickHouseClusters.Body(ClusterId, shards: 3, replicas: 3, storageSize: "250Gi");
+        var body = ClickHouseClusters.Body(ClusterId, 3, 3, "250Gi");
 
         Amounts(body).ShouldBe(Amounts(body));
     }
@@ -129,7 +129,7 @@ public sealed class ClickHouseQuotaTests {
 
         using var body = JsonDocument.Parse(WithSizing(ClickHouseClusters.Body(ClusterId), "not-a-quantity", "4Gi"));
 
-        var vcpu = registration.Meters.Single(x => x.Meter == QuotaMeter.Vcpu).Derivation!;
+        var vcpu = registration.Meters.Single(static x => x.Meter == QuotaMeter.Vcpu).Derivation!;
 
         vcpu.Amount(body.RootElement)
             .IsFailure.ShouldBeTrue("a body whose cpu quantity does not parse reserved an amount instead of refusing.");
@@ -148,10 +148,10 @@ public sealed class ClickHouseQuotaTests {
                         foreach (var amount in Amounts(
                                      ClickHouseClusters.Body(
                                          ClusterId,
-                                         shards: shards,
-                                         replicas: replicas,
-                                         storageSize: size,
-                                         keeperNodes: keeperNodes
+                                         shards,
+                                         replicas,
+                                         size,
+                                         keeperNodes
                                      )
                                  ).Values) {
                             amount.ShouldBeGreaterThan(
@@ -175,7 +175,7 @@ public sealed class ClickHouseQuotaTests {
         using var body = JsonDocument.Parse(bodyJson);
         var found = new Dictionary<QuotaMeter, decimal>();
 
-        foreach (var meter in registration.Meters.Where(x => x.Derivation is not null)) {
+        foreach (var meter in registration.Meters.Where(static x => x.Derivation is not null)) {
             var amount = meter.Derivation!.Amount(body.RootElement);
             amount.IsSuccess.ShouldBeTrue(meter.Meter.ToString());
             found[meter.Meter] = amount.GetValueOrThrow();

@@ -19,8 +19,11 @@ namespace CyberCloud.Identity.Seams;
 ///         sentence, rather than writing every customer's one-time codes to a log stream.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The silo's log, not the identity host's console, and the reason is
-///         <see cref="OtpPolicy" />'s fourth property.</b> A code is minted and delivered inside a
+///         ⚠
+///         <b>
+///             The silo's log, not the identity host's console, and the reason is
+///             <see cref="OtpPolicy" />'s fourth property.
+///         </b> A code is minted and delivered inside a
 ///         grain activation, so the only process that ever holds the plaintext is the silo that ran
 ///         the grain — the host never sees it, and could not print it. On the AppHost the person
 ///         reads it in the Aspire dashboard: <c>silo-1</c>'s or <c>silo-2</c>'s console (the
@@ -32,16 +35,22 @@ namespace CyberCloud.Identity.Seams;
 ///         silos to send through it, so <c>SiloIdentityComposition</c> hands this seam a
 ///         <see cref="CommunicationOtpDelivery" /> pointed at the platform's own communication
 ///         service and the code lands at <c>http://localhost:8025</c> as well. The log line stays,
-///         because the person on the dashboard should still find the code there. ⚠ <b>The mail
-///         failing does not fail the delivery.</b> A Mailpit still starting, a relay a laptop's
+///         because the person on the dashboard should still find the code there. ⚠
+///         <b>
+///             The mail
+///             failing does not fail the delivery.
+///         </b> A Mailpit still starting, a relay a laptop's
 ///         firewall refused — in Development the log line is a delivery in its own right, so the
 ///         refusal is logged beside the code (<c>IdentityLog.DevelopmentOtpNotMailed</c>) and the
 ///         sign-up continues. Outside Development this type does not load, so that leniency reaches
 ///         no production tenant.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The address is a structured property and never in the message — and neither is
-///         the sending module's sentence.</b> docs/plan/11 § Auditing bans an email from a log
+///         ⚠
+///         <b>
+///             The address is a structured property and never in the message — and neither is
+///             the sending module's sentence.
+///         </b> docs/plan/11 § Auditing bans an email from a log
 ///         <i>message</i>; the code is not PII and is in the line, the address is not and rides in
 ///         a scope. <c>IdentityLog.DevelopmentOtpDelivered</c> carries the template and the
 ///         argument. The refusal line is held to the same rule: a suppression refusal starts with
@@ -70,7 +79,11 @@ public sealed class DevelopmentOtpDelivery : IOtpDeliverySeam {
     ///     the development relay — or <see langword="null" /> for the log alone.
     /// </param>
     /// <exception cref="InvalidOperationException">The environment is not Development.</exception>
-    public DevelopmentOtpDelivery(IHostEnvironment environment, ILogger<DevelopmentOtpDelivery> logger, IOtpDeliverySeam? mail = null) {
+    public DevelopmentOtpDelivery(
+        IHostEnvironment environment,
+        ILogger<DevelopmentOtpDelivery> logger,
+        IOtpDeliverySeam? mail = null
+    ) {
         ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(logger);
 
@@ -103,7 +116,13 @@ public sealed class DevelopmentOtpDelivery : IOtpDeliverySeam {
                        [DestinationProperty] = delivery.Destination
                    }
                )) {
-            IdentityLog.DevelopmentOtpDelivered(logger, delivery.Code, delivery.UserId, delivery.Purpose, delivery.Kind);
+            IdentityLog.DevelopmentOtpDelivered(
+                logger,
+                delivery.Code,
+                delivery.UserId,
+                delivery.Purpose,
+                delivery.Kind
+            );
         }
 
         if (mail is null) {
@@ -120,8 +139,7 @@ public sealed class DevelopmentOtpDelivery : IOtpDeliverySeam {
             // for a refusal.
             using (logger.BeginScope(
                        new Dictionary<string, object>(StringComparer.Ordinal) {
-                           [DestinationProperty] = delivery.Destination,
-                           [ReasonProperty] = refused.Message
+                           [DestinationProperty] = delivery.Destination, [ReasonProperty] = refused.Message
                        }
                    )) {
                 IdentityLog.DevelopmentOtpNotMailed(logger, delivery.UserId, refused.Code.Value);

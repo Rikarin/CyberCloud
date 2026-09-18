@@ -25,8 +25,11 @@ public sealed class AgentOptions {
     ///     <c>cluster.credentialSecretName</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Has to be the name the chart's <c>Role</c> scopes to, and this is how it gets
-    ///     there.</b> <c>rbac.yaml</c> grants <c>get</c>, <c>update</c> and <c>patch</c> on exactly
+    ///     ⚠
+    ///     <b>
+    ///         Has to be the name the chart's <c>Role</c> scopes to, and this is how it gets
+    ///         there.
+    ///     </b> <c>rbac.yaml</c> grants <c>get</c>, <c>update</c> and <c>patch</c> on exactly
     ///     <c>cluster.credentialSecretName</c> and <c>create</c> on any (Kubernetes RBAC cannot
     ///     scope a create). The first cut exposed the value and never passed it in, so an agent
     ///     under an overridden name created a Secret it could never read again — a lockout on the

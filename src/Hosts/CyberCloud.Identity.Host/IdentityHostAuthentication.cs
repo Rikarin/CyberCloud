@@ -75,7 +75,7 @@ public static class IdentityHostAuthentication {
             .AddAuthentication(SchemeName)
             .AddCookie(
                 SchemeName,
-                options => {
+                static options => {
                     options.Cookie.Name = CookieName;
                     options.Cookie.HttpOnly = true;
                     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
@@ -93,7 +93,7 @@ public static class IdentityHostAuthentication {
                     // ⚠ 302-to-a-login-page is wrong for everything but a browser navigation, and
                     // this host serves JSON endpoints too. A redirect on an XHR turns a 401 into a
                     // 200 with a login page in it, which every client then fails to parse.
-                    options.Events.OnRedirectToLogin = context => {
+                    options.Events.OnRedirectToLogin = static context => {
                         if (context.Request.Path.StartsWithSegments("/api", StringComparison.Ordinal)) {
                             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                             return Task.CompletedTask;

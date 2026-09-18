@@ -69,41 +69,47 @@ public sealed class FeedContractTests {
     ///     carry an alias for the same reason and no <c>[GenerateSerializer]</c>.
     /// </summary>
     static IEnumerable<Type> AliasedTypes =>
-        Contracts.GetTypes().Concat(Implementation.GetTypes())
-            .Where(t => t.GetCustomAttribute<GenerateSerializerAttribute>() is not null || t == typeof(IFeedGrain) || t == typeof(FeedKind));
+        Contracts.GetTypes()
+            .Concat(Implementation.GetTypes())
+            .Where(static t => t.GetCustomAttribute<GenerateSerializerAttribute>() is not null
+                || t == typeof(IFeedGrain)
+                || t == typeof(FeedKind)
+            );
 
-    static IEnumerable<Type> SerializedTypes => AliasedTypes.Where(t => !t.IsInterface && !t.IsEnum);
+    static IEnumerable<Type> SerializedTypes => AliasedTypes.Where(static t => !t.IsInterface && !t.IsEnum);
 
     [Fact]
     public void EverySerializedTypeHasAStableAlias() =>
         AliasedTypes
-            .Where(t => t.GetCustomAttribute<AliasAttribute>() is null)
-            .Select(t => t.Name)
-            .ShouldBeEmpty("docs/plan/05 § Serialization, rule 5. For FeedState that means the row is still in PostgreSQL and nothing can read it.");
+            .Where(static t => t.GetCustomAttribute<AliasAttribute>() is null)
+            .Select(static t => t.Name)
+            .ShouldBeEmpty(
+                "docs/plan/05 § Serialization, rule 5. For FeedState that means the row is still in PostgreSQL and nothing can read it."
+            );
 
     [Fact]
     public void TheAliasesAreTheOnesRecordedHere() =>
         AliasedTypes
-            .Select(t => (Type: t.Name, Alias: t.GetCustomAttribute<AliasAttribute>()?.Alias ?? "<none>"))
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
+            .Select(static t => (Type: t.Name, Alias: t.GetCustomAttribute<AliasAttribute>()?.Alias ?? "<none>"))
+            .OrderBy(static x => x.Type, StringComparer.Ordinal)
             .ToList()
-            .ShouldBe(Aliases.OrderBy(x => x.Type, StringComparer.Ordinal).ToList());
+            .ShouldBe(Aliases.OrderBy(static x => x.Type, StringComparer.Ordinal).ToList());
 
     [Fact]
     public void TheIdManifestMatchesTheBaseline() {
         var actual = SerializedTypes
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetMembers(BindingFlags.Public | BindingFlags.Instance)
-                    .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
-                    .Where(x => x.id is not null)
+                    .Select(static member => (member, id: member.GetCustomAttribute<IdAttribute>()))
+                    .Where(static x => x.id is not null)
                     .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
             )
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
-            .ThenBy(x => x.Id)
+            .OrderBy(static x => x.Type, StringComparer.Ordinal)
+            .ThenBy(static x => x.Id)
             .ToList();
 
         actual.ShouldBe(
-            Baseline.OrderBy(x => x.Type, StringComparer.Ordinal).ThenBy(x => x.Id).ToList(),
+            Baseline.OrderBy(static x => x.Type, StringComparer.Ordinal).ThenBy(static x => x.Id).ToList(),
             "[Id(n)] numbers are never reused and never reordered — and for FeedState the old bytes are still in the database."
         );
     }
@@ -111,33 +117,37 @@ public sealed class FeedContractTests {
     [Fact]
     public void EveryPublicMemberOfEverySerializedTypeIsNumbered() =>
         SerializedTypes
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                    .Where(p => p.GetCustomAttribute<IdAttribute>() is null)
+                    .Where(static p => p.GetCustomAttribute<IdAttribute>() is null)
                     .Select(p => string.Create(CultureInfo.InvariantCulture, $"{type.Name}.{p.Name}"))
             )
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList()
             .ShouldBeEmpty("a member with no [Id(n)] is not serialized at all.");
 
     [Fact]
     public void EveryPersistedCollectionIsGetAndSet() =>
         SerializedTypes
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                    .Where(p => typeof(IEnumerable).IsAssignableFrom(p.PropertyType) && p.PropertyType != typeof(string))
-                    .Where(p => p.SetMethod is null)
+                    .Where(static p => typeof(IEnumerable).IsAssignableFrom(p.PropertyType)
+                        && p.PropertyType != typeof(string)
+                    )
+                    .Where(static p => p.SetMethod is null)
                     .Select(p => string.Create(CultureInfo.InvariantCulture, $"{type.Name}.{p.Name}"))
             )
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList()
-            .ShouldBeEmpty("System.Text.Json does not populate a get-only collection property on read — FeedState.Entries' own remarks.");
+            .ShouldBeEmpty(
+                "System.Text.Json does not populate a get-only collection property on read — FeedState.Entries' own remarks."
+            );
 
     [Fact]
     public void TheEnumValuesAreTheOnesRecordedHere() =>
         // A wire enum is a number on the wire; renaming is free and renumbering is not.
         Enum.GetValues<FeedKind>()
-            .Select(x => (Name: x.ToString(), Value: (int)x))
+            .Select(static x => (Name: x.ToString(), Value: (int)x))
             .ToList()
             .ShouldBe([("Unknown", 0), ("NuGet", 1), ("Npm", 2), ("Maven", 3)]);
 }

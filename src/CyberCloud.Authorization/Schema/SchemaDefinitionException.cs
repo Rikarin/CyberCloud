@@ -63,6 +63,6 @@ public sealed class SchemaDefinitionException : Exception {
             ? message
             : message
             + Environment.NewLine
-            + string.Join(Environment.NewLine, listed.Select(x => "  • " + x));
+            + string.Join(Environment.NewLine, listed.Select(static x => "  • " + x));
     }
 }

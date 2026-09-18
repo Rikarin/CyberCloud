@@ -1,5 +1,4 @@
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.Providers.Cache.Contracts;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -25,21 +24,21 @@ public sealed class ValkeyCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Cache/redis",
-            CreateProvider = () => new ValkeyCacheProvider(),
+            CreateProvider = static () => new ValkeyCacheProvider(),
             ReconcilerType = typeof(ValkeyCacheReconciler),
-            CreateReconciler = clock => new ValkeyCacheReconciler(clock),
+            CreateReconciler = static clock => new ValkeyCacheReconciler(clock),
             Type = ValkeyCaches.Type,
             ApiVersion = ValkeyCaches.V2026,
-            Body = cluster => ValkeyCaches.Body(cluster),
+            Body = static cluster => ValkeyCaches.Body(cluster),
             // ⚠ Changes `replicas`, which the reconciler renders into `spec.redis.replicas` and
             // ValkeyCaches.Matches reads back. A body that differed only where the reconciler ignores
             // it would pass the update test while proving the update never left the grain.
-            ChangedBody = cluster => ValkeyCaches.Body(cluster, replicas: 5),
+            ChangedBody = static cluster => ValkeyCaches.Body(cluster, 5),
             // Drops the required `/properties/version`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written: a
             // hand-written invalid body drifts out of date the day the schema gains a property and then
             // tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => WithoutVersion(ValkeyCaches.Body(cluster)),
+            InvalidBody = static cluster => WithoutVersion(ValkeyCaches.Body(cluster)),
             InvalidBodyTarget = "/properties/version",
             ActionName = ValkeyCaches.ListKeysAction,
             // ⚠ TWO OBJECTS, and the count is a fact about the operator rather than about this suite.
@@ -52,7 +51,7 @@ public sealed class ValkeyCase : IProviderCaseSource {
             // how a Secret nobody wrote went unnoticed for the life of this type.
             // ⚠ In apply order, which is also the order the cluster-backed half derives its CRD stubs
             // from — the Secret is core-group and needs none.
-            Objects = (id, ns) => [
+            Objects = static (id, ns) => [
                 ValkeyCaches.CredentialSecretRef(ns, id.Name),
                 ValkeyCaches.FailoverRef(ns, id.Name)
             ],
@@ -67,7 +66,7 @@ public sealed class ValkeyCase : IProviderCaseSource {
             // AND RETURNS FALSE FOR ONE IT DOES NOT KNOW. A Matches that defaulted to true for an
             // unrecognised document would report a Secret that was never applied as converged — which
             // is a cache the platform calls ready and the operator cannot start a pod for.
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return ValkeyCaches.Matches(match.ObjectJson, desired.RootElement);
             }

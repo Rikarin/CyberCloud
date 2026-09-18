@@ -1,5 +1,4 @@
 using CyberCloud.Core.Resources;
-using CyberCloud.Kubernetes.Apply;
 using CyberCloud.Kubernetes.Connections;
 using CyberCloud.Kubernetes.Contracts.Tunnel;
 using CyberCloud.Kubernetes.Tests.Infrastructure;
@@ -89,7 +88,7 @@ public sealed class AgentTunnelGrainTests(KubeTestCluster cluster) {
         // welcome always carried the platform-wide default, and a resource asking for 30 got 15.
         var owner = Guid.NewGuid();
         var clusterId = Guid.NewGuid();
-        var enrollment = await ArmAsync(clusterId, owner, heartbeat: TimeSpan.FromSeconds(30));
+        var enrollment = await ArmAsync(clusterId, owner, TimeSpan.FromSeconds(30));
 
         await using var agent = await ConnectAgentAsync(clusterId, enrollment.Plaintext);
 
@@ -135,7 +134,10 @@ public sealed class AgentTunnelGrainTests(KubeTestCluster cluster) {
         // ⚠ Even the OWNER is refused on the direct route: the connection grain is the only caller,
         // because it is the only one that has made the owner check first.
         (await cluster.Reacher(owner).ReachTunnelExchangeAsync(clusterId))
-            .ShouldBe($"<{ErrorCode.ResourceNotFound}>", "the tunnel is reached through the connection grain or not at all");
+            .ShouldBe(
+                $"<{ErrorCode.ResourceNotFound}>",
+                "the tunnel is reached through the connection grain or not at all"
+            );
 
         // And the other tenant cannot read the status either.
         (await cluster.Reacher(other).ReachTunnelStatusAsync(clusterId)).ShouldBe($"<{ErrorCode.ResourceNotFound}>");
@@ -183,9 +185,16 @@ public sealed class AgentTunnelGrainTests(KubeTestCluster cluster) {
         (await second.WelcomeAsync()).Credential.ShouldBeNull();
 
         // A wrong credential of the right shape: the same refusal, with the same message.
-        var forged = await new AgentTunnelRelay(cluster.Grains).AdmitAsync(clusterId, AgentCredentials.MintCredential().Plaintext, "forged");
+        var forged = await new AgentTunnelRelay(cluster.Grains).AdmitAsync(
+            clusterId,
+            AgentCredentials.MintCredential().Plaintext,
+            "forged"
+        );
         forged.IsFailure.ShouldBeTrue();
-        forged.Error!.Message.ShouldBe(replay.Error.Message, "a stolen token must not be able to tell which refusal it got");
+        forged.Error!.Message.ShouldBe(
+            replay.Error.Message,
+            "a stolen token must not be able to tell which refusal it got"
+        );
     }
 
     [Fact]
@@ -215,7 +224,9 @@ public sealed class AgentTunnelGrainTests(KubeTestCluster cluster) {
         // Degraded — the tracker does not wait out the window for a cluster with no last success —
         // and a Degraded cluster SUSPENDS applies rather than failing them.
         (await cluster.Reacher(owner).ReachPingAsync(clusterId)).ShouldBe(nameof(ClusterHealthState.Degraded));
-        (await cluster.Reacher(owner).ReachApplyAsync(clusterId, CommandFor(owner))).ShouldBe(nameof(ApplyResult.Suspended));
+        (await cluster.Reacher(owner).ReachApplyAsync(clusterId, CommandFor(owner))).ShouldBe(
+            nameof(ApplyResult.Suspended)
+        );
     }
 
     [Fact]
@@ -283,15 +294,16 @@ public sealed class AgentTunnelGrainTests(KubeTestCluster cluster) {
     }
 
     async Task AttachAsync(Guid clusterId, Guid owner) {
-        var attached = await cluster.Connection(clusterId).AttachAsync(
-            new() {
-                ClusterId = clusterId,
-                OwningTenantId = owner,
-                Kind = ClusterConnectionKind.AgentInitiated,
-                Endpoint = "agent://" + clusterId.ToString("D"),
-                DisplayName = "byo"
-            }
-        );
+        var attached = await cluster.Connection(clusterId)
+            .AttachAsync(
+                new() {
+                    ClusterId = clusterId,
+                    OwningTenantId = owner,
+                    Kind = ClusterConnectionKind.AgentInitiated,
+                    Endpoint = "agent://" + clusterId.ToString("D"),
+                    DisplayName = "byo"
+                }
+            );
 
         attached.IsSuccess.ShouldBeTrue(attached.Error?.Message);
     }
@@ -367,7 +379,11 @@ public sealed class AgentTunnelGrainTests(KubeTestCluster cluster) {
             gatewayReads = new(PipeDirection.In, agentToGateway.ClientSafePipeHandle);
             gatewayTransport = new(gatewayReads, gatewayToAgent);
             agentTransport = new(agentReads, agentToGateway);
-            Agent = new(agentTransport, Api, new() { HeartbeatInterval = TimeSpan.FromMilliseconds(100), AgentVersion = "test-agent" });
+            Agent = new(
+                agentTransport,
+                Api,
+                new() { HeartbeatInterval = TimeSpan.FromMilliseconds(100), AgentVersion = "test-agent" }
+            );
         }
 
         public void Start() {
@@ -386,7 +402,8 @@ public sealed class AgentTunnelGrainTests(KubeTestCluster cluster) {
         }
 
         public async Task<string> CredentialAsync() =>
-            (await WelcomeAsync()).Credential ?? throw new InvalidOperationException("the welcome carried no credential");
+            (await WelcomeAsync()).Credential
+            ?? throw new InvalidOperationException("the welcome carried no credential");
 
         public Task<string> EndedAsync() => relay!.WaitAsync(TimeSpan.FromSeconds(10), Ct);
 

@@ -91,8 +91,11 @@ public sealed record ListObjectsEvaluation {
 ///         requested one.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Exact for union rewrites, an over-approximation for the other two, and the
-///         difference is what "<c>Check</c>-verified" costs.</b> A union is true when any arm is,
+///         ⚠
+///         <b>
+///             Exact for union rewrites, an over-approximation for the other two, and the
+///             difference is what "<c>Check</c>-verified" costs.
+///         </b> A union is true when any arm is,
 ///         so reaching a pair through one arm is enough. An intersection is not — reaching
 ///         <c>(o, y)</c> through <c>A</c> says nothing about <c>B</c> — and an exclusion
 ///         <c>A &amp; !B</c> is only ever entered through <c>A</c> (the nodes under a <c>!</c> never
@@ -116,8 +119,11 @@ public sealed record ListObjectsEvaluation {
 ///         its members' closures are inside it.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>Check</c>'s breadth cap is mirrored where the walk crosses the node it caps,
-///         and the mirror is asked of the same index in the same order.</b> <c>Check</c> at
+///         ⚠
+///         <b>
+///             <c>Check</c>'s breadth cap is mirrored where the walk crosses the node it caps,
+///             and the mirror is asked of the same index in the same order.
+///         </b> <c>Check</c> at
 ///         <c>(o, r)</c> walks through the userset subjects of <c>o#r</c> in the order the forward
 ///         index holds them, skips every one the index answers, and gives up after expanding
 ///         <c>MaxBreadth</c> of the rest — so a subject that is in <c>o#r</c> only through the
@@ -317,7 +323,12 @@ public sealed class ListObjectsEvaluator {
             List<ObjectRef> allowed = new(candidates.Count);
 
             foreach (var candidate in candidates) {
-                var checkedResult = await checker.EvaluateAsync(candidate, request.Permission, subject, cancellationToken)
+                var checkedResult = await checker.EvaluateAsync(
+                    candidate,
+                    request.Permission,
+                    subject,
+                    cancellationToken
+                )
                     .ConfigureAwait(false);
 
                 if (checkedResult.TryGetError(out var checkError)) {
@@ -454,8 +465,10 @@ public sealed class ListObjectsEvaluator {
 
         // Rule 1 — computed userset: every y on this type whose rewrite has Rel(name).
         foreach (var member in type.Members) {
-            if (Triggers(member, node => node is RelationRefExpression reference
-                    && string.Equals(reference.Relation, name, StringComparison.Ordinal)
+            if (Triggers(
+                    member,
+                    node => node is RelationRefExpression reference
+                        && string.Equals(reference.Relation, name, StringComparison.Ordinal)
                 )) {
                 Reach(target, member.Name, depth);
             }
@@ -507,7 +520,9 @@ public sealed class ListObjectsEvaluator {
                 continue;
             }
 
-            if (!await CheckWouldExpandAsync(entry.Object, entry.Relation, userset, cancellationToken).ConfigureAwait(false)) {
+            if (!await CheckWouldExpandAsync(entry.Object, entry.Relation, userset, cancellationToken).ConfigureAwait(
+                    false
+                )) {
                 if (readFailure is not null) {
                     return;
                 }
@@ -531,9 +546,11 @@ public sealed class ListObjectsEvaluator {
             var descentDecided = false;
 
             foreach (var member in childType.Members) {
-                if (!Triggers(member, node => node is TuplesetExpression tupleset
-                        && string.Equals(tupleset.Tupleset, entry.Relation, StringComparison.Ordinal)
-                        && string.Equals(tupleset.Computed, name, StringComparison.Ordinal)
+                if (!Triggers(
+                        member,
+                        node => node is TuplesetExpression tupleset
+                            && string.Equals(tupleset.Tupleset, entry.Relation, StringComparison.Ordinal)
+                            && string.Equals(tupleset.Computed, name, StringComparison.Ordinal)
                     )) {
                     continue;
                 }
@@ -566,8 +583,14 @@ public sealed class ListObjectsEvaluator {
     ///     <c>MaxBreadth</c> unanswered usersets <c>Check</c> is willing to expand, or when the
     ///     forward index no longer holds the tuple the reverse entry came from.
     /// </remarks>
-    async ValueTask<bool> CheckWouldExpandAsync(ObjectRef target, string relation, SubjectRef userset, CancellationToken cancellationToken) {
-        var own = await membershipIndex.TryTestMembershipAsync(userset, subject, cancellationToken).ConfigureAwait(false);
+    async ValueTask<bool> CheckWouldExpandAsync(
+        ObjectRef target,
+        string relation,
+        SubjectRef userset,
+        CancellationToken cancellationToken
+    ) {
+        var own = await membershipIndex.TryTestMembershipAsync(userset, subject, cancellationToken)
+            .ConfigureAwait(false);
         if (own is { } answered) {
             return answered;
         }
@@ -600,7 +623,8 @@ public sealed class ListObjectsEvaluator {
                 return expansions < limits.MaxBreadth;
             }
 
-            var answer = await membershipIndex.TryTestMembershipAsync(candidate, subject, cancellationToken).ConfigureAwait(false);
+            var answer = await membershipIndex.TryTestMembershipAsync(candidate, subject, cancellationToken)
+                .ConfigureAwait(false);
             if (answer == true) {
                 return true;
             }
@@ -661,7 +685,7 @@ public sealed class ListObjectsEvaluator {
     }
 
     static bool IsUnionOnly(RelationExpression expression) =>
-        expression.DescendantsAndSelf().All(x => x is not (IntersectionExpression or ExclusionExpression));
+        expression.DescendantsAndSelf().All(static x => x is not (IntersectionExpression or ExclusionExpression));
 
     bool HasThis(string type, string relation) =>
         schema.Member(type, relation) is { } member
@@ -811,9 +835,9 @@ public sealed class ListObjectsEvaluator {
 
     static IEnumerable<string> TuplesetRelations(SchemaType type) =>
         type.Members
-            .SelectMany(member => member.Expression.DescendantsAndSelf())
+            .SelectMany(static member => member.Expression.DescendantsAndSelf())
             .OfType<TuplesetExpression>()
-            .Select(tupleset => tupleset.Tupleset)
+            .Select(static tupleset => tupleset.Tupleset)
             .Distinct(StringComparer.Ordinal);
 
     // ── Reads ──────────────────────────────────────────────────────────────────────────────────
@@ -840,7 +864,10 @@ public sealed class ListObjectsEvaluator {
         }
     }
 
-    async ValueTask<IReadOnlyList<SubjectIndexEntry>?> ReverseAsync(ObjectRef target, CancellationToken cancellationToken) {
+    async ValueTask<IReadOnlyList<SubjectIndexEntry>?> ReverseAsync(
+        ObjectRef target,
+        CancellationToken cancellationToken
+    ) {
         if (reverseEntries.TryGetValue(target, out var cached)) {
             return cached;
         }

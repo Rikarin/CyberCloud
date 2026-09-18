@@ -19,7 +19,7 @@ public sealed class InboundAndReceiptTests(CommunicationCluster cluster) {
 
         var before = await cluster.SendAsync(
             CommunicationCluster.Tenant,
-            CommunicationCluster.Request(service, "alert-1", "+420777123456")
+            CommunicationCluster.Request(service, "alert-1")
         );
 
         before.IsSuccess.ShouldBeTrue();
@@ -43,7 +43,7 @@ public sealed class InboundAndReceiptTests(CommunicationCluster cluster) {
 
         var after = await cluster.SendAsync(
             CommunicationCluster.Tenant,
-            CommunicationCluster.Request(service, "alert-2", "+420777123456")
+            CommunicationCluster.Request(service, "alert-2")
         );
 
         after.Error!.Code.ShouldBe(ErrorCode.PolicyViolation);
@@ -243,7 +243,7 @@ public sealed class InboundAndReceiptTests(CommunicationCluster cluster) {
 
         var sent = await cluster.SendAsync(
             CommunicationCluster.Tenant,
-            CommunicationCluster.Request(service, "otp-1", "+420777123456")
+            CommunicationCluster.Request(service, "otp-1")
         );
 
         _ = await cluster.ReceiptAsync(

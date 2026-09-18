@@ -112,7 +112,9 @@ public sealed class ScopeCollectionRoutingTests {
         // ⚠ Read back through the parser rather than searched for in the text: the sentence carries
         // an em dash and a section sign, which Utf8JsonWriter escapes on the wire.
         Message(subscriptions.Body)
-            .ShouldBe(GatewayRouter.ScopeCollectionWriteRefusal(ScopeCollectionId.SubscriptionsOf(GatewayHarness.TenantA)));
+            .ShouldBe(
+                GatewayRouter.ScopeCollectionWriteRefusal(ScopeCollectionId.SubscriptionsOf(GatewayHarness.TenantA))
+            );
 
         Message(subscriptions.Body).ShouldContain("/tenants/{t}/subscriptions/{s}.");
 
@@ -201,7 +203,7 @@ public sealed class ScopeCollectionRoutingTests {
             "GET",
             SubscriptionsPath(GatewayHarness.TenantA),
             gateway.Token(GatewayHarness.TenantA),
-            query: "api-version=" + OneTypeRegistry.TheVersion + "&$top=7&$skipToken=start"
+            "api-version=" + OneTypeRegistry.TheVersion + "&$top=7&$skipToken=start"
         );
 
         response.Status.ShouldBe(StatusCodes.Status200OK, response.Body);
@@ -219,9 +221,13 @@ public sealed class ScopeCollectionRoutingTests {
         link.ShouldContain("$skipToken=after-this");
 
         // …and no nextLink at all on the last page — an empty string is a URL a polite client requests.
-        gateway.Scopes.OnList = _ => Result<ScopeListPage>.Success(new());
+        gateway.Scopes.OnList = static _ => Result<ScopeListPage>.Success(new());
 
-        var last = await gateway.SendAsync("GET", SubscriptionsPath(GatewayHarness.TenantA), gateway.Token(GatewayHarness.TenantA));
+        var last = await gateway.SendAsync(
+            "GET",
+            SubscriptionsPath(GatewayHarness.TenantA),
+            gateway.Token(GatewayHarness.TenantA)
+        );
 
         last.Body.ShouldNotContain("nextLink");
         last.Body.ShouldContain("\"value\":[]");
@@ -234,7 +240,7 @@ public sealed class ScopeCollectionRoutingTests {
     public async Task AManagerNotFoundIsServedAs404() {
         var gateway = new GatewayHarness();
 
-        gateway.Scopes.OnList = request =>
+        gateway.Scopes.OnList = static request =>
             Result<ScopeListPage>.Failure(ErrorCode.ResourceNotFound, $"'{request.ParentPath}' does not exist.");
 
         var response = await gateway.SendAsync(

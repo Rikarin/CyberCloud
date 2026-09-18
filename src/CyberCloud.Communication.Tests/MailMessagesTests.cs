@@ -75,7 +75,10 @@ public sealed class MailMessagesTests {
         messageId.ShouldBe(headers["Message-ID"]);
 
         headers["List-Unsubscribe"].ShouldBe("<mailto:unsubscribe@cybercloud.example?subject=unsubscribe>");
-        headers["Auto-Submitted"].ShouldBe("auto-generated", "RFC 3834 — so no vacation responder answers the platform");
+        headers["Auto-Submitted"].ShouldBe(
+            "auto-generated",
+            "RFC 3834 — so no vacation responder answers the platform"
+        );
         headers["Date"].ShouldBe("Thu, 17 Sep 2026 12:22:09 +0000", "UTC, whatever offset the clock carried");
         headers["From"].ShouldBe("Cyber Cloud <no-reply@cybercloud.example>");
         headers["To"].ShouldBe("<alice@example.com>");
@@ -100,7 +103,7 @@ public sealed class MailMessagesTests {
         // ⚠ Absent rather than pointing at a mailbox nobody reads. A List-Unsubscribe that goes
         // nowhere is a recipient who tried to leave and could not — which is the complaint the
         // header exists to prevent.
-        var composed = MailMessages.Compose(Message(), Relay(unsubscribe: ""), "<x@cybercloud.example>", Date);
+        var composed = MailMessages.Compose(Message(), Relay(""), "<x@cybercloud.example>", Date);
 
         HeadersOf(composed).ShouldNotContainKey("List-Unsubscribe");
     }
@@ -109,7 +112,12 @@ public sealed class MailMessagesTests {
     public void AFreeTextSendWithNoSubjectUsesItsFirstLine() {
         // CommunicationOtpDelivery with no template sends "424242 is your code." and no subject; an
         // email with no Subject header is a spam signal and a blank inbox line.
-        var composed = MailMessages.Compose(Message(subject: "", body: "424242 is your code.\r\nIt expires in ten minutes."), Relay(), "<x@cybercloud.example>", Date);
+        var composed = MailMessages.Compose(
+            Message("", "424242 is your code.\r\nIt expires in ten minutes."),
+            Relay(),
+            "<x@cybercloud.example>",
+            Date
+        );
 
         HeadersOf(composed)["Subject"].ShouldBe("424242 is your code.");
     }
@@ -118,11 +126,20 @@ public sealed class MailMessagesTests {
 
     [Fact]
     public void ASubjectWithALineBreakCannotAddAHeader() {
-        var composed = MailMessages.Compose(Message(subject: "Your code\r\nBcc: mallory@example.net"), Relay(), "<x@cybercloud.example>", Date);
+        var composed = MailMessages.Compose(
+            Message("Your code\r\nBcc: mallory@example.net"),
+            Relay(),
+            "<x@cybercloud.example>",
+            Date
+        );
         var headers = HeadersOf(composed);
 
         headers.ShouldNotContainKey("Bcc");
-        headers["Subject"].ShouldStartWith("=?utf-8?B?", Case.Sensitive, "a control character takes the whole value down the RFC 2047 path");
+        headers["Subject"].ShouldStartWith(
+            "=?utf-8?B?",
+            Case.Sensitive,
+            "a control character takes the whole value down the RFC 2047 path"
+        );
 
         // And it decodes back to what was written, line break included, as one value.
         Decode(headers["Subject"]).ShouldBe("Your code\r\nBcc: mallory@example.net");
@@ -131,7 +148,7 @@ public sealed class MailMessagesTests {
     [Fact]
     public void ANonAsciiSubjectIsEncodedInWordsNoLongerThanRfc2047Allows() {
         var subject = "Váš kód: Přihlášení do Cyber Cloud — Ověření účtu — Ještě jednou pro jistotu";
-        var composed = MailMessages.Compose(Message(subject: subject), Relay(), "<x@cybercloud.example>", Date);
+        var composed = MailMessages.Compose(Message(subject), Relay(), "<x@cybercloud.example>", Date);
         var value = HeadersOf(composed)["Subject"];
 
         foreach (var word in value.Split(' ')) {
@@ -146,7 +163,7 @@ public sealed class MailMessagesTests {
     [Fact]
     public void ALongHeaderIsFoldedSoNoLineExceeds78Characters() {
         var subject = string.Join(' ', Enumerable.Repeat("word", 40));
-        var composed = MailMessages.Compose(Message(subject: subject), Relay(), "<x@cybercloud.example>", Date);
+        var composed = MailMessages.Compose(Message(subject), Relay(), "<x@cybercloud.example>", Date);
 
         foreach (var line in composed[..composed.IndexOf("\r\n\r\n", StringComparison.Ordinal)].Split("\r\n")) {
             line.Length.ShouldBeLessThanOrEqualTo(78, $"RFC 5322 § 2.1.1 — '{line}'");
@@ -167,10 +184,18 @@ public sealed class MailMessagesTests {
         }
 
         encoded.ShouldContain("Dobr=C3=BD den,", Case.Sensitive, "UTF-8 bytes outside printable ASCII are =XX");
-        encoded.ShouldContain("end.=20\r\n", Case.Sensitive, "trailing white space is encoded so a relay cannot strip it");
+        encoded.ShouldContain(
+            "end.=20\r\n",
+            Case.Sensitive,
+            "trailing white space is encoded so a relay cannot strip it"
+        );
         encoded.ShouldContain("\r\n=3D\r\n", Case.Sensitive, "the escape character is itself escaped");
         var withoutLineBreaks = encoded.Replace("\r\n", string.Empty, StringComparison.Ordinal);
-        withoutLineBreaks.ShouldNotContain("\n", Case.Sensitive, "every line break in the output is CRLF, never a bare LF");
+        withoutLineBreaks.ShouldNotContain(
+            "\n",
+            Case.Sensitive,
+            "every line break in the output is CRLF, never a bare LF"
+        );
         withoutLineBreaks.ShouldNotContain("\r", Case.Sensitive, "and never a bare CR");
 
         DecodeQuotedPrintable(encoded).ShouldBe(body.ReplaceLineEndings("\r\n"));

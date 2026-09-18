@@ -12,8 +12,11 @@ namespace CyberCloud.Gateway.Host.WellKnown;
 ///     <para>
 ///         ⚠ <b>The file is a build input, not configuration, and that is what makes it gateable.</b>
 ///         RFC 9116 § 2.5.5 makes <c>Expires</c> mandatory, and docs/plan/18 § Disclosure is blunt
-///         about the consequence: <i>"a <c>security.txt</c> with a stale <c>Expires</c> is worse than
-///         none"</i>. An embedded file has exactly one copy, the one the compiler saw, so
+///         about the consequence:
+///         <i>
+///             "a <c>security.txt</c> with a stale <c>Expires</c> is worse than
+///             none"
+///         </i>. An embedded file has exactly one copy, the one the compiler saw, so
 ///         <c>SecurityTxtTests.ExpiresIsAtLeastThirtyDaysOut</c> reads the bytes that ship and turns
 ///         the build red thirty days before they lapse. A file read from disk or from a ConfigMap at
 ///         start-up would be a file nothing in the build could see expire.
@@ -59,7 +62,8 @@ static class SecurityTxt {
     ///     date-time RFC 9116 § 2.5.5 requires; otherwise <see langword="null" />.
     /// </returns>
     public static DateTimeOffset? Expires() {
-        var lines = Fields.Where(x => string.Equals(x.Name, "Expires", StringComparison.OrdinalIgnoreCase)).ToList();
+        var lines = Fields.Where(static x => string.Equals(x.Name, "Expires", StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
         if (lines.Count != 1) {
             return null;
@@ -74,8 +78,8 @@ static class SecurityTxt {
             DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
             out var expires
         )
-            ? expires
-            : null;
+                ? expires
+                : null;
     }
 
     static string Read() {
@@ -86,7 +90,7 @@ static class SecurityTxt {
                 + "the file or the project line is gone."
             );
 
-        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: false);
+        using var reader = new StreamReader(stream, Encoding.UTF8, false);
 
         return reader.ReadToEnd();
     }

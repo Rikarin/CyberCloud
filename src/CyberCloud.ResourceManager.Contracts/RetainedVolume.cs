@@ -235,9 +235,7 @@ public readonly record struct RetainedVolume(
                 continue;
             }
 
-            volumes.Add(
-                new(new() { Kind = ClaimKind, Namespace = ns, Name = summary.Name }, ownedBy, reason)
-            );
+            volumes.Add(new(new() { Kind = ClaimKind, Namespace = ns, Name = summary.Name }, ownedBy, reason));
         }
 
         return volumes.ToImmutable();
@@ -251,7 +249,10 @@ public readonly record struct RetainedVolume(
     public static string Selector(ImmutableDictionary<string, string> ownedBy) {
         ArgumentNullException.ThrowIfNull(ownedBy);
 
-        return string.Join(",", ownedBy.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Key + "=" + x.Value));
+        return string.Join(
+            ",",
+            ownedBy.OrderBy(static x => x.Key, StringComparer.Ordinal).Select(static x => x.Key + "=" + x.Value)
+        );
     }
 
     /// <summary>
@@ -323,8 +324,11 @@ public readonly record struct RetainedVolume(
     ///         would be checking our own arithmetic twice.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Held here rather than in <c>VolumeReclaimer</c> because two callers now need
-    ///         it and a guard written twice drifts.</b> The reclaimer runs it before a delete; a
+    ///         ⚠
+    ///         <b>
+    ///             Held here rather than in <c>VolumeReclaimer</c> because two callers now need
+    ///             it and a guard written twice drifts.
+    ///         </b> The reclaimer runs it before a delete; a
     ///         provider whose operator owns its claims runs it before a detach and again before an
     ///         adopt, and a claim that fails it in either place is left exactly as it was found.
     ///     </para>

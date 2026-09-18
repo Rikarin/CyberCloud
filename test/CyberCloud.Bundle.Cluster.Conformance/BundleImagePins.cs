@@ -71,12 +71,12 @@ public sealed class BundleImagePins {
         );
 
         using var copy = BundleCopy.Create();
-        var image = copy.SabotageDigest(Component, digest => "unresolved");
+        var image = copy.SabotageDigest(Component, static digest => "unresolved");
 
         var run = await BundleInstaller.RunAsync(
             copy.Script,
             "--component " + Component,
-            kubeconfig: copy.NoCluster,
+            copy.NoCluster,
             TestContext.Current.CancellationToken
         );
 
@@ -93,14 +93,16 @@ public sealed class BundleImagePins {
             image,
             Case.Sensitive,
             "the refusal did not name the image that has no digest, which is the one thing the "
-            + "reader has to go and resolve. Its output was:\n" + run.Output
+            + "reader has to go and resolve. Its output was:\n"
+            + run.Output
         );
 
         run.Output.ShouldContain(
             "no digest",
             Case.Sensitive,
             "the refusal did not say that the digest is missing, so a reader cannot tell this from "
-            + "a moved tag. Its output was:\n" + run.Output
+            + "a moved tag. Its output was:\n"
+            + run.Output
         );
 
         AssertNothingWasApplied(run);
@@ -111,7 +113,7 @@ public sealed class BundleImagePins {
         var dry = await BundleInstaller.RunAsync(
             copy.Script,
             "--dry-run --component " + Component,
-            kubeconfig: null,
+            null,
             TestContext.Current.CancellationToken
         );
 
@@ -120,7 +122,8 @@ public sealed class BundleImagePins {
             "charts/bundle/install.sh --dry-run passed over an `images:` entry recorded as "
             + "`@unresolved`. The dry run is the check people make before a real one, and a dry run "
             + "that is green over a pin nobody resolved sends them into the real one. Its output "
-            + "was:\n" + dry.Output
+            + "was:\n"
+            + dry.Output
         );
 
         dry.Output.ShouldContain(image, Case.Sensitive, "the dry run's refusal did not name the image:\n" + dry.Output);
@@ -130,7 +133,8 @@ public sealed class BundleImagePins {
             Case.Sensitive,
             "charts/bundle/install.sh --dry-run resolved a tag against its registry. A dry run "
             + "executes nothing and needs no network; a registry round-trip in it is a contract "
-            + "broken quietly. Its output was:\n" + dry.Output
+            + "broken quietly. Its output was:\n"
+            + dry.Output
         );
     }
 
@@ -172,7 +176,7 @@ public sealed class BundleImagePins {
         var run = await BundleInstaller.RunAsync(
             copy.Script,
             "--component " + Component,
-            kubeconfig: copy.NoCluster,
+            copy.NoCluster,
             TestContext.Current.CancellationToken
         );
 
@@ -191,7 +195,8 @@ public sealed class BundleImagePins {
             "recorded sha256:deadbeef",
             Case.Sensitive,
             "the refusal did not print the digest that was recorded, so a reader cannot see what "
-            + "was reviewed. Its output was:\n" + run.Output
+            + "was reviewed. Its output was:\n"
+            + run.Output
         );
 
         run.Output.ShouldContain(
@@ -199,8 +204,11 @@ public sealed class BundleImagePins {
             Case.Sensitive,
             "the refusal did not print the digest the registry serves — or printed one other than "
             + "the digest the checked-in component.yaml records, which would mean the tag has moved "
-            + "for real and charts/bundle/" + Component + "/component.yaml needs re-review. Its "
-            + "output was:\n" + run.Output
+            + "for real and charts/bundle/"
+            + Component
+            + "/component.yaml needs re-review. Its "
+            + "output was:\n"
+            + run.Output
         );
 
         AssertNothingWasApplied(run);
@@ -228,13 +236,14 @@ public sealed class BundleImagePins {
 
         Assert.SkipUnless(
             await Registry.Answers(TestContext.Current.CancellationToken),
-            "SKIPPED — ghcr.io did not answer. WOULD PROVE: that charts/bundle/" + Component
+            "SKIPPED — ghcr.io did not answer. WOULD PROVE: that charts/bundle/"
+            + Component
             + "/component.yaml's recorded digest is what its tag serves today."
         );
 
         var run = await BundleInstaller.RunAsync(
             "--verify --component " + Component,
-            kubeconfig: null,
+            null,
             TestContext.Current.CancellationToken
         );
 
@@ -259,7 +268,8 @@ public sealed class BundleImagePins {
                 "✔ image          " + entry,
                 Case.Sensitive,
                 $"charts/bundle/install.sh --verify did not report `{entry}` as serving its recorded "
-                + "digest. Its output was:\n" + run.Output
+                + "digest. Its output was:\n"
+                + run.Output
             );
         }
     }
@@ -272,7 +282,8 @@ public sealed class BundleImagePins {
             "refused by the digest gate",
             Case.Sensitive,
             "the run failed without saying the digest gate refused the component, so a reader "
-            + "would go looking for a broken chart. Its output was:\n" + run.Output
+            + "would go looking for a broken chart. Its output was:\n"
+            + run.Output
         );
 
         foreach (var trace in new[] { "kubectl", "helm", "connection", "KUBECONFIG", "Bundle applied" }) {
@@ -300,7 +311,9 @@ public sealed class BundleImagePins {
     sealed class BundleCopy : IDisposable {
         readonly string root;
 
-        BundleCopy(string root) => this.root = root;
+        BundleCopy(string root) {
+            this.root = root;
+        }
 
         public static BundleCopy Create() {
             var source = Path.Combine(BundleInstaller.RepositoryRoot, "charts", "bundle");
@@ -353,7 +366,10 @@ public sealed class BundleImagePins {
                 var entry = line[4..].Trim();
                 var at = entry.IndexOf('@', StringComparison.Ordinal);
 
-                at.ShouldBeGreaterThan(0, $"charts/bundle/{component}/component.yaml records `{entry}` with no digest to sabotage.");
+                at.ShouldBeGreaterThan(
+                    0,
+                    $"charts/bundle/{component}/component.yaml records `{entry}` with no digest to sabotage."
+                );
 
                 lines[index] = "  - " + entry[..at] + "@" + rewrite(entry[(at + 1)..]);
                 File.WriteAllLines(file, lines);
@@ -361,12 +377,14 @@ public sealed class BundleImagePins {
                 return entry[..at];
             }
 
-            throw new InvalidOperationException($"charts/bundle/{component}/component.yaml records no images: block to sabotage.");
+            throw new InvalidOperationException(
+                $"charts/bundle/{component}/component.yaml records no images: block to sabotage."
+            );
         }
 
         public void Dispose() {
             try {
-                Directory.Delete(root, recursive: true);
+                Directory.Delete(root, true);
             } catch (IOException) {
                 // A copy left in the temp directory is untidy and is not a failed assertion.
             }
@@ -377,7 +395,8 @@ public sealed class BundleImagePins {
     static class Registry {
         public static async Task<bool> Answers(CancellationToken cancellationToken) {
             try {
-                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+                using var client = new HttpClient();
+                client.Timeout = TimeSpan.FromSeconds(15);
                 using var request = new HttpRequestMessage(HttpMethod.Head, "https://ghcr.io/v2/");
                 using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
 

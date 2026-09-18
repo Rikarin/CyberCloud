@@ -22,8 +22,11 @@ public sealed record SignUpTicket(
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The sign-up id is the whole of the browser's authority over a sign-up, so it is
-///         protected and never in a body or a URL.</b> Whoever can name the id can answer its code,
+///         ⚠
+///         <b>
+///             The sign-up id is the whole of the browser's authority over a sign-up, so it is
+///             protected and never in a body or a URL.
+///         </b> Whoever can name the id can answer its code,
 ///         enrol a credential on its user and complete it as the owner of its tenant. The id is
 ///         random (a GUID the host minted, never derived from the address), it travels in a
 ///         data-protected <c>HttpOnly</c> cookie the page cannot read, and the same

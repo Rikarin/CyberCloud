@@ -43,7 +43,7 @@ public sealed class VaultSeamWiringTests {
         // ⚠ The default, and it must stay the default. This is every silo in the repository today:
         // CyberCloud.Silo.Host composes the resource manager and calls nothing from CyberCloud.Vault,
         // so the refusal is reachable and is what ReconcileDriver hands a reconciler.
-        Resolver(silo => silo.AddCyberCloudResourceManager()).ShouldBeOfType<UnavailableSecretResolver>();
+        Resolver(static silo => silo.AddCyberCloudResourceManager()).ShouldBeOfType<UnavailableSecretResolver>();
     }
 
     [Fact]
@@ -53,8 +53,8 @@ public sealed class VaultSeamWiringTests {
         // let the rest pick it up. The second is silent — a silo with no vault would then fail at the
         // first RESOLVE with a connection error naming an address that is not set, rather than with
         // the sentence UnavailableSecretResolver was written to hand an operator.
-        var wired = Resolver(silo => silo.AddCyberCloudResourceManager().AddOpenBaoSecretResolver(Wired));
-        var unwired = Resolver(silo => silo.AddCyberCloudResourceManager());
+        var wired = Resolver(static silo => silo.AddCyberCloudResourceManager().AddOpenBaoSecretResolver(Wired));
+        var unwired = Resolver(static silo => silo.AddCyberCloudResourceManager());
 
         wired.ShouldBeOfType<OpenBaoSecretResolver>();
         unwired.ShouldBeOfType<UnavailableSecretResolver>();
@@ -82,7 +82,7 @@ public sealed class VaultSeamWiringTests {
         // rather than reasoned about here.
         var services = Compose(silo => Both(silo, managerFirst));
 
-        services.Count(x => x.ServiceType == typeof(ISecretResolver))
+        services.Count(static x => x.ServiceType == typeof(ISecretResolver))
             .ShouldBe(
                 1,
                 "a host that opted in should have one ISecretResolver registration, not the real one "
@@ -98,7 +98,7 @@ public sealed class VaultSeamWiringTests {
         var builder = new ServiceCollectionSiloBuilder();
         builder.AddCyberCloudResourceManager();
 
-        builder.Services.Any(x => x.ServiceType == typeof(VaultOptions))
+        builder.Services.Any(static x => x.ServiceType == typeof(VaultOptions))
             .ShouldBeFalse(
                 "AddCyberCloudResourceManager must not drag the vault module into a silo that did not "
                 + "ask for it — module-layering.txt has no ResourceManager -> Vault line and could not"

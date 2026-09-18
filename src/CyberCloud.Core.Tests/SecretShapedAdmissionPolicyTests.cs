@@ -1,7 +1,7 @@
-using System.Text;
-using System.Text.RegularExpressions;
 using CyberCloud.Core.Security;
 using Shouldly;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace CyberCloud.Core.Tests;
 
@@ -45,7 +45,7 @@ public class SecretShapedAdmissionPolicyTests {
     );
 
     static readonly Regex MessageLine = new(
-        @"^      message: ""a value in this object is credential-shaped \((?<rule>[A-Za-z]+)\)\.",
+        """^      message: "a value in this object is credential-shaped \((?<rule>[A-Za-z]+)\)\.""",
         RegexOptions.NonBacktracking
     );
 
@@ -76,14 +76,17 @@ public class SecretShapedAdmissionPolicyTests {
             message.Success.ShouldBeTrue(
                 $"{PolicyFile} line {i + 1} is a rule expression and line {i + 2} is not its "
                 + "message. The message is what names the rule to whoever was refused, so the two "
-                + "travel together:\n" + lines[i] + "\n" + (i + 1 < lines.Length ? lines[i + 1] : "(end)")
+                + "travel together:\n"
+                + lines[i]
+                + "\n"
+                + (i + 1 < lines.Length ? lines[i + 1] : "(end)")
             );
 
             actual.Add((message.Groups["rule"].Value, expression.Groups["pattern"].Value));
         }
 
         var expected = SecretShapedText.Rules
-            .Select(rule => (rule.Name, Literal: CelLiteral(rule.Re2Pattern)))
+            .Select(static rule => (rule.Name, Literal: CelLiteral(rule.Re2Pattern)))
             .ToList();
 
         // ⚠ One assertion over the whole list rather than one per rule, so that an insertion, a
@@ -111,7 +114,7 @@ public class SecretShapedAdmissionPolicyTests {
     ///     this returns is what the file holds.
     /// </remarks>
     static string CelLiteral(string pattern) =>
-        pattern.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("'", "\\'", StringComparison.Ordinal);
+        pattern.Replace("""\""", """\\""", StringComparison.Ordinal).Replace("'", """\'""", StringComparison.Ordinal);
 
     /// <summary>The <c>validations:</c> block the policy must carry, rendered from the rules.</summary>
     static string ExpectedBlock() {

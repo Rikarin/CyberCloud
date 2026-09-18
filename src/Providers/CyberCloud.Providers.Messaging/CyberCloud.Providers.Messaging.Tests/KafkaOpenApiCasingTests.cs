@@ -93,7 +93,7 @@ public sealed class KafkaOpenApiCasingTests {
             "no path carries the provider namespace and type as the catalogue spells them"
         );
 
-        foreach (var path in paths.Where(x => x.Contains("kafkaclusters", StringComparison.OrdinalIgnoreCase))) {
+        foreach (var path in paths.Where(static x => x.Contains("kafkaclusters", StringComparison.OrdinalIgnoreCase))) {
             path.Contains(QualifiedType, StringComparison.Ordinal)
                 .ShouldBeTrue($"'{path}' spells the type in a casing other than '{QualifiedType}'.");
         }
@@ -141,7 +141,7 @@ public sealed class KafkaOpenApiCasingTests {
         return OpenApiEmitter.Emit(registry, OpenApiEmitter.ApiVersionsOf(registry).Single());
     }
 
-    static ImmutableArray<string> Paths() => [.. Document()["paths"]!.AsObject().Select(x => x.Key)];
+    static ImmutableArray<string> Paths() => [.. Document()["paths"]!.AsObject().Select(static x => x.Key)];
 
     static void Collect(JsonNode? node, HashSet<string> names) {
         switch (node) {

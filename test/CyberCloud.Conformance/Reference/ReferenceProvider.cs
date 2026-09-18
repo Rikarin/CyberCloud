@@ -80,10 +80,10 @@ public static class Probes {
     public static ResourceSchema ChildSchema { get; } =
         ResourceSchema.Of(
             [
-                new("/location", SchemaKind.Text, Required: true),
+                new("/location", SchemaKind.Text, true),
                 new("/properties", SchemaKind.Nested),
-                new("/properties/clusterId", SchemaKind.Text, Required: true),
-                new("/properties/note", SchemaKind.Text, Required: true)
+                new("/properties/clusterId", SchemaKind.Text, true),
+                new("/properties/note", SchemaKind.Text, true)
             ]
         );
 
@@ -137,10 +137,10 @@ public static class Probes {
     public static ResourceSchema Schema { get; } =
         ResourceSchema.Of(
             [
-                new("/location", SchemaKind.Text, Required: true),
+                new("/location", SchemaKind.Text, true),
                 new("/properties", SchemaKind.Nested),
-                new("/properties/clusterId", SchemaKind.Text, Required: true),
-                new("/properties/note", SchemaKind.Text, Required: true)
+                new("/properties/clusterId", SchemaKind.Text, true),
+                new("/properties/note", SchemaKind.Text, true)
             ]
         );
 

@@ -135,7 +135,7 @@ public sealed class ResourceGroupReclaimer(
                 + "name and never confirmed it: {Paths}",
                 scope.ResourceGroup,
                 reaped.Count,
-                string.Join(", ", reaped.Select(x => x.CanonicalPath))
+                string.Join(", ", reaped.Select(static x => x.CanonicalPath))
             );
         }
 

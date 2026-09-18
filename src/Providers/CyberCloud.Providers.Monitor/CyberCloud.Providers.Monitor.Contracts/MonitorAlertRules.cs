@@ -14,8 +14,11 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/16 § Alerts · M2: <i>"a query, a threshold, a duration, a severity, an action
-///         group"</i>. All five are here, under <c>/properties</c>, and the document's
+///         docs/plan/16 § Alerts · M2:
+///         <i>
+///             "a query, a threshold, a duration, a severity, an action
+///             group"
+///         </i>. All five are here, under <c>/properties</c>, and the document's
 ///         <c>CyberCloud.Monitor/alertRules</c> is spelled as a child of <c>workspaces</c> because a
 ///         rule's query has no meaning without a store to run against, and the store is the
 ///         workspace — a top-level rule would carry the workspace as a property that could name
@@ -34,8 +37,11 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 ///         through an <c>IConvergedModule</c>, the same run.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The action group names the sending service by RESOURCE ID PATH, and this is the
-///         first property in the catalogue with <c>SchemaFormat.ResourceId</c>.</b> docs/plan/03
+///         ⚠
+///         <b>
+///             The action group names the sending service by RESOURCE ID PATH, and this is the
+///             first property in the catalogue with <c>SchemaFormat.ResourceId</c>.
+///         </b> docs/plan/03
 ///         § Assembly graph rules, rule 2: cross-provider traffic goes
 ///         <i>"through CyberCloud.ResourceManager by resource id"</i>. Every family before this one
 ///         either needed no other provider's resource or recorded that it wanted one and could not
@@ -48,8 +54,10 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>docs/plan/16 § Alerts' three mandatory limits, and where each one is.</b>
-///         <i>"Query cost limits, a per-workspace concurrent-evaluation cap and a max look-back are
-///         mandatory from day one."</i> The look-back is the schema's — <see cref="MaxLookbackSeconds" />
+///         <i>
+///             "Query cost limits, a per-workspace concurrent-evaluation cap and a max look-back are
+///             mandatory from day one."
+///         </i> The look-back is the schema's — <see cref="MaxLookbackSeconds" />
 ///         — and is refused at the API. The concurrency cap is the evaluator's activation, one per
 ///         workspace, evaluating rules one at a time (<see cref="IAlertEvaluatorGrain" />). Query
 ///         cost is bounded three ways: the query's length (<see cref="MaxQueryLength" />), the
@@ -142,7 +150,7 @@ public static class MonitorAlertRules {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the rule is evaluated in — the workspace's."
                 ) {
                     Format = SchemaFormat.Region,
@@ -160,7 +168,7 @@ public static class MonitorAlertRules {
                 new(
                     "/properties/severity",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "How loud: critical pages somebody, error is looked at today, warning "
                     + "this week, informational is worth knowing."
                 ) { AllowedValues = SeverityValues, ExampleJson = "\"warning\"" },
@@ -170,27 +178,31 @@ public static class MonitorAlertRules {
                 new(
                     "/properties/condition/signal",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "Which store the query runs against: metrics is MetricsQL over the "
                     + "workspace's VictoriaMetrics account, logs is SQL over its ClickHouse database."
                 ) { AllowedValues = SignalValues, ExampleJson = "\"metrics\"" },
                 new(
                     "/properties/condition/query",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The query, verbatim. It must produce numbers; the rule fires when any of "
                     + "them satisfies the operator against the threshold."
-                ) { MinLength = 1, MaxLength = MaxQueryLength, ExampleJson = "\"max(rate(http_requests_errors_total[5m]))\"" },
+                ) {
+                    MinLength = 1,
+                    MaxLength = MaxQueryLength,
+                    ExampleJson = "\"max(rate(http_requests_errors_total[5m]))\""
+                },
                 new(
                     "/properties/condition/operator",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "How a value is compared with the threshold."
                 ) { AllowedValues = OperatorValues, ExampleJson = "\"greaterThan\"" },
                 new(
                     "/properties/condition/threshold",
                     SchemaKind.Number,
-                    Required: true,
+                    true,
                     Description: "The number the value is compared with."
                 ) { ExampleJson = "5" },
                 new(
@@ -201,7 +213,11 @@ public static class MonitorAlertRules {
                 ) { Minimum = MinLookbackSeconds, Maximum = MaxLookbackSeconds, DefaultJson = "300" },
 
                 // ── The schedule ─────────────────────────────────────────────────────────────
-                new("/properties/evaluation", SchemaKind.Nested, Description: "How often, and how long before it counts."),
+                new(
+                    "/properties/evaluation",
+                    SchemaKind.Nested,
+                    Description: "How often, and how long before it counts."
+                ),
                 new(
                     "/properties/evaluation/intervalSeconds",
                     SchemaKind.WholeNumber,
@@ -222,31 +238,36 @@ public static class MonitorAlertRules {
                 new(
                     "/properties/actionGroup/service",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The CyberCloud.Communication/services resource the notification is sent "
                     + "through, as its full resource id path. It must be in this tenant."
                 ) {
                     Format = SchemaFormat.ResourceId,
                     MaxLength = 512,
                     ExampleJson = "\"/tenants/11111111-1111-4111-8111-111111111111/subscriptions/"
-                    + "33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/"
-                    + "CyberCloud.Communication/services/alerts\""
+                        + "33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/"
+                        + "CyberCloud.Communication/services/alerts\""
                 },
                 new(
                     "/properties/actionGroup/channel",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "Which of that service's channels carries it. The service must have the "
                     + "channel configured and enabled, or every notification is refused by name."
                 ) { AllowedValues = ChannelValues, ExampleJson = "\"email\"" },
                 new(
                     "/properties/actionGroup/recipients",
                     SchemaKind.Array,
-                    Required: true,
+                    true,
                     Description: "Where it goes — addresses or E.164 numbers, one send each, every one "
                     + "checked against the service's suppression list before dispatch. At least one and "
                     + "at most 20; a list outside that is refused when the rule is reconciled."
-                ) { ElementKind = SchemaKind.Text, MinLength = 1, MaxLength = 320, ExampleJson = "[\"oncall@example.com\"]" },
+                ) {
+                    ElementKind = SchemaKind.Text,
+                    MinLength = 1,
+                    MaxLength = 320,
+                    ExampleJson = """["oncall@example.com"]"""
+                },
                 new(
                     "/properties/actionGroup/notifyOnResolve",
                     SchemaKind.Boolean,
@@ -257,7 +278,8 @@ public static class MonitorAlertRules {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     /// <summary>What a <c>listInstances</c> returns.</summary>
     /// <remarks>
@@ -268,18 +290,18 @@ public static class MonitorAlertRules {
     public static ResourceSchema ListInstancesResponse { get; } =
         ResourceSchema.Of(
             [
-                new("/count", SchemaKind.WholeNumber, Required: true, Description: "How many firings the rule keeps."),
-                new("/open", SchemaKind.WholeNumber, Required: true, Description: "How many of them are still firing."),
+                new("/count", SchemaKind.WholeNumber, true, Description: "How many firings the rule keeps."),
+                new("/open", SchemaKind.WholeNumber, true, Description: "How many of them are still firing."),
                 new(
                     "/state",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "Where the rule is now: ok, pending or firing."
                 ),
                 new(
                     "/instances",
                     SchemaKind.Array,
-                    Required: true,
+                    true,
                     Description: "Every firing, oldest first, one line each: "
                     + "'{state} {severity} fired {firedAt} resolved {resolvedAt} value {value}: {summary} | {notification}'."
                 ) { ElementKind = SchemaKind.Text }
@@ -335,7 +357,7 @@ public static class MonitorAlertRules {
                 ["actionGroup"] = new JsonObject {
                     ["service"] = service,
                     ["channel"] = channel,
-                    ["recipients"] = new JsonArray([.. recipients.Select(x => (JsonNode?)x)]),
+                    ["recipients"] = new JsonArray([.. recipients.Select(static x => (JsonNode?)x)]),
                     ["notifyOnResolve"] = notifyOnResolve
                 }
             }
@@ -377,7 +399,7 @@ public static class MonitorAlertRules {
         guid[6] = (byte)((guid[6] & 0x0F) | 0x80);
         guid[8] = (byte)((guid[8] & 0x3F) | 0x80);
 
-        return new(guid, bigEndian: true);
+        return new(guid, true);
     }
 
     /// <summary>The workspace a rule sits under — its address, with no GUID.</summary>
@@ -413,22 +435,34 @@ public static class MonitorAlertRules {
     public static Result<AlertRuleSpec> ToSpec(ResourceId id, JsonElement desired) {
         var signal = ParseSignal(Text(Member(desired, "condition", "signal"), string.Empty));
         if (signal == AlertSignal.Unknown) {
-            return Refuse("The condition's signal is not one of " + string.Join(", ", SignalValues) + ".", "/properties/condition/signal");
+            return Refuse(
+                "The condition's signal is not one of " + string.Join(", ", SignalValues) + ".",
+                "/properties/condition/signal"
+            );
         }
 
         var op = ParseOperator(Text(Member(desired, "condition", "operator"), string.Empty));
         if (op == AlertOperator.Unknown) {
-            return Refuse("The condition's operator is not one of " + string.Join(", ", OperatorValues) + ".", "/properties/condition/operator");
+            return Refuse(
+                "The condition's operator is not one of " + string.Join(", ", OperatorValues) + ".",
+                "/properties/condition/operator"
+            );
         }
 
         var severity = ParseSeverity(Text(Property(desired, "severity"), string.Empty));
         if (severity == AlertSeverity.Unknown) {
-            return Refuse("The severity is not one of " + string.Join(", ", SeverityValues) + ".", "/properties/severity");
+            return Refuse(
+                "The severity is not one of " + string.Join(", ", SeverityValues) + ".",
+                "/properties/severity"
+            );
         }
 
         var channel = ParseChannel(Text(Member(desired, "actionGroup", "channel"), string.Empty));
         if (channel == ChannelKind.Unknown) {
-            return Refuse("The action group's channel is not one of " + string.Join(", ", ChannelValues) + ".", "/properties/actionGroup/channel");
+            return Refuse(
+                "The action group's channel is not one of " + string.Join(", ", ChannelValues) + ".",
+                "/properties/actionGroup/channel"
+            );
         }
 
         var servicePath = Text(Member(desired, "actionGroup", "service"), string.Empty).Trim();
@@ -476,12 +510,15 @@ public static class MonitorAlertRules {
         }
 
         var recipients = Strings(Member(desired, "actionGroup", "recipients"))
-            .Select(x => x.Trim())
-            .Where(x => x.Length > 0)
+            .Select(static x => x.Trim())
+            .Where(static x => x.Length > 0)
             .ToImmutableArray();
 
         if (recipients.Length == 0) {
-            return Refuse("The action group names no recipient. Nobody would be told.", "/properties/actionGroup/recipients");
+            return Refuse(
+                "The action group names no recipient. Nobody would be told.",
+                "/properties/actionGroup/recipients"
+            );
         }
 
         if (recipients.Length > MaxRecipients) {
@@ -507,7 +544,9 @@ public static class MonitorAlertRules {
                     Query = Text(Member(desired, "condition", "query"), string.Empty),
                     Operator = op,
                     Threshold = Number(Member(desired, "condition", "threshold"), 0d),
-                    Lookback = TimeSpan.FromSeconds(Whole(Member(desired, "condition", "lookbackSeconds"), DefaultLookbackSeconds))
+                    Lookback = TimeSpan.FromSeconds(
+                        Whole(Member(desired, "condition", "lookbackSeconds"), DefaultLookbackSeconds)
+                    )
                 },
                 Interval = TimeSpan.FromSeconds(intervalSeconds),
                 For = TimeSpan.FromSeconds(Whole(Member(desired, "evaluation", "forSeconds"), 0)),
@@ -651,9 +690,9 @@ public static class MonitorAlertRules {
 
         return new JsonObject {
             ["count"] = instances.Length,
-            ["open"] = instances.Count(x => x.IsOpen),
+            ["open"] = instances.Count(static x => x.IsOpen),
             ["state"] = Spell(rule.State),
-            ["instances"] = new JsonArray([.. instances.Select(x => (JsonNode?)InstanceLine(x))])
+            ["instances"] = new JsonArray([.. instances.Select(static x => (JsonNode?)InstanceLine(x))])
         }.ToJsonString();
     }
 

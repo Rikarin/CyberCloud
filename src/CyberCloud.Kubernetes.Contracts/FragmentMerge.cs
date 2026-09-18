@@ -17,8 +17,11 @@ namespace CyberCloud.Kubernetes.Contracts;
 ///         is the failure the co-owned mode exists to make impossible.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Co-writer order is the ordinal order of their GUIDs, and it has to be some fixed
-///         order.</b> The merged array is what the API server stores, and the reconcile hash each
+///         ⚠
+///         <b>
+///             Co-writer order is the ordinal order of their GUIDs, and it has to be some fixed
+///             order.
+///         </b> The merged array is what the API server stores, and the reconcile hash each
 ///         co-writer compares is over its own fragment rather than the union — so order does not move
 ///         a hash. But the union is applied as one atomic value, and a union whose order depended on
 ///         which co-writer applied last would make every co-writer's apply an <c>Updated</c> that
@@ -40,7 +43,10 @@ static class FragmentMerge {
         var result = new JsonObject();
         var writers = new Dictionary<string, Guid>(StringComparer.Ordinal);
 
-        foreach (var (writer, fragment) in fragments.OrderBy(x => KubeLabels.GuidValue(x.Writer), StringComparer.Ordinal)) {
+        foreach (var (writer, fragment) in fragments.OrderBy(
+                     static x => KubeLabels.GuidValue(x.Writer),
+                     StringComparer.Ordinal
+                 )) {
             var merged = MergeInto(result, fragment, writer, writers, string.Empty);
             if (merged.TryGetError(out var error)) {
                 return Result<JsonObject>.Failure(error);
@@ -69,7 +75,7 @@ static class FragmentMerge {
             switch (existing, value) {
                 case (JsonObject left, JsonObject right): {
                     var nested = MergeInto(left, right, writer, writers, here);
-                    if (nested.TryGetError(out var error)) {
+                    if (nested.TryGetError(out _)) {
                         return nested;
                     }
 

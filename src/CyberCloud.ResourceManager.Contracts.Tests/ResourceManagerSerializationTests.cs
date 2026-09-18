@@ -33,7 +33,7 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
     /// <summary>Builds a serializer over every contract assembly a silo would load.</summary>
     public ResourceManagerSerializationTests() {
         var services = new ServiceCollection();
-        services.AddSerializer(builder => builder
+        services.AddSerializer(static builder => builder
                 .AddAssembly(typeof(ResourceSnapshot).Assembly)
                 .AddAssembly(typeof(ProvisioningState).Assembly)
                 .AddAssembly(typeof(KubeCommand).Assembly)
@@ -232,7 +232,9 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
     public void AResourceGraphQueryRequestRoundTrips() {
         var value = new ResourceGraphQueryRequest {
             Query = "resources | where tags has 'prod' | project name",
-            Caller = new() { TenantId = Guid.Parse("11111111-1111-4111-8111-111111111111"), SubjectType = "user", SubjectId = "alice" },
+            Caller = new() {
+                TenantId = Guid.Parse("11111111-1111-4111-8111-111111111111"), SubjectType = "user", SubjectId = "alice"
+            },
             Top = 25,
             Continuation = "25.0123456789abcdef"
         };
@@ -257,7 +259,9 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
 
         var round = RoundTrip(value);
 
-        round.Columns.IsDefault.ShouldBeFalse("an ImmutableArray that comes back default is the failure this suite is for");
+        round.Columns.IsDefault.ShouldBeFalse(
+            "an ImmutableArray that comes back default is the failure this suite is for"
+        );
         round.Columns.ShouldBe(value.Columns);
         round.Rows.IsDefault.ShouldBeFalse();
         round.Rows.ShouldBe(value.Rows);
@@ -374,7 +378,8 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
         var value = new RoleAssignmentPage {
             Assignments = [
                 new() {
-                    Path = "/tenants/t/subscriptions/s/providers/CyberCloud.Authorization/roleAssignments/owner-user-7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d",
+                    Path =
+                        "/tenants/t/subscriptions/s/providers/CyberCloud.Authorization/roleAssignments/owner-user-7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d",
                     Name = "owner-user-7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d",
                     Scope = "/tenants/t/subscriptions/s",
                     RoleDefinitionId = "owner",
@@ -383,7 +388,8 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
                     Inherited = true
                 },
                 new() {
-                    Path = "/tenants/t/subscriptions/s/resourceGroups/rg/providers/CyberCloud.Authorization/roleAssignments/reader-group-2b4a1c662e704a9d9d0a1f7ec1f1a4b3",
+                    Path =
+                        "/tenants/t/subscriptions/s/resourceGroups/rg/providers/CyberCloud.Authorization/roleAssignments/reader-group-2b4a1c662e704a9d9d0a1f7ec1f1a4b3",
                     Name = "reader-group-2b4a1c662e704a9d9d0a1f7ec1f1a4b3",
                     Scope = "/tenants/t/subscriptions/s/resourceGroups/rg",
                     RoleDefinitionId = "reader",
@@ -391,7 +397,8 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
                     PrincipalId = "2b4a1c662e704a9d9d0a1f7ec1f1a4b3"
                 }
             ],
-            Continuation = "/tenants/t/subscriptions/s/resourceGroups/rg/providers/CyberCloud.Authorization/roleAssignments/reader-group-2b4a1c662e704a9d9d0a1f7ec1f1a4b3"
+            Continuation =
+                "/tenants/t/subscriptions/s/resourceGroups/rg/providers/CyberCloud.Authorization/roleAssignments/reader-group-2b4a1c662e704a9d9d0a1f7ec1f1a4b3"
         };
 
         var round = RoundTrip(value);
@@ -425,9 +432,9 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
 
         typeof(SecretRef)
             .GetProperties()
-            .Where(x => x.SetMethod is not null)
-            .Select(x => x.Name)
-            .ShouldBe(["Path", "Field", "Version"], ignoreOrder: true);
+            .Where(static x => x.SetMethod is not null)
+            .Select(static x => x.Name)
+            .ShouldBe(["Path", "Field", "Version"], true);
 
         new SecretRef().IsEmpty.ShouldBeTrue();
         new SecretRef { Path = "p" }.IsEmpty.ShouldBeTrue("an address with no field addresses nothing");
@@ -479,11 +486,11 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
         // reach because they carry no [GenerateSerializer].
         var offenders = typeof(ResourceSnapshot).Assembly
             .GetTypes()
-            .Where(x => x.IsPublic
+            .Where(static x => x.IsPublic
                 && (x.IsEnum || x.GetCustomAttributes(typeof(GenerateSerializerAttribute), false).Length > 0)
             )
-            .Where(x => x.GetCustomAttributes(typeof(AliasAttribute), false).Length == 0)
-            .Select(x => x.FullName)
+            .Where(static x => x.GetCustomAttributes(typeof(AliasAttribute), false).Length == 0)
+            .Select(static x => x.FullName)
             .ToArray();
 
         offenders.ShouldBeEmpty();

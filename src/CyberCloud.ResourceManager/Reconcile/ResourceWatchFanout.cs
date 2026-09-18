@@ -11,8 +11,10 @@ namespace CyberCloud.ResourceManager.Reconcile;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>Runs at step 11 of the write path, beside the projection's sink, in the process that
-///         accepted the write.</b> <c>ResourceManagerService.EmitAsync</c> calls
+///         <b>
+///             Runs at step 11 of the write path, beside the projection's sink, in the process that
+///             accepted the write.
+///         </b> <c>ResourceManagerService.EmitAsync</c> calls
 ///         <see cref="DeliverAsync" /> after <see cref="IResourceChangedSink.PublishAsync" />, so a
 ///         watcher hears about a change when the projection does. It is not the sink and is not
 ///         registered as one: a host that replaces <see cref="IResourceChangedSink" /> with a real
@@ -22,7 +24,8 @@ namespace CyberCloud.ResourceManager.Reconcile;
 ///         ⚠ <b>Each delivery is checked by the read rule, watcher by watcher.</b> The event carries
 ///         the resource's path, name and tags, so handing it to a watcher that could not
 ///         <see cref="IResourceView.ReadAsync" /> the resource would disclose exactly what the
-///         gateway's <c>404</c> withholds. <see cref="ResourceViews.MayReadAsync(ResourceId, ResourceId, string, CancellationToken)" />
+///         gateway's <c>404</c> withholds.
+///         <see cref="ResourceViews.MayReadAsync(ResourceId, ResourceId, string, CancellationToken)" />
 ///         is the one rule, and a refused watcher is skipped with a log line rather than told.
 ///     </para>
 ///     <para>
@@ -129,7 +132,8 @@ public sealed class ResourceWatchFanout(
                 continue;
             }
 
-            var handed = await tenant.GetGrain<IResourceGrain>(GrainKeys.Resource(watcher.ResourceId)).NotifyChangedAsync(change);
+            var handed = await tenant.GetGrain<IResourceGrain>(GrainKeys.Resource(watcher.ResourceId))
+                .NotifyChangedAsync(change);
 
             if (handed.IsSuccess) {
                 delivered++;

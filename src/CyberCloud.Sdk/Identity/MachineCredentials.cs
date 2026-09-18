@@ -13,7 +13,7 @@ public abstract class TokenEndpointCredential : TokenCredential, IDisposable {
     /// <param name="options">The options, or <see langword="null" /> for the defaults.</param>
     protected TokenEndpointCredential(CyberCloudCredentialOptions? options) {
         Options = options ?? new CyberCloudCredentialOptions();
-        Identity = new IdentityClient(Options.AuthorityHost, Options.Transport);
+        Identity = new(Options.AuthorityHost, Options.Transport);
     }
 
     /// <summary>The options this credential was created with.</summary>
@@ -47,7 +47,7 @@ public abstract class TokenEndpointCredential : TokenCredential, IDisposable {
         // The SDK does not parse its own access token: docs/plan/11 § Protocol makes it an opaque
         // bearer credential to a client, and a client that reads claims out of it starts depending on
         // them. `expires_in` is the answer the RFC gives for exactly this question.
-        return new AccessToken(payload.AccessToken, DateTimeOffset.UtcNow.AddSeconds(payload.ExpiresIn));
+        return new(payload.AccessToken, DateTimeOffset.UtcNow.AddSeconds(payload.ExpiresIn));
     }
 
     /// <summary>Adds the scope field when there are scopes to ask for.</summary>
@@ -61,7 +61,7 @@ public abstract class TokenEndpointCredential : TokenCredential, IDisposable {
 
     /// <inheritdoc />
     public void Dispose() {
-        Dispose(disposing: true);
+        Dispose(true);
         GC.SuppressFinalize(this);
     }
 

@@ -4,9 +4,12 @@ using System.Diagnostics;
 namespace CyberCloud.Chaos.Invariants;
 
 /// <summary>
-///     docs/plan/23 § The chaos invariants, 5: <i>blackhole the global directory cluster for 10
-///     minutes → zero tenant-facing errors; new tenant creation fails cleanly with a retryable
-///     error.</i>
+///     docs/plan/23 § The chaos invariants, 5:
+///     <i>
+///         blackhole the global directory cluster for 10
+///         minutes → zero tenant-facing errors; new tenant creation fails cleanly with a retryable
+///         error.
+///     </i>
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -19,8 +22,11 @@ namespace CyberCloud.Chaos.Invariants;
 ///         <c>IScopeManager.CreateTenantAsync</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Ten minutes is compressed to a working window, and the compression is safe because
-///         the property is TTL-less.</b> docs/plan/05 § The tenant directory has every silo keep a
+///         ⚠
+///         <b>
+///             Ten minutes is compressed to a working window, and the compression is safe because
+///             the property is TTL-less.
+///         </b> docs/plan/05 § The tenant directory has every silo keep a
 ///         snapshot with no expiry, so a directory that is gone for ten minutes and one that is gone
 ///         for one differ in nothing but the clock; the window here is long enough for every silo's
 ///         refresh service to fail at least once and be seen failing.
@@ -32,8 +38,11 @@ namespace CyberCloud.Chaos.Invariants;
 ///         activation that never needed to read anything.
 ///     </para>
 ///     <para>
-///         ⚠ <b>"Fails cleanly with a retryable error" is asserted as a <c>Result</c> failure whose
-///         HTTP status is 5xx or 429</b>, because that is what a gateway turns into a response a
+///         ⚠
+///         <b>
+///             "Fails cleanly with a retryable error" is asserted as a <c>Result</c> failure whose
+///             HTTP status is 5xx or 429
+///         </b>, because that is what a gateway turns into a response a
 ///         client library retries. An exception escaping the scope manager is neither clean nor
 ///         retryable: the gateway answers 500 with no detail and the client has no idea whether to
 ///         try again.
@@ -41,10 +50,16 @@ namespace CyberCloud.Chaos.Invariants;
 /// </remarks>
 [Collection(ChaosSuite.Name)]
 public sealed class Invariant5DirectoryBlackholeTests(ChaosTopology topology) {
-    /// <summary>Rounds of tenant-facing traffic while the directory is gone. Each is a read, a scope read and a write per tenant.</summary>
+    /// <summary>
+    ///     Rounds of tenant-facing traffic while the directory is gone. Each is a read, a scope read and a write per
+    ///     tenant.
+    /// </summary>
     const int Rounds = 8;
 
-    /// <summary>The longest one tenant-facing call may take before it counts as an error. Orleans' own response timeout is 30 s.</summary>
+    /// <summary>
+    ///     The longest one tenant-facing call may take before it counts as an error. Orleans' own response timeout is 30
+    ///     s.
+    /// </summary>
     static readonly TimeSpan CallBudget = TimeSpan.FromSeconds(35);
 
     static readonly TimeSpan ConvergeBudget = TimeSpan.FromMinutes(3);
@@ -59,7 +74,12 @@ public sealed class Invariant5DirectoryBlackholeTests(ChaosTopology topology) {
 
         foreach (var world in new[] { a, b }) {
             var seeded = (await topology.PutWidgetAsync(world, "existing", "before", token)).GetValueOrThrow();
-            (await topology.DriveUntilTerminalAsync(world.Tenant, seeded.OperationId, ConvergeBudget, token)).Last?.State.ShouldBe(OperationState.Succeeded);
+            (await topology.DriveUntilTerminalAsync(
+                    world.Tenant,
+                    seeded.OperationId,
+                    ConvergeBudget,
+                    token
+                )).Last?.State.ShouldBe(OperationState.Succeeded);
         }
 
         // ── The blackhole. ────────────────────────────────────────────────────────────────────
@@ -86,7 +106,8 @@ public sealed class Invariant5DirectoryBlackholeTests(ChaosTopology topology) {
                 foreach (var world in new[] { a, b }) {
                     try {
                         reads++;
-                        var read = await topology.ReadWidgetAsync(world, "existing", token).WaitAsync(CallBudget, token);
+                        var read = await topology.ReadWidgetAsync(world, "existing", token)
+                            .WaitAsync(CallBudget, token);
 
                         if (read.IsFailure) {
                             errors.Add($"read {world.Group}/existing: {read.Error!.Code} — {read.Error.Message}");
@@ -100,10 +121,13 @@ public sealed class Invariant5DirectoryBlackholeTests(ChaosTopology topology) {
                         }
 
                         writes++;
-                        var write = await topology.PutWidgetAsync(world, $"during-{round}", "during", token).WaitAsync(CallBudget, token);
+                        var write = await topology.PutWidgetAsync(world, $"during-{round}", "during", token)
+                            .WaitAsync(CallBudget, token);
 
                         if (write.IsFailure) {
-                            errors.Add($"write {world.Group}/during-{round}: {write.Error!.Code} — {write.Error.Message}");
+                            errors.Add(
+                                $"write {world.Group}/during-{round}: {write.Error!.Code} — {write.Error.Message}"
+                            );
                         } else {
                             accepted.Add((world, write.GetValueOrThrow().OperationId));
                         }
@@ -112,7 +136,9 @@ public sealed class Invariant5DirectoryBlackholeTests(ChaosTopology topology) {
                     }
                 }
 
-                Console.WriteLine($"[CyberCloud.Chaos] invariant 5 round {round}/{Rounds} at {blackhole.Elapsed.TotalSeconds:F0} s: {errors.Count} errors so far");
+                Console.WriteLine(
+                    $"[CyberCloud.Chaos] invariant 5 round {round}/{Rounds} at {blackhole.Elapsed.TotalSeconds:F0} s: {errors.Count} errors so far"
+                );
                 await Task.Delay(TimeSpan.FromSeconds(2), token);
             }
 
@@ -121,7 +147,12 @@ public sealed class Invariant5DirectoryBlackholeTests(ChaosTopology topology) {
             // whether "tenant-facing" reaches the data plane. Driven together, under one budget.
             var duringBlackhole = await Task.WhenAll(
                 accepted.Select(async x => {
-                        var (last, faults) = await topology.DriveUntilTerminalAsync(x.World.Tenant, x.OperationId, TimeSpan.FromSeconds(40), token);
+                        var (last, faults) = await topology.DriveUntilTerminalAsync(
+                            x.World.Tenant,
+                            x.OperationId,
+                            TimeSpan.FromSeconds(40),
+                            token
+                        );
                         return (x.World, x.OperationId, Last: last, Faults: faults);
                     }
                 )
@@ -130,17 +161,21 @@ public sealed class Invariant5DirectoryBlackholeTests(ChaosTopology topology) {
             drives = duringBlackhole.Length;
 
             notConverged = duringBlackhole
-                .Where(x => x.Last?.State != OperationState.Succeeded)
-                .Select(x => $"{x.World.Group}/{x.OperationId:N} → {x.Last?.State.ToString() ?? "never answered"} after {x.Faults} faults: {x.Last?.Error?.Message ?? x.Last?.LastProgress?.Detail}")
+                .Where(static x => x.Last?.State != OperationState.Succeeded)
+                .Select(static x => $"{x.World.Group}/{x.OperationId:N} → {x.Last?.State.ToString() ?? "never answered"} after {x.Faults} faults: {x.Last?.Error?.Message ?? x.Last?.LastProgress?.Detail}"
+                )
                 .ToList();
 
-            Console.WriteLine($"[CyberCloud.Chaos] invariant 5: {accepted.Count - notConverged.Count}/{accepted.Count} accepted writes converged while the directory was gone");
+            Console.WriteLine(
+                $"[CyberCloud.Chaos] invariant 5: {accepted.Count - notConverged.Count}/{accepted.Count} accepted writes converged while the directory was gone"
+            );
 
             // ── New tenant creation, through the platform path. ───────────────────────────────────
             var attempt = Stopwatch.StartNew();
 
             try {
-                var created = await topology.TryCreateTenantAsync(Guid.NewGuid(), "dir-new", token).WaitAsync(TimeSpan.FromSeconds(90), token);
+                var created = await topology.TryCreateTenantAsync(Guid.NewGuid(), "dir-new", token)
+                    .WaitAsync(TimeSpan.FromSeconds(90), token);
 
                 if (created.IsSuccess) {
                     newTenantOutcome = "ACCEPTED — a tenant was created with no directory to register it in";
@@ -184,15 +219,21 @@ public sealed class Invariant5DirectoryBlackholeTests(ChaosTopology topology) {
         // gone is allowed to pause the data plane, never to lose an accepted write.
         var afterRestore = await Task.WhenAll(
             accepted.Select(async x => {
-                    var (last, _) = await topology.DriveUntilTerminalAsync(x.World.Tenant, x.OperationId, ConvergeBudget, token);
+                    var (last, _) = await topology.DriveUntilTerminalAsync(
+                        x.World.Tenant,
+                        x.OperationId,
+                        ConvergeBudget,
+                        token
+                    );
                     return (x.World, x.OperationId, Last: last);
                 }
             )
         );
 
         var lostAfterRestore = afterRestore
-            .Where(x => x.Last?.State != OperationState.Succeeded)
-            .Select(x => $"{x.World.Group}/{x.OperationId:N} → {x.Last?.State.ToString() ?? "never answered"}: {x.Last?.Error?.Message}")
+            .Where(static x => x.Last?.State != OperationState.Succeeded)
+            .Select(static x => $"{x.World.Group}/{x.OperationId:N} → {x.Last?.State.ToString() ?? "never answered"}: {x.Last?.Error?.Message}"
+            )
             .ToList();
 
         var numbers = new Dictionary<string, double>(StringComparer.Ordinal) {
@@ -228,14 +269,18 @@ public sealed class Invariant5DirectoryBlackholeTests(ChaosTopology topology) {
             + string.Join("; ", errors.Take(10))
         );
 
-        lostAfterRestore.ShouldBeEmpty("accepted writes did not converge after the directory came back: " + string.Join("; ", lostAfterRestore));
+        lostAfterRestore.ShouldBeEmpty(
+            "accepted writes did not converge after the directory came back: " + string.Join("; ", lostAfterRestore)
+        );
 
         cleanAndRetryable.ShouldBeTrue(
             "docs/plan/23 § The chaos invariants, 5: new tenant creation fails cleanly with a retryable error. It answered: "
             + newTenantOutcome
         );
 
-        newTenantAfter.ShouldNotBeNull("no new tenant could be created within two minutes of the platform shard coming back.");
+        newTenantAfter.ShouldNotBeNull(
+            "no new tenant could be created within two minutes of the platform shard coming back."
+        );
     }
 
     static string Shorten(string message) => message.Length <= 300 ? message : message[..300] + "…";

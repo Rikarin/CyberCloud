@@ -1,5 +1,4 @@
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.Core.Resources;
 using CyberCloud.Providers.ContainerRegistry.Contracts;
 using CyberCloud.ResourceManager.Conformance;
@@ -41,25 +40,25 @@ public sealed class ArtifactFeedCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.ContainerRegistry/feeds",
-            CreateProvider = () => new ContainerRegistryProvider(),
+            CreateProvider = static () => new ContainerRegistryProvider(),
             ReconcilerType = typeof(ArtifactFeedReconciler),
             // ⚠ The factory takes the harness's clock and nothing else, and this reconciler needs a
             // grain factory too — the first in the tree that does. The suite drives a reconciler it
             // built this way twice, in the four-clause check and the drift repair, and both have to
             // reach the same silo the harness runs; ConformanceGrains is how the fixture's factory
             // gets here, and its remarks say why that is not the case's own member yet.
-            CreateReconciler = clock => new ArtifactFeedReconciler(ConformanceGrains.Instance, clock),
+            CreateReconciler = static clock => new ArtifactFeedReconciler(ConformanceGrains.Instance, clock),
             Type = ArtifactFeeds.Type,
             ApiVersion = ArtifactFeeds.V2026,
             // The cluster id the harness passes is ignored: a feed names no cluster.
-            Body = _ => ArtifactFeeds.Body("nuget", "packages for the build"),
+            Body = static _ => ArtifactFeeds.Body("nuget", "packages for the build"),
             // ⚠ Changes the description, which is the ONLY mutable property a feed has. The kind is
             // immutable and the location is immutable, so a body that changed either would be
             // refused at the write path rather than reaching the cluster — which is what the update
             // assertion needs to distinguish from an update that stopped at the grain.
-            ChangedBody = _ => ArtifactFeeds.Body("nuget", "packages for the build, renamed"),
+            ChangedBody = static _ => ArtifactFeeds.Body("nuget", "packages for the build, renamed"),
             // Drops the required kind.
-            InvalidBody = _ => Without(ArtifactFeeds.Body("nuget"), "kind"),
+            InvalidBody = static _ => Without(ArtifactFeeds.Body(), "kind"),
             InvalidBodyTarget = ArtifactFeeds.KindPointer,
             // ⚠ No action, deliberately, and the suite's two POST assertions skip loudly for it. A
             // feed's endpoints — its NuGet service index, its npm registry URL — are a function of
@@ -71,7 +70,7 @@ public sealed class ArtifactFeedCase : IProviderCaseSource {
             OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = static _ => false,
             DataPlane = DataPlaneOf,
-            StoragePrefix = address => ArtifactFeeds.StoragePrefix(address.TenantId, address.Id)
+            StoragePrefix = static address => ArtifactFeeds.StoragePrefix(address.TenantId, address.Id)
         };
 
     /// <summary>
@@ -85,8 +84,8 @@ public sealed class ArtifactFeedCase : IProviderCaseSource {
             .GetGrain<IFeedGrain>(GrainKeys.Resource(address.Id));
 
         return new(
-            BreakAsync: async () => (await feed.CloseAsync()).IsSuccess.ShouldBeTrue(),
-            MatchesDesiredAsync: async () => {
+            async () => (await feed.CloseAsync()).IsSuccess.ShouldBeTrue(),
+            async () => {
                 var described = await feed.DescribeAsync();
                 return described.IsSuccess
                     && described.GetValueOrThrow().IsOpen
@@ -112,8 +111,9 @@ public sealed class ArtifactFeedConformance
     : ProviderConformanceTests<ArtifactFeedCase>, IClassFixture<ProviderTestCluster<ArtifactFeedCase>> {
     /// <summary>Runs the suite over the harness, and lets the case's reconciler reach its silo.</summary>
     /// <param name="cluster">The harness.</param>
-    public ArtifactFeedConformance(ProviderTestCluster<ArtifactFeedCase> cluster) : base(cluster) =>
+    public ArtifactFeedConformance(ProviderTestCluster<ArtifactFeedCase> cluster) : base(cluster) {
         ConformanceGrains.Use(cluster.Grains);
+    }
 }
 
 /// <summary>The container-backed half, skipped loudly, against the artifact-feed type.</summary>
@@ -149,8 +149,12 @@ public sealed class ArtifactFeedSuiteShapeTests {
         using var after = JsonDocument.Parse(ArtifactFeedCase.ProviderCase.ChangedBody(Guid.Empty));
 
         ArtifactFeeds.KindOf(before.RootElement).ShouldBe(ArtifactFeeds.KindOf(after.RootElement));
-        before.RootElement.GetProperty("location").GetString().ShouldBe(after.RootElement.GetProperty("location").GetString());
-        before.RootElement.GetProperty("properties").GetProperty("description").GetString()
+        before.RootElement.GetProperty("location")
+            .GetString()
+            .ShouldBe(after.RootElement.GetProperty("location").GetString());
+        before.RootElement.GetProperty("properties")
+            .GetProperty("description")
+            .GetString()
             .ShouldNotBe(after.RootElement.GetProperty("properties").GetProperty("description").GetString());
     }
 }

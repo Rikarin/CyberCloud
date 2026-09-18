@@ -1,4 +1,3 @@
-using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
@@ -53,8 +52,8 @@ public sealed class NatsReconcilerTests {
 
         var connection = new RecordingConnection();
 
-        using var aliceBody = JsonDocument.Parse(NatsClusters.Body(ClusterId, servers: 3, storageSize: "10Gi"));
-        using var bobBody = JsonDocument.Parse(NatsClusters.Body(ClusterId, servers: 5, storageSize: "50Gi"));
+        using var aliceBody = JsonDocument.Parse(NatsClusters.Body(ClusterId, 3, "10Gi"));
+        using var bobBody = JsonDocument.Parse(NatsClusters.Body(ClusterId, 5, "50Gi"));
 
         // Interleaved, so a cache written on the first pass is read on the third.
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
@@ -95,7 +94,7 @@ public sealed class NatsReconcilerTests {
 
             outcome.ShouldBe(ReconcileOutcome.Converged, $"monitoring.enabled = {monitoring}");
 
-            var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target))
+            var applied = connection.Applied.Select(static x => RecordingConnection.Key(x.Target))
                 .ToHashSet(StringComparer.Ordinal);
 
             var read = connection.Read.Select(RecordingConnection.Key).ToHashSet(StringComparer.Ordinal);
@@ -145,10 +144,10 @@ public sealed class NatsReconcilerTests {
         using var body = JsonDocument.Parse(NatsClusters.Body(ClusterId));
 
         await Reconcile(connection, body.RootElement);
-        var first = connection.Applied.Select(x => x.Body).ToArray();
+        var first = connection.Applied.Select(static x => x.Body).ToArray();
 
         await Reconcile(connection, body.RootElement);
-        var second = connection.Applied.Skip(first.Length).Select(x => x.Body).ToArray();
+        var second = connection.Applied.Skip(first.Length).Select(static x => x.Body).ToArray();
 
         second.ShouldBe(first);
     }
@@ -190,7 +189,7 @@ public sealed class NatsReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
-        var applied = connection.Applied.Select(x => x.Target.Kind.Kind + "/" + x.Target.Name).ToArray();
+        var applied = connection.Applied.Select(static x => x.Target.Kind.Kind + "/" + x.Target.Name).ToArray();
 
         applied[0].ShouldBe("ConfigMap/" + NatsClusters.ConfigMapName("observed"));
         applied[1].ShouldBe("Service/" + NatsClusters.HeadlessServiceName("observed"));
@@ -199,7 +198,7 @@ public sealed class NatsReconcilerTests {
         var reconciler = new NatsClusterReconciler(new FixedClock());
         await reconciler.DeleteAsync(Context(connection, body.RootElement), TestContext.Current.CancellationToken);
 
-        var deleted = connection.Deleted.Select(x => x.Kind.Kind + "/" + x.Name).ToArray();
+        var deleted = connection.Deleted.Select(static x => x.Kind.Kind + "/" + x.Name).ToArray();
 
         Array.IndexOf(deleted, "StatefulSet/observed")
             .ShouldBeLessThan(
@@ -244,7 +243,7 @@ public sealed class NatsReconcilerTests {
         // route, which is a second server joining the cluster rather than a client connecting to it.
         foreach (var spec in new[] { closed, open }) {
             spec["ports"]!.AsArray()
-                .Select(x => x!["port"]!.GetValue<int>())
+                .Select(static x => x!["port"]!.GetValue<int>())
                 .ShouldNotContain(NatsClusters.ClusterPort);
         }
     }

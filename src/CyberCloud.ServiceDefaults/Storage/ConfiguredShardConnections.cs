@@ -23,7 +23,7 @@ public sealed class ConfiguredShardConnections : IShardConnections {
         // obvious implementation — compose the string inside configureTenantOptions — gives one pool
         // per tenant per shard and multiplies the connection count by the tenant count.
         durable = options.Durable.Shards.ToDictionary(
-            x => x.Key,
+            static x => x.Key,
             x => Canonicalise(x.Value, options.Durable),
             StringComparer.Ordinal
         );

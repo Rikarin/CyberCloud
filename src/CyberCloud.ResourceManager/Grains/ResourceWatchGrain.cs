@@ -72,7 +72,7 @@ public sealed class ResourceWatchGrain(
     public Task<Result<ImmutableArray<ResourceWatcher>>> ListAsync() =>
         Task.FromResult(
             Result<ImmutableArray<ResourceWatcher>>.Success(
-                [.. state.State.Watchers.Values.OrderBy(x => x.Since).ThenBy(x => x.ResourceId)]
+                [.. state.State.Watchers.Values.OrderBy(static x => x.Since).ThenBy(static x => x.ResourceId)]
             )
         );
 

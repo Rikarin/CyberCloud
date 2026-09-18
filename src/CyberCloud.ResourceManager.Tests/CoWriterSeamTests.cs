@@ -31,7 +31,11 @@ public sealed class CoWriterSeamTests {
 
         var refused = await context.CoWriter.ApplyFragmentAsync(
             context.Id,
-            new() { Kind = new() { Group = "", Version = "v1", Kind = "ConfigMap", Plural = "configmaps" }, Namespace = Namespace, Name = "x" },
+            new() {
+                Kind = new() { Group = "", Version = "v1", Kind = "ConfigMap", Plural = "configmaps" },
+                Namespace = Namespace,
+                Name = "x"
+            },
             """{ "data": { "k": "v" } }""",
             TestContext.Current.CancellationToken
         );
@@ -48,7 +52,11 @@ public sealed class CoWriterSeamTests {
 
         await context.CoWriter.ApplyFragmentAsync(
             context.Id,
-            new() { Kind = new() { Group = "", Version = "v1", Kind = "ConfigMap", Plural = "configmaps" }, Namespace = Namespace, Name = "x" },
+            new() {
+                Kind = new() { Group = "", Version = "v1", Kind = "ConfigMap", Plural = "configmaps" },
+                Namespace = Namespace,
+                Name = "x"
+            },
             """{ "data": { "k": "v" } }""",
             TestContext.Current.CancellationToken
         );
@@ -70,14 +78,20 @@ public sealed class CoWriterSeamTests {
 
         await context.CoWriter.ApplyFragmentAsync(
             context.Id,
-            new() { Kind = new() { Group = "", Version = "v1", Kind = "ConfigMap", Plural = "configmaps" }, Namespace = Namespace, Name = "x" },
+            new() {
+                Kind = new() { Group = "", Version = "v1", Kind = "ConfigMap", Plural = "configmaps" },
+                Namespace = Namespace,
+                Name = "x"
+            },
             """{ "data": { "k": "v" } }""",
             TestContext.Current.CancellationToken
         );
 
         connection.Reads.ShouldBe(1, "the co-writer follows the cluster the context has now");
 
-        (Context(connection) with { Cluster = null }).CoWriter.ShouldBeOfType<NoClusterCoWriter>("and the other direction");
+        (Context(connection) with { Cluster = null }).CoWriter.ShouldBeOfType<NoClusterCoWriter>(
+            "and the other direction"
+        );
     }
 
     [Fact]
@@ -113,7 +127,10 @@ public sealed class CoWriterSeamTests {
 
         public Guid ClusterId => Guid.Parse("eeeeeeee-0000-4000-8000-000000000005");
 
-        public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) =>
+        public Task<Result<ApplyOutcome>> ApplyAsync(
+            KubeCommand command,
+            CancellationToken cancellationToken = default
+        ) =>
             throw new NotSupportedException("nothing is applied against an object that is not there");
 
         public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) {

@@ -77,7 +77,7 @@ public sealed class ResourceCollectionIdTests {
     /// </remarks>
     [Fact]
     public void EveryCollectionRoundTripsAndItsMemberRebuildsTheResource() {
-        foreach (var id in Corpus.ResourceIds(500, seed: 20260902)) {
+        foreach (var id in Corpus.ResourceIds(500, 20260902)) {
             var collection = ResourceCollectionId.Of(id);
 
             var parsed = ResourceCollectionId.ParsePath(collection.Path);
@@ -105,7 +105,7 @@ public sealed class ResourceCollectionIdTests {
     /// </remarks>
     [Fact]
     public void TheTwoGrammarsAreDisjointForEveryGeneratedAddress() {
-        foreach (var id in Corpus.ResourceIds(500, seed: 20260903)) {
+        foreach (var id in Corpus.ResourceIds(500, 20260903)) {
             ResourceCollectionId.TryParsePath(id.Path, out _)
                 .ShouldBeFalse($"the resource path '{id.Path}' parsed as a collection");
 
@@ -224,7 +224,7 @@ public sealed class ResourceCollectionIdTests {
     /// </remarks>
     [Fact]
     public void ANestedTypeWithoutItsAncestorsNamesThrows() {
-        Should.Throw<ArgumentException>(() => new ResourceCollectionId(
+        Should.Throw<ArgumentException>(static () => new ResourceCollectionId(
                 Tenant,
                 Subscription,
                 "prod",
@@ -232,7 +232,7 @@ public sealed class ResourceCollectionIdTests {
             )
         );
 
-        Should.Throw<ArgumentException>(() => new ResourceCollectionId(
+        Should.Throw<ArgumentException>(static () => new ResourceCollectionId(
                 Tenant,
                 Subscription,
                 "prod",

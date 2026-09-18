@@ -72,10 +72,10 @@ public static class TemplateRenderer {
             return Result<RenderedMessage>.Failure(
                 ErrorCode.InvalidRequestBody,
                 $"Template version {version.Version} requires "
-                + $"{string.Join(", ", missing.Select(x => $"'{x}'"))} and the send supplied "
+                + $"{string.Join(", ", missing.Select(static x => $"'{x}'"))} and the send supplied "
                 + (supplied.Length == 0
                         ? "no arguments"
-                        : $"only {string.Join(", ", supplied.Select(x => $"'{x.Name}'"))}")
+                        : $"only {string.Join(", ", supplied.Select(static x => $"'{x.Name}'"))}")
                 + ". Refused before dispatch — docs/plan/17 § The parts that are actually the work. "
                 + "A carrier would have sent the placeholder text to the recipient."
             );

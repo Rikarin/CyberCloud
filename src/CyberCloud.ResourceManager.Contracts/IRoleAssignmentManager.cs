@@ -14,8 +14,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///             UNBUILDABLE (issue #70).
 ///         </b> The only grant above <c>ITupleStoreGrain</c> was
 ///         <see cref="IScopeRelationWriter.GrantOwnerAsync" />, called once at tenant creation, and
-///         nothing anywhere wrote <c>contributor</c> or <c>reader</c>. So <i>"invite a colleague and
-///         grant them Reader on one resource group"</i> had no request that did the second half.
+///         nothing anywhere wrote <c>contributor</c> or <c>reader</c>. So
+///         <i>
+///             "invite a colleague and
+///             grant them Reader on one resource group"
+///         </i> had no request that did the second half.
 ///         This is that request.
 ///     </para>
 ///     <para>
@@ -106,8 +109,11 @@ public interface IRoleAssignmentManager {
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>One check, on the scope, and no per-member filter — which is the opposite of
-    ///         <see cref="IResourceManager.ListAsync" />.</b> A resource listing hides the members
+    ///         ⚠
+    ///         <b>
+    ///             One check, on the scope, and no per-member filter — which is the opposite of
+    ///             <see cref="IResourceManager.ListAsync" />.
+    ///         </b> A resource listing hides the members
     ///         the caller may not read because each member is an object with its own tuples. An
     ///         assignment is not an object; it is a tuple <i>on</i> the scope, and Azure's
     ///         <c>roleAssignments/read</c> sits in Reader for exactly that reason. So a caller who
@@ -452,8 +458,11 @@ public sealed record RoleAssignmentPage {
 ///         something the caller did not spell.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="RoleDefinitionId" /> takes a role <i>name</i> and there are no role
-///         definitions to address.</b> Azure's is a path to a definition, because Azure has custom
+///         ⚠
+///         <b>
+///             <see cref="RoleDefinitionId" /> takes a role <i>name</i> and there are no role
+///             definitions to address.
+///         </b> Azure's is a path to a definition, because Azure has custom
 ///         roles; here the three built-in roles are three relations in <c>CyberCloudSchema</c>, and
 ///         docs/plan/07 § Azure RBAC, expressed in it says the reverse mapping is not expressible as a
 ///         table. The property keeps Azure's name so a client reads it as the thing it is.

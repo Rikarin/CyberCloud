@@ -25,8 +25,8 @@ public sealed class TerminalHubTests {
 
         var bound = typeof(TerminalHub)
             .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-            .Select(m => m.GetCustomAttribute<HubMethodNameAttribute>()?.Name ?? m.Name)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Select(static m => m.GetCustomAttribute<HubMethodNameAttribute>()?.Name ?? m.Name)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToArray();
 
         bound.ShouldBe([TerminalProtocol.Attach, TerminalProtocol.Resize, TerminalProtocol.Send]);

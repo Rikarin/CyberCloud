@@ -78,8 +78,8 @@ sealed class SecretScrubbingSink : ILogEventSink, IDisposable {
 
     static readonly Counter<long> Redactions = Meter.CreateCounter<long>(
         CounterName,
-        unit: "{redaction}",
-        description: "Credential-shaped runs replaced in a log event before it left the process."
+        "{redaction}",
+        "Credential-shaped runs replaced in a log event before it left the process."
     );
 
     static readonly MessageTemplateParser TemplateParser = new();
@@ -138,7 +138,7 @@ sealed class SecretScrubbingSink : ILogEventSink, IDisposable {
             Redactions.Add(1, new KeyValuePair<string, object?>("rule", rule));
         }
 
-        properties ??= logEvent.Properties.Select(x => new LogEventProperty(x.Key, x.Value)).ToList();
+        properties ??= logEvent.Properties.Select(static x => new LogEventProperty(x.Key, x.Value)).ToList();
         properties.Add(
             new LogEventProperty(
                 MarkerProperty,
@@ -146,7 +146,7 @@ sealed class SecretScrubbingSink : ILogEventSink, IDisposable {
             )
         );
 
-        return new LogEvent(
+        return new(
             logEvent.Timestamp,
             logEvent.Level,
             exception,
@@ -188,12 +188,12 @@ sealed class SecretScrubbingSink : ILogEventSink, IDisposable {
     static HashSet<string>? Swallowed(MessageTemplate before, MessageTemplate after) {
         var kept = after.Tokens
             .OfType<PropertyToken>()
-            .Select(x => x.PropertyName)
+            .Select(static x => x.PropertyName)
             .ToHashSet(StringComparer.Ordinal);
 
         var lost = before.Tokens
             .OfType<PropertyToken>()
-            .Select(x => x.PropertyName)
+            .Select(static x => x.PropertyName)
             .Where(x => !kept.Contains(x))
             .ToHashSet(StringComparer.Ordinal);
 
@@ -226,7 +226,7 @@ sealed class SecretScrubbingSink : ILogEventSink, IDisposable {
                 // as it stands.
                 scrubbed = properties
                     .Take(seen)
-                    .Select(x => new LogEventProperty(x.Key, x.Value))
+                    .Select(static x => new LogEventProperty(x.Key, x.Value))
                     .ToList();
             }
 
@@ -303,7 +303,7 @@ sealed class SecretScrubbingSink : ILogEventSink, IDisposable {
         }
 
         fired.AddRange(rules);
-        return new ScalarValue(clean);
+        return new(clean);
     }
 
     /// <summary>

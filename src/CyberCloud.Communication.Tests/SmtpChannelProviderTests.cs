@@ -73,7 +73,9 @@ public sealed class SmtpChannelProviderTests : IAsyncLifetime {
         mailpit = new ContainerBuilder(Image)
             .WithPortBinding(SmtpPort, true)
             .WithPortBinding(HttpPort, true)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(x => x.ForPort(HttpPort).ForPath("/readyz")))
+            .WithWaitStrategy(
+                Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(static x => x.ForPort(HttpPort).ForPath("/readyz"))
+            )
             .Build();
 
         await mailpit.StartAsync(token);
@@ -88,7 +90,11 @@ public sealed class SmtpChannelProviderTests : IAsyncLifetime {
             Timeout = TimeSpan.FromSeconds(20)
         };
 
-        api = new HttpClient { BaseAddress = new($"http://{mailpit.Hostname}:{mailpit.GetMappedPublicPort(HttpPort).ToString(CultureInfo.InvariantCulture)}/") };
+        api = new() {
+            BaseAddress = new(
+                $"http://{mailpit.Hostname}:{mailpit.GetMappedPublicPort(HttpPort).ToString(CultureInfo.InvariantCulture)}/"
+            )
+        };
 
         var builder = new TestClusterBuilder(1);
         builder.AddSiloBuilderConfigurator<SiloConfigurator>();
@@ -130,7 +136,10 @@ public sealed class SmtpChannelProviderTests : IAsyncLifetime {
         var snapshot = sent.GetValueOrThrow();
         snapshot.Status.ShouldBe(MessageStatus.Dispatched, snapshot.Detail);
         snapshot.Provider.ShouldBe(SmtpChannelProvider.ProviderName);
-        snapshot.ProviderMessageId.ShouldBe($"{snapshot.MessageId:N}@cybercloud.example", "the Message-ID this build minted, bare");
+        snapshot.ProviderMessageId.ShouldBe(
+            $"{snapshot.MessageId:N}@cybercloud.example",
+            "the Message-ID this build minted, bare"
+        );
 
         var message = await TheOneMessageToAsync("alice@example.com", token);
 
@@ -139,13 +148,20 @@ public sealed class SmtpChannelProviderTests : IAsyncLifetime {
         message.GetProperty("From").GetProperty("Address").GetString().ShouldBe("no-reply@cybercloud.example");
         message.GetProperty("From").GetProperty("Name").GetString().ShouldBe("Cyber Cloud");
         message.GetProperty("Subject").GetString().ShouldBe("424242 is your code.");
-        message.GetProperty("ReturnPath").GetString().ShouldBe("no-reply@cybercloud.example", "the envelope sender is the From address");
-        message.GetProperty("ListUnsubscribe").GetProperty("Header").GetString()
+        message.GetProperty("ReturnPath")
+            .GetString()
+            .ShouldBe("no-reply@cybercloud.example", "the envelope sender is the From address");
+        message.GetProperty("ListUnsubscribe")
+            .GetProperty("Header")
+            .GetString()
             .ShouldBe("<mailto:unsubscribe@cybercloud.example?subject=unsubscribe>");
 
         // ⚠ The lone dot survived. Without dot-stuffing the server would have taken the body to end
         // at that line, and "It expires in ten minutes." would have been read as an SMTP command.
-        message.GetProperty("Text").GetString()!.ReplaceLineEndings("\n").TrimEnd('\n')
+        message.GetProperty("Text")
+            .GetString()!
+            .ReplaceLineEndings("\n")
+            .TrimEnd('\n')
             .ShouldBe("424242 is your code.\n.\nIt expires in ten minutes.");
 
         var headers = await HeadersOfAsync(message.GetProperty("ID").GetString()!, token);
@@ -163,7 +179,13 @@ public sealed class SmtpChannelProviderTests : IAsyncLifetime {
 
         (await cluster.GrainFactory.ForTenant(Tenant.ToString("D", CultureInfo.InvariantCulture))
                 .GetGrain<ISuppressionListGrain>(CommunicationGrainKeys.Service(service))
-                .SuppressAsync(ChannelKind.Email, "bob@example.com", SuppressionReason.Complaint, "marked as spam", Guid.Empty))
+                .SuppressAsync(
+                    ChannelKind.Email,
+                    "bob@example.com",
+                    SuppressionReason.Complaint,
+                    "marked as spam",
+                    Guid.Empty
+                ))
             .IsSuccess.ShouldBeTrue();
 
         var refused = await sender.SendAsync(
@@ -195,9 +217,13 @@ public sealed class SmtpChannelProviderTests : IAsyncLifetime {
                     IdempotencyKey = "otp-control"
                 },
                 token
-            )).GetValueOrThrow().Status.ShouldBe(MessageStatus.Dispatched);
+            )).GetValueOrThrow()
+            .Status.ShouldBe(MessageStatus.Dispatched);
 
-        (await CountToAsync("bob@example.com", token)).ShouldBe(0, "a suppressed address produced no connection to the relay");
+        (await CountToAsync("bob@example.com", token)).ShouldBe(
+            0,
+            "a suppressed address produced no connection to the relay"
+        );
         (await CountToAsync("carol@example.com", token)).ShouldBe(1);
     }
 
@@ -207,19 +233,31 @@ public sealed class SmtpChannelProviderTests : IAsyncLifetime {
 
         // Nobody listens on a port the container did not publish — the shape of "the relay is down".
         var provider = new SmtpChannelProvider(
-            new() { Host = "127.0.0.1", Port = 9, Security = SmtpSecurity.None, From = "no-reply@cybercloud.example", Timeout = TimeSpan.FromSeconds(5) },
+            new() {
+                Host = "127.0.0.1",
+                Port = 9,
+                Security = SmtpSecurity.None,
+                From = "no-reply@cybercloud.example",
+                Timeout = TimeSpan.FromSeconds(5)
+            },
             new SystemClock(),
             NullLogger<SmtpChannelProvider>.Instance
         );
 
         var failed = await provider.SendAsync(
-            new() { MessageId = Guid.NewGuid(), Channel = ChannelKind.Email, Destination = "dave@example.com", Body = "x" },
+            new() {
+                MessageId = Guid.NewGuid(), Channel = ChannelKind.Email, Destination = "dave@example.com", Body = "x"
+            },
             token
         );
 
         failed.IsFailure.ShouldBeTrue();
         failed.Error!.Message.ShouldContain("could not be spoken to");
-        failed.Error.Message.ShouldNotContain("dave@example.com", Case.Insensitive, "no address in a refusal that will be logged");
+        failed.Error.Message.ShouldNotContain(
+            "dave@example.com",
+            Case.Insensitive,
+            "no address in a refusal that will be logged"
+        );
     }
 
     [Fact]
@@ -302,7 +340,7 @@ public sealed class SmtpChannelProviderTests : IAsyncLifetime {
         public void Configure(ISiloBuilder silo) {
             silo.AddMemoryGrainStorage(StorageTiers.Durable);
             silo.AddMemoryGrainStorage(StorageTiers.Hot);
-            silo.ConfigureServices(services => services.AddSingleton<IClock, SystemClock>());
+            silo.ConfigureServices(static services => services.AddSingleton<IClock, SystemClock>());
 
             // The production wiring, both calls, in the order SiloComposition makes them.
             silo.AddCyberCloudCommunication();

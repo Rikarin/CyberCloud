@@ -105,7 +105,7 @@ public sealed class DocumentDbSizingTests {
         var helpers = Embedded("ferretdb.helpers.tpl");
         var block = Regex.Match(
             helpers,
-            "define \"ferretdb\\.gatewayResources\" -}}(.*?){{- end",
+            """define "ferretdb\.gatewayResources" -}}(.*?){{- end""",
             RegexOptions.Singleline,
             TimeSpan.FromSeconds(5)
         );
@@ -130,7 +130,7 @@ public sealed class DocumentDbSizingTests {
 
         var block = Regex.Match(
             cluster,
-            "\\n    shared_preload_libraries:\\n((?:      - \\S+\\n)+)",
+            """\n    shared_preload_libraries:\n((?:      - \S+\n)+)""",
             RegexOptions.None,
             TimeSpan.FromSeconds(5)
         );
@@ -143,7 +143,7 @@ public sealed class DocumentDbSizingTests {
 
         var declared = block.Groups[1].Value
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => x.Trim().TrimStart('-').Trim())
+            .Select(static x => x.Trim().TrimStart('-').Trim())
             .ToList();
 
         declared.ShouldBe([.. DocumentDbAccounts.SharedPreloadLibraries]);
@@ -154,7 +154,7 @@ public sealed class DocumentDbSizingTests {
         // guards.
         var parameters = Regex.Match(
             cluster,
-            "\\n    parameters:\\n((?:      \\S.*\\n)+)",
+            """\n    parameters:\n((?:      \S.*\n)+)""",
             RegexOptions.None,
             TimeSpan.FromSeconds(5)
         );

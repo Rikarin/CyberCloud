@@ -194,7 +194,7 @@ public sealed class LedgerTests(MeteringCluster cluster) {
         var entries = (await ledger.ListAsync()).GetValueOrThrow();
 
         entries.Length.ShouldBe(5);
-        entries.Select(x => x.Sequence).ShouldBe([1L, 2L, 3L, 4L, 5L]);
+        entries.Select(static x => x.Sequence).ShouldBe([1L, 2L, 3L, 4L, 5L]);
     }
 
     /// <summary>

@@ -577,7 +577,7 @@ public static class NetworkSecurityGroups {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the security group lives in. It must be the network's "
                     + "own region — nothing checks that."
                 ) {
@@ -594,7 +594,7 @@ public static class NetworkSecurityGroups {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster whose fabric carries the security group. Must be the "
                     + "cluster the network is in — nothing checks that."
                 ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
@@ -709,7 +709,8 @@ public static class NetworkSecurityGroups {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     /// <summary>
     ///     What a <c>POST …/showEffectiveRules</c> returns.
@@ -731,7 +732,7 @@ public static class NetworkSecurityGroups {
                 new(
                     "/rules",
                     SchemaKind.Array,
-                    Required: true,
+                    true,
                     Description: "Every rule this security group's body becomes, in the order it is "
                     + "written to the fabric, one sentence each. An empty list means the group permits "
                     + "nothing, which is a valid and fully restrictive configuration."
@@ -739,14 +740,14 @@ public static class NetworkSecurityGroups {
                 new(
                     "/count",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "How many rules there are. ⚠ Worth reading next to the body: one "
                     + "port list of three entries with two remotes is six rules."
                 ),
                 new(
                     "/defaultAction",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "What happens to traffic no rule above matches. It is always 'drop' "
                     + "— the fabric installs a default-deny for every port in a security group and "
                     + "this resource cannot change that."
@@ -754,7 +755,7 @@ public static class NetworkSecurityGroups {
                 new(
                     "/allowSameGroupTraffic",
                     SchemaKind.Boolean,
-                    Required: true,
+                    true,
                     Description: "Whether workloads carrying this same group reach each other without "
                     + "a rule. ⚠ Returned because it is the one permission that is not in the list "
                     + "above."
@@ -762,7 +763,7 @@ public static class NetworkSecurityGroups {
                 new(
                     "/note",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "⚠ What this answer is and is not. It is what the platform asks the "
                     + "fabric for, derived from the resource's stored body — not a reading of the "
                     + "ACLs OVN currently holds."
@@ -1103,7 +1104,7 @@ public static class NetworkSecurityGroups {
         }
 
         return parsed is JsonObject document
-            && document["kind"]?.GetValue<string>() is (null or "SecurityGroup")
+            && document["kind"]?.GetValue<string>() is null or "SecurityGroup"
             && document["spec"] is JsonObject spec
                 ? spec
                 : null;

@@ -122,7 +122,7 @@ public sealed class AnalyticsProvider : IResourceProvider {
                 ClickHouseClusters.ListKeysAction,
                 ActionKind.Post,
                 ClickHouseClusters.ListKeysPermission,
-                secret: true,
+                true,
                 response: ClickHouseClusters.ListKeysResponse
             )
             // ⚠ `clickhouse`, AND `analytics` IS THE ONE WORD THIS NAMESPACE COULD NOT HAVE.
@@ -142,13 +142,13 @@ public sealed class AnalyticsProvider : IResourceProvider {
             .Display(
                 "ClickHouse cluster",
                 "ClickHouse clusters",
-                shortName: "clickhouse",
-                summary: "A managed ClickHouse cluster on the Altinity operator, with declared shards "
+                "clickhouse",
+                "A managed ClickHouse cluster on the Altinity operator, with declared shards "
                 + "and replicas and a ClickHouse Keeper quorum. The schema is the tenant's."
             )
             .Chart(ClickHouseClusters.ChartName)
             .SupportsTags()
-            .RequiresCluster(ClickHouseClusters.ClusterIdPointer);
+            .RequiresCluster();
     }
 
     // ── What a ClickHouse cluster draws ────────────────────────────────────────────────────────
@@ -181,7 +181,7 @@ public sealed class AnalyticsProvider : IResourceProvider {
                 "/properties/sizing/cpu",
                 "/properties/keeperNodes"
             ],
-            body => KubeQuantity.TryParse(ClickHouseClusters.Resources(body).Cpu, out var cores)
+            static body => KubeQuantity.TryParse(ClickHouseClusters.Resources(body).Cpu, out var cores)
                 && KubeQuantity.TryParse(ClickHouseClusters.KeeperCpu, out var keeper)
                     ? Result<decimal>.Success(
                         ClickHouseClusters.Servers(body) * cores
@@ -202,7 +202,7 @@ public sealed class AnalyticsProvider : IResourceProvider {
                 "/properties/sizing/memory",
                 "/properties/keeperNodes"
             ],
-            body => KubeQuantity.TryGibibytes(ClickHouseClusters.Resources(body).Memory, out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(ClickHouseClusters.Resources(body).Memory, out var gibibytes)
                 && KubeQuantity.TryGibibytes(ClickHouseClusters.KeeperMemory, out var keeper)
                     ? Result<decimal>.Success(
                         ClickHouseClusters.Servers(body) * gibibytes
@@ -227,7 +227,7 @@ public sealed class AnalyticsProvider : IResourceProvider {
         MeterDerivation.Of(
             "shards × replicas × storage.size + keeperNodes × 10Gi, in GiB",
             ["/properties/shards", "/properties/replicas", "/properties/storage/size", "/properties/keeperNodes"],
-            body => KubeQuantity.TryGibibytes(ClickHouseClusters.StorageSize(body), out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(ClickHouseClusters.StorageSize(body), out var gibibytes)
                 && KubeQuantity.TryGibibytes(ClickHouseClusters.KeeperVolumeSize, out var keeper)
                     ? Result<decimal>.Success(
                         ClickHouseClusters.Servers(body) * gibibytes

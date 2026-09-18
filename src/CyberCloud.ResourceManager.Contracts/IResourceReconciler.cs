@@ -302,7 +302,7 @@ public sealed class RefusingSecretWriter : ISecretWriter {
         Task.FromResult(
             Result<SecretMint>.Failure(
                 ErrorCode.InternalError,
-                $"This reconcile context carries no secret writer, so nothing can be minted at "
+                "This reconcile context carries no secret writer, so nothing can be minted at "
                 + $"'{path}'. A pass driven by ReconcileDriver always carries the host's writer; a "
                 + "context built by hand has to supply one through ReconcileContext.SecretWriter."
             )
@@ -342,7 +342,10 @@ public sealed class RefusingObjectStore : IObjectStore {
         Task.FromResult(Result.Failure(ErrorCode.InternalError, Because));
 
     /// <inheritdoc />
-    public Task<Result<ImmutableArray<string>>> ListAsync(string prefix, CancellationToken cancellationToken = default) =>
+    public Task<Result<ImmutableArray<string>>> ListAsync(
+        string prefix,
+        CancellationToken cancellationToken = default
+    ) =>
         Task.FromResult(Result<ImmutableArray<string>>.Failure(ErrorCode.InternalError, Because));
 }
 

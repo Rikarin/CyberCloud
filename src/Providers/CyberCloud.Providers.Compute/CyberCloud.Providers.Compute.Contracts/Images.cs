@@ -14,8 +14,10 @@ namespace CyberCloud.Providers.Compute.Contracts;
 ///     <para>
 ///         ⚠ <b>THE ROW #28 SAID THIS FAMILY WOULD GET STUCK ON, AND WHERE IT DID NOT.</b> The issue's
 ///         evidence is <c>quay.io/capk/ubuntu-2404-container-disk</c>: four tags, no automation, and
-///         <i>"a VM catalogue means building and hosting images, which is infrastructure rather than a
-///         provider"</i>. That is true of a <b>Kubernetes node</b> image, which has to carry a kubelet
+///         <i>
+///             "a VM catalogue means building and hosting images, which is infrastructure rather than a
+///             provider"
+///         </i>. That is true of a <b>Kubernetes node</b> image, which has to carry a kubelet
 ///         at a pinned minor. A plain cloud image does not: the <c>containerdisks</c> project publishes
 ///         Ubuntu and Debian as container disks, rebuilt from the distributions' own cloud images, and
 ///         <see cref="Catalogue" /> pins them <b>by digest</b> — so the catalogue is a table of four
@@ -23,8 +25,11 @@ namespace CyberCloud.Providers.Compute.Contracts;
 ///         than one this platform would have to compute.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An image is a CDI <c>DataVolume</c> that binds immediately, and that one annotation is
-///         what makes it importable at all</b> — <see cref="Cdi.ImmediateBindAnnotation" />. The
+///         ⚠
+///         <b>
+///             An image is a CDI <c>DataVolume</c> that binds immediately, and that one annotation is
+///             what makes it importable at all
+///         </b> — <see cref="Cdi.ImmediateBindAnnotation" />. The
 ///         storage class the bundle installs is <c>WaitForFirstConsumer</c>, and an image has no
 ///         consumer: it is the <i>source</i> of a clone, never a mounted volume. Without the annotation
 ///         the claim never binds, the import never starts, and the tenant sees an image that is
@@ -97,8 +102,11 @@ public static class Images {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Linux only, by docs/plan/13 § Images and licensing</b>: <i>"Windows Server images are
-    ///         a licensing arrangement, not a technical task"</i>, and the API refuses a name that is
+    ///         ⚠ <b>Linux only, by docs/plan/13 § Images and licensing</b>:
+    ///         <i>
+    ///             "Windows Server images are
+    ///             a licensing arrangement, not a technical task"
+    ///         </i>, and the API refuses a name that is
     ///         not here through <see cref="Schema2026" />'s <c>AllowedValues</c> rather than through a
     ///         mysterious absence.
     ///     </para>
@@ -117,19 +125,23 @@ public static class Images {
     public static FrozenDictionary<string, CatalogueImage> Catalogue { get; } =
         new Dictionary<string, CatalogueImage>(StringComparer.Ordinal) {
             ["ubuntu-24.04"] = new(
-                RegistryScheme + "quay.io/containerdisks/ubuntu@sha256:1b49166bd3047c7d818be67cec73f891b12db7e792dbc91809412b6be1c20ec2",
+                RegistryScheme
+                + "quay.io/containerdisks/ubuntu@sha256:1b49166bd3047c7d818be67cec73f891b12db7e792dbc91809412b6be1c20ec2",
                 "Ubuntu 24.04 LTS (Noble Numbat) cloud image"
             ),
             ["ubuntu-22.04"] = new(
-                RegistryScheme + "quay.io/containerdisks/ubuntu@sha256:27d3bbe1374521aa43fc50b647d712c9c90693f1e8ce9516aa25aeb73f17681d",
+                RegistryScheme
+                + "quay.io/containerdisks/ubuntu@sha256:27d3bbe1374521aa43fc50b647d712c9c90693f1e8ce9516aa25aeb73f17681d",
                 "Ubuntu 22.04 LTS (Jammy Jellyfish) cloud image"
             ),
             ["debian-13"] = new(
-                RegistryScheme + "quay.io/containerdisks/debian@sha256:518a687c58255e8556906a6f51f45ed9e96b0997eedd6e8a12c36680d82e2956",
+                RegistryScheme
+                + "quay.io/containerdisks/debian@sha256:518a687c58255e8556906a6f51f45ed9e96b0997eedd6e8a12c36680d82e2956",
                 "Debian 13 (trixie) generic cloud image"
             ),
             ["debian-12"] = new(
-                RegistryScheme + "quay.io/containerdisks/debian@sha256:ba8d5e83785ce239fa1ff9767ee0146019b96421f96543b68b154cf9e1ff4c7f",
+                RegistryScheme
+                + "quay.io/containerdisks/debian@sha256:ba8d5e83785ce239fa1ff9767ee0146019b96421f96543b68b154cf9e1ff4c7f",
                 "Debian 12 (bookworm) generic cloud image"
             )
         }.ToFrozenDictionary(StringComparer.Ordinal);
@@ -145,8 +157,11 @@ public static class Images {
     /// <summary>The name of the <c>DataVolume</c> — and so of the claim a VM clones — which is the resource's own.</summary>
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
-    ///     ⚠ <b>The resource's name with nothing added, and <see cref="VirtualMachines" /> depends on
-    ///     that.</b> A VM's body names an image by its resource name and the VM renders
+    ///     ⚠
+    ///     <b>
+    ///         The resource's name with nothing added, and <see cref="VirtualMachines" /> depends on
+    ///         that.
+    ///     </b> A VM's body names an image by its resource name and the VM renders
     ///     <c>source.pvc.name</c> from it without reading the image resource; a prefix here would be a
     ///     prefix the VM has to know about, in a second place.
     /// </remarks>
@@ -162,8 +177,11 @@ public static class Images {
 
     /// <summary>The body shape at <see cref="V2026" />.</summary>
     /// <remarks>
-    ///     ⚠ <b>Every property but <c>location</c> is immutable, because an imported image cannot be
-    ///     re-imported in place.</b> A CDI <c>DataVolume</c>'s source and size are fixed at creation;
+    ///     ⚠
+    ///     <b>
+    ///         Every property but <c>location</c> is immutable, because an imported image cannot be
+    ///         re-imported in place.
+    ///     </b> A CDI <c>DataVolume</c>'s source and size are fixed at creation;
     ///     changing either here would be a PUT the API server refuses on every pass, with the resource
     ///     stuck <c>InProgress</c>. A different image is a different resource.
     /// </remarks>
@@ -173,16 +191,19 @@ public static class Images {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the image is billed in."
                 ) {
-                    Format = SchemaFormat.Region, Widget = WidgetHint.Region, Immutable = true, ExampleJson = "\"eu-central\""
+                    Format = SchemaFormat.Region,
+                    Widget = WidgetHint.Region,
+                    Immutable = true,
+                    ExampleJson = "\"eu-central\""
                 },
                 new("/properties", SchemaKind.Nested, Description: "The image's own settings."),
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster the image is imported into. A virtual machine can boot from "
                     + "it only in the same cluster and the same resource group, because a clone is a "
                     + "claim in one namespace copied from a claim beside it."
@@ -191,7 +212,7 @@ public static class Images {
                 new(
                     "/properties/source/kind",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "catalogue for one of the platform's own Linux cloud images, pinned by "
                     + "digest; url for an address you supply."
                 ) { AllowedValues = SourceKinds, Immutable = true, DefaultJson = "\"" + CatalogueSource + "\"" },
@@ -201,7 +222,9 @@ public static class Images {
                     Description: "Which catalogue image, when kind is catalogue. ⚠ Linux only: Windows "
                     + "Server is a licensing arrangement and not in this catalogue — docs/plan/13 "
                     + "§ Images and licensing."
-                ) { AllowedValues = CatalogueNames, Immutable = true, DefaultJson = "\"" + DefaultCatalogueImage + "\"" },
+                ) {
+                    AllowedValues = CatalogueNames, Immutable = true, DefaultJson = "\"" + DefaultCatalogueImage + "\""
+                },
                 new(
                     "/properties/source/url",
                     SchemaKind.Text,
@@ -213,11 +236,16 @@ public static class Images {
                 new(
                     "/properties/size",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The claim the image is imported into, in Kubernetes quantity form. It "
                     + "must hold the image's virtual size — 10Gi fits every catalogue image — and it is "
                     + "the smallest disk a machine booted from this image can have."
-                ) { Pattern = KubeQuantity.Pattern, Immutable = true, DefaultJson = "\"" + DefaultSize + "\"", ExampleJson = "\"10Gi\"" },
+                ) {
+                    Pattern = KubeQuantity.Pattern,
+                    Immutable = true,
+                    DefaultJson = "\"" + DefaultSize + "\"",
+                    ExampleJson = "\"10Gi\""
+                },
                 new(
                     "/properties/storageClass",
                     SchemaKind.Text,
@@ -228,7 +256,8 @@ public static class Images {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -249,7 +278,8 @@ public static class Images {
 
     /// <summary>The claim size a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string Size(JsonElement desired) => ComputeBodies.Text(ComputeBodies.Property(desired, "size"), DefaultSize);
+    public static string Size(JsonElement desired) =>
+        ComputeBodies.Text(ComputeBodies.Property(desired, "size"), DefaultSize);
 
     /// <summary>The storage class a body names, or empty for the cluster's default.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -314,7 +344,8 @@ public static class Images {
     ///     only when the body names one, because "the default" is spelled by its absence.
     /// </remarks>
     public static bool Matches(string objectJson, JsonElement desired) {
-        if (ComputeBodies.Kind(objectJson) != Cdi.DataVolumeKind.Kind || ComputeBodies.Spec(objectJson) is not { } spec) {
+        if (ComputeBodies.Kind(objectJson) != Cdi.DataVolumeKind.Kind
+            || ComputeBodies.Spec(objectJson) is not { } spec) {
             return false;
         }
 

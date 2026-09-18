@@ -79,7 +79,7 @@ public sealed class PragmaWithoutIssueAnalyzer : DiagnosticAnalyzer {
                 continue;
             }
 
-            var codes = string.Join(", ", directive.ErrorCodes.Select(x => x.ToString()));
+            var codes = string.Join(", ", directive.ErrorCodes.Select(static x => x.ToString()));
 
             context.ReportDiagnostic(
                 Diagnostic.Create(

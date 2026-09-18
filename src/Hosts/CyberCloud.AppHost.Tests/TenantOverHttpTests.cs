@@ -12,7 +12,6 @@ using CyberCloud.ServiceDefaults;
 using CyberCloud.Tenancy.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
-using Orleans.Configuration;
 using Orleans.Multitenant;
 using System.Diagnostics;
 using System.Globalization;
@@ -261,15 +260,19 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
         // enumeration oracle.
         var subscriptions = await GetAsync(ScopeCollectionId.SubscriptionsOf(Tenant).Path, cancellationToken);
 
-        subscriptions.Status.ShouldBe(HttpStatusCode.OK, "the subscription collection is not readable: " + subscriptions.Body);
+        subscriptions.Status.ShouldBe(
+            HttpStatusCode.OK,
+            "the subscription collection is not readable: " + subscriptions.Body
+        );
 
         var listedSubscriptions = Json(subscriptions.Body).GetProperty("value").EnumerateArray().ToList();
 
-        listedSubscriptions.Select(x => x.GetProperty("id").GetString())
+        listedSubscriptions.Select(static x => x.GetProperty("id").GetString())
             .ShouldBe(
                 [ScopeId.Subscription(Tenant, Subscription).Path],
                 "the tenant holds exactly one subscription, owned through the tenant grant, and the "
-                + "listing did not return exactly it. Body: " + subscriptions.Body
+                + "listing did not return exactly it. Body: "
+                + subscriptions.Body
             );
 
         listedSubscriptions[0].GetProperty("name").GetString().ShouldBe("over http");
@@ -296,11 +299,12 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
 
         var listedGroups = Json(groups.Body).GetProperty("value").EnumerateArray().ToList();
 
-        listedGroups.Select(x => x.GetProperty("id").GetString())
+        listedGroups.Select(static x => x.GetProperty("id").GetString())
             .ShouldBe(
                 [ScopeId.Group(Tenant, Subscription, ResourceGroup).Path],
                 "the subscription holds exactly one resource group and the listing did not return "
-                + "exactly it. Body: " + groups.Body
+                + "exactly it. Body: "
+                + groups.Body
             );
 
         listedGroups[0].GetProperty("name").GetString().ShouldBe(ResourceGroup);
@@ -389,14 +393,16 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
         resource.GetProperty("properties").GetProperty("message").GetString().ShouldBe("hello");
         resource.GetProperty("location").GetString().ShouldBe("eu-central");
 
-        resource.GetProperty("properties").TryGetProperty("properties", out _)
+        resource.GetProperty("properties")
+            .TryGetProperty("properties", out _)
             .ShouldBeFalse("the body is nested inside its own envelope again — issue #72");
-        resource.GetProperty("properties").TryGetProperty("location", out _)
+        resource.GetProperty("properties")
+            .TryGetProperty("location", out _)
             .ShouldBeFalse("`location` reached the wire inside `properties` as well as beside it — issue #72");
 
         // ⚠ Counted rather than looked up. JsonDocument resolves a duplicated name to one of its
         // values, so GetProperty("location") passes over a body that carries it twice.
-        resource.EnumerateObject().Count(x => x.Name == "location").ShouldBe(1);
+        resource.EnumerateObject().Count(static x => x.Name == "location").ShouldBe(1);
 
         // ── Step 6: list it. ────────────────────────────────────────────────────────────────────
         //
@@ -413,7 +419,8 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
         value.Count.ShouldBe(
             1,
             "the resource group holds exactly one widget and the listing did not return it. "
-            + "Body: " + list.Body
+            + "Body: "
+            + list.Body
         );
 
         value[0].GetProperty("id").GetString().ShouldBe(Address.Path);
@@ -472,7 +479,8 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
         using var request = new HttpRequestMessage(
             HttpMethod.Put,
             new Uri(path + Version, UriKind.Relative)
-        ) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+        );
+        request.Content = new StringContent(body, Encoding.UTF8, "application/json");
 
         return await SendAsync(request, cancellationToken);
     }
@@ -570,7 +578,10 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
                 .Create(ObjectTypes.Tenant, Tenant.ToString("N", CultureInfo.InvariantCulture))
                 .GetValueOrThrow(),
             Relations.Owner,
-            SubjectRef.Create(SubjectTypes.ServicePrincipal, ServicePrincipal.ToString("N", CultureInfo.InvariantCulture))
+            SubjectRef.Create(
+                SubjectTypes.ServicePrincipal,
+                ServicePrincipal.ToString("N", CultureInfo.InvariantCulture)
+            )
                 .GetValueOrThrow()
         )
             .GetValueOrThrow();
@@ -644,9 +655,7 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
             .GetGrain<IServicePrincipalGrain>(GrainKeys.ServicePrincipal(ServicePrincipal))
             .CreateAsync(
                 new() {
-                    DisplayName = "Phase 1 over HTTP, as CI would",
-                    Enabled = true,
-                    CredentialSecretRef = CredentialRef
+                    DisplayName = "Phase 1 over HTTP, as CI would", Enabled = true, CredentialSecretRef = CredentialRef
                 }
             );
 
@@ -662,8 +671,11 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
     /// <returns>The access token, verbatim.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The response is asserted on beyond <c>access_token</c>, because the wire token is
-    ///         the contract.</b> <c>NoRolesInTokenTests</c> asserts the principal the factory builds;
+    ///         ⚠
+    ///         <b>
+    ///             The response is asserted on beyond <c>access_token</c>, because the wire token is
+    ///             the contract.
+    ///         </b> <c>NoRolesInTokenTests</c> asserts the principal the factory builds;
     ///         nothing until here asserted what OpenIddict serialized from it, and the two differ in
     ///         exactly the way that bit: a claim without an access-token destination is dropped
     ///         silently. So the payload is decoded and checked for the four claims the gateway cannot
@@ -675,7 +687,8 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
     ///     </para>
     /// </remarks>
     async Task<string> TakeTokenAsync(CancellationToken cancellationToken) {
-        using var client = new HttpClient { BaseAddress = new(identity.Urls.First()) };
+        using var client = new HttpClient();
+        client.BaseAddress = new(identity.Urls.First());
 
         using var response = await client.PostAsync(
             new Uri(IdentityHostOpenIddict.TokenPath, UriKind.Relative),
@@ -766,7 +779,9 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
                 + CyberCloudResources.SiloOneGatewayPort.ToString(CultureInfo.InvariantCulture),
                 $"--{IdentityHostOptions.SectionName}:TenantId=" + Tenant.ToString("D", CultureInfo.InvariantCulture)
             ],
-            services => services.AddSingleton<IClientSecretSeam>(new TestClientSecrets(CredentialRef, ClientSecret))
+            static services => services.AddSingleton<IClientSecretSeam>(
+                new TestClientSecrets(CredentialRef, ClientSecret)
+            )
         );
 
     /// <summary>

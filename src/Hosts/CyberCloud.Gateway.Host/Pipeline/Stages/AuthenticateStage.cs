@@ -18,8 +18,11 @@ namespace CyberCloud.Gateway.Host.Pipeline.Stages;
 ///         "wherever the token is read".
 ///     </para>
 ///     <para>
-///         ⚠ <b>Two credentials, one of them derived from the other, and the second is read from the
-///         query string on exactly one shape of request.</b> <see cref="ICallerContextResolver" />
+///         ⚠
+///         <b>
+///             Two credentials, one of them derived from the other, and the second is read from the
+///             query string on exactly one shape of request.
+///         </b> <see cref="ICallerContextResolver" />
 ///         reads the <c>Authorization</c> header and nothing else, and its remarks say why: anything
 ///         else is a caller-controlled surface inside authentication. A browser's WebSocket upgrade
 ///         has no header to read, so for a request that is exactly a hub's path, carries no header and
@@ -86,11 +89,11 @@ sealed class AuthenticateStage(ICallerContextResolver resolver, IHubTicketStore 
                 // seconds of opaque bytes, and the distinction would tell a holder of a leaked URL
                 // which of the three it was.
                 return GatewayOutcome.Failure(
-                        StatusCodes.Status401Unauthorized,
-                        BearerTokenErrors.Unauthenticated(
-                            "the hub ticket was not accepted; mint another with POST /hubs/" + hub + "/ticket"
-                        )
+                    StatusCodes.Status401Unauthorized,
+                    BearerTokenErrors.Unauthenticated(
+                        "the hub ticket was not accepted; mint another with POST /hubs/" + hub + "/ticket"
                     )
+                )
                     .WithHeader("WWW-Authenticate", "Bearer");
             }
 

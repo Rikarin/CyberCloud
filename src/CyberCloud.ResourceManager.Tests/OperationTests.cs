@@ -1,5 +1,3 @@
-using CyberCloud.ResourceManager.Tests.Infrastructure;
-
 namespace CyberCloud.ResourceManager.Tests;
 
 /// <summary>
@@ -104,7 +102,7 @@ public sealed class OperationTests(ResourceManagerCluster cluster) {
         (await operation.StartAsync(spec)).IsSuccess.ShouldBeTrue();
         (await operation.StartAsync(spec)).IsSuccess.ShouldBeTrue("the retried PUT must be a no-op all the way down");
 
-        var different = spec with { Desired = TestingProvider.Body(size: 99) };
+        var different = spec with { Desired = TestingProvider.Body(99) };
         var conflict = await operation.StartAsync(different);
 
         conflict.IsFailure.ShouldBeTrue();
@@ -162,7 +160,7 @@ public sealed class OperationTests(ResourceManagerCluster cluster) {
 
         (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow()
             .Reserved
-                .ShouldBeGreaterThan(before.Reserved, "step 6 reserved");
+            .ShouldBeGreaterThan(before.Reserved, "step 6 reserved");
 
         await operation.CancelAsync("changed my mind");
         await operation.DriveAsync();
@@ -236,7 +234,7 @@ public sealed class OperationTests(ResourceManagerCluster cluster) {
 
         (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow()
             .Reserved
-                .ShouldBeGreaterThan(before.Reserved);
+            .ShouldBeGreaterThan(before.Reserved);
 
         var operationId = accepted.GetValueOrThrow().OperationId;
 
@@ -263,7 +261,7 @@ public sealed class OperationTests(ResourceManagerCluster cluster) {
         var quota = cluster.Quota(ResourceManagerCluster.Tenant, ResourceManagerCluster.Subscription);
         var before = (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow();
 
-        var accepted = await Create(ResourceManagerCluster.Address("committing"), size: 3);
+        var accepted = await Create(ResourceManagerCluster.Address("committing"), 3);
         var operation = cluster.Operation(ResourceManagerCluster.Tenant, accepted.GetValueOrThrow().OperationId);
 
         await operation.DriveAsync();
@@ -285,7 +283,7 @@ public sealed class OperationTests(ResourceManagerCluster cluster) {
         var address = ResourceManagerCluster.Address("too-big");
         var oversized = (int)(usage.Limit + 1);
 
-        var refused = await Create(address, size: oversized);
+        var refused = await Create(address, oversized);
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Code.ShouldBe(ErrorCode.QuotaExceeded);
@@ -294,7 +292,7 @@ public sealed class OperationTests(ResourceManagerCluster cluster) {
 
         (await cluster.Index(address).GetAsync()).GetValueOrThrow()
             .State
-                .ShouldBe(IndexEntryState.Free, "a quota refusal must not have claimed the name");
+            .ShouldBe(IndexEntryState.Free, "a quota refusal must not have claimed the name");
     }
 
     // ── Backoff and the ceiling ─────────────────────────────────────────────────────────────────
@@ -447,7 +445,7 @@ public sealed class OperationTests(ResourceManagerCluster cluster) {
 
         stolen.IsFailure.ShouldBeTrue();
         stolen.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
-        stolen.Error.Message.ShouldNotContain("not-yours", Case.Insensitive);
+        stolen.Error.Message.ShouldNotContain("not-yours");
     }
 
     [Fact]

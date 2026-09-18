@@ -261,7 +261,7 @@ public sealed class ScopeRoutingTests {
         // docs/plan/06 § Two-phase create is careful about, one scope up.
         var gateway = new GatewayHarness();
 
-        gateway.Scopes.OnDelete = _ => Result.Failure(
+        gateway.Scopes.OnDelete = static _ => Result.Failure(
             ErrorCode.Conflict,
             "the resource group still holds 2 resource(s)"
         );

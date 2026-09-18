@@ -60,7 +60,7 @@ public sealed class NatsSizingTests {
         var helpers = Embedded("nats.helpers.tpl");
         var block = Regex.Match(
             helpers,
-            "define \"nats\\.selectorLabels\" -}}(.*?){{- end",
+            """define "nats\.selectorLabels" -}}(.*?){{- end""",
             RegexOptions.Singleline,
             TimeSpan.FromSeconds(5)
         );
@@ -83,7 +83,7 @@ public sealed class NatsSizingTests {
         // selects on and the reconciler does not write is a Service that selects nothing.
         foreach (Match line in Regex.Matches(
                      declared,
-                     "^\\s*(app\\.kubernetes\\.io/[a-z-]+):",
+                     """^\s*(app\.kubernetes\.io/[a-z-]+):""",
                      RegexOptions.Multiline,
                      TimeSpan.FromSeconds(5)
                  )) {

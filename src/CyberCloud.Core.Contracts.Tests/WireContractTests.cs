@@ -125,14 +125,14 @@ public sealed class WireContractTests {
     ];
 
     static IEnumerable<Type> GeneratedSerializerTypes =>
-        Contracts.GetTypes().Where(t => t.GetCustomAttribute<GenerateSerializerAttribute>() is not null);
+        Contracts.GetTypes().Where(static t => t.GetCustomAttribute<GenerateSerializerAttribute>() is not null);
 
     [Fact]
     public void EveryGenerateSerializerTypeHasAnAlias() {
         var missing = GeneratedSerializerTypes
-            .Where(t => t.GetCustomAttribute<AliasAttribute>() is null)
-            .Select(t => t.Name)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Where(static t => t.GetCustomAttribute<AliasAttribute>() is null)
+            .Select(static t => t.Name)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
 
         missing.ShouldBeEmpty(
@@ -145,11 +145,11 @@ public sealed class WireContractTests {
     [Fact]
     public void EveryAliasIsUnique() {
         var duplicates = GeneratedSerializerTypes
-            .Select(t => t.GetCustomAttribute<AliasAttribute>()?.Alias)
-            .Where(a => a is not null)
-            .GroupBy(a => a, StringComparer.Ordinal)
-            .Where(g => g.Count() > 1)
-            .Select(g => g.Key!)
+            .Select(static t => t.GetCustomAttribute<AliasAttribute>()?.Alias)
+            .Where(static a => a is not null)
+            .GroupBy(static a => a, StringComparer.Ordinal)
+            .Where(static g => g.Count() > 1)
+            .Select(static g => g.Key!)
             .ToList();
 
         duplicates.ShouldBeEmpty("two types claiming one alias is a coin flip at deserialization.");
@@ -158,12 +158,12 @@ public sealed class WireContractTests {
     [Fact]
     public void TheAliasesAreTheOnesRecordedHere() {
         var actual = GeneratedSerializerTypes
-            .Select(t => (Type: t.Name, Alias: t.GetCustomAttribute<AliasAttribute>()?.Alias ?? "<none>"))
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
+            .Select(static t => (Type: t.Name, Alias: t.GetCustomAttribute<AliasAttribute>()?.Alias ?? "<none>"))
+            .OrderBy(static x => x.Type, StringComparer.Ordinal)
             .ToList();
 
         actual.ShouldBe(
-            Aliases.OrderBy(x => x.Type, StringComparer.Ordinal).ToList(),
+            Aliases.OrderBy(static x => x.Type, StringComparer.Ordinal).ToList(),
             "an alias changed, or a [GenerateSerializer] type was added without recording its "
             + "alias. Both are wire-contract changes."
         );
@@ -175,25 +175,25 @@ public sealed class WireContractTests {
         // instantiate from another assembly's generic instantiation is a runtime failure, not a
         // compile one.
         GeneratedSerializerTypes
-            .Where(t => !t.IsPublic && !t.IsNestedPublic)
-            .Select(t => t.Name)
+            .Where(static t => !t.IsPublic && !t.IsNestedPublic)
+            .Select(static t => t.Name)
             .ShouldBeEmpty();
 
     [Fact]
     public void TheIdManifestMatchesTheBaseline() {
         var actual = GeneratedSerializerTypes
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetMembers(BindingFlags.Public | BindingFlags.Instance)
-                    .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
-                    .Where(x => x.id is not null)
+                    .Select(static member => (member, id: member.GetCustomAttribute<IdAttribute>()))
+                    .Where(static x => x.id is not null)
                     .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
             )
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
-            .ThenBy(x => x.Id)
+            .OrderBy(static x => x.Type, StringComparer.Ordinal)
+            .ThenBy(static x => x.Id)
             .ToList();
 
         actual.ShouldBe(
-            Baseline.OrderBy(x => x.Type, StringComparer.Ordinal).ThenBy(x => x.Id).ToList(),
+            Baseline.OrderBy(static x => x.Type, StringComparer.Ordinal).ThenBy(static x => x.Id).ToList(),
             "docs/plan/05 § Serialization and schema evolution: [Id(n)] numbers are never reused and "
             + "never reordered. If this fails "
             + "because a member was added, append it to Baseline with the next unused number. If it "
@@ -203,8 +203,8 @@ public sealed class WireContractTests {
 
     [Fact]
     public void NoTypeReusesAnIdNumber() {
-        foreach (var group in Baseline.GroupBy(x => x.Type, StringComparer.Ordinal)) {
-            var ids = group.Select(x => x.Id).ToList();
+        foreach (var group in Baseline.GroupBy(static x => x.Type, StringComparer.Ordinal)) {
+            var ids = group.Select(static x => x.Id).ToList();
             ids.Distinct()
                 .Count()
                 .ShouldBe(
@@ -232,15 +232,15 @@ public sealed class WireContractTests {
         // A surrogate with no [RegisterConverter] compiles, publishes an alias, passes every test
         // above, and silently never participates in serialization.
         var surrogates = GeneratedSerializerTypes
-            .Where(t => t.Name.Contains("Surrogate", StringComparison.Ordinal))
-            .Select(t => t.Name)
+            .Where(static t => t.Name.Contains("Surrogate", StringComparison.Ordinal))
+            .Select(static t => t.Name)
             .ToHashSet(StringComparer.Ordinal);
 
         var converted = Contracts.GetTypes()
-            .Where(t => t.GetCustomAttribute<RegisterConverterAttribute>() is not null)
-            .SelectMany(t => t.GetInterfaces())
-            .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IConverter<,>))
-            .Select(i => i.GetGenericArguments()[1].Name)
+            .Where(static t => t.GetCustomAttribute<RegisterConverterAttribute>() is not null)
+            .SelectMany(static t => t.GetInterfaces())
+            .Where(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IConverter<,>))
+            .Select(static i => i.GetGenericArguments()[1].Name)
             .ToHashSet(StringComparer.Ordinal);
 
         surrogates.Except(converted).ShouldBeEmpty("surrogate types with no registered converter.");
@@ -265,16 +265,16 @@ public sealed class WireContractTests {
         // The direction the manifest test cannot cover on its own: a member added WITHOUT an [Id]
         // is invisible to Orleans and is silently dropped on the wire.
         var unnumbered = GeneratedSerializerTypes
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                    .Where(p => p.SetMethod is not null && p.GetCustomAttribute<IdAttribute>() is null)
+                    .Where(static p => p.SetMethod is not null && p.GetCustomAttribute<IdAttribute>() is null)
                     .Select(p => string.Create(
                             CultureInfo.InvariantCulture,
                             $"{type.Name}.{p.Name}"
                         )
                     )
             )
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
 
         unnumbered.ShouldBeEmpty(

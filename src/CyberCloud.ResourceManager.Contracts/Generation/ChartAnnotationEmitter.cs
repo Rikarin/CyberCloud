@@ -309,9 +309,9 @@ public static class ChartAnnotationEmitter {
         var originalRegions = Regions(original, indent);
         var output = new List<string>();
 
-        var lastGenerated = originalRegions.FindLastIndex(x => !x.IsInternal);
+        var lastGenerated = originalRegions.FindLastIndex(static x => !x.IsInternal);
 
-        foreach (var stranded in originalRegions.Take(Math.Max(lastGenerated, 0)).Where(x => x.IsInternal)) {
+        foreach (var stranded in originalRegions.Take(Math.Max(lastGenerated, 0)).Where(static x => x.IsInternal)) {
             problems.Add(
                 $"{stranded.Line}: '{stranded.Name}' is `@internal` and is followed by "
                 + $"'{originalRegions[lastGenerated].Name}' on line {originalRegions[lastGenerated].Line}, "
@@ -360,7 +360,7 @@ public static class ChartAnnotationEmitter {
             output.AddRange(lines);
         }
 
-        var tail = originalRegions.Where(x => x.IsInternal).ToList();
+        var tail = originalRegions.Where(static x => x.IsInternal).ToList();
 
         // ⚠ One blank line between the generated keys and the hand-written tail, at the top level
         // only, because that is the shape the file already has: root keys are separated by a blank
@@ -903,7 +903,7 @@ public static class ChartAnnotationEmitter {
                 $"'{property.JsonPointer}' declares a Pattern with leading or trailing whitespace, and "
                 + "`@pattern` cannot spell one: build/Build.Charts.cs trims the line, the directive body "
                 + "and the argument, so the pattern would come back without it and the chart would "
-                + "accept a different set of strings from the API. Anchor the whitespace with `\\s` or "
+                + """accept a different set of strings from the API. Anchor the whitespace with `\s` or """
                 + "drop it."
             );
         }
@@ -917,7 +917,7 @@ public static class ChartAnnotationEmitter {
                 $"'{property.JsonPointer}' declares a Pattern containing the control character "
                 + $"U+{(int)character:X4}. An annotation is one line: a newline would end the block "
                 + "above the key it describes, and a tab is a build failure in the values subset. Write "
-                + "it as an escape — `\\n`, `\\t` — so the pattern is one line of printable text."
+                + """it as an escape — `\n`, `\t` — so the pattern is one line of printable text."""
             );
 
             return;
@@ -1083,7 +1083,7 @@ public static class ChartAnnotationEmitter {
 
     static string Missing(string jsonPointer, string fact, string directive) =>
         $"'{jsonPointer}' declares {fact}, and the chart annotation vocabulary has no syntax for it. "
-        + $"It is refused rather than dropped: a constraint that reached the API and not the chart is a "
+        + "It is refused rather than dropped: a constraint that reached the API and not the chart is a "
         + $"cluster rendered from values the API would have refused. Closing it means a `{directive}` "
         + "directive, which is nine sites in four files — charts/README.md § What a chart cannot say "
         + "lists them, and warns that this directive is the harder half of the original seven.";
@@ -1470,7 +1470,7 @@ public static class ChartAnnotationEmitter {
     static readonly Regex KeyName = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
     static readonly Regex RootKey =
-        new(@"^(?<key>[A-Za-z_][A-Za-z0-9_]*):[ ]*", RegexOptions.Compiled);
+        new("^(?<key>[A-Za-z_][A-Za-z0-9_]*):[ ]*", RegexOptions.Compiled);
 
     static readonly Regex IntegerLiteral = new(@"^-?\d+$", RegexOptions.Compiled);
 

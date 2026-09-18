@@ -35,7 +35,8 @@ public sealed class RoleAssignmentRoutingTests {
 
     static string OnGroup(Guid tenant) => GatewayHarness.GroupPath(tenant) + RoleAssignmentId.Suffix + Name;
 
-    static string OnSubscription(Guid tenant) => GatewayHarness.SubscriptionPath(tenant) + RoleAssignmentId.Suffix + Name;
+    static string OnSubscription(Guid tenant) =>
+        GatewayHarness.SubscriptionPath(tenant) + RoleAssignmentId.Suffix + Name;
 
     static string OnResource(Guid tenant) => GatewayHarness.ResourcePath(tenant) + RoleAssignmentId.Suffix + Name;
 
@@ -149,7 +150,12 @@ public sealed class RoleAssignmentRoutingTests {
         var gateway = new GatewayHarness();
         const string body = """{"principalId":"7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d","roleDefinitionId":"reader"}""";
 
-        await gateway.SendAsync("PUT", OnGroup(GatewayHarness.TenantA), gateway.Token(GatewayHarness.TenantA), body: body);
+        await gateway.SendAsync(
+            "PUT",
+            OnGroup(GatewayHarness.TenantA),
+            gateway.Token(GatewayHarness.TenantA),
+            body: body
+        );
 
         gateway.Roles.Bodies.ShouldContain(body);
     }
@@ -214,12 +220,15 @@ public sealed class RoleAssignmentRoutingTests {
         var caller = gateway.Roles.Callers.ShouldHaveSingleItem();
         caller.TenantId.ShouldBe(GatewayHarness.TenantA);
 
-        RoleAssignmentId.ParsePath(gateway.Roles.Paths.Single()).GetValueOrThrow().TenantId.ShouldBe(GatewayHarness.TenantA);
+        RoleAssignmentId.ParsePath(gateway.Roles.Paths.Single())
+            .GetValueOrThrow()
+            .TenantId.ShouldBe(GatewayHarness.TenantA);
     }
 
     // ── The collection (issue #86) ─────────────────────────────────────────────────────────────
 
-    static string CollectionOnGroup(Guid tenant) => GatewayHarness.GroupPath(tenant) + RoleAssignmentId.CollectionSuffix;
+    static string CollectionOnGroup(Guid tenant) =>
+        GatewayHarness.GroupPath(tenant) + RoleAssignmentId.CollectionSuffix;
 
     [Fact]
     public async Task TheCollectionIsServedByTheRoleAssignmentManagerAndNotTheRegistry() {
@@ -267,13 +276,24 @@ public sealed class RoleAssignmentRoutingTests {
         direct.GetProperty("id").GetString().ShouldBe(OnGroup(GatewayHarness.TenantA));
         direct.GetProperty("type").GetString().ShouldBe(RoleAssignmentId.TypeName);
         direct.GetProperty("properties").GetProperty("inherited").GetBoolean().ShouldBeFalse();
-        direct.GetProperty("properties").GetProperty("scope").GetString().ShouldBe(GatewayHarness.GroupPath(GatewayHarness.TenantA));
-        direct.GetProperty("properties").GetProperty(RoleAssignmentBodyProperties.RoleDefinitionId).GetString().ShouldBe("reader");
+        direct.GetProperty("properties")
+            .GetProperty("scope")
+            .GetString()
+            .ShouldBe(GatewayHarness.GroupPath(GatewayHarness.TenantA));
+        direct.GetProperty("properties")
+            .GetProperty(RoleAssignmentBodyProperties.RoleDefinitionId)
+            .GetString()
+            .ShouldBe("reader");
 
         var inherited = rows[1];
         inherited.GetProperty("properties").GetProperty("inherited").GetBoolean().ShouldBeTrue();
-        inherited.GetProperty("properties").GetProperty("scope").GetString().ShouldBe($"/tenants/{GatewayHarness.TenantA:D}");
-        inherited.GetProperty("id").GetString().ShouldStartWith($"/tenants/{GatewayHarness.TenantA:D}" + RoleAssignmentId.Suffix);
+        inherited.GetProperty("properties")
+            .GetProperty("scope")
+            .GetString()
+            .ShouldBe($"/tenants/{GatewayHarness.TenantA:D}");
+        inherited.GetProperty("id")
+            .GetString()
+            .ShouldStartWith($"/tenants/{GatewayHarness.TenantA:D}" + RoleAssignmentId.Suffix);
 
         document.RootElement.TryGetProperty("nextLink", out _).ShouldBeFalse("a last page carried a nextLink");
     }
@@ -294,7 +314,7 @@ public sealed class RoleAssignmentRoutingTests {
             "GET",
             CollectionOnGroup(GatewayHarness.TenantA),
             gateway.Token(GatewayHarness.TenantA),
-            query: "api-version=" + OneTypeRegistry.TheVersion + "&$top=7&$skipToken=" + Uri.EscapeDataString("/tenants/x")
+            "api-version=" + OneTypeRegistry.TheVersion + "&$top=7&$skipToken=" + Uri.EscapeDataString("/tenants/x")
         );
 
         response.Status.ShouldBe(StatusCodes.Status200OK, response.Body);
@@ -353,7 +373,11 @@ public sealed class RoleAssignmentRoutingTests {
     public async Task TheCollectionAddressThatReachesTheManagerCarriesTheTokensTenant() {
         var gateway = new GatewayHarness();
 
-        await gateway.SendAsync("GET", CollectionOnGroup(GatewayHarness.TenantA), gateway.Token(GatewayHarness.TenantA));
+        await gateway.SendAsync(
+            "GET",
+            CollectionOnGroup(GatewayHarness.TenantA),
+            gateway.Token(GatewayHarness.TenantA)
+        );
 
         var listing = gateway.Roles.Listings.ShouldHaveSingleItem();
         listing.Caller.TenantId.ShouldBe(GatewayHarness.TenantA);
@@ -365,12 +389,24 @@ public sealed class RoleAssignmentRoutingTests {
     [Theory]
     [InlineData("/providers/CyberCloud.Authorization/roleAssignments/reader-user-alice")]
     [InlineData("/providers/CyberCloud.Authorization/roleAssignments")]
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/")]
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/somethingElse/x")]
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader-user-alice/extra")]
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader")]
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader-user-")]
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader-user-Alice")]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/"
+    )]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/somethingElse/x"
+    )]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader-user-alice/extra"
+    )]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader"
+    )]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader-user-"
+    )]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader-user-Alice"
+    )]
     public async Task AMalformedAssignmentPathIsABadRequestAndReachesNoManager(string template) {
         // ⚠ 400 and never 404: every one of these is a client's URL being wrong, and a 404 would
         // send them looking for a missing assignment. The grammar is the manager's contract too —

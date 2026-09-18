@@ -77,6 +77,7 @@ sealed record OciImage(
 sealed class OciRegistry : IDisposable {
     static readonly string? DockerHubUser = Environment.GetEnvironmentVariable("DOCKERHUB_USERNAME");
     static readonly string? DockerHubToken = Environment.GetEnvironmentVariable("DOCKERHUB_TOKEN");
+
     static readonly string Accept = string.Join(
         ", ",
         "application/vnd.oci.image.index.v1+json",
@@ -116,17 +117,22 @@ sealed class OciRegistry : IDisposable {
         if (document["manifests"] is JsonArray manifests) {
             // An index. Walk to the linux/amd64 manifest, or the first one when no platform matches.
             var chosen = manifests
-                             .FirstOrDefault(entry =>
-                                 entry?["platform"]?["os"]?.GetValue<string>() == "linux"
-                                 && entry?["platform"]?["architecture"]?.GetValue<string>() == "amd64"
-                             )
-                         ?? manifests.FirstOrDefault()
-                         ?? throw new HttpRequestException($"{reference}: the index lists no manifest");
+                .FirstOrDefault(entry =>
+                    entry?["platform"]?["os"]?.GetValue<string>() == "linux"
+                    && entry?["platform"]?["architecture"]?.GetValue<string>() == "amd64"
+                )
+                ?? manifests.FirstOrDefault()
+                ?? throw new HttpRequestException($"{reference}: the index lists no manifest");
 
             var platformDigest = chosen["digest"]?.GetValue<string>()
                 ?? throw new HttpRequestException($"{reference}: an index entry carries no digest");
 
-            var platform = Fetch($"https://{host}/v2/{repository}/manifests/{platformDigest}", ref token, host, repository);
+            var platform = Fetch(
+                $"https://{host}/v2/{repository}/manifests/{platformDigest}",
+                ref token,
+                host,
+                repository
+            );
 
             document = JsonNode.Parse(platform.Content.ReadAsStringAsync().GetAwaiter().GetResult())
                 ?? throw new HttpRequestException($"{reference}: the platform manifest is not JSON");
@@ -170,11 +176,14 @@ sealed class OciRegistry : IDisposable {
                     scope = $"repository:{repository}:pull";
                 }
 
-                var tokenUrl = $"{realm}?service={Uri.EscapeDataString(service ?? host)}&scope={Uri.EscapeDataString(scope)}";
+                var tokenUrl =
+                    $"{realm}?service={Uri.EscapeDataString(service ?? host)}&scope={Uri.EscapeDataString(scope)}";
 
                 using var tokenRequest = new HttpRequestMessage(HttpMethod.Get, tokenUrl);
 
-                if (host == "registry-1.docker.io" && !string.IsNullOrEmpty(DockerHubUser) && !string.IsNullOrEmpty(DockerHubToken)) {
+                if (host == "registry-1.docker.io"
+                    && !string.IsNullOrEmpty(DockerHubUser)
+                    && !string.IsNullOrEmpty(DockerHubToken)) {
                     tokenRequest.Headers.Authorization = new AuthenticationHeaderValue(
                         "Basic",
                         Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{DockerHubUser}:{DockerHubToken}"))

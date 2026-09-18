@@ -766,7 +766,8 @@ public static class CloudConsoles {
     public const string HubPath = "/hubs/terminal";
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── Rendering ─────────────────────────────────────────────────────────────────────────────
 
@@ -1236,7 +1237,7 @@ public static class CloudConsoles {
         }
 
         var types = spec["policyTypes"] as JsonArray;
-        var declared = types?.Select(x => x?.GetValue<string>()).ToList() ?? [];
+        var declared = types?.Select(static x => x?.GetValue<string>()).ToList() ?? [];
 
         return declared.Contains("Ingress")
             && declared.Contains("Egress")

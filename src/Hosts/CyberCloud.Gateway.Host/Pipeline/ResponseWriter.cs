@@ -28,8 +28,11 @@ namespace CyberCloud.Gateway.Host.Pipeline;
 ///         </i>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Three body kinds, each with a fixed content type, and an outcome that sets two is
-///         refused rather than resolved.</b> Error is <see cref="ErrorBody.ContentType" />, JSON is
+///         ⚠
+///         <b>
+///             Three body kinds, each with a fixed content type, and an outcome that sets two is
+///             refused rather than resolved.
+///         </b> Error is <see cref="ErrorBody.ContentType" />, JSON is
 ///         the same, and <see cref="GatewayOutcome.Text" /> is <c>text/plain; charset=utf-8</c> —
 ///         the media type is decided here, by kind, and no stage can name one. Choosing a
 ///         precedence for a two-bodied outcome would make the mistake invisible; throwing makes it

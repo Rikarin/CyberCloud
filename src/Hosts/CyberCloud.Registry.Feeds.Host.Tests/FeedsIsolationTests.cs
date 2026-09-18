@@ -17,13 +17,13 @@ public sealed class FeedsIsolationTests {
         // no type from the assembly that declares ICheckGrain, so no AssemblyRef row exists for it
         // even though CyberCloud.ResourceManager is referenced and references it.
         Host.GetReferencedAssemblies()
-            .Select(x => x.Name ?? "")
+            .Select(static x => x.Name ?? "")
             .ShouldNotContain("CyberCloud.Authorization.Contracts");
     }
 
     [Fact]
     public void TheHostValidatesTokensAndMintsNone() {
-        var referenced = Host.GetReferencedAssemblies().Select(x => x.Name ?? "").ToList();
+        var referenced = Host.GetReferencedAssemblies().Select(static x => x.Name ?? "").ToList();
 
         referenced.ShouldContain("CyberCloud.Identity.Validation");
         referenced.ShouldNotContain(x => x.StartsWith("OpenIddict.Server", StringComparison.Ordinal));
@@ -31,12 +31,15 @@ public sealed class FeedsIsolationTests {
 
     [Fact]
     public void TheHostIsNoWritePathAndNoSilo() {
-        var referenced = Host.GetReferencedAssemblies().Select(x => x.Name ?? "").ToList();
+        var referenced = Host.GetReferencedAssemblies().Select(static x => x.Name ?? "").ToList();
 
         referenced.ShouldNotContain(x => x.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal));
         referenced.ShouldNotContain(x => x.StartsWith("Npgsql", StringComparison.Ordinal));
         referenced.ShouldNotContain("Microsoft.Orleans.Runtime", "a data-plane host activates no grain");
-        referenced.ShouldNotContain("CyberCloud.Providers.ContainerRegistry", "the implementation assembly is the silo's; this host binds the module and the contracts");
+        referenced.ShouldNotContain(
+            "CyberCloud.Providers.ContainerRegistry",
+            "the implementation assembly is the silo's; this host binds the module and the contracts"
+        );
     }
 
     [Fact]
@@ -60,20 +63,29 @@ public sealed class FeedsIsolationTests {
 
         foreach (var file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)) {
             // Comments legitimately discuss the seam at length, so they are stripped first.
-            var code = System.Text.RegularExpressions.Regex.Replace(File.ReadAllText(file), @"^\s*(///|//).*$", "", System.Text.RegularExpressions.RegexOptions.Multiline);
+            var code = System.Text.RegularExpressions.Regex.Replace(
+                File.ReadAllText(file),
+                @"^\s*(///|//).*$",
+                "",
+                System.Text.RegularExpressions.RegexOptions.Multiline
+            );
 
             // ⚠ IResourceAuthorizer is NOT on this list, unlike the gateway's. The gateway dispatches
             // to the resource manager and needs no authorization answer of its own; this host serves
             // a data plane and asks the manager's authorizer the question the manager would ask for a
             // PUT — with the type's own permission names — which is the one sanctioned way to reach a
             // decision without a second seam. What stays forbidden is the engine.
-            foreach (var forbidden in new[] { "ICheckGrain", "CheckAsync(", "SubjectRef", "ObjectRef.Resource", "ReBacResourceAuthorizer" }) {
+            foreach (var forbidden in new[] {
+                         "ICheckGrain", "CheckAsync(", "SubjectRef", "ObjectRef.Resource", "ReBacResourceAuthorizer"
+                     }) {
                 if (code.Contains(forbidden, StringComparison.Ordinal)) {
                     offenders.Add($"{Path.GetFileName(file)} contains '{forbidden}'");
                 }
             }
         }
 
-        offenders.ShouldBeEmpty("docs/plan/07 § The enforcement seam: the engine is called from the resource manager and from nowhere in this host");
+        offenders.ShouldBeEmpty(
+            "docs/plan/07 § The enforcement seam: the engine is called from the resource manager and from nowhere in this host"
+        );
     }
 }

@@ -31,7 +31,8 @@ public sealed class ConnectionKindTests(KubeTestCluster cluster) {
         outcome.IsSuccess.ShouldBeTrue(outcome.Error?.Message);
 
         var client = outcome.GetValueOrThrow().ShouldBeOfType<TunnelKubeApiClient>();
-        client.Route.ShouldBeOfType<GrainTunnelRoute>().ClusterId.ShouldBe(Descriptor(ClusterConnectionKind.AgentInitiated).ClusterId);
+        client.Route.ShouldBeOfType<GrainTunnelRoute>()
+            .ClusterId.ShouldBe(Descriptor(ClusterConnectionKind.AgentInitiated).ClusterId);
     }
 
     [Fact]
@@ -77,7 +78,7 @@ public sealed class ConnectionKindTests(KubeTestCluster cluster) {
     public async Task AResolvedKubeconfigProducesAClient() {
         // The seam works when filled — the same shape the k3s fixture uses in production form.
         var factory = new KubeApiClientFactory(new TestClock()) {
-            ResolveKubeconfig = (_, _) => Task.FromResult(
+            ResolveKubeconfig = static (_, _) => Task.FromResult(
                 Result<string>.Success(
                     """
                     apiVersion: v1

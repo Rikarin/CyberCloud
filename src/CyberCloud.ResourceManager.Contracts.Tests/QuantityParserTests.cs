@@ -47,19 +47,19 @@ public sealed class QuantityParserTests {
 
         var offenders = Directory
             .EnumerateFiles(Path.Combine(RepositoryRoot(), "src"), "*.cs", SearchOption.AllDirectories)
-            .Where(x => !x.Contains(
+            .Where(static x => !x.Contains(
                     $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
                     StringComparison.Ordinal
                 )
             )
-            .Where(x => !x.Contains(
+            .Where(static x => !x.Contains(
                     $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
                     StringComparison.Ordinal
                 )
             )
-            .Where(x => Path.GetFileName(x) is not ("KubeQuantity.cs" or "QuantityParserTests.cs"))
+            .Where(static x => Path.GetFileName(x) is not ("KubeQuantity.cs" or "QuantityParserTests.cs"))
             .Where(x => table.IsMatch(File.ReadAllText(x)))
-            .Select(x => Path.GetRelativePath(RepositoryRoot(), x))
+            .Select(static x => Path.GetRelativePath(RepositoryRoot(), x))
             .Order(StringComparer.Ordinal)
             .ToArray();
 
@@ -109,12 +109,12 @@ public sealed class QuantityParserTests {
 
         var copies = Directory
             .EnumerateFiles(Path.Combine(RepositoryRoot(), "src"), "*.cs", SearchOption.AllDirectories)
-            .Where(x => !x.Contains(
+            .Where(static x => !x.Contains(
                     $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
                     StringComparison.Ordinal
                 )
             )
-            .Where(x => !x.Contains(
+            .Where(static x => !x.Contains(
                     $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
                     StringComparison.Ordinal
                 )
@@ -125,7 +125,7 @@ public sealed class QuantityParserTests {
             // splits `@enum` on that character. Nothing validates a body with it, and it is asserted
             // byte-for-byte on the emitted side, so widening it to the real grammar would be churn in
             // a test about something else.
-            .Where(x => Path.GetFileName(x) is not ("QuantityParserTests.cs" or "ChartAnnotationTests.cs"))
+            .Where(static x => Path.GetFileName(x) is not ("QuantityParserTests.cs" or "ChartAnnotationTests.cs"))
             .SelectMany(x => alternation.Matches(File.ReadAllText(x))
                     .Select(match => (File: Path.GetRelativePath(RepositoryRoot(), x), match.Value))
             )

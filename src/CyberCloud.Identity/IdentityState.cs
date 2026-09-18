@@ -431,7 +431,10 @@ public sealed class SignUpGrainState {
     [Id(9)]
     public int Attempts { get; set; }
 
-    /// <summary>When codes were sent, for <see cref="OtpPolicy.MaxIssuesPerWindow" /> — pruned as <see cref="UserGrainState.OtpIssuedAt" /> is.</summary>
+    /// <summary>
+    ///     When codes were sent, for <see cref="OtpPolicy.MaxIssuesPerWindow" /> — pruned as
+    ///     <see cref="UserGrainState.OtpIssuedAt" /> is.
+    /// </summary>
     [Id(10)]
     public List<DateTimeOffset> OtpIssuedAt { get; set; } = [];
 

@@ -13,8 +13,11 @@ namespace CyberCloud.Identity.Host.Tests.Infrastructure;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The cookie jar is hand-rolled because <see cref="CookieContainer" /> is not a
-///         browser.</b> Every cookie this host sets is <c>Secure</c>, and the .NET container refuses
+///         ⚠
+///         <b>
+///             The cookie jar is hand-rolled because <see cref="CookieContainer" /> is not a
+///             browser.
+///         </b> Every cookie this host sets is <c>Secure</c>, and the .NET container refuses
 ///         to store a <c>Secure</c> cookie received over plain <c>http://</c> — which is what the
 ///         test host is — while Chromium and Firefox accept one on <c>http://localhost</c>. The jar
 ///         here does what those browsers do with what the host sends: a value replaces the earlier
@@ -36,7 +39,9 @@ public sealed class BrowserClient : IDisposable {
     /// <param name="baseAddress">The identity host.</param>
     /// <param name="origin">The origin the page lives on — the <c>Origin</c> header on every request.</param>
     public BrowserClient(Uri baseAddress, string origin) {
-        http = new(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }) { BaseAddress = baseAddress };
+        http = new(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }) {
+            BaseAddress = baseAddress
+        };
         Origin = origin;
     }
 
@@ -97,13 +102,13 @@ public sealed class BrowserClient : IDisposable {
 
     async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
         if (jar.Count > 0) {
-            request.Headers.Add("Cookie", string.Join("; ", jar.Select(x => x.Key + "=" + x.Value)));
+            request.Headers.Add("Cookie", string.Join("; ", jar.Select(static x => x.Key + "=" + x.Value)));
         }
 
         request.Headers.Add("Origin", Origin);
 
         if (Bearer is { } bearer) {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+            request.Headers.Authorization = new("Bearer", bearer);
         }
 
         if (ForwardedFor is { } forwardedFor) {
@@ -133,11 +138,12 @@ public sealed class BrowserClient : IDisposable {
         var value = parts[0][(equals + 1)..];
 
         var gone = value.Length == 0
-            || parts.Skip(1).Any(x => x.StartsWith("max-age=0", StringComparison.OrdinalIgnoreCase))
-            || parts.Skip(1).Any(x => x.StartsWith("expires=", StringComparison.OrdinalIgnoreCase)
-                && DateTimeOffset.TryParse(x["expires=".Length..], out var expires)
-                && expires < DateTimeOffset.UtcNow
-            );
+            || parts.Skip(1).Any(static x => x.StartsWith("max-age=0", StringComparison.OrdinalIgnoreCase))
+            || parts.Skip(1)
+                .Any(static x => x.StartsWith("expires=", StringComparison.OrdinalIgnoreCase)
+                    && DateTimeOffset.TryParse(x["expires=".Length..], out var expires)
+                    && expires < DateTimeOffset.UtcNow
+                );
 
         if (gone) {
             jar.Remove(name);
@@ -174,10 +180,10 @@ public sealed class BrowserClient : IDisposable {
     public static Dictionary<string, string> Query(Uri uri) =>
         uri.Query.TrimStart('?')
             .Split('&', StringSplitOptions.RemoveEmptyEntries)
-            .Select(pair => pair.Split('=', 2))
+            .Select(static pair => pair.Split('=', 2))
             .ToDictionary(
-                pair => Uri.UnescapeDataString(pair[0]),
-                pair => pair.Length > 1 ? Uri.UnescapeDataString(pair[1].Replace('+', ' ')) : string.Empty,
+                static pair => Uri.UnescapeDataString(pair[0]),
+                static pair => pair.Length > 1 ? Uri.UnescapeDataString(pair[1].Replace('+', ' ')) : string.Empty,
                 StringComparer.Ordinal
             );
 
@@ -187,7 +193,10 @@ public sealed class BrowserClient : IDisposable {
         ?? throw new InvalidOperationException($"{(int)response.StatusCode} with no Location header");
 
     /// <summary>A response's body as JSON.</summary>
-    public static async Task<JsonElement> JsonAsync(HttpResponseMessage response, CancellationToken cancellationToken) =>
+    public static async Task<JsonElement> JsonAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken
+    ) =>
         JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken)).RootElement.Clone();
 
     /// <summary>One <c>Set-Cookie</c> header by cookie name, or <see langword="null" />.</summary>

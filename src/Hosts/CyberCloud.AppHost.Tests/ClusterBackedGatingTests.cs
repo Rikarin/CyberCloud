@@ -145,7 +145,7 @@ public sealed partial class ClusterBackedGatingTests {
     [Fact]
     public void TheEvidenceTheBuildLooksForIsBesideThisTestHost() {
         var found = ClusterEvidence
-            .SelectMany(pattern => Directory.GetFiles(OutputDirectory, pattern))
+            .SelectMany(static pattern => Directory.GetFiles(OutputDirectory, pattern))
             .ToList();
 
         found.ShouldNotBeEmpty(
@@ -227,7 +227,7 @@ public sealed partial class ClusterBackedGatingTests {
     ///     tree gives both tests the same message rather than a different one each.
     /// </remarks>
     static readonly Lazy<string> LazyBuildTestSource =
-        new(() => File.ReadAllText(Path.Combine(TestPaths.Repository, "build", "Build.Test.cs")));
+        new(static () => File.ReadAllText(Path.Combine(TestPaths.Repository, "build", "Build.Test.cs")));
 
     static string BuildTestSource => LazyBuildTestSource.Value;
 
@@ -346,7 +346,7 @@ public sealed partial class ClusterBackedGatingTests {
 
         var globs = StringLiteral
             .Matches(call.Groups["args"].Value)
-            .Select(match => match.Groups["glob"].Value)
+            .Select(static match => match.Groups["glob"].Value)
             .ToArray();
 
         globs.ShouldBe(

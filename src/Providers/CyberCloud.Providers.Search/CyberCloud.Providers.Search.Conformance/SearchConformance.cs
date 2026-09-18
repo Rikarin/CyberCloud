@@ -82,17 +82,17 @@ public sealed class OpenSearchCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Search/services",
-            CreateProvider = () => new SearchProvider(),
+            CreateProvider = static () => new SearchProvider(),
             ReconcilerType = typeof(OpenSearchServiceReconciler),
-            CreateReconciler = clock => new OpenSearchServiceReconciler(clock),
+            CreateReconciler = static clock => new OpenSearchServiceReconciler(clock),
             Type = OpenSearchServices.Type,
             ApiVersion = OpenSearchServices.V2026,
             // ⚠ THE SMALLEST LEGAL SERVICE, NOT THE SCHEMA'S DEFAULT — see this type's remarks for the
             // harness property that forces it and for why it is recorded rather than only fixed.
-            Body = cluster => OpenSearchServices.Body(cluster, dataNodes: 1, masterNodes: 1),
-            ChangedBody = cluster => OpenSearchServices.Body(
+            Body = static cluster => OpenSearchServices.Body(cluster, 1, masterNodes: 1),
+            ChangedBody = static cluster => OpenSearchServices.Body(
                 cluster,
-                dataNodes: 1,
+                1,
                 masterNodes: 1,
                 coordinatingNodes: 1
             ),
@@ -100,10 +100,10 @@ public sealed class OpenSearchCase : IProviderCaseSource {
             // ⚠ Built from a valid body with one required property removed rather than hand-written:
             // a hand-written invalid body drifts out of date the day the schema gains a property and
             // then tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => WithoutStorageSize(OpenSearchServices.Body(cluster, dataNodes: 1, masterNodes: 1)),
+            InvalidBody = static cluster => WithoutStorageSize(OpenSearchServices.Body(cluster, 1, masterNodes: 1)),
             InvalidBodyTarget = "/properties/storage/size",
             ActionName = OpenSearchServices.ListKeysAction,
-            Objects = (id, ns) => [OpenSearchServices.ClusterRef(ns, id.Name)],
+            Objects = static (id, ns) => [OpenSearchServices.ClusterRef(ns, id.Name)],
             // ⚠ opensearch-operator's EnsureAdminCredentialsSecret, which runs because ClusterJson
             // deliberately leaves `spec.security.config.adminCredentialsSecret` unset. This fixture is
             // also the only place in the tree that asserts the NAME that helper builds — nothing here
@@ -111,7 +111,7 @@ public sealed class OpenSearchCase : IProviderCaseSource {
             // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
             DataPlane = null,
             StoragePrefix = null,
-            OperatorWritten = (id, ns) => [
+            OperatorWritten = static (id, ns) => [
                 (KubeSecret.Ref(ns, OpenSearchServices.AdminCredentialsSecretName(id.Name)),
                     OperatorSecret.Json(
                         KubeSecret.Ref(ns, OpenSearchServices.AdminCredentialsSecretName(id.Name)),
@@ -121,7 +121,7 @@ public sealed class OpenSearchCase : IProviderCaseSource {
                         ]
                     ))
             ],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return OpenSearchServices.Matches(match.ObjectJson, desired.RootElement);
             }

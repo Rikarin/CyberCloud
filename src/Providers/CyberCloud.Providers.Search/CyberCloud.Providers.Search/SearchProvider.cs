@@ -203,21 +203,21 @@ public sealed class SearchProvider : IResourceProvider {
                 OpenSearchServices.ListKeysAction,
                 ActionKind.Post,
                 OpenSearchServices.ListKeysPermission,
-                secret: true,
+                true,
                 response: OpenSearchServices.ListKeysResponse,
                 handler: typeof(OpenSearchServiceListKeysHandler)
             )
             .Display(
                 "OpenSearch service",
                 "OpenSearch services",
-                shortName: "opensearch",
-                summary: "A managed OpenSearch cluster on the OpenSearch operator, with dedicated "
+                "opensearch",
+                "A managed OpenSearch cluster on the OpenSearch operator, with dedicated "
                 + "cluster-manager, data and optional coordinating node pools and operator-generated "
                 + "transport and HTTP TLS."
             )
             .Chart(OpenSearchServices.ChartName)
             .SupportsTags()
-            .RequiresCluster(OpenSearchServices.ClusterIdPointer);
+            .RequiresCluster();
     }
 
     // ── What a search service draws ────────────────────────────────────────────────────────────
@@ -251,7 +251,7 @@ public sealed class SearchProvider : IResourceProvider {
                 "/properties/sizing/preset",
                 "/properties/sizing/cpu"
             ],
-            body => KubeQuantity.TryParse(OpenSearchServices.Resources(body).Cpu, out var cores)
+            static body => KubeQuantity.TryParse(OpenSearchServices.Resources(body).Cpu, out var cores)
                 && KubeQuantity.TryParse(OpenSearchServices.ControlPlaneCpu, out var share)
                     ? Result<decimal>.Success(SizedNodes(body) * cores + OpenSearchServices.MasterNodes(body) * share)
                     : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
@@ -275,7 +275,7 @@ public sealed class SearchProvider : IResourceProvider {
                 "/properties/sizing/preset",
                 "/properties/sizing/memory"
             ],
-            body => KubeQuantity.TryGibibytes(OpenSearchServices.Resources(body).Memory, out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(OpenSearchServices.Resources(body).Memory, out var gibibytes)
                 && KubeQuantity.TryGibibytes(OpenSearchServices.ControlPlaneMemory, out var share)
                     ? Result<decimal>.Success(
                         SizedNodes(body) * gibibytes + OpenSearchServices.MasterNodes(body) * share
@@ -311,7 +311,7 @@ public sealed class SearchProvider : IResourceProvider {
                 "/properties/coordinatingNodes",
                 "/properties/storage/size"
             ],
-            body => KubeQuantity.TryGibibytes(OpenSearchServices.StorageSize(body), out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(OpenSearchServices.StorageSize(body), out var gibibytes)
                 && KubeQuantity.TryGibibytes(OpenSearchServices.ControlPlaneVolumeSize, out var fixedVolume)
                     ? Result<decimal>.Success(
                         OpenSearchServices.DataNodes(body) * gibibytes

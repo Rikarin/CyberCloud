@@ -154,7 +154,9 @@ partial class Build {
                     $"{string.Join(", ", sources)} renders {apiVersion} {kind}, which charts/bundle/{component} "
                     + $"serves, and charts/bundle/{component}/crds/ holds no definition for it. Without one the "
                     + "conformance harness echoes whatever the reconciler renders — issue #91 — so run "
-                    + "`./charts/bundle/crds.sh --refresh --component " + component + "` and commit what it writes";
+                    + "`./charts/bundle/crds.sh --refresh --component "
+                    + component
+                    + "` and commit what it writes";
 
                 continue;
             }
@@ -186,7 +188,11 @@ partial class Build {
             }
 
             if (!rendered.Any(x =>
-                    string.Equals(x.ApiVersion[..x.ApiVersion.LastIndexOf('/')], definition.Group, StringComparison.Ordinal)
+                    string.Equals(
+                        x.ApiVersion[..x.ApiVersion.LastIndexOf('/')],
+                        definition.Group,
+                        StringComparison.Ordinal
+                    )
                     && string.Equals(x.Kind, definition.Kind, StringComparison.Ordinal)
                 )) {
                 yield return
@@ -197,8 +203,12 @@ partial class Build {
                     + "file, or the template spells the kind in a way the scan cannot see";
             }
 
-            var covers = definition.Versions.Any(version => servedBy.TryGetValue(definition.Group + "/" + version, out var owner)
-                && string.Equals(owner, definition.Component, StringComparison.Ordinal));
+            var covers = definition.Versions.Any(version => servedBy.TryGetValue(
+                    definition.Group + "/" + version,
+                    out var owner
+                )
+                && string.Equals(owner, definition.Component, StringComparison.Ordinal)
+            );
 
             if (!covers) {
                 yield return
@@ -292,14 +302,20 @@ partial class Build {
                         group = spec.TryGetProperty("group", out var g) ? g.GetString() ?? string.Empty : string.Empty;
 
                         if (spec.TryGetProperty("names", out var names)) {
-                            kind = names.TryGetProperty("kind", out var k) ? k.GetString() ?? string.Empty : string.Empty;
-                            plural = names.TryGetProperty("plural", out var p) ? p.GetString() ?? string.Empty : string.Empty;
+                            kind = names.TryGetProperty("kind", out var k)
+                                ? k.GetString() ?? string.Empty
+                                : string.Empty;
+                            plural = names.TryGetProperty("plural", out var p)
+                                ? p.GetString() ?? string.Empty
+                                : string.Empty;
                         }
 
                         if (spec.TryGetProperty("versions", out var list)) {
-                            versions.AddRange(list.EnumerateArray()
-                                .Where(v => !v.TryGetProperty("served", out var served) || served.GetBoolean())
-                                .Select(v => v.GetProperty("name").GetString() ?? string.Empty));
+                            versions.AddRange(
+                                list.EnumerateArray()
+                                    .Where(v => !v.TryGetProperty("served", out var served) || served.GetBoolean())
+                                    .Select(v => v.GetProperty("name").GetString() ?? string.Empty)
+                            );
                         }
                     } catch (JsonException) {
                         return null;
@@ -377,7 +393,8 @@ partial class Build {
             return [];
         }
 
-        foreach (var chart in ManagedChartsDirectory.GlobDirectories("*").OrderBy(x => x.Name, StringComparer.Ordinal)) {
+        foreach (var chart in ManagedChartsDirectory.GlobDirectories("*")
+                     .OrderBy(x => x.Name, StringComparer.Ordinal)) {
             var templates = chart / "templates";
 
             if (!templates.DirectoryExists()) {
@@ -394,7 +411,9 @@ partial class Build {
 
                     if (version.Success) {
                         var value = version.Groups["value"].Value;
-                        apiVersion = value.Contains("{{", StringComparison.Ordinal) || !value.Contains('/') ? null : value;
+                        apiVersion = value.Contains("{{", StringComparison.Ordinal) || !value.Contains('/')
+                            ? null
+                            : value;
                         indent = line.Length - line.TrimStart().Length;
 
                         continue;
@@ -469,36 +488,67 @@ partial class Build {
         var committed = ReadCommittedDefinitions(out _).Count;
 
         if (committed == 0) {
-            return GateOutcome.From(Gate, 0, "definition(s) under charts/bundle/*/crds/, so there was nothing to compare with a release", []);
+            return GateOutcome.From(
+                Gate,
+                0,
+                "definition(s) under charts/bundle/*/crds/, so there was nothing to compare with a release",
+                []
+            );
         }
 
         if (!DefinitionsScript.FileExists()) {
-            return GateOutcome.From(Gate, 0, $"of {committed} definition(s) compared — {RootDirectory.GetRelativePathTo(DefinitionsScript)} is missing", []);
+            return GateOutcome.From(
+                Gate,
+                0,
+                $"of {committed} definition(s) compared — {RootDirectory.GetRelativePathTo(DefinitionsScript)} is missing",
+                []
+            );
         }
 
         var bash = GitBash(out var absent);
 
         if (bash is null) {
-            return GateOutcome.From(Gate, 0, $"of {committed} definition(s) compared — {absent}, so crds.sh could not run. Install Git for Windows or bash and run again", []);
+            return GateOutcome.From(
+                Gate,
+                0,
+                $"of {committed} definition(s) compared — {absent}, so crds.sh could not run. Install Git for Windows or bash and run again",
+                []
+            );
         }
 
         if (GeneratedPackageSurface.Resolve("helm", out var noHelm) is null) {
-            return GateOutcome.From(Gate, 0, $"of {committed} definition(s) compared — {noHelm}, and seven components render their definitions through `helm template`. Install Helm and run again", []);
+            return GateOutcome.From(
+                Gate,
+                0,
+                $"of {committed} definition(s) compared — {noHelm}, and seven components render their definitions through `helm template`. Install Helm and run again",
+                []
+            );
         }
 
         var run = RunScript(bash, DefinitionsScript, TimeSpan.FromMinutes(5), out var timedOut);
 
         if (timedOut) {
-            return GateOutcome.From(Gate, 0, $"of {committed} definition(s) compared — crds.sh did not finish within 5 minutes, so the releases were not compared", []);
+            return GateOutcome.From(
+                Gate,
+                0,
+                $"of {committed} definition(s) compared — crds.sh did not finish within 5 minutes, so the releases were not compared",
+                []
+            );
         }
 
         var compared = run.Output.Count(x => x.EndsWith(" matches", StringComparison.Ordinal));
         var captured = run.Output.Count(x => x.Contains(" RUNTIME — ", StringComparison.Ordinal));
 
         if (run.ExitCode == 3) {
-            var why = run.Output.FirstOrDefault(x => x.Contains("could not be fetched", StringComparison.Ordinal)) ?? "a release could not be fetched";
+            var why = run.Output.FirstOrDefault(x => x.Contains("could not be fetched", StringComparison.Ordinal))
+                ?? "a release could not be fetched";
 
-            return GateOutcome.From(Gate, 0, $"of {committed} definition(s) compared — {why.Replace("crds.sh: ", string.Empty)}. Offline, or the registry is down; the comparison was not made", []);
+            return GateOutcome.From(
+                Gate,
+                0,
+                $"of {committed} definition(s) compared — {why.Replace("crds.sh: ", string.Empty)}. Offline, or the registry is down; the comparison was not made",
+                []
+            );
         }
 
         var violations = run.ExitCode == 0
@@ -508,7 +558,8 @@ partial class Build {
                     && (x.Contains(" DIFFERS", StringComparison.Ordinal)
                         || x.Contains(" MISSING", StringComparison.Ordinal)
                         || x.Contains(" STALE", StringComparison.Ordinal)
-                        || x.Contains(" ABSENT", StringComparison.Ordinal)))
+                        || x.Contains(" ABSENT", StringComparison.Ordinal))
+                )
                 .Select(x => x.Replace("crds.sh: ", string.Empty))
                 .ToList();
 
@@ -524,9 +575,9 @@ partial class Build {
             compared,
             "definition(s) under charts/bundle/*/crds/ fetched from the release each component pins and compared byte for byte by charts/bundle/crds.sh"
             + (captured == 0
-                ? string.Empty
-                : $"; {captured.ToString(CultureInfo.InvariantCulture)} more captured from a cluster because the operator writes them at runtime "
-                + "(component.yaml § definitionsWrittenByOperator) and NOT compared — no release carries them"),
+                    ? string.Empty
+                    : $"; {captured.ToString(CultureInfo.InvariantCulture)} more captured from a cluster because the operator writes them at runtime "
+                    + "(component.yaml § definitionsWrittenByOperator) and NOT compared — no release carries them"),
             violations
         );
     }
@@ -591,8 +642,16 @@ partial class Build {
         using var process = new System.Diagnostics.Process { StartInfo = start };
         var output = new List<string>();
 
-        process.OutputDataReceived += (_, e) => { if (e.Data is not null) { lock (output) { output.Add(e.Data); } } };
-        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) { lock (output) { output.Add(e.Data); } } };
+        process.OutputDataReceived += (_, e) => { if (e.Data is not null) {
+                lock (output) {
+                    output.Add(e.Data);
+                }
+            } };
+        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) {
+                lock (output) {
+                    output.Add(e.Data);
+                }
+            } };
 
         process.Start();
         process.BeginOutputReadLine();

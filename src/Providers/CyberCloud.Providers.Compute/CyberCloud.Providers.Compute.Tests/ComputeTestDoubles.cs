@@ -19,10 +19,12 @@ static class Compute {
 
     public static ResourceId Disk(string name) => new(TenantA, SubscriptionA, "prod", Disks.Type, name, Guid.NewGuid());
 
-    public static ResourceId Image(string name) => new(TenantA, SubscriptionA, "prod", Images.Type, name, Guid.NewGuid());
+    public static ResourceId Image(string name) =>
+        new(TenantA, SubscriptionA, "prod", Images.Type, name, Guid.NewGuid());
 
     /// <summary>A vault path under a tenant's own prefix — the only kind a cloud-init handle may name.</summary>
-    public static string VaultPath(string leaf, Guid? tenant = null) => VirtualMachines.TenantVaultPrefix(tenant ?? TenantA) + leaf;
+    public static string VaultPath(string leaf, Guid? tenant = null) =>
+        VirtualMachines.TenantVaultPrefix(tenant ?? TenantA) + leaf;
 
     public static ReconcileContext Context(
         RecordingConnection connection,
@@ -67,7 +69,9 @@ static class Compute {
             ["apiVersion"] = Cdi.DataVolumeKind.ApiVersion,
             ["kind"] = Cdi.DataVolumeKind.Kind,
             ["metadata"] = new JsonObject { ["name"] = name },
-            ["spec"] = new JsonObject { ["source"] = new JsonObject { ["registry"] = new JsonObject { ["url"] = "docker://x" } } },
+            ["spec"] = new JsonObject {
+                ["source"] = new JsonObject { ["registry"] = new JsonObject { ["url"] = "docker://x" } }
+            },
             ["status"] = new JsonObject { ["phase"] = phase }
         }.ToJsonString();
 
@@ -222,7 +226,10 @@ sealed class NullLog : IReconcileLog {
 sealed class SeededSecrets(params (string Path, string Field, string Value)[] entries) : ISecretResolver {
     public int Resolves { get; private set; }
 
-    public Task<Result<string>> ResolveAsync(CyberCloud.Core.Contracts.SecretRef reference, CancellationToken cancellationToken = default) {
+    public Task<Result<string>> ResolveAsync(
+        CyberCloud.Core.Contracts.SecretRef reference,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(reference);
         Resolves++;
 
@@ -232,6 +239,8 @@ sealed class SeededSecrets(params (string Path, string Field, string Value)[] en
             }
         }
 
-        return Task.FromResult(Result<string>.Failure(ErrorCode.ResourceNotFound, $"the test vault holds nothing at '{reference}'."));
+        return Task.FromResult(
+            Result<string>.Failure(ErrorCode.ResourceNotFound, $"the test vault holds nothing at '{reference}'.")
+        );
     }
 }

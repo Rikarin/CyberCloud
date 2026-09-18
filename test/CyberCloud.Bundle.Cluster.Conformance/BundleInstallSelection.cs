@@ -76,7 +76,7 @@ public sealed class BundleInstallSelection {
 
         var run = await BundleInstaller.RunAsync(
             "--dry-run",
-            kubeconfig: null,
+            null,
             TestContext.Current.CancellationToken
         );
 
@@ -127,8 +127,8 @@ public sealed class BundleInstallSelection {
                 previous,
                 $"charts/bundle/install.sh --dry-run attempted `{component}` before "
                 + $"`{previousName}`, and charts/bundle/bundle.yaml lists them the other way round. "
-                + "The roster carries the ORDER — bundle.yaml's header calls it \"a property of the "
-                + "set\" — and the order is what stops a webhook being installed onto a cluster with "
+                + """The roster carries the ORDER — bundle.yaml's header calls it "a property of the """
+                + """set" — and the order is what stops a webhook being installed onto a cluster with """
                 + "no CNI. Its output was:\n"
                 + run.Output
             );
@@ -143,7 +143,7 @@ public sealed class BundleInstallSelection {
         // run died at.
         var phasePrevious = -1;
 
-        foreach (var phase in roster.Select(entry => entry.Phase).Distinct()) {
+        foreach (var phase in roster.Select(static entry => entry.Phase).Distinct()) {
             var at = run.Output.IndexOf("── phase " + phase + " ", StringComparison.Ordinal);
 
             at.ShouldBeGreaterThan(
@@ -247,7 +247,7 @@ public sealed class BundleInstallSelection {
 
         var run = await BundleInstaller.RunAsync(
             "--dry-run",
-            kubeconfig: null,
+            null,
             TestContext.Current.CancellationToken
         );
 
@@ -276,7 +276,8 @@ public sealed class BundleInstallSelection {
             at.ShouldBeGreaterThanOrEqualTo(
                 0,
                 $"charts/bundle/install.sh --dry-run never attempted `{component}`. Its output "
-                + "was:\n" + run.Output
+                + "was:\n"
+                + run.Output
             );
 
             // ⚠ To the NEXT component's header rather than to the end of the output, so a wait
@@ -393,10 +394,11 @@ public sealed class BundleInstallSelection {
                 segment.ShouldContain(
                     "/" + component + "/" + path,
                     Case.Sensitive,
-                    $"charts/bundle/install.sh applied something other than "
+                    "charts/bundle/install.sh applied something other than "
                     + $"charts/bundle/{component}/{path} for `{component}`. The pin of a `file` "
                     + "component is a path beside its manifest and nothing else. What it emitted "
-                    + "was:\n" + segment
+                    + "was:\n"
+                    + segment
                 );
 
                 segment.ShouldNotContain(
@@ -485,7 +487,8 @@ public sealed class BundleInstallSelection {
             + "2026-09-15 a manifest is downloaded, substituted and applied from disk — `kubectl "
             + "apply -f <url>` would hand clusterctl's `${VAR:=default}` templates to the API server "
             + "verbatim, which is issue #2's four crashlooping controllers. What install.sh emitted "
-            + "for this component was:\n" + segment
+            + "for this component was:\n"
+            + segment
         );
 
         var substitute = segment.IndexOf("substitute_manifest " + fetched + " ", StringComparison.Ordinal);
@@ -494,7 +497,8 @@ public sealed class BundleInstallSelection {
             fetch,
             $"charts/bundle/install.sh fetched `{component}`'s document to {fetched} and never ran "
             + "substitute_manifest over that file. An unsubstituted apply is the crashloop the "
-            + "substitution exists to prevent. What it emitted was:\n" + segment
+            + "substitution exists to prevent. What it emitted was:\n"
+            + segment
         );
 
         var substituteLineEnd = segment.IndexOf('\n', substitute);
@@ -510,7 +514,8 @@ public sealed class BundleInstallSelection {
             substitute,
             $"charts/bundle/install.sh substituted `{component}`'s document into {written} and never "
             + "applied THAT file — it applied something else, or nothing, or applied before "
-            + "substituting. What it emitted was:\n" + segment
+            + "substituting. What it emitted was:\n"
+            + segment
         );
 
         return apply;
@@ -562,7 +567,7 @@ public sealed class BundleInstallSelection {
 
         var run = await BundleInstaller.RunAsync(
             "--dry-run",
-            kubeconfig: null,
+            null,
             TestContext.Current.CancellationToken
         );
 
@@ -594,7 +599,7 @@ public sealed class BundleInstallSelection {
             entries.ShouldNotBeEmpty(
                 $"charts/bundle/{component}/component.yaml declares `install: manifest` and no "
                 + "`waitFor:` entry. The Bundle gate refuses that file, and this test refuses to "
-                + "pass over a component whose \"installed\" means \"stored\"."
+                + """pass over a component whose "installed" means "stored"."""
             );
 
             // The last apply: the manifestExtra's when there is one, the manifest's otherwise.
@@ -608,13 +613,16 @@ public sealed class BundleInstallSelection {
             foreach (var entry in entries) {
                 waits++;
 
-                var expected = "would run: kubectl wait --timeout=10m " + entry.Replace("{", "\\{").Replace("}", "\\}");
+                var expected = "would run: kubectl wait --timeout=10m "
+                    + entry.Replace("{", """\{""").Replace("}", """\}""");
                 var wait = segment.IndexOf(expected, StringComparison.Ordinal);
 
                 wait.ShouldBeGreaterThan(
                     lastApply,
                     $"charts/bundle/{component}/component.yaml declares `waitFor: {entry}` and "
-                    + "install.sh emitted no `" + expected + "` after the component's last apply. A "
+                    + "install.sh emitted no `"
+                    + expected
+                    + "` after the component's last apply. A "
                     + "declaration the script does not run is a record nothing reads — the defect "
                     + "charts/bundle/bundle.yaml § owed, `images-are-not-pinned-by-digest`, names "
                     + "about `imageDigest:`. What install.sh emitted for this component was:\n"
@@ -660,7 +668,7 @@ public sealed class BundleInstallSelection {
 
         var run = await BundleInstaller.RunAsync(
             "--help",
-            kubeconfig: null,
+            null,
             TestContext.Current.CancellationToken
         );
 
@@ -670,8 +678,8 @@ public sealed class BundleInstallSelection {
         );
 
         var held = BundleInstaller.Roster()
-            .GroupBy(entry => entry.Phase)
-            .ToDictionary(group => group.Key, group => group.Count());
+            .GroupBy(static entry => entry.Phase)
+            .ToDictionary(static group => group.Key, static group => group.Count());
 
         held.ShouldNotBeEmpty(
             "charts/bundle/bundle.yaml's `components:` block read as empty, so this test would have "
@@ -722,7 +730,7 @@ public sealed class BundleInstallSelection {
 
         var run = await BundleInstaller.RunAsync(
             "--dry-run --phase 99",
-            kubeconfig: null,
+            null,
             TestContext.Current.CancellationToken
         );
 
@@ -730,7 +738,7 @@ public sealed class BundleInstallSelection {
             2,
             "charts/bundle/install.sh --dry-run --phase 99 selected no component and did not fail. "
             + "bundle.yaml has no phase 99, so this is a typo that reports success — and the same "
-            + "typo without --dry-run reports \"Bundle applied\" over a cluster nothing was installed "
+            + """typo without --dry-run reports "Bundle applied" over a cluster nothing was installed """
             + "onto. Its output was:\n"
             + run.Output
         );
@@ -764,7 +772,7 @@ public sealed class BundleInstallSelection {
 
         var run = await BundleInstaller.RunAsync(
             "--dry-run --component cloudnativepg",
-            kubeconfig: null,
+            null,
             TestContext.Current.CancellationToken
         );
 

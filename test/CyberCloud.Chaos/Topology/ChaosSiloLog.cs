@@ -26,7 +26,7 @@ namespace CyberCloud.Chaos.Topology;
 ///     </para>
 /// </remarks>
 sealed class ChaosSiloLog : ILoggerProvider {
-    static readonly object Gate = new();
+    static readonly Lock Gate = new();
 
     /// <summary>Where the file goes: beside the results file, or beside the host.</summary>
     public static string Path { get; } =
@@ -66,7 +66,10 @@ sealed class ChaosSiloLog : ILoggerProvider {
             .Append(message);
 
         if (exception is not null) {
-            line.Append(" | ").Append(exception.GetType().Name).Append(": ").Append(exception.Message.ReplaceLineEndings(" "));
+            line.Append(" | ")
+                .Append(exception.GetType().Name)
+                .Append(": ")
+                .Append(exception.Message.ReplaceLineEndings(" "));
         }
 
         line.AppendLine();
@@ -78,11 +81,18 @@ sealed class ChaosSiloLog : ILoggerProvider {
 
     sealed class Logger(ChaosSiloLog owner, string category) : ILogger {
         public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
+            where TState : notnull =>
+            null;
 
         public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
 
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter
+        ) {
             if (!IsEnabled(logLevel)) {
                 return;
             }

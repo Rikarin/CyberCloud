@@ -110,7 +110,7 @@ public sealed class DevelopmentKeyFile {
             WritePrivately(path, key.ExportPkcs8PrivateKeyPem());
         }
 
-        return new ECDsaSecurityKey(key) { KeyId = KeyIdOf(key) };
+        return new(key) { KeyId = KeyIdOf(key) };
     }
 
     /// <summary>
@@ -130,7 +130,7 @@ public sealed class DevelopmentKeyFile {
             WritePrivately(path, Convert.ToBase64String(bytes));
         }
 
-        return new SymmetricSecurityKey(bytes);
+        return new(bytes);
     }
 
     void EnsureDirectory() => System.IO.Directory.CreateDirectory(Directory);
@@ -152,8 +152,7 @@ public sealed class DevelopmentKeyFile {
     }
 
     /// <summary>A stable <c>kid</c>: the base64url SHA-256 of the public key's SubjectPublicKeyInfo.</summary>
-    static string KeyIdOf(ECDsa key) =>
-        Base64UrlEncoder.Encode(SHA256.HashData(key.ExportSubjectPublicKeyInfo()));
+    static string KeyIdOf(ECDsa key) => Base64UrlEncoder.Encode(SHA256.HashData(key.ExportSubjectPublicKeyInfo()));
 }
 
 /// <summary>
@@ -173,7 +172,9 @@ public sealed class IdentityHostKeys(DevelopmentKeyFile file) : IConfigureOption
         ArgumentNullException.ThrowIfNull(options);
 
         if (file.IsConfigured) {
-            options.SigningCredentials.Add(new SigningCredentials(file.LoadOrCreateSigningKey(), AccessTokenPolicy.SigningAlgorithm));
+            options.SigningCredentials.Add(
+                new SigningCredentials(file.LoadOrCreateSigningKey(), AccessTokenPolicy.SigningAlgorithm)
+            );
             options.EncryptionCredentials.Add(
                 new EncryptingCredentials(
                     file.LoadOrCreateEncryptionKey(),
@@ -190,7 +191,10 @@ public sealed class IdentityHostKeys(DevelopmentKeyFile file) : IConfigureOption
         // restart invalidates every issued token, which is survivable in a test and is the reason
         // the AppHost configures a directory.
         options.SigningCredentials.Add(
-            new SigningCredentials(new ECDsaSecurityKey(ECDsa.Create(ECCurve.NamedCurves.nistP256)), AccessTokenPolicy.SigningAlgorithm)
+            new SigningCredentials(
+                new ECDsaSecurityKey(ECDsa.Create(ECCurve.NamedCurves.nistP256)),
+                AccessTokenPolicy.SigningAlgorithm
+            )
         );
 
         options.EncryptionCredentials.Add(

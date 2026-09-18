@@ -60,8 +60,11 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 ///         not this grain's to hide.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Keyed by the workspace's ADDRESS rather than its GUID, for the reason
-///         <c>CommunicationGrainKeys.ResourceIdFor</c> gives.</b> A rule's reconcile pass knows its
+///         ⚠
+///         <b>
+///             Keyed by the workspace's ADDRESS rather than its GUID, for the reason
+///             <c>CommunicationGrainKeys.ResourceIdFor</c> gives.
+///         </b> A rule's reconcile pass knows its
 ///         workspace by name — <c>ReconcileContext.Id.ParentNames</c> — and nothing hands it the
 ///         parent's GUID; asking the index is a provider calling the index, which docs/plan/08 § The
 ///         reconcile loop forbids. So the grain id is derived from the workspace's canonical path
@@ -72,8 +75,11 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Durable, and the first provider grain on <c>durable-grains.txt</c>.</b> That file's
-///         Providers section says a provider needing a line there means <i>"the first question is
-///         what the manager is missing"</i>, and the answer is written beside the line: the manager
+///         Providers section says a provider needing a line there means
+///         <i>
+///             "the first question is
+///             what the manager is missing"
+///         </i>, and the answer is written beside the line: the manager
 ///         holds one desired body and one observed state per resource, and an alert's history is
 ///         neither — it is a sequence of events with timestamps and delivery outcomes, and it is
 ///         what a tenant reads at 03:00 to learn whether they were told. It cannot be rebuilt from
@@ -141,8 +147,11 @@ public interface IAlertEvaluatorGrain : IGrainWithStringKey {
     /// <param name="ruleId">The rule.</param>
     /// <returns><see cref="ErrorCode.ResourceNotFound" /> when the grain holds no such rule.</returns>
     /// <remarks>
-    ///     ⚠ <b>A firing rule that is deleted sends its resolve notification, when the action group
-    ///     asks for one (2026-09-15, #32 review).</b> A disabled or re-conditioned rule keeps its
+    ///     ⚠
+    ///     <b>
+    ///         A firing rule that is deleted sends its resolve notification, when the action group
+    ///         asks for one (2026-09-15, #32 review).
+    ///     </b> A disabled or re-conditioned rule keeps its
     ///     history, so those two close the instance quietly and write "not notified" on it for a
     ///     tenant to read later; a deleted rule has no history left to write on, and a recipient who
     ///     was paged FIRING with nothing after it is a recipient still holding a page. The line says
@@ -181,8 +190,11 @@ public interface IAlertEvaluatorGrain : IGrainWithStringKey {
     ///         exact moment nothing can be seen.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>And a seam that throws is a seam that could not answer, not a pass that ends
-    ///         (2026-09-15, #32 review).</b> <see cref="IAlertQuerySeam" />'s contract asks for a
+    ///         ⚠
+    ///         <b>
+    ///             And a seam that throws is a seam that could not answer, not a pass that ends
+    ///             (2026-09-15, #32 review).
+    ///         </b> <see cref="IAlertQuerySeam" />'s contract asks for a
     ///         failure and does not forbid an exception, and a real seam over <c>HttpClient</c>
     ///         throws on a refused connection. The first version caught only its own timeout, so
     ///         one throwing rule ended the pass at that rule and every rule sorted after it was
@@ -208,8 +220,11 @@ public interface IAlertEvaluatorGrain : IGrainWithStringKey {
     ///         tell an evaluator that stood down from one that is still ticking.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>And it is what <c>MonitorAlertRuleReconciler</c> asks before it says
-    ///         <c>Converged</c> for an enabled rule (2026-09-15, #32 review).</b> The state write and
+    ///         ⚠
+    ///         <b>
+    ///             And it is what <c>MonitorAlertRuleReconciler</c> asks before it says
+    ///             <c>Converged</c> for an enabled rule (2026-09-15, #32 review).
+    ///         </b> The state write and
     ///         the reminder registration are two calls, and a reminder-table fault between them
     ///         leaves a rule that reads back as desired and that nothing will ever tick. A reconciler
     ///         that judged convergence on the held spec alone reported that rule converged on every

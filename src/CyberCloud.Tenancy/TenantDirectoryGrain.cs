@@ -148,10 +148,10 @@ public sealed class TenantDirectoryGrain(
         var full = knownVersion <= 0 || state.State.Version - knownVersion > DeltaWindow;
 
         var entries = full
-            ? state.State.Entries.Values.OrderBy(x => x.DirectoryVersion).ToList()
+            ? state.State.Entries.Values.OrderBy(static x => x.DirectoryVersion).ToList()
             : state.State.Entries.Values
                 .Where(x => x.DirectoryVersion > knownVersion)
-                .OrderBy(x => x.DirectoryVersion)
+                .OrderBy(static x => x.DirectoryVersion)
                 .ToList();
 
         return Task.FromResult(

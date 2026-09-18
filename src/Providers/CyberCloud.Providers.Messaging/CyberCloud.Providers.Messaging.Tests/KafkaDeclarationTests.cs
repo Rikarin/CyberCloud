@@ -32,7 +32,7 @@ public sealed class KafkaDeclarationTests {
         // that way. docs/plan/07 § Consistency puts a key export in the fully-consistent row by name;
         // sharing `read` would make every viewer of a broker a holder of its credentials, and the
         // change that would do it is one word.
-        registration.Actions.Single(x => x.Name == KafkaClusters.ListKeysAction)
+        registration.Actions.Single(static x => x.Name == KafkaClusters.ListKeysAction)
             .Permission.ShouldNotBe(registration.ReadPermission);
     }
 
@@ -50,7 +50,7 @@ public sealed class KafkaDeclarationTests {
         // /properties/version — so a single-property body fails on the two it is missing, which is a
         // test that goes red for its own reason and says nothing about defaults. That is the shape
         // this test had on its first run.
-        foreach (var property in KafkaClusters.Schema2026.Properties.Where(x => x.DefaultJson.Length > 0)) {
+        foreach (var property in KafkaClusters.Schema2026.Properties.Where(static x => x.DefaultJson.Length > 0)) {
             using var body = JsonDocument.Parse(
                 Overridden(KafkaClusters.Body(Guid.NewGuid()), property.JsonPointer, property.DefaultJson)
             );

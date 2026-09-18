@@ -65,27 +65,51 @@ public sealed class BundleManifestSubstitution : IDisposable {
 
         run.ExitCode.ShouldBe(0, "substitute.sh refused a document whose every variable has a default:\n" + run.Output);
 
-        run.Output.ShouldContain("--diagnostics-address=:8443\n", Case.Sensitive,
-            "a default containing a colon was not taken whole — the parser split on the wrong colon. Output:\n" + run.Output);
+        run.Output.ShouldContain(
+            "--diagnostics-address=:8443\n",
+            Case.Sensitive,
+            "a default containing a colon was not taken whole — the parser split on the wrong colon. Output:\n"
+            + run.Output
+        );
         run.Output.ShouldContain("--insecure-diagnostics=false\n", Case.Sensitive, run.Output);
-        run.Output.ShouldContain("--feature-gates=MachinePool=true,ClusterTopology=false,RuntimeSDK=false\n", Case.Sensitive,
-            "three variables on one line, `:=` and `:-` mixed, did not all substitute. Output:\n" + run.Output);
-        run.Output.ShouldContain("--dynamic-infrastructure-clusters= \n", Case.Sensitive,
+        run.Output.ShouldContain(
+            "--feature-gates=MachinePool=true,ClusterTopology=false,RuntimeSDK=false\n",
+            Case.Sensitive,
+            "three variables on one line, `:=` and `:-` mixed, did not all substitute. Output:\n" + run.Output
+        );
+        run.Output.ShouldContain(
+            "--dynamic-infrastructure-clusters= \n",
+            Case.Sensitive,
             "a default that is one space was not preserved as one space, which is what clusterctl "
-            + "produces for the kamaji provider's `${CACPPK_INFRASTRUCTURE_CLUSTERS:= }`. Output:\n" + run.Output);
+            + "produces for the kamaji provider's `${CACPPK_INFRASTRUCTURE_CLUSTERS:= }`. Output:\n"
+            + run.Output
+        );
 
         // ⚠ The three forms the same documents carry that are NOT variables. A pass that touched
         // any of them would corrupt every CustomResourceDefinition description in the document,
         // and a regex pattern ending in `$` is the one whose corruption an API server refuses.
-        run.Output.ShouldContain("$(VAR_NAME) are expanded", Case.Sensitive,
-            "`$(VAR_NAME)` — Kubernetes' container-env syntax, not a variable — was altered. Output:\n" + run.Output);
-        run.Output.ShouldContain("whether $$(VAR_NAME)", Case.Sensitive,
-            "`$$(VAR_NAME)` — the escape of the above — was altered. Output:\n" + run.Output);
-        run.Output.ShouldContain("?$\n", Case.Sensitive,
-            "a validation pattern's terminal `$` was altered. Output:\n" + run.Output);
-        run.Output.ShouldNotContain("${", Case.Sensitive,
+        run.Output.ShouldContain(
+            "$(VAR_NAME) are expanded",
+            Case.Sensitive,
+            "`$(VAR_NAME)` — Kubernetes' container-env syntax, not a variable — was altered. Output:\n" + run.Output
+        );
+        run.Output.ShouldContain(
+            "whether $$(VAR_NAME)",
+            Case.Sensitive,
+            "`$$(VAR_NAME)` — the escape of the above — was altered. Output:\n" + run.Output
+        );
+        run.Output.ShouldContain(
+            "?$\n",
+            Case.Sensitive,
+            "a validation pattern's terminal `$` was altered. Output:\n" + run.Output
+        );
+        run.Output.ShouldNotContain(
+            "${",
+            Case.Sensitive,
             "a `${…}` survived the pass, so it would reach a container as the literal string that "
-            + "crashlooped four controllers on 2026-09-15. Output:\n" + run.Output);
+            + "crashlooped four controllers on 2026-09-15. Output:\n"
+            + run.Output
+        );
     }
 
     /// <summary>
@@ -98,18 +122,23 @@ public sealed class BundleManifestSubstitution : IDisposable {
         var run = await SubstituteAsync(
             Fixture,
             new Dictionary<string, string> {
-                ["CLUSTER_TOPOLOGY"] = "true",
-                ["EXP_RUNTIME_SDK"] = "true",
-                ["CAPI_INSECURE_DIAGNOSTICS"] = ""
+                ["CLUSTER_TOPOLOGY"] = "true", ["EXP_RUNTIME_SDK"] = "true", ["CAPI_INSECURE_DIAGNOSTICS"] = ""
             }
         );
 
         run.ExitCode.ShouldBe(0, run.Output);
-        run.Output.ShouldContain("ClusterTopology=true,RuntimeSDK=true", Case.Sensitive,
-            "`:=` or `:-` did not take the environment's value over the document's default. Output:\n" + run.Output);
-        run.Output.ShouldContain("--insecure-diagnostics=false\n", Case.Sensitive,
+        run.Output.ShouldContain(
+            "ClusterTopology=true,RuntimeSDK=true",
+            Case.Sensitive,
+            "`:=` or `:-` did not take the environment's value over the document's default. Output:\n" + run.Output
+        );
+        run.Output.ShouldContain(
+            "--insecure-diagnostics=false\n",
+            Case.Sensitive,
             "a variable set to the empty string replaced a `:=` default with nothing. drone/envsubst, "
-            + "which clusterctl uses, treats empty as unset for the two default forms. Output:\n" + run.Output);
+            + "which clusterctl uses, treats empty as unset for the two default forms. Output:\n"
+            + run.Output
+        );
     }
 
     /// <summary>
@@ -130,16 +159,29 @@ public sealed class BundleManifestSubstitution : IDisposable {
             new Dictionary<string, string> { ["PRESENT"] = "yes" }
         );
 
-        run.ExitCode.ShouldBe(1,
+        run.ExitCode.ShouldBe(
+            1,
             "substitute.sh accepted a document naming `${CLOUD_PROVIDER}` with no default and no value. "
-            + "The container would have got the literal string, or an empty one. Output:\n" + run.Output);
-        run.Output.ShouldContain("CLOUD_PROVIDER", Case.Sensitive,
-            "the refusal did not name the variable, which is the one thing the reader needs. Output:\n" + run.Output);
-        run.Output.ShouldContain("${NAME^^}", Case.Sensitive,
-            "a `${…}` form the pass does not implement was passed through rather than refused. Output:\n" + run.Output);
-        run.Output.ShouldNotContain("--cloud=\n", Case.Sensitive,
+            + "The container would have got the literal string, or an empty one. Output:\n"
+            + run.Output
+        );
+        run.Output.ShouldContain(
+            "CLOUD_PROVIDER",
+            Case.Sensitive,
+            "the refusal did not name the variable, which is the one thing the reader needs. Output:\n" + run.Output
+        );
+        run.Output.ShouldContain(
+            "${NAME^^}",
+            Case.Sensitive,
+            "a `${…}` form the pass does not implement was passed through rather than refused. Output:\n" + run.Output
+        );
+        run.Output.ShouldNotContain(
+            "--cloud=\n",
+            Case.Sensitive,
             "the unset variable was expanded to the empty string, which is envsubst's behaviour and "
-            + "the one this pass exists to avoid. Output:\n" + run.Output);
+            + "the one this pass exists to avoid. Output:\n"
+            + run.Output
+        );
     }
 
     /// <summary>
@@ -155,7 +197,10 @@ public sealed class BundleManifestSubstitution : IDisposable {
         run.Output.ShouldBe(document, "a variable-free document was altered by the pass:\n" + run.Output);
     }
 
-    async Task<BundleInstaller.Run> SubstituteAsync(string document, IReadOnlyDictionary<string, string>? environment = null) {
+    async Task<BundleInstaller.Run> SubstituteAsync(
+        string document,
+        IReadOnlyDictionary<string, string>? environment = null
+    ) {
         Assert.SkipUnless(
             BundleInstaller.OnPath("bash"),
             BundleInstaller.SkipWithoutBash(
@@ -173,7 +218,7 @@ public sealed class BundleManifestSubstitution : IDisposable {
         return await BundleInstaller.RunAsync(
             Script,
             input.Replace('\\', '/') + " -",
-            kubeconfig: null,
+            null,
             TestContext.Current.CancellationToken,
             environment
         );
@@ -182,7 +227,7 @@ public sealed class BundleManifestSubstitution : IDisposable {
     /// <inheritdoc />
     public void Dispose() {
         if (Directory.Exists(root)) {
-            Directory.Delete(root, recursive: true);
+            Directory.Delete(root, true);
         }
     }
 }

@@ -88,7 +88,7 @@ public sealed class ShardMapTests(TenancyCluster cluster) {
 
             (await map.AssignAsync(tenant, "eu-central")).GetValueOrThrow()
                 .DurableShard
-                    .ShouldBe(shard);
+                .ShouldBe(shard);
         }
     }
 
@@ -104,7 +104,7 @@ public sealed class ShardMapTests(TenancyCluster cluster) {
         for (var i = 200; i < 260; i++) {
             placements.Add(
                 (await map.AssignAsync(Tenant(i), "eu-central")).GetValueOrThrow()
-                    .DurableShard
+                .DurableShard
             );
         }
 
@@ -132,7 +132,7 @@ public sealed class ShardMapTests(TenancyCluster cluster) {
             for (var i = 400; i < 440; i++) {
                 (await map.AssignAsync(Tenant(i), "eu-central")).GetValueOrThrow()
                     .DurableShard
-                        .ShouldNotBe(shard);
+                    .ShouldNotBe(shard);
             }
         } finally {
             // Put it back: the tests in this class share one map grain and xUnit does not order
@@ -182,7 +182,9 @@ public sealed class ShardMapTests(TenancyCluster cluster) {
 
         assigned.DurableShard.ShouldBe(chosen, "the create placed the tenant somewhere other than its pin");
         assigned.Region.ShouldBe("eu-central", "the assign did not complete the region the pin could not carry");
-        assigned.HotHashTag.ShouldBe(StaticShardMapCache.HotTagPrefix + TenancyCluster.Id(tenant).Replace("-", "", StringComparison.Ordinal));
+        assigned.HotHashTag.ShouldBe(
+            StaticShardMapCache.HotTagPrefix + TenancyCluster.Id(tenant).Replace("-", "", StringComparison.Ordinal)
+        );
 
         // Idempotent: the re-driven create carries the same pin and finds it.
         (await map.PinAsync(tenant, chosen, null)).IsSuccess.ShouldBeTrue();
@@ -289,17 +291,19 @@ public sealed class ShardMapTests(TenancyCluster cluster) {
 
         // The record is in the map and NOT in this silo's mirror — the gap the timer would close in
         // fifteen seconds, and the gap a tenant grain activated now would write its first row into.
-        cluster.ShardMap.DurableShardFor(id).ShouldBe(
-            hashed,
-            "the mirror learned the pin without a refresh, so this test no longer exercises the gap"
-        );
+        cluster.ShardMap.DurableShardFor(id)
+            .ShouldBe(
+                hashed,
+                "the mirror learned the pin without a refresh, so this test no longer exercises the gap"
+            );
 
         var before = cluster.ShardMapRefresher.Commands;
         var confirmed = await ShardMapPropagation.ConfirmAsync(cluster.Grains, assigned);
 
         confirmed.IsSuccess.ShouldBeTrue(confirmed.Error?.Message);
         cluster.ShardMapRefresher.Commands.ShouldBe(before + 1, "the fan-out did not reach this silo's mirror");
-        cluster.ShardMap.DurableShardFor(id).ShouldBe(pinned, "the mirror was refreshed and still does not resolve the pin");
+        cluster.ShardMap.DurableShardFor(id)
+            .ShouldBe(pinned, "the mirror was refreshed and still does not resolve the pin");
 
         // And the rows land on the pin — the storage provider for this tenant is built on this silo
         // now, for the first time, from the mirror that has the record.

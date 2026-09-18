@@ -94,7 +94,8 @@ public static class ConflictParser {
     ///     The prose the API server puts on its optimistic-lock refusal —
     ///     <c>registry.OptimisticLockErrorMsg</c> in <c>k8s.io/apiserver</c>, verbatim.
     /// </summary>
-    public const string OptimisticLockMessage = "the object has been modified; please apply your changes to the latest version and try again";
+    public const string OptimisticLockMessage =
+        "the object has been modified; please apply your changes to the latest version and try again";
 
     /// <summary>
     ///     Whether a 409 is the API server's optimistic lock — the apply carried a

@@ -67,7 +67,7 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         // for. An action's response schema is legitimately all-secret — the `listKeys` case in
         // docs/plan/08 § The provider registry is exactly that — and it never goes near the projection.
         // Only a resource-type body does, and this is the one place a schema is declared to be one.
-        if (!schema.Properties.IsDefaultOrEmpty && schema.Properties.All(x => x.Secret)) {
+        if (!schema.Properties.IsDefaultOrEmpty && schema.Properties.All(static x => x.Secret)) {
             throw new ArgumentException(
                 $"Every property of '{draft.Type}' at '{version}' is Secret, so a read has nothing to "
                 + "project and would fall through to the whole stored superset — the opposite of what "
@@ -337,7 +337,7 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
                     Type = draft.Type,
                     // Oldest first, so `Newest` is the last entry and a lexicographic sort and a
                     // chronological one agree — see ApiVersion's remarks.
-                    ApiVersions = [.. draft.ApiVersions.OrderBy(x => x.Version)],
+                    ApiVersions = [.. draft.ApiVersions.OrderBy(static x => x.Version)],
                     ReconcilerType = draft.ReconcilerType,
                     Meters = [.. draft.Meters],
                     Actions = SoftDeleteActionsOf(draft),
@@ -618,7 +618,7 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         ?? throw new InvalidOperationException(
             $"'{method}' was called before any ResourceType. Everything a provider declares belongs "
             + "to a resource type, and the chain reads "
-            + "`.ResourceType(\"servers\").ApiVersion(…)…` — docs/plan/08 § The provider registry."
+            + """`.ResourceType("servers").ApiVersion(…)…` — docs/plan/08 § The provider registry."""
         );
 
     sealed class TypeDraft(ResourceTypeName type) {

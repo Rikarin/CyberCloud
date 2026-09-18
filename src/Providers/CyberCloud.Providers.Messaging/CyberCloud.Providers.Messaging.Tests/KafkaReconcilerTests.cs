@@ -66,8 +66,8 @@ public sealed class KafkaReconcilerTests {
 
         var world = new RecordingConnection();
 
-        using var aliceBody = JsonDocument.Parse(KafkaClusters.Body(ClusterId, nodes: 3, storageSize: "10Gi"));
-        using var bobBody = JsonDocument.Parse(KafkaClusters.Body(ClusterId, nodes: 5, storageSize: "50Gi"));
+        using var aliceBody = JsonDocument.Parse(KafkaClusters.Body(ClusterId, 3, "10Gi"));
+        using var bobBody = JsonDocument.Parse(KafkaClusters.Body(ClusterId, 5, "50Gi"));
 
         // Interleaved on purpose: A, B, A. A reconciler that remembered anything from its first pass
         // would answer the third pass with B's values.
@@ -77,7 +77,7 @@ public sealed class KafkaReconcilerTests {
 
         third.IsConverged.ShouldBeTrue(third.ToString());
 
-        var pools = world.Applied.Where(x => x.Target.Kind.Kind == "KafkaNodePool").ToList();
+        var pools = world.Applied.Where(static x => x.Target.Kind.Kind == "KafkaNodePool").ToList();
 
         pools.Count.ShouldBe(3);
 
@@ -148,7 +148,11 @@ public sealed class KafkaReconcilerTests {
         using var desired = JsonDocument.Parse(KafkaClusters.Body(ClusterId));
 
         (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
-        var afterFirst = connection.Objects.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
+        var afterFirst = connection.Objects.ToDictionary(
+            static x => x.Key,
+            static x => x.Value,
+            StringComparer.Ordinal
+        );
 
         (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
 
@@ -169,7 +173,7 @@ public sealed class KafkaReconcilerTests {
 
         (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
 
-        connection.Applied.Select(x => x.Target.Kind.Kind).ShouldBe(KafkaThenNodePool);
+        connection.Applied.Select(static x => x.Target.Kind.Kind).ShouldBe(KafkaThenNodePool);
 
         foreach (var command in connection.Applied) {
             foreach (var label in KubeLabels.Mandatory) {
@@ -186,8 +190,8 @@ public sealed class KafkaReconcilerTests {
         // coming". And it is NOT on the Kafka: a Kafka labelled as a member of itself would be
         // harmless and meaningless, and a provider that sprayed operator labels onto every object it
         // touched is one that would eventually spray one that is not harmless.
-        var pool = connection.Applied.Single(x => x.Target.Kind.Kind == "KafkaNodePool");
-        var kafka = connection.Applied.Single(x => x.Target.Kind.Kind == "Kafka");
+        var pool = connection.Applied.Single(static x => x.Target.Kind.Kind == "KafkaNodePool");
+        var kafka = connection.Applied.Single(static x => x.Target.Kind.Kind == "Kafka");
 
         pool.Labels[KafkaClusters.ClusterLabel].ShouldBe("observed");
         kafka.Labels.ShouldNotContainKey(KafkaClusters.ClusterLabel);
@@ -209,13 +213,13 @@ public sealed class KafkaReconcilerTests {
         using var desired = JsonDocument.Parse(KafkaClusters.Body(ClusterId));
 
         (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
-        connection.Applied.Select(x => x.Target.Kind.Kind).ShouldBe(KafkaThenNodePool);
+        connection.Applied.Select(static x => x.Target.Kind.Kind).ShouldBe(KafkaThenNodePool);
 
         var torn = await new KafkaClusterReconciler(new FixedClock())
             .DeleteAsync(Context(connection, desired.RootElement), TestContext.Current.CancellationToken);
 
         torn.IsConverged.ShouldBeTrue(torn.ToString());
-        connection.Deleted.Select(x => x.Kind.Kind).ShouldBe(NodePoolThenKafka);
+        connection.Deleted.Select(static x => x.Kind.Kind).ShouldBe(NodePoolThenKafka);
     }
 
     [Fact]
@@ -228,17 +232,17 @@ public sealed class KafkaReconcilerTests {
 
         await Reconcile(connection, plain.RootElement);
 
-        var listeners = Listeners(connection.Applied.Single(x => x.Target.Kind.Kind == "Kafka").Body);
+        var listeners = Listeners(connection.Applied.Single(static x => x.Target.Kind.Kind == "Kafka").Body);
         listeners.Count.ShouldBe(1, "a body that did not ask for external exposure got some");
 
         // And with it on but the allow-list empty: a load balancer that accepts NOTHING, never one
         // that accepts everything. An absent `loadBalancerSourceRanges` means "from anywhere".
         var open = new RecordingConnection();
-        using var exposed = JsonDocument.Parse(WithExternal(KafkaClusters.Body(ClusterId), enabled: true));
+        using var exposed = JsonDocument.Parse(WithExternal(KafkaClusters.Body(ClusterId), true));
 
         await Reconcile(open, exposed.RootElement);
 
-        var second = Listeners(open.Applied.Single(x => x.Target.Kind.Kind == "Kafka").Body);
+        var second = Listeners(open.Applied.Single(static x => x.Target.Kind.Kind == "Kafka").Body);
         second.Count.ShouldBe(2);
 
         var external = second[1]!.AsObject();

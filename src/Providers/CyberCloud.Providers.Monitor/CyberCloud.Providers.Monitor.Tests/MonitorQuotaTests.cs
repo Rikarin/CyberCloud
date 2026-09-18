@@ -78,7 +78,7 @@ public sealed class MonitorQuotaTests {
         foreach (var metrics in MonitorWorkspaces.Tiers) {
             foreach (var logs in MonitorWorkspaces.Tiers) {
                 foreach (var traces in MonitorWorkspaces.Tiers) {
-                    Storage(Body(metrics, logs, traces, logsGbPerDay: 1)).ShouldBeGreaterThan(
+                    Storage(Body(metrics, logs, traces, 1)).ShouldBeGreaterThan(
                         0,
                         $"({metrics}, {logs}, {traces}) at the smallest legal allowance draws nothing, "
                         + "so every create with that body would be refused inside the quota grain "
@@ -118,7 +118,7 @@ public sealed class MonitorQuotaTests {
         // delegate nothing sandboxes. Six pointers: three tiers and three allowances. A derivation
         // naming only the allowances would be the "retention is not priced" defect with an honest
         // amount, and a reviewer reading the registry would see it.
-        var derivation = Registration().Meters.Single(x => x.Meter == QuotaMeter.StorageGb).Derivation;
+        var derivation = Registration().Meters.Single(static x => x.Meter == QuotaMeter.StorageGb).Derivation;
 
         derivation.ShouldNotBeNull();
         derivation.Expression.ShouldNotBeNullOrWhiteSpace();

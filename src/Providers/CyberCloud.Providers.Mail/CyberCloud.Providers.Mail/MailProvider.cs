@@ -116,14 +116,14 @@ public sealed class MailProvider : IResourceProvider {
                 // type's own group key is `mail` and a short name equal to it gives `cyc mail mail`
                 // two meanings. The token dictionary is per PARENT command, so a short name equal to
                 // some OTHER group's key would parse cleanly; this one would not.
-                shortName: "domain",
-                summary: "A managed mail domain on Dovecot, Postfix and Rspamd, with a per-tenant "
+                "domain",
+                "A managed mail domain on Dovecot, Postfix and Rspamd, with a per-tenant "
                 + "mail store, DKIM signing, and the SPF, DKIM, DMARC and MX records the domain "
                 + "must publish before the platform will send for it."
             )
             .Chart(MailDomains.ChartName)
             .SupportsTags()
-            .RequiresCluster(MailDomains.ClusterIdPointer);
+            .RequiresCluster();
     }
 
     // ── What a mail domain draws ───────────────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ public sealed class MailProvider : IResourceProvider {
         MeterDerivation.Of(
             "sizing.cpu, in cores, taking sizing.preset when the override is empty",
             ["/properties/sizing/preset", "/properties/sizing/cpu"],
-            body => KubeQuantity.TryParse(MailDomains.Resources(body).Cpu, out var cores)
+            static body => KubeQuantity.TryParse(MailDomains.Resources(body).Cpu, out var cores)
                 ? Result<decimal>.Success(cores)
                 : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
         );
@@ -166,7 +166,7 @@ public sealed class MailProvider : IResourceProvider {
         MeterDerivation.Of(
             "sizing.memory, in GiB, taking sizing.preset when the override is empty",
             ["/properties/sizing/preset", "/properties/sizing/memory"],
-            body => KubeQuantity.TryGibibytes(MailDomains.Resources(body).Memory, out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(MailDomains.Resources(body).Memory, out var gibibytes)
                 ? Result<decimal>.Success(gibibytes)
                 : Unresolvable("memory", "sizing.memory or the sizing.preset behind it")
         );
@@ -183,7 +183,7 @@ public sealed class MailProvider : IResourceProvider {
         MeterDerivation.Of(
             "storage.size, in GiB",
             ["/properties/storage/size"],
-            body => KubeQuantity.TryGibibytes(MailDomains.StorageSize(body), out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(MailDomains.StorageSize(body), out var gibibytes)
                 ? Result<decimal>.Success(gibibytes)
                 : Unresolvable("storage", "storage.size")
         );

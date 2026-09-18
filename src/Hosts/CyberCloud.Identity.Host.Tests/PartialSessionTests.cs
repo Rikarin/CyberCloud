@@ -33,7 +33,7 @@ public sealed class PartialSessionTests {
     public void APasswordSignInIsNotFullyAuthenticatedUntilTheSecondFactorArrives() {
         var pending = IdentitySessionPrincipal.Build(
             Tenant,
-            SignInOutcome.Success(User, Session, AuthenticationMethod.Password, secondFactorRequired: true)
+            SignInOutcome.Success(User, Session, AuthenticationMethod.Password, true)
         );
 
         IdentitySessionPrincipal.IsFullyAuthenticated(pending)
@@ -65,7 +65,7 @@ public sealed class PartialSessionTests {
     public void PresentingTheSecondFactorPromotesTheSessionAndKeepsBothMethods() {
         var pending = IdentitySessionPrincipal.Build(
             Tenant,
-            SignInOutcome.Success(User, Session, AuthenticationMethod.Password, secondFactorRequired: true)
+            SignInOutcome.Success(User, Session, AuthenticationMethod.Password, true)
         );
 
         var promoted = IdentitySessionPrincipal.Promote(pending, AuthenticationMethod.Totp);
@@ -78,7 +78,7 @@ public sealed class PartialSessionTests {
         // lose the fact that a password was the first factor — and `amr` is a list precisely so it
         // does not have to choose.
         var methods = promoted.FindAll(AccessTokenClaims.AuthenticationMethods)
-            .Select(x => x.Value)
+            .Select(static x => x.Value)
             .ToList();
 
         methods.ShouldContain("pwd");
@@ -89,7 +89,7 @@ public sealed class PartialSessionTests {
     public void PromotingDoesNotMutateThePrincipalItWasGiven() {
         var pending = IdentitySessionPrincipal.Build(
             Tenant,
-            SignInOutcome.Success(User, Session, AuthenticationMethod.Password, secondFactorRequired: true)
+            SignInOutcome.Success(User, Session, AuthenticationMethod.Password, true)
         );
 
         _ = IdentitySessionPrincipal.Promote(pending, AuthenticationMethod.Totp);

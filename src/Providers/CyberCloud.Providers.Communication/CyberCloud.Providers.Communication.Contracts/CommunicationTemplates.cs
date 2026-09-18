@@ -11,8 +11,11 @@ namespace CyberCloud.Providers.Communication.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/17 § The parts that are actually the work: <i>"Named, versioned, localised,
-///         with typed parameters."</i> Three of the four are here as written. <b>Named</b>: the
+///         docs/plan/17 § The parts that are actually the work:
+///         <i>
+///             "Named, versioned, localised,
+///             with typed parameters."
+///         </i> Three of the four are here as written. <b>Named</b>: the
 ///         resource's name is what a send's <c>template</c> references, and the service is the naming
 ///         authority. <b>Versioned</b>: every PUT that changes the body appends a version to
 ///         <c>IMessageTemplateGrain</c>, which never edits one in place, so a carrier-approved body
@@ -21,8 +24,11 @@ namespace CyberCloud.Providers.Communication.Contracts;
 ///         is refused before dispatch.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Localised is the one this api-version cannot carry as docs/plan/17 means it, and
-///         the reason is the schema model rather than the module.</b> A template version holds a body
+///         ⚠
+///         <b>
+///             Localised is the one this api-version cannot carry as docs/plan/17 means it, and
+///             the reason is the schema model rather than the module.
+///         </b> A template version holds a body
 ///         <i>per locale</i> — <c>LocalizedBody</c>, an array of records — and this platform's
 ///         schema has no array of objects (see the remarks on <c>SchemaKind.Array</c>). So a template
 ///         resource is one locale: <c>locale</c>, <c>subject</c>, <c>body</c>. A second language is a
@@ -64,7 +70,7 @@ public static class CommunicationTemplates {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the template is billed in."
                 ) {
                     Format = SchemaFormat.Region,
@@ -76,7 +82,7 @@ public static class CommunicationTemplates {
                 new(
                     "/properties/channel",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "Which channel the body is written for. A WhatsApp body is not an email body, "
                     + "and the channel decides whether carrier pre-approval is consulted at all."
                 ) { AllowedValues = ChannelKinds.AllowedValues, Immutable = true, ExampleJson = "\"email\"" },
@@ -95,7 +101,7 @@ public static class CommunicationTemplates {
                 new(
                     "/properties/body",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The message text. A {name} is replaced by the argument of that name, "
                     + "left to right, and a substituted value is never re-scanned."
                 ) {
@@ -108,18 +114,19 @@ public static class CommunicationTemplates {
                     SchemaKind.Array,
                     Description: "The placeholders a send must supply. A send missing one is refused before "
                     + "any carrier is called."
-                ) { ElementKind = SchemaKind.Text, Pattern = VariablePattern, ExampleJson = "[\"code\"]" },
+                ) { ElementKind = SchemaKind.Text, Pattern = VariablePattern, ExampleJson = """["code"]""" },
                 new(
                     "/properties/optionalVariables",
                     SchemaKind.Array,
                     Description: "The placeholders a send may supply. An unsupplied one is left as written, "
                     + "so a tenant testing the template sees it."
-                ) { ElementKind = SchemaKind.Text, Pattern = VariablePattern, ExampleJson = "[\"minutes\"]" }
+                ) { ElementKind = SchemaKind.Text, Pattern = VariablePattern, ExampleJson = """["minutes"]""" }
             ]
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     /// <summary>Builds a body that satisfies <see cref="Schema2026" />.</summary>
     /// <param name="channel">Which channel.</param>
@@ -145,8 +152,12 @@ public static class CommunicationTemplates {
                 ["locale"] = locale,
                 ["subject"] = subject,
                 ["body"] = body,
-                ["variables"] = new JsonArray([.. (variables.IsDefault ? ["code"] : variables).Select(x => (JsonNode?)x)]),
-                ["optionalVariables"] = new JsonArray([.. (optionalVariables.IsDefault ? [] : optionalVariables).Select(x => (JsonNode?)x)])
+                ["variables"] = new JsonArray(
+                    [.. (variables.IsDefault ? ["code"] : variables).Select(static x => (JsonNode?)x)]
+                ),
+                ["optionalVariables"] = new JsonArray(
+                    [.. (optionalVariables.IsDefault ? [] : optionalVariables).Select(static x => (JsonNode?)x)]
+                )
             }
         }.ToJsonString();
 
@@ -155,7 +166,8 @@ public static class CommunicationTemplates {
         ChannelKinds.Parse(Bodies.Text(Bodies.Property(desired, "channel"), string.Empty));
 
     /// <summary>The id of the template's grain, derived from its address.</summary>
-    public static Guid TemplateIdOf(ResourceId id) => CommunicationGrainKeys.ResourceIdFor(id.TenantId, id.CanonicalPath);
+    public static Guid TemplateIdOf(ResourceId id) =>
+        CommunicationGrainKeys.ResourceIdFor(id.TenantId, id.CanonicalPath);
 
     /// <summary>The parameters a body declares — required ones first, then optional.</summary>
     public static ImmutableArray<TemplateParameter> ParametersOf(JsonElement desired) {
@@ -190,7 +202,9 @@ public static class CommunicationTemplates {
     ///     what the body says and not what the grain has recorded.
     /// </summary>
     public static MessageTemplateVersion VersionOf(JsonElement desired) =>
-        new() { Version = 0, Channel = ChannelOf(desired), Parameters = ParametersOf(desired), Bodies = [BodyOf(desired)] };
+        new() {
+            Version = 0, Channel = ChannelOf(desired), Parameters = ParametersOf(desired), Bodies = [BodyOf(desired)]
+        };
 
     /// <summary>Whether a recorded version carries what the body asks for.</summary>
     /// <param name="version">A version the grain holds — the newest, when checking convergence.</param>
@@ -215,8 +229,11 @@ public static class CommunicationTemplates {
 
     /// <summary><c>POST …/templates/{name}/render</c>. What a send with these arguments would say.</summary>
     /// <remarks>
-    ///     ⚠ <b>Pure over the resource's own body, and that is what lets it run on the request
-    ///     path.</b> A synchronous action runs inside <c>ResourceManagerService</c>, which in
+    ///     ⚠
+    ///     <b>
+    ///         Pure over the resource's own body, and that is what lets it run on the request
+    ///         path.
+    ///     </b> A synchronous action runs inside <c>ResourceManagerService</c>, which in
     ///     production is the gateway; this one reaches no grain, because <c>TemplateRenderer</c> is a
     ///     pure function and the body is in <c>ActionContext.Desired</c>. It renders what the resource
     ///     <i>says</i>, which after convergence is what the grain's newest version holds — and before
@@ -234,7 +251,11 @@ public static class CommunicationTemplates {
                     SchemaKind.Array,
                     Description: "The arguments, one name=value per element. A missing required variable is "
                     + "refused, naming every missing one at once."
-                ) { ElementKind = SchemaKind.Text, Pattern = CommunicationServices.ArgumentPattern, ExampleJson = "[\"code=482913\"]" }
+                ) {
+                    ElementKind = SchemaKind.Text,
+                    Pattern = CommunicationServices.ArgumentPattern,
+                    ExampleJson = """["code=482913"]"""
+                }
             ]
         );
 
@@ -242,9 +263,9 @@ public static class CommunicationTemplates {
     public static ResourceSchema RenderResponse { get; } =
         ResourceSchema.Of(
             [
-                new("/subject", SchemaKind.Text, Required: true, Description: "The subject, substituted."),
-                new("/body", SchemaKind.Text, Required: true, Description: "The body, substituted."),
-                new("/locale", SchemaKind.Text, Required: true, Description: "The locale it was rendered in.")
+                new("/subject", SchemaKind.Text, true, Description: "The subject, substituted."),
+                new("/body", SchemaKind.Text, true, Description: "The body, substituted."),
+                new("/locale", SchemaKind.Text, true, Description: "The locale it was rendered in.")
             ]
         );
 

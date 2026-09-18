@@ -76,7 +76,11 @@ public sealed class ArtifactFeedReconciler(IGrainFactory grains, IClock clock) :
             );
         }
 
-        context.Log.Report("opening", $"opening the {ArtifactFeeds.NameOf(kind)} catalogue for '{context.Id.Name}'", 40);
+        context.Log.Report(
+            "opening",
+            $"opening the {ArtifactFeeds.NameOf(kind)} catalogue for '{context.Id.Name}'",
+            40
+        );
 
         var opened = await Feed(context.Id).OpenAsync(kind);
 

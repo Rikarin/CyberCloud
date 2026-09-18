@@ -30,28 +30,28 @@ public sealed class PostgresCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.DBforPostgreSQL/servers",
-            CreateProvider = () => new PostgresProvider(),
+            CreateProvider = static () => new PostgresProvider(),
             ReconcilerType = typeof(PostgresServerReconciler),
-            CreateReconciler = clock => new PostgresServerReconciler(clock),
+            CreateReconciler = static clock => new PostgresServerReconciler(clock),
             Type = PostgresServers.Type,
             ApiVersion = PostgresServers.V2026,
-            Body = cluster => PostgresServers.Body(cluster),
+            Body = static cluster => PostgresServers.Body(cluster),
             // ⚠ Changes `replicas`, which the reconciler renders into `spec.instances` and
             // PostgresServers.Matches reads back. A body that differed only where the reconciler
             // ignores it would pass the update test while proving the update never left the grain.
-            ChangedBody = cluster => PostgresServers.Body(cluster, replicas: 3),
+            ChangedBody = static cluster => PostgresServers.Body(cluster, 3),
             // Drops the required `/properties/storage/size`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written:
             // a hand-written invalid body drifts out of date the day the schema gains a property and
             // then tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => WithoutStorageSize(PostgresServers.Body(cluster)),
+            InvalidBody = static cluster => WithoutStorageSize(PostgresServers.Body(cluster)),
             InvalidBodyTarget = "/properties/storage/size",
             ActionName = PostgresServers.ListKeysAction,
             // ⚠ TWO OBJECTS, AND THE POOLER IS IN THE LIST BECAUSE `Body` LEAVES POOLING ON. The case
             // supplies one body, so the object set is a function of that body — a case whose Body
             // turned pooling off and whose Objects still listed the Pooler would fail every
             // world-facing assertion for a reason that is the case's rather than the provider's.
-            Objects = (id, ns) => [
+            Objects = static (id, ns) => [
                 PostgresServers.ClusterRef(ns, id.Name),
                 PostgresServers.PoolerRef(ns, id.Name)
             ],
@@ -70,7 +70,7 @@ public sealed class PostgresCase : IProviderCaseSource {
             // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
             DataPlane = null,
             StoragePrefix = null,
-            OperatorWritten = (id, ns) => [
+            OperatorWritten = static (id, ns) => [
                 (KubeSecret.Ref(ns, PostgresServers.CredentialSecretName(id.Name)),
                     OperatorSecret.Json(
                         KubeSecret.Ref(ns, PostgresServers.CredentialSecretName(id.Name)),
@@ -79,12 +79,12 @@ public sealed class PostgresCase : IProviderCaseSource {
                             (PostgresServers.PasswordKey, "a-generated-password")
                         ]
                     )),
-                Claim(ns, id.Name, serial: 1, wal: false),
-                Claim(ns, id.Name, serial: 1, wal: true),
-                Claim(ns, id.Name, serial: 3, wal: false),
-                Claim(ns, id.Name, serial: 3, wal: true)
+                Claim(ns, id.Name, 1, false),
+                Claim(ns, id.Name, 1, true),
+                Claim(ns, id.Name, 3, false),
+                Claim(ns, id.Name, 3, true)
             ],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return PostgresServers.Matches(match.ObjectJson, desired.RootElement);
             }
@@ -120,7 +120,7 @@ public sealed class PostgresCase : IProviderCaseSource {
                 ["cnpg.io/pvcStatus"] = "ready"
             },
             ["ownerReferences"] = new JsonArray(
-                KubeJson.OwnerReference(PostgresServers.ClusterOwner(cluster, uid: string.Empty))
+                KubeJson.OwnerReference(PostgresServers.ClusterOwner(cluster, string.Empty))
             )
         };
 

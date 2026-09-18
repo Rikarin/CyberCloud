@@ -20,8 +20,11 @@ namespace CyberCloud.Providers.Monitor.Alerting;
 ///         unparseable one means our own code did.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The evaluator's key is a <see cref="GrainKeyKind.Resource" /> key for something that
-///         is not a resource</b> — the workspace's address, folded by
+///         ⚠
+///         <b>
+///             The evaluator's key is a <see cref="GrainKeyKind.Resource" /> key for something that
+///             is not a resource
+///         </b> — the workspace's address, folded by
 ///         <see cref="MonitorAlertRules.EvaluatorIdFor" /> — which is the borrowing the sending module
 ///         records on <c>CommunicationGrainKeys</c> and costs the same thing: the shape is checked,
 ///         the meaning is not, and a repair tool routing by kind would send this key to

@@ -17,8 +17,11 @@ namespace CyberCloud.Authorization.Tests.Infrastructure;
 ///         under test is the evaluator that ships; only the two tuple sources differ.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The index is built by the maintainer that ships, one tuple at a time, in the order
-///         the store would see them.</b> Every tuple is applied through
+///         ⚠
+///         <b>
+///             The index is built by the maintainer that ships, one tuple at a time, in the order
+///             the store would see them.
+///         </b> Every tuple is applied through
 ///         <see cref="MembershipIndexMaintainer.ApplyWriteAsync" /> over an
 ///         <see cref="InMemoryMembershipIndexStore" />, so the closure the walk reads here is the
 ///         closure the write path would have produced, not a brute force standing in for it. The
@@ -88,13 +91,14 @@ public sealed class InMemoryReverseRelationReader : IReverseRelationReader {
 
     /// <summary>Builds a reader from the tuple grammar, closed under <see cref="CyberCloudSchema" />.</summary>
     /// <param name="tuples">Tuples as <c>object#relation@subject</c>.</param>
-    public static InMemoryReverseRelationReader Parse(params string[] tuples) => Parse(CyberCloudSchema.Instance, tuples);
+    public static InMemoryReverseRelationReader Parse(params string[] tuples) =>
+        Parse(CyberCloudSchema.Instance, tuples);
 
     /// <summary>Builds a reader from the tuple grammar, closed under <paramref name="schema" />.</summary>
     /// <param name="schema">The schema.</param>
     /// <param name="tuples">Tuples as <c>object#relation@subject</c>.</param>
     public static InMemoryReverseRelationReader Parse(AuthorizationSchema schema, params string[] tuples) =>
-        new(schema, tuples.Select(x => RelationTuple.Parse(x).GetValueOrThrow()));
+        new(schema, tuples.Select(static x => RelationTuple.Parse(x).GetValueOrThrow()));
 
     /// <summary>
     ///     Drops a tuple's reverse entry — <c>TupleStoreGrain</c>'s step 5 of a delete, so a test
@@ -106,7 +110,9 @@ public sealed class InMemoryReverseRelationReader : IReverseRelationReader {
         ArgumentNullException.ThrowIfNull(tuple);
 
         if (bySubject.TryGetValue(tuple.Subject.Object, out var entries)) {
-            entries.Remove(new() { Object = tuple.Object, Relation = tuple.Relation, SubjectRelation = tuple.Subject.Relation });
+            entries.Remove(
+                new() { Object = tuple.Object, Relation = tuple.Relation, SubjectRelation = tuple.Subject.Relation }
+            );
         }
     }
 

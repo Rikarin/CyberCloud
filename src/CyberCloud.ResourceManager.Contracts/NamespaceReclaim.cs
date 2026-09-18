@@ -359,10 +359,10 @@ public readonly struct NamespaceReclaim : IEquatable<NamespaceReclaim> {
         // and `IsDefaultOrEmpty` is what keeps that from throwing here rather than at the delete.
         var significant = occupants.IsDefaultOrEmpty
             ? []
-            : occupants.Where(x => !IsAmbient(x)).ToImmutableArray();
+            : occupants.Where(static x => !IsAmbient(x)).ToImmutableArray();
 
         if (members.Count > 0) {
-            var deleting = members.Count(x => x.State == ProvisioningState.Deleting);
+            var deleting = members.Count(static x => x.State == ProvisioningState.Deleting);
 
             refusals.Add(
                 $"The resource group still holds {members.Count} member(s), {deleting} of them "
@@ -370,12 +370,12 @@ public readonly struct NamespaceReclaim : IEquatable<NamespaceReclaim> {
                 + "docs/plan/06 § Two-phase create keeps a resource whose teardown failed listed and "
                 + "Deleting rather than silently gone, and a namespace delete would take its objects "
                 + "anyway: "
-                + Sample(members.Select(x => x.CanonicalPath))
+                + Sample(members.Select(static x => x.CanonicalPath))
             );
         }
 
         if (significant.Length > 0) {
-            var managed = significant.Count(x => x.IsManaged);
+            var managed = significant.Count(static x => x.IsManaged);
             var foreign = significant.Length - managed;
 
             refusals.Add(
@@ -384,7 +384,7 @@ public readonly struct NamespaceReclaim : IEquatable<NamespaceReclaim> {
                 + "namespace is a recursive delete of all of them, and an unlabelled object is either "
                 + "somebody else's or a volume claim a StatefulSet made, which docs/plan/08 § Soft "
                 + "delete keeps on purpose so that a restore has something to restore from: "
-                + Sample(significant.Select(x => $"{x.Kind}/{x.Name}"))
+                + Sample(significant.Select(static x => $"{x.Kind}/{x.Name}"))
             );
         }
 

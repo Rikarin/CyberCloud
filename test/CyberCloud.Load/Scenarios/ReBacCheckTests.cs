@@ -1,5 +1,4 @@
 using CyberCloud.Authorization.Contracts;
-using CyberCloud.Chaos.Topology;
 using System.Diagnostics;
 using System.Globalization;
 using AuthObjectRef = CyberCloud.Authorization.Contracts.ObjectRef;
@@ -7,8 +6,11 @@ using AuthObjectRef = CyberCloud.Authorization.Contracts.ObjectRef;
 namespace CyberCloud.Load.Scenarios;
 
 /// <summary>
-///     docs/plan/23 § The load scenarios, row 3: <i>ReBAC: 5-deep groups, 10 000 members, 20 000
-///     checks/s → check p99 &lt; 10 ms warm, &lt; 50 ms cold</i>, at a tenth of the members and the
+///     docs/plan/23 § The load scenarios, row 3:
+///     <i>
+///         ReBAC: 5-deep groups, 10 000 members, 20 000
+///         checks/s → check p99 &lt; 10 ms warm, &lt; 50 ms cold
+///     </i>, at a tenth of the members and the
 ///     rate. docs/plan/25 § R5 is the risk this row measures.
 /// </summary>
 /// <remarks>
@@ -72,39 +74,79 @@ public sealed class ReBacCheckTests(LoadTopology topology) {
 
         // ── The graph. ────────────────────────────────────────────────────────────────────────
         var build = Stopwatch.StartNew();
-        var groups = Enumerable.Range(0, Depth).Select(i => $"load-g{i}").ToList();
+        var groups = Enumerable.Range(0, Depth).Select(static i => $"load-g{i}").ToList();
 
         for (var i = 1; i < Depth; i++) {
-            await WriteAsync(store, Tuple(ObjectTypes.Group, groups[i], Relations.Member, SubjectRef.Userset(ObjectTypes.Group, groups[i - 1], Relations.Member)));
+            await WriteAsync(
+                store,
+                Tuple(
+                    ObjectTypes.Group,
+                    groups[i],
+                    Relations.Member,
+                    SubjectRef.Userset(ObjectTypes.Group, groups[i - 1], Relations.Member)
+                )
+            );
         }
 
-        var users = Enumerable.Range(0, Members).Select(i => $"load-member-{i}").ToList();
+        var users = Enumerable.Range(0, Members).Select(static i => $"load-member-{i}").ToList();
 
         // The cold subjects: members like the others, and never checked until their one sample.
-        var coldUsers = Enumerable.Range(0, ColdSamples + FullyConsistentSamples).Select(i => $"load-cold-{i}").ToList();
+        var coldUsers = Enumerable.Range(0, ColdSamples + FullyConsistentSamples)
+            .Select(static i => $"load-cold-{i}")
+            .ToList();
 
         foreach (var chunk in users.Concat(coldUsers).Chunk(50)) {
-            await Task.WhenAll(chunk.Select(user => WriteAsync(store, Tuple(ObjectTypes.Group, groups[0], Relations.Member, SubjectRef.Of(SubjectTypes.User, user)))));
+            await Task.WhenAll(
+                chunk.Select(user => WriteAsync(
+                        store,
+                        Tuple(ObjectTypes.Group, groups[0], Relations.Member, SubjectRef.Of(SubjectTypes.User, user))
+                    )
+                )
+            );
         }
 
         // The grant, on a resource group, to the outermost group's members.
-        var target = AuthObjectRef.Create(ObjectTypes.ResourceGroup, world.Subscription.ToString("N", CultureInfo.InvariantCulture) + "-" + world.Group).GetValueOrThrow();
-        await WriteAsync(store, RelationTuple.Create(target, Relations.Reader, SubjectRef.Userset(ObjectTypes.Group, groups[^1], Relations.Member)).GetValueOrThrow());
+        var target = AuthObjectRef.Create(
+            ObjectTypes.ResourceGroup,
+            world.Subscription.ToString("N", CultureInfo.InvariantCulture) + "-" + world.Group
+        )
+            .GetValueOrThrow();
+        await WriteAsync(
+            store,
+            RelationTuple.Create(
+                target,
+                Relations.Reader,
+                SubjectRef.Userset(ObjectTypes.Group, groups[^1], Relations.Member)
+            )
+                .GetValueOrThrow()
+        );
 
         var check = platform.For(world.Tenant).GetGrain<ICheckGrain>(GrainKeys.CheckCache(target.Type, target.Id));
-        output?.WriteLine($"graph of {Depth} groups and {Members + coldUsers.Count} members written in {build.Elapsed.TotalSeconds:F1} s");
+        output?.WriteLine(
+            $"graph of {Depth} groups and {Members + coldUsers.Count} members written in {build.Elapsed.TotalSeconds:F1} s"
+        );
 
         // A check that must be true, so the walk is the whole walk.
         var probe = await check.CheckAsync(Permissions.Read, SubjectRef.Of(SubjectTypes.User, users[0]), null);
         probe.IsSuccess.ShouldBeTrue(probe.Error?.Message);
-        probe.GetValueOrThrow().Allowed.ShouldBeTrue("a member of the innermost group is not a reader of the resource group; the chain is not what the row asks for.");
+        probe.GetValueOrThrow()
+            .Allowed.ShouldBeTrue(
+                "a member of the innermost group is not a reader of the resource group; the chain is not what the row asks for."
+            );
 
         // ── Warm: the rate, against the real check grain. ─────────────────────────────────────
-        var driver = new OpenLoopDriver(Rate, WarmUp, Window, inFlightCap: 4_000);
+        var driver = new OpenLoopDriver(Rate, WarmUp, Window, 4_000);
 
-        var warm = await driver.RunAsync(async (i, _) => {
-                var answer = await check.CheckAsync(Permissions.Read, SubjectRef.Of(SubjectTypes.User, users[i % users.Count]), null);
-                return answer.IsSuccess ? answer.GetValueOrThrow().Allowed ? null : "denied" : answer.Error!.Code.ToString();
+        var warm = await driver.RunAsync(
+            async (i, _) => {
+                var answer = await check.CheckAsync(
+                    Permissions.Read,
+                    SubjectRef.Of(SubjectTypes.User, users[i % users.Count]),
+                    null
+                );
+                return answer.IsSuccess
+                    ? answer.GetValueOrThrow().Allowed ? null : "denied"
+                    : answer.Error!.Code.ToString();
             },
             token
         );
@@ -144,7 +186,9 @@ public sealed class ReBacCheckTests(LoadTopology topology) {
         }
 
         var coldDistribution = Distribution.Of(cold, coldErrors + coldFromCache, coldClock.Elapsed, 0);
-        output?.WriteLine($"cold: {coldDistribution}; {coldFromCache} answered from the cache; triples visited {(coldTriples.Count == 0 ? 0 : coldTriples.Min())}–{(coldTriples.Count == 0 ? 0 : coldTriples.Max())}");
+        output?.WriteLine(
+            $"cold: {coldDistribution}; {coldFromCache} answered from the cache; triples visited {(coldTriples.Count == 0 ? 0 : coldTriples.Min())}–{(coldTriples.Count == 0 ? 0 : coldTriples.Max())}"
+        );
 
         // ── The aside: the full-consistency walk, no cache, no index, every durable row re-read. ──
         var fully = new List<double>();
@@ -152,7 +196,11 @@ public sealed class ReBacCheckTests(LoadTopology topology) {
 
         for (var i = 0; i < FullyConsistentSamples; i++) {
             var started = Stopwatch.GetTimestamp();
-            var answer = await check.CheckAsync(Permissions.Read, SubjectRef.Of(SubjectTypes.User, coldUsers[ColdSamples + i]), Consistency.FullyConsistent);
+            var answer = await check.CheckAsync(
+                Permissions.Read,
+                SubjectRef.Of(SubjectTypes.User, coldUsers[ColdSamples + i]),
+                Consistency.FullyConsistent
+            );
             var took = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
 
             if (answer.IsSuccess && answer.GetValueOrThrow().Allowed && !answer.GetValueOrThrow().FromCache) {
@@ -182,7 +230,9 @@ public sealed class ReBacCheckTests(LoadTopology topology) {
             WarmMetric,
             $"ICheckGrain.CheckAsync(read) over a {Depth}-deep group chain with {Members} members (a tenth of the row's 10 000) at {Rate.ToString("0", CultureInfo.InvariantCulture)} checks/s "
             + $"(a tenth of 20 000) for {Window.TotalSeconds:F0} s from the cluster client; failures: "
-            + (driver.Failures.IsEmpty ? "none" : string.Join(", ", driver.Failures.Select(x => $"{x.Value} × {x.Key}")))
+            + (driver.Failures.IsEmpty
+                    ? "none"
+                    : string.Join(", ", driver.Failures.Select(static x => $"{x.Value} × {x.Key}")))
         );
 
         topology.Report.Note(
@@ -193,15 +243,25 @@ public sealed class ReBacCheckTests(LoadTopology topology) {
             + $"The full-consistency walk — no cache, no index, every object's durable row re-read — is p50 {fullyDistribution.P50:F1} / p99 {fullyDistribution.P99:F1} ms over {fully.Count} samples."
         );
 
-        warm.AchievedRate.ShouldBeGreaterThan(Rate * 0.9, $"the driver reached {warm.AchievedRate:F0} checks/s of the {Rate:F0} asked for.");
-        warm.Errors.ShouldBe(0, "checks failed or denied: " + string.Join(", ", driver.Failures.Select(x => $"{x.Value} × {x.Key}")));
+        warm.AchievedRate.ShouldBeGreaterThan(
+            Rate * 0.9,
+            $"the driver reached {warm.AchievedRate:F0} checks/s of the {Rate:F0} asked for."
+        );
+        warm.Errors.ShouldBe(
+            0,
+            "checks failed or denied: " + string.Join(", ", driver.Failures.Select(static x => $"{x.Value} × {x.Key}"))
+        );
         coldErrors.ShouldBe(0, "cold checks failed or denied.");
-        coldFromCache.ShouldBe(0, $"{coldFromCache} of {ColdSamples} cold samples were answered from the check grain's persisted cache, so they were not cold and the p99 is not a cold number.");
+        coldFromCache.ShouldBe(
+            0,
+            $"{coldFromCache} of {ColdSamples} cold samples were answered from the check grain's persisted cache, so they were not cold and the p99 is not a cold number."
+        );
         fullyErrors.ShouldBe(0, "fully consistent checks failed, were denied, or came from the cache.");
     }
 
     static RelationTuple Tuple(string objectType, string objectId, string relation, SubjectRef subject) =>
-        RelationTuple.Create(AuthObjectRef.Create(objectType, objectId).GetValueOrThrow(), relation, subject).GetValueOrThrow();
+        RelationTuple.Create(AuthObjectRef.Create(objectType, objectId).GetValueOrThrow(), relation, subject)
+            .GetValueOrThrow();
 
     static async Task WriteAsync(ITupleStoreGrain store, RelationTuple tuple) {
         var written = await store.WriteAsync(tuple);

@@ -1,5 +1,4 @@
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.Providers.Analytics.Contracts;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -47,30 +46,30 @@ public sealed class AnalyticsCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Analytics/clickhouseClusters",
-            CreateProvider = () => new AnalyticsProvider(),
+            CreateProvider = static () => new AnalyticsProvider(),
             ReconcilerType = typeof(ClickHouseClusterReconciler),
-            CreateReconciler = clock => new ClickHouseClusterReconciler(clock),
+            CreateReconciler = static clock => new ClickHouseClusterReconciler(clock),
             Type = ClickHouseClusters.Type,
             ApiVersion = ClickHouseClusters.V2026,
-            Body = cluster => ClickHouseClusters.Body(cluster),
+            Body = static cluster => ClickHouseClusters.Body(cluster),
             // ⚠ Changes `shards`, which is the property that reaches the rendered object in the place
             // a copied derivation gets wrong — `spec.configuration.clusters[0].layout.shardsCount` —
             // and which moves all three meters through ClickHouseClusters.Servers. A body that
             // differed only where the reconciler ignores it would pass the update test while proving
             // the update never left the grain.
-            ChangedBody = cluster => ClickHouseClusters.Body(cluster, shards: 3),
+            ChangedBody = static cluster => ClickHouseClusters.Body(cluster, 3),
             // Drops the required `/properties/storage/size`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written:
             // a hand-written invalid body drifts out of date the day the schema gains a property and
             // then tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => WithoutStorageSize(ClickHouseClusters.Body(cluster)),
+            InvalidBody = static cluster => WithoutStorageSize(ClickHouseClusters.Body(cluster)),
             InvalidBodyTarget = "/properties/storage/size",
             ActionName = ClickHouseClusters.ListKeysAction,
             // ⚠ THE KEEPER FIRST, MATCHING THE ORDER THE RECONCILER APPLIES THEM IN. The suite does
             // not require an order and the reconciler's reason for having one is in its remarks;
             // listing them the other way round here would be a second, quieter opinion about which
             // object comes first.
-            Objects = (id, ns) => [
+            Objects = static (id, ns) => [
                 ClickHouseClusters.KeeperRef(ns, id.Name),
                 ClickHouseClusters.ClickHouseRef(ns, id.Name)
             ],
@@ -85,7 +84,7 @@ public sealed class AnalyticsCase : IProviderCaseSource {
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return ClickHouseClusters.Matches(match.ObjectJson, desired.RootElement);
             }

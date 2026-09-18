@@ -78,7 +78,7 @@ public sealed class SchemaBuilderTests {
         problems.ShouldContain(x => x.Contains("may only be applied to `Rel(name)`", StringComparison.Ordinal));
 
         // ⚠ And it does not merely report — it refuses to produce a schema.
-        Should.Throw<SchemaDefinitionException>(() =>
+        Should.Throw<SchemaDefinitionException>(static () =>
             Schema.DefineType("doc")
                 .Relation("parent")
                 .Relation("owner", This)
@@ -340,7 +340,7 @@ public sealed class SchemaBuilderTests {
 
     [Fact]
     public void BuildThrowsAndListsEveryProblemAtOnce() {
-        var thrown = Should.Throw<SchemaDefinitionException>(() =>
+        var thrown = Should.Throw<SchemaDefinitionException>(static () =>
             Schema.DefineType("doc")
                 .Relation("owner", This)
                 .Relation("suspended")

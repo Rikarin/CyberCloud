@@ -131,7 +131,10 @@ public sealed class SmtpRelayOptions {
     /// </remarks>
     public Result Validate() {
         if (!IsConfigured) {
-            return Result.Failure(ErrorCode.InvalidRequestBody, $"{SectionName}:Host is empty, so there is no relay to send through.");
+            return Result.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"{SectionName}:Host is empty, so there is no relay to send through."
+            );
         }
 
         if (Port is < 1 or > 65535) {
@@ -169,7 +172,8 @@ public sealed class SmtpRelayOptions {
             return Result.Failure(badFrom.Code, $"{SectionName}:From: {badFrom.Message}");
         }
 
-        if (UnsubscribeMailbox.Length > 0 && MailAddresses.Check(UnsubscribeMailbox).TryGetError(out var badUnsubscribe)) {
+        if (UnsubscribeMailbox.Length > 0
+            && MailAddresses.Check(UnsubscribeMailbox).TryGetError(out var badUnsubscribe)) {
             return Result.Failure(badUnsubscribe.Code, $"{SectionName}:UnsubscribeMailbox: {badUnsubscribe.Message}");
         }
 

@@ -29,7 +29,7 @@ public sealed record DerivedReport(
     ImmutableArray<string> Stale
 ) {
     /// <summary>Whether anything at all is wrong.</summary>
-    public bool IsClean => Stale.IsEmpty && Documents.All(x => !x.Drifted && x.Problems.IsEmpty);
+    public bool IsClean => Stale.IsEmpty && Documents.All(static x => !x.Drifted && x.Problems.IsEmpty);
 }
 
 /// <summary>
@@ -38,8 +38,11 @@ public sealed record DerivedReport(
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Five directories under one root since issue #40, and two of them are packages
-///         rather than one file per api-version.</b> <c>sdk-python/</c> and <c>sdk-go/</c> each
+///         ⚠
+///         <b>
+///             Five directories under one root since issue #40, and two of them are packages
+///             rather than one file per api-version.
+///         </b> <c>sdk-python/</c> and <c>sdk-go/</c> each
 ///         hold a subpackage per api-version and a few files written once for all of them; every
 ///         file is its own row here, byte-compared exactly as the single-file surfaces are, so a
 ///         drift in any one of them is a named file in the report.
@@ -102,7 +105,7 @@ public static class DerivedSurfaces {
         var produced = new List<DerivedDocument>();
         var expected = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var (version, document) in documents.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+        foreach (var (version, document) in documents.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
             var cli = CliEmitter.Emit(document);
             var forms = FormsEmitter.Emit(document);
             var sdk = SdkEmitter.Emit(document);
@@ -154,22 +157,62 @@ public static class DerivedSurfaces {
             // TypeScript client no rule 6 gives them a directory of their own. Each is several
             // files per api-version, so each file is its own row and the surface's self-check is
             // reported once, on the client file, rather than repeated on every row.
-            AppendPackage(produced, PythonSdkEmitter.DirectoryName, version, PythonSdkEmitter.Emit(document), PythonSdkEmitter.Problems, directory, write, expected);
-            AppendPackage(produced, GoSdkEmitter.DirectoryName, version, GoSdkEmitter.Emit(document), GoSdkEmitter.Problems, directory, write, expected);
+            AppendPackage(
+                produced,
+                PythonSdkEmitter.DirectoryName,
+                version,
+                PythonSdkEmitter.Emit(document),
+                PythonSdkEmitter.Problems,
+                directory,
+                write,
+                expected
+            );
+            AppendPackage(
+                produced,
+                GoSdkEmitter.DirectoryName,
+                version,
+                GoSdkEmitter.Emit(document),
+                GoSdkEmitter.Problems,
+                directory,
+                write,
+                expected
+            );
         }
 
         // The files a package writes once for every api-version — the Python manifest and root
         // package, the Go module file. Attributed to the newest api-version, which is the run that
         // decided their content, and only when there was one: an empty registry has no package.
         if (documents.Count > 0) {
-            var newest = documents.Keys.OrderBy(x => x, StringComparer.Ordinal).Last();
+            var newest = documents.Keys.OrderBy(static x => x, StringComparer.Ordinal).Last();
 
             foreach (var file in PythonSdkEmitter.Root(documents.Keys)) {
-                produced.Add(Write(PythonSdkEmitter.DirectoryName, file.Key, newest, Text(file.Value), [], directory, write, expected));
+                produced.Add(
+                    Write(
+                        PythonSdkEmitter.DirectoryName,
+                        file.Key,
+                        newest,
+                        Text(file.Value),
+                        [],
+                        directory,
+                        write,
+                        expected
+                    )
+                );
             }
 
             foreach (var file in GoSdkEmitter.Root()) {
-                produced.Add(Write(GoSdkEmitter.DirectoryName, file.Key, newest, Text(file.Value), [], directory, write, expected));
+                produced.Add(
+                    Write(
+                        GoSdkEmitter.DirectoryName,
+                        file.Key,
+                        newest,
+                        Text(file.Value),
+                        [],
+                        directory,
+                        write,
+                        expected
+                    )
+                );
             }
         }
 
@@ -179,11 +222,11 @@ public static class DerivedSurfaces {
             ? root.EnumerateFiles("*", SearchOption.AllDirectories)
                 .Select(x => Relative(directory, x.FullName))
                 .Where(x => !expected.Contains(x) && !x.EndsWith(".md", StringComparison.Ordinal))
-                .OrderBy(x => x, StringComparer.Ordinal)
+                .OrderBy(static x => x, StringComparer.Ordinal)
                 .ToImmutableArray()
             : [];
 
-        return new([.. produced.OrderBy(x => x.FileName, StringComparer.Ordinal)], stale);
+        return new([.. produced.OrderBy(static x => x.FileName, StringComparer.Ordinal)], stale);
     }
 
     /// <summary>The report as one line per file, for a build log.</summary>
@@ -256,7 +299,18 @@ public static class DerivedSurfaces {
         foreach (var file in files) {
             var isClient = Path.GetFileNameWithoutExtension(file.Key) == "client";
 
-            produced.Add(Write(surface, file.Key, version, Text(file.Value), isClient ? problems : [], directory, write, expected));
+            produced.Add(
+                Write(
+                    surface,
+                    file.Key,
+                    version,
+                    Text(file.Value),
+                    isClient ? problems : [],
+                    directory,
+                    write,
+                    expected
+                )
+            );
         }
     }
 
@@ -270,7 +324,7 @@ public static class DerivedSurfaces {
             normalised += "\n";
         }
 
-        return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(normalised);
+        return new UTF8Encoding(false).GetBytes(normalised);
     }
 
     static string Relative(string directory, string full) =>
@@ -311,8 +365,8 @@ public static class DerivedSurfaces {
         // would have to be relaxed to a range, which is the shape of a check that stops catching the
         // thing it was written for.
         var commandCount = groups
-            .Where(x => !string.Equals(x.Key, CliEmitter.ScopeGroupName, StringComparison.Ordinal))
-            .Sum(group => group.Value?["commands"] is JsonObject c ? c.Count : 0);
+            .Where(static x => !string.Equals(x.Key, CliEmitter.ScopeGroupName, StringComparison.Ordinal))
+            .Sum(static group => group.Value?["commands"] is JsonObject c ? c.Count : 0);
 
         var typeCount = DocumentReader.TypesOf(document).Length;
         var scopeCount = groups[CliEmitter.ScopeGroupName]?["commands"] is JsonObject scopes ? scopes.Count : 0;
@@ -355,7 +409,7 @@ public static class DerivedSurfaces {
             // messages naming an empty provider and an empty type, which is worse than no check.
             // Its own count is asserted above, and a JsonObject cannot hold one key twice.
             if (!string.Equals(group.Key, CliEmitter.ScopeGroupName, StringComparison.Ordinal)) {
-                problems.AddRange(CliTokens.Collisions(commands.Select(x => Declaration(x.Value))));
+                problems.AddRange(CliTokens.Collisions(commands.Select(static x => Declaration(x.Value))));
             }
 
             foreach (var command in commands) {
@@ -503,7 +557,7 @@ public static class DerivedSurfaces {
 
         if (depth > 0) {
             problems.Add(
-                $"The generated source leaves {depth.ToString(System.Globalization.CultureInfo.InvariantCulture)} "
+                $"The generated source leaves {depth.ToString(CultureInfo.InvariantCulture)} "
                 + "brace(s) open."
             );
         }

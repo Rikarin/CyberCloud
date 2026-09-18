@@ -34,7 +34,7 @@ static class ResultWriter {
 
             case OutputFormat.Json:
                 // ⚠ A missing value is `null`, not nothing: `--output json` promises a document.
-                console.Out.WriteLine(value.ToJson(indented: true));
+                console.Out.WriteLine(value.ToJson(true));
 
                 break;
 

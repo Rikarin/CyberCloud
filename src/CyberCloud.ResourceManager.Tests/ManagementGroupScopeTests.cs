@@ -35,7 +35,7 @@ public sealed class ManagementGroupScopeTests {
     public ManagementGroupScopeTests(ResourceManagerCluster cluster) {
         this.cluster = cluster;
 
-        scopes = new ScopeManagerService(
+        scopes = new(
             new SwitchableScopeAuthorizer(),
             new NoOpScopeRelationWriter(),
             cluster.Grains,
@@ -81,7 +81,8 @@ public sealed class ManagementGroupScopeTests {
         );
 
         read.IsSuccess.ShouldBeTrue(read.Error?.Message);
-        read.GetValueOrThrow().ShouldBe(snapshot with { Created = false }, "a read renders differently from the create");
+        read.GetValueOrThrow()
+            .ShouldBe(snapshot with { Created = false }, "a read renders differently from the create");
 
         // Idempotent: 200 the second time, same record.
         var again = await CreateGroupAsync(group, """{"displayName":"Platform"}""");
@@ -152,7 +153,10 @@ public sealed class ManagementGroupScopeTests {
         Reset();
         var tenant = await NewTenantAsync();
 
-        var refused = await CreateGroupAsync(ScopeId.ManagementGroupOf(tenant, "orphan"), """{"managementGroup":"nowhere"}""");
+        var refused = await CreateGroupAsync(
+            ScopeId.ManagementGroupOf(tenant, "orphan"),
+            """{"managementGroup":"nowhere"}"""
+        );
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
@@ -165,7 +169,10 @@ public sealed class ManagementGroupScopeTests {
         Reset();
         var tenant = await NewTenantAsync();
 
-        var refused = await CreateGroupAsync(ScopeId.ManagementGroupOf(tenant, "loop"), """{"managementGroup":"loop"}""");
+        var refused = await CreateGroupAsync(
+            ScopeId.ManagementGroupOf(tenant, "loop"),
+            """{"managementGroup":"loop"}"""
+        );
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
@@ -189,7 +196,9 @@ public sealed class ManagementGroupScopeTests {
     public async Task AGroupNamedInTheBodyThatIsNotADns1123NameIsA400AndNotAThrow(string name) {
         Reset();
         var tenant = await NewTenantAsync();
-        var body = JsonSerializer.Serialize(new Dictionary<string, string> { ["displayName"] = "Prod", ["managementGroup"] = name });
+        var body = JsonSerializer.Serialize(
+            new Dictionary<string, string> { ["displayName"] = "Prod", ["managementGroup"] = name }
+        );
 
         // The subscription PUT, assigning to a group that cannot be named.
         var subscription = await PutSubscriptionAsync(ScopeId.Subscription(tenant, Guid.NewGuid()), body);
@@ -272,9 +281,15 @@ public sealed class ManagementGroupScopeTests {
         created.GetValueOrThrow().ManagementGroup.ShouldBe("platform");
 
         var edges = NoOpScopeRelationWriter.Edges.Where(x => x.Scope == subscription).ToList();
-        edges.ShouldBe([(subscription, (ScopeId?)null, (ScopeId?)group)], "the subscription's one edge is not to the group");
+        edges.ShouldBe(
+            [(subscription, (ScopeId?)null, (ScopeId?)group)],
+            "the subscription's one edge is not to the group"
+        );
 
-        SwitchableScopeAuthorizer.Asked.ShouldContain(group, "the group was not asked whether the caller may place a subscription under it");
+        SwitchableScopeAuthorizer.Asked.ShouldContain(
+            group,
+            "the group was not asked whether the caller may place a subscription under it"
+        );
         SwitchableScopeAuthorizer.Asked.ShouldContain(ScopeId.Tenant(tenant));
 
         var record = await cluster.For(tenant)
@@ -305,7 +320,10 @@ public sealed class ManagementGroupScopeTests {
         (await CreateGroupAsync(b, "{}")).IsSuccess.ShouldBeTrue();
 
         var subscription = ScopeId.Subscription(tenant, Guid.NewGuid());
-        (await PutSubscriptionAsync(subscription, """{"displayName":"Prod","managementGroup":"a"}""")).IsSuccess.ShouldBeTrue();
+        (await PutSubscriptionAsync(
+                subscription,
+                """{"displayName":"Prod","managementGroup":"a"}"""
+            )).IsSuccess.ShouldBeTrue();
         NoOpScopeRelationWriter.Edges.Clear();
 
         var moved = await PutSubscriptionAsync(subscription, """{"displayName":"Prod","managementGroup":"b"}""");
@@ -322,9 +340,13 @@ public sealed class ManagementGroupScopeTests {
 
         // Back to the root with the empty string; absent leaves it alone.
         NoOpScopeRelationWriter.Edges.Clear();
-        (await PutSubscriptionAsync(subscription, """{"displayName":"Prod"}""")).GetValueOrThrow().ManagementGroup.ShouldBe("b");
+        (await PutSubscriptionAsync(subscription, """{"displayName":"Prod"}""")).GetValueOrThrow()
+            .ManagementGroup.ShouldBe("b");
         NoOpScopeRelationWriter.Edges.Where(x => x.Scope == subscription)
-            .ShouldBe([(subscription, (ScopeId?)null, (ScopeId?)b)], "a body that did not mention the group moved the subscription");
+            .ShouldBe(
+                [(subscription, (ScopeId?)null, (ScopeId?)b)],
+                "a body that did not mention the group moved the subscription"
+            );
 
         NoOpScopeRelationWriter.Edges.Clear();
         var rooted = await PutSubscriptionAsync(subscription, """{"displayName":"Prod","managementGroup":""}""");
@@ -346,15 +368,24 @@ public sealed class ManagementGroupScopeTests {
         (await CreateGroupAsync(hidden, "{}")).IsSuccess.ShouldBeTrue();
         SwitchableScopeAuthorizer.Hidden[hidden] = true;
 
-        var unseen = await PutSubscriptionAsync(ScopeId.Subscription(tenant, Guid.NewGuid()), """{"displayName":"x","managementGroup":"hidden"}""");
-        var absent = await PutSubscriptionAsync(ScopeId.Subscription(tenant, Guid.NewGuid()), """{"displayName":"x","managementGroup":"absent"}""");
+        var unseen = await PutSubscriptionAsync(
+            ScopeId.Subscription(tenant, Guid.NewGuid()),
+            """{"displayName":"x","managementGroup":"hidden"}"""
+        );
+        var absent = await PutSubscriptionAsync(
+            ScopeId.Subscription(tenant, Guid.NewGuid()),
+            """{"displayName":"x","managementGroup":"absent"}"""
+        );
 
         unseen.IsFailure.ShouldBeTrue();
         absent.IsFailure.ShouldBeTrue();
         unseen.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
         absent.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
         unseen.Error.Message.Replace("hidden", "X", StringComparison.Ordinal)
-            .ShouldBe(absent.Error.Message.Replace("absent", "X", StringComparison.Ordinal), "the two refusals differ — an oracle");
+            .ShouldBe(
+                absent.Error.Message.Replace("absent", "X", StringComparison.Ordinal),
+                "the two refusals differ — an oracle"
+            );
     }
 
     // ── List ───────────────────────────────────────────────────────────────────────────────────
@@ -365,16 +396,22 @@ public sealed class ManagementGroupScopeTests {
         var tenant = await NewTenantAsync();
         (await CreateGroupAsync(ScopeId.ManagementGroupOf(tenant, "zeta"), "{}")).IsSuccess.ShouldBeTrue();
         (await CreateGroupAsync(ScopeId.ManagementGroupOf(tenant, "alpha"), "{}")).IsSuccess.ShouldBeTrue();
-        (await CreateGroupAsync(ScopeId.ManagementGroupOf(tenant, "alpha-child"), """{"managementGroup":"alpha"}""")).IsSuccess.ShouldBeTrue();
+        (await CreateGroupAsync(
+                ScopeId.ManagementGroupOf(tenant, "alpha-child"),
+                """{"managementGroup":"alpha"}"""
+            )).IsSuccess.ShouldBeTrue();
 
         SwitchableScopeAuthorizer.Hidden[ScopeId.ManagementGroupOf(tenant, "zeta")] = true;
 
         var page = await ListAsync(tenant, ScopeKind.ManagementGroup);
 
-        page.Items.Select(x => x.Path).ShouldBe([
-            ScopeId.ManagementGroupOf(tenant, "alpha").Path,
-            ScopeId.ManagementGroupOf(tenant, "alpha-child").Path
-        ]);
+        page.Items.Select(static x => x.Path)
+            .ShouldBe(
+                [
+                    ScopeId.ManagementGroupOf(tenant, "alpha").Path,
+                    ScopeId.ManagementGroupOf(tenant, "alpha-child").Path
+                ]
+            );
 
         // Flat: the nested group is in the page, carrying its parent.
         page.Items[1].ManagementGroup.ShouldBe("alpha");
@@ -412,7 +449,7 @@ public sealed class ManagementGroupScopeTests {
         // no longer lists it, the tenant neither.
         NoOpScopeRelationWriter.Cleared.ShouldContain(child);
         (await Group(tenant, "root")).Children.ShouldBeEmpty();
-        (await ListAsync(tenant, ScopeKind.ManagementGroup)).Items.Select(x => x.Path).ShouldBe([root.Path]);
+        (await ListAsync(tenant, ScopeKind.ManagementGroup)).Items.Select(static x => x.Path).ShouldBe([root.Path]);
 
         // Idempotent, and the re-driven DELETE sweeps again.
         NoOpScopeRelationWriter.Cleared.Clear();
@@ -456,7 +493,9 @@ public sealed class ManagementGroupScopeTests {
 
     Task<Result<ScopeSnapshot>> PutSubscriptionAsync(ScopeId subscription, string body) =>
         scopes.CreateAsync(
-            new() { Path = subscription.Path, Body = body, Caller = ResourceManagerCluster.Caller(subscription.TenantId) },
+            new() {
+                Path = subscription.Path, Body = body, Caller = ResourceManagerCluster.Caller(subscription.TenantId)
+            },
             TestContext.Current.CancellationToken
         );
 

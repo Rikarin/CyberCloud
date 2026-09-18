@@ -79,9 +79,9 @@ public sealed partial class ChartRegistryPairTests {
         var shipped = ApiPointers(ChartSchema()).ToList();
 
         var registry = ValkeyCaches.Schema2026.Properties
-            .Where(x => x.JsonPointer.StartsWith("/properties/", StringComparison.Ordinal))
-            .Where(x => x.JsonPointer != ValkeyCaches.ClusterIdPointer)
-            .Select(x => x.JsonPointer)
+            .Where(static x => x.JsonPointer.StartsWith("/properties/", StringComparison.Ordinal))
+            .Where(static x => x.JsonPointer != ValkeyCaches.ClusterIdPointer)
+            .Select(static x => x.JsonPointer)
             .ToList();
 
         foreach (var pointer in shipped) {
@@ -138,7 +138,7 @@ public sealed partial class ChartRegistryPairTests {
         // _helpers.tpl has the same hazard and says so; this is the check that neither list can grow
         // without the other.
         foreach (var preset in ValkeyCaches.Schema2026.Properties
-                     .Single(x => x.JsonPointer == "/properties/sizing/preset")
+                     .Single(static x => x.JsonPointer == "/properties/sizing/preset")
                      .AllowedValues) {
             ValkeyCaches.Presets.ShouldContainKey(preset);
         }
@@ -164,8 +164,8 @@ public sealed partial class ChartRegistryPairTests {
     /// </remarks>
     static IEnumerable<string> ApiPointers(JsonObject node) =>
         Members(node)
-            .Where(x => x["x-cybercloud-api"]?.GetValue<bool>() != false)
-            .Select(x => x["x-cybercloud-pointer"]!.GetValue<string>());
+            .Where(static x => x["x-cybercloud-api"]?.GetValue<bool>() != false)
+            .Select(static x => x["x-cybercloud-pointer"]!.GetValue<string>());
 
     static IEnumerable<JsonObject> Members(JsonObject node) {
         if (node["properties"] is not JsonObject members) {

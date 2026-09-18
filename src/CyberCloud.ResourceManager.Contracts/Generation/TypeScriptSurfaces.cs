@@ -21,7 +21,7 @@ public sealed record TypeScriptReport(
     ImmutableArray<string> Problems
 ) {
     /// <summary>Whether anything at all is wrong.</summary>
-    public bool IsClean => Stale.IsEmpty && Problems.IsEmpty && Files.All(x => !x.Drifted);
+    public bool IsClean => Stale.IsEmpty && Problems.IsEmpty && Files.All(static x => !x.Drifted);
 
     /// <summary>
     ///     Whether the run had nothing to emit — the vacuous pass a caller must read rather than
@@ -105,7 +105,7 @@ public static class TypeScriptSurfaces {
 
         // ⚠ The newest, and ordinal ordering is chronological because a version is a date —
         // docs/plan/10 § API versioning. The same ordering ApiVersionsOf relies on.
-        var version = documents.Keys.OrderBy(x => x, StringComparer.Ordinal).Last();
+        var version = documents.Keys.OrderBy(static x => x, StringComparer.Ordinal).Last();
         var files = TypeScriptEmitter.Emit(documents[version]);
         var produced = new List<TypeScriptFile>();
         var expected = new HashSet<string>(StringComparer.Ordinal);
@@ -137,12 +137,12 @@ public static class TypeScriptSurfaces {
             ? root.EnumerateFiles("*", SearchOption.AllDirectories)
                 .Select(x => Relative(directory, x.FullName))
                 .Where(x => !expected.Contains(x) && !IsExempt(x))
-                .OrderBy(x => x, StringComparer.Ordinal)
+                .OrderBy(static x => x, StringComparer.Ordinal)
                 .ToImmutableArray()
             : [];
 
         return new(
-            [.. produced.OrderBy(x => x.File, StringComparer.Ordinal)],
+            [.. produced.OrderBy(static x => x.File, StringComparer.Ordinal)],
             stale,
             TypeScriptEmitter.Problems(files)
         );
@@ -188,7 +188,7 @@ public static class TypeScriptSurfaces {
             normalised += "\n";
         }
 
-        return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(normalised);
+        return new UTF8Encoding(false).GetBytes(normalised);
     }
 
     static string Relative(string directory, string full) =>

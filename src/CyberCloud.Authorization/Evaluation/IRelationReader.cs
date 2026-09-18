@@ -51,8 +51,11 @@ public interface IRelationReader {
 ///         from them.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A <c>false</c> from this interface is taken without a walk, so it must be a
-///         <c>false</c> the walk would have reached.</b> § Staleness's "always verifiable, never an
+///         ⚠
+///         <b>
+///             A <c>false</c> from this interface is taken without a walk, so it must be a
+///             <c>false</c> the walk would have reached.
+///         </b> § Staleness's "always verifiable, never an
 ///         authority" is met differently from the way the document sketches: the index is not
 ///         behind a token, because the store writes it before the version moves, so there is no
 ///         version to compare. What is compared instead is completeness — a closure that recorded

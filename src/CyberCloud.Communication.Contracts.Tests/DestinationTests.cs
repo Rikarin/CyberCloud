@@ -31,7 +31,7 @@ public sealed class DestinationTests {
     public void TheLookAlikeSeparatorsAPastedContactCardCarriesAreStrippedToo() =>
         // U+00A0 no-break space, U+2011 non-breaking hyphen, U+2013 en dash. Every one of these
         // reaches a form field from a copied contact card and none of them is a hyphen-minus.
-        Destinations.Normalize(ChannelKind.Sms, "+420 777‑123–456")
+        Destinations.Normalize(ChannelKind.Sms, "+420\u00A0777‑123–456")
             .GetValueOrThrow()
             .ShouldBe("+420777123456");
 

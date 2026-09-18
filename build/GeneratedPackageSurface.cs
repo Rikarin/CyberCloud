@@ -100,5 +100,7 @@ static class GeneratedPackageSurface {
     ///     indentation for Python, <c>type </c> at column zero for Go.
     /// </summary>
     public static int Declarations(IEnumerable<AbsolutePath> files, string keyword, bool indented) =>
-        files.Sum(file => File.ReadLines(file).Count(line => (indented ? line.TrimStart() : line).StartsWith(keyword, StringComparison.Ordinal)));
+        files.Sum(file => File.ReadLines(file)
+                .Count(line => (indented ? line.TrimStart() : line).StartsWith(keyword, StringComparison.Ordinal))
+        );
 }

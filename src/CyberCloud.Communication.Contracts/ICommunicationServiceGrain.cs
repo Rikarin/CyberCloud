@@ -99,8 +99,11 @@ public interface ICommunicationServiceGrain : IGrainWithStringKey {
     ///     so a send through it refuses before reaching a carrier.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The suppression list is not touched, and that is the point of retiring rather than
-    ///     deleting.</b> <see cref="ISuppressionListGrain" /> shares this key and is the one record
+    ///     ⚠
+    ///     <b>
+    ///         The suppression list is not touched, and that is the point of retiring rather than
+    ///         deleting.
+    ///     </b> <see cref="ISuppressionListGrain" /> shares this key and is the one record
     ///     the tenant must not be able to clear by deleting and recreating the service —
     ///     <see cref="CommunicationGrainKeys.ResourceIdFor" /> says why the recreated service lands
     ///     on the same key. The template grains keep their versions for the same reason: a carrier's

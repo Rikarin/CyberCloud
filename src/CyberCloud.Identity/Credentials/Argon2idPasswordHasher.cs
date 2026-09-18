@@ -249,13 +249,12 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher {
     }
 
     byte[] Derive(string candidate, byte[] salt, Argon2idOptions with) {
-        using var argon = new Argon2id(Encode(candidate)) {
-            Salt = salt,
-            MemorySize = with.MemoryKibibytes,
-            Iterations = with.Iterations,
-            DegreeOfParallelism = with.Parallelism,
-            KnownSecret = pepper.Length == 0 ? null : pepper
-        };
+        using var argon = new Argon2id(Encode(candidate));
+        argon.Salt = salt;
+        argon.MemorySize = with.MemoryKibibytes;
+        argon.Iterations = with.Iterations;
+        argon.DegreeOfParallelism = with.Parallelism;
+        argon.KnownSecret = pepper.Length == 0 ? null : pepper;
 
         // ⚠ GetBytes, not GetBytesAsync. This runs inside a grain call, and Konscious' async form
         // fans the lanes out onto the thread pool — which from inside an Orleans activation means

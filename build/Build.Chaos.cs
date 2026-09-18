@@ -247,7 +247,8 @@ partial class Build {
         }
 
         foreach (var (key, value) in invariants) {
-            if (int.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var number) && value is JsonObject row) {
+            if (int.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var number)
+                && value is JsonObject row) {
                 outcomes[number] = new(
                     row["status"]?.GetValue<string>() ?? "Unknown",
                     row["detail"]?.GetValue<string>() ?? string.Empty
@@ -282,23 +283,43 @@ partial class Build {
 
         foreach (var invariant in ChaosInvariants) {
             if (!outcomes.TryGetValue(invariant.Number, out var outcome)) {
-                Log.Error("  ✘ {Number} {Fault,-52} no outcome recorded — the test did not get as far as saying what it found", invariant.Number, invariant.Fault);
+                Log.Error(
+                    "  ✘ {Number} {Fault,-52} no outcome recorded — the test did not get as far as saying what it found",
+                    invariant.Number,
+                    invariant.Fault
+                );
                 violated.Add($"invariant {invariant.Number} ({invariant.Fault}): no outcome recorded");
                 continue;
             }
 
             switch (outcome.Status) {
                 case "Held":
-                    Log.Information("  ✔ {Number} {Fault,-52} {Detail}", invariant.Number, invariant.Fault, outcome.Detail);
+                    Log.Information(
+                        "  ✔ {Number} {Fault,-52} {Detail}",
+                        invariant.Number,
+                        invariant.Fault,
+                        outcome.Detail
+                    );
                     break;
 
                 case "Vacuous":
-                    Log.Warning("  ○ {Number} {Fault,-52} VACUOUS — {Detail}", invariant.Number, invariant.Fault, outcome.Detail);
+                    Log.Warning(
+                        "  ○ {Number} {Fault,-52} VACUOUS — {Detail}",
+                        invariant.Number,
+                        invariant.Fault,
+                        outcome.Detail
+                    );
                     vacuous.Add(invariant.Number);
                     break;
 
                 default:
-                    Log.Error("  ✘ {Number} {Fault,-52} {Status} — {Detail}", invariant.Number, invariant.Fault, outcome.Status.ToUpperInvariant(), outcome.Detail);
+                    Log.Error(
+                        "  ✘ {Number} {Fault,-52} {Status} — {Detail}",
+                        invariant.Number,
+                        invariant.Fault,
+                        outcome.Status.ToUpperInvariant(),
+                        outcome.Detail
+                    );
                     violated.Add($"invariant {invariant.Number} ({invariant.Fault}): {outcome.Detail}");
                     break;
             }

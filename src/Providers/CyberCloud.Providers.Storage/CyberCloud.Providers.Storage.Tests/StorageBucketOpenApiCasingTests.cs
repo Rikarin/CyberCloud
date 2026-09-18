@@ -178,7 +178,7 @@ public sealed class StorageBucketOpenApiCasingTests {
         return OpenApiEmitter.Emit(registry, OpenApiEmitter.ApiVersionsOf(registry).Single());
     }
 
-    static ImmutableArray<string> Paths() => [.. Document()["paths"]!.AsObject().Select(x => x.Key)];
+    static ImmutableArray<string> Paths() => [.. Document()["paths"]!.AsObject().Select(static x => x.Key)];
 
     static void Collect(JsonNode? node, HashSet<string> names) {
         switch (node) {

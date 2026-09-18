@@ -52,12 +52,12 @@ public sealed record GenerationReport(
     ImmutableArray<string> Stale
 ) {
     /// <summary>How many api-versions were emitted. The index does not count as one.</summary>
-    public int ApiVersions => Documents.Count(x => x.ApiVersion.Length > 0);
+    public int ApiVersions => Documents.Count(static x => x.ApiVersion.Length > 0);
 
     /// <summary>Whether anything at all is wrong.</summary>
     public bool IsClean =>
         Stale.IsEmpty
-        && Documents.All(x => !x.Drifted && x.StructuralProblems.IsEmpty && x.BreakingChanges.IsEmpty);
+        && Documents.All(static x => !x.Drifted && x.StructuralProblems.IsEmpty && x.BreakingChanges.IsEmpty);
 }
 
 /// <summary>
@@ -122,7 +122,7 @@ public static class OpenApiArtifacts {
                 write,
                 // The index lists which versions exist, so it changes whenever one is added. Diffing it
                 // for compatibility would report every new api-version as a breaking change.
-                compareForCompatibility: false
+                false
             )
         );
 
@@ -139,7 +139,7 @@ public static class OpenApiArtifacts {
                     OpenApiEmitter.Emit(registry, version),
                     directory,
                     write,
-                    compareForCompatibility: true
+                    true
                 )
             );
         }
@@ -148,15 +148,15 @@ public static class OpenApiArtifacts {
             ? Directory.EnumerateFiles(directory, "*.json")
                 .Select(Path.GetFileName)
                 .Where(x => x is not null && !produced.Contains(x))
-                .Select(x => x!)
-                .OrderBy(x => x, StringComparer.Ordinal)
+                .Select(static x => x!)
+                .OrderBy(static x => x, StringComparer.Ordinal)
                 .ToImmutableArray()
             : [];
 
         return new(
             registry.Namespaces.Length,
             registry.Types.Length,
-            [.. documents.OrderBy(x => x.FileName, StringComparer.Ordinal)],
+            [.. documents.OrderBy(static x => x.FileName, StringComparer.Ordinal)],
             stale
         );
     }

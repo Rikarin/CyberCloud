@@ -1,5 +1,4 @@
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.Core.Resources;
 using CyberCloud.Providers.Storage.Contracts;
 using Shouldly;
@@ -71,28 +70,28 @@ public sealed class StorageCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Storage/accounts",
-            CreateProvider = () => new StorageProvider(),
+            CreateProvider = static () => new StorageProvider(),
             ReconcilerType = typeof(StorageAccountReconciler),
-            CreateReconciler = clock => new StorageAccountReconciler(clock),
+            CreateReconciler = static clock => new StorageAccountReconciler(clock),
             Type = StorageAccounts.Type,
             ApiVersion = StorageAccounts.V2026,
-            Body = cluster => StorageAccounts.Body(cluster),
+            Body = static cluster => StorageAccounts.Body(cluster),
             // ⚠ Changes `volumeServers`, which is the property the rendered object carries in TWO
             // places — `spec.volume.replicas` and, through the meters, the amount the update
             // re-reserves. A body that differed only where the reconciler ignores it would pass the
             // update test while proving the update never left the grain.
-            ChangedBody = cluster => StorageAccounts.Body(cluster, volumeServers: 5),
+            ChangedBody = static cluster => StorageAccounts.Body(cluster, 5),
             // Drops the required `/properties/storage/size`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written:
             // a hand-written invalid body drifts out of date the day the schema gains a property and
             // then tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => WithoutStorageSize(StorageAccounts.Body(cluster)),
+            InvalidBody = static cluster => WithoutStorageSize(StorageAccounts.Body(cluster)),
             InvalidBodyTarget = "/properties/storage/size",
             ActionName = StorageAccounts.ListKeysAction,
             // ⚠ BOTH OBJECTS, IN APPLY ORDER. The identities Secret is declared rather than left
             // undeclared-but-applied: the suite's delete assertion only proves what it lists is gone,
             // and a credential Secret surviving its account is exactly the thing that must not.
-            Objects = (id, ns) => [
+            Objects = static (id, ns) => [
                 StorageAccounts.ConfigSecretRef(ns, id.Name),
                 StorageAccounts.SeaweedRef(ns, id.Name)
             ],
@@ -103,7 +102,7 @@ public sealed class StorageCase : IProviderCaseSource {
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return StorageAccounts.Matches(match.ObjectJson, desired.RootElement);
             }
@@ -159,27 +158,27 @@ public sealed class StorageBucketCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Storage/accounts/buckets",
-            CreateProvider = () => new StorageProvider(),
+            CreateProvider = static () => new StorageProvider(),
             ReconcilerType = typeof(StorageBucketReconciler),
-            CreateReconciler = clock => new StorageBucketReconciler(clock),
+            CreateReconciler = static clock => new StorageBucketReconciler(clock),
             Type = StorageBuckets.Type,
             ApiVersion = StorageBuckets.V2026,
-            Body = cluster => StorageBuckets.Body(cluster),
+            Body = static cluster => StorageBuckets.Body(cluster),
             // ⚠ Changes `versioning`, which the rendered object carries as a bare boolean, rather than
             // `quota.size`, which is omitted from the object entirely when empty. A changed body whose
             // difference the renderer can DROP would pass the update test while proving nothing about
             // whether the update reached the cluster.
-            ChangedBody = cluster => StorageBuckets.Body(cluster, versioning: true),
+            ChangedBody = static cluster => StorageBuckets.Body(cluster, versioning: true),
             // Drops the required `/properties/clusterId`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written,
             // for the reason StorageCase gives. ⚠ And it is the CLUSTER pointer here because a
             // bucket's body has only two other leaves and neither is required — which is itself worth
             // noticing: this is the thinnest body in the catalogue, and the thing that makes it thin
             // is that a child's identity is its address.
-            InvalidBody = cluster => WithoutClusterId(StorageBuckets.Body(cluster)),
+            InvalidBody = static cluster => WithoutClusterId(StorageBuckets.Body(cluster)),
             InvalidBodyTarget = StorageBuckets.ClusterIdPointer,
             ActionName = StorageBuckets.StatsAction,
-            Objects = (id, ns) => [StorageBuckets.BucketRef(ns, id)],
+            Objects = static (id, ns) => [StorageBuckets.BucketRef(ns, id)],
             // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
             DataPlane = null,
             StoragePrefix = null,
@@ -191,14 +190,14 @@ public sealed class StorageBucketCase : IProviderCaseSource {
             // wholesale, which is more than a status patch; what the action assertion then proves is
             // that StorageBucketStatsHandler reads `status.usage` off the object it addresses, and
             // StorageActionHandlerTests proves the projection against a full document.
-            OperatorWritten = (id, ns) => [
+            OperatorWritten = static (id, ns) => [
                 (
                     StorageBuckets.BucketRef(ns, id),
                     StorageBuckets.WithSampledUsage(
                         StorageBuckets.BucketJson(id, JsonDocument.Parse(StorageBuckets.Body(Guid.Empty)).RootElement),
-                        objectCount: 12,
-                        sizeBytes: 4096,
-                        sampledAt: "2026-09-15T12:00:00Z"
+                        12,
+                        4096,
+                        "2026-09-15T12:00:00Z"
                     )
                 )
             ],
@@ -215,7 +214,7 @@ public sealed class StorageBucketCase : IProviderCaseSource {
             // cover that this still cannot is two accounts in ONE resource group each holding a
             // bucket called `assets` — the harness builds one parent per run, so the collision has no
             // way to happen here however much address the case is handed.
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return StorageBuckets.Matches(match.ObjectJson, match.Id, desired.RootElement);
             }
@@ -249,8 +248,11 @@ public sealed class StorageBucketCase : IProviderCaseSource {
 ///         asserts that half.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="ProviderConformanceCase.OperatorWritten" /> plants the claim BOUND, and it
-///         is the second shape that member has carried.</b> The action reads <c>spec.volumeName</c>,
+///         ⚠
+///         <b>
+///             <see cref="ProviderConformanceCase.OperatorWritten" /> plants the claim BOUND, and it
+///             is the second shape that member has carried.
+///         </b> The action reads <c>spec.volumeName</c>,
 ///         which the CSI external-provisioner writes and the fake never does. The planted claim names
 ///         no owner, because nothing owns a dynamically provisioned claim, and the shared claims case
 ///         follows an unowned planted claim through the teardown without asking it for a controller.
@@ -261,9 +263,9 @@ public sealed class StorageFileShareCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Storage/accounts/fileShares",
-            CreateProvider = () => new StorageProvider(),
+            CreateProvider = static () => new StorageProvider(),
             ReconcilerType = typeof(StorageFileShareReconciler),
-            CreateReconciler = clock => new StorageFileShareReconciler(clock),
+            CreateReconciler = static clock => new StorageFileShareReconciler(clock),
             Type = StorageFileShares.Type,
             ApiVersion = StorageFileShares.V2026,
             // ⚠ A NON-CANONICAL SIZE ON PURPOSE. 102400Mi is 100Gi, and a real API server stores a
@@ -272,35 +274,39 @@ public sealed class StorageFileShareCase : IProviderCaseSource {
             // MatchesDesired against this body is what proves the reconciler converges on a claim the
             // API server respelled, which a byte compare never did. Every other case in this provider
             // uses a canonical size, and that is exactly why nothing noticed.
-            Body = cluster => StorageFileShares.Body(cluster, quotaSize: "102400Mi"),
+            Body = static cluster => StorageFileShares.Body(cluster, "102400Mi"),
             // ⚠ Changes `quota.size`, which is the ONLY tenant-facing leaf and the one the claim
             // carries as `spec.resources.requests.storage`. Larger, not smaller: a shrink is refused
             // by the API server (a claim's request may not decrease) and the update test would then
             // be asserting a refusal rather than an update.
-            ChangedBody = cluster => StorageFileShares.Body(cluster, quotaSize: "200Gi"),
+            ChangedBody = static cluster => StorageFileShares.Body(cluster, "200Gi"),
             // Drops the required `/properties/quota/size`.
-            InvalidBody = cluster => WithoutQuotaSize(StorageFileShares.Body(cluster)),
+            InvalidBody = static cluster => WithoutQuotaSize(StorageFileShares.Body(cluster)),
             InvalidBodyTarget = "/properties/quota/size",
             ActionName = StorageFileShares.ListMountTargetsAction,
             // ⚠ IN APPLY ORDER: the driver, then the claim. A claim against a class that does not exist
             // yet stays Pending with no event naming why.
-            Objects = (id, ns) => [
+            Objects = static (id, ns) => [
                 StorageFileShares.DriverRef(ns, id),
                 StorageFileShares.ClaimRef(ns, id)
             ],
             // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
             DataPlane = null,
             StoragePrefix = null,
-            OperatorWritten = (id, ns) => [
+            OperatorWritten = static (id, ns) => [
                 (
                     StorageFileShares.ClaimRef(ns, id),
                     StorageFileShares.WithBoundVolume(
-                        StorageFileShares.ClaimJson(ns, id, JsonDocument.Parse(StorageFileShares.Body(Guid.Empty)).RootElement),
+                        StorageFileShares.ClaimJson(
+                            ns,
+                            id,
+                            JsonDocument.Parse(StorageFileShares.Body(Guid.Empty)).RootElement
+                        ),
                         "pvc-0f7d2c1e-conformance"
                     )
                 )
             ],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return StorageFileShares.Matches(match.ObjectJson, match.Id, match.Namespace, desired.RootElement);
             }
@@ -422,15 +428,16 @@ public sealed class StorageSuiteShapeTests {
     }
 
     static ImmutableArray<ProviderConformanceCase> AncestorsOf<TSource>()
-        where TSource : IProviderCaseSource => TSource.Ancestors;
+        where TSource : IProviderCaseSource =>
+        TSource.Ancestors;
 
     /// <summary>Every <c>[Fact]</c> a test class runs, by name, ordered.</summary>
     /// <param name="suite">The closed test class.</param>
     static ImmutableArray<string> RunnableFactsOf(Type suite) => [
         .. suite
             .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-            .Where(x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
-            .Select(x => x.Name)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Where(static x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
+            .Select(static x => x.Name)
+            .OrderBy(static x => x, StringComparer.Ordinal)
     ];
 }

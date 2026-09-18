@@ -129,7 +129,7 @@ public sealed class ClaimTemplateLabelTests(K3sFixture k3s) {
         // prevents is one nobody can read. Both halves are asserted below, and the cluster's own
         // sentence is kept in the message precisely so that this stays a measurement rather than an
         // assertion about our paraphrase of it.
-        second.Error!.Message.ShouldContain("Forbidden", Case.Insensitive);
+        second.Error!.Message.ShouldContain("Forbidden");
         second.Error.Message.ShouldContain("minReadySeconds");
 
         second.Error.Message.ShouldContain(
@@ -155,7 +155,7 @@ public sealed class ClaimTemplateLabelTests(K3sFixture k3s) {
         );
     }
 
-    KubeCommand Command(string name, string apiVersion) {
+    static KubeCommand Command(string name, string apiVersion) {
         var id = Resource(name);
 
         return KubeCommand.For(new UnusedConnection())
@@ -166,14 +166,14 @@ public sealed class ClaimTemplateLabelTests(K3sFixture k3s) {
             .WithFieldManager(OurManager)
             .WithApiVersion(apiVersion)
             .WithTemplateLabels(ClaimTemplatePath)
-            .ObjectJson(StatefulSetJson(name, claimLabels: null))
+            .ObjectJson(StatefulSetJson(name, null))
             .Build();
     }
 
     /// <summary>The same command with a per-request label written into the template by hand.</summary>
     /// <param name="name">The object's name.</param>
     /// <param name="apiVersion">The api-version to stamp, in the template as well as on the object.</param>
-    KubeCommand Sabotaged(string name, string apiVersion) {
+    static KubeCommand Sabotaged(string name, string apiVersion) {
         var id = Resource(name);
 
         return KubeCommand.For(new UnusedConnection())

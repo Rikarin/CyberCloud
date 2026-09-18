@@ -34,8 +34,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         withdraws the slice rather than deleting either network's object.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE REMOTE IS A NAME IN THE SAME RESOURCE GROUP, AND THE SCHEMA COULD HAVE SAID
-///         MORE.</b> <c>SchemaFormat.ResourceId</c> exists — <c>CyberCloud.Monitor</c>'s alert rules
+///         ⚠
+///         <b>
+///             THE REMOTE IS A NAME IN THE SAME RESOURCE GROUP, AND THE SCHEMA COULD HAVE SAID
+///             MORE.
+///         </b> <c>SchemaFormat.ResourceId</c> exists — <c>CyberCloud.Monitor</c>'s alert rules
 ///         name a sending service by full path — so a cross-subscription peering was expressible at
 ///         the API. It is not offered, for two reasons that are not the schema's. First, the write
 ///         path authorizes the caller against the <i>peering's</i> address and nothing else, and no
@@ -84,8 +87,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         <c>subnets-are-not-checked-against-the-address-space</c>, one level up.
 ///     </para>
 ///     <para>
-///         ⚠ <b>IPv4 ONLY AT THIS API-VERSION, WHICH IS A GAP THE FAMILY'S DUAL-STACK RULE MAKES
-///         WORTH NAMING.</b> <c>CreatePeerRouterPort</c> splits <c>localConnectIP</c> on commas into the
+///         ⚠
+///         <b>
+///             IPv4 ONLY AT THIS API-VERSION, WHICH IS A GAP THE FAMILY'S DUAL-STACK RULE MAKES
+///             WORTH NAMING.
+///         </b> <c>CreatePeerRouterPort</c> splits <c>localConnectIP</c> on commas into the
 ///         port's <c>networks</c>, so a dual-stack link is expressible on the substrate; what it
 ///         needs on this side is a v6 link range and a v6 route per side with a v6 next hop, three
 ///         more optional properties and a rule that all three arrive together. Recorded rather than
@@ -243,8 +249,11 @@ public static class VirtualNetworkPeerings {
     ///         an Azure-shaped switch that changed nothing would be the worst kind of property.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Every range is a required, patterned property with a default its pattern
-    ///         accepts</b>, for the reason <see cref="VirtualNetworks.Schema2026" /> gives at length:
+    ///         ⚠
+    ///         <b>
+    ///             Every range is a required, patterned property with a default its pattern
+    ///             accepts
+    ///         </b>, for the reason <see cref="VirtualNetworks.Schema2026" /> gives at length:
     ///         the generated chart lints against its own defaults, and <c>""</c> does not match a CIDR
     ///         pattern.
     ///     </para>
@@ -255,7 +264,7 @@ public static class VirtualNetworkPeerings {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the peering is billed in. ⚠ It must be the region both "
                     + "virtual networks are in — nothing checks that, because neither network's own "
                     + "region is readable from here."
@@ -269,7 +278,7 @@ public static class VirtualNetworkPeerings {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster whose fabric holds both networks. ⚠ Two networks in two "
                     + "clusters cannot be peered: a Kube-OVN peering is two ports on one OVN "
                     + "northbound database."
@@ -277,7 +286,7 @@ public static class VirtualNetworkPeerings {
                 new(
                     "/properties/remoteNetwork",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The name of the virtualNetworks resource in the same resource group "
                     + "to peer this network with. ⚠ A name, not a resource id: the remote must be in "
                     + "this subscription and resource group, and a network in another cannot be "
@@ -300,7 +309,7 @@ public static class VirtualNetworkPeerings {
                 new(
                     "/properties/localAddressSpace/v4",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "This network's IPv4 range, in CIDR form — normally its address space. "
                     + "⚠ It may not overlap the remote range or the link, and the refusal names both."
                 ) {
@@ -318,7 +327,7 @@ public static class VirtualNetworkPeerings {
                 new(
                     "/properties/remoteAddressSpace/v4",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The remote network's IPv4 range, in CIDR form — normally its address "
                     + "space. ⚠ Two networks with overlapping ranges cannot be peered, which is the "
                     + "one place this platform's 'overlapping your own networks is fine' stops "
@@ -337,7 +346,7 @@ public static class VirtualNetworkPeerings {
                 new(
                     "/properties/link/v4",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "A small IPv4 range, /30 or wider, that is in neither network. This "
                     + "network's peer port takes its first host address and the remote's takes the "
                     + "second. ⚠ It is checked against the platform's reserved ranges like any "
@@ -352,7 +361,8 @@ public static class VirtualNetworkPeerings {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     /// <summary>
     ///     What a <c>POST …/showRoutes</c> returns.
@@ -368,30 +378,35 @@ public static class VirtualNetworkPeerings {
     public static ResourceSchema RoutesResponse { get; } =
         ResourceSchema.Of(
             [
-                new("/localVpc", SchemaKind.Text, Required: true, Description: "The local network's Vpc object name."),
-                new("/remoteVpc", SchemaKind.Text, Required: true, Description: "The remote network's Vpc object name."),
+                new("/localVpc", SchemaKind.Text, true, Description: "The local network's Vpc object name."),
+                new(
+                    "/remoteVpc",
+                    SchemaKind.Text,
+                    true,
+                    Description: "The remote network's Vpc object name."
+                ),
                 new(
                     "/localConnectIP",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The address, with the link's prefix, this network's peer port carries."
                 ),
                 new(
                     "/remoteConnectIP",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The address, with the link's prefix, the remote's peer port carries."
                 ),
                 new(
                     "/localWritten",
                     SchemaKind.Boolean,
-                    Required: true,
+                    true,
                     Description: "Whether the local Vpc carries this peering's entry and route."
                 ),
                 new(
                     "/remoteWritten",
                     SchemaKind.Boolean,
-                    Required: true,
+                    true,
                     Description: "Whether the remote Vpc carries this peering's entry and route. ⚠ "
                     + "False with localWritten true is a remote network that was deleted or never "
                     + "existed."
@@ -399,7 +414,7 @@ public static class VirtualNetworkPeerings {
                 new(
                     "/localConnected",
                     SchemaKind.Boolean,
-                    Required: true,
+                    true,
                     Description: "Whether the fabric lists the remote in the local Vpc's "
                     + "status.vpcPeerings — the peer port exists. False on a cluster without the "
                     + "Kube-OVN controller."
@@ -407,13 +422,13 @@ public static class VirtualNetworkPeerings {
                 new(
                     "/remoteConnected",
                     SchemaKind.Boolean,
-                    Required: true,
+                    true,
                     Description: "The same, read off the remote Vpc."
                 ),
                 new(
                     "/sampledAt",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "When the platform read the objects, RFC 3339."
                 ) { Format = SchemaFormat.DateTime }
             ]
@@ -451,8 +466,11 @@ public static class VirtualNetworkPeerings {
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Runs after the <c>202</c>, for the reason <see cref="NetworkAddressing" /> gives:
-    ///         nothing on the write path lets a provider compare two properties.</b> Every refusal is
+    ///         ⚠
+    ///         <b>
+    ///             Runs after the <c>202</c>, for the reason <see cref="NetworkAddressing" /> gives:
+    ///             nothing on the write path lets a provider compare two properties.
+    ///         </b> Every refusal is
     ///         terminal — a body whose ranges overlap can never converge — and names the pointer and
     ///         both values, which is docs/plan/08 § Errors' standard.
     ///     </para>
@@ -488,9 +506,12 @@ public static class VirtualNetworkPeerings {
         }
 
         // Every one parsed a moment ago, or ProblemWith would have refused it by name.
-        var parsed = ranges.Select(x => (x.Pointer, x.Prefix, Cidr: Cidr.TryParse(x.Prefix, out var cidr) ? cidr : default)).ToArray();
+        var parsed = ranges.Select(static x => (x.Pointer, x.Prefix,
+                Cidr: Cidr.TryParse(x.Prefix, out var cidr) ? cidr : default)
+        )
+            .ToArray();
 
-        if (parsed.Any(x => x.Cidr.Network is null || x.Cidr.IsV6)) {
+        if (parsed.Any(static x => x.Cidr.Network is null || x.Cidr.IsV6)) {
             return "a peering's ranges are IPv4 at this api-version — see "
                 + "charts/managed/kube-ovn-vpc-peering/conformance.yaml § owed, peering-is-ipv4-only.";
         }
@@ -526,19 +547,19 @@ public static class VirtualNetworkPeerings {
     ///     agreement: the local side is the network the peering hangs off, the remote is the one its
     ///     body names.
     /// </remarks>
-    public static string LocalConnectIP(JsonElement desired) => HostAt(LinkV4(desired), 1, withPrefix: true);
+    public static string LocalConnectIP(JsonElement desired) => HostAt(LinkV4(desired), 1, true);
 
     /// <summary>The remote network's peer-port address, with the link's prefix.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string RemoteConnectIP(JsonElement desired) => HostAt(LinkV4(desired), 2, withPrefix: true);
+    public static string RemoteConnectIP(JsonElement desired) => HostAt(LinkV4(desired), 2, true);
 
     /// <summary>The bare address the local side's route to the remote range points at — the remote's port.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string LocalNextHop(JsonElement desired) => HostAt(LinkV4(desired), 2, withPrefix: false);
+    public static string LocalNextHop(JsonElement desired) => HostAt(LinkV4(desired), 2, false);
 
     /// <summary>The bare address the remote side's route to the local range points at — this network's port.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string RemoteNextHop(JsonElement desired) => HostAt(LinkV4(desired), 1, withPrefix: false);
+    public static string RemoteNextHop(JsonElement desired) => HostAt(LinkV4(desired), 1, false);
 
     // ── The two fragments a desired body becomes ──────────────────────────────────────────────
 
@@ -561,14 +582,24 @@ public static class VirtualNetworkPeerings {
     ///     </para>
     /// </remarks>
     public static string LocalFragmentJson(string ns, ResourceId id, JsonElement desired) =>
-        Fragment(RemoteVpcNameOf(ns, desired), LocalConnectIP(desired), RemoteAddressSpaceV4(desired), LocalNextHop(desired));
+        Fragment(
+            RemoteVpcNameOf(ns, desired),
+            LocalConnectIP(desired),
+            RemoteAddressSpaceV4(desired),
+            LocalNextHop(desired)
+        );
 
     /// <summary>The slice of the <b>remote</b> network's <c>Vpc</c> this peering contributes — the mirror image.</summary>
     /// <param name="ns">The resource's namespace, used as a name component of the local network's object name.</param>
     /// <param name="id">The peering's address.</param>
     /// <param name="desired">The validated desired body.</param>
     public static string RemoteFragmentJson(string ns, ResourceId id, JsonElement desired) =>
-        Fragment(LocalVpcNameOf(ns, id), RemoteConnectIP(desired), LocalAddressSpaceV4(desired), RemoteNextHop(desired));
+        Fragment(
+            LocalVpcNameOf(ns, id),
+            RemoteConnectIP(desired),
+            LocalAddressSpaceV4(desired),
+            RemoteNextHop(desired)
+        );
 
     static string Fragment(string remoteVpc, string localConnectIP, string cidr, string nextHop) =>
         new JsonObject {
@@ -612,7 +643,8 @@ public static class VirtualNetworkPeerings {
         }
 
         var (remoteVpc, connect, cidr, nextHop) = side == Side.Local
-            ? (RemoteVpcNameOf(ns, desired), LocalConnectIP(desired), RemoteAddressSpaceV4(desired), LocalNextHop(desired))
+            ? (RemoteVpcNameOf(ns, desired), LocalConnectIP(desired), RemoteAddressSpaceV4(desired),
+                LocalNextHop(desired))
             : (LocalVpcNameOf(ns, id), RemoteConnectIP(desired), LocalAddressSpaceV4(desired), RemoteNextHop(desired));
 
         var peered = spec["vpcPeerings"] is JsonArray peerings
@@ -649,7 +681,7 @@ public static class VirtualNetworkPeerings {
         Parse(objectJson) is { } document
         && document["status"] is JsonObject status
         && status["vpcPeerings"] is JsonArray peers
-            ? [.. peers.OfType<JsonValue>().Select(x => x.GetValue<string>())]
+            ? [.. peers.OfType<JsonValue>().Select(static x => x.GetValue<string>())]
             : [];
 
     /// <summary>The <c>spec</c> of a <c>Vpc</c> document, or <see langword="null" />.</summary>
@@ -665,7 +697,7 @@ public static class VirtualNetworkPeerings {
         }
 
         return parsed is JsonObject document
-            && document["kind"]?.GetValue<string>() is (null or "Vpc")
+            && document["kind"]?.GetValue<string>() is null or "Vpc"
                 ? document
                 : null;
     }
@@ -708,7 +740,10 @@ public static class VirtualNetworkPeerings {
     /// <summary>The <paramref name="offset" />th address above a v4 prefix's network address.</summary>
     /// <param name="prefix">The link, as the body spells it.</param>
     /// <param name="offset">1 for the first host, 2 for the second.</param>
-    /// <param name="withPrefix">Whether to append <c>/length</c>, which <c>localConnectIP</c> wants and <c>nextHopIP</c> refuses.</param>
+    /// <param name="withPrefix">
+    ///     Whether to append <c>/length</c>, which <c>localConnectIP</c> wants and <c>nextHopIP</c>
+    ///     refuses.
+    /// </param>
     /// <remarks>
     ///     ⚠ Answers empty for a link that does not parse or is not IPv4 rather than throwing, so a
     ///     body <see cref="AddressProblem" /> is about to refuse renders nothing that looks like an
@@ -723,7 +758,9 @@ public static class VirtualNetworkPeerings {
         var value = ((uint)bytes[0] << 24) | ((uint)bytes[1] << 16) | ((uint)bytes[2] << 8) | bytes[3];
         value += (uint)offset;
 
-        var host = new IPAddress([(byte)(value >> 24), (byte)(value >> 16), (byte)(value >> 8), (byte)value]).ToString();
+        var host = new IPAddress(
+            [(byte)(value >> 24), (byte)(value >> 16), (byte)(value >> 8), (byte)value]
+        ).ToString();
 
         return withPrefix ? host + "/" + link.PrefixLength.ToString(CultureInfo.InvariantCulture) : host;
     }

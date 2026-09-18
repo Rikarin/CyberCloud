@@ -240,7 +240,7 @@ public static class OrleansAdoNetSchema {
 
         var applied = new Dictionary<string, bool>(StringComparer.Ordinal);
 
-        foreach (var (shard, connectionString) in durable.Shards.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+        foreach (var (shard, connectionString) in durable.Shards.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
             try {
                 applied[shard] = await ApplyAsync(connectionString, cancellationToken);
             } catch (Exception failure) when (failure is NpgsqlException or InvalidOperationException) {

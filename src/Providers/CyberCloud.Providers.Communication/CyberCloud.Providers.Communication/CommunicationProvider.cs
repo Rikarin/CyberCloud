@@ -7,8 +7,11 @@ namespace CyberCloud.Providers.Communication;
 /// <remarks>
 ///     <para>
 ///         [17 § <c>CyberCloud.Communication/services</c>](../../../../docs/plan/17-communication-and-email.md)
-///         · M2 · 2.0 EM, and docs/plan/24 § Phase 3's <c>Communication</c> row: <i>"Channels,
-///         templates, suppression, delivery receipts."</i> The first three are the three child types;
+///         · M2 · 2.0 EM, and docs/plan/24 § Phase 3's <c>Communication</c> row:
+///         <i>
+///             "Channels,
+///             templates, suppression, delivery receipts."
+///         </i> The first three are the three child types;
 ///         delivery receipts are per send and come back on the service's <c>status</c> action, and
 ///         <see cref="CommunicationServices.SendAction" />'s remarks say why a message is an action
 ///         rather than a fifth type.
@@ -26,8 +29,11 @@ namespace CyberCloud.Providers.Communication;
 ///         after the write — see any of the reconcilers.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every synchronous action here runs on the request path, and four of the five reach
-///         a grain.</b> A synchronous action runs inside <c>ResourceManagerService</c>, which in
+///         ⚠
+///         <b>
+///             Every synchronous action here runs on the request path, and four of the five reach
+///             a grain.
+///         </b> A synchronous action runs inside <c>ResourceManagerService</c>, which in
 ///         production is the gateway's process, so the gateway registers
 ///         <c>AddCyberCloudCommunicationClient</c> — the two client-side seams over its cluster
 ///         client — and <c>HostCompositionTests</c> is what notices if it stops. <c>render</c> is the
@@ -101,8 +107,8 @@ public sealed class CommunicationProvider : IResourceProvider {
                 // CliEmitter.GroupOf derives the group key from the namespace's last segment, and a
                 // short name equal to its own group's key gives `cyc communication communication`
                 // two meanings.
-                shortName: "comms",
-                summary: "A sending service — SMS, WhatsApp, email, push and voice through the platform's "
+                "comms",
+                "A sending service — SMS, WhatsApp, email, push and voice through the platform's "
                 + "carrier accounts or the tenant's own — with per-channel spend limits, versioned "
                 + "templates, a suppression list honoured before every dispatch, and delivery receipts "
                 + "per send."
@@ -116,8 +122,8 @@ public sealed class CommunicationProvider : IResourceProvider {
             .Display(
                 "Communication channel",
                 "Communication channels",
-                shortName: "channel",
-                summary: "One channel a service sends on: which carrier, whose account pays, and what it "
+                "channel",
+                "One channel a service sends on: which carrier, whose account pays, and what it "
                 + "may send and spend per day."
             )
             .SupportsTags()
@@ -137,8 +143,8 @@ public sealed class CommunicationProvider : IResourceProvider {
             .Display(
                 "Message template",
                 "Message templates",
-                shortName: "template",
-                summary: "A named, versioned message body with typed variables. Every change appends a "
+                "template",
+                "A named, versioned message body with typed variables. Every change appends a "
                 + "version; a send names the template and the version it wants."
             )
             .SupportsTags()
@@ -150,8 +156,8 @@ public sealed class CommunicationProvider : IResourceProvider {
             .Display(
                 "Suppression",
                 "Suppressions",
-                shortName: "suppression",
-                summary: "An address a service must never send to, placed by the tenant. Bounces, "
+                "suppression",
+                "An address a service must never send to, placed by the tenant. Bounces, "
                 + "complaints and opt-outs join the same list on their own and are not resources."
             )
             .SupportsTags();

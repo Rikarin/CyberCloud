@@ -88,8 +88,11 @@ public interface IObjectRelationsGrain : IGrainWithStringKey {
 ///         <c>Check</c> is still correct.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This is what <c>ListObjects</c> reads, and the only thing on that path that
-///         reads it is the walk.</b> docs/plan/07 § Effort and sequencing put <c>ListObjects</c> at
+///         ⚠
+///         <b>
+///             This is what <c>ListObjects</c> reads, and the only thing on that path that
+///             reads it is the walk.
+///         </b> docs/plan/07 § Effort and sequencing put <c>ListObjects</c> at
 ///         M2 and this grain was built in M1 because the write path was two-grain from the start —
 ///         retrofitting a reverse index over tuples written without one means a backfill.
 ///         <see cref="IListObjectsGrain" /> starts from <see cref="ListAsync" /> for the subject —

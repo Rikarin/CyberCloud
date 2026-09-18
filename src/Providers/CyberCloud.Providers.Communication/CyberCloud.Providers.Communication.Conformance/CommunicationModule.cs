@@ -22,8 +22,11 @@ namespace CyberCloud.Providers.Communication.Conformance;
 ///         grading itself; <see cref="IConvergedModule" />'s remarks carry the argument.
 ///     </para>
 ///     <para>
-///         ⚠ <b>One instance per case source, for the reason <c>ConformanceState&lt;TSource&gt;</c>
-///         is keyed on one.</b> <see cref="Plane" /> is bound in <see cref="Attach" /> from a cluster
+///         ⚠
+///         <b>
+///             One instance per case source, for the reason <c>ConformanceState&lt;TSource&gt;</c>
+///             is keyed on one.
+///         </b> <see cref="Plane" /> is bound in <see cref="Attach" /> from a cluster
 ///         that exists only once the harness has deployed it, and the case's <c>CreateReconciler</c>
 ///         reads it from here when the suite drives a pass directly. Four suites run in parallel,
 ///         each with its own cluster; one shared instance would have handed one suite another's
@@ -95,13 +98,27 @@ public sealed class CommunicationModule(bool underAService) : IConvergedModule {
 
         Task.Run(async () => {
                 foreach (var spelled in ChannelKinds.AllowedValues) {
-                    Throwing(await plane.RemoveChannelAsync(ancestor.TenantId, serviceId, ChannelKinds.Parse(spelled), CancellationToken.None));
+                    Throwing(
+                        await plane.RemoveChannelAsync(
+                            ancestor.TenantId,
+                            serviceId,
+                            ChannelKinds.Parse(spelled),
+                            CancellationToken.None
+                        )
+                    );
                 }
 
                 // A list is never not-found: the grain answers empty for a service never created.
-                var listed = Throwing(await plane.ListSuppressionsAsync(ancestor.TenantId, serviceId, ChannelKind.Unknown, CancellationToken.None));
+                var listed = Throwing(
+                    await plane.ListSuppressionsAsync(
+                        ancestor.TenantId,
+                        serviceId,
+                        ChannelKind.Unknown,
+                        CancellationToken.None
+                    )
+                );
 
-                foreach (var entry in listed.Where(x => x.Reason == SuppressionReason.ManualBlock)) {
+                foreach (var entry in listed.Where(static x => x.Reason == SuppressionReason.ManualBlock)) {
                     Throwing(
                         await plane.ReleaseSuppressionAsync(
                             ancestor.TenantId,
@@ -114,7 +131,9 @@ public sealed class CommunicationModule(bool underAService) : IConvergedModule {
                     );
                 }
             }
-        ).GetAwaiter().GetResult();
+        )
+            .GetAwaiter()
+            .GetResult();
     }
 
     /// <inheritdoc />
@@ -137,14 +156,20 @@ public sealed class CommunicationModule(bool underAService) : IConvergedModule {
 
             case CommunicationTemplates.TypePath: {
                 var resolved = await plane.ResolveTemplateAsync(id.TenantId, serviceId, id.Name, cancellationToken);
-                return resolved.TryGetValue(out var templateId) && templateId == CommunicationTemplates.TemplateIdOf(id);
+                return resolved.TryGetValue(out var templateId)
+                    && templateId == CommunicationTemplates.TemplateIdOf(id);
             }
 
             case CommunicationSuppressions.TypePath: {
                 // A manual block is the only entry a resource can own, and the entry names its owner;
                 // Holds asks for the resource's contribution, and without a body the list is the only
                 // place to look for it.
-                var listed = await plane.ListSuppressionsAsync(id.TenantId, serviceId, ChannelKind.Unknown, cancellationToken);
+                var listed = await plane.ListSuppressionsAsync(
+                    id.TenantId,
+                    serviceId,
+                    ChannelKind.Unknown,
+                    cancellationToken
+                );
                 return listed.TryGetValue(out var entries)
                     && !entries.IsDefault
                     && entries.Any(x => x.Reason == SuppressionReason.ManualBlock && x.OwnerResourceId == id.Id);
@@ -169,13 +194,20 @@ public sealed class CommunicationModule(bool underAService) : IConvergedModule {
             }
 
             case CommunicationChannels.TypePath: {
-                var held = await plane.GetChannelAsync(id.TenantId, serviceId, CommunicationChannels.KindOf(body), cancellationToken);
-                return held.TryGetValue(out var configuration) && CommunicationChannels.Matches(configuration, id, body);
+                var held = await plane.GetChannelAsync(
+                    id.TenantId,
+                    serviceId,
+                    CommunicationChannels.KindOf(body),
+                    cancellationToken
+                );
+                return held.TryGetValue(out var configuration)
+                    && CommunicationChannels.Matches(configuration, id, body);
             }
 
             case CommunicationTemplates.TypePath: {
                 var resolved = await plane.ResolveTemplateAsync(id.TenantId, serviceId, id.Name, cancellationToken);
-                if (!resolved.TryGetValue(out var templateId) || templateId != CommunicationTemplates.TemplateIdOf(id)) {
+                if (!resolved.TryGetValue(out var templateId)
+                    || templateId != CommunicationTemplates.TemplateIdOf(id)) {
                     return false;
                 }
 
@@ -217,7 +249,14 @@ public sealed class CommunicationModule(bool underAService) : IConvergedModule {
                 break;
 
             case CommunicationChannels.TypePath:
-                Throwing(await plane.RemoveChannelAsync(id.TenantId, serviceId, CommunicationChannels.KindOf(body), cancellationToken));
+                Throwing(
+                    await plane.RemoveChannelAsync(
+                        id.TenantId,
+                        serviceId,
+                        CommunicationChannels.KindOf(body),
+                        cancellationToken
+                    )
+                );
                 break;
 
             case CommunicationTemplates.TypePath:
@@ -266,13 +305,22 @@ public sealed class CommunicationModule(bool underAService) : IConvergedModule {
                 break;
 
             case CommunicationChannels.TypePath: {
-                var held = Throwing(await plane.GetChannelAsync(id.TenantId, serviceId, CommunicationChannels.KindOf(body), cancellationToken));
+                var held = Throwing(
+                    await plane.GetChannelAsync(
+                        id.TenantId,
+                        serviceId,
+                        CommunicationChannels.KindOf(body),
+                        cancellationToken
+                    )
+                );
 
                 Throwing(
                     await plane.ConfigureChannelAsync(
                         id.TenantId,
                         serviceId,
-                        held with { Limits = held.Limits with { MaxMessagesPerWindow = held.Limits.MaxMessagesPerWindow + 7919 } },
+                        held with {
+                            Limits = held.Limits with { MaxMessagesPerWindow = held.Limits.MaxMessagesPerWindow + 7919 }
+                        },
                         cancellationToken
                     )
                 );
@@ -319,18 +367,24 @@ public sealed class CommunicationModule(bool underAService) : IConvergedModule {
     }
 
     static InvalidOperationException Unknown(ResourceId id) =>
-        new($"'{id.Type}' is not a type CommunicationModule knows how to read. The four it does are declared in CommunicationProvider.");
+        new(
+            $"'{id.Type}' is not a type CommunicationModule knows how to read. The four it does are declared in CommunicationProvider."
+        );
 
     static void Throwing(Result result) {
         if (result.TryGetError(out var error)) {
-            throw new InvalidOperationException($"The module refused a write the suite made behind the reconciler's back: {error.Message}");
+            throw new InvalidOperationException(
+                $"The module refused a write the suite made behind the reconciler's back: {error.Message}"
+            );
         }
     }
 
     static T Throwing<T>(Result<T> result)
         where T : notnull {
         if (result.TryGetError(out var error)) {
-            throw new InvalidOperationException($"The module refused a call the suite made around the reconciler: {error.Message}");
+            throw new InvalidOperationException(
+                $"The module refused a call the suite made around the reconciler: {error.Message}"
+            );
         }
 
         return result.GetValueOrThrow();
@@ -340,14 +394,14 @@ public sealed class CommunicationModule(bool underAService) : IConvergedModule {
 /// <summary>The four instances, one per case source. See <see cref="CommunicationModule" />.</summary>
 public static class Modules {
     /// <summary>For <c>CommunicationServiceCase</c>.</summary>
-    public static CommunicationModule Service { get; } = new(underAService: false);
+    public static CommunicationModule Service { get; } = new(false);
 
     /// <summary>For <c>CommunicationChannelCase</c>.</summary>
-    public static CommunicationModule Channel { get; } = new(underAService: true);
+    public static CommunicationModule Channel { get; } = new(true);
 
     /// <summary>For <c>CommunicationTemplateCase</c>.</summary>
-    public static CommunicationModule Template { get; } = new(underAService: true);
+    public static CommunicationModule Template { get; } = new(true);
 
     /// <summary>For <c>CommunicationSuppressionCase</c>.</summary>
-    public static CommunicationModule Suppression { get; } = new(underAService: true);
+    public static CommunicationModule Suppression { get; } = new(true);
 }

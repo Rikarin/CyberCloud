@@ -217,7 +217,7 @@ public static partial class OpenApiStructure {
         }
 
         var placeholders = Placeholder.Matches(template)
-            .Select(x => x.Groups[1].Value)
+            .Select(static x => x.Groups[1].Value)
             .ToList();
 
         foreach (var placeholder in placeholders.Where(x => !declared.Contains(x)).Distinct(StringComparer.Ordinal)) {
@@ -228,7 +228,7 @@ public static partial class OpenApiStructure {
         }
 
         foreach (var orphan in declared.Where(x => !placeholders.Contains(x, StringComparer.Ordinal))
-                     .OrderBy(x => x, StringComparer.Ordinal)) {
+                     .OrderBy(static x => x, StringComparer.Ordinal)) {
             problems.Add(
                 $"/paths/{template} — path parameter '{orphan}' is declared and does not appear in the "
                 + "template."
@@ -281,7 +281,7 @@ public static partial class OpenApiStructure {
         if (schema["required"] is JsonArray required) {
             var properties = schema["properties"] as JsonObject;
 
-            foreach (var name in required.Select(x => Text(x)).Where(x => x is not null)) {
+            foreach (var name in required.Select(static x => Text(x)).Where(static x => x is not null)) {
                 if (properties?[name!] is null) {
                     problems.Add(
                         $"{pointer}/required — names '{name}', which is not in this schema's properties. "
@@ -339,9 +339,6 @@ public static partial class OpenApiStructure {
                     );
                 }
 
-                break;
-
-            default:
                 break;
         }
     }

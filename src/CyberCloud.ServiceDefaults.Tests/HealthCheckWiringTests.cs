@@ -18,9 +18,9 @@ namespace CyberCloud.ServiceDefaults.Tests;
 public sealed class HealthCheckWiringTests {
     [Fact]
     public void ExactlyOneCheckIsLiveAndItDependsOnNothingRemote() {
-        var live = Registrations(b => b.AddServiceDefaults())
+        var live = Registrations(static b => b.AddServiceDefaults())
             .Registrations
-            .Where(x => x.Tags.Contains(HealthCheckTags.Live))
+            .Where(static x => x.Tags.Contains(HealthCheckTags.Live))
             .ToList();
 
         // A liveness failure RESTARTS the pod. Anything that can fail because another machine
@@ -33,21 +33,21 @@ public sealed class HealthCheckWiringTests {
     [Fact]
     public void AddServiceDefaultsAloneTagsNothingReady() {
         // A process that has not said what "ready" means for it must not accidentally inherit one.
-        Registrations(b => b.AddServiceDefaults())
+        Registrations(static b => b.AddServiceDefaults())
             .Registrations
-            .Where(x => x.Tags.Contains(HealthCheckTags.Ready))
+            .Where(static x => x.Tags.Contains(HealthCheckTags.Ready))
             .ShouldBeEmpty();
     }
 
     [Fact]
     public void ExactlyOneCheckIsReadyOnASiloAndItIsTheSiloReadinessCheck() {
-        var ready = Registrations(b => {
+        var ready = Registrations(static b => {
                 b.AddServiceDefaults();
                 b.AddOrleansHealthChecks();
             }
         )
                 .Registrations
-                .Where(x => x.Tags.Contains(HealthCheckTags.Ready))
+                .Where(static x => x.Tags.Contains(HealthCheckTags.Ready))
                 .ToList();
 
         ready.Count.ShouldBe(
@@ -64,17 +64,17 @@ public sealed class HealthCheckWiringTests {
     public void TheClusterCheckIsNeverReady() {
         // The cascading-eviction guard: `cluster` describes PEERS. Wiring it into readiness means
         // one silo dying makes every survivor report the same degradation and get evicted too.
-        var registrations = Registrations(b => {
+        var registrations = Registrations(static b => {
                 b.AddServiceDefaults();
                 b.AddOrleansHealthChecks();
             }
         )
                 .Registrations;
 
-        var cluster = registrations.Single(x => x.Name == "cluster");
+        var cluster = registrations.Single(static x => x.Name == "cluster");
         cluster.Tags.ShouldBeEmpty();
 
-        var participants = registrations.Single(x => x.Name == "silo-participants");
+        var participants = registrations.Single(static x => x.Name == "silo-participants");
         participants.Tags.ShouldBeEmpty();
     }
 
@@ -82,13 +82,13 @@ public sealed class HealthCheckWiringTests {
     public void TheClientRegistersNoSiloOnlyChecks() {
         // SiloReadinessHealthCheck resolves ILocalSiloDetails, which a client does not have. If it
         // were registered here the gateway would report Unhealthy forever with a DI error.
-        var names = Registrations(b => {
+        var names = Registrations(static b => {
                 b.AddServiceDefaults();
                 b.AddOrleansClientHealthChecks();
             }
         )
                 .Registrations
-                .Select(x => x.Name)
+                .Select(static x => x.Name)
                 .ToList();
 
         names.ShouldNotContain("silo-ready");
@@ -104,7 +104,7 @@ public sealed class HealthCheckWiringTests {
         // evicting it concentrates that shard's load on its neighbours — the cascade
         // SiloReadinessHealthCheck's remarks refuse by name. This is the assertion that keeps the
         // refusal true through a future edit.
-        var registrations = Registrations(b => {
+        var registrations = Registrations(static b => {
                 b.AddServiceDefaults();
                 b.AddOrleansHealthChecks();
                 b.Services.AddDurableShardHealthCheck();
@@ -112,13 +112,13 @@ public sealed class HealthCheckWiringTests {
         )
                 .Registrations;
 
-        registrations.Single(x => x.Name == "durable-shards").Tags.ShouldBeEmpty();
+        registrations.Single(static x => x.Name == "durable-shards").Tags.ShouldBeEmpty();
 
-        var ready = registrations.Where(x => x.Tags.Contains(HealthCheckTags.Ready)).ToList();
+        var ready = registrations.Where(static x => x.Tags.Contains(HealthCheckTags.Ready)).ToList();
         ready.Count.ShouldBe(1);
         ready[0].Name.ShouldBe("silo-ready");
 
-        var live = registrations.Where(x => x.Tags.Contains(HealthCheckTags.Live)).ToList();
+        var live = registrations.Where(static x => x.Tags.Contains(HealthCheckTags.Live)).ToList();
         live.Count.ShouldBe(1);
         live[0].Name.ShouldBe("self");
     }

@@ -145,6 +145,6 @@ readonly struct Pkce {
         var verifier = Base64Url.Encode(RandomNumberGenerator.GetBytes(32));
         var challenge = Base64Url.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
 
-        return new Pkce(verifier, challenge);
+        return new(verifier, challenge);
     }
 }

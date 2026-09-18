@@ -54,10 +54,10 @@ public sealed class NetworkSecurityGroupTests {
         using var body = JsonDocument.Parse(
             NetworkSecurityGroups.Body(
                 ClusterId,
-                ingressRemoteV4: "0.0.0.0/0",
-                ingressTcpPorts: "",
-                egressRemoteV4: "",
-                egressTcpPorts: ""
+                "0.0.0.0/0",
+                "",
+                "",
+                ""
             )
         );
 
@@ -72,10 +72,10 @@ public sealed class NetworkSecurityGroupTests {
         using var body = JsonDocument.Parse(
             NetworkSecurityGroups.Body(
                 ClusterId,
-                ingressRemoteV4: "",
-                ingressTcpPorts: "80,443",
-                egressRemoteV4: "",
-                egressTcpPorts: "443"
+                "",
+                "80,443",
+                "",
+                "443"
             )
         );
 
@@ -86,9 +86,7 @@ public sealed class NetworkSecurityGroupTests {
 
     [Fact]
     public void TwoRemotesAndTwoPortsAreFourRulesInAFixedOrder() {
-        using var body = JsonDocument.Parse(
-            WithIngress(remoteV4: "10.0.0.0/8", remoteV6: "fd00::/8", tcpPorts: "80,443")
-        );
+        using var body = JsonDocument.Parse(WithIngress("10.0.0.0/8", "fd00::/8", "80,443"));
 
         var rules = NetworkSecurityGroups.Rules(body.RootElement, NetworkSecurityGroups.Ingress);
 
@@ -98,17 +96,17 @@ public sealed class NetworkSecurityGroupTests {
         // apply and Matches compares them element by element, so a renderer that sorted or used a
         // hash set would report drift on a converged group forever — and the symptom is a resource
         // that never leaves InProgress, not a wrong rule.
-        rules.Select(x => $"{x.IpVersion}:{x.Ports}").ShouldBe(["ipv4:80", "ipv4:443", "ipv6:80", "ipv6:443"]);
+        rules.Select(static x => $"{x.IpVersion}:{x.Ports}").ShouldBe(["ipv4:80", "ipv4:443", "ipv6:80", "ipv6:443"]);
     }
 
     [Fact]
     public void TcpComesBeforeUdpComesBeforeIcmpWithinOneFamily() {
         using var body = JsonDocument.Parse(
-            WithIngress(remoteV4: "10.0.0.0/8", tcpPorts: "443", udpPorts: "53", allowIcmp: true)
+            WithIngress("10.0.0.0/8", tcpPorts: "443", udpPorts: "53", allowIcmp: true)
         );
 
         NetworkSecurityGroups.Rules(body.RootElement, NetworkSecurityGroups.Ingress)
-            .Select(x => x.Protocol)
+            .Select(static x => x.Protocol)
             .ShouldBe(["tcp", "udp", "icmp"]);
     }
 
@@ -117,7 +115,7 @@ public sealed class NetworkSecurityGroupTests {
         // ⚠ `8000-8100` is 101 ports and ONE rule. A renderer that expanded a range would produce 101
         // ACL rows for one line of configuration, which is how an OVN northbound database gets slow
         // enough to be somebody else's incident.
-        using var body = JsonDocument.Parse(WithIngress(remoteV4: "10.0.0.0/8", tcpPorts: "8000-8100"));
+        using var body = JsonDocument.Parse(WithIngress("10.0.0.0/8", tcpPorts: "8000-8100"));
 
         var rules = NetworkSecurityGroups.Rules(body.RootElement, NetworkSecurityGroups.Ingress);
 
@@ -130,7 +128,7 @@ public sealed class NetworkSecurityGroupTests {
         // ⚠ An ICMP rule with `portRangeMin: 0` is a rule Kube-OVN's own validateSgRule would refuse
         // if it looked at it, and `0` is what an omitted int becomes. What is sent is what Matches
         // compares, so the two stay in step by construction — this pins the sent half.
-        using var body = JsonDocument.Parse(WithIngress(remoteV4: "10.0.0.0/8", allowIcmp: true));
+        using var body = JsonDocument.Parse(WithIngress("10.0.0.0/8", allowIcmp: true));
 
         var rule = SpecOf(body.RootElement)["ingressRules"]!.AsArray()[0]!.AsObject();
 
@@ -143,7 +141,7 @@ public sealed class NetworkSecurityGroupTests {
 
     [Fact]
     public void EveryRuleUsesLowercaseIpVersionAndAllowRatherThanDeny() {
-        using var body = JsonDocument.Parse(WithIngress(remoteV4: "10.0.0.0/8", remoteV6: "fd00::/8", tcpPorts: "443"));
+        using var body = JsonDocument.Parse(WithIngress("10.0.0.0/8", "fd00::/8", "443"));
 
         foreach (var node in SpecOf(body.RootElement)["ingressRules"]!.AsArray()) {
             var rule = node!.AsObject();
@@ -168,7 +166,7 @@ public sealed class NetworkSecurityGroupTests {
 
     [Fact]
     public void NothingRendersATierOrASecurityGroupRemote() {
-        using var body = JsonDocument.Parse(WithIngress(remoteV4: "10.0.0.0/8", tcpPorts: "443"));
+        using var body = JsonDocument.Parse(WithIngress("10.0.0.0/8", tcpPorts: "443"));
 
         var spec = SpecOf(body.RootElement);
 
@@ -261,8 +259,8 @@ public sealed class NetworkSecurityGroupTests {
                          NetworkSecurityGroups.Body(ClusterId, ingressTcpPorts: "9-8")),
                      ("/properties/egress/tcpPorts",
                          NetworkSecurityGroups.Body(ClusterId, egressTcpPorts: "9-8")),
-                     ("/properties/ingress/udpPorts", WithIngress(remoteV4: "10.0.0.0/8", udpPorts: "9-8")),
-                     ("/properties/egress/udpPorts", WithEgress(remoteV4: "10.0.0.0/8", udpPorts: "9-8"))
+                     ("/properties/ingress/udpPorts", WithIngress("10.0.0.0/8", udpPorts: "9-8")),
+                     ("/properties/egress/udpPorts", WithEgress("10.0.0.0/8", udpPorts: "9-8"))
                  ]) {
             using var parsed = JsonDocument.Parse(body);
 
@@ -280,7 +278,7 @@ public sealed class NetworkSecurityGroupTests {
         // Every write pkg/controller/security_group.go makes is patchSgStatus, a merge patch against
         // the `status` subresource. Containment is used anyway because a finalizer, a field a later
         // Kube-OVN adds, or another field manager's addition is not drift in what was asked for.
-        using var body = JsonDocument.Parse(WithIngress(remoteV4: "10.0.0.0/8", tcpPorts: "443"));
+        using var body = JsonDocument.Parse(WithIngress("10.0.0.0/8", tcpPorts: "443"));
 
         var document = JsonNode.Parse(NetworkSecurityGroups.SecurityGroupJson("ns", Address(), body.RootElement))!
             .AsObject();
@@ -294,7 +292,7 @@ public sealed class NetworkSecurityGroupTests {
 
     [Fact]
     public void MatchesRejectsARuleThatWasAddedRemovedOrRewritten() {
-        using var body = JsonDocument.Parse(WithIngress(remoteV4: "10.0.0.0/8", tcpPorts: "80,443"));
+        using var body = JsonDocument.Parse(WithIngress("10.0.0.0/8", tcpPorts: "80,443"));
 
         var rendered = NetworkSecurityGroups.SecurityGroupJson("ns", Address(), body.RootElement);
 
@@ -406,9 +404,7 @@ public sealed class NetworkSecurityGroupTests {
         // checks it in production: the schema is what the OpenAPI document, the SDK and the portal
         // form are generated from, and a handler drifting from it publishes a contract nothing
         // honours. The dispatcher's failure is a 500; this one is a test.
-        using var body = JsonDocument.Parse(
-            WithIngress(remoteV4: "10.0.0.0/8", remoteV6: "fd00::/8", tcpPorts: "80,443")
-        );
+        using var body = JsonDocument.Parse(WithIngress("10.0.0.0/8", "fd00::/8", "80,443"));
 
         var handler = new ShowEffectiveRulesHandler();
 
@@ -507,10 +503,10 @@ public sealed class NetworkSecurityGroupTests {
     static string Empty() =>
         NetworkSecurityGroups.Body(
             ClusterId,
-            ingressRemoteV4: "",
-            ingressTcpPorts: "",
-            egressRemoteV4: "",
-            egressTcpPorts: ""
+            "",
+            "",
+            "",
+            ""
         );
 
     /// <summary>A body whose inbound section is exactly the arguments and whose outbound is empty.</summary>

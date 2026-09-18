@@ -406,7 +406,8 @@ public readonly record struct GrainKey {
 ///         and #88 before this. It goes stale the moment a
 ///         member is added without this sentence being reread, which is exactly how issue #71 came to
 ///         describe this type as covering "eight key shapes today": eight is the size of
-///         docs/plan/06's <i>table</i>, and it stopped being the size of this type twenty-one shapes ago (twenty-nine less eight — re-derived, as #39's review of this sentence
+///         docs/plan/06's <i>table</i>, and it stopped being the size of this type twenty-one shapes ago (twenty-nine less
+///         eight — re-derived, as #39's review of this sentence
 ///         asked; #39's own task text had called its kind "the 25th", a count from an older tree).
 ///     </para>
 ///     <list type="table">
@@ -646,7 +647,8 @@ public readonly record struct GrainKey {
 ///         <b>The shapes cannot collide, and that is a property rather than a coincidence.</b> Each
 ///         shape is fixed by its first segment (<c>sub</c>, <c>res</c>, <c>user</c>, <c>op</c>,
 ///         <c>cluster</c>, <c>group</c>, <c>app</c>, <c>sp</c>, <c>session</c>, <c>mi</c>,
-///         <c>signup</c>, <c>code</c>, <c>consent</c>, <c>mg</c>, <c>parked</c>, <c>sweep</c>, <c>idx</c>, <c>rel</c>, <c>tenant</c>,
+///         <c>signup</c>, <c>code</c>, <c>consent</c>, <c>mg</c>, <c>parked</c>, <c>sweep</c>, <c>idx</c>, <c>rel</c>,
+///         <c>tenant</c>,
 ///         <c>platform</c>) and
 ///         its segment count, and the only caller-controlled components
 ///         — the resource group name, in <see cref="ResourceGroup" />, in
@@ -694,6 +696,7 @@ public static class GrainKeys {
 
     /// <summary><c>consent/</c> — a person's consent to one client, docs/plan/11 § Protocol.</summary>
     public const string ConsentGrantPrefix = "consent/";
+
     /// <summary><c>mg/</c> — a management group, keyed by its name within the tenant.</summary>
     public const string ManagementGroupPrefix = "mg/";
 
@@ -1130,8 +1133,11 @@ public static class GrainKeys {
     ///         out no wider than the callers actually listing.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The same <c>{type}/{id}</c> tail as <see cref="SubjectRelations" />, and
-    ///         deliberately not a method on that grain.</b> The reverse index is Durable and is
+    ///         ⚠
+    ///         <b>
+    ///             The same <c>{type}/{id}</c> tail as <see cref="SubjectRelations" />, and
+    ///             deliberately not a method on that grain.
+    ///         </b> The reverse index is Durable and is
     ///         written by the tuple store on every tuple naming this subject; a walk that reads a
     ///         dozen other grains would hold that activation for its whole duration and every
     ///         write naming the subject would wait behind a listing. This shape holds no state at
@@ -1152,8 +1158,11 @@ public static class GrainKeys {
     /// <param name="id">The subject's object id.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The document's row says <c>rel/idx/{usersetType}/{usersetId}</c>, one per
-    ///         userset, and this is one per object, deliberately.</b> docs/plan/07 § The Leopard
+    ///         ⚠
+    ///         <b>
+    ///             The document's row says <c>rel/idx/{usersetType}/{usersetId}</c>, one per
+    ///             userset, and this is one per object, deliberately.
+    ///         </b> docs/plan/07 § The Leopard
     ///         index's status paragraph found that maintaining the closure incrementally needs both
     ///         directions — a write against a userset must find the subjects it reaches through
     ///         the members set, and a subject's listing wants the usersets it is in — and the two
@@ -1163,8 +1172,11 @@ public static class GrainKeys {
     ///         is therefore <c>rel/idx/group/eng</c> with <c>member</c> looked up inside.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The same <c>{type}/{id}</c> tail as <see cref="SubjectRelations" /> and
-    ///         <see cref="ListObjects" />, and a third activation rather than a field on either.</b>
+    ///         ⚠
+    ///         <b>
+    ///             The same <c>{type}/{id}</c> tail as <see cref="SubjectRelations" /> and
+    ///             <see cref="ListObjects" />, and a third activation rather than a field on either.
+    ///         </b>
     ///         The reverse index is the record of tuples; this is a closure over them, rebuildable
     ///         from them, and written to many more grains per tuple than the reverse half is — a
     ///         group-to-group edge touches every userset above it and every member below it. Folding
@@ -1359,8 +1371,11 @@ public static class GrainKeys {
     /// <param name="clientId">The <c>client_id</c>, verbatim. Validated by <see cref="EnsureValidClientId" />.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A digest and not <c>consent/{userId}/{clientId}</c>, because a client id is not
-    ///         key-safe text.</b> An OAuth <c>client_id</c> is opaque and may carry any character
+    ///         ⚠
+    ///         <b>
+    ///             A digest and not <c>consent/{userId}/{clientId}</c>, because a client id is not
+    ///             key-safe text.
+    ///         </b> An OAuth <c>client_id</c> is opaque and may carry any character
     ///         but the few <see cref="EnsureValidClientId" /> refuses; a key that spelled it out
     ///         would need every one of them to survive tenant qualification and Redis's key syntax,
     ///         and <see cref="IsTenantQualificationSafe" /> would then be false of a key this type
@@ -1396,8 +1411,11 @@ public static class GrainKeys {
     /// <param name="name">The group's DNS-1123 name, validated as <see cref="ResourceGroup" /> validates one.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Keyed by NAME, which is the second shape in this type to be, and for the reason
-    ///         the first is.</b> A resource group is <c>sub/{id}/rg/{name}</c> because its name is
+    ///         ⚠
+    ///         <b>
+    ///             Keyed by NAME, which is the second shape in this type to be, and for the reason
+    ///             the first is.
+    ///         </b> A resource group is <c>sub/{id}/rg/{name}</c> because its name is
     ///         what a person types and what makes it unique within its subscription; a management
     ///         group is <c>mg/{name}</c> because its name is what a person types into a policy scope
     ///         or a role assignment and what makes it unique within its <i>tenant</i> — the key is

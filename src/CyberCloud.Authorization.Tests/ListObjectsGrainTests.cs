@@ -35,10 +35,14 @@ public sealed class ListObjectsGrainTests(AuthorizationCluster cluster) {
 
         var granted = await cluster.WriteAsync(tenant, "resourceGroup:l1-alpha#reader@user:alice");
 
-        var page = await ListAsync(tenant, Alice, new() { ObjectType = ObjectTypes.Resource, Permission = Permissions.Read });
+        var page = await ListAsync(
+            tenant,
+            Alice,
+            new() { ObjectType = ObjectTypes.Resource, Permission = Permissions.Read }
+        );
 
         page.Outcome.ShouldBe(ListObjectsOutcome.Complete);
-        page.Objects.Select(x => x.Id).ShouldBe(["l1-a1", "l1-a2"]);
+        page.Objects.Select(static x => x.Id).ShouldBe(["l1-a1", "l1-a2"]);
         page.Objects.ShouldAllBe(x => x.Type == ObjectTypes.Resource);
         page.Token.Version.ShouldBeGreaterThanOrEqualTo(granted.Version, "the walk ran at or after the grant landed");
         page.Verified.ShouldBeFalse();
@@ -50,7 +54,11 @@ public sealed class ListObjectsGrainTests(AuthorizationCluster cluster) {
         // that sentence is held to.
         var revoked = await cluster.RevokeAsync(tenant, "resourceGroup:l1-alpha#reader@user:alice");
 
-        var after = await ListAsync(tenant, Alice, new() { ObjectType = ObjectTypes.Resource, Permission = Permissions.Read });
+        var after = await ListAsync(
+            tenant,
+            Alice,
+            new() { ObjectType = ObjectTypes.Resource, Permission = Permissions.Read }
+        );
 
         after.Objects.ShouldBeEmpty("the grant is gone from both halves");
         after.Token.Version.ShouldBeGreaterThanOrEqualTo(revoked.Version);
@@ -62,8 +70,12 @@ public sealed class ListObjectsGrainTests(AuthorizationCluster cluster) {
         await SeedTwoGroupsAsync(tenant, "l2");
         await cluster.WriteAsync(tenant, "subscription:l2-sub#owner@user:alice");
 
-        var everything = await ListAsync(tenant, Alice, new() { ObjectType = ObjectTypes.Resource, Permission = Permissions.Read });
-        everything.Objects.Select(x => x.Id).ShouldBe(["l2-a1", "l2-a2", "l2-b1", "l2-b2"]);
+        var everything = await ListAsync(
+            tenant,
+            Alice,
+            new() { ObjectType = ObjectTypes.Resource, Permission = Permissions.Read }
+        );
+        everything.Objects.Select(static x => x.Id).ShouldBe(["l2-a1", "l2-a2", "l2-b1", "l2-b2"]);
 
         var scoped = await ListAsync(
             tenant,
@@ -76,7 +88,7 @@ public sealed class ListObjectsGrainTests(AuthorizationCluster cluster) {
             }
         );
 
-        scoped.Objects.Select(x => x.Id).ShouldBe(["l2-a1", "l2-a2"]);
+        scoped.Objects.Select(static x => x.Id).ShouldBe(["l2-a1", "l2-a2"]);
 
         // alice, the subscription, alpha — beta's index and every resource's are never activated.
         scoped.ReverseReads.ShouldBe(3, "the scope bounds the walk, not only the answer");
@@ -105,7 +117,7 @@ public sealed class ListObjectsGrainTests(AuthorizationCluster cluster) {
             );
 
             page.Objects.Count.ShouldBeLessThanOrEqualTo(3);
-            collected.AddRange(page.Objects.Select(x => x.Id));
+            collected.AddRange(page.Objects.Select(static x => x.Id));
             continuation = page.Continuation;
             pages++;
         } while (continuation.Length > 0);
@@ -128,7 +140,7 @@ public sealed class ListObjectsGrainTests(AuthorizationCluster cluster) {
             new() { ObjectType = ObjectTypes.Resource, Permission = Permissions.Read }
         );
 
-        members.Objects.Select(x => x.Id).ShouldBe(["l4-b1", "l4-b2"]);
+        members.Objects.Select(static x => x.Id).ShouldBe(["l4-b1", "l4-b2"]);
 
         var theGroupItself = await ListAsync(
             tenant,

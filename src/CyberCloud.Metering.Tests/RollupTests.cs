@@ -1,5 +1,3 @@
-using System.Collections.Immutable;
-
 namespace CyberCloud.Metering.Tests;
 
 /// <summary>
@@ -59,7 +57,7 @@ public sealed class RollupTests(MeteringCluster cluster) {
         var pending = (await rollup.ListPendingAsync()).GetValueOrThrow();
 
         pending.Length.ShouldBe(2);
-        pending.Select(x => x.IdempotencyKey).Distinct(StringComparer.Ordinal).Count().ShouldBe(2);
+        pending.Select(static x => x.IdempotencyKey).Distinct(StringComparer.Ordinal).Count().ShouldBe(2);
     }
 
     /// <summary>
@@ -220,8 +218,8 @@ public sealed class RollupTests(MeteringCluster cluster) {
         closed[0].HourEnd.ShouldBe(hour.End);
 
         // The aggregate reached both destinations, and the raw records reached the sink.
-        TestSink.Instance.Hourly.Count(x => x.ResourceId == Widget).ShouldBe(1);
-        TestSink.Instance.Raw.Count(x => x.ResourceId == Widget).ShouldBe(12);
+        TestSink.Instance.Hourly.Count(static x => x.ResourceId == Widget).ShouldBe(1);
+        TestSink.Instance.Raw.Count(static x => x.ResourceId == Widget).ShouldBe(12);
 
         // ⚠ And the hour's raw records are gone from grain state, because both durable destinations
         // have them. The seen keys are not — they stay for the retention horizon.
@@ -367,7 +365,7 @@ public sealed class RollupTests(MeteringCluster cluster) {
 
         closed.Length.ShouldBe(3);
         closed.ShouldAllBe(x => x.SampleCount == 1);
-        closed.Select(x => (x.ResourceId, x.Meter)).Distinct().Count().ShouldBe(3);
+        closed.Select(static x => (x.ResourceId, x.Meter)).Distinct().Count().ShouldBe(3);
     }
 
     /// <summary>

@@ -77,9 +77,9 @@ public sealed class OpenApiEmitterTests {
         var text = DeterministicJson.ToText(Emit(Fixtures.Postgres()));
 
         // Three of the ways a generated file goes red on somebody else's machine and green on yours.
-        text.ShouldNotContain(Environment.MachineName, Case.Insensitive);
-        text.ShouldNotContain(Environment.UserName, Case.Insensitive);
-        text.ShouldNotContain(AppContext.BaseDirectory.TrimEnd('/'), Case.Insensitive);
+        text.ShouldNotContain(Environment.MachineName);
+        text.ShouldNotContain(Environment.UserName);
+        text.ShouldNotContain(AppContext.BaseDirectory.TrimEnd('/'));
     }
 
     [Fact]
@@ -90,9 +90,9 @@ public sealed class OpenApiEmitterTests {
         var text = DeterministicJson.ToText(Emit(Fixtures.Postgres()));
 
         Regex.Matches(text, @"\d{4}-\d{2}-\d{2}")
-            .Select(x => x.Value)
+            .Select(static x => x.Value)
             .Distinct(StringComparer.Ordinal)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ShouldBe([Fixtures.FirstVersion]);
     }
 
@@ -128,7 +128,7 @@ public sealed class OpenApiEmitterTests {
         var later = Emit(Fixtures.Postgres(), Fixtures.SecondVersion)["paths"]!.AsObject();
 
         later.ShouldContainKey(ServerPath);
-        later.Count(x => x.Key.Contains("databases", StringComparison.Ordinal)).ShouldBe(0);
+        later.Count(static x => x.Key.Contains("databases", StringComparison.Ordinal)).ShouldBe(0);
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public sealed class OpenApiEmitterTests {
             // ⚠ Not every entry is a $ref: a nested type's ancestors are declared inline, because
             // their names come from the type path — see OpenApiEmitter.ResourceParameters.
             var parameters = path.Value!["parameters"]!.AsArray()
-                .Select(x => x!["$ref"]?.GetValue<string>())
+                .Select(static x => x!["$ref"]?.GetValue<string>())
                 .ToList();
 
             parameters.Contains("#/components/parameters/ApiVersion", StringComparer.Ordinal)
@@ -241,7 +241,9 @@ public sealed class OpenApiEmitterTests {
 
             // GET and nothing else: a scope is created by PUT at its own address, and a write here
             // would be a second create whose id the platform chose.
-            item.Select(x => x.Key).Where(x => !x.StartsWith("x-", StringComparison.Ordinal)).Order(StringComparer.Ordinal)
+            item.Select(static x => x.Key)
+                .Where(static x => !x.StartsWith("x-", StringComparison.Ordinal))
+                .Order(StringComparer.Ordinal)
                 .ShouldBe(["get", "parameters"]);
 
             item["get"]!["responses"]!["200"]!["content"]!["application/json"]!["schema"]!["$ref"]!
@@ -251,16 +253,17 @@ public sealed class OpenApiEmitterTests {
             // The paging pair, by wire name — a gateway ignores a query parameter it does not
             // recognise, so a misspelling here is a 200 holding page one, for ever.
             item["parameters"]!.AsArray()
-                .Select(x => x!["name"]?.GetValue<string>())
-                .Where(x => x is not null)
+                .Select(static x => x!["name"]?.GetValue<string>())
+                .Where(static x => x is not null)
                 .ShouldBe(["$top", "$skipToken"]);
         }
 
         // One page component for both, over the one scope schema — its `value` is a Scope, and
         // nextLink is optional so a client tests for another page rather than for "".
         var page = document["components"]!["schemas"]![OpenApiEmitter.ScopeListSchema]!;
-        page["properties"]!["value"]!["items"]!["$ref"]!.GetValue<string>().ShouldBe("#/components/schemas/" + OpenApiEmitter.ScopeSchema);
-        page["required"]!.AsArray().Select(x => x!.GetValue<string>()).ShouldBe(["value"]);
+        page["properties"]!["value"]!["items"]!["$ref"]!.GetValue<string>()
+            .ShouldBe("#/components/schemas/" + OpenApiEmitter.ScopeSchema);
+        page["required"]!.AsArray().Select(static x => x!.GetValue<string>()).ShouldBe(["value"]);
         page["additionalProperties"]!.GetValue<bool>().ShouldBeFalse();
     }
 
@@ -294,14 +297,14 @@ public sealed class OpenApiEmitterTests {
     [Fact]
     public void TheErrorCodeEnumIsTheCheckedInRegistry() {
         var codes = Emit(Fixtures.Empty)["components"]!["schemas"]!["ErrorCode"]!["enum"]!.AsArray()
-            .Select(x => x!.GetValue<string>())
+            .Select(static x => x!.GetValue<string>())
             .ToList();
 
         // Read off ErrorCode.All rather than retyped, so a new error code reaches the published
         // contract without anybody editing the emitter — and shows up in the diff as an addition.
         codes.Count.ShouldBe(ErrorCode.All.Length);
         codes.ShouldContain("QuotaExceeded");
-        codes.ShouldBe(codes.OrderBy(x => x, StringComparer.Ordinal).ToList());
+        codes.ShouldBe(codes.OrderBy(static x => x, StringComparer.Ordinal).ToList());
     }
 
     [Fact]
@@ -334,7 +337,7 @@ public sealed class OpenApiEmitterTests {
         sku["type"]!.GetValue<string>().ShouldBe("object");
         sku["properties"]!["name"]!["type"]!.GetValue<string>().ShouldBe("string");
         sku["properties"]!["vcpu"]!["type"]!.GetValue<string>().ShouldBe("integer");
-        sku["required"]!.AsArray().Select(x => x!.GetValue<string>()).ShouldBe(["name", "vcpu"]);
+        sku["required"]!.AsArray().Select(static x => x!.GetValue<string>()).ShouldBe(["name", "vcpu"]);
     }
 
     [Fact]
@@ -425,7 +428,7 @@ public sealed class OpenApiEmitterTests {
         // collections read as collections on those four, never as a fifth, sixth and seventh scope.
         // A count of 12 is also what a document with duplicated collection paths would have.
         DocumentReader.ScopesOf(document)
-            .Select(x => x.Kind)
+            .Select(static x => x.Kind)
             .ShouldBe(["tenant", "managementGroup", "subscription", "resourceGroup"]);
         document["components"]!["schemas"]!.AsObject().ShouldContainKey("CyberCloud.DBforMySQL.servers");
         document["components"]!["schemas"]!.AsObject().ShouldContainKey("CyberCloud.DBforPostgreSQL.servers");
@@ -436,9 +439,9 @@ public sealed class OpenApiEmitterTests {
         // operationId per type, which is the first new one since this case was written.
         var operations = document["paths"]!
             .AsObject()
-            .SelectMany(x => x.Value!.AsObject())
-            .Where(x => x.Value is JsonObject verb && verb["operationId"] is not null)
-            .Select(x => x.Value!["operationId"]!.GetValue<string>())
+            .SelectMany(static x => x.Value!.AsObject())
+            .Where(static x => x.Value is JsonObject verb && verb["operationId"] is not null)
+            .Select(static x => x.Value!["operationId"]!.GetValue<string>())
             .ToList();
 
         operations.Distinct(StringComparer.Ordinal).Count().ShouldBe(operations.Count);
@@ -503,9 +506,7 @@ public sealed class OpenApiEmitterTests {
     [Fact]
     public void ARequiredReadOnlyPropertyIsRefused() {
         // Required means required on a PUT; read-only means refused on a PUT. Every PUT fails twice.
-        var broken = Fixtures.PostgresWith(
-            ResourceSchema.Of([new("/location", SchemaKind.Text, Required: true, ReadOnly: true)])
-        );
+        var broken = Fixtures.PostgresWith(ResourceSchema.Of([new("/location", SchemaKind.Text, true, true)]));
 
         Should.Throw<InvalidOperationException>(() => Emit(broken))
             .Message.ShouldContain("both required and read-only");
@@ -520,7 +521,7 @@ public sealed class OpenApiEmitterTests {
 
     [Fact]
     public void EmittingWithoutAnApiVersionIsARejectedArgument() =>
-        Should.Throw<ArgumentException>(() => OpenApiEmitter.Emit(Fixtures.Postgres(), default));
+        Should.Throw<ArgumentException>(static () => OpenApiEmitter.Emit(Fixtures.Postgres(), default));
 
     // ── The read envelope — issue #85 ──────────────────────────────────────────────────────────
 
@@ -529,7 +530,8 @@ public sealed class OpenApiEmitterTests {
     ///     <c>ResourceBodyShapeTests.TheWriterRendersTheEnvelopeThenTheBodyThenTags</c> pins the
     ///     writer to this list; this class pins the document to it.
     /// </summary>
-    static readonly string[] Served = ["id", "name", "type", "location", "provisioningState", "etag", "properties", "tags"];
+    static readonly string[] Served =
+        ["id", "name", "type", "location", "provisioningState", "etag", "properties", "tags"];
 
     static readonly string[] Envelope = ["id", "name", "type", "provisioningState", "etag"];
 
@@ -541,7 +543,8 @@ public sealed class OpenApiEmitterTests {
 
         // allOf names where the five come from; the repeated members are what let the schema's own
         // additionalProperties: false admit them, because that keyword never sees a subschema.
-        body["allOf"]!.AsArray().Select(x => DocumentReader.Text(x!["$ref"]))
+        body["allOf"]!.AsArray()
+            .Select(static x => DocumentReader.Text(x!["$ref"]))
             .ShouldBe(["#/components/schemas/" + OpenApiEmitter.ResourceEnvelopeSchema]);
 
         foreach (var name in Envelope) {
@@ -551,11 +554,11 @@ public sealed class OpenApiEmitterTests {
 
         // Every member the gateway serves is a member the schema names — the defect, stated as the
         // property that was missing.
-        var declared = body["properties"]!.AsObject().Select(x => x.Key).ToList();
+        var declared = body["properties"]!.AsObject().Select(static x => x.Key).ToList();
         declared.ShouldBe(Served.Order(StringComparer.Ordinal).ToList());
 
         body["additionalProperties"]!.GetValue<bool>().ShouldBeFalse();
-        body["required"]!.AsArray().Select(x => DocumentReader.Text(x)).ShouldBe(["location", "properties"]);
+        body["required"]!.AsArray().Select(static x => DocumentReader.Text(x)).ShouldBe(["location", "properties"]);
     }
 
     [Fact]
@@ -566,8 +569,9 @@ public sealed class OpenApiEmitterTests {
         // member on a write rather than ignoring it. The read side's promise goes in the extension.
         envelope["required"].ShouldBeNull();
         envelope["additionalProperties"].ShouldBeNull();
-        envelope["properties"]!.AsObject().Select(x => x.Key).ShouldBe(Envelope);
-        envelope[OpenApiEmitter.ReadRequiredExtension]!.AsArray().Select(x => DocumentReader.Text(x))
+        envelope["properties"]!.AsObject().Select(static x => x.Key).ShouldBe(Envelope);
+        envelope[OpenApiEmitter.ReadRequiredExtension]!.AsArray()
+            .Select(static x => DocumentReader.Text(x))
             .ShouldBe(Envelope.Order(StringComparer.Ordinal));
 
         var states = DocumentReader.EnumOf(envelope["properties"]!["provisioningState"]!.AsObject());
@@ -594,9 +598,9 @@ public sealed class OpenApiEmitterTests {
 
         // A list element is exactly what a GET returns — ResponseBodies.Collection's own remark.
         DocumentReader.Text(
-                document["components"]!["schemas"]!["CyberCloud.DBforPostgreSQL.servers.List"]!
-                ["properties"]!["value"]!["items"]!["$ref"]
-            )
+            document["components"]!["schemas"]!["CyberCloud.DBforPostgreSQL.servers.List"]!
+            ["properties"]!["value"]!["items"]!["$ref"]
+        )
             .ShouldBe(Expected);
     }
 
@@ -607,7 +611,7 @@ public sealed class OpenApiEmitterTests {
         var broken = Fixtures.PostgresWith(
             ResourceSchema.Of(
                 [
-                    new("/location", SchemaKind.Text, Required: true),
+                    new("/location", SchemaKind.Text, true),
                     new("/etag", SchemaKind.Text, Description: "A provider's own etag.")
                 ]
             )
@@ -622,19 +626,25 @@ public sealed class OpenApiEmitterTests {
         var schemas = Emit(Fixtures.Empty)["components"]!["schemas"]!;
         var status = schemas[OpenApiEmitter.OperationStatusSchema]!;
 
-        status["properties"]!.AsObject().Select(x => x.Key)
+        status["properties"]!.AsObject()
+            .Select(static x => x.Key)
             .ShouldBe(["endTime", "error", "id", "percentComplete", "progress", "startTime", "status"]);
         status["additionalProperties"]!.GetValue<bool>().ShouldBeFalse();
-        status[OpenApiEmitter.ReadRequiredExtension]!.AsArray().Select(x => DocumentReader.Text(x))
+        status[OpenApiEmitter.ReadRequiredExtension]!.AsArray()
+            .Select(static x => DocumentReader.Text(x))
             .ShouldBe(["id", "percentComplete", "progress", "startTime", "status"]);
 
-        schemas[OpenApiEmitter.OperationProgressSchema]!["properties"]!.AsObject().Select(x => x.Key)
+        schemas[OpenApiEmitter.OperationProgressSchema]!["properties"]!.AsObject()
+            .Select(static x => x.Key)
             .ShouldBe(["at", "message", "percentComplete", "step"]);
     }
 
     /// <summary>
-    ///     ⚠ <b>Every piece the envelope added is something the compatibility gate would refuse to
-    ///     take away.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Every piece the envelope added is something the compatibility gate would refuse to
+    ///         take away.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -649,8 +659,11 @@ public sealed class OpenApiEmitterTests {
     ///         <see cref="OpenApiCompatibility" /> refuses every one of those.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The forwards diff is a subset against its superset and is empty by
-    ///         construction</b> — the 2026-09-15 review's point. It is kept as the statement that
+    ///         ⚠
+    ///         <b>
+    ///             The forwards diff is a subset against its superset and is empty by
+    ///             construction
+    ///         </b> — the 2026-09-15 review's point. It is kept as the statement that
     ///         the gate reads an addition as an addition, not as evidence that master's document
     ///         was one: that verdict was <c>./build.sh Generate</c>'s over the real checked-in
     ///         predecessor, "0 breaking change(s)", and no test can reproduce it without that file.
@@ -664,7 +677,8 @@ public sealed class OpenApiEmitterTests {
         before["components"]!["schemas"]!.AsObject().Remove(OpenApiEmitter.ResourceEnvelopeSchema);
 
         foreach (var member in new[] { "id", "startTime", "endTime" }) {
-            before["components"]!["schemas"]![OpenApiEmitter.OperationStatusSchema]!["properties"]!.AsObject().Remove(member);
+            before["components"]!["schemas"]![OpenApiEmitter.OperationStatusSchema]!["properties"]!.AsObject()
+                .Remove(member);
         }
 
         before["components"]!["schemas"]![OpenApiEmitter.OperationStatusSchema]!.AsObject()
@@ -684,7 +698,7 @@ public sealed class OpenApiEmitterTests {
 
         foreach (var path in before["paths"]!.AsObject()) {
             foreach (var operation in path.Value!.AsObject()) {
-                if (operation.Value is JsonObject { } verb && verb["responses"]?["202"] is JsonObject accepted) {
+                if (operation.Value is JsonObject verb && verb["responses"]?["202"] is JsonObject accepted) {
                     accepted.Remove("content");
                 }
             }
@@ -696,14 +710,19 @@ public sealed class OpenApiEmitterTests {
         // as its own rule, because the gate compares that list as the set it is — see below.
         var backwards = OpenApiCompatibility.Diff(now, before);
 
-        backwards.Select(x => x.Rule).Distinct().Order(StringComparer.Ordinal)
+        backwards.Select(static x => x.Rule)
+            .Distinct()
+            .Order(StringComparer.Ordinal)
             .ShouldBe([OpenApiCompatibility.ReadRequiredRemoved, OpenApiCompatibility.Removed]);
-        backwards.Count(x => x.Rule == OpenApiCompatibility.ReadRequiredRemoved).ShouldBe(5);
+        backwards.Count(static x => x.Rule == OpenApiCompatibility.ReadRequiredRemoved).ShouldBe(5);
     }
 
     /// <summary>
-    ///     ⚠ <b>The read promise is guarded, and until the 2026-09-15 review of issue #85 it was
-    ///     not.</b> <c>x-cybercloud-read-required</c> is where the five members' "always present"
+    ///     ⚠
+    ///     <b>
+    ///         The read promise is guarded, and until the 2026-09-15 review of issue #85 it was
+    ///         not.
+    ///     </b> <c>x-cybercloud-read-required</c> is where the five members' "always present"
     ///     lives, because <c>required</c> cannot say it on a schema that also validates a write —
     ///     and the gate treated every <c>x-</c> key as prose, so a regeneration that dropped
     ///     <c>etag</c> from the list narrowed <c>readonly etag: string</c> to optional for every
@@ -715,8 +734,9 @@ public sealed class OpenApiEmitterTests {
         var envelope = "/components/schemas/" + OpenApiEmitter.ResourceEnvelopeSchema;
 
         var narrowed = (JsonObject)now.DeepClone();
-        var promised = narrowed["components"]!["schemas"]![OpenApiEmitter.ResourceEnvelopeSchema]![OpenApiEmitter.ReadRequiredExtension]!.AsArray();
-        promised.Remove(promised.Single(x => DocumentReader.Text(x) == "etag"));
+        var promised =
+            narrowed["components"]!["schemas"]![OpenApiEmitter.ResourceEnvelopeSchema]![OpenApiEmitter.ReadRequiredExtension]!.AsArray();
+        promised.Remove(promised.Single(static x => DocumentReader.Text(x) == "etag"));
 
         var breaking = OpenApiCompatibility.Diff(now, narrowed);
 
@@ -728,16 +748,18 @@ public sealed class OpenApiEmitterTests {
         // The extension disappearing altogether is every name it carried, not one "removed" for the
         // key: the gate's output has to say what the clients lose.
         var stripped = (JsonObject)now.DeepClone();
-        stripped["components"]!["schemas"]![OpenApiEmitter.OperationStatusSchema]!.AsObject().Remove(OpenApiEmitter.ReadRequiredExtension);
+        stripped["components"]!["schemas"]![OpenApiEmitter.OperationStatusSchema]!.AsObject()
+            .Remove(OpenApiEmitter.ReadRequiredExtension);
 
         OpenApiCompatibility.Diff(now, stripped)
-            .Select(x => x.Detail[1..x.Detail.IndexOf('\'', 1)])
+            .Select(static x => x.Detail[1..x.Detail.IndexOf('\'', 1)])
             .ShouldBe(["id", "percentComplete", "progress", "startTime", "status"]);
 
         // A promise added widens the read; a client generated against the old document null-checked
         // something that is now guaranteed, which is safe. Every other x- key is still prose.
         var widened = (JsonObject)now.DeepClone();
-        widened["components"]!["schemas"]![OpenApiEmitter.ResourceEnvelopeSchema]![OpenApiEmitter.ReadRequiredExtension]!.AsArray().Add("location");
+        widened["components"]!["schemas"]![OpenApiEmitter.ResourceEnvelopeSchema]![OpenApiEmitter.ReadRequiredExtension]!.AsArray()
+            .Add("location");
         widened["paths"]![ServerPath]!["get"]!["x-cybercloud-permission"] = "Something.Else/read";
 
         OpenApiCompatibility.Diff(now, widened).ShouldBeEmpty();

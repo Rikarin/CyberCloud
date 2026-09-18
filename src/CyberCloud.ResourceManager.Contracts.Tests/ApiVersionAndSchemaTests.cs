@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 
 namespace CyberCloud.ResourceManager.Contracts.Tests;
 
@@ -73,9 +72,9 @@ public sealed class ResourceSchemaTests {
     static ResourceSchema Sku2026 =>
         ResourceSchema.Of(
             [
-                new("/location", SchemaKind.Text, Required: true),
+                new("/location", SchemaKind.Text, true),
                 new("/properties", SchemaKind.Nested),
-                new("/properties/version", SchemaKind.Text, Required: true),
+                new("/properties/version", SchemaKind.Text, true),
                 new("/properties/storageGb", SchemaKind.WholeNumber)
             ]
         );
@@ -134,7 +133,7 @@ public sealed class ResourceSchemaTests {
         result.IsFailure.ShouldBeTrue();
         result.Error!.Details.Length.ShouldBeGreaterThanOrEqualTo(1);
 
-        var everything = new[] { result.Error }.Concat(result.Error.Details).Select(x => x.Target).ToArray();
+        var everything = new[] { result.Error }.Concat(result.Error.Details).Select(static x => x.Target).ToArray();
         everything.ShouldContain("/location");
         everything.ShouldContain("/properties/version");
         everything.ShouldContain("/properties/storageGb");
@@ -144,8 +143,8 @@ public sealed class ResourceSchemaTests {
     public void APatchDocumentValidatesWithoutItsRequiredProperties() {
         // ⚠ THE VERB ASYMMETRY. A merge patch omits everything it is not changing; the MERGED result
         // is what must satisfy requiredness, and the grain is where the merge happens.
-        var asPut = Validate(Sku2026, """{"properties":{"storageGb":200}}""", requireRequired: true);
-        var asPatch = Validate(Sku2026, """{"properties":{"storageGb":200}}""", requireRequired: false);
+        var asPut = Validate(Sku2026, """{"properties":{"storageGb":200}}""", true);
+        var asPatch = Validate(Sku2026, """{"properties":{"storageGb":200}}""", false);
 
         asPut.IsFailure.ShouldBeTrue();
         asPatch.IsSuccess.ShouldBeTrue();
@@ -171,7 +170,7 @@ public sealed class ResourceSchemaTests {
 
     [Fact]
     public void ADuplicatePointerIsABuildFailure() {
-        Should.Throw<ArgumentException>(() => ResourceSchema.Of(
+        Should.Throw<ArgumentException>(static () => ResourceSchema.Of(
                 [new("/a", SchemaKind.Text), new("/a", SchemaKind.Number)]
             )
         );
@@ -179,8 +178,8 @@ public sealed class ResourceSchemaTests {
 
     [Fact]
     public void APropertyPointerMustBeginWithASlash() {
-        Should.Throw<ArgumentException>(() => new SchemaProperty("properties/version", SchemaKind.Text));
-        Should.Throw<ArgumentException>(() => new SchemaProperty("", SchemaKind.Text));
+        Should.Throw<ArgumentException>(static () => new SchemaProperty("properties/version", SchemaKind.Text));
+        Should.Throw<ArgumentException>(static () => new SchemaProperty("", SchemaKind.Text));
     }
 
     // ── The api-version projection — the other half of the immutable-date rule ──────────────────
@@ -311,7 +310,7 @@ public sealed class ReconcileOutcomeTests {
                     ReconcileOutcomeKind.InProgress,
                     ReconcileOutcomeKind.Failed
                 ],
-                ignoreOrder: true
+                true
             );
     }
 
@@ -347,12 +346,15 @@ public sealed class ReconcileOutcomeTests {
     public void AnInProgressWithNoReasonIsRefused() {
         // A reconciler that wants to say nothing is a spinner, which is the thing the progress model
         // exists to replace.
-        Should.Throw<ArgumentException>(() => ReconcileOutcome.InProgress("  "));
+        Should.Throw<ArgumentException>(static () => ReconcileOutcome.InProgress("  "));
     }
 
     [Fact]
     public void ANegativeRetryAfterIsRefusedRatherThanClamped() {
-        Should.Throw<ArgumentOutOfRangeException>(() => ReconcileOutcome.InProgress("waiting", TimeSpan.FromSeconds(-1))
+        Should.Throw<ArgumentOutOfRangeException>(static () => ReconcileOutcome.InProgress(
+                "waiting",
+                TimeSpan.FromSeconds(-1)
+            )
         );
     }
 
@@ -365,7 +367,7 @@ public sealed class ReconcileOutcomeTests {
         outcome.Retryable.ShouldBeFalse();
         outcome.IsTerminal.ShouldBeTrue();
 
-        ReconcileOutcome.Failed(ErrorCode.ProvisioningFailed, "the api server timed out", retryable: true)
+        ReconcileOutcome.Failed(ErrorCode.ProvisioningFailed, "the api server timed out", true)
             .IsTerminal.ShouldBeFalse();
     }
 
@@ -410,7 +412,7 @@ public sealed class ReconcileOutcomeTests {
 
     [Fact]
     public void FromFailureRefusesANullError() {
-        Should.Throw<ArgumentNullException>(() => ReconcileOutcome.FromFailure(null!));
+        Should.Throw<ArgumentNullException>(static () => ReconcileOutcome.FromFailure(null!));
     }
 }
 
@@ -440,7 +442,7 @@ public sealed class ErrorShapeTests {
 
     [Fact]
     public void ATargetMustBeAJsonPointer() {
-        Should.Throw<ArgumentException>(() => new Error(ErrorCode.InvalidRequestBody, "x", "properties.sku"));
+        Should.Throw<ArgumentException>(static () => new Error(ErrorCode.InvalidRequestBody, "x", "properties.sku"));
     }
 
     [Fact]

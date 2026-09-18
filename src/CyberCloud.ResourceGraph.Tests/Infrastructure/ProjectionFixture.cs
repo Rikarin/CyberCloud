@@ -21,8 +21,11 @@ namespace CyberCloud.ResourceGraph.Tests.Infrastructure;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The projector runs INSIDE the silo, as the hosted service the host registers, and
-///         not as an object the test drives.</b> <c>AddResourceGraphProjector</c> is the same call
+///         ⚠
+///         <b>
+///             The projector runs INSIDE the silo, as the hosted service the host registers, and
+///             not as an object the test drives.
+///         </b> <c>AddResourceGraphProjector</c> is the same call
 ///         <c>SiloComposition</c> makes; what the test process holds is the publisher's end (a
 ///         <see cref="NatsResourceChangedSink" />, which is what the gateway holds) and a reader over
 ///         ClickHouse. A message therefore travels sink → JetStream → the silo's consumer → the
@@ -35,8 +38,11 @@ namespace CyberCloud.ResourceGraph.Tests.Infrastructure;
 ///         user so the credential headers are exercised rather than waved through.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The options reach the silo through a static, because <see cref="ISiloConfigurator" />
-///         is instantiated by type.</b> The same shape <c>ResourceManagerCluster</c>'s doubles use.
+///         ⚠
+///         <b>
+///             The options reach the silo through a static, because <see cref="ISiloConfigurator" />
+///             is instantiated by type.
+///         </b> The same shape <c>ResourceManagerCluster</c>'s doubles use.
 ///         They are written before <c>DeployAsync</c> and read once, in <c>Configure</c>.
 ///     </para>
 /// </remarks>
@@ -81,7 +87,9 @@ public sealed class ProjectionFixture : IAsyncLifetime {
         // string in it does not work here: the wait strategy builds its URI from a path, so the
         // `?` is escaped and the server answers 404 forever. The first version of this fixture
         // waited on `/?query=SELECT 1` and never came back.
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(x => x.ForPort(8123).ForPath("/ping")))
+        .WithWaitStrategy(
+            Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(static x => x.ForPort(8123).ForPath("/ping"))
+        )
         .Build();
 
     TestCluster cluster = null!;
@@ -105,7 +113,8 @@ public sealed class ProjectionFixture : IAsyncLifetime {
     public IGrainFactory Grains => cluster.GrainFactory;
 
     /// <summary>The silo's grain factory, tenant applied.</summary>
-    public TenantGrainFactory For(Guid tenant) => cluster.GrainFactory.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
+    public TenantGrainFactory For(Guid tenant) =>
+        cluster.GrainFactory.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
 
     /// <summary>The silo's own projector, for the tests that drive one event without the stream.</summary>
     public ResourceGraphProjector SiloProjector =>
@@ -224,8 +233,8 @@ public sealed class ProjectionFixture : IAsyncLifetime {
             ProvisioningState = ProvisioningState.Creating,
             Location = "eu-central",
             Tags = System.Collections.Immutable.ImmutableDictionary<string, string>.Empty.Add("env", "test"),
-            CreatedAt = new DateTimeOffset(2026, 9, 17, 10, 0, 0, TimeSpan.Zero),
-            ModifiedAt = new DateTimeOffset(2026, 9, 17, 10, 0, 0, TimeSpan.Zero),
+            CreatedAt = new(2026, 9, 17, 10, 0, 0, TimeSpan.Zero),
+            ModifiedAt = new(2026, 9, 17, 10, 0, 0, TimeSpan.Zero),
             DesiredHash = "sha256:0",
             Version = 1
         };
@@ -239,10 +248,13 @@ public sealed class ProjectionFixture : IAsyncLifetime {
             // The schema CheckGrain and TupleStoreGrain evaluate against — the same line
             // SiloComposition writes — and then the same projector call it makes.
             silo.AddCyberCloudAuthorization();
-            silo.ConfigureServices(services => {
+            silo.ConfigureServices(static services => {
                     services.AddSingleton<IClock, SystemClock>();
                     services.AddResourceGraphProjector(
-                        SiloOptions ?? throw new InvalidOperationException("ProjectionFixture.SiloOptions is set before the cluster deploys.")
+                        SiloOptions
+                        ?? throw new InvalidOperationException(
+                            "ProjectionFixture.SiloOptions is set before the cluster deploys."
+                        )
                     );
                 }
             );

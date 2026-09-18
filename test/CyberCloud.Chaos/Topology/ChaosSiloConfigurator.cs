@@ -20,17 +20,23 @@ namespace CyberCloud.Chaos.Topology;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Two deployment knobs are turned — the cluster health window here, the pool size in
-///         <see cref="ChaosTopology" /> — and they are the only deviations from the shipped
-///         defaults. Both are named in the results file's topology block
-///         (<c>ChaosTopology.Facts</c>: <c>clusterHealthWindow</c>, <c>clusterPingInterval</c>,
-///         <c>npgsqlPoolSize</c>) so a reader of the dated table in docs/plan/23 knows what the
-///         numbers were measured under. ⚠ The pool size was not in the block until the review of
-///         the branch read this sentence against the file.</b>
+///         ⚠
+///         <b>
+///             Two deployment knobs are turned — the cluster health window here, the pool size in
+///             <see cref="ChaosTopology" /> — and they are the only deviations from the shipped
+///             defaults. Both are named in the results file's topology block
+///             (<c>ChaosTopology.Facts</c>: <c>clusterHealthWindow</c>, <c>clusterPingInterval</c>,
+///             <c>npgsqlPoolSize</c>) so a reader of the dated table in docs/plan/23 knows what the
+///             numbers were measured under. ⚠ The pool size was not in the block until the review of
+///             the branch read this sentence against the file.
+///         </b>
 ///     </para>
 ///     <para>
-///         ⚠ <b>The membership probes are the shipped defaults, and the first version of this file
-///         tuned them and paid for it.</b> <see cref="ClusterMembershipOptions" /> was set to a 2 s
+///         ⚠
+///         <b>
+///             The membership probes are the shipped defaults, and the first version of this file
+///             tuned them and paid for it.
+///         </b> <see cref="ClusterMembershipOptions" /> was set to a 2 s
 ///         probe, two misses and one vote so a killed silo would be declared dead in seconds rather
 ///         than a minute. Two things were wrong with that. The testing host's kill announces its own
 ///         death — the dying silo writes its Dead row — so the probes were never what noticed a kill
@@ -103,7 +109,7 @@ public sealed class ChaosSiloConfigurator : ISiloConfigurator {
         silo.AddCyberCloudTenancy(ChaosState.Storage);
 
         // ── Reminders, in the same Redis as the hot tier — SiloComposition.ConfigureStorage. ─────
-        silo.UseRedisReminderService(reminders =>
+        silo.UseRedisReminderService(static reminders =>
             reminders.ConfigurationOptions = ConfigurationOptions.Parse(ChaosState.RedisConnectionString)
         );
 
@@ -121,11 +127,13 @@ public sealed class ChaosSiloConfigurator : ISiloConfigurator {
                         provider.GetService<ILogger<KubeApiClientFactory>>(),
                         provider.GetRequiredService<IGrainFactory>()
                     ) {
-                        ResolveKubeconfig = (_, _) => Task.FromResult(Result<string>.Success(ChaosState.Kubeconfig))
+                        ResolveKubeconfig = static (_, _) => Task.FromResult(
+                            Result<string>.Success(ChaosState.Kubeconfig)
+                        )
                     }
                 );
 
-                services.Configure<KubernetesOptions>(options => {
+                services.Configure<KubernetesOptions>(static options => {
                         options.PingInterval = PingInterval;
                         options.HealthStalenessWindow = HealthStalenessWindow;
                     }
@@ -135,7 +143,7 @@ public sealed class ChaosSiloConfigurator : ISiloConfigurator {
 
         silo.AddCyberCloudAuthorization()
             .AddCyberCloudKubernetes()
-            .ConfigureServices(services => {
+            .ConfigureServices(static services => {
                     services.AddSingleton<IClusterConnectionFactory, GrainClusterConnectionFactory>();
                     services.AddSingleton<IClusterConnectionRegistrar, GrainClusterConnectionRegistrar>();
                     services.AddCyberCloudProvider(new SampleProvider());

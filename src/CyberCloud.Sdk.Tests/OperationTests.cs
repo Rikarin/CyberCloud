@@ -19,7 +19,7 @@ public sealed class ProgressStreamsIncrementallyTests {
     /// </summary>
     [Fact]
     public async Task Entries_surface_as_each_poll_returns_them_not_in_a_batch_at_the_end() {
-        var transport = new ScriptedTransport((request, index) => index switch {
+        var transport = new ScriptedTransport(static (request, index) => index switch {
                 0 => Responses.Accepted(TestClient.OperationUri),
                 1 => Responses.Operation("Running", [("etcd", "etcd cluster ready", 20)]),
                 2 => Responses.Operation(
@@ -50,7 +50,7 @@ public sealed class ProgressStreamsIncrementallyTests {
             observed.Add((progress.Step, transport.RequestCount));
         }
 
-        observed.Select(x => x.Step).ShouldBe(["etcd", "apiserver", "ready"]);
+        observed.Select(static x => x.Step).ShouldBe(["etcd", "apiserver", "ready"]);
 
         // 1 = the PUT, then one poll per entry — so each entry is observed at a strictly higher request
         // count than the one before, which is the streaming claim. A batching implementation would
@@ -67,7 +67,7 @@ public sealed class ProgressStreamsIncrementallyTests {
     /// <summary>A late subscriber gets the history rather than nothing.</summary>
     [Fact]
     public async Task Enumerating_after_completion_replays_every_entry() {
-        var transport = new ScriptedTransport((request, index) => index switch {
+        var transport = new ScriptedTransport(static (request, index) => index switch {
                 0 => Responses.Accepted(TestClient.OperationUri),
                 1 => Responses.Operation("Succeeded", [("etcd", "ready", 100)]),
                 _ => Responses.Json(HttpStatusCode.OK, TestClient.WidgetBody),
@@ -96,7 +96,7 @@ public sealed class ProgressStreamsIncrementallyTests {
 public sealed class WaitUntilTests {
     [Fact]
     public async Task Started_returns_before_the_operation_has_completed() {
-        var transport = new ScriptedTransport((request, index) => index switch {
+        var transport = new ScriptedTransport(static (request, index) => index switch {
                 0 => Responses.Accepted(TestClient.OperationUri),
                 _ => Responses.Operation("Succeeded"),
             }
@@ -117,7 +117,7 @@ public sealed class WaitUntilTests {
 
     [Fact]
     public async Task Completed_does_not_return_until_the_operation_has_completed() {
-        var transport = new ScriptedTransport((request, index) => index switch {
+        var transport = new ScriptedTransport(static (request, index) => index switch {
                 0 => Responses.Accepted(TestClient.OperationUri),
                 1 => Responses.Operation("Running", [("etcd", "starting", 10)]),
                 2 => Responses.Operation("Succeeded", [("etcd", "starting", 10), ("ready", "done", 100)]),
@@ -158,10 +158,8 @@ public sealed class WaitUntilTests {
             .CreateOrUpdateAsync(WaitUntil.Started, "main", TestClient.SampleData(), Cancel.Token);
 
         var thrown =
-            await Should.ThrowAsync<CyberCloudRequestFailedException>(async () => await operation.WaitForCompletionAsync(
-                    Cancel.Token
-                )
-            );
+            await Should.ThrowAsync<
+                CyberCloudRequestFailedException>(async () => await operation.WaitForCompletionAsync(Cancel.Token));
 
         thrown.ErrorCode.ShouldBe("QuotaExceeded");
         thrown.Target.ShouldBe("/properties/sku");
@@ -210,7 +208,7 @@ public sealed class OperationCancellationTests {
     /// </summary>
     [Fact]
     public async Task Cancelling_a_wait_stops_the_polling_promptly_and_nothing_polls_afterwards() {
-        var transport = new ScriptedTransport((request, index) => index == 0
+        var transport = new ScriptedTransport(static (request, index) => index == 0
                 ? Responses.Accepted(TestClient.OperationUri)
                 : Responses.Operation("Running", [("etcd", "still going", 10)])
         );
@@ -219,7 +217,7 @@ public sealed class OperationCancellationTests {
         // delay were not cancellable this test would take 30 seconds and then fail.
         using var client = TestClient.Create(
             transport,
-            configure: options => options.PollingInterval = TimeSpan.FromSeconds(30)
+            configure: static options => options.PollingInterval = TimeSpan.FromSeconds(30)
         );
 
         var operation = await client.Widgets()
@@ -245,7 +243,7 @@ public sealed class OperationCancellationTests {
     /// <summary>An already-cancelled token costs no request at all.</summary>
     [Fact]
     public async Task An_already_cancelled_token_issues_no_poll() {
-        var transport = new ScriptedTransport((request, index) => Responses.Accepted(TestClient.OperationUri));
+        var transport = new ScriptedTransport(static (request, index) => Responses.Accepted(TestClient.OperationUri));
 
         using var client = TestClient.Create(transport);
 

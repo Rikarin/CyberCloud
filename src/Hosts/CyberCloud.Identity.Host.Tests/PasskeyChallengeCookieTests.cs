@@ -35,7 +35,7 @@ public sealed class PasskeyChallengeCookieTests {
 
     static PasskeyChallengeTicket Ticket(DateTimeOffset? expiresAt = null) =>
         new(
-            "{\"challenge\":\"abc\",\"allowCredentials\":[{\"id\":\"k1\"}]}",
+            """{"challenge":"abc","allowCredentials":[{"id":"k1"}]}""",
             "someone@example.com",
             expiresAt ?? Now.AddMinutes(5)
         );
@@ -89,10 +89,10 @@ public sealed class PasskeyChallengeCookieTests {
         // set a challenge for this origin, which is the half of the defence the server cannot do.
         PasskeyChallengeCookie.CookieName.ShouldStartWith("__Host-");
         setCookie.ShouldStartWith(PasskeyChallengeCookie.CookieName + "=");
-        setCookie.ShouldContain("path=/", Case.Insensitive);
-        setCookie.ShouldContain("secure", Case.Insensitive);
-        setCookie.ShouldContain("httponly", Case.Insensitive);
-        setCookie.ShouldNotContain("domain=", Case.Insensitive);
+        setCookie.ShouldContain("path=/");
+        setCookie.ShouldContain("secure");
+        setCookie.ShouldContain("httponly");
+        setCookie.ShouldNotContain("domain=");
     }
 
     [Fact]

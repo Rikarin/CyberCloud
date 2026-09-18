@@ -24,8 +24,11 @@ namespace CyberCloud.Providers.Communication.Contracts;
 ///             THE FIRST CLUSTERLESS FAMILY IN THE CATALOGUE, AND EVERYTHING UNUSUAL ABOUT IT
 ///             FOLLOWS FROM THAT.
 ///         </b> docs/plan/08 § What the resource manager deliberately does not do requires the manager
-///         to <i>"work for a provider with no cluster at all (a DNS zone, a mail domain, a role
-///         assignment)"</i>, and fourteen families later this is the first that takes it up on that.
+///         to
+///         <i>
+///             "work for a provider with no cluster at all (a DNS zone, a mail domain, a role
+///             assignment)"
+///         </i>, and fourteen families later this is the first that takes it up on that.
 ///         No type here declares <c>RequiresCluster</c>, none names a chart, none renders an object:
 ///         what a reconciler converges is <b>grain state</b> in <c>CyberCloud.Communication</c>,
 ///         reached through <see cref="ICommunicationControlPlane" />, and what it reads back is the
@@ -89,7 +92,7 @@ public static class CommunicationServices {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the service is billed in."
                 ) {
                     Format = SchemaFormat.Region,
@@ -109,7 +112,8 @@ public static class CommunicationServices {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     /// <summary>Builds a body that satisfies <see cref="Schema2026" />.</summary>
     /// <param name="defaultLocale">The fallback locale, or empty.</param>
@@ -120,7 +124,8 @@ public static class CommunicationServices {
         }.ToJsonString();
 
     /// <summary>The fallback locale a body asks for.</summary>
-    public static string DefaultLocaleOf(JsonElement desired) => Bodies.Text(Bodies.Property(desired, "defaultLocale"), string.Empty);
+    public static string DefaultLocaleOf(JsonElement desired) =>
+        Bodies.Text(Bodies.Property(desired, "defaultLocale"), string.Empty);
 
     // ── The grain a resource converges onto ────────────────────────────────────────────────────
 
@@ -158,8 +163,11 @@ public static class CommunicationServices {
 
     /// <summary><c>POST …/services/{name}/send</c>. One message, through this service.</summary>
     /// <remarks>
-    ///     ⚠ <b>An action rather than a <c>messages</c> resource type, and the reason is what a
-    ///     resource is.</b> A resource is desired state the platform converges and re-converges; a
+    ///     ⚠
+    ///     <b>
+    ///         An action rather than a <c>messages</c> resource type, and the reason is what a
+    ///         resource is.
+    ///     </b> A resource is desired state the platform converges and re-converges; a
     ///     message is an event that happened once. Modelling one as a resource would give it a PUT
     ///     whose second body could never be applied — the grain answers <c>Conflict</c> to a second
     ///     message under one idempotency key, deliberately — and a delete that could not un-send.
@@ -204,20 +212,20 @@ public static class CommunicationServices {
     public static ResourceSchema SendRequest { get; } =
         ResourceSchema.Of(
             [
-                new("/channel", SchemaKind.Text, Required: true, Description: "Which channel to send on.") {
+                new("/channel", SchemaKind.Text, true, Description: "Which channel to send on.") {
                     AllowedValues = ChannelKinds.AllowedValues
                 },
                 new(
                     "/to",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The recipient — an E.164 number for sms, whatsapp and voice, an address for "
                     + "email, a device token for push."
                 ) { MinLength = 1, MaxLength = DestinationMaxLength, ExampleJson = "\"+420777123456\"" },
                 new(
                     "/idempotencyKey",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The caller's key for this message. A retry carrying the same key returns the "
                     + "message already sent and calls no carrier; derive it from the thing being notified "
                     + "about, never from the attempt."
@@ -242,7 +250,7 @@ public static class CommunicationServices {
                     "/arguments",
                     SchemaKind.Array,
                     Description: "The template's arguments, one name=value per element."
-                ) { ElementKind = SchemaKind.Text, Pattern = ArgumentPattern, ExampleJson = "[\"code=482913\"]" },
+                ) { ElementKind = SchemaKind.Text, Pattern = ArgumentPattern, ExampleJson = """["code=482913"]""" },
                 new(
                     "/body",
                     SchemaKind.Text,
@@ -258,19 +266,23 @@ public static class CommunicationServices {
                 new(
                     "/idempotencyKey",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The key the message was sent under."
                 ) { MinLength = 1, MaxLength = 200 }
             ]
         );
 
     /// <summary>The message statuses a response spells, lower-cased <see cref="MessageStatus" />.</summary>
-    public static ImmutableArray<string> StatusValues { get; } = ["queued", "dispatched", "delivered", "failed", "refused"];
+    public static ImmutableArray<string> StatusValues { get; } =
+        ["queued", "dispatched", "delivered", "failed", "refused"];
 
     /// <summary>What <c>send</c> and <c>status</c> both return: the message as the platform holds it.</summary>
     /// <remarks>
-    ///     ⚠ <b><c>/receipts</c> is one line of text per receipt, and that is a schema limit rather
-    ///     than a design.</b> A delivery receipt is a record — a status, the carrier's own status
+    ///     ⚠
+    ///     <b>
+    ///         <c>/receipts</c> is one line of text per receipt, and that is a schema limit rather
+    ///         than a design.
+    ///     </b> A delivery receipt is a record — a status, the carrier's own status
     ///     word, a timestamp, a detail — and this platform's schema model has no array of objects, so
     ///     each is rendered as <c>{occurredAt} {status} {providerStatus}: {detail}</c> by
     ///     <see cref="ReceiptLine" />. The structured form is owed to the api-version that grows the
@@ -279,31 +291,42 @@ public static class CommunicationServices {
     public static ResourceSchema MessageResponse { get; } =
         ResourceSchema.Of(
             [
-                new("/messageId", SchemaKind.Text, Required: true, Description: "The platform's id for the message.") {
+                new("/messageId", SchemaKind.Text, true, Description: "The platform's id for the message.") {
                     Format = SchemaFormat.Uuid
                 },
-                new("/status", SchemaKind.Text, Required: true, Description: "Where the message is in its life.") {
+                new("/status", SchemaKind.Text, true, Description: "Where the message is in its life.") {
                     AllowedValues = StatusValues
                 },
-                new("/channel", SchemaKind.Text, Required: true, Description: "The channel it went on.") {
+                new("/channel", SchemaKind.Text, true, Description: "The channel it went on.") {
                     AllowedValues = ChannelKinds.AllowedValues
                 },
-                new("/to", SchemaKind.Text, Required: true, Description: "The recipient, normalized."),
+                new("/to", SchemaKind.Text, true, Description: "The recipient, normalized."),
                 new("/provider", SchemaKind.Text, Description: "Which carrier implementation served it."),
                 new("/providerMessageId", SchemaKind.Text, Description: "The carrier's own id, once it has one."),
-                new("/queuedAt", SchemaKind.Text, Required: true, Description: "When the platform accepted it.") {
+                new("/queuedAt", SchemaKind.Text, true, Description: "When the platform accepted it.") {
                     Format = SchemaFormat.DateTime
                 },
                 new("/dispatchedAt", SchemaKind.Text, Description: "When a carrier accepted it. Absent until then.") {
                     Format = SchemaFormat.DateTime
                 },
-                new("/settledAt", SchemaKind.Text, Description: "When it was delivered, failed or refused. Absent until then.") {
-                    Format = SchemaFormat.DateTime
-                },
+                new(
+                    "/settledAt",
+                    SchemaKind.Text,
+                    Description: "When it was delivered, failed or refused. Absent until then."
+                ) { Format = SchemaFormat.DateTime },
                 new("/cost", SchemaKind.Number, Description: "What the carrier charged, once it said."),
                 new("/currency", SchemaKind.Text, Description: "The currency of cost."),
-                new("/detail", SchemaKind.Text, Description: "The last thing the platform or the carrier said about it."),
-                new("/receiptCount", SchemaKind.WholeNumber, Required: true, Description: "How many delivery receipts have arrived."),
+                new(
+                    "/detail",
+                    SchemaKind.Text,
+                    Description: "The last thing the platform or the carrier said about it."
+                ),
+                new(
+                    "/receiptCount",
+                    SchemaKind.WholeNumber,
+                    true,
+                    Description: "How many delivery receipts have arrived."
+                ),
                 new(
                     "/receipts",
                     SchemaKind.Array,
@@ -317,10 +340,13 @@ public static class CommunicationServices {
     public static ResourceSchema CheckSuppressionRequest { get; } =
         ResourceSchema.Of(
             [
-                new("/channel", SchemaKind.Text, Required: true, Description: "The channel the address would be sent on.") {
-                    AllowedValues = ChannelKinds.AllowedValues
-                },
-                new("/destination", SchemaKind.Text, Required: true, Description: "The address, in any spelling.") {
+                new(
+                    "/channel",
+                    SchemaKind.Text,
+                    true,
+                    Description: "The channel the address would be sent on."
+                ) { AllowedValues = ChannelKinds.AllowedValues },
+                new("/destination", SchemaKind.Text, true, Description: "The address, in any spelling.") {
                     MinLength = 1, MaxLength = DestinationMaxLength
                 }
             ]
@@ -330,9 +356,20 @@ public static class CommunicationServices {
     public static ResourceSchema CheckSuppressionResponse { get; } =
         ResourceSchema.Of(
             [
-                new("/suppressed", SchemaKind.Boolean, Required: true, Description: "Whether a send to it would be refused."),
-                new("/reason", SchemaKind.Text, Description: "Why, when it is: hardBounce, complaint, optOut or manualBlock."),
-                new("/suppressedAt", SchemaKind.Text, Description: "When it was suppressed.") { Format = SchemaFormat.DateTime },
+                new(
+                    "/suppressed",
+                    SchemaKind.Boolean,
+                    true,
+                    Description: "Whether a send to it would be refused."
+                ),
+                new(
+                    "/reason",
+                    SchemaKind.Text,
+                    Description: "Why, when it is: hardBounce, complaint, optOut or manualBlock."
+                ),
+                new("/suppressedAt", SchemaKind.Text, Description: "When it was suppressed.") {
+                    Format = SchemaFormat.DateTime
+                },
                 new("/note", SchemaKind.Text, Description: "The carrier's, the recipient's or the operator's words.")
             ]
         );
@@ -360,11 +397,11 @@ public static class CommunicationServices {
     public static ResourceSchema ListSuppressionsResponse { get; } =
         ResourceSchema.Of(
             [
-                new("/count", SchemaKind.WholeNumber, Required: true, Description: "How many entries are on the list."),
+                new("/count", SchemaKind.WholeNumber, true, Description: "How many entries are on the list."),
                 new(
                     "/entries",
                     SchemaKind.Array,
-                    Required: true,
+                    true,
                     Description: "Every entry, oldest first, one line each: "
                     + "'{channel} {destination} {reason} {suppressedAt}: {note}'."
                 ) { ElementKind = SchemaKind.Text }
@@ -441,7 +478,7 @@ public static class CommunicationServices {
             ["currency"] = message.Currency,
             ["detail"] = message.Detail,
             ["receiptCount"] = receipts.Length,
-            ["receipts"] = new JsonArray([.. receipts.Select(x => (JsonNode?)ReceiptLine(x))])
+            ["receipts"] = new JsonArray([.. receipts.Select(static x => (JsonNode?)ReceiptLine(x))])
         };
 
         // Absent rather than null: the response schema declares neither as nullable, and "not yet"
@@ -477,7 +514,8 @@ public static class CommunicationServices {
         var list = entries.IsDefault ? [] : entries;
 
         return new JsonObject {
-            ["count"] = list.Length, ["entries"] = new JsonArray([.. list.Select(x => (JsonNode?)SuppressionLine(x))])
+            ["count"] = list.Length,
+            ["entries"] = new JsonArray([.. list.Select(static x => (JsonNode?)SuppressionLine(x))])
         }.ToJsonString();
     }
 

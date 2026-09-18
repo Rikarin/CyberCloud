@@ -149,7 +149,7 @@ public class SecretShapedTextTests {
             )
             .ShouldBeTrue();
 
-        rules.ShouldBe(["AwsAccessKey", "ConnectionStringPassword"], ignoreOrder: true);
+        rules.ShouldBe(["AwsAccessKey", "ConnectionStringPassword"], true);
         redacted.ShouldNotContain(Shape("AKIA", "IOSFODNN7EXAMPLE"));
         redacted.ShouldNotContain("Tr0ub4dor");
     }
@@ -196,8 +196,11 @@ public class SecretShapedTextTests {
     ///     the .NET spelling recognises, over every fixture in this file.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The nearest thing to Go's engine this suite can run is .NET's non-backtracking one,
-    ///     and the nearness is a fact rather than a hope.</b> Both are linear-time automata over the
+    ///     ⚠
+    ///     <b>
+    ///         The nearest thing to Go's engine this suite can run is .NET's non-backtracking one,
+    ///         and the nearness is a fact rather than a hope.
+    ///     </b> Both are linear-time automata over the
     ///     same syntax subset: no lookaround, no backreference, no atomic group, each refused at
     ///     construction. So a <see cref="SecretShapedRule.Re2Pattern" /> that does not compile here
     ///     would not compile on the API server either, and one that matches here matches there for
@@ -234,7 +237,7 @@ public class SecretShapedTextTests {
         // And nothing the platform logs on purpose is caught by any of them.
         foreach (var row in Innocent) {
             var line = row.Data;
-            var fired = rules.Where(rule => Re2(rule).IsMatch(line)).Select(rule => rule.Name).ToList();
+            var fired = rules.Where(rule => Re2(rule).IsMatch(line)).Select(static rule => rule.Name).ToList();
 
             fired.ShouldBeEmpty($"{string.Join(", ", fired)} fired in RE2 form on: {line}");
         }

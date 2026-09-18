@@ -21,8 +21,11 @@ namespace CyberCloud.Authorization.Tests.Generated;
 ///         scoped one, so 2 000 keeps the pair under half a minute.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The generated schemas have every node kind, so this is also the test of
-///         verification.</b> A relation rewrite can be an intersection and a permission can carry
+///         ⚠
+///         <b>
+///             The generated schemas have every node kind, so this is also the test of
+///             verification.
+///         </b> A relation rewrite can be an intersection and a permission can carry
 ///         a top-level exclusion, so a good share of walks over-approximate and re-check; the
 ///         counters at the end are what stop that share from silently becoming zero.
 ///     </para>
@@ -66,11 +69,17 @@ public sealed class ListObjectsPropertyTests {
                         var expected = objects
                             .Where(o => o.Type == type)
                             .Where(o => ReferenceEvaluator.Evaluate(graph.Schema, graph.Tuples, o, name, subject))
-                            .Select(o => o.Id)
+                            .Select(static o => o.Id)
                             .Order(StringComparer.Ordinal)
                             .ToArray();
 
-                        var evaluator = new ListObjectsEvaluator(graph.Schema, forward, reverse, Unbounded, reverse.Index);
+                        var evaluator = new ListObjectsEvaluator(
+                            graph.Schema,
+                            forward,
+                            reverse,
+                            Unbounded,
+                            reverse.Index
+                        );
 
                         var actual = await evaluator.EvaluateAsync(
                             subject,
@@ -83,7 +92,7 @@ public sealed class ListObjectsPropertyTests {
                         var evaluation = actual.GetValueOrThrow();
                         evaluation.Outcome.ShouldBe(ListObjectsOutcome.Complete);
 
-                        evaluation.Objects.Select(x => x.Id)
+                        evaluation.Objects.Select(static x => x.Id)
                             .ToArray()
                             .ShouldBe(
                                 expected,
@@ -132,13 +141,13 @@ public sealed class ListObjectsPropertyTests {
             var reverse = new InMemoryReverseRelationReader(graph.Schema, graph.Tuples);
             var objects = Universe(graph);
             var parents = Parents(graph, objects);
-            var isChain = parents.Values.All(x => x.Count <= 1);
+            var isChain = parents.Values.All(static x => x.Count <= 1);
 
             // One scope per graph — the object with the most descendants, so scoping has something
             // to do — and the two depths that matter: one level, and every level.
             var scope = objects
                 .OrderByDescending(o => Descendants(parents, o).Count)
-                .ThenBy(o => o.ToString(), StringComparer.Ordinal)
+                .ThenBy(static o => o.ToString(), StringComparer.Ordinal)
                 .First();
 
             var descendants = Descendants(parents, scope);
@@ -147,7 +156,7 @@ public sealed class ListObjectsPropertyTests {
             foreach (var withinDepth in new int?[] { 1, null }) {
                 var inScope = descendants
                     .Where(x => withinDepth is null || x.Value <= withinDepth)
-                    .Select(x => x.Key)
+                    .Select(static x => x.Key)
                     .ToHashSet();
 
                 // The second assumption: every userset any tuple names is formed on an object the
@@ -156,7 +165,8 @@ public sealed class ListObjectsPropertyTests {
                 // through an object the pruned walk never reached.
                 var usersetOffTheWalk = graph.Tuples.Any(t => t.Subject.IsUserset
                     && !ancestors.Contains(t.Subject.Object)
-                    && !(descendants.TryGetValue(t.Subject.Object, out var d) && (withinDepth is null || d < withinDepth))
+                    && !(descendants.TryGetValue(t.Subject.Object, out var d)
+                        && (withinDepth is null || d < withinDepth))
                 );
 
                 foreach (var subject in Subjects) {
@@ -165,11 +175,17 @@ public sealed class ListObjectsPropertyTests {
                             var expected = inScope
                                 .Where(o => o.Type == type)
                                 .Where(o => ReferenceEvaluator.Evaluate(graph.Schema, graph.Tuples, o, name, subject))
-                                .Select(o => o.Id)
+                                .Select(static o => o.Id)
                                 .Order(StringComparer.Ordinal)
                                 .ToArray();
 
-                            var evaluator = new ListObjectsEvaluator(graph.Schema, forward, reverse, Unbounded, reverse.Index);
+                            var evaluator = new ListObjectsEvaluator(
+                                graph.Schema,
+                                forward,
+                                reverse,
+                                Unbounded,
+                                reverse.Index
+                            );
 
                             var actual = await evaluator.EvaluateAsync(
                                 subject,
@@ -181,7 +197,7 @@ public sealed class ListObjectsPropertyTests {
 
                             actual.IsSuccess.ShouldBeTrue(actual.Error?.Message);
 
-                            var ids = actual.GetValueOrThrow().Objects.Select(x => x.Id).ToArray();
+                            var ids = actual.GetValueOrThrow().Objects.Select(static x => x.Id).ToArray();
                             var why = $"scoped to {scope} at depth {withinDepth?.ToString() ?? "∞"}: "
                                 + $"{type}#{name}@{subject}."
                                 + Environment.NewLine
@@ -190,7 +206,10 @@ public sealed class ListObjectsPropertyTests {
                             ids.ShouldBeSubsetOf(expected, "a scoped listing showed an object it may not: " + why);
 
                             if (isChain && !usersetOffTheWalk) {
-                                ids.ShouldBe(expected, "the chain assumptions hold and the scoped listing is short: " + why);
+                                ids.ShouldBe(
+                                    expected,
+                                    "the chain assumptions hold and the scoped listing is short: " + why
+                                );
                                 exact++;
                             }
 
@@ -204,15 +223,21 @@ public sealed class ListObjectsPropertyTests {
             }
         }
 
-        nonEmpty.ShouldBeGreaterThan(comparisons / 50, "scoped listings were almost all empty — the scope choice is not exercising the walk");
-        exact.ShouldBeGreaterThan(comparisons / 20, "too few graphs satisfied the chain assumptions for the exactness half to mean anything");
+        nonEmpty.ShouldBeGreaterThan(
+            comparisons / 50,
+            "scoped listings were almost all empty — the scope choice is not exercising the walk"
+        );
+        exact.ShouldBeGreaterThan(
+            comparisons / 20,
+            "too few graphs satisfied the chain assumptions for the exactness half to mean anything"
+        );
     }
 
     /// <summary>Every object a tuple mentions, as object or as subject, plus the subjects' objects.</summary>
     static List<ObjectRef> Universe(GeneratedGraph graph) =>
-        graph.Tuples.Select(t => t.Object)
-            .Concat(graph.Tuples.Select(t => t.Subject.Object))
-            .Concat(Subjects.Select(s => s.Object))
+        graph.Tuples.Select(static t => t.Object)
+            .Concat(graph.Tuples.Select(static t => t.Subject.Object))
+            .Concat(Subjects.Select(static s => s.Object))
             .Distinct()
             .ToList();
 
@@ -223,21 +248,21 @@ public sealed class ListObjectsPropertyTests {
     /// </summary>
     static Dictionary<ObjectRef, List<ObjectRef>> Parents(GeneratedGraph graph, List<ObjectRef> objects) {
         var tuplesetsByType = graph.Schema.TypeNames.ToDictionary(
-            t => t,
+            static t => t,
             t => graph.Schema.Type(t)!
                 .Members
-                .SelectMany(m => m.Expression.DescendantsAndSelf())
-                .OfType<TuplesetExpression>()
-                .Select(x => x.Tupleset)
-                .ToHashSet(StringComparer.Ordinal),
+                    .SelectMany(static m => m.Expression.DescendantsAndSelf())
+                    .OfType<TuplesetExpression>()
+                    .Select(static x => x.Tupleset)
+                    .ToHashSet(StringComparer.Ordinal),
             StringComparer.Ordinal
         );
 
         return objects.ToDictionary(
-            o => o,
+            static o => o,
             o => graph.Tuples
                 .Where(t => t.Object == o && tuplesetsByType[o.Type].Contains(t.Relation))
-                .Select(t => t.Subject.Object)
+                .Select(static t => t.Subject.Object)
                 .Distinct()
                 .ToList()
         );

@@ -86,21 +86,34 @@ public sealed class ConsentApi(TenantHint tenants, IClientResolver clients) {
     /// <param name="returnUrl">The <c>/authorize</c> path and query the page was sent with.</param>
     /// <param name="user">The cookie principal.</param>
     /// <param name="cancellationToken">Cancels the lookups.</param>
-    public async Task<ConsentPageResponse> DescribeAsync(string? returnUrl, ClaimsPrincipal? user, CancellationToken cancellationToken = default) {
+    public async Task<ConsentPageResponse> DescribeAsync(
+        string? returnUrl,
+        ClaimsPrincipal? user,
+        CancellationToken cancellationToken = default
+    ) {
         var sanitized = ReturnUrl.Sanitize(returnUrl);
         var question = sanitized.IndexOf('?', StringComparison.Ordinal);
 
-        if (question < 0 || !string.Equals(sanitized[..question], IdentityHostOpenIddict.AuthorizationPath, StringComparison.Ordinal)) {
+        if (question < 0
+            || !string.Equals(
+                sanitized[..question],
+                IdentityHostOpenIddict.AuthorizationPath,
+                StringComparison.Ordinal
+            )) {
             return NotReady(NotAnAuthorizationRequest);
         }
 
         var query = QueryHelpers.ParseQuery(sanitized[question..]);
 
-        if (!IdentitySessionPrincipal.IsFullyAuthenticated(user) || IdentitySessionPrincipal.TenantId(user) is not { } cookieTenant) {
+        if (!IdentitySessionPrincipal.IsFullyAuthenticated(user)
+            || IdentitySessionPrincipal.TenantId(user) is not { } cookieTenant) {
             return NotReady(SignInFirst);
         }
 
-        var tenantId = await tenants.ResolveAsync(query.TryGetValue(TenantHint.ParameterName, out var hint) ? hint.ToString() : null, cancellationToken);
+        var tenantId = await tenants.ResolveAsync(
+            query.TryGetValue(TenantHint.ParameterName, out var hint) ? hint.ToString() : null,
+            cancellationToken
+        );
 
         if (tenantId is null) {
             return NotReady(UnknownClient);
@@ -121,13 +134,17 @@ public sealed class ConsentApi(TenantHint tenants, IClientResolver clients) {
             return NotReady(FirstPartyNeedsNoConsent);
         }
 
-        var redirectUri = query.TryGetValue(OpenIddictConstants.Parameters.RedirectUri, out var uri) ? uri.ToString() : null;
+        var redirectUri = query.TryGetValue(OpenIddictConstants.Parameters.RedirectUri, out var uri)
+            ? uri.ToString()
+            : null;
 
         if (!FirstPartyClients.IsRegisteredRedirectUri(client, redirectUri)) {
             return NotReady(UnregisteredRedirectUri);
         }
 
-        var scopes = (query.TryGetValue(OpenIddictConstants.Parameters.Scope, out var scope) ? scope.ToString() : string.Empty)
+        var scopes = (query.TryGetValue(OpenIddictConstants.Parameters.Scope, out var scope)
+                ? scope.ToString()
+                : string.Empty)
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(x => client.AllowedScopes.Contains(x, StringComparer.Ordinal))
             .Distinct(StringComparer.Ordinal)

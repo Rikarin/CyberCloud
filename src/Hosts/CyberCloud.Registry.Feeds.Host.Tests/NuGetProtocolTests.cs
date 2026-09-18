@@ -27,7 +27,10 @@ public sealed class NuGetProtocolTests(FeedsHostFixture host) {
 
         var resources = index.RootElement.GetProperty("resources")
             .EnumerateArray()
-            .ToDictionary(x => x.GetProperty("@type").GetString()!, x => x.GetProperty("@id").GetString()!);
+            .ToDictionary(
+                static x => x.GetProperty("@type").GetString()!,
+                static x => x.GetProperty("@id").GetString()!
+            );
 
         var origin = host.BaseAddress.ToString().TrimEnd('/');
         resources["PackagePublish/2.0.0"].ShouldBe(origin + Base + "/v2/package");
@@ -45,9 +48,12 @@ public sealed class NuGetProtocolTests(FeedsHostFixture host) {
         using var client = host.Client();
 
         // dotnet nuget push: multipart, X-NuGet-ApiKey, no Authorization header.
-        using (var push = new HttpRequestMessage(HttpMethod.Put, Base + "/v2/package") { Content = TestPackages.NuGetPush(nupkg) }.WithHeader("X-NuGet-ApiKey", host.Alice))
-        using (var response = await client.SendAsync(push, Token)) {
-            response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.BodyAsync());
+        using (var push = new HttpRequestMessage(HttpMethod.Put, Base + "/v2/package") {
+                   Content = TestPackages.NuGetPush(nupkg)
+               }.WithHeader("X-NuGet-ApiKey", host.Alice)) {
+            using (var response = await client.SendAsync(push, Token)) {
+                response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.BodyAsync());
+            }
         }
 
         client.DefaultRequestHeaders.Authorization = new("Bearer", host.Alice);
@@ -56,17 +62,26 @@ public sealed class NuGetProtocolTests(FeedsHostFixture host) {
         using (var versions = await client.GetAsync(Base + "/v3/flatcontainer/cyber.roundtrip/index.json", Token)) {
             versions.StatusCode.ShouldBe(HttpStatusCode.OK);
             using var document = JsonDocument.Parse(await versions.BodyAsync());
-            document.RootElement.GetProperty("versions").EnumerateArray().Select(x => x.GetString()).ShouldBe(["1.0.0"]);
+            document.RootElement.GetProperty("versions")
+                .EnumerateArray()
+                .Select(static x => x.GetString())
+                .ShouldBe(["1.0.0"]);
         }
 
         // The bytes, byte for byte, at the address the client computes from the flat container.
-        using (var download = await client.GetAsync(Base + "/v3/flatcontainer/cyber.roundtrip/1.0.0/cyber.roundtrip.1.0.0.nupkg", Token)) {
+        using (var download = await client.GetAsync(
+                   Base + "/v3/flatcontainer/cyber.roundtrip/1.0.0/cyber.roundtrip.1.0.0.nupkg",
+                   Token
+               )) {
             download.StatusCode.ShouldBe(HttpStatusCode.OK);
             (await download.BytesAsync()).ShouldBe(nupkg);
         }
 
         // The nuspec on its own, which the client reads without downloading the package.
-        using (var nuspec = await client.GetAsync(Base + "/v3/flatcontainer/cyber.roundtrip/1.0.0/cyber.roundtrip.nuspec", Token)) {
+        using (var nuspec = await client.GetAsync(
+                   Base + "/v3/flatcontainer/cyber.roundtrip/1.0.0/cyber.roundtrip.nuspec",
+                   Token
+               )) {
             nuspec.StatusCode.ShouldBe(HttpStatusCode.OK);
             (await nuspec.BodyAsync()).ShouldContain("<id>Cyber.Roundtrip</id>");
         }
@@ -84,11 +99,18 @@ public sealed class NuGetProtocolTests(FeedsHostFixture host) {
             entry.GetProperty("id").GetString().ShouldBe("Cyber.Roundtrip");
             entry.GetProperty("version").GetString().ShouldBe("1.0.0");
             entry.GetProperty("listed").GetBoolean().ShouldBeTrue();
-            entry.GetProperty("packageContent").GetString().ShouldEndWith("/v3/flatcontainer/cyber.roundtrip/1.0.0/cyber.roundtrip.1.0.0.nupkg");
+            entry.GetProperty("packageContent")
+                .GetString()
+                .ShouldEndWith("/v3/flatcontainer/cyber.roundtrip/1.0.0/cyber.roundtrip.1.0.0.nupkg");
 
             var group = entry.GetProperty("dependencyGroups").EnumerateArray().Single();
             group.GetProperty("targetFramework").GetString().ShouldBe("net8.0");
-            group.GetProperty("dependencies").EnumerateArray().Single().GetProperty("id").GetString().ShouldBe("Newtonsoft.Json");
+            group.GetProperty("dependencies")
+                .EnumerateArray()
+                .Single()
+                .GetProperty("id")
+                .GetString()
+                .ShouldBe("Newtonsoft.Json");
         }
 
         // Search finds it by id.
@@ -100,7 +122,7 @@ public sealed class NuGetProtocolTests(FeedsHostFixture host) {
             var hit = document.RootElement.GetProperty("data").EnumerateArray().Single();
             hit.GetProperty("id").GetString().ShouldBe("Cyber.Roundtrip");
             hit.GetProperty("version").GetString().ShouldBe("1.0.0");
-            hit.GetProperty("authors").EnumerateArray().Select(x => x.GetString()).ShouldBe(["Cyber Cloud"]);
+            hit.GetProperty("authors").EnumerateArray().Select(static x => x.GetString()).ShouldBe(["Cyber Cloud"]);
         }
     }
 
@@ -122,7 +144,10 @@ public sealed class NuGetProtocolTests(FeedsHostFixture host) {
             (await response.BodyAsync()).ShouldContain("immutable");
         }
 
-        using var download = await client.GetAsync(Base + "/v3/flatcontainer/cyber.immutable/2.0.0/cyber.immutable.2.0.0.nupkg", Token);
+        using var download = await client.GetAsync(
+            Base + "/v3/flatcontainer/cyber.immutable/2.0.0/cyber.immutable.2.0.0.nupkg",
+            Token
+        );
         (await download.BytesAsync()).ShouldBe(first);
     }
 
@@ -143,7 +168,10 @@ public sealed class NuGetProtocolTests(FeedsHostFixture host) {
         // Still in the flat container — a lock file that pins it keeps restoring.
         using (var versions = await client.GetAsync(Base + "/v3/flatcontainer/cyber.unlisted/index.json", Token)) {
             using var document = JsonDocument.Parse(await versions.BodyAsync());
-            document.RootElement.GetProperty("versions").EnumerateArray().Select(x => x.GetString()).ShouldBe(["3.1.0-beta.2"]);
+            document.RootElement.GetProperty("versions")
+                .EnumerateArray()
+                .Select(static x => x.GetString())
+                .ShouldBe(["3.1.0-beta.2"]);
         }
 
         // Gone from search, and `listed` is false on the registration.
@@ -179,7 +207,11 @@ public sealed class NuGetProtocolTests(FeedsHostFixture host) {
         using var client = host.Client(host.Alice);
 
         foreach (var version in new[] { "1.0.0", "1.0.0-alpha", "1.0.0-alpha.10", "1.0.0-alpha.2", "0.9.0", "1.0.1" }) {
-            using var response = await client.PutAsync(Base + "/v2/package", TestPackages.NuGetPush(TestPackages.NuGet("Cyber.Ordered", version)), Token);
+            using var response = await client.PutAsync(
+                Base + "/v2/package",
+                TestPackages.NuGetPush(TestPackages.NuGet("Cyber.Ordered", version)),
+                Token
+            );
             response.StatusCode.ShouldBe(HttpStatusCode.Created);
         }
 
@@ -188,7 +220,7 @@ public sealed class NuGetProtocolTests(FeedsHostFixture host) {
 
         document.RootElement.GetProperty("versions")
             .EnumerateArray()
-            .Select(x => x.GetString())
+            .Select(static x => x.GetString())
             .ShouldBe(["0.9.0", "1.0.0-alpha", "1.0.0-alpha.2", "1.0.0-alpha.10", "1.0.0", "1.0.1"]);
     }
 
@@ -197,12 +229,20 @@ public sealed class NuGetProtocolTests(FeedsHostFixture host) {
         using var client = host.Client(host.Alice);
         var before = host.Objects.Count;
 
-        using (var response = await client.PutAsync(Base + "/v2/package", TestPackages.NuGetPush(TestPackages.ZipWithoutNuspec()), Token)) {
+        using (var response = await client.PutAsync(
+                   Base + "/v2/package",
+                   TestPackages.NuGetPush(TestPackages.ZipWithoutNuspec()),
+                   Token
+               )) {
             response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
             (await response.BodyAsync()).ShouldContain("nuspec");
         }
 
-        using (var response = await client.PutAsync(Base + "/v2/package", TestPackages.NuGetPush("not a zip"u8.ToArray()), Token)) {
+        using (var response = await client.PutAsync(
+                   Base + "/v2/package",
+                   TestPackages.NuGetPush("not a zip"u8.ToArray()),
+                   Token
+               )) {
             response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         }
 
@@ -212,7 +252,11 @@ public sealed class NuGetProtocolTests(FeedsHostFixture host) {
     [Fact]
     public async Task APushLargerThanTheCapIs400() {
         using var client = host.Client(host.Alice);
-        var oversized = TestPackages.NuGet("Cyber.Huge", "1.0.0", payloadBytes: (int)FeedsHostFixture.MaxArtifactBytes + 1);
+        var oversized = TestPackages.NuGet(
+            "Cyber.Huge",
+            "1.0.0",
+            payloadBytes: (int)FeedsHostFixture.MaxArtifactBytes + 1
+        );
 
         using var response = await client.PutAsync(Base + "/v2/package", TestPackages.NuGetPush(oversized), Token);
 
@@ -225,10 +269,8 @@ public sealed class NuGetProtocolTests(FeedsHostFixture host) {
         using var client = host.Client(host.Alice);
 
         foreach (var route in new[] {
-                     "/v3/flatcontainer/no.such/index.json",
-                     "/v3/flatcontainer/no.such/1.0.0/no.such.1.0.0.nupkg",
-                     "/v3/registration/no.such/index.json",
-                     "/v3/registration/no.such/1.0.0.json"
+                     "/v3/flatcontainer/no.such/index.json", "/v3/flatcontainer/no.such/1.0.0/no.such.1.0.0.nupkg",
+                     "/v3/registration/no.such/index.json", "/v3/registration/no.such/1.0.0.json"
                  }) {
             using var response = await client.GetAsync(Base + route, Token);
             response.StatusCode.ShouldBe(HttpStatusCode.NotFound, route);
@@ -250,7 +292,17 @@ public sealed class NuGetProtocolTests(FeedsHostFixture host) {
         // directory named by their own hash, which is what keeps a racing second push off them.
         var sha256 = Convert.ToHexStringLower(SHA256.HashData(nupkg));
         var stored = await host.Objects.ListAsync("", Token);
-        stored.GetValueOrThrow().ShouldContain(x => x.EndsWith($"/nuget/cyber.raw/1.0.0/{sha256}/cyber.raw.1.0.0.nupkg", StringComparison.Ordinal));
-        stored.GetValueOrThrow().ShouldContain(x => x.EndsWith($"/nuget/cyber.raw/1.0.0/{sha256}/cyber.raw.nuspec", StringComparison.Ordinal));
+        stored.GetValueOrThrow()
+            .ShouldContain(x => x.EndsWith(
+                    $"/nuget/cyber.raw/1.0.0/{sha256}/cyber.raw.1.0.0.nupkg",
+                    StringComparison.Ordinal
+                )
+            );
+        stored.GetValueOrThrow()
+            .ShouldContain(x => x.EndsWith(
+                    $"/nuget/cyber.raw/1.0.0/{sha256}/cyber.raw.nuspec",
+                    StringComparison.Ordinal
+                )
+            );
     }
 }

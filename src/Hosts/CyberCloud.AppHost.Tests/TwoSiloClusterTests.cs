@@ -34,7 +34,7 @@ public sealed class TwoSiloClusterTests(LocalTopology topology) {
         hosts.Count.ShouldBe(
             2,
             "the cluster's membership table has "
-            + $"{string.Join(", ", hosts.Select(x => $"{x.Key} = {x.Value}"))}. Two silos that each "
+            + $"{string.Join(", ", hosts.Select(static x => $"{x.Key} = {x.Value}"))}. Two silos that each "
             + "hold their own development membership table are two clusters, not one — see "
             + "CyberCloudClusterOptions.LocalhostPrimarySiloPort."
         );
@@ -79,7 +79,7 @@ public sealed class TwoSiloClusterTests(LocalTopology topology) {
         for (var attempt = 0; attempt < 50; attempt++) {
             var hosts = await management.GetHosts(true);
 
-            if (hosts.Count(x => x.Value == SiloStatus.Active) >= 2) {
+            if (hosts.Count(static x => x.Value == SiloStatus.Active) >= 2) {
                 return;
             }
 

@@ -33,8 +33,8 @@ public sealed class LedgerImmutabilityTests {
     public void TheLedgerInterfaceDeclaresNoMutator() {
         var offending = typeof(IUsageLedgerGrain)
             .GetMethods()
-            .Where(method => MutatingVerbs.Any(verb => method.Name.StartsWith(verb, StringComparison.Ordinal)))
-            .Select(method => method.Name)
+            .Where(static method => MutatingVerbs.Any(verb => method.Name.StartsWith(verb, StringComparison.Ordinal)))
+            .Select(static method => method.Name)
             .ToList();
 
         offending.ShouldBeEmpty(

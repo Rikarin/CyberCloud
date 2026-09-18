@@ -110,7 +110,7 @@ public sealed class ConsoleDeclarationTests {
 
         // The alternative it rests on is a real, tenant-visible number.
         var retention = CloudConsoles.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/home/retentionDays");
+            .Single(static x => x.JsonPointer == "/properties/home/retentionDays");
 
         retention.DefaultJson.ShouldBe("90", "docs/plan/19 § The pod: retained 90 days after last use");
     }
@@ -144,7 +144,7 @@ public sealed class ConsoleDeclarationTests {
         // CliEmitter.Emit at generation, and GeneratedSurfaceTests over the embedded verb tree.
         CliTokens.Collisions(
             ProviderRegistry.Build([new TerminalProvider()])
-                .Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+                .Types.Select(static x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
         )
             .ShouldBeEmpty();
     }
@@ -168,7 +168,7 @@ public sealed class ConsoleDeclarationTests {
         // and `recording` is here rather than only on the resource body because that document requires
         // the portal to be loud when recording is on — a panel that had to fetch the resource to find
         // out would render one frame of a terminal that lies.
-        CloudConsoles.ConnectResponse.Properties.Select(x => x.JsonPointer)
+        CloudConsoles.ConnectResponse.Properties.Select(static x => x.JsonPointer)
             .ShouldBe(
                 [
                     "/sessionId",
@@ -241,7 +241,7 @@ public sealed class ConsoleDeclarationTests {
         var registry = ProviderRegistry.Build([new TerminalProvider()]);
         registry.TryGetType(CloudConsoles.Type, out var registration).ShouldBeTrue();
 
-        var meters = registration.Meters.Select(x => x.Meter).ToList();
+        var meters = registration.Meters.Select(static x => x.Meter).ToList();
 
         meters.ShouldContain(QuotaMeter.StorageGb);
         meters.ShouldContain(QuotaMeter.Resources);
@@ -259,7 +259,7 @@ public sealed class ConsoleDeclarationTests {
         var registry = ProviderRegistry.Build([new TerminalProvider()]);
         registry.TryGetType(CloudConsoles.Type, out var registration).ShouldBeTrue();
 
-        var storage = registration.Meters.Single(x => x.Meter == QuotaMeter.StorageGb);
+        var storage = registration.Meters.Single(static x => x.Meter == QuotaMeter.StorageGb);
         storage.Reads.ShouldBe(["/properties/home/size"]);
 
         using var five = JsonDocument.Parse(CloudConsoles.Body(Cluster));
@@ -281,7 +281,7 @@ public sealed class ConsoleDeclarationTests {
 
         using var broken = JsonDocument.Parse(body.ToJsonString());
 
-        registration.Meters.Single(x => x.Meter == QuotaMeter.StorageGb)
+        registration.Meters.Single(static x => x.Meter == QuotaMeter.StorageGb)
             .Derivation!
             .Amount(broken.RootElement)
             .IsSuccess.ShouldBeFalse();
@@ -353,7 +353,7 @@ public sealed class ConsoleDeclarationTests {
         CloudConsoles.EgressModes.ShouldBe(["Internet", "TenantOnly"]);
 
         CloudConsoles.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/network/egress")
+            .Single(static x => x.JsonPointer == "/properties/network/egress")
             .AllowedValues
             .ShouldBe(CloudConsoles.EgressModes);
     }
@@ -380,7 +380,7 @@ public sealed class ConsoleDeclarationTests {
 
         // The enum and the table are one set, so a preset a tenant may name always resolves.
         CloudConsoles.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/sizing/preset")
+            .Single(static x => x.JsonPointer == "/properties/sizing/preset")
             .AllowedValues
             .Order(StringComparer.Ordinal)
             .ShouldBe(CloudConsoles.Presets.Keys.Order(StringComparer.Ordinal));

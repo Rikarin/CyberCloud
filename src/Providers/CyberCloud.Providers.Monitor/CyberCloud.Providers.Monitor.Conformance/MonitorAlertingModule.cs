@@ -1,6 +1,5 @@
 using CyberCloud.Communication;
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.Core;
 using CyberCloud.Core.Resources;
 using CyberCloud.Providers.Monitor.Alerting;
@@ -24,8 +23,11 @@ namespace CyberCloud.Providers.Monitor.Conformance;
 ///         <c>ObserveAsync</c>. <see cref="IConvergedModule" />'s remarks say why that matters.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The silo hosts the sending module too, with no carrier, and the query seam is the
-///         refusing default.</b> The evaluator grain takes an <c>IMessageSender</c>, so the silo
+///         ⚠
+///         <b>
+///             The silo hosts the sending module too, with no carrier, and the query seam is the
+///             refusing default.
+///         </b> The evaluator grain takes an <c>IMessageSender</c>, so the silo
 ///         needs <c>AddCyberCloudCommunication</c> the way the silo host has it; nothing in the suite
 ///         sends, and the in-memory reminder service's ticks — a minute apart, if the run lasts that
 ///         long — find a seam that refuses by name, record the sentence on the rule, and move
@@ -54,7 +56,7 @@ public sealed class MonitorAlertingModule : IConvergedModule {
 
     /// <inheritdoc />
     public void ConfigureSilo(ISiloBuilder silo) {
-        silo.ConfigureServices(services => services.AddCyberCloudMonitorAlerting());
+        silo.ConfigureServices(static services => services.AddCyberCloudMonitorAlerting());
         silo.AddCyberCloudCommunication();
     }
 
@@ -98,19 +100,38 @@ public sealed class MonitorAlertingModule : IConvergedModule {
                 var listed = Throwing(await plane.ListRulesAsync(ancestor.TenantId, evaluator, CancellationToken.None));
 
                 foreach (var rule in listed) {
-                    Throwing(await plane.RemoveRuleAsync(ancestor.TenantId, evaluator, rule.Spec.RuleId, CancellationToken.None));
+                    Throwing(
+                        await plane.RemoveRuleAsync(
+                            ancestor.TenantId,
+                            evaluator,
+                            rule.Spec.RuleId,
+                            CancellationToken.None
+                        )
+                    );
                 }
             }
-        ).GetAwaiter().GetResult();
+        )
+            .GetAwaiter()
+            .GetResult();
     }
 
     /// <inheritdoc />
     public async Task<bool> HoldsAsync(ResourceId id, CancellationToken cancellationToken) =>
-        (await Plane.GetRuleAsync(id.TenantId, MonitorAlertRules.EvaluatorIdFor(id), id.Id, cancellationToken)).IsSuccess;
+        (await Plane.GetRuleAsync(
+                id.TenantId,
+                MonitorAlertRules.EvaluatorIdFor(id),
+                id.Id,
+                cancellationToken
+            )).IsSuccess;
 
     /// <inheritdoc />
     public async Task<bool> MatchesAsync(ResourceId id, string desiredJson, CancellationToken cancellationToken) {
-        var held = await Plane.GetRuleAsync(id.TenantId, MonitorAlertRules.EvaluatorIdFor(id), id.Id, cancellationToken);
+        var held = await Plane.GetRuleAsync(
+            id.TenantId,
+            MonitorAlertRules.EvaluatorIdFor(id),
+            id.Id,
+            cancellationToken
+        );
         if (!held.TryGetValue(out var snapshot)) {
             return false;
         }
@@ -121,18 +142,24 @@ public sealed class MonitorAlertingModule : IConvergedModule {
 
     /// <inheritdoc />
     public async Task RemoveAsync(ResourceId id, string desiredJson, CancellationToken cancellationToken) =>
-        Throwing(await Plane.RemoveRuleAsync(id.TenantId, MonitorAlertRules.EvaluatorIdFor(id), id.Id, cancellationToken));
+        Throwing(
+            await Plane.RemoveRuleAsync(id.TenantId, MonitorAlertRules.EvaluatorIdFor(id), id.Id, cancellationToken)
+        );
 
     /// <inheritdoc />
     public async Task CorruptAsync(ResourceId id, string desiredJson, CancellationToken cancellationToken) {
         // A threshold no body in the suite asks for, on the spec as held — the hand edit.
-        var held = Throwing(await Plane.GetRuleAsync(id.TenantId, MonitorAlertRules.EvaluatorIdFor(id), id.Id, cancellationToken));
+        var held = Throwing(
+            await Plane.GetRuleAsync(id.TenantId, MonitorAlertRules.EvaluatorIdFor(id), id.Id, cancellationToken)
+        );
 
         Throwing(
             await Plane.UpsertRuleAsync(
                 id.TenantId,
                 MonitorAlertRules.EvaluatorIdFor(id),
-                held.Spec with { Condition = held.Spec.Condition with { Threshold = held.Spec.Condition.Threshold + 7919 } },
+                held.Spec with {
+                    Condition = held.Spec.Condition with { Threshold = held.Spec.Condition.Threshold + 7919 }
+                },
                 cancellationToken
             )
         );
@@ -140,14 +167,18 @@ public sealed class MonitorAlertingModule : IConvergedModule {
 
     static void Throwing(Result result) {
         if (result.TryGetError(out var error)) {
-            throw new InvalidOperationException($"The evaluator refused a write the suite made behind the reconciler's back: {error.Message}");
+            throw new InvalidOperationException(
+                $"The evaluator refused a write the suite made behind the reconciler's back: {error.Message}"
+            );
         }
     }
 
     static T Throwing<T>(Result<T> result)
         where T : notnull {
         if (result.TryGetError(out var error)) {
-            throw new InvalidOperationException($"The evaluator refused a call the suite made around the reconciler: {error.Message}");
+            throw new InvalidOperationException(
+                $"The evaluator refused a call the suite made around the reconciler: {error.Message}"
+            );
         }
 
         return result.GetValueOrThrow();

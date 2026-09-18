@@ -127,13 +127,13 @@ public static class MeterCatalog {
     ];
 
     static readonly ImmutableDictionary<BillingMeter, MeterDefinition> ByMeter =
-        All.ToImmutableDictionary(x => x.Meter);
+        All.ToImmutableDictionary(static x => x.Meter);
 
     static readonly ImmutableDictionary<QuotaMeter, ImmutableArray<BillingMeter>> ByFamily =
         All
-            .Where(x => x.Family != QuotaMeter.Unknown)
-            .GroupBy(x => x.Family)
-            .ToImmutableDictionary(x => x.Key, x => x.Select(y => y.Meter).ToImmutableArray());
+            .Where(static x => x.Family != QuotaMeter.Unknown)
+            .GroupBy(static x => x.Family)
+            .ToImmutableDictionary(static x => x.Key, static x => x.Select(static y => y.Meter).ToImmutableArray());
 
     /// <summary>Every meter the platform knows, in declaration order.</summary>
     public static ImmutableArray<MeterDefinition> Definitions => All;
@@ -147,7 +147,7 @@ public static class MeterCatalog {
             : Result<MeterDefinition>.Failure(
                 ErrorCode.InvalidRequestBody,
                 $"'{meter}' is not a meter this platform declares. It knows "
-                + $"[{string.Join(", ", All.Select(x => x.Meter))}] — MeterCatalog is the whole "
+                + $"[{string.Join(", ", All.Select(static x => x.Meter))}] — MeterCatalog is the whole "
                 + "vocabulary and there is no second list."
             );
 
@@ -215,8 +215,8 @@ public static class MeterCatalog {
             return Result<decimal>.Failure(
                 ErrorCode.InvalidRequestBody,
                 $"'{meter}' is {definition.Kind} and cannot be accrued from a stock. "
-                + "docs/plan/22 § Two kinds of meter: sampling an event-based meter \"would miss "
-                + "everything between samples\". It is emitted by the provider at the moment, "
+                + """docs/plan/22 § Two kinds of meter: sampling an event-based meter "would miss """
+                + """everything between samples". It is emitted by the provider at the moment, """
                 + "through IUsageEmitter."
             );
         }

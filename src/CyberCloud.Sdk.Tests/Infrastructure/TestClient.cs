@@ -16,7 +16,7 @@ public sealed class FakeCredential : TokenCredential {
 
     /// <summary>A credential whose fetch takes long enough for a second caller to arrive during it.</summary>
     public FakeCredential(bool async)
-        : this(_ => new AccessToken("token-1", DateTimeOffset.UtcNow.AddHours(1))) {
+        : this(static _ => new AccessToken("token-1", DateTimeOffset.UtcNow.AddHours(1))) {
         slow = async;
     }
 
@@ -60,7 +60,7 @@ public static class TestClient {
 
         configure?.Invoke(options);
 
-        return new CyberCloudClient(
+        return new(
             new Uri("https://api.cybercloud.test/"),
             credential ?? new FakeCredential(),
             options
@@ -70,7 +70,7 @@ public static class TestClient {
     public static WidgetCollection Widgets(this CyberCloudClient client) => new(client.Context, Scope);
 
     public static WidgetData SampleData() =>
-        new("eu-central") { Properties = new WidgetData.PropertiesData { ClusterId = "cluster-1", Message = "hello" } };
+        new("eu-central") { Properties = new() { ClusterId = "cluster-1", Message = "hello" } };
 
     public const string OperationUri = "https://api.cybercloud.test/operations/op-1?api-version=2026-08-01";
 

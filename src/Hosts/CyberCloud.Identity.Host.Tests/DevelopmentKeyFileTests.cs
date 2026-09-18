@@ -14,12 +14,13 @@ namespace CyberCloud.Identity.Host.Tests;
 ///     published as ES256, and ephemeral when unset. docs/plan/11 § Protocol.
 /// </summary>
 public sealed class DevelopmentKeyFileTests : IDisposable {
-    readonly string directory = Path.Combine(Path.GetTempPath(), "cyc-identity-keys-tests", Guid.NewGuid().ToString("N"));
+    readonly string directory =
+        Path.Combine(Path.GetTempPath(), "cyc-identity-keys-tests", Guid.NewGuid().ToString("N"));
 
     /// <inheritdoc />
     public void Dispose() {
         if (Directory.Exists(directory)) {
-            Directory.Delete(directory, recursive: true);
+            Directory.Delete(directory, true);
         }
     }
 
@@ -30,7 +31,12 @@ public sealed class DevelopmentKeyFileTests : IDisposable {
         // different key and whose backups carry the signing key; docs/plan/11 § Protocol's key set
         // is the vault's, and the message says so.
         var thrown = Should.Throw<InvalidOperationException>(() =>
-            new DevelopmentKeyFile(Microsoft.Extensions.Options.Options.Create(new IdentityHostOptions { DevelopmentKeyDirectory = directory }), TestEnvironment.Production)
+            new DevelopmentKeyFile(
+                Microsoft.Extensions.Options.Options.Create(
+                    new IdentityHostOptions { DevelopmentKeyDirectory = directory }
+                ),
+                TestEnvironment.Production
+            )
         );
 
         thrown.Message.ShouldContain("CyberCloud.Vault");
@@ -47,7 +53,8 @@ public sealed class DevelopmentKeyFileTests : IDisposable {
             .AddIdentityHostOpenIddict()
             .BuildServiceProvider();
 
-        Should.Throw<InvalidOperationException>(() => services.GetRequiredService<IOptions<OpenIddictServerOptions>>().Value)
+        Should.Throw<
+            InvalidOperationException>(() => services.GetRequiredService<IOptions<OpenIddictServerOptions>>().Value)
             .Message.ShouldContain("CyberCloud.Vault");
     }
 
@@ -73,7 +80,8 @@ public sealed class DevelopmentKeyFileTests : IDisposable {
 
         File.Exists(Path.Combine(directory, DevelopmentKeyFile.SigningKeyFileName)).ShouldBeTrue();
         File.Exists(Path.Combine(directory, DevelopmentKeyFile.EncryptionKeyFileName)).ShouldBeTrue();
-        File.ReadAllText(Path.Combine(directory, DevelopmentKeyFile.SigningKeyFileName)).ShouldStartWith("-----BEGIN PRIVATE KEY-----");
+        File.ReadAllText(Path.Combine(directory, DevelopmentKeyFile.SigningKeyFileName))
+            .ShouldStartWith("-----BEGIN PRIVATE KEY-----");
 
         // A different directory is a different key — the file, not the process, is the identity.
         var elsewhere = Options(Path.Combine(directory, "other"));
@@ -88,15 +96,22 @@ public sealed class DevelopmentKeyFileTests : IDisposable {
         // ⚠ The algorithm is the contract's on this path too. A file key registered with no
         // algorithm would default to whatever IdentityModel picks, and the gateway pins ES256.
         options.SigningCredentials.Single().Algorithm.ShouldBe(AccessTokenPolicy.SigningAlgorithm);
-        options.SigningCredentials.Single().Key.ShouldBeOfType<ECDsaSecurityKey>()
-            .ECDsa.ExportParameters(false).Curve.Oid.FriendlyName!.ShouldContain("256");
+        options.SigningCredentials.Single()
+            .Key.ShouldBeOfType<ECDsaSecurityKey>()
+            .ECDsa.ExportParameters(false).Curve.Oid.FriendlyName!
+            .ShouldContain("256");
 
         options.EncryptionCredentials.Single().Alg.ShouldBe(SecurityAlgorithms.Aes256KW);
         options.EncryptionCredentials.Single().Enc.ShouldBe(SecurityAlgorithms.Aes256CbcHmacSha512);
 
         // The published key set is what GrantsOverHttpTests compares across a restart; here, that
         // the kid it will publish is the file's rather than a per-process value.
-        var file = new DevelopmentKeyFile(Microsoft.Extensions.Options.Options.Create(new IdentityHostOptions { DevelopmentKeyDirectory = directory }), TestEnvironment.Development);
+        var file = new DevelopmentKeyFile(
+            Microsoft.Extensions.Options.Options.Create(
+                new IdentityHostOptions { DevelopmentKeyDirectory = directory }
+            ),
+            TestEnvironment.Development
+        );
 
         file.LoadOrCreateSigningKey().KeyId.ShouldBe(((ECDsaSecurityKey)options.SigningCredentials.Single().Key).KeyId);
     }
@@ -116,7 +131,10 @@ public sealed class DevelopmentKeyFileTests : IDisposable {
 
         Directory.Exists(directory).ShouldBeFalse();
 
-        new DevelopmentKeyFile(Microsoft.Extensions.Options.Options.Create(new IdentityHostOptions()), TestEnvironment.Production)
+        new DevelopmentKeyFile(
+            Microsoft.Extensions.Options.Options.Create(new IdentityHostOptions()),
+            TestEnvironment.Production
+        )
             .IsConfigured.ShouldBeFalse("unset is allowed anywhere, and means ephemeral");
     }
 

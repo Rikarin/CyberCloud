@@ -471,7 +471,7 @@ public sealed class MessageGrain(
                     ErrorCode.PolicyViolation,
                     $"{request.Channel} requires a pre-approved template for a business-initiated "
                     + "message and this send names none. docs/plan/17 § The parts that are actually "
-                    + "the work: \"WhatsApp requires pre-approved templates\"."
+                    + """the work: "WhatsApp requires pre-approved templates"."""
                 );
             }
 

@@ -98,8 +98,8 @@ public sealed class OrleansAdoNetSchemaTests {
 
         var applied = await Task.WhenAll(appliers);
 
-        applied.Count(x => x).ShouldBe(1, "exactly one applier does the work.");
-        applied.Count(x => !x).ShouldBe(3, "the other three find a complete schema and return.");
+        applied.Count(static x => x).ShouldBe(1, "exactly one applier does the work.");
+        applied.Count(static x => !x).ShouldBe(3, "the other three find a complete schema and return.");
 
         (await ProbeAsync(shard)).IsComplete.ShouldBeTrue();
         (await ScalarAsync(shard, "SELECT count(*) FROM orleansquery;"))
@@ -151,7 +151,7 @@ public sealed class OrleansAdoNetSchemaTests {
 
         var report = await provider.GetRequiredService<HealthCheckService>()
             .CheckHealthAsync(
-                x => x.Name == DurableShardHealthCheck.Name,
+                static x => x.Name == DurableShardHealthCheck.Name,
                 TestContext.Current.CancellationToken
             );
 

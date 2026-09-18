@@ -90,7 +90,7 @@ public sealed class IdentityClient : IDisposable {
         AuthorityHost = authorityHost;
         http = transport is null
             ? new HttpClient()
-            : new HttpClient(transport, disposeHandler: false);
+            : new HttpClient(transport, false);
     }
 
     /// <summary>The identity host this client talks to.</summary>
@@ -149,9 +149,8 @@ public sealed class IdentityClient : IDisposable {
         CancellationToken cancellationToken
     ) {
         var document = await GetConfigurationAsync(cancellationToken).ConfigureAwait(false);
-        using var request = new HttpRequestMessage(HttpMethod.Post, document.TokenEndpoint) {
-            Content = new FormUrlEncodedContent(form)
-        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, document.TokenEndpoint);
+        request.Content = new FormUrlEncodedContent(form);
         var content = await SendAsync(request, "token response", cancellationToken).ConfigureAwait(false);
 
         return SdkJsonContext.Read(content, SdkJsonContext.Default.TokenPayload, "token response");
@@ -172,9 +171,8 @@ public sealed class IdentityClient : IDisposable {
             );
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, document.DeviceAuthorizationEndpoint) {
-            Content = new FormUrlEncodedContent(form)
-        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, document.DeviceAuthorizationEndpoint);
+        request.Content = new FormUrlEncodedContent(form);
 
         var content = await SendAsync(request, "device authorization response", cancellationToken).ConfigureAwait(
             false
@@ -255,7 +253,7 @@ public sealed class IdentityClient : IDisposable {
 
         var description = error?.ErrorDescription is { Length: > 0 } text ? $" — {text}" : string.Empty;
 
-        return new AuthenticationFailedException(
+        return new(
             $"The identity server rejected the request for a {what}: {(int)status} {error?.Error ?? status.ToString()}{description}"
         ) { ErrorCode = error?.Error };
     }

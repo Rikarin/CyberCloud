@@ -109,7 +109,7 @@ public sealed class ValkeyDeclarationTests {
         // validate.go replaces a sentinel replica count of <= 0 with 3 — so Cluster has nothing to
         // render and Standalone is not a state the CRD can express. Either extra member would be a
         // value the API accepts and the cluster ignores.
-        var mode = ValkeyCaches.Schema2026.Properties.Single(x => x.JsonPointer == "/properties/mode");
+        var mode = ValkeyCaches.Schema2026.Properties.Single(static x => x.JsonPointer == "/properties/mode");
 
         mode.AllowedValues.ShouldBe(["Sentinel"]);
         mode.Immutable.ShouldBeTrue("a topology change is not something a running client survives");

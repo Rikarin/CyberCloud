@@ -426,7 +426,7 @@ public sealed record ResourceTypeRegistration {
         return Result<ResourceSchema>.Failure(
             ErrorCode.InvalidApiVersion,
             $"'{version}' is not an api-version of '{Type}'. This type serves "
-            + $"[{string.Join(", ", ApiVersions.Select(x => x.Version))}]. An api-version is immutable "
+            + $"[{string.Join(", ", ApiVersions.Select(static x => x.Version))}]. An api-version is immutable "
             + "and there is no 'latest' — docs/plan/08 § The provider registry."
         );
     }

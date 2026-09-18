@@ -95,7 +95,7 @@ public static class SampleWidgets {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the widget is billed in."
                 ) {
                     // A platform format: checked with the same rule every other platform name obeys,
@@ -109,7 +109,7 @@ public static class SampleWidgets {
                 new(
                     "/properties/clusterId",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster whose namespace holds the widget's ConfigMap."
                 ) {
                     // ⚠ This is the property RequiresCluster names. ProviderBuilder now refuses the
@@ -120,7 +120,7 @@ public static class SampleWidgets {
                 new(
                     "/properties/message",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "What the ConfigMap's 'message' key says."
                 ) {
                     // A ConfigMap key's value is a string of any length; the cap is ours, so that a
@@ -161,7 +161,7 @@ public static class SampleWidgets {
                     ElementKind = SchemaKind.Text,
                     Pattern = @"\d{1,3}(\.\d{1,3}){3}/\d{1,2}",
                     Widget = WidgetHint.Cidr,
-                    ExampleJson = "[\"10.0.0.0/8\"]"
+                    ExampleJson = """["10.0.0.0/8"]"""
                 },
                 new(
                     "/properties/retiredOn",
@@ -207,15 +207,16 @@ public static class SampleWidgets {
     public static ResourceSchema PingResponse { get; } =
         ResourceSchema.Of(
             [
-                new("/echo", SchemaKind.Text, Required: true, Description: "What was echoed."),
-                new("/at", SchemaKind.Text, Required: true, Description: "When the ping was served.") {
+                new("/echo", SchemaKind.Text, true, Description: "What was echoed."),
+                new("/at", SchemaKind.Text, true, Description: "When the ping was served.") {
                     Format = SchemaFormat.DateTime
                 }
             ]
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     /// <summary>Builds a body that satisfies <see cref="Schema2026" />.</summary>
     /// <param name="clusterId">The cluster to place the ConfigMap in.</param>

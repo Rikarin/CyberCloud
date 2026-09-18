@@ -9,8 +9,11 @@ namespace CyberCloud.Kubernetes.Contracts.Tunnel;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This seam is the whole reason the tunnel can be tested end to end without a
-///         network.</b> Both sides of the tunnel — the platform's exchange and the agent's dispatcher
+///         ⚠
+///         <b>
+///             This seam is the whole reason the tunnel can be tested end to end without a
+///             network.
+///         </b> Both sides of the tunnel — the platform's exchange and the agent's dispatcher
 ///         — are written against this and nothing else, so <c>TunnelEndToEndTests</c> runs the real
 ///         code at both ends over <see cref="StreamTunnelTransport" /> and a duplex stream, and the
 ///         only thing production substitutes is <see cref="WebSocketTunnelTransport" />.
@@ -105,7 +108,7 @@ public sealed class StreamTunnelTransport : ITunnelTransport {
 
         var length = BinaryPrimitives.ReadInt32BigEndian(header);
 
-        if (length <= 0 || length > TunnelCodec.MaxFrameBytes) {
+        if (length is <= 0 or > TunnelCodec.MaxFrameBytes) {
             throw new InvalidDataException(
                 $"A tunnel frame announced {length} bytes; the cap is {TunnelCodec.MaxFrameBytes}."
             );
@@ -239,7 +242,8 @@ public sealed class WebSocketTunnelTransport : ITunnelTransport {
                     WebSocketCloseStatus.MessageTooBig,
                     $"a frame exceeded {TunnelCodec.MaxFrameBytes} bytes",
                     CancellationToken.None
-                ).ConfigureAwait(false);
+                )
+                    .ConfigureAwait(false);
 
                 return null;
             }
@@ -265,7 +269,8 @@ public sealed class WebSocketTunnelTransport : ITunnelTransport {
         }
 
         try {
-            await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, reason, cancellationToken).ConfigureAwait(false);
+            await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, reason, cancellationToken)
+                .ConfigureAwait(false);
         } catch (WebSocketException) {
             // Already gone.
         }

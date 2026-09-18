@@ -62,9 +62,9 @@ public static class ProviderDiscovery {
         var found = new List<IResourceProvider>();
 
         var candidates = types
-            .Where(x => x is { IsAbstract: false, IsInterface: false, IsGenericTypeDefinition: false })
-            .Where(x => typeof(IResourceProvider).IsAssignableFrom(x))
-            .OrderBy(x => x.FullName, StringComparer.Ordinal);
+            .Where(static x => x is { IsAbstract: false, IsInterface: false, IsGenericTypeDefinition: false })
+            .Where(static x => typeof(IResourceProvider).IsAssignableFrom(x))
+            .OrderBy(static x => x.FullName, StringComparer.Ordinal);
 
         foreach (var candidate in candidates) {
             if (candidate.GetConstructor(Type.EmptyTypes) is null) {
@@ -100,7 +100,7 @@ public static class ProviderDiscovery {
 
         var found = new List<IResourceProvider>();
 
-        foreach (var path in assemblyPaths.OrderBy(x => x, StringComparer.Ordinal)) {
+        foreach (var path in assemblyPaths.OrderBy(static x => x, StringComparer.Ordinal)) {
             found.AddRange(FromAssembly(Assembly.LoadFrom(Path.GetFullPath(path))));
         }
 

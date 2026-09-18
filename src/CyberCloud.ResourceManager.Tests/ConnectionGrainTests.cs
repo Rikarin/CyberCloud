@@ -1,6 +1,3 @@
-using CyberCloud.ResourceManager.Grains;
-using CyberCloud.ResourceManager.Tests.Infrastructure;
-
 namespace CyberCloud.ResourceManager.Tests;
 
 /// <summary>
@@ -37,7 +34,7 @@ public sealed class ConnectionGrainTests(ResourceManagerCluster cluster) {
     static readonly string AnotherResource = ResourceManagerCluster.Address("watched-too").Path;
     static readonly string AThirdResource = ResourceManagerCluster.Address("watched-thrice").Path;
 
-    static CallerContext Caller(Guid? tenant = null) => ResourceManagerCluster.Caller(tenant, "alice");
+    static CallerContext Caller(Guid? tenant = null) => ResourceManagerCluster.Caller(tenant);
 
     IConnectionGrain Connection(string id) => cluster.Connection(ResourceManagerCluster.Tenant, id);
 

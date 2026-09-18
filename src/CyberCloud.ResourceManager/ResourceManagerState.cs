@@ -163,7 +163,7 @@ public sealed class OperationGrainState {
 
     /// <summary>Azure's status vocabulary.</summary>
     [Id(1)]
-    public Contracts.OperationState Status { get; set; } = Contracts.OperationState.Unknown;
+    public OperationState Status { get; set; } = OperationState.Unknown;
 
     /// <summary>The progress array, oldest first. Capped — see <c>OperationGrain.MaxProgressEntries</c>.</summary>
     [Id(2)]

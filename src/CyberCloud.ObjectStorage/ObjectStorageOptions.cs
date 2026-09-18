@@ -14,8 +14,11 @@ namespace CyberCloud.ObjectStorage;
 ///         what it can see — an absolute endpoint, a bucket, both halves of the credential.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="SecretAccessKey" /> is a value, and this is the one place in the tree
-///         that holds one outside <c>CyberCloud.Vault</c>.</b> It arrives from configuration — in a
+///         ⚠
+///         <b>
+///             <see cref="SecretAccessKey" /> is a value, and this is the one place in the tree
+///             that holds one outside <c>CyberCloud.Vault</c>.
+///         </b> It arrives from configuration — in a
 ///         deployment, a Kubernetes <c>Secret</c> projected into the environment — and it is read
 ///         into an HMAC key and nowhere else: never logged, never on a wire type, never in grain
 ///         state. CC1005 polices <c>[Id]</c> members and this class has none; what keeps the value

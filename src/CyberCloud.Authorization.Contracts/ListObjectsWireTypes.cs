@@ -3,8 +3,11 @@ using System.Diagnostics.CodeAnalysis;
 namespace CyberCloud.Authorization.Contracts;
 
 /// <summary>
-///     What a <c>ListObjects</c> concluded, beyond the objects it returned. ⚠ <b>Three outcomes,
-///     not one, for the reason <see cref="CheckOutcome" /> has four.</b>
+///     What a <c>ListObjects</c> concluded, beyond the objects it returned. ⚠
+///     <b>
+///         Three outcomes,
+///         not one, for the reason <see cref="CheckOutcome" /> has four.
+///     </b>
 /// </summary>
 /// <remarks>
 ///     A walk that hit its cap did not compute an answer. Returning the part it had found would be
@@ -39,8 +42,11 @@ public enum ListObjectsOutcome {
     ObjectCapExceeded = 2,
 
     /// <summary>
-    ///     The walk needed more hops from the subject than the depth cap allows. <b>No objects are
-    ///     returned</b>, because an object past the cap is one <c>Check</c> would deny and the ones
+    ///     The walk needed more hops from the subject than the depth cap allows.
+    ///     <b>
+    ///         No objects are
+    ///         returned
+    ///     </b>, because an object past the cap is one <c>Check</c> would deny and the ones
     ///     before it may depend on it.
     /// </summary>
     DepthCapExceeded = 3
@@ -59,8 +65,11 @@ public enum ListObjectsOutcome {
 ///         half alone.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="Within" /> is the bound the document does not name, and it is what makes
-///         the resource list affordable.</b> § ListObjects warns that serving a list page straight
+///         ⚠
+///         <b>
+///             <see cref="Within" /> is the bound the document does not name, and it is what makes
+///             the resource list affordable.
+///         </b> § ListObjects warns that serving a list page straight
 ///         from an unscoped walk "is the single most likely performance mistake in this subsystem":
 ///         a subscription owner's reach is every resource in the subscription, and a listing of one
 ///         group would walk all of them to keep ten. <see cref="Within" /> restricts the answer to
@@ -153,8 +162,11 @@ public sealed record ListObjectsRequest {
 [Alias("CyberCloud.Authorization.ListObjectsPage")]
 public sealed record ListObjectsPage {
     /// <summary>
-    ///     The objects on this page, ordered by id, ordinally. <b>Empty whenever
-    ///     <see cref="Outcome" /> is not <see cref="ListObjectsOutcome.Complete" /></b>.
+    ///     The objects on this page, ordered by id, ordinally.
+    ///     <b>
+    ///         Empty whenever
+    ///         <see cref="Outcome" /> is not <see cref="ListObjectsOutcome.Complete" />
+    ///     </b>.
     /// </summary>
     [Id(0)]
     public IReadOnlyList<ObjectRef> Objects { get; init; } = [];
@@ -181,7 +193,7 @@ public sealed record ListObjectsPage {
         "CyberCloud.Security",
         "CC1005:A secret must not be a serialized member of grain state",
         Justification = "A ConsistencyToken is Zanzibar's zookie — a public {tenantId}.{version} "
-        + "pair, not a credential. docs/plan/07 § Consistency."
+            + "pair, not a credential. docs/plan/07 § Consistency."
     )]
     public ConsistencyToken Token { get; init; } = new();
 

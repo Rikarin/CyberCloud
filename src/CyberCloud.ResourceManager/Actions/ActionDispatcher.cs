@@ -150,11 +150,11 @@ public sealed class ActionDispatcher(
             connection,
             secrets
         ) {
-            // ⚠ The host's seam, or the refusing default when a caller built this dispatcher
-            // without one — which every test double does, and which is the right answer for a
-            // dispatcher that serves no connected cluster.
-            Agents = agents ?? new UnavailableAgentTunnels()
-        };
+                // ⚠ The host's seam, or the refusing default when a caller built this dispatcher
+                // without one — which every test double does, and which is the right answer for a
+                // dispatcher that serves no connected cluster.
+                Agents = agents ?? new UnavailableAgentTunnels()
+            };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(ReconcileDriver.PassBudget);

@@ -11,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Orleans.Configuration;
 using Orleans.Multitenant;
 using Orleans.TestingHost;
 using StackExchange.Redis;
@@ -83,8 +82,11 @@ public static class ClusterConformanceState<TSource>
     ///         time.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Not the same thing as <see cref="IProviderCaseSource.Companions" />, and the
-    ///         difference is who creates the resource.</b> A declared companion is one a case's body
+    ///         ⚠
+    ///         <b>
+    ///             Not the same thing as <see cref="IProviderCaseSource.Companions" />, and the
+    ///             difference is who creates the resource.
+    ///         </b> A declared companion is one a case's body
     ///         names — the vault's PostgreSQL server — so both harnesses create it before the first
     ///         assertion, under a name the case knows, and refuse it if it nests. These are cases a
     ///         story hands <see cref="ClusterConformanceHarness{TSource}.StartAsync" /> from the
@@ -181,8 +183,8 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         services.AddSingleton<ISecretWriter>(ClusterConformanceState<TSource>.Vault);
 
         foreach (var handler in Registry.Types
-                     .SelectMany(x => x.Actions)
-                     .Select(x => x.HandlerType)
+                     .SelectMany(static x => x.Actions)
+                     .Select(static x => x.HandlerType)
                      .OfType<Type>()
                      .Distinct()) {
             services.AddSingleton(handler);
@@ -211,8 +213,11 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
     ///     request the generated client has no method for.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The server certificate is accepted without validation, and that is a property of this
-    ///     harness rather than a shortcut a caller may copy.</b> The k3s minted its CA a minute ago and
+    ///     ⚠
+    ///     <b>
+    ///         The server certificate is accepted without validation, and that is a property of this
+    ///         harness rather than a shortcut a caller may copy.
+    ///     </b> The k3s minted its CA a minute ago and
     ///     the kubeconfig carries it as <c>certificate-authority-data</c>; <see cref="Raw" /> validates
     ///     against it through <c>Kubernetes.CertificateValidationCallBack</c>, which is not reachable
     ///     from here. A test asserting what a pod answered is not asserting the API server's identity,
@@ -234,9 +239,11 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         using var ephemeral = System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromPem(pem, keyPem);
         var exported = ephemeral.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pkcs12);
 
-        handler.ClientCertificates.Add(System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12(exported, null));
+        handler.ClientCertificates.Add(
+            System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12(exported, null)
+        );
 
-        return new HttpClient(handler, disposeHandler: true) { BaseAddress = new Uri(ClientConfiguration.Host) };
+        return new(handler, true) { BaseAddress = new(ClientConfiguration.Host) };
     }
 
     /// <summary>The fabric's client over the same cluster.</summary>
@@ -408,7 +415,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         await harness.LiftQuotaAsync(ConformanceIds.Tenant, ConformanceIds.Subscription)
             .ConfigureAwait(false);
 
-        harness.Views = new ResourceViews(
+        harness.Views = new(
             harness.Registry,
             harness.cluster.GrainFactory,
             ClusterConformanceState<TSource>.Authorizer,
@@ -616,7 +623,12 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         foreach (var companion in ClusterConformanceState<TSource>.Companions) {
             var candidate = companion.CreateProvider();
 
-            if (providers.Any(x => string.Equals(x.ProviderNamespace, candidate.ProviderNamespace, StringComparison.OrdinalIgnoreCase))) {
+            if (providers.Exists(x => string.Equals(
+                        x.ProviderNamespace,
+                        candidate.ProviderNamespace,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )) {
                 continue;
             }
 
@@ -777,7 +789,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
 
         return rows.Reminders.Count == 0
             ? "the whole table is empty"
-            : string.Join(", ", rows.Reminders.Select(x => x.GrainId + "/" + x.ReminderName));
+            : string.Join(", ", rows.Reminders.Select(static x => x.GrainId + "/" + x.ReminderName));
     }
 
     /// <summary>The concrete <see cref="IReminderTable" /> the silos are really using.</summary>
@@ -802,7 +814,6 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         }
 
         Raw?.Dispose();
-        GC.SuppressFinalize(this);
     }
 
     async Task CreateSubscriptionAsync(Guid tenant, Guid subscription) {
@@ -910,8 +921,11 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
     ///         provider nothing.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The REAL definition when one is committed, since issue #91 — and the argument
-    ///         that kept it out is answered rather than forgotten.</b> Until 2026-09-17 every kind
+    ///         ⚠
+    ///         <b>
+    ///             The REAL definition when one is committed, since issue #91 — and the argument
+    ///             that kept it out is answered rather than forgotten.
+    ///         </b> Until 2026-09-17 every kind
     ///         got a stub whose schema was <c>x-kubernetes-preserve-unknown-fields</c>, on the
     ///         reasoning that this suite's criteria — REST addressability, server-side apply under
     ///         our field manager, admission of the seven labels, conflict parsing — need no upstream
@@ -929,8 +943,11 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
     ///         is what keeps a shipping provider out of that branch.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A conversion webhook in a committed definition is installed as written and never
-    ///         called.</b> Cluster API's definitions name <c>capi-webhook-service</c>, which no bare
+    ///         ⚠
+    ///         <b>
+    ///             A conversion webhook in a committed definition is installed as written and never
+    ///             called.
+    ///         </b> Cluster API's definitions name <c>capi-webhook-service</c>, which no bare
     ///         k3s has; the API server accepts the definition regardless and invokes the webhook only
     ///         for a request at a version other than the storage version. ⚠ The Bundle gate does NOT
     ///         keep the rendered version at the storage version — it checks only that the version is
@@ -953,7 +970,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         // child does not would fail the nameless HttpOperationException this whole method exists to
         // remove — and it would fail during setup, where the message names nothing at all.
         var candidates = ProviderTestCluster<TSource>.Ancestors
-            .Select((ancestor, level) => ancestor.Objects(
+            .Select(static (ancestor, level) => ancestor.Objects(
                     new ResourceId(
                         ConformanceIds.Tenant,
                         ConformanceIds.Subscription,
@@ -970,7 +987,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             // the first assertion, and a sibling rendering a kind nobody else does would fail during
             // setup with the nameless exception.
             .Concat(
-                ProviderTestCluster<TSource>.Siblings.Select(sibling => sibling.Case.Objects(
+                ProviderTestCluster<TSource>.Siblings.Select(static sibling => sibling.Case.Objects(
                         ProviderTestCluster<TSource>.SiblingAddress(sibling).WithId(Guid.NewGuid()),
                         Namespace
                     )
@@ -978,21 +995,26 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             )
             .Aggregate(
                 Case.Objects(Address("crd-discovery").WithId(Guid.NewGuid()), Namespace).AsEnumerable(),
-                (all, next) => all.Concat(next)
+                static (all, next) => all.Concat(next)
             )
             // ⚠ AND THE COMPANIONS' KINDS, for the same reason as the ancestors': the harness creates
             // them before the first assertion. Against a k3s where the bundle installed the operator
             // the kind is already served and IsServedAsync below skips the stub.
             .Concat(
                 ProviderTestCluster<TSource>.Companions
-                    .SelectMany(companion => companion.ProviderCase.Objects(companion.Address().WithId(Guid.NewGuid()), Namespace))
+                    .SelectMany(static companion => companion.ProviderCase.Objects(
+                            companion.Address().WithId(Guid.NewGuid()),
+                            Namespace
+                        )
+                    )
             )
             // ⚠ AND THE KINDS OF THE COMPANIONS A STORY HANDS IN, for the same reason: a story that
             // writes a network beside a database would otherwise fail its first network apply with
             // the nameless HttpOperationException this method exists to remove. Empty for every
             // per-provider suite, so nothing changes for them.
-            .Concat(ClusterConformanceState<TSource>.Companions
-                .SelectMany(companion => companion.Objects(CompanionAddress(companion), Namespace))
+            .Concat(
+                ClusterConformanceState<TSource>.Companions
+                    .SelectMany(static companion => companion.Objects(CompanionAddress(companion), Namespace))
             )
             // ⚠ AND THE KINDS THE CASE SAYS AN OPERATOR WRITES, which the reconciler reads without ever
             // applying. CyberCloud.RecoveryServices/vaults renders a ScheduledBackup and LISTS the
@@ -1002,7 +1024,10 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             // unserved-kind refusal. OperatorWritten is where the case names the kinds an operator
             // puts there, and a stub for each is what makes a real API server as complete as the
             // fake in exactly the way the case declared. Core kinds fall out below like every other.
-            .Concat(Case.OperatorWritten(Address("crd-discovery").WithId(Guid.NewGuid()), Namespace).Select(x => x.Target))
+            .Concat(
+                Case.OperatorWritten(Address("crd-discovery").WithId(Guid.NewGuid()), Namespace)
+                    .Select(static x => x.Target)
+            )
             // ⚠ THE SCOPE COMES ALONG WITH THE KIND, AND IT IS DERIVED FOR THE REASON THIS METHOD
             // DERIVES EVERYTHING ELSE. Until CyberCloud.Network/virtualNetworks there was no
             // cluster-scoped object in the tree and this projection was `.Select(x => x.Kind)` with a
@@ -1019,10 +1044,10 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             //
             // ⚠ It changes nothing for the nine families that predate it: every ObjectRef they render
             // carries a namespace, so every one still derives "Namespaced".
-            .Select(x => (x.Kind, x.IsClusterScoped))
+            .Select(static x => (x.Kind, x.IsClusterScoped))
             // The core group has no CRD and needs none — its REST paths are built in.
-            .Where(x => !string.IsNullOrEmpty(x.Kind.Group))
-            .DistinctBy(x => x.Kind.Group + "/" + x.Kind.Plural, StringComparer.Ordinal);
+            .Where(static x => !string.IsNullOrEmpty(x.Kind.Group))
+            .DistinctBy(static x => x.Kind.Group + "/" + x.Kind.Plural, StringComparer.Ordinal);
 
         // ⚠ AND NEITHER DOES ANY OTHER GROUP THE API SERVER ALREADY SERVES, WHICH THE FILTER ABOVE
         // CANNOT SEE. "Not the core group" is not the same question as "not built in": `apps`,
@@ -1063,7 +1088,8 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                     await File.ReadAllTextAsync(
                         Path.Combine(CommittedDefinitions.RepositoryRoot, committed.File),
                         cancellationToken
-                    ).ConfigureAwait(false)
+                    )
+                        .ConfigureAwait(false)
                 );
 
                 // A `helm.sh/resource-policy: keep` or a cert-manager annotation is inert on a bare
@@ -1224,7 +1250,11 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                 .ReadCustomResourceDefinitionAsync(name, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
-            if (definition.Status?.Conditions?.Any(x => string.Equals(x.Type, "Established", StringComparison.Ordinal)
+            if (definition.Status?.Conditions?.Any(static x => string.Equals(
+                        x.Type,
+                        "Established",
+                        StringComparison.Ordinal
+                    )
                     && string.Equals(x.Status, "True", StringComparison.Ordinal)
                 )
                 == true) {
@@ -1262,7 +1292,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             //    is the tier ADR-003 specifies, with the serializer the shipped wiring uses. ─────
             silo.AddAdoNetGrainStorage(
                 StorageTiers.Durable,
-                options => {
+                static options => {
                     options.Invariant = DurableTierConfigurator.NpgsqlInvariant;
                     options.ConnectionString = ClusterConformanceState<TSource>.DurableConnectionString;
 
@@ -1276,12 +1306,12 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             );
 
             // ── Reminders. Redis, so the table outlives a silo. ─────────────────────────────────
-            silo.UseRedisReminderService(options =>
+            silo.UseRedisReminderService(static options =>
                 options.ConfigurationOptions =
                 ConfigurationOptions.Parse(ClusterConformanceState<TSource>.RedisConnectionString)
             );
 
-            silo.ConfigureServices(services => {
+            silo.ConfigureServices(static services => {
                     services.AddSingleton<IClock>(ClusterConformanceState<TSource>.Clock);
                     services.AddSingleton<IResourceAuthorizer>(ClusterConformanceState<TSource>.Authorizer);
                     services.AddSingleton<ILockResolver>(ClusterConformanceState<TSource>.Locks);
@@ -1299,7 +1329,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                     // story's alike — so the write path and the reconcile driver agree on which types
                     // exist, and the view resolves a protected item's type against the same registry.
                     foreach (var provider in Providers()) {
-                        services.AddSingleton<IResourceProvider>(provider);
+                        services.AddSingleton(provider);
                     }
 
                     services.AddSingleton(TSource.ProviderCase.ReconcilerType);
@@ -1310,11 +1340,16 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                     // than on the request path. Siblings as ProviderTestCluster does; both kinds of
                     // companion, for Providers()'s reason.
                     foreach (var reconciler in TSource.Ancestors
-                                 .Select(x => x.ReconcilerType)
-                                 .Concat(TSource.Siblings.Select(x => x.Case.ReconcilerType))
-                                 .Concat(ProviderTestCluster<TSource>.Companions.Select(x => x.ProviderCase.ReconcilerType))
-                                 .Concat(ClusterConformanceState<TSource>.Companions.Select(x => x.ReconcilerType))
-                                 .Where(x => x != TSource.ProviderCase.ReconcilerType)
+                                 .Select(static x => x.ReconcilerType)
+                                 .Concat(TSource.Siblings.Select(static x => x.Case.ReconcilerType))
+                                 .Concat(
+                                     ProviderTestCluster<
+                                         TSource>.Companions.Select(static x => x.ProviderCase.ReconcilerType)
+                                 )
+                                 .Concat(
+                                     ClusterConformanceState<TSource>.Companions.Select(static x => x.ReconcilerType)
+                                 )
+                                 .Where(static x => x != TSource.ProviderCase.ReconcilerType)
                                  .Distinct()) {
                         services.AddSingleton(reconciler);
                     }
@@ -1324,14 +1359,14 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
 
                     foreach (var handler in ProviderRegistry.Build(Providers())
                                  .Types
-                                     .SelectMany(x => x.Actions)
-                                     .Select(x => x.HandlerType)
+                                     .SelectMany(static x => x.Actions)
+                                     .Select(static x => x.HandlerType)
                                      .OfType<Type>()
                                      .Distinct()) {
                         services.AddSingleton(handler);
                     }
 
-                    services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
+                    services.TryAddSingleton<ILoggerFactory>(static _ => NullLoggerFactory.Instance);
                 }
             );
 

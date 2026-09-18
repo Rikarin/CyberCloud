@@ -360,9 +360,6 @@ public readonly record struct SchemaProperty(
                     );
 
                     break;
-
-                default:
-                    break;
             }
         } else if (ElementKind is not SchemaKind.Unknown) {
             problems.Add(

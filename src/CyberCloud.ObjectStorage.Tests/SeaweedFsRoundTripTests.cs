@@ -57,10 +57,10 @@ public sealed class SeaweedFsRoundTripTests : IAsyncLifetime {
             // answer that means "the S3 gateway is up and checking credentials".
             .WithWaitStrategy(
                 Wait.ForUnixContainer()
-                    .UntilHttpRequestIsSucceeded(x => x
-                        .ForPort(8333)
-                        .ForPath("/")
-                        .ForStatusCodeMatching(code => code is HttpStatusCode.Forbidden or HttpStatusCode.OK)
+                    .UntilHttpRequestIsSucceeded(static x => x
+                            .ForPort(8333)
+                            .ForPath("/")
+                            .ForStatusCodeMatching(static code => code is HttpStatusCode.Forbidden or HttpStatusCode.OK)
                     )
             )
             .Build();
@@ -100,9 +100,19 @@ public sealed class SeaweedFsRoundTripTests : IAsyncLifetime {
         var prefix = "aaaaaaaa00004000800000000000000a/feed-" + Guid.NewGuid().ToString("N") + "/";
 
         // Put — two keys under the prefix, one with a space and a plus in it, one outside it.
-        (await store.PutAsync(prefix + "nuget/my package/1.0.0+build/a.nupkg", "first"u8.ToArray(), "application/octet-stream", token))
+        (await store.PutAsync(
+                prefix + "nuget/my package/1.0.0+build/a.nupkg",
+                "first"u8.ToArray(),
+                "application/octet-stream",
+                token
+            ))
             .IsSuccess.ShouldBeTrue();
-        (await store.PutAsync(prefix + "npm/@scope/pkg/-/pkg-1.0.0.tgz", "second"u8.ToArray(), "application/gzip", token))
+        (await store.PutAsync(
+                prefix + "npm/@scope/pkg/-/pkg-1.0.0.tgz",
+                "second"u8.ToArray(),
+                "application/gzip",
+                token
+            ))
             .IsSuccess.ShouldBeTrue();
         (await store.PutAsync("elsewhere/" + Guid.NewGuid().ToString("N"), "other"u8.ToArray(), "text/plain", token))
             .IsSuccess.ShouldBeTrue();
@@ -126,13 +136,20 @@ public sealed class SeaweedFsRoundTripTests : IAsyncLifetime {
         }
 
         (await store.ListAsync(prefix, token)).GetValueOrThrow().ShouldBeEmpty();
-        (await store.GetAsync(prefix + "nuget/my package/1.0.0+build/a.nupkg", token)).Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+        (await store.GetAsync(prefix + "nuget/my package/1.0.0+build/a.nupkg", token)).Error!.Code.ShouldBe(
+            ErrorCode.ResourceNotFound
+        );
     }
 
     [Fact]
     public async Task AWrongSecretIsRefusedByTheServer() {
         // ⚠ The control. Without this, a server that ignored signatures would pass the test above.
-        var refused = await Store("the-wrong-secret").PutAsync("probe/" + Guid.NewGuid().ToString("N"), "x"u8.ToArray(), "text/plain", TestContext.Current.CancellationToken);
+        var refused = await Store("the-wrong-secret").PutAsync(
+            "probe/" + Guid.NewGuid().ToString("N"),
+            "x"u8.ToArray(),
+            "text/plain",
+            TestContext.Current.CancellationToken
+        );
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Message.ShouldContain("403");
@@ -165,7 +182,8 @@ public sealed class SeaweedFsRoundTripTests : IAsyncLifetime {
             )
         );
 
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        using var http = new HttpClient();
+        http.Timeout = TimeSpan.FromSeconds(30);
         using var response = await http.SendAsync(request, token);
 
         if (!response.IsSuccessStatusCode) {

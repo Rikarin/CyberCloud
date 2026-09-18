@@ -326,14 +326,14 @@ public sealed class TenancyCluster : IAsyncLifetime {
         ];
 
         args.AddRange(
-            connections.Select(x =>
+            connections.Select(static x =>
                 $"--{CyberCloudStorageOptions.SectionName}:Durable:Shards:{x.Key}={x.Value}"
             )
         );
 
         var builder = OrleansApplication.CreateSilo(
             [.. args],
-            silo => silo
+            static silo => silo
                 // ⚠ ResourceGroupGrain is IRemindable — it arms the two-phase-create reaper of
                 // docs/plan/06 § Two-phase create while it holds a member in Creating — and
                 // RegisterOrUpdateReminder throws on a silo with no reminder service. The grain
@@ -342,15 +342,15 @@ public sealed class TenancyCluster : IAsyncLifetime {
                 // the catch. In-memory rather than Redis (docs/plan/04 § Reminders): the production
                 // choice is the host's and this is a test.
                     .UseInMemoryReminderService()
-                    .ConfigureServices(services => {
+                    .ConfigureServices(static services => {
                             // Registered BEFORE AddCyberCloudTenancy's TryAdd calls run, so these win.
                             services.AddSingleton<IClock, TestClock>();
                             services.AddSingleton<SwitchablePlatformOperatorAuthority>();
                             services.AddSingleton<SwitchableDelegationStore>();
-                            services.AddSingleton<IPlatformOperatorAuthority>(sp =>
+                            services.AddSingleton<IPlatformOperatorAuthority>(static sp =>
                                 sp.GetRequiredService<SwitchablePlatformOperatorAuthority>()
                             );
-                            services.AddSingleton<ICrossTenantDelegationStore>(sp =>
+                            services.AddSingleton<ICrossTenantDelegationStore>(static sp =>
                                 sp.GetRequiredService<SwitchableDelegationStore>()
                             );
 
@@ -359,10 +359,10 @@ public sealed class TenancyCluster : IAsyncLifetime {
                             // is quietly filling the cache — the assertion would pass or fail on timing, which
                             // is how a suite earns a `[Skip]`. The method the tests call is the method the loop
                             // calls, so nothing is stubbed out; only the schedule is.
-                            services.Configure<TenancyRefreshOptions>(o => o.RunBackgroundRefresh = false);
+                            services.Configure<TenancyRefreshOptions>(static o => o.RunBackgroundRefresh = false);
                         }
                     ),
-            (silo, options) => silo.AddCyberCloudTenancy(options)
+            static (silo, options) => silo.AddCyberCloudTenancy(options)
         );
 
         await builder.Services.AddApplicationAsync<TenancySiloModule>();

@@ -136,8 +136,7 @@ public sealed class VirtualNetworkPeeringReconciler(IClock clock) : IResourceRec
 
         // ── Clause 4. Everything above this line is a claim; this is the reading. ───────────────
         foreach (var (target, side) in new[] {
-                     (local, VirtualNetworkPeerings.Side.Local),
-                     (remote, VirtualNetworkPeerings.Side.Remote)
+                     (local, VirtualNetworkPeerings.Side.Local), (remote, VirtualNetworkPeerings.Side.Remote)
                  }) {
             var read = await cluster.GetAsync(target, cancellationToken);
 
@@ -292,7 +291,11 @@ public sealed class VirtualNetworkPeeringReconciler(IClock clock) : IResourceRec
             }
         }
 
-        context.Log.Report("withdrawn", $"neither '{local.Name}' nor '{remote.Name}' carries the peering any more", 100);
+        context.Log.Report(
+            "withdrawn",
+            $"neither '{local.Name}' nor '{remote.Name}' carries the peering any more",
+            100
+        );
         return ReconcileOutcome.Converged;
     }
 

@@ -13,8 +13,11 @@ namespace CyberCloud.Providers.RecoveryServices;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/15 § Backup as a service: <i>"Restore always creates a new resource.
-///         Restore-in-place is how people lose the good copy while trying to recover it."</i> Four
+///         docs/plan/15 § Backup as a service:
+///         <i>
+///             "Restore always creates a new resource.
+///             Restore-in-place is how people lose the good copy while trying to recover it."
+///         </i> Four
 ///         checks stand between the request and the apply, and each refuses by name: the recovery
 ///         point must exist, it must belong to one of <i>this</i> vault's schedules, its phase must be
 ///         <c>completed</c>, and nothing may already be called <c>targetName</c>. The third is the
@@ -31,8 +34,11 @@ namespace CyberCloud.Providers.RecoveryServices;
 ///         restore that matters.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The second handler in the catalogue that writes an object, and the first outside the
-///         Terminal family.</b> It writes through <see cref="KubeCommand" /> like a reconciler, under
+///         ⚠
+///         <b>
+///             The second handler in the catalogue that writes an object, and the first outside the
+///             Terminal family.
+///         </b> It writes through <see cref="KubeCommand" /> like a reconciler, under
 ///         the vault's own id and with <see cref="RecoveryVaults.RestoreRoleLabel" /> beside the seven,
 ///         so the drift scan attributes the cluster to the vault and the vault's teardown knows to
 ///         leave it standing. What the restored cluster is <i>not</i> — a
@@ -56,7 +62,10 @@ public sealed class RecoveryVaultRecoverHandler : IResourceActionHandler {
     public string Action => RecoveryVaults.RecoverAction;
 
     /// <inheritdoc />
-    public async Task<Result<string>> InvokeAsync(ActionContext context, CancellationToken cancellationToken = default) {
+    public async Task<Result<string>> InvokeAsync(
+        ActionContext context,
+        CancellationToken cancellationToken = default
+    ) {
         if (context.Cluster is not { } cluster) {
             return Result<string>.Failure(
                 ErrorCode.InternalError,
@@ -79,7 +88,10 @@ public sealed class RecoveryVaultRecoverHandler : IResourceActionHandler {
         }
 
         // ── The point, and that it is this vault's ─────────────────────────────────────────────
-        var backup = await cluster.GetAsync(RecoveryVaults.BackupRef(context.Namespace, recoveryPoint), cancellationToken);
+        var backup = await cluster.GetAsync(
+            RecoveryVaults.BackupRef(context.Namespace, recoveryPoint),
+            cancellationToken
+        );
 
         if (backup.TryGetError(out var backupError)) {
             return backupError.Code == ErrorCode.ResourceNotFound
@@ -101,7 +113,8 @@ public sealed class RecoveryVaultRecoverHandler : IResourceActionHandler {
             return Result<string>.Failure(scheduleError);
         }
 
-        var schedule = schedules.GetValueOrThrow().FirstOrDefault(x => string.Equals(x.Name, parent, StringComparison.Ordinal));
+        var schedule = schedules.GetValueOrThrow()
+            .FirstOrDefault(x => string.Equals(x.Name, parent, StringComparison.Ordinal));
 
         if (parent.Length == 0 || schedule is null) {
             // ⚠ The same answer as "no such Backup": a vault that said "that point belongs to another
@@ -109,10 +122,15 @@ public sealed class RecoveryVaultRecoverHandler : IResourceActionHandler {
             return NotAPointOfThisVault(recoveryPoint);
         }
 
-        var item = schedule.Labels.TryGetValue(RecoveryVaults.ProtectedItemLabel, out var labelled) ? labelled : schedule.Name;
+        var item = schedule.Labels.TryGetValue(RecoveryVaults.ProtectedItemLabel, out var labelled)
+            ? labelled
+            : schedule.Name;
 
         if (RecoveryVaults.RecoveryPointOf(item, backupJson) is not { } point) {
-            return Result<string>.Failure(ErrorCode.InternalError, $"'{recoveryPoint}' is not a Backup document this platform can read.");
+            return Result<string>.Failure(
+                ErrorCode.InternalError,
+                $"'{recoveryPoint}' is not a Backup document this platform can read."
+            );
         }
 
         if (!point.IsCompleted) {
@@ -205,7 +223,9 @@ public sealed class RecoveryVaultRecoverHandler : IResourceActionHandler {
         );
 
     static string Text(JsonElement body, string name) =>
-        body.ValueKind is JsonValueKind.Object && body.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.String
+        body.ValueKind is JsonValueKind.Object
+        && body.TryGetProperty(name, out var value)
+        && value.ValueKind is JsonValueKind.String
             ? value.GetString() ?? string.Empty
             : string.Empty;
 }

@@ -1,5 +1,4 @@
 using CyberCloud.Authorization.Contracts;
-using CyberCloud.Core.Contracts;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Host.Tokens;
 using OpenIddict.Abstractions;
@@ -62,7 +61,7 @@ public sealed class NoRolesInTokenTests {
         TenantId = Session.TenantId,
         DisplayName = "ci",
         Enabled = true,
-        CredentialSecretRef = new SecretRef { Path = "tenants/t/sp/ci", Field = "secret" }
+        CredentialSecretRef = new() { Path = "tenants/t/sp/ci", Field = "secret" }
     };
 
     static readonly DateTimeOffset Now = new(2026, 8, 11, 12, 5, 0, TimeSpan.Zero);
@@ -74,7 +73,13 @@ public sealed class NoRolesInTokenTests {
         // which is invisible to every assertion on the principal — the claim is there — and visible
         // only to a gateway reading a token with no tid in it. Both entry points, every claim.
         foreach (var principal in new[] {
-                     AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"], SubjectTypes.User, Guid.NewGuid()),
+                     AccessTokenPrincipalFactory.Build(
+                         Session,
+                         "cyc.api",
+                         ["cyc.api"],
+                         SubjectTypes.User,
+                         Guid.NewGuid()
+                     ),
                      AccessTokenPrincipalFactory.BuildForServicePrincipal(Principal, "ci", "cyc.api", ["cyc.api"], Now)
                  }) {
             foreach (var claim in principal.Claims) {
@@ -116,7 +121,8 @@ public sealed class NoRolesInTokenTests {
         principal.FindFirst(AccessTokenClaims.SubjectType)!.Value.ShouldBe(SubjectTypes.ServicePrincipal);
         principal.FindFirst(AccessTokenClaims.Subject)!.Value.ShouldBe(Principal.ServicePrincipalId.ToString("N"));
         principal.FindFirst(AccessTokenClaims.TenantId)!.Value.ShouldBe(Principal.TenantId.ToString("N"));
-        principal.FindFirst(AccessTokenClaims.AuthorizedParty)!.Value.ShouldBe(Principal.ServicePrincipalId.ToString("N"));
+        principal.FindFirst(AccessTokenClaims.AuthorizedParty)!
+            .Value.ShouldBe(Principal.ServicePrincipalId.ToString("N"));
         principal.FindFirst(AccessTokenClaims.AuthenticationMethods)!.Value.ShouldBe("pop");
         principal.FindFirst(AccessTokenClaims.AuthenticationTime)!.Value.ShouldBe(Now.ToUnixTimeSeconds().ToString());
 
@@ -270,7 +276,7 @@ public sealed class NoRolesInTokenTests {
 
         // ⚠ Ordinal. `serviceprincipal` is a subject the tuple store has never heard of, so a token
         // carrying it would deny every check and look like a permissions bug.
-        Should.Throw<ArgumentException>(() => AccessTokenPrincipalFactory.Build(
+        Should.Throw<ArgumentException>(static () => AccessTokenPrincipalFactory.Build(
                 Session,
                 "cyc.api",
                 ["cyc.api"],
@@ -278,7 +284,7 @@ public sealed class NoRolesInTokenTests {
             )
         );
 
-        Should.Throw<ArgumentException>(() => AccessTokenPrincipalFactory.Build(
+        Should.Throw<ArgumentException>(static () => AccessTokenPrincipalFactory.Build(
                 Session,
                 "cyc.api",
                 ["cyc.api"],
@@ -332,13 +338,14 @@ public sealed class NoRolesInTokenTests {
         var build = typeof(AccessTokenPrincipalFactory).GetMethod(nameof(AccessTokenPrincipalFactory.Build))!;
 
         build.GetParameters()
-            .Select(x => x.ParameterType.Name)
+            .Select(static x => x.ParameterType.Name)
             .ShouldBe(["SessionDescriptor", "String", "IReadOnlyList`1", "String", "Guid"]);
 
         // Nothing HTTP-shaped reaches it, which is what makes "never accepted from a header" a fact
         // about the type rather than a rule about its callers — and the same holds for every other
         // public entry point the type grows, so the second one is covered without being named.
-        foreach (var method in typeof(AccessTokenPrincipalFactory).GetMethods().Where(x => x.DeclaringType == typeof(AccessTokenPrincipalFactory))) {
+        foreach (var method in typeof(AccessTokenPrincipalFactory).GetMethods()
+                     .Where(static x => x.DeclaringType == typeof(AccessTokenPrincipalFactory))) {
             method.GetParameters()
                 .ShouldAllBe(
                     x => !x.ParameterType.FullName!.Contains("Microsoft.AspNetCore", StringComparison.Ordinal),
@@ -363,8 +370,10 @@ public sealed class NoRolesInTokenTests {
     ///     This is the rule <c>PrepareAccessTokenPrincipal</c> applies, and asserting through it is
     ///     asserting on the token rather than on the principal.
     /// </summary>
-    static IReadOnlyList<Claim> SerializedIntoTheAccessToken(ClaimsPrincipal principal) =>
-        [.. principal.Claims.Where(x => x.GetDestinations().Contains(OpenIddictConstants.Destinations.AccessToken))];
+    static IReadOnlyList<Claim> SerializedIntoTheAccessToken(ClaimsPrincipal principal) => [
+        .. principal.Claims.Where(static x => x.GetDestinations().Contains(OpenIddictConstants.Destinations.AccessToken)
+        )
+    ];
 
     [Fact]
     public void TheRefreshHandleAndInteractiveSidNeverReachTheAccessToken() {
@@ -379,9 +388,9 @@ public sealed class NoRolesInTokenTests {
         principal.FindFirst(AccessTokenPrincipalFactory.RefreshHandleClaim)!.GetDestinations().ShouldBeEmpty();
         principal.FindFirst(AccessTokenPrincipalFactory.InteractiveSessionClaim)!.GetDestinations().ShouldBeEmpty();
 
-        SerializedIntoTheAccessToken(principal).Select(x => x.Type)
+        SerializedIntoTheAccessToken(principal).Select(static x => x.Type)
             .ShouldNotContain(AccessTokenPrincipalFactory.RefreshHandleClaim);
-        SerializedIntoTheAccessToken(principal).Select(x => x.Type)
+        SerializedIntoTheAccessToken(principal).Select(static x => x.Type)
             .ShouldNotContain(AccessTokenPrincipalFactory.InteractiveSessionClaim);
     }
 
@@ -393,7 +402,7 @@ public sealed class NoRolesInTokenTests {
 
         foreach (var type in new[] { OpenIddictConstants.Claims.Email, OpenIddictConstants.Claims.Name }) {
             principal.FindFirst(type)!.GetDestinations().ShouldBe([OpenIddictConstants.Destinations.IdentityToken]);
-            SerializedIntoTheAccessToken(principal).Select(x => x.Type).ShouldNotContain(type);
+            SerializedIntoTheAccessToken(principal).Select(static x => x.Type).ShouldNotContain(type);
         }
 
         // An empty value adds no claim at all rather than an empty one.
@@ -413,11 +422,12 @@ public sealed class NoRolesInTokenTests {
         // four claims outside the set — that is what the two Append methods are for. What must stay
         // true is that none of them has the access-token destination, so the token on the wire is
         // still exactly the closed set. GrantsOverHttpTests decodes a real one and asserts the same.
-        var serialized = SerializedIntoTheAccessToken(principal).Select(x => x.Type).ToList();
+        var serialized = SerializedIntoTheAccessToken(principal).Select(static x => x.Type).ToList();
 
         serialized.ShouldAllBe(x => AccessTokenClaims.Permitted.Contains(x));
         serialized.ShouldNotBeEmpty();
 
-        principal.Claims.Count().ShouldBe(serialized.Count + 4, "cyc:rh, cyc:isid, email and name ride beside the token");
+        principal.Claims.Count()
+            .ShouldBe(serialized.Count + 4, "cyc:rh, cyc:isid, email and name ride beside the token");
     }
 }

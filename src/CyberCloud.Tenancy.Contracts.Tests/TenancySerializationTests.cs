@@ -24,7 +24,7 @@ public sealed class TenancySerializationTests : IDisposable {
     /// <summary>Builds a serializer over both contract assemblies, the way a silo does.</summary>
     public TenancySerializationTests() {
         var services = new ServiceCollection();
-        services.AddSerializer(builder => builder
+        services.AddSerializer(static builder => builder
                 .AddAssembly(typeof(TenantDescriptor).Assembly)
                 .AddAssembly(typeof(ResultSurrogate).Assembly)
         );

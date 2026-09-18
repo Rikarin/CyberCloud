@@ -1491,7 +1491,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
             TestContext.Current.CancellationToken
         );
 
-        after.GetValueOrThrow().Resources.Select(x => x.Name).ShouldBe(["still-here"]);
+        after.GetValueOrThrow().Resources.Select(static x => x.Name).ShouldBe(["still-here"]);
 
         // ── Underneath the filter, which is where the finding actually is ───────────────────────
         var members = (await cluster.Group(parked).ListAsync())
@@ -1499,14 +1499,14 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         // ⚠ The calibration, and without it the assertion below passes for an empty membership — a
         // group grain that answered nothing at all would look exactly like the finding.
-        members.Select(x => x.CanonicalPath)
+        members.Select(static x => x.CanonicalPath)
             .ShouldContain(
                 live.CanonicalPath,
                 "the group's membership does not hold the LIVE resource either, so the assertion below "
                 + "would be measuring an empty list rather than the park"
             );
 
-        members.Select(x => x.CanonicalPath)
+        members.Select(static x => x.CanonicalPath)
             .ShouldNotContain(
                 parked.CanonicalPath,
                 "the parked resource is still a member of its group, so ListAsync's page was short for "
@@ -1574,13 +1574,13 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         // ── The membership, which is where it is NOT ─────────────────────────────────────────
         var members = (await cluster.Group(parked).ListAsync()).GetValueOrThrow();
 
-        members.Select(x => x.CanonicalPath).ShouldContain(live.CanonicalPath);
-        members.Select(x => x.CanonicalPath).ShouldNotContain(parked.CanonicalPath);
+        members.Select(static x => x.CanonicalPath).ShouldContain(live.CanonicalPath);
+        members.Select(static x => x.CanonicalPath).ShouldNotContain(parked.CanonicalPath);
 
         // ── The registry, which is where it IS ───────────────────────────────────────────────
         var recoverable = (await cluster.Parked(parked).ListAsync()).GetValueOrThrow();
 
-        recoverable.Select(x => x.AddressOf().Name).ShouldBe(["goes-away"]);
+        recoverable.Select(static x => x.AddressOf().Name).ShouldBe(["goes-away"]);
         recoverable[0].ResourceId.ShouldBe(
             (await cluster.Index(parked).ResolveSoftDeletedAsync()).GetValueOrThrow(),
             "the entry has to carry the GUID a restore and a purge address the resource by"
@@ -1592,9 +1592,9 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         var ofWidgets = (await cluster.Parked(parked)
                 .ListOfTypeAsync(new(parked.TenantId, parked.SubscriptionId, group, ConformingReconciler.TypeName)))
-                .GetValueOrThrow();
+            .GetValueOrThrow();
 
-        ofVaults.Select(x => x.AddressOf().Name).ShouldBe(["goes-away"]);
+        ofVaults.Select(static x => x.AddressOf().Name).ShouldBe(["goes-away"]);
         ofWidgets.ShouldBeEmpty("widgets declare no recovery window, so nothing can be parked in one");
     }
 
@@ -1628,7 +1628,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         (await cluster.Parked(address).ListAsync())
             .GetValueOrThrow()
-            .Select(x => x.AddressOf().Name)
+            .Select(static x => x.AddressOf().Name)
             .ShouldBe(["comes-back"], "the calibration: it was in the registry before the restore");
 
         (await RestoreAndConverge(address)).IsSuccess.ShouldBeTrue();
@@ -1637,7 +1637,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         (await cluster.Group(address).ListAsync())
             .GetValueOrThrow()
-            .Select(x => x.CanonicalPath)
+            .Select(static x => x.CanonicalPath)
             .ShouldContain(address.CanonicalPath);
 
         (await Read(address)).IsSuccess.ShouldBeTrue("and it is readable at its own address again");
@@ -1672,7 +1672,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         (await cluster.Parked(address).ListAsync())
             .GetValueOrThrow()
-            .Select(x => x.AddressOf().Name)
+            .Select(static x => x.AddressOf().Name)
             .ShouldBe(["goes-for-good"], "the calibration: it was in the registry before the purge");
 
         await Converge((await Purge(address)).GetValueOrThrow());
@@ -1681,7 +1681,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         (await cluster.Group(address).ListAsync())
             .GetValueOrThrow()
-            .Select(x => x.CanonicalPath)
+            .Select(static x => x.CanonicalPath)
             .ShouldNotContain(address.CanonicalPath, "and it did not come back to the membership either");
 
         (await Restore(address)).Error!.Code.ShouldBe(
@@ -1758,7 +1758,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         var before = (await cluster.Parked(address).ListAsync()).GetValueOrThrow();
 
-        before.Select(x => x.AddressOf().Name)
+        before.Select(static x => x.AddressOf().Name)
             .ShouldBe(["too-late-to-restore"], "the calibration: it was in the registry before the refusal");
 
         // ⚠ EIGHT DAYS INTO THE SEVEN-DAY WINDOW `vaults` DECLARES, and past it rather than at its
@@ -1782,7 +1782,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         var after = (await cluster.Parked(address).ListAsync()).GetValueOrThrow();
 
-        after.Select(x => x.AddressOf().Name)
+        after.Select(static x => x.AddressOf().Name)
             .ShouldBe(
                 ["too-late-to-restore"],
                 "a refused restore must not unlist the resource: nothing re-parks it, so the entry would "
@@ -1804,7 +1804,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         (await Restore(address)).Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
 
         (await cluster.Parked(address).ListAsync()).GetValueOrThrow()
-            .Select(x => x.AddressOf().Name)
+            .Select(static x => x.AddressOf().Name)
             .ShouldBe(["too-late-to-restore"], "and the second refusal did not lose it either");
 
         // ── And the purge, which is what SHOULD end this, is unaffected ─────────────────────────
@@ -1864,13 +1864,23 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         var afterPark = RecordingChangeSink.Published.Where(x => x.ResourceId == resourceId).ToList();
 
-        afterPark.Select(x => x.Change).ShouldBe(
-            [ResourceChangeKind.Created, ResourceChangeKind.StateChanged, ResourceChangeKind.Deleting, ResourceChangeKind.SoftDeleted],
-            "the gateway's two, the silo's terminal transition, and the park — and no Deleted, because nothing was destroyed"
-        );
+        afterPark.Select(static x => x.Change)
+            .ShouldBe(
+                [
+                    ResourceChangeKind.Created, ResourceChangeKind.StateChanged, ResourceChangeKind.Deleting,
+                    ResourceChangeKind.SoftDeleted
+                ],
+                "the gateway's two, the silo's terminal transition, and the park — and no Deleted, because nothing was destroyed"
+            );
 
-        afterPark[3].ProvisioningState.ShouldBe(ProvisioningState.Deleting, "a parked resource is still Deleting; the window is what it is in");
-        afterPark[3].Version.ShouldBeGreaterThan(afterPark[2].Version, "counted by the grain, above the Deleting the gateway sent");
+        afterPark[3].ProvisioningState.ShouldBe(
+            ProvisioningState.Deleting,
+            "a parked resource is still Deleting; the window is what it is in"
+        );
+        afterPark[3].Version.ShouldBeGreaterThan(
+            afterPark[2].Version,
+            "counted by the grain, above the Deleting the gateway sent"
+        );
 
         // ── The restore: Updated from the gateway, StateChanged from the silo, both above the park ──
         var restored = await RestoreAndConverge(address);
@@ -1878,17 +1888,21 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         var afterRestore = RecordingChangeSink.Published.Where(x => x.ResourceId == resourceId).Skip(4).ToList();
 
-        afterRestore.Select(x => x.Change).ShouldBe(
-            [ResourceChangeKind.Updated, ResourceChangeKind.StateChanged],
-            "a restore is a write at the gateway and a reconcile on the silo, like any update"
-        );
+        afterRestore.Select(static x => x.Change)
+            .ShouldBe(
+                [ResourceChangeKind.Updated, ResourceChangeKind.StateChanged],
+                "a restore is a write at the gateway and a reconcile on the silo, like any update"
+            );
         afterRestore[0].ProvisioningState.ShouldBe(ProvisioningState.Updating);
         afterRestore[1].ProvisioningState.ShouldBe(ProvisioningState.Succeeded);
 
         // ⚠ THE COLLISION THAT AN INVENTED VERSION WOULD HAVE HAD. BeginRestoreAsync counts one; if
         // the park had claimed that number the projector would drop the Updated and the row would
         // say SoftDeleted until the reconcile landed.
-        afterRestore[0].Version.ShouldBeGreaterThan(afterPark[3].Version, "the restore's own event lands above the park's");
+        afterRestore[0].Version.ShouldBeGreaterThan(
+            afterPark[3].Version,
+            "the restore's own event lands above the park's"
+        );
 
         // ── And the purge is the Deleted the park did not send ──────────────────────────────────
         await Converge((await Delete(address)).GetValueOrThrow());
@@ -1896,19 +1910,30 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         var all = RecordingChangeSink.Published.Where(x => x.ResourceId == resourceId).ToList();
 
-        all.Select(x => x.Change).Skip(6).ShouldBe(
-            [ResourceChangeKind.Deleting, ResourceChangeKind.SoftDeleted, ResourceChangeKind.Deleting, ResourceChangeKind.Deleted],
-            "the second park, then the purge's accept and its clear"
+        all.Select(static x => x.Change)
+            .Skip(6)
+            .ShouldBe(
+                [
+                    ResourceChangeKind.Deleting, ResourceChangeKind.SoftDeleted, ResourceChangeKind.Deleting,
+                    ResourceChangeKind.Deleted
+                ],
+                "the second park, then the purge's accept and its clear"
+            );
+        all[^1].Version.ShouldBeGreaterThan(
+            all[^2].Version,
+            "the purge's clear is the last transition and takes the number after the last one counted"
         );
-        all[^1].Version.ShouldBeGreaterThan(all[^2].Version, "the purge's clear is the last transition and takes the number after the last one counted");
 
         // Never decreasing over the whole life, so a consumer holding one drops everything at or
         // below it. ⚠ ONE PAIR SHARES A NUMBER, AND IT IS THE PURGE'S ACCEPT: PurgeCoreAsync reads
         // the grain without writing it, so its Deleting carries the second park's version. The
         // projector drops it, and the row it would have written — a tombstone out of the list —
         // is the one the park already wrote; the clear that follows is what changes the row.
-        all.Select(x => x.Version).ShouldBe(all.Select(x => x.Version).Order().ToList());
-        all.Select(x => x.Version).Distinct().Count().ShouldBe(all.Count - 1, "every transition but the purge's accept has its own version");
+        all.Select(static x => x.Version).ShouldBe(all.Select(static x => x.Version).Order().ToList());
+        all.Select(static x => x.Version)
+            .Distinct()
+            .Count()
+            .ShouldBe(all.Count - 1, "every transition but the purge's accept has its own version");
         all[8].Version.ShouldBe(all[7].Version, "and the purge's accept is that one");
         all.ShouldAllBe(x => x.Subject == all[0].Subject, "one resource is one subject for its whole life");
     }

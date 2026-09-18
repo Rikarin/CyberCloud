@@ -162,8 +162,11 @@ public sealed class TypeScriptSurfaceTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>The two clients agree about the shape of a body: every container the document
-    ///     declares is a nested object on both.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The two clients agree about the shape of a body: every container the document
+    ///         declares is a nested object on both.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     Issue #79's evidence that the flat .NET SDK was a defect and not a taste: this emitter
@@ -234,8 +237,11 @@ public sealed class TypeScriptSurfaceTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>Both clients type the read envelope from the document, and neither writes it —
-    ///     issue #85.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Both clients type the read envelope from the document, and neither writes it —
+    ///         issue #85.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -274,7 +280,10 @@ public sealed class TypeScriptSurfaceTests {
             envelope.Length.ShouldBe(5, type.ResourceType);
             served.Count.ShouldBe(5, type.ResourceType);
 
-            var tsResource = Block(models, "export interface " + model + "Resource extends Resource, " + model + "Data {");
+            var tsResource = Block(
+                models,
+                "export interface " + model + "Resource extends Resource, " + model + "Data {"
+            );
             var tsData = Block(models, "export interface " + model + "Data {");
             var csResource = Block(sdk, "public sealed partial class " + csModel + "Resource {");
             var csData = Block(sdk, "public sealed partial class " + csModel + "Data {");
@@ -288,13 +297,28 @@ public sealed class TypeScriptSurfaceTests {
 
                 // At the write body's own depth — two spaces in TypeScript, four in C# — because a
                 // provider may nest a `name` of its own under /properties/sku, and the fixture does.
-                tsData.ShouldNotContain("\n  " + leaf.Name + ":", customMessage: leaf.Name + " on the TypeScript write body");
-                tsData.ShouldNotContain("\n  " + leaf.Name + "?:", customMessage: leaf.Name + " on the TypeScript write body");
-                tsData.ShouldNotContain("\n  readonly " + leaf.Name, customMessage: leaf.Name + " on the TypeScript write body");
+                tsData.ShouldNotContain(
+                    "\n  " + leaf.Name + ":",
+                    customMessage: leaf.Name + " on the TypeScript write body"
+                );
+                tsData.ShouldNotContain(
+                    "\n  " + leaf.Name + "?:",
+                    customMessage: leaf.Name + " on the TypeScript write body"
+                );
+                tsData.ShouldNotContain(
+                    "\n  readonly " + leaf.Name,
+                    customMessage: leaf.Name + " on the TypeScript write body"
+                );
 
                 csResource.ShouldContain("[JsonPropertyName(\"" + leaf.Name + "\")]", customMessage: leaf.Name);
-                csResource.ShouldContain(" " + SdkEmitter.Pascal(leaf.Name) + " { get; init; }", customMessage: leaf.Name);
-                csData.ShouldNotContain("\n    [JsonPropertyName(\"" + leaf.Name + "\")]", customMessage: leaf.Name + " on the .NET write body");
+                csResource.ShouldContain(
+                    " " + SdkEmitter.Pascal(leaf.Name) + " { get; init; }",
+                    customMessage: leaf.Name
+                );
+                csData.ShouldNotContain(
+                    "\n    [JsonPropertyName(\"" + leaf.Name + "\")]",
+                    customMessage: leaf.Name + " on the .NET write body"
+                );
             }
         }
     }
@@ -368,7 +392,9 @@ public sealed class TypeScriptSurfaceTests {
         files["src/models.ts"].ShouldContain("readonly status: OperationState;");
         files["src/models.ts"].ShouldContain("readonly error?: CyberCloudError;");
 
-        files["src/client.ts"].ShouldContain("getOperation(operationId: string): Promise<ApiResponse<OperationStatus>>");
+        files["src/client.ts"].ShouldContain(
+            "getOperation(operationId: string): Promise<ApiResponse<OperationStatus>>"
+        );
         files["src/client.ts"].ShouldContain("path: `/operations/${CyberCloudApi.segment(operationId)}`");
 
         // …and the id is one encoded segment, never a URL the server chose.
@@ -413,7 +439,7 @@ public sealed class TypeScriptSurfaceTests {
 
     static IEnumerable<string> Declarations(string source, string keyword) =>
         source.Split('\n')
-            .Select(x => x.Trim())
+            .Select(static x => x.Trim())
             .Where(x => x.StartsWith(keyword, StringComparison.Ordinal))
             .Select(x => x[keyword.Length..].Split(' ')[0].TrimEnd('{', '=', ' '));
 
@@ -421,7 +447,7 @@ public sealed class TypeScriptSurfaceTests {
     static ResourceSchema CollidingEnums() =>
         ResourceSchema.Of(
             [
-                new("/properties", SchemaKind.Nested, Required: true),
+                new("/properties", SchemaKind.Nested, true),
                 new("/properties/mode", SchemaKind.Text, Description: "The top-level one.") {
                     AllowedValues = ["Sentinel", "Standalone"]
                 },

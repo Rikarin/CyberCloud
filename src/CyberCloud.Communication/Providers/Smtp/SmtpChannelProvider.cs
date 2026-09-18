@@ -113,7 +113,10 @@ public sealed class SmtpChannelProvider(
     public string Name => ProviderName;
 
     /// <inheritdoc />
-    public async Task<Result<DispatchReceipt>> SendAsync(OutboundMessage message, CancellationToken cancellationToken = default) {
+    public async Task<Result<DispatchReceipt>> SendAsync(
+        OutboundMessage message,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(message);
 
         if (message.Channel != ChannelKind.Email) {
@@ -135,14 +138,18 @@ public sealed class SmtpChannelProvider(
         }
 
         if (MailAddresses.Check(message.Destination).TryGetError(out var badAddress)) {
-            return Result<DispatchReceipt>.Failure(badAddress.Code, $"The destination was refused before any connection: {badAddress.Message}");
+            return Result<DispatchReceipt>.Failure(
+                badAddress.Code,
+                $"The destination was refused before any connection: {badAddress.Message}"
+            );
         }
 
         // ⚠ A registered sender is a From address the tenant proved to a carrier, and this relay
         // sends as the platform's From alone — see the class remarks. Refused, not replaced: mail
         // that says "from the platform" when the channel said "from billing@tenant" is a
         // misattribution nobody asked for, and the refusal names the gap.
-        if (message.Sender.Length > 0 && !string.Equals(message.Sender, relay.From, StringComparison.OrdinalIgnoreCase)) {
+        if (message.Sender.Length > 0
+            && !string.Equals(message.Sender, relay.From, StringComparison.OrdinalIgnoreCase)) {
             return Result<DispatchReceipt>.Failure(
                 ErrorCode.PolicyViolation,
                 $"This channel names a registered sender ({message.Sender}) and the smtp carrier sends as the "
@@ -194,11 +201,14 @@ public sealed class SmtpChannelProvider(
     }
 
     /// <inheritdoc />
-    public Task<Result<DeliveryStatus>> GetStatusAsync(string providerMessageId, CancellationToken cancellationToken = default) =>
+    public Task<Result<DeliveryStatus>> GetStatusAsync(
+        string providerMessageId,
+        CancellationToken cancellationToken = default
+    ) =>
         Task.FromResult(
             Result<DeliveryStatus>.Failure(
                 ErrorCode.InternalError,
-                "SMTP has no status query: a relay says \"accepted\" once and reports what happened later as a "
+                """SMTP has no status query: a relay says "accepted" once and reports what happened later as a """
                 + "delivery status notification to the envelope sender, or, for Amazon SES, as an SNS "
                 + "notification. Neither has an ingress on this platform yet — charts/bundle/bundle.yaml § owed, "
                 + "communication-receipts-have-no-ingress — so where message "
@@ -215,7 +225,10 @@ public sealed class SmtpChannelProvider(
     ///     notification reaches an SNS topic, and neither is a callback this class can verify
     ///     today. What parsing each will take is written where the ingress is owed.
     /// </remarks>
-    public ValueTask<Result<WebhookOutcome>> HandleWebhookAsync(WebhookEnvelope request, CancellationToken cancellationToken = default) =>
+    public ValueTask<Result<WebhookOutcome>> HandleWebhookAsync(
+        WebhookEnvelope request,
+        CancellationToken cancellationToken = default
+    ) =>
         ValueTask.FromResult(Result<WebhookOutcome>.Success(WebhookOutcome.Empty));
 
     /// <summary>
@@ -314,7 +327,10 @@ public sealed class SmtpChannelProvider(
                 + "it queued the message is unknown, so the message grain keeps it Queued — not Failed — and "
                 + "only IMessageGrain.RetryAsync, by a caller who knows a second copy is acceptable, sends it again."
             );
-        } catch (Exception error) when (error is SocketException or IOException or AuthenticationException or InvalidOperationException) {
+        } catch (Exception error) when (error is SocketException
+                                            or IOException
+                                            or AuthenticationException
+                                            or InvalidOperationException) {
             return Result<string>.Failure(
                 ErrorCode.InternalError,
                 $"The relay {relay.Host}:{relay.Port.ToString(CultureInfo.InvariantCulture)} could not be spoken to: "
@@ -324,7 +340,7 @@ public sealed class SmtpChannelProvider(
     }
 
     /// <summary>Says <c>EHLO</c> and reads the extension keywords the relay offers, upper-cased.</summary>
-    async Task<Result<HashSet<string>>> HelloAsync(SmtpConnection connection, CancellationToken ct) {
+    static async Task<Result<HashSet<string>>> HelloAsync(SmtpConnection connection, CancellationToken ct) {
         var hello = await connection.SendCommandAsync(string.Concat("EHLO ", ClientName()), ct);
 
         if (!hello.IsCompleted) {
@@ -373,17 +389,25 @@ public sealed class SmtpChannelProvider(
 
         if (extensions.Contains("AUTH=PLAIN")) {
             // RFC 4616: [authzid] NUL authcid NUL passwd, base64, as the initial response.
-            var plain = Convert.ToBase64String(Encoding.UTF8.GetBytes(string.Concat("\0", relay.Username, "\0", relay.Password)));
+            var plain = Convert.ToBase64String(
+                Encoding.UTF8.GetBytes(string.Concat("\0", relay.Username, "\0", relay.Password))
+            );
             reply = await connection.SendCommandAsync(string.Concat("AUTH PLAIN ", plain), ct);
         } else if (extensions.Contains("AUTH=LOGIN")) {
             reply = await connection.SendCommandAsync("AUTH LOGIN", ct);
 
             if (reply.Code == 334) {
-                reply = await connection.SendCommandAsync(Convert.ToBase64String(Encoding.UTF8.GetBytes(relay.Username)), ct);
+                reply = await connection.SendCommandAsync(
+                    Convert.ToBase64String(Encoding.UTF8.GetBytes(relay.Username)),
+                    ct
+                );
             }
 
             if (reply.Code == 334) {
-                reply = await connection.SendCommandAsync(Convert.ToBase64String(Encoding.UTF8.GetBytes(relay.Password)), ct);
+                reply = await connection.SendCommandAsync(
+                    Convert.ToBase64String(Encoding.UTF8.GetBytes(relay.Password)),
+                    ct
+                );
             }
         } else {
             return Result.Failure(
@@ -413,8 +437,8 @@ public sealed class SmtpChannelProvider(
             ErrorCode.InternalError,
             $"The relay refused {step} with {reply}. "
             + (reply.IsPermanentFailure
-                ? "A 5yz reply is permanent: the same message to the same relay gets the same answer, so fix what it names."
-                : "A non-5yz refusal is transient: the relay may accept the same message shortly.")
+                    ? "A 5yz reply is permanent: the same message to the same relay gets the same answer, so fix what it names."
+                    : "A non-5yz refusal is transient: the relay may accept the same message shortly.")
         );
 
     /// <summary>The name this client introduces itself by in <c>EHLO</c>.</summary>
@@ -433,7 +457,7 @@ public sealed class SmtpChannelProvider(
             name = string.Empty;
         }
 
-        return name.Length > 0 && name.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '.')
+        return name.Length > 0 && name.All(static c => char.IsAsciiLetterOrDigit(c) || c is '-' or '.')
             ? name
             : "cybercloud-silo";
     }

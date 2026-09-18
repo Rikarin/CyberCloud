@@ -29,14 +29,12 @@ static class AccountCommands {
     public static Command Build(CycHost host, GlobalOptions globals, VerbTreeDocument tree) {
         ArgumentNullException.ThrowIfNull(host);
 
-        var command = new Command("account", "The signed-in account, the current profile, and its token.") {
+        return new("account", "The signed-in account, the current profile, and its token.") {
             Show(host, globals, tree),
             Set(host, globals, tree),
             List(host, globals, tree),
             GetAccessToken(host, globals, tree)
         };
-
-        return command;
     }
 
     static Command Show(CycHost host, GlobalOptions globals, VerbTreeDocument tree) {

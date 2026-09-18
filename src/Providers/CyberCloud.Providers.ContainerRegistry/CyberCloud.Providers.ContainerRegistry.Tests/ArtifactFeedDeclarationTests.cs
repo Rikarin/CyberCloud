@@ -48,7 +48,7 @@ public sealed class ArtifactFeedDeclarationTests {
     public void TheBodyHasNoClusterIdAndTheKindIsImmutableAndClosed() {
         ArtifactFeeds.Pointers2026.ShouldNotContain(ClusterPlacement.DefaultPointer);
 
-        var kind = ArtifactFeeds.Schema2026.Properties.Single(x => x.JsonPointer == ArtifactFeeds.KindPointer);
+        var kind = ArtifactFeeds.Schema2026.Properties.Single(static x => x.JsonPointer == ArtifactFeeds.KindPointer);
 
         kind.Required.ShouldBeTrue();
         kind.Immutable.ShouldBeTrue();
@@ -72,7 +72,8 @@ public sealed class ArtifactFeedDeclarationTests {
     [InlineData("")]
     [InlineData("oci")]
     [InlineData(null)]
-    public void AKindTheSchemaDoesNotAllowIsUnknown(string? name) => ArtifactFeeds.ParseKind(name).ShouldBe(FeedKind.Unknown);
+    public void AKindTheSchemaDoesNotAllowIsUnknown(string? name) =>
+        ArtifactFeeds.ParseKind(name).ShouldBe(FeedKind.Unknown);
 
     [Fact]
     public void ABodyWithNoKindIsUnknownRatherThanAThrow() {
@@ -113,7 +114,7 @@ public sealed class ArtifactFeedDeclarationTests {
         // collide — ProviderRegistry.Build would have thrown on a duplicate.
         var registry = ProviderRegistry.Build([new ContainerRegistryProvider()]);
 
-        registry.Types.Select(x => x.Type.ToString())
+        registry.Types.Select(static x => x.Type.ToString())
             .Order(StringComparer.Ordinal)
             .ShouldBe(["CyberCloud.ContainerRegistry/feeds", "CyberCloud.ContainerRegistry/registries"]);
     }

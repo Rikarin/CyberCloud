@@ -10,9 +10,12 @@ namespace CyberCloud.Providers.Communication.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/17 § The parts that are actually the work: <i>"Bounces, complaints, opt-outs —
-///         per tenant, honoured before dispatch. Ignoring a complaint is how a sending domain gets
-///         blocked."</i> This type is the fourth kind of entry, the one the sentence does not list:
+///         docs/plan/17 § The parts that are actually the work:
+///         <i>
+///             "Bounces, complaints, opt-outs —
+///             per tenant, honoured before dispatch. Ignoring a complaint is how a sending domain gets
+///             blocked."
+///         </i> This type is the fourth kind of entry, the one the sentence does not list:
 ///         a <see cref="SuppressionReason.ManualBlock" /> the tenant places themselves. The other
 ///         three arrive on their own — a hard bounce or a complaint through a delivery receipt, an
 ///         opt-out through an inbound <c>STOP</c> — and are not resources, because nobody PUTs them;
@@ -35,8 +38,11 @@ namespace CyberCloud.Providers.Communication.Contracts;
 ///         <c>SuppressionEnforcementTests</c> pins both halves, and the second was sabotage-tested.
 ///     </para>
 ///     <para>
-///         ⚠ <b>AND A MANUAL BLOCK HAS ONE OWNER, BECAUSE TWO RESOURCES OVER ONE ENTRY WAS THE SAME
-///         HOLE FROM THE OTHER SIDE.</b> The first cut of this type let any number of resources
+///         ⚠
+///         <b>
+///             AND A MANUAL BLOCK HAS ONE OWNER, BECAUSE TWO RESOURCES OVER ONE ENTRY WAS THE SAME
+///             HOLE FROM THE OTHER SIDE.
+///         </b> The first cut of this type let any number of resources
 ///         name one address: the second read the first's entry as its own and reported converged,
 ///         and deleting either released the block while the other still declared it — an address
 ///         sendable with a resource saying it is not, and nothing to re-converge it, because
@@ -68,7 +74,7 @@ public static class CommunicationSuppressions {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the suppression is billed in."
                 ) {
                     Format = SchemaFormat.Region,
@@ -80,14 +86,14 @@ public static class CommunicationSuppressions {
                 new(
                     "/properties/channel",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The channel the address is blocked on. Suppression is per channel: an "
                     + "email bounce says nothing about a phone number."
                 ) { AllowedValues = ChannelKinds.AllowedValues, Immutable = true, ExampleJson = "\"email\"" },
                 new(
                     "/properties/destination",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The address, in any spelling. Normalized before it is stored, so two "
                     + "spellings of one address are one entry."
                 ) {
@@ -100,12 +106,17 @@ public static class CommunicationSuppressions {
                     "/properties/note",
                     SchemaKind.Text,
                     Description: "Why, in the tenant's words. What a support case reads."
-                ) { MaxLength = NoteMaxLength, DefaultJson = "\"\"", ExampleJson = "\"Asked us to stop by phone, 2026-09-01\"" }
+                ) {
+                    MaxLength = NoteMaxLength,
+                    DefaultJson = "\"\"",
+                    ExampleJson = "\"Asked us to stop by phone, 2026-09-01\""
+                }
             ]
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     /// <summary>Builds a body that satisfies <see cref="Schema2026" />.</summary>
     /// <param name="channel">Which channel.</param>
@@ -128,7 +139,8 @@ public static class CommunicationSuppressions {
         ChannelKinds.Parse(Bodies.Text(Bodies.Property(desired, "channel"), string.Empty));
 
     /// <summary>The address a body blocks, as written.</summary>
-    public static string DestinationOf(JsonElement desired) => Bodies.Text(Bodies.Property(desired, "destination"), string.Empty);
+    public static string DestinationOf(JsonElement desired) =>
+        Bodies.Text(Bodies.Property(desired, "destination"), string.Empty);
 
     /// <summary>The note a body carries.</summary>
     public static string NoteOf(JsonElement desired) => Bodies.Text(Bodies.Property(desired, "note"), string.Empty);
@@ -143,8 +155,11 @@ public static class CommunicationSuppressions {
     /// <param name="desired">The desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ A complaint, an opt-out or a hard bounce on the address matches <i>regardless of the
-    ///         note and of who is asking</i>. The body asked for the address to be suppressed and it
+    ///         ⚠ A complaint, an opt-out or a hard bounce on the address matches
+    ///         <i>
+    ///             regardless of the
+    ///             note and of who is asking
+    ///         </i>. The body asked for the address to be suppressed and it
     ///         is, for a reason the tenant may not overwrite — see this type's remarks.
     ///     </para>
     ///     <para>
@@ -162,7 +177,8 @@ public static class CommunicationSuppressions {
         }
 
         var normalized = Destinations.Normalize(entry.Channel, DestinationOf(desired));
-        if (!normalized.TryGetValue(out var destination) || !string.Equals(entry.Destination, destination, StringComparison.Ordinal)) {
+        if (!normalized.TryGetValue(out var destination)
+            || !string.Equals(entry.Destination, destination, StringComparison.Ordinal)) {
             return false;
         }
 

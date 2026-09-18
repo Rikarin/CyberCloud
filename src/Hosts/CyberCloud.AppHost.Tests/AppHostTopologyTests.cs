@@ -44,14 +44,17 @@ public sealed class AppHostTopologyTests {
             directory = directory.Parent;
         }
 
-        return directory?.FullName ?? throw new InvalidOperationException("CyberCloud.slnx is above no ancestor of " + AppContext.BaseDirectory);
+        return directory?.FullName
+            ?? throw new InvalidOperationException(
+                "CyberCloud.slnx is above no ancestor of " + AppContext.BaseDirectory
+            );
     }
 
     /// <summary>The built model and the context its environment is resolved in — nothing started.</summary>
     sealed record Built(DistributedApplicationModel Model) {
         public IResource Resource(string name) => Model.Resources.Single(x => x.Name == name);
 
-        public IEnumerable<string> Names => Model.Resources.Select(x => x.Name);
+        public IEnumerable<string> Names => Model.Resources.Select(static x => x.Name);
 
         /// <summary>A resource's environment as the AppHost declares it.</summary>
         /// <remarks>
@@ -74,7 +77,11 @@ public sealed class AppHostTopologyTests {
 
             resolved.Exception.ShouldBeNull($"{name}'s environment could not be resolved");
 
-            return resolved.EnvironmentVariables.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
+            return resolved.EnvironmentVariables.ToDictionary(
+                static x => x.Key,
+                static x => x.Value,
+                StringComparer.Ordinal
+            );
         }
     }
 
@@ -126,9 +133,8 @@ public sealed class AppHostTopologyTests {
 
         foreach (var expected in new[] {
                      CyberCloudResources.Gateway, CyberCloudResources.Identity, CyberCloudResources.Feeds,
-                     CyberCloudResources.Portal, CyberCloudResources.IdentityApp,
-                     CyberCloudResources.ObjectStore, CyberCloudResources.ObjectStoreBucketInit,
-                     CyberCloudResources.Mailpit
+                     CyberCloudResources.Portal, CyberCloudResources.IdentityApp, CyberCloudResources.ObjectStore,
+                     CyberCloudResources.ObjectStoreBucketInit, CyberCloudResources.Mailpit
                  }) {
             names.ShouldContain(
                 expected,
@@ -137,8 +143,14 @@ public sealed class AppHostTopologyTests {
             );
         }
 
-        built.Model.Resources.Where(x => x.Name is CyberCloudResources.Gateway or CyberCloudResources.Identity or CyberCloudResources.Feeds)
-            .ShouldAllBe(x => x is ProjectResource, "the hosts are the processes their own Program.cs files start, not containers of a build");
+        built.Model.Resources.Where(static x => x.Name is CyberCloudResources.Gateway
+                or CyberCloudResources.Identity
+                or CyberCloudResources.Feeds
+        )
+            .ShouldAllBe(
+                x => x is ProjectResource,
+                "the hosts are the processes their own Program.cs files start, not containers of a build"
+            );
     }
 
     [Fact]
@@ -149,8 +161,14 @@ public sealed class AppHostTopologyTests {
         names.ShouldNotContain(CyberCloudResources.Portal);
         names.ShouldNotContain(CyberCloudResources.IdentityApp);
 
-        foreach (var kept in new[] { CyberCloudResources.Gateway, CyberCloudResources.Identity, CyberCloudResources.Feeds, CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo }) {
-            names.ShouldContain(kept, $"{CyberCloudResources.FrontendsKey} is the one switch this AppHost has, and it turns off the two dev servers only");
+        foreach (var kept in new[] {
+                     CyberCloudResources.Gateway, CyberCloudResources.Identity, CyberCloudResources.Feeds,
+                     CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo
+                 }) {
+            names.ShouldContain(
+                kept,
+                $"{CyberCloudResources.FrontendsKey} is the one switch this AppHost has, and it turns off the two dev servers only"
+            );
         }
     }
 
@@ -171,22 +189,42 @@ public sealed class AppHostTopologyTests {
         // a code under `http://localhost:4201/`, and /token on 5101 refused it (OpenIddict ID2088)
         // with every host healthy — CyberCloudTopology's issuer note. An Issuer that DIFFERED from
         // the port would be a discovery document the gateway refuses, just as quietly.
-        identity["CyberCloud__Identity__Issuer"].ShouldBe(CyberCloudResources.IdentityIssuer, "one issuer, whichever origin the request arrived on");
+        identity["CyberCloud__Identity__Issuer"].ShouldBe(
+            CyberCloudResources.IdentityIssuer,
+            "one issuer, whichever origin the request arrived on"
+        );
         new Uri(CyberCloudResources.IdentityIssuer).Port.ShouldBe(CyberCloudResources.IdentityPort);
 
         // ⚠ The person's path, pinned on the identity host's side: where an unauthenticated
         // /authorize sends the person (the identity app's dev server, which proxies the resumed
         // request back), where the portal's code may be sent (which is also the CORS origin for
         // /token), and where the keys persist so a restart does not sign everybody out.
-        identity["CyberCloud__Identity__SignInPageBaseUri"].ShouldBe($"http://localhost:{CyberCloudResources.IdentityAppPort}");
-        identity["CyberCloud__Identity__Clients__Portal__RedirectUris__0"].ShouldBe($"http://localhost:{CyberCloudResources.PortalPort}/auth/callback");
-        identity["CyberCloud__Identity__Clients__Portal__PostLogoutRedirectUris__0"].ShouldBe($"http://localhost:{CyberCloudResources.PortalPort}/");
-        identity["CyberCloud__Identity__DevelopmentKeyDirectory"].ShouldBe(Path.Combine(RepositoryRoot, "src", "Hosts", "CyberCloud.AppHost", ".identity"));
+        identity["CyberCloud__Identity__SignInPageBaseUri"].ShouldBe(
+            $"http://localhost:{CyberCloudResources.IdentityAppPort}"
+        );
+        identity["CyberCloud__Identity__Clients__Portal__RedirectUris__0"].ShouldBe(
+            $"http://localhost:{CyberCloudResources.PortalPort}/auth/callback"
+        );
+        identity["CyberCloud__Identity__Clients__Portal__PostLogoutRedirectUris__0"].ShouldBe(
+            $"http://localhost:{CyberCloudResources.PortalPort}/"
+        );
+        identity["CyberCloud__Identity__DevelopmentKeyDirectory"].ShouldBe(
+            Path.Combine(RepositoryRoot, "src", "Hosts", "CyberCloud.AppHost", ".identity")
+        );
 
-        foreach (var (name, environment) in new[] { (CyberCloudResources.Gateway, gateway), (CyberCloudResources.Feeds, feeds), (CyberCloudResources.Identity, identity) }) {
+        foreach (var (name, environment) in new[] {
+                     (CyberCloudResources.Gateway, gateway), (CyberCloudResources.Feeds, feeds),
+                     (CyberCloudResources.Identity, identity)
+                 }) {
             environment["CyberCloud__Cluster__LocalhostGatewayPort"]
-                .ShouldBe(CyberCloudResources.SiloOneGatewayPort.ToString(), $"{name} is an Orleans client of silo 1 — AsOrleansClient");
-            environment["DOTNET_ENVIRONMENT"].ShouldBe("Development", $"{name} would otherwise choose Kubernetes membership under Aspire.Hosting.Testing — WithOrleansPorts' remarks");
+                .ShouldBe(
+                    CyberCloudResources.SiloOneGatewayPort.ToString(),
+                    $"{name} is an Orleans client of silo 1 — AsOrleansClient"
+                );
+            environment["DOTNET_ENVIRONMENT"].ShouldBe(
+                "Development",
+                $"{name} would otherwise choose Kubernetes membership under Aspire.Hosting.Testing — WithOrleansPorts' remarks"
+            );
         }
     }
 
@@ -199,7 +237,9 @@ public sealed class AppHostTopologyTests {
         // tenants under only when it is on, and the identity host opens /api/signup/* only when it
         // is on. A host with it on beside silos with it off refuses every completion with
         // "something went wrong" — IdentityHostOptions.SelfServeSignUp.
-        foreach (var name in new[] { CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo, CyberCloudResources.Identity }) {
+        foreach (var name in new[] {
+                     CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo, CyberCloudResources.Identity
+                 }) {
             var environment = await built.EnvironmentOf(name);
             environment[CyberCloudTopology.SelfServeSignUpVariable].ShouldBe("true", $"{name} is one of the three");
         }
@@ -224,21 +264,30 @@ public sealed class AppHostTopologyTests {
     public async Task TheObjectStoreReachesTheSilosAndTheFeedsHost() {
         var built = Model();
 
-        foreach (var name in new[] { CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo, CyberCloudResources.Feeds }) {
+        foreach (var name in new[] {
+                     CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo, CyberCloudResources.Feeds
+                 }) {
             var environment = await built.EnvironmentOf(name);
 
-            environment["CyberCloud__ObjectStorage__Endpoint"].ShouldBe($"http://localhost:{CyberCloudResources.ObjectStoreS3Port}");
+            environment["CyberCloud__ObjectStorage__Endpoint"].ShouldBe(
+                $"http://localhost:{CyberCloudResources.ObjectStoreS3Port}"
+            );
             environment["CyberCloud__ObjectStorage__Bucket"].ShouldBe(CyberCloudResources.ObjectStoreBucket);
-            environment["CyberCloud__ObjectStorage__AllowInsecureTransport"].ShouldBe("true", $"{name} speaks plain http to a container on the laptop, and the option exists so production cannot");
+            environment["CyberCloud__ObjectStorage__AllowInsecureTransport"].ShouldBe(
+                "true",
+                $"{name} speaks plain http to a container on the laptop, and the option exists so production cannot"
+            );
         }
 
         // The bucket is made by the init container, and everything that writes into it waits for
         // that to have finished — a store pointed at a bucket that does not exist answers
         // NoSuchBucket, which reads like a signing bug.
         foreach (var name in new[] { CyberCloudResources.SiloOne, CyberCloudResources.Feeds }) {
-            built.Resource(name).Annotations.OfType<WaitAnnotation>()
+            built.Resource(name)
+                .Annotations.OfType<WaitAnnotation>()
                 .ShouldContain(
-                    x => x.Resource.Name == CyberCloudResources.ObjectStoreBucketInit && x.WaitType == WaitType.WaitForCompletion,
+                    x => x.Resource.Name == CyberCloudResources.ObjectStoreBucketInit
+                        && x.WaitType == WaitType.WaitForCompletion,
                     $"{name} writes into {CyberCloudResources.ObjectStoreBucket} and must wait for the container that creates it"
                 );
         }
@@ -260,7 +309,8 @@ public sealed class AppHostTopologyTests {
             "SmtpChannelProviderTests.Image runs the carrier against this exact tag; the dialect proven is the dialect this run speaks"
         );
 
-        var endpoints = mailpit.Annotations.OfType<EndpointAnnotation>().ToDictionary(x => x.Name, StringComparer.Ordinal);
+        var endpoints = mailpit.Annotations.OfType<EndpointAnnotation>()
+            .ToDictionary(static x => x.Name, StringComparer.Ordinal);
         endpoints["smtp"].Port.ShouldBe(CyberCloudResources.MailpitSmtpPort);
         endpoints["smtp"].TargetPort.ShouldBe(CyberCloudResources.MailpitSmtpPort);
         endpoints["smtp"].IsProxied.ShouldBeFalse("the silos are handed localhost:1025 as a literal");
@@ -272,12 +322,26 @@ public sealed class AppHostTopologyTests {
         foreach (var name in new[] { CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo }) {
             var environment = await built.EnvironmentOf(name);
 
-            environment["CyberCloud__Communication__Smtp__Host"].ShouldBe("localhost", $"{name} reaches Mailpit on the published port");
-            environment["CyberCloud__Communication__Smtp__Port"].ShouldBe(CyberCloudResources.MailpitSmtpPort.ToString());
-            environment["CyberCloud__Communication__Smtp__Security"].ShouldBe("None", "Mailpit speaks no TLS, and there is no password to protect");
+            environment["CyberCloud__Communication__Smtp__Host"].ShouldBe(
+                "localhost",
+                $"{name} reaches Mailpit on the published port"
+            );
+            environment["CyberCloud__Communication__Smtp__Port"].ShouldBe(
+                CyberCloudResources.MailpitSmtpPort.ToString()
+            );
+            environment["CyberCloud__Communication__Smtp__Security"].ShouldBe(
+                "None",
+                "Mailpit speaks no TLS, and there is no password to protect"
+            );
             environment["CyberCloud__Communication__Smtp__From"].ShouldBe(CyberCloudResources.PlatformSender);
-            environment["CyberCloud__Communication__Smtp__UnsubscribeMailbox"].ShouldBe(CyberCloudResources.PlatformUnsubscribeMailbox, "List-Unsubscribe is sent, and its mailbox lands in the same inbox");
-            environment.ShouldNotContainKey("CyberCloud__Communication__Smtp__Password", "no credential on a relay that trusts the laptop");
+            environment["CyberCloud__Communication__Smtp__UnsubscribeMailbox"].ShouldBe(
+                CyberCloudResources.PlatformUnsubscribeMailbox,
+                "List-Unsubscribe is sent, and its mailbox lands in the same inbox"
+            );
+            environment.ShouldNotContainKey(
+                "CyberCloud__Communication__Smtp__Password",
+                "no credential on a relay that trusts the laptop"
+            );
 
             // ⚠ No explicit route: the silo is in Development, so the unset section is what makes
             // DevelopmentOtpDelivery log the code AND mail it through the platform's own service.
@@ -286,9 +350,14 @@ public sealed class AppHostTopologyTests {
         }
 
         // Nothing waits on the relay, for the reason nothing waits on k3s — CyberCloudTopology.
-        built.Resource(CyberCloudResources.SiloOne).Annotations.OfType<WaitAnnotation>()
-            .ShouldNotContain(x => x.Resource.Name == CyberCloudResources.Mailpit, "a carrier is a data plane the control plane refuses honestly without");
+        built.Resource(CyberCloudResources.SiloOne)
+            .Annotations.OfType<WaitAnnotation>()
+            .ShouldNotContain(
+                x => x.Resource.Name == CyberCloudResources.Mailpit,
+                "a carrier is a data plane the control plane refuses honestly without"
+            );
     }
+
     [Fact]
     public async Task TheResourceChangedStreamReachesTheGatewayAndTheProjectionReachesTheSilos() {
         // docs/plan/08 § The resource-graph projection, #54. The gateway PUBLISHES — step 11 runs in
@@ -298,13 +367,18 @@ public sealed class AppHostTopologyTests {
         // transitions, with nothing in any log to say the creates are missing.
         var built = Model();
 
-        foreach (var name in new[] { CyberCloudResources.Gateway, CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo }) {
+        foreach (var name in new[] {
+                     CyberCloudResources.Gateway, CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo
+                 }) {
             var environment = await built.EnvironmentOf(name);
 
             // Under Publish a reference renders as its manifest expression rather than an address —
             // see EnvironmentOf — so what is asserted is that the key ResourceGraphOptions.Bind reads
             // is there and names the NATS resource.
-            environment.ShouldContainKey("ConnectionStrings__nats", $"{name} has no NATS connection string, so it keeps the logging sink and publishes nothing");
+            environment.ShouldContainKey(
+                "ConnectionStrings__nats",
+                $"{name} has no NATS connection string, so it keeps the logging sink and publishes nothing"
+            );
             environment["ConnectionStrings__nats"].ShouldContain(CyberCloudResources.Nats);
         }
 
@@ -313,21 +387,35 @@ public sealed class AppHostTopologyTests {
         // the endpoint every query is a 500 naming the section. It still runs no projector —
         // GatewayComposition calls AddResourceGraphQuery, never AddResourceGraphProjector, and
         // HostCompositionTests holds that line.
-        foreach (var name in new[] { CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo, CyberCloudResources.Gateway }) {
+        foreach (var name in new[] {
+                     CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo, CyberCloudResources.Gateway
+                 }) {
             var environment = await built.EnvironmentOf(name);
 
-            environment["CyberCloud__ResourceGraph__ClickHouseEndpoint"].ShouldBe($"http://localhost:{CyberCloudResources.ClickHouseHttpPort}");
+            environment["CyberCloud__ResourceGraph__ClickHouseEndpoint"].ShouldBe(
+                $"http://localhost:{CyberCloudResources.ClickHouseHttpPort}"
+            );
             environment["CyberCloud__ResourceGraph__ClickHouseUser"].ShouldBe(CyberCloudResources.ClickHouseUser);
-            environment["CyberCloud__ResourceGraph__AllowInsecureTransport"].ShouldBe("true", $"{name} speaks plain http to a container on the laptop, and the option exists so production cannot");
+            environment["CyberCloud__ResourceGraph__AllowInsecureTransport"].ShouldBe(
+                "true",
+                $"{name} speaks plain http to a container on the laptop, and the option exists so production cannot"
+            );
         }
 
-        built.Resource(CyberCloudResources.Gateway).Annotations.OfType<WaitAnnotation>()
-            .ShouldContain(x => x.Resource.Name == CyberCloudResources.ClickHouse, "the gateway's first query would otherwise race the container's start");
+        built.Resource(CyberCloudResources.Gateway)
+            .Annotations.OfType<WaitAnnotation>()
+            .ShouldContain(
+                x => x.Resource.Name == CyberCloudResources.ClickHouse,
+                "the gateway's first query would otherwise race the container's start"
+            );
 
         var clickHouse = built.Resource(CyberCloudResources.ClickHouse);
         clickHouse.ShouldBeAssignableTo<ContainerResource>();
         clickHouse.Annotations.OfType<EndpointAnnotation>()
-            .ShouldContain(x => x.Port == CyberCloudResources.ClickHouseHttpPort && x.TargetPort == CyberCloudResources.ClickHouseHttpPort && !x.IsProxied);
+            .ShouldContain(x => x.Port == CyberCloudResources.ClickHouseHttpPort
+                && x.TargetPort == CyberCloudResources.ClickHouseHttpPort
+                && !x.IsProxied
+            );
     }
 
     [Fact]
@@ -335,8 +423,13 @@ public sealed class AppHostTopologyTests {
         var proxy = ReadProxy(Path.Combine("apps", "portal", "proxy.conf.json"));
 
         proxy.ShouldContainKey("/api", "API_BASE_PATH in portal/apps/portal/src/app/api/http-transport.ts is /api");
-        TargetPortOf(proxy["/api"]).ShouldBe(CyberCloudResources.GatewayPort, "the portal's /api is the gateway — CyberCloudResources.GatewayPort");
-        proxy["/api"].GetProperty("pathRewrite").GetProperty("^/api").GetString()
+        TargetPortOf(proxy["/api"]).ShouldBe(
+            CyberCloudResources.GatewayPort,
+            "the portal's /api is the gateway — CyberCloudResources.GatewayPort"
+        );
+        proxy["/api"].GetProperty("pathRewrite")
+            .GetProperty("^/api")
+            .GetString()
             .ShouldBe("", "the gateway serves its routes at the root, so /api has to come off");
 
         // ⚠ The terminal's socket is `ws://localhost:4200/api/hubs/terminal?ticket=…`, on this same
@@ -344,7 +437,8 @@ public sealed class AppHostTopologyTests {
         // target is `ws:`), which @angular/build's proxy loader never adds. Without it every HTTP
         // request reaches the gateway and the one WebSocket does not, with the symptom a pane that
         // reconnects five times and gives up. The entry has to say it.
-        proxy["/api"].TryGetProperty("ws", out var ws).ShouldBeTrue("the /api entry has no `ws`, so the dev server drops the terminal hub's Upgrade");
+        proxy["/api"].TryGetProperty("ws", out var ws)
+            .ShouldBeTrue("the /api entry has no `ws`, so the dev server drops the terminal hub's Upgrade");
         ws.GetBoolean().ShouldBeTrue("`ws` is false, so the dev server drops the terminal hub's Upgrade");
 
         ServePortOf("portal").ShouldBe(CyberCloudResources.PortalPort);
@@ -360,7 +454,10 @@ public sealed class AppHostTopologyTests {
         // existed — the endpoints are at the root, IdentityHostOpenIddict says where.
         foreach (var path in new[] { "/api", "/authorize", "/logout", "/.well-known" }) {
             proxy.ShouldContainKey(path);
-            TargetPortOf(proxy[path]).ShouldBe(CyberCloudResources.IdentityPort, $"the identity app's {path} is the identity host — CyberCloudResources.IdentityPort");
+            TargetPortOf(proxy[path]).ShouldBe(
+                CyberCloudResources.IdentityPort,
+                $"the identity app's {path} is the identity host — CyberCloudResources.IdentityPort"
+            );
         }
 
         ServePortOf("identity").ShouldBe(CyberCloudResources.IdentityAppPort);
@@ -436,30 +533,46 @@ public sealed class AppHostTopologyTests {
 
         try {
             var file = Path.Combine(appHostDirectory, ".seaweedfs", "s3.json");
-            File.Exists(file).ShouldBeFalse("a directory made a moment ago already holds the identity file, and the race this test runs needs it absent");
+            File.Exists(file)
+                .ShouldBeFalse(
+                    "a directory made a moment ago already holds the identity file, and the race this test runs needs it absent"
+                );
 
             var composed = await Task.WhenAll(
-                Enumerable.Range(0, 8).Select(_ => Task.Run(() => ModelOver(appHostDirectory, $"--{CyberCloudResources.FrontendsKey}=false"), TestContext.Current.CancellationToken))
+                Enumerable.Range(0, 8)
+                    .Select(_ => Task.Run(
+                            () => ModelOver(appHostDirectory, $"--{CyberCloudResources.FrontendsKey}=false"),
+                            TestContext.Current.CancellationToken
+                        )
+                    )
             );
 
             foreach (var built in composed) {
-                built.Names.ShouldContain(CyberCloudResources.ObjectStore, "a Compose that raced another on the identity file lost the object store on the way");
+                built.Names.ShouldContain(
+                    CyberCloudResources.ObjectStore,
+                    "a Compose that raced another on the identity file lost the object store on the way"
+                );
             }
 
-            File.Exists(file).ShouldBeTrue("eight Compose calls over an empty AppHost directory and none of them wrote the identity file");
+            File.Exists(file)
+                .ShouldBeTrue(
+                    "eight Compose calls over an empty AppHost directory and none of them wrote the identity file"
+                );
         } finally {
-            Directory.Delete(appHostDirectory, recursive: true);
+            Directory.Delete(appHostDirectory, true);
         }
     }
 
     /// <summary>The proxy file's entries, keyed by the path each forwards.</summary>
     static Dictionary<string, JsonElement> ReadProxy(string relative) {
         var path = Path.Combine(PortalRoot, relative);
-        File.Exists(path).ShouldBeTrue($"{path} is the file `ng serve` reads through angular.json's proxyConfig, and it is gone");
+        File.Exists(path)
+            .ShouldBeTrue($"{path} is the file `ng serve` reads through angular.json's proxyConfig, and it is gone");
 
         using var document = JsonDocument.Parse(File.ReadAllText(path));
 
-        return document.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
+        return document.RootElement.EnumerateObject()
+            .ToDictionary(static x => x.Name, static x => x.Value.Clone(), StringComparer.Ordinal);
     }
 
     static int TargetPortOf(JsonElement entry) => new Uri(entry.GetProperty("target").GetString()!).Port;
@@ -469,8 +582,12 @@ public sealed class AppHostTopologyTests {
         using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(PortalRoot, "angular.json")));
 
         return document.RootElement
-            .GetProperty("projects").GetProperty(project)
-            .GetProperty("architect").GetProperty("serve").GetProperty("options").GetProperty("port")
+            .GetProperty("projects")
+            .GetProperty(project)
+            .GetProperty("architect")
+            .GetProperty("serve")
+            .GetProperty("options")
+            .GetProperty("port")
             .GetInt32();
     }
 }

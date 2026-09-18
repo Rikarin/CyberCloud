@@ -191,7 +191,7 @@ public sealed class StorageFixture : IAsyncLifetime {
         ];
 
         args.AddRange(
-            connections.Select(x =>
+            connections.Select(static x =>
                 $"--{CyberCloudStorageOptions.SectionName}:Durable:Shards:{x.Key}={x.Value}"
             )
         );

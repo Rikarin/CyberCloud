@@ -199,7 +199,7 @@ public sealed class CollectionListingTests(IsolationCluster cluster) {
 
         mine.GetValueOrThrow()
             .Resources
-                .Select(x => x.Name)
+                .Select(static x => x.Name)
                 .ShouldContain(
                     "list-scoped-mine",
                     "the control failed: an owner of a group cannot list the resources in it"
@@ -207,7 +207,7 @@ public sealed class CollectionListingTests(IsolationCluster cluster) {
 
         mine.GetValueOrThrow()
             .Resources
-                .Select(x => x.Name)
+                .Select(static x => x.Name)
                 .ShouldNotContain(
                     "list-scoped-victim",
                     "a listing crossed a subscription boundary — the two groups share a name and "

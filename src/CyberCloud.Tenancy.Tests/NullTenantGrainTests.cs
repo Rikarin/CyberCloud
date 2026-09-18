@@ -36,7 +36,11 @@ public sealed class NullTenantGrainTests(TenancyCluster cluster) {
         // Orleans.Multitenant's default is a failing test rather than a silent behaviour change.
         new MultitenantStorageOptions().TenantIdForNullTenant.ShouldBe("Null");
 
-        Should.Throw<FormatException>(() => Guid.Parse(new MultitenantStorageOptions().TenantIdForNullTenant, null));
+        Should.Throw<FormatException>(static () => Guid.Parse(
+                new MultitenantStorageOptions().TenantIdForNullTenant,
+                null
+            )
+        );
     }
 
     [Fact]
@@ -84,7 +88,7 @@ public sealed class NullTenantGrainTests(TenancyCluster cluster) {
             .ShouldBe(assigned);
         (await cluster.DirectoryGrain().LookupAsync(tenant)).GetValueOrThrow()
             .Slug
-                .ShouldBe("null-tenant-probe");
+            .ShouldBe("null-tenant-probe");
     }
 
     [Fact]

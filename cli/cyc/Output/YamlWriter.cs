@@ -33,7 +33,7 @@ static class YamlWriter {
             return;
         }
 
-        WriteNode(writer, value, indent: 0, inline: false);
+        WriteNode(writer, value, 0, false);
     }
 
     static void WriteNode(TextWriter writer, Payload value, int indent, bool inline) {
@@ -84,7 +84,7 @@ static class YamlWriter {
                     // compact `- key: value` form is legal and reads worse the moment the object has
                     // a second member.
                     writer.WriteLine();
-                    WriteNode(writer, item, indent + 2, inline: false);
+                    WriteNode(writer, item, indent + 2, false);
                 } else {
                     writer.Write(' ');
                     writer.WriteLine(Scalar(item));
@@ -104,7 +104,7 @@ static class YamlWriter {
 
     static void WriteChild(TextWriter writer, Payload value, int indent) {
         if (value.IsObject || value.IsArray) {
-            WriteNode(writer, value, indent + 2, inline: true);
+            WriteNode(writer, value, indent + 2, true);
 
             return;
         }
@@ -141,7 +141,7 @@ static class YamlWriter {
             return true;
         }
 
-        if ("-?:,[]{}#&*!|>'\"%@`".Contains(value[0], StringComparison.Ordinal)) {
+        if ("""-?:,[]{}#&*!|>'"%@`""".Contains(value[0], StringComparison.Ordinal)) {
             return true;
         }
 
@@ -176,22 +176,22 @@ static class YamlWriter {
                     break;
 
                 case '\\':
-                    quoted.Append("\\\\");
+                    quoted.Append("""\\""");
 
                     break;
 
                 case '\n':
-                    quoted.Append("\\n");
+                    quoted.Append("""\n""");
 
                     break;
 
                 case '\r':
-                    quoted.Append("\\r");
+                    quoted.Append("""\r""");
 
                     break;
 
                 case '\t':
-                    quoted.Append("\\t");
+                    quoted.Append("""\t""");
 
                     break;
 

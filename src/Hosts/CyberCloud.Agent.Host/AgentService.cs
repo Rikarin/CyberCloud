@@ -35,8 +35,11 @@ namespace CyberCloud.Agent.Host;
 ///         agent being broken rather than the credential.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A credential the Secret write refused is kept in memory and the write is
-///         retried, because by then the token is spent.</b> The welcome that carries the credential
+///         ⚠
+///         <b>
+///             A credential the Secret write refused is kept in memory and the write is
+///             retried, because by then the token is spent.
+///         </b> The welcome that carries the credential
 ///         is the platform saying the enrollment token has been used; a <c>403</c> from the
 ///         <c>Role</c> on the Secret write, or a transient API server error, at that moment used
 ///         to escape the session, end the process, and restart a pod that had neither a stored
@@ -180,7 +183,11 @@ public sealed class AgentService : BackgroundService {
             logger
         );
 
-        logger.LogInformation("Connected to {Endpoint} as cluster {Cluster}.", settings.TunnelEndpoint, settings.ClusterId);
+        logger.LogInformation(
+            "Connected to {Endpoint} as cluster {Cluster}.",
+            settings.TunnelEndpoint,
+            settings.ClusterId
+        );
 
         var reason = await agent.RunAsync(stoppingToken);
 

@@ -34,8 +34,11 @@ namespace CyberCloud.Registry.Feeds.Host.Protocols;
 ///         directory ending in <c>-SNAPSHOT</c> is replaceable throughout — that is what a snapshot is.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The path is caller-supplied and reaches the object store, so it is checked before
-///         anything else is.</b> <see cref="IsRepositoryPath" /> allows the segment grammar a
+///         ⚠
+///         <b>
+///             The path is caller-supplied and reaches the object store, so it is checked before
+///             anything else is.
+///         </b> <see cref="IsRepositoryPath" /> allows the segment grammar a
 ///         Maven coordinate can produce and refuses <c>..</c>, empty segments and anything that is
 ///         not a repository file; the feed's storage prefix goes in front of whatever survives, so
 ///         no path can name another feed's bytes.
@@ -59,7 +62,15 @@ public sealed class MavenProtocol(FeedAccess access, IObjectStore objects, Feeds
             return Results.NotFound();
         }
 
-        var resolved = await access.ResolveAsync(http, FeedKind.Maven, subscription, group, feed, FeedIntent.Write, http.RequestAborted);
+        var resolved = await access.ResolveAsync(
+            http,
+            FeedKind.Maven,
+            subscription,
+            group,
+            feed,
+            FeedIntent.Write,
+            http.RequestAborted
+        );
 
         if (resolved.TryGetError(out var refused)) {
             return FeedResponses.Refuse(refused, http);
@@ -77,7 +88,10 @@ public sealed class MavenProtocol(FeedAccess access, IObjectStore objects, Feeds
 
         if (!replaceable && (await context.Catalogue.GetAsync(entryPath)).IsSuccess) {
             return FeedResponses.Refuse(
-                new(ErrorCode.ResourceAlreadyExists, $"'{path}' is a released artifact and is already in this feed. A release is immutable; deploy a new version."),
+                new(
+                    ErrorCode.ResourceAlreadyExists,
+                    $"'{path}' is a released artifact and is already in this feed. A release is immutable; deploy a new version."
+                ),
                 http
             );
         }
@@ -90,9 +104,18 @@ public sealed class MavenProtocol(FeedAccess access, IObjectStore objects, Feeds
         // land on each other's bytes, and the claim below removes the loser's — ImmutablePublish.
         var storedAt = replaceable
             ? entryPath
-            : ImmutablePublish.StoredAt(ImmutablePublish.DirectoryOf(entryPath), sha256, path[(path.LastIndexOf('/') + 1)..]);
+            : ImmutablePublish.StoredAt(
+                ImmutablePublish.DirectoryOf(entryPath),
+                sha256,
+                path[(path.LastIndexOf('/') + 1)..]
+            );
 
-        var stored = await objects.PutAsync(context.StoragePrefix + storedAt, bytes, ContentTypeOf(path), http.RequestAborted);
+        var stored = await objects.PutAsync(
+            context.StoragePrefix + storedAt,
+            bytes,
+            ContentTypeOf(path),
+            http.RequestAborted
+        );
 
         if (stored.TryGetError(out var storeError)) {
             return FeedResponses.Refuse(storeError, http);
@@ -108,7 +131,7 @@ public sealed class MavenProtocol(FeedAccess access, IObjectStore objects, Feeds
         };
 
         var claimed = replaceable
-            ? await context.Catalogue.PutAsync(entry, replace: true)
+            ? await context.Catalogue.PutAsync(entry, true)
             : await ImmutablePublish.ClaimAsync(context, objects, entry, [storedAt], http.RequestAborted);
 
         return claimed.TryGetError(out var catalogueError)
@@ -125,7 +148,15 @@ public sealed class MavenProtocol(FeedAccess access, IObjectStore objects, Feeds
             return Results.NotFound();
         }
 
-        var resolved = await access.ResolveAsync(http, FeedKind.Maven, subscription, group, feed, FeedIntent.Read, http.RequestAborted);
+        var resolved = await access.ResolveAsync(
+            http,
+            FeedKind.Maven,
+            subscription,
+            group,
+            feed,
+            FeedIntent.Read,
+            http.RequestAborted
+        );
 
         if (resolved.TryGetError(out var refused)) {
             return FeedResponses.Refuse(refused, http);
@@ -140,10 +171,15 @@ public sealed class MavenProtocol(FeedAccess access, IObjectStore objects, Feeds
                 return Results.Ok();
             }
 
-            var read = await objects.GetAsync(context.StoragePrefix + entry.GetValueOrThrow().StoredAt, http.RequestAborted);
+            var read = await objects.GetAsync(
+                context.StoragePrefix + entry.GetValueOrThrow().StoredAt,
+                http.RequestAborted
+            );
 
             if (read.TryGetError(out var missing)) {
-                return missing.Code == ErrorCode.ResourceNotFound ? Results.NotFound() : FeedResponses.Refuse(missing, http);
+                return missing.Code == ErrorCode.ResourceNotFound
+                    ? Results.NotFound()
+                    : FeedResponses.Refuse(missing, http);
             }
 
             return Results.Stream(read.GetValueOrThrow().Content, entry.GetValueOrThrow().ContentType);
@@ -171,15 +207,16 @@ public sealed class MavenProtocol(FeedAccess access, IObjectStore objects, Feeds
         "Security",
         "CA5350:Do Not Use Weak Cryptographic Algorithms",
         Justification =
-        "Maven's checksum files are `.sha1` and `.md5` beside every artifact, and a resolver "
-        + "verifies whichever it fetches. They are transfer checksums the protocol fixes, served "
-        + "here for a generated maven-metadata.xml; the catalogue entry of every deployed file "
-        + "carries SHA-256."
+            "Maven's checksum files are `.sha1` and `.md5` beside every artifact, and a resolver "
+            + "verifies whichever it fetches. They are transfer checksums the protocol fixes, served "
+            + "here for a generated maven-metadata.xml; the catalogue entry of every deployed file "
+            + "carries SHA-256."
     )]
     [SuppressMessage(
         "Security",
         "CA5351:Do Not Use Broken Cryptographic Algorithms",
-        Justification = "The same: `.md5` is a checksum file Maven resolvers ask for by name, not a security decision this host makes."
+        Justification =
+            "The same: `.md5` is a checksum file Maven resolvers ask for by name, not a security decision this host makes."
     )]
     async Task<string?> GeneratedMetadataAsync(FeedContext context, string path) {
         var checksum = ChecksumSuffixes.FirstOrDefault(x => path.EndsWith(x, StringComparison.Ordinal) && x != ".asc");
@@ -204,17 +241,17 @@ public sealed class MavenProtocol(FeedAccess access, IObjectStore objects, Feeds
 
         var versions = listed.GetValueOrThrow()
             .Select(x => x.Path[(PathPrefix.Length + artifactDirectory.Length + 1)..])
-            .Where(x => x.Contains('/', StringComparison.Ordinal))
-            .Select(x => x[..x.IndexOf('/', StringComparison.Ordinal)])
+            .Where(static x => x.Contains('/', StringComparison.Ordinal))
+            .Select(static x => x[..x.IndexOf('/', StringComparison.Ordinal)])
             .Distinct(StringComparer.Ordinal)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
 
         if (versions.Count == 0) {
             return null;
         }
 
-        var releases = versions.Where(x => !x.EndsWith("-SNAPSHOT", StringComparison.Ordinal)).ToList();
+        var releases = versions.Where(static x => !x.EndsWith("-SNAPSHOT", StringComparison.Ordinal)).ToList();
         var latest = versions[^1];
 
         var xml = new XDocument(
@@ -227,8 +264,11 @@ public sealed class MavenProtocol(FeedAccess access, IObjectStore objects, Feeds
                     "versioning",
                     new XElement("latest", latest),
                     new XElement("release", releases.Count > 0 ? releases[^1] : ""),
-                    new XElement("versions", versions.Select(x => new XElement("version", x))),
-                    new XElement("lastUpdated", DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture))
+                    new XElement("versions", versions.Select(static x => new XElement("version", x))),
+                    new XElement(
+                        "lastUpdated",
+                        DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture)
+                    )
                 )
             )
         );
@@ -277,7 +317,9 @@ public sealed class MavenProtocol(FeedAccess access, IObjectStore objects, Feeds
         }
 
         foreach (var segment in path.Split('/')) {
-            if (segment.Length == 0 || segment is "." or ".." || !segment.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' or '+')) {
+            if (segment.Length == 0
+                || segment is "." or ".."
+                || !segment.All(static c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' or '+')) {
                 return false;
             }
         }
@@ -296,6 +338,8 @@ public sealed class MavenProtocol(FeedAccess access, IObjectStore objects, Feeds
             return "application/java-archive";
         }
 
-        return ChecksumSuffixes.Any(x => file.EndsWith(x, StringComparison.Ordinal)) ? "text/plain" : "application/octet-stream";
+        return ChecksumSuffixes.Any(x => file.EndsWith(x, StringComparison.Ordinal))
+            ? "text/plain"
+            : "application/octet-stream";
     }
 }

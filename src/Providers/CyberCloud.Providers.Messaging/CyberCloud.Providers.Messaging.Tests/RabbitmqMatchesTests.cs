@@ -165,7 +165,7 @@ public sealed class RabbitmqMatchesTests {
         // an unhandled exception inside a reminder rather than as a resource that has not converged.
         using var body = JsonDocument.Parse(RabbitmqClusters.Body(ClusterId));
 
-        foreach (var malformed in new[] { "{", "[]", "null", "{\"kind\":\"RabbitmqCluster\"}" }) {
+        foreach (var malformed in new[] { "{", "[]", "null", """{"kind":"RabbitmqCluster"}""" }) {
             RabbitmqClusters.Matches(malformed, body.RootElement).ShouldBeFalse(malformed);
         }
     }

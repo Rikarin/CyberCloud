@@ -77,7 +77,7 @@ public readonly record struct ConformanceReport(string Reconciler, ImmutableArra
         Conforms
             ? $"{Reconciler} conforms."
             : $"{Reconciler} fails the reconciler contract:{Environment.NewLine}"
-            + string.Join(Environment.NewLine, Findings.Select(x => "  - " + x));
+            + string.Join(Environment.NewLine, Findings.Select(static x => "  - " + x));
 }
 
 /// <summary>
@@ -182,7 +182,7 @@ public static class ReconcilerConformance {
             findings.Add(
                 new(
                     ReconcilerClause.Idempotent,
-                    $"The reconciler failed rather than converging, so the contract cannot be checked: "
+                    "The reconciler failed rather than converging, so the contract cannot be checked: "
                     + $"{first.Error?.Message}"
                 )
             );
@@ -194,7 +194,7 @@ public static class ReconcilerConformance {
             findings.Add(
                 new(
                     ReconcilerClause.Bounded,
-                    $"The reconciler stayed InProgress across "
+                    "The reconciler stayed InProgress across "
                     + $"{MaxPasses.ToString(CultureInfo.InvariantCulture)} passes. A conformance run "
                     + "cannot wait out a real provisioning; give the harness a context whose world is "
                     + "already reachable."
@@ -417,7 +417,7 @@ public static class ReconcilerConformance {
             findings.Add(
                 new(
                     ReconcilerClause.Bounded,
-                    $"A pass did not return within "
+                    "A pass did not return within "
                     + $"{budget.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} seconds. A "
                     + "reconciler that blocks on a four-minute cluster creation blocks that grain's "
                     + "turn — docs/plan/08 § The reconcile loop, clause 3."

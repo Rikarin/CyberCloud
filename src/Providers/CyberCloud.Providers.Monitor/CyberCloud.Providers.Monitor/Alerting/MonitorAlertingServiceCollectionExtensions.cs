@@ -6,8 +6,11 @@ namespace CyberCloud.Providers.Monitor.Alerting;
 /// <summary>Wires the alert evaluator's two seams into a container.</summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Called by <c>MonitorApplicationModule</c>, which both hosts load, and by the
-///         conformance module, which the harness loads — and by nothing else.</b> A synchronous
+///         ⚠
+///         <b>
+///             Called by <c>MonitorApplicationModule</c>, which both hosts load, and by the
+///             conformance module, which the harness loads — and by nothing else.
+///         </b> A synchronous
 ///         action runs inside <c>ResourceManagerService</c>, which in production is the gateway's
 ///         process, so the <c>listInstances</c> handler needs <see cref="IAlertControlPlane" /> in the
 ///         gateway as well as in the silo; the query seam is registered in both because
@@ -15,8 +18,11 @@ namespace CyberCloud.Providers.Monitor.Alerting;
 ///         drift.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>TryAdd</c> throughout, so a host that registers a real query seam first keeps
-///         it.</b> The refusing default is the contract every seam in this tree follows: a silo that
+///         ⚠
+///         <b>
+///             <c>TryAdd</c> throughout, so a host that registers a real query seam first keeps
+///             it.
+///         </b> The refusing default is the contract every seam in this tree follows: a silo that
 ///         wired nothing gets a sentence naming what it did not wire, never a stub that answers.
 ///     </para>
 ///     <para>

@@ -103,7 +103,7 @@ public static partial class IdentityLog {
         EventId = 1103,
         Level = LogLevel.Warning,
         Message =
-        "Refresh reuse detected on session {SessionId} for user {UserId} in tenant {TenantId}. The session and its entire chain are revoked."
+            "Refresh reuse detected on session {SessionId} for user {UserId} in tenant {TenantId}. The session and its entire chain are revoked."
     )]
     public static partial void RefreshReuseDetected(
         ILogger logger,
@@ -145,7 +145,7 @@ public static partial class IdentityLog {
         EventId = 1105,
         Level = LogLevel.Information,
         Message =
-        "A request named an address with no account: identifier {IdentifierDigest} in tenant {TenantId}. The caller was told nothing."
+            "A request named an address with no account: identifier {IdentifierDigest} in tenant {TenantId}. The caller was told nothing."
     )]
     public static partial void UnknownAddressProbed(ILogger logger, Guid tenantId, string identifierDigest);
 
@@ -218,7 +218,7 @@ public static partial class IdentityLog {
         EventId = 1110,
         Level = LogLevel.Warning,
         Message =
-        "A recovery code was burnt for user {UserId} in tenant {TenantId}. The session is now fully authenticated."
+            "A recovery code was burnt for user {UserId} in tenant {TenantId}. The session is now fully authenticated."
     )]
     public static partial void RecoveryCodeBurnt(ILogger logger, Guid tenantId, Guid userId);
 
@@ -304,7 +304,7 @@ public static partial class IdentityLog {
         EventId = 1113,
         Level = LogLevel.Warning,
         Message =
-        "⚠ DEVELOPMENT OTP DELIVERY (#93): code {Code} for user {UserId}, {Purpose} via {Kind}. This seam refuses to load outside Development."
+            "⚠ DEVELOPMENT OTP DELIVERY (#93): code {Code} for user {UserId}, {Purpose} via {Kind}. This seam refuses to load outside Development."
     )]
     public static partial void DevelopmentOtpDelivered(
         ILogger logger,
@@ -340,7 +340,8 @@ public static partial class IdentityLog {
     [LoggerMessage(
         EventId = 1122,
         Level = LogLevel.Warning,
-        Message = "The development code for user {UserId} was logged above and was NOT mailed ({Code}); the sending module's reason is the Reason property."
+        Message =
+            "The development code for user {UserId} was logged above and was NOT mailed ({Code}); the sending module's reason is the Reason property."
     )]
     public static partial void DevelopmentOtpNotMailed(ILogger logger, Guid userId, string code);
 

@@ -34,7 +34,7 @@ public sealed class VirtualMachineReconcilerTests {
         await Pass(reconciler, connection, bob, bobBody.RootElement);
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
 
-        var machines = connection.Applied.Where(x => x.Target.Kind.Kind == "VirtualMachine").ToList();
+        var machines = connection.Applied.Where(static x => x.Target.Kind.Kind == "VirtualMachine").ToList();
 
         machines.Count.ShouldBe(3);
         Cores(machines[0].Body).ShouldBe(1);
@@ -57,7 +57,7 @@ public sealed class VirtualMachineReconcilerTests {
 
         await Pass(reconciler, connection, address, body.RootElement);
 
-        var first = connection.Applied.Single(x => x.Target.Kind.Kind == "VirtualMachine");
+        var first = connection.Applied.Single(static x => x.Target.Kind.Kind == "VirtualMachine");
         VirtualMachines.RunStrategyOf(first.Body).ShouldBe(VirtualMachines.RunAlways);
 
         // An operator — or the power handler — halts the machine on the object.
@@ -68,11 +68,12 @@ public sealed class VirtualMachineReconcilerTests {
 
         await Pass(reconciler, connection, address, body.RootElement);
 
-        var second = connection.Applied.Where(x => x.Target.Kind.Kind == "VirtualMachine").Last();
-        VirtualMachines.RunStrategyOf(second.Body).ShouldBe(
-            VirtualMachines.RunHalted,
-            "a reconcile pass turned a stopped machine back on, which is the drift correction tenants complain about"
-        );
+        var second = connection.Applied.Last(static x => x.Target.Kind.Kind == "VirtualMachine");
+        VirtualMachines.RunStrategyOf(second.Body)
+            .ShouldBe(
+                VirtualMachines.RunHalted,
+                "a reconcile pass turned a stopped machine back on, which is the drift correction tenants complain about"
+            );
     }
 
     [Fact]
@@ -124,7 +125,11 @@ public sealed class VirtualMachineReconcilerTests {
         var stuck = await Pass(reconciler, connection, address, body.RootElement);
         stuck.Kind.ShouldBe(ReconcileOutcomeKind.InProgress);
         stuck.Reason.ShouldContain("ErrorUnschedulable");
-        stuck.Reason.ShouldContain("devices.kubevirt.io/kvm", Case.Sensitive, "the scheduler's own sentence is the diagnosis a tenant needs");
+        stuck.Reason.ShouldContain(
+            "devices.kubevirt.io/kvm",
+            Case.Sensitive,
+            "the scheduler's own sentence is the diagnosis a tenant needs"
+        );
 
         // A clone CDI refused: KubeVirt's Failure condition is the reason when nothing is scheduled.
         Compute.Report(
@@ -133,7 +138,9 @@ public sealed class VirtualMachineReconcilerTests {
             new JsonObject {
                 ["printableStatus"] = "Starting",
                 ["conditions"] = new JsonArray(
-                    new JsonObject { ["type"] = "Failure", ["status"] = "True", ["message"] = "Source PVC prod/ubuntu not found" }
+                    new JsonObject {
+                        ["type"] = "Failure", ["status"] = "True", ["message"] = "Source PVC prod/ubuntu not found"
+                    }
                 )
             }
         );
@@ -163,10 +170,10 @@ public sealed class VirtualMachineReconcilerTests {
         var connection = new RecordingConnection();
         var address = Compute.Machine("web");
         var ns = ReconcileDriver(address);
-        using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, image: "ubuntu"));
+        using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, "ubuntu"));
 
         var image = Images.DataVolumeRef(ns, "ubuntu");
-        connection.Objects[RecordingConnection.Key(image)] = Compute.ImportedImage("ubuntu", phase: "ImportInProgress");
+        connection.Objects[RecordingConnection.Key(image)] = Compute.ImportedImage("ubuntu", "ImportInProgress");
 
         var waiting = await Pass(reconciler, connection, address, body.RootElement);
         waiting.Kind.ShouldBe(ReconcileOutcomeKind.InProgress);
@@ -174,10 +181,12 @@ public sealed class VirtualMachineReconcilerTests {
         waiting.Reason.ShouldContain("ImportInProgress");
         connection.Applied.ShouldBeEmpty("a machine was applied before its image had imported");
 
-        connection.Objects[RecordingConnection.Key(image)] = Compute.ImportedImage("ubuntu", phase: Cdi.Failed);
+        connection.Objects[RecordingConnection.Key(image)] = Compute.ImportedImage("ubuntu", Cdi.Failed);
         var failed = await Pass(reconciler, connection, address, body.RootElement);
         failed.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
-        failed.Retryable.ShouldBeFalse("the image is immutable on the machine, so a retry would spin on a body the tenant cannot mend");
+        failed.Retryable.ShouldBeFalse(
+            "the image is immutable on the machine, so a retry would spin on a body the tenant cannot mend"
+        );
 
         connection.Objects.TryRemove(RecordingConnection.Key(image), out _);
         (await Pass(reconciler, connection, address, body.RootElement)).ShouldBe(
@@ -185,7 +194,7 @@ public sealed class VirtualMachineReconcilerTests {
             "an absent image is CDI's to refuse — the machine is applied and recovers when the image lands"
         );
 
-        var rendered = connection.Applied.Single(x => x.Target.Kind.Kind == "VirtualMachine").Body;
+        var rendered = connection.Applied.Single(static x => x.Target.Kind.Kind == "VirtualMachine").Body;
         var root = Compute.Spec(rendered)["dataVolumeTemplates"]![0]!["spec"]!["source"]!["pvc"]!;
         root["name"]!.GetValue<string>().ShouldBe("ubuntu");
         root["namespace"]!.GetValue<string>().ShouldBe(ns, "a clone across namespaces is not offered");
@@ -197,17 +206,28 @@ public sealed class VirtualMachineReconcilerTests {
     public async Task CloudInitIsResolvedOncePerPassAndReachesASecretAndNothingElse() {
         var reconciler = new VirtualMachineReconciler(new FixedClock());
         var connection = new RecordingConnection();
-        var secrets = new SeededSecrets((Compute.VaultPath("web"), "userdata", "#cloud-config\nusers:\n  - name: ops\n"));
+        var secrets = new SeededSecrets(
+            (Compute.VaultPath("web"), "userdata", "#cloud-config\nusers:\n  - name: ops\n")
+        );
         var address = Compute.Machine("web");
-        var ns = ReconcileDriver(address);
-        using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, cloudInit: Compute.VaultPath("web") + "#userdata"));
+        _ = ReconcileDriver(address);
+        using var body = JsonDocument.Parse(
+            VirtualMachines.Body(Compute.ClusterId, cloudInit: Compute.VaultPath("web") + "#userdata")
+        );
 
-        var outcome = await reconciler.ReconcileAsync(Compute.Context(connection, address, body.RootElement, secrets), TestContext.Current.CancellationToken);
+        var outcome = await reconciler.ReconcileAsync(
+            Compute.Context(connection, address, body.RootElement, secrets),
+            TestContext.Current.CancellationToken
+        );
 
         outcome.ShouldBe(ReconcileOutcome.Converged);
         secrets.Resolves.ShouldBe(1);
 
-        connection.Applied.Select(x => x.Target.Kind.Kind).ShouldBe(["Secret", "VirtualMachine"], "the Secret goes first: a machine that names a Secret not yet there cannot start");
+        connection.Applied.Select(static x => x.Target.Kind.Kind)
+            .ShouldBe(
+                ["Secret", "VirtualMachine"],
+                "the Secret goes first: a machine that names a Secret not yet there cannot start"
+            );
 
         var secret = connection.Applied[0];
         secret.Target.Name.ShouldBe("web-cloud-init");
@@ -225,7 +245,7 @@ public sealed class VirtualMachineReconcilerTests {
         var plain = new RecordingConnection();
         using var plainBody = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId));
         await Pass(reconciler, plain, address, plainBody.RootElement);
-        plain.Applied.Select(x => x.Target.Kind.Kind).ShouldBe(["VirtualMachine"]);
+        plain.Applied.Select(static x => x.Target.Kind.Kind).ShouldBe(["VirtualMachine"]);
         plain.Applied[0].Body.ShouldNotContain("cloudInitNoCloud");
     }
 
@@ -234,9 +254,14 @@ public sealed class VirtualMachineReconcilerTests {
         var reconciler = new VirtualMachineReconciler(new FixedClock());
         var connection = new RecordingConnection();
         var address = Compute.Machine("web");
-        using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, cloudInit: Compute.VaultPath("missing") + "#userdata"));
+        using var body = JsonDocument.Parse(
+            VirtualMachines.Body(Compute.ClusterId, cloudInit: Compute.VaultPath("missing") + "#userdata")
+        );
 
-        var outcome = await reconciler.ReconcileAsync(Compute.Context(connection, address, body.RootElement, new SeededSecrets()), TestContext.Current.CancellationToken);
+        var outcome = await reconciler.ReconcileAsync(
+            Compute.Context(connection, address, body.RootElement, new SeededSecrets()),
+            TestContext.Current.CancellationToken
+        );
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
         connection.Applied.ShouldBeEmpty("a machine was applied that would mount a Secret nothing can fill");
@@ -250,12 +275,18 @@ public sealed class VirtualMachineReconcilerTests {
         // asked, nothing applied, and a refusal that names A's own prefix rather than B's path.
         var reconciler = new VirtualMachineReconciler(new FixedClock());
         var connection = new RecordingConnection();
-        var foreign = Compute.VaultPath("CyberCloud.ContainerRegistry/registries/11111111-1111-4111-8111-111111111111", Compute.TenantB);
+        var foreign = Compute.VaultPath(
+            "CyberCloud.ContainerRegistry/registries/11111111-1111-4111-8111-111111111111",
+            Compute.TenantB
+        );
         var secrets = new SeededSecrets((foreign, "password", "bobs-registry-password"));
         var address = Compute.Machine("web", Compute.TenantA, Compute.SubscriptionA);
         using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, cloudInit: foreign + "#password"));
 
-        var outcome = await reconciler.ReconcileAsync(Compute.Context(connection, address, body.RootElement, secrets), TestContext.Current.CancellationToken);
+        var outcome = await reconciler.ReconcileAsync(
+            Compute.Context(connection, address, body.RootElement, secrets),
+            TestContext.Current.CancellationToken
+        );
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
         outcome.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
@@ -269,7 +300,10 @@ public sealed class VirtualMachineReconcilerTests {
         using var ownBody = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, cloudInit: own + "#password"));
         var ownSecrets = new SeededSecrets((own, "password", "alices-own"));
 
-        (await reconciler.ReconcileAsync(Compute.Context(connection, address, ownBody.RootElement, ownSecrets), TestContext.Current.CancellationToken))
+        (await reconciler.ReconcileAsync(
+                Compute.Context(connection, address, ownBody.RootElement, ownSecrets),
+                TestContext.Current.CancellationToken
+            ))
             .ShouldBe(ReconcileOutcome.Converged);
         ownSecrets.Resolves.ShouldBe(1);
     }
@@ -281,18 +315,23 @@ public sealed class VirtualMachineReconcilerTests {
         var connection = new RecordingConnection();
         var address = Compute.Machine("web");
         var ns = ReconcileDriver(address);
-        using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, dataDisks: ["data", "logs"], virtualNetwork: "vnet", subnet: "web"));
+        using var body = JsonDocument.Parse(
+            VirtualMachines.Body(Compute.ClusterId, dataDisks: ["data", "logs"], virtualNetwork: "vnet", subnet: "web")
+        );
 
         await Pass(new VirtualMachineReconciler(new FixedClock()), connection, address, body.RootElement);
 
         var spec = Compute.Spec(connection.Applied.Single().Body);
         var volumes = spec["template"]!["spec"]!["volumes"]!.AsArray();
 
-        volumes.Select(x => x!["persistentVolumeClaim"]?["claimName"]?.GetValue<string>()).Where(x => x is not null)
+        volumes.Select(static x => x!["persistentVolumeClaim"]?["claimName"]?.GetValue<string>())
+            .Where(static x => x is not null)
             .ShouldBe(["data", "logs"]);
         volumes[0]!["dataVolume"]!["name"]!.GetValue<string>().ShouldBe("web-root");
 
-        spec["template"]!["spec"]!["domain"]!["devices"]!["disks"]!.AsArray()[0]!["bootOrder"]!.GetValue<int>().ShouldBe(1, "the root disk boots first");
+        spec["template"]!["spec"]!["domain"]!["devices"]!["disks"]!.AsArray()[0]!["bootOrder"]!
+            .GetValue<int>()
+            .ShouldBe(1, "the root disk boots first");
 
         spec["template"]!["metadata"]!["annotations"]![VirtualMachines.LogicalSwitchAnnotation]!.GetValue<string>()
             .ShouldBe(ns + "-vnet-web");
@@ -312,11 +351,18 @@ public sealed class VirtualMachineReconcilerTests {
         // names, which KubeVirt's webhook refuses as duplicates, and strings that are not resource
         // names at all, which the API server refuses as a claim name — neither refuser is in either
         // conformance suite. VirtualMachines.DataDiskProblem.
-        foreach (var bad in new[] { VirtualMachines.RootVolume, VirtualMachines.CloudInitVolume, "Not A Name", "../../etc" }) {
+        foreach (var bad in new[] {
+                     VirtualMachines.RootVolume, VirtualMachines.CloudInitVolume, "Not A Name", "../../etc"
+                 }) {
             var connection = new RecordingConnection();
             using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, dataDisks: ["data", bad]));
 
-            var outcome = await Pass(new VirtualMachineReconciler(new FixedClock()), connection, Compute.Machine("web"), body.RootElement);
+            var outcome = await Pass(
+                new VirtualMachineReconciler(new FixedClock()),
+                connection,
+                Compute.Machine("web"),
+                body.RootElement
+            );
 
             outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed, bad);
             outcome.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
@@ -337,15 +383,23 @@ public sealed class VirtualMachineReconcilerTests {
 
         await Pass(reconciler, connection, address, body.RootElement);
 
-        var noInstance = await reconciler.ObserveAsync(Compute.Observe(connection, address, body.RootElement), TestContext.Current.CancellationToken);
+        var noInstance = await reconciler.ObserveAsync(
+            Compute.Observe(connection, address, body.RootElement),
+            TestContext.Current.CancellationToken
+        );
         noInstance.Exists.ShouldBeTrue();
         noInstance.Summary.ShouldContain("run strategy Always");
         noInstance.Summary.ShouldContain("no instance");
 
         connection.Objects[RecordingConnection.Key(VirtualMachines.InstanceRef(ns, "web"))] =
-            new JsonObject { ["kind"] = "VirtualMachineInstance", ["status"] = new JsonObject { ["phase"] = "Scheduling" } }.ToJsonString();
+            new JsonObject {
+                ["kind"] = "VirtualMachineInstance", ["status"] = new JsonObject { ["phase"] = "Scheduling" }
+            }.ToJsonString();
 
-        var scheduling = await reconciler.ObserveAsync(Compute.Observe(connection, address, body.RootElement), TestContext.Current.CancellationToken);
+        var scheduling = await reconciler.ObserveAsync(
+            Compute.Observe(connection, address, body.RootElement),
+            TestContext.Current.CancellationToken
+        );
         scheduling.Summary.ShouldContain("instance Scheduling");
     }
 
@@ -356,24 +410,37 @@ public sealed class VirtualMachineReconcilerTests {
         var address = Compute.Machine("web");
         var ns = ReconcileDriver(address);
         var secrets = new SeededSecrets((Compute.VaultPath("web"), "userdata", "#cloud-config"));
-        using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, dataDisks: ["data"], cloudInit: Compute.VaultPath("web") + "#userdata"));
+        using var body = JsonDocument.Parse(
+            VirtualMachines.Body(
+                Compute.ClusterId,
+                dataDisks: ["data"],
+                cloudInit: Compute.VaultPath("web") + "#userdata"
+            )
+        );
 
-        await reconciler.ReconcileAsync(Compute.Context(connection, address, body.RootElement, secrets), TestContext.Current.CancellationToken);
+        await reconciler.ReconcileAsync(
+            Compute.Context(connection, address, body.RootElement, secrets),
+            TestContext.Current.CancellationToken
+        );
 
         var disk = Disks.DataVolumeRef(ns, "data");
         var image = Images.DataVolumeRef(ns, "ubuntu");
-        connection.Objects[RecordingConnection.Key(disk)] = "{\"kind\":\"DataVolume\"}";
+        connection.Objects[RecordingConnection.Key(disk)] = """{"kind":"DataVolume"}""";
         connection.Objects[RecordingConnection.Key(image)] = Compute.ImportedImage("ubuntu");
 
-        var outcome = await reconciler.DeleteAsync(Compute.Context(connection, address, body.RootElement, secrets), TestContext.Current.CancellationToken);
+        var outcome = await reconciler.DeleteAsync(
+            Compute.Context(connection, address, body.RootElement, secrets),
+            TestContext.Current.CancellationToken
+        );
 
         outcome.ShouldBe(ReconcileOutcome.Converged);
-        connection.Deleted.Select(x => x.Kind.Kind).ShouldBe(["VirtualMachine", "Secret"]);
-        connection.Objects.Keys.OrderBy(x => x, StringComparer.Ordinal).ShouldBe(
-            [RecordingConnection.Key(disk), RecordingConnection.Key(image)],
-            Case.Sensitive,
-            "a machine's delete reached a disk or an image, which are other resources' objects"
-        );
+        connection.Deleted.Select(static x => x.Kind.Kind).ShouldBe(["VirtualMachine", "Secret"]);
+        connection.Objects.Keys.OrderBy(static x => x, StringComparer.Ordinal)
+            .ShouldBe(
+                [RecordingConnection.Key(disk), RecordingConnection.Key(image)],
+                Case.Sensitive,
+                "a machine's delete reached a disk or an image, which are other resources' objects"
+            );
     }
 
     [Fact]
@@ -381,14 +448,32 @@ public sealed class VirtualMachineReconcilerTests {
         var address = Compute.Machine("web");
         using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId));
 
-        var suspended = await Pass(new VirtualMachineReconciler(new FixedClock()), new RecordingConnection { Suspend = true }, address, body.RootElement);
+        var suspended = await Pass(
+            new VirtualMachineReconciler(new FixedClock()),
+            new RecordingConnection { Suspend = true },
+            address,
+            body.RootElement
+        );
         suspended.Kind.ShouldBe(ReconcileOutcomeKind.InProgress);
 
-        var refused = await Pass(new VirtualMachineReconciler(new FixedClock()), new RecordingConnection { RefuseWith = ErrorCode.PolicyViolation }, address, body.RootElement);
+        var refused = await Pass(
+            new VirtualMachineReconciler(new FixedClock()),
+            new RecordingConnection { RefuseWith = ErrorCode.PolicyViolation },
+            address,
+            body.RootElement
+        );
         refused.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
 
-        var swallowed = await Pass(new VirtualMachineReconciler(new FixedClock()), new RecordingConnection { SwallowApplies = true }, address, body.RootElement);
-        swallowed.Kind.ShouldBe(ReconcileOutcomeKind.InProgress, "clause 4: Converged follows a read, never an apply's own result");
+        var swallowed = await Pass(
+            new VirtualMachineReconciler(new FixedClock()),
+            new RecordingConnection { SwallowApplies = true },
+            address,
+            body.RootElement
+        );
+        swallowed.Kind.ShouldBe(
+            ReconcileOutcomeKind.InProgress,
+            "clause 4: Converged follows a read, never an apply's own result"
+        );
     }
 
     // ── Harness ─────────────────────────────────────────────────────────────────────────────────
@@ -399,9 +484,14 @@ public sealed class VirtualMachineReconcilerTests {
         ResourceId address,
         JsonElement desired
     ) =>
-        await reconciler.ReconcileAsync(Compute.Context(connection, address, desired), TestContext.Current.CancellationToken);
+        await reconciler.ReconcileAsync(
+            Compute.Context(connection, address, desired),
+            TestContext.Current.CancellationToken
+        );
 
-    static string ReconcileDriver(ResourceId address) => CyberCloud.ResourceManager.Reconcile.ReconcileDriver.NamespaceFor(address);
+    static string ReconcileDriver(ResourceId address) =>
+        CyberCloud.ResourceManager.Reconcile.ReconcileDriver.NamespaceFor(address);
 
-    static int Cores(string objectJson) => Compute.Spec(objectJson)["template"]!["spec"]!["domain"]!["cpu"]!["cores"]!.GetValue<int>();
+    static int Cores(string objectJson) =>
+        Compute.Spec(objectJson)["template"]!["spec"]!["domain"]!["cpu"]!["cores"]!.GetValue<int>();
 }

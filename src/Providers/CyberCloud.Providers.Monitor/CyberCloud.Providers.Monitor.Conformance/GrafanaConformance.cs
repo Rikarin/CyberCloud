@@ -1,5 +1,4 @@
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.Core.Resources;
 using CyberCloud.Providers.Monitor.Contracts;
 using System.Text.Json;
@@ -38,27 +37,28 @@ public sealed class GrafanaCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Dashboard/grafanas",
-            CreateProvider = () => new DashboardProvider(),
+            CreateProvider = static () => new DashboardProvider(),
             ReconcilerType = typeof(GrafanaReconciler),
-            CreateReconciler = clock => new GrafanaReconciler(clock),
+            CreateReconciler = static clock => new GrafanaReconciler(clock),
             Type = Grafanas.Type,
             ApiVersion = Grafanas.V2026,
-            Body = cluster => Grafanas.Body(cluster, HarnessWorkspace),
+            Body = static cluster => Grafanas.Body(cluster, HarnessWorkspace),
             // Turns anonymous viewing on, which is an env entry on the Deployment and the one setting
             // a tenant is likely to flip after the create.
-            ChangedBody = cluster => Grafanas.Body(cluster, HarnessWorkspace, anonymousViewers: true),
+            ChangedBody = static cluster => Grafanas.Body(cluster, HarnessWorkspace, true),
             // A workspace that is not a resource id path — refused by the schema's format, at the pointer.
-            InvalidBody = cluster => WithWorkspace(Grafanas.Body(cluster, HarnessWorkspace), "not-a-path"),
+            InvalidBody = static cluster => WithWorkspace(Grafanas.Body(cluster, HarnessWorkspace), "not-a-path"),
             InvalidBodyTarget = Grafanas.WorkspacePointer,
             ActionName = Grafanas.UrlAction,
-            Objects = (id, ns) => Grafanas.Objects(ns, id.Name),
+            Objects = static (id, ns) => Grafanas.Objects(ns, id.Name),
             OperatorWritten = static (_, _) => [],
             DataPlane = null,
             StoragePrefix = null,
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 var workspace = Grafanas.WorkspaceOf(match.Id, desired.RootElement);
-                return workspace.IsSuccess && Grafanas.Matches(match.ObjectJson, workspace.GetValueOrThrow().Name, desired.RootElement);
+                return workspace.IsSuccess
+                    && Grafanas.Matches(match.ObjectJson, workspace.GetValueOrThrow().Name, desired.RootElement);
             }
         };
 
@@ -71,8 +71,11 @@ public sealed class GrafanaCase : IProviderCaseSource {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>No resource exists at this path in either suite, and that is not the same
-    ///         statement in both.</b> On the fake cluster nothing reads the workspace's objects, so
+    ///         ⚠
+    ///         <b>
+    ///             No resource exists at this path in either suite, and that is not the same
+    ///             statement in both.
+    ///         </b> On the fake cluster nothing reads the workspace's objects, so
     ///         the pointer's shape is all that is checked. On the real k3s the pod's three <c>env</c>
     ///         references name <c>monitor-telemetry</c> and its ingest-key <c>Secret</c>, neither of
     ///         which any reconciler in a one-provider registry will write; the kubelet holds the pod

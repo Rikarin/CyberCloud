@@ -62,7 +62,8 @@ public sealed class PythonGoSurfaceTests {
             ]
         );
 
-        PythonSdkEmitter.Root([Fixtures.FirstVersion]).Keys.ShouldBe(["cybercloud/__init__.py", "cybercloud/py.typed", "pyproject.toml"]);
+        PythonSdkEmitter.Root([Fixtures.FirstVersion])
+            .Keys.ShouldBe(["cybercloud/__init__.py", "cybercloud/py.typed", "pyproject.toml"]);
         Go.Keys.ShouldBe([GoPackage + "client.go", GoPackage + "models.go", GoPackage + "runtime.go"]);
         GoSdkEmitter.Root().Keys.ShouldBe(["go.mod"]);
 
@@ -71,8 +72,11 @@ public sealed class PythonGoSurfaceTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>The package directory carries the api-version, in the one spelling each language
-    ///     allows.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The package directory carries the api-version, in the one spelling each language
+    ///         allows.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     A Python module cannot start with a digit or contain a hyphen; a Go path element of the
@@ -122,8 +126,8 @@ public sealed class PythonGoSurfaceTests {
     [Fact]
     public void TheClientNamesNothingTheModelsDoNotDeclare() {
         var declared = PythonModels.Split('\n')
-            .Where(x => x.StartsWith("class ", StringComparison.Ordinal))
-            .Select(x => x[6..].TrimEnd(':', ' '))
+            .Where(static x => x.StartsWith("class ", StringComparison.Ordinal))
+            .Select(static x => x[6..].TrimEnd(':', ' '))
             .ToHashSet(StringComparer.Ordinal);
 
         var importing = false;
@@ -139,7 +143,10 @@ public sealed class PythonGoSurfaceTests {
                 continue;
             }
 
-            declared.ShouldContain(line.Trim().TrimEnd(','), $"client.py imports {line.Trim()} and models.py does not declare it");
+            declared.ShouldContain(
+                line.Trim().TrimEnd(','),
+                $"client.py imports {line.Trim()} and models.py does not declare it"
+            );
         }
 
         // …and the models file exports exactly what it declares, which is what `import *` and
@@ -149,15 +156,16 @@ public sealed class PythonGoSurfaceTests {
         }
 
         var goTypes = (GoModels + GoClient + GoRuntime).Split('\n')
-            .Where(x => x.StartsWith("type ", StringComparison.Ordinal))
-            .Select(x => x[5..].Split(' ', '[')[0])
+            .Where(static x => x.StartsWith("type ", StringComparison.Ordinal))
+            .Select(static x => x[5..].Split(' ', '[')[0])
             .ToList();
 
         goTypes.ShouldBeUnique();
 
-        foreach (var line in GoClient.Split('\n').Where(x => x.StartsWith("func ", StringComparison.Ordinal))) {
+        foreach (var line in GoClient.Split('\n').Where(static x => x.StartsWith("func ", StringComparison.Ordinal))) {
             foreach (var token in line.Split(' ', '(', ')', '*', '[', ']', ',')) {
-                if (token.EndsWith("Resource", StringComparison.Ordinal) || token.EndsWith("Data", StringComparison.Ordinal)) {
+                if (token.EndsWith("Resource", StringComparison.Ordinal)
+                    || token.EndsWith("Data", StringComparison.Ordinal)) {
                     goTypes.ShouldContain(token, line.Trim());
                 }
             }
@@ -181,7 +189,12 @@ public sealed class PythonGoSurfaceTests {
 
         python.ShouldContain("\nServersMode = Literal[");
         python.ShouldContain("\nServersPersistenceMode = Literal[");
-        Declarations(python, "class ").Concat(python.Split('\n').Where(x => x.Contains(" = Literal[", StringComparison.Ordinal)).Select(x => x.Split(' ')[0])).ShouldBeUnique();
+        Declarations(python, "class ").Concat(
+            python.Split('\n')
+                .Where(static x => x.Contains(" = Literal[", StringComparison.Ordinal))
+                .Select(static x => x.Split(' ')[0])
+        )
+            .ShouldBeUnique();
 
         go.ShouldContain("\ntype ServersMode string\n");
         go.ShouldContain("\ntype ServersPersistenceMode string\n");
@@ -189,8 +202,11 @@ public sealed class PythonGoSurfaceTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>Both clients nest every container the document declares — the #79 convention,
-    ///     in the one spelling each language has.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Both clients nest every container the document declares — the #79 convention,
+    ///         in the one spelling each language has.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     Python nests a class inside the class that holds it; Go has no nested types, so a
@@ -212,7 +228,7 @@ public sealed class PythonGoSurfaceTests {
 
                 containers++;
 
-                var depth = leaf.JsonPointer.Count(x => x == '/');
+                var depth = leaf.JsonPointer.Count(static x => x == '/');
                 var indent = new string(' ', 4 * depth);
 
                 PythonModels.ShouldContain(
@@ -220,7 +236,10 @@ public sealed class PythonGoSurfaceTests {
                     customMessage: $"{type.ResourceType} {leaf.JsonPointer} on the Python client"
                 );
 
-                var goStruct = model + string.Concat(leaf.JsonPointer.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(SdkEmitter.Pascal));
+                var goStruct = model
+                    + string.Concat(
+                        leaf.JsonPointer.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(SdkEmitter.Pascal)
+                    );
 
                 GoModels.ShouldContain(
                     "\ntype " + goStruct + " struct {\n",
@@ -236,13 +255,18 @@ public sealed class PythonGoSurfaceTests {
         // …and the nested leaf keeps its own wire name at its own depth, on both: /properties/sku/name
         // is `name` inside the sku class, beside no other `name`, so its closed set is the bare
         // {Model}Name — the "disambiguate only what collides" rule the other emitters apply.
-        Block(PythonModels, "        class Sku:").ShouldContain("wire[\"name\"] = self.name");
-        Block(GoModels, "type PostgreSQLServerPropertiesSku struct {").ShouldContain("Name PostgreSQLServerName `json:\"name\"`");
+        Block(PythonModels, "        class Sku:").ShouldContain("""wire["name"] = self.name""");
+        Block(GoModels, "type PostgreSQLServerPropertiesSku struct {").ShouldContain(
+            """Name PostgreSQLServerName `json:"name"`"""
+        );
     }
 
     /// <summary>
-    ///     ⚠ <b>Both clients read the envelope from the document, and neither writes it —
-    ///     issue #85, on two more surfaces.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Both clients read the envelope from the document, and neither writes it —
+    ///         issue #85, on two more surfaces.
+    ///     </b>
     /// </summary>
     [Fact]
     public void BothClientsReadTheEnvelopeFromTheDocumentAndNeitherWritesIt() {
@@ -272,18 +296,36 @@ public sealed class PythonGoSurfaceTests {
             foreach (var leaf in envelope) {
                 var member = PythonSdkEmitter.Snake(leaf.Name);
 
-                pyResource.ShouldContain("\n    " + member + ": ", customMessage: leaf.Name + " on the Python read model");
-                pyResource.ShouldContain("=wire[\"" + leaf.Name + "\"]", customMessage: leaf.Name + " read off the wire");
+                pyResource.ShouldContain(
+                    "\n    " + member + ": ",
+                    customMessage: leaf.Name + " on the Python read model"
+                );
+                pyResource.ShouldContain(
+                    "=wire[\"" + leaf.Name + "\"]",
+                    customMessage: leaf.Name + " read off the wire"
+                );
                 // At the write body's own depth — four spaces for a member, twelve for its from_wire
                 // line — because a provider may nest a `name` of its own under /properties/sku, and
                 // the fixture does.
-                pyData.ShouldNotContain("\n    " + member + ":", customMessage: leaf.Name + " on the Python write body");
-                pyData.ShouldNotContain("\n            " + member + "=", customMessage: leaf.Name + " read into the Python write body");
+                pyData.ShouldNotContain(
+                    "\n    " + member + ":",
+                    customMessage: leaf.Name + " on the Python write body"
+                );
+                pyData.ShouldNotContain(
+                    "\n            " + member + "=",
+                    customMessage: leaf.Name + " read into the Python write body"
+                );
 
                 // Present as a value, not a pointer, because the document says a read always carries it.
                 served.ShouldContain(leaf.Name);
-                Block(GoModels, "type Resource struct {").ShouldContain(" `json:\"" + leaf.Name + "\"`", customMessage: leaf.Name + " on the Go envelope");
-                goData.ShouldNotContain("json:\"" + leaf.Name + "\"", customMessage: leaf.Name + " on the Go write body");
+                Block(GoModels, "type Resource struct {").ShouldContain(
+                    " `json:\"" + leaf.Name + "\"`",
+                    customMessage: leaf.Name + " on the Go envelope"
+                );
+                goData.ShouldNotContain(
+                    "json:\"" + leaf.Name + "\"",
+                    customMessage: leaf.Name + " on the Go write body"
+                );
             }
         }
     }
@@ -313,12 +355,12 @@ public sealed class PythonGoSurfaceTests {
     public void AReadOnlyLeafIsReadAndNeverWritten() {
         var properties = Block(PythonModels, "    class Properties:");
 
-        properties.ShouldContain("provisioning_state=wire.get(\"provisioningState\")");
-        properties.ShouldNotContain("wire[\"provisioningState\"]");
+        properties.ShouldContain("""provisioning_state=wire.get("provisioningState")""");
+        properties.ShouldNotContain("""wire["provisioningState"]""");
 
         var go = Block(GoModels, "type PostgreSQLServerProperties struct {");
 
-        go.ShouldContain("ProvisioningState *string `json:\"provisioningState,omitempty\"`");
+        go.ShouldContain("""ProvisioningState *string `json:"provisioningState,omitempty"`""");
         GoModels.ShouldContain("func (v PostgreSQLServerProperties) MarshalJSON() ([]byte, error) {");
         GoModels.ShouldContain("\tstripped.ProvisioningState = nil\n");
 
@@ -332,7 +374,7 @@ public sealed class PythonGoSurfaceTests {
         var paths = 0;
 
         foreach (var line in PythonClient.Split('\n')) {
-            if (!line.Contains("f\"/", StringComparison.Ordinal)) {
+            if (!line.Contains("""f"/""", StringComparison.Ordinal)) {
                 continue;
             }
 
@@ -344,14 +386,16 @@ public sealed class PythonGoSurfaceTests {
         }
 
         foreach (var line in GoClient.Split('\n')) {
-            if (!line.Contains("path := \"/", StringComparison.Ordinal)) {
+            if (!line.Contains("""path := "/""", StringComparison.Ordinal)) {
                 continue;
             }
 
             paths++;
 
             foreach (var term in line[(line.IndexOf('=') + 1)..].Split(" + ", StringSplitOptions.TrimEntries)) {
-                (term.StartsWith('"') || term.StartsWith("segment(", StringComparison.Ordinal)).ShouldBeTrue(line.Trim());
+                (term.StartsWith('"') || term.StartsWith("segment(", StringComparison.Ordinal)).ShouldBeTrue(
+                    line.Trim()
+                );
             }
         }
 
@@ -364,26 +408,35 @@ public sealed class PythonGoSurfaceTests {
         PythonModels.ShouldContain("class ScopeResource:");
         PythonModels.ShouldContain("class SubscriptionCreateContent:");
         PythonClient.ShouldContain("class SubscriptionsClient:");
-        Block(PythonClient, "class SubscriptionsClient:").ShouldContain("def create(self, tenant_id: str, subscription_id: str, content: SubscriptionCreateContent) -> ScopeResource:");
+        Block(PythonClient, "class SubscriptionsClient:").ShouldContain(
+            "def create(self, tenant_id: str, subscription_id: str, content: SubscriptionCreateContent) -> ScopeResource:"
+        );
         Block(PythonClient, "class TenantsClient:").ShouldNotContain("def create(");
         PythonClient.ShouldContain("self.tenants = TenantsClient(transport)");
         PythonClient.ShouldContain("self.resource_groups = ResourceGroupsClient(transport)");
 
         GoModels.ShouldContain("type ScopeResource struct {");
         GoModels.ShouldContain("type SubscriptionCreateContent struct {");
-        GoClient.ShouldContain("func (c *SubscriptionsClient) Create(ctx context.Context, tenantID, subscriptionID string, content SubscriptionCreateContent) (*ScopeResource, error) {");
+        GoClient.ShouldContain(
+            "func (c *SubscriptionsClient) Create(ctx context.Context, tenantID, subscriptionID string, content SubscriptionCreateContent) (*ScopeResource, error) {"
+        );
         GoClient.ShouldNotContain("func (c *TenantsClient) Create(");
         GoClient.ShouldContain("\tTenants ");
         GoClient.ShouldContain("\tResourceGroups ");
     }
 
     /// <summary>
-    ///     ⚠ <b>Every long-running verb's 202 can be followed to the resource, on both, and the
-    ///     poll speaks the document's own vocabulary.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Every long-running verb's 202 can be followed to the resource, on both, and the
+    ///         poll speaks the document's own vocabulary.
+    ///     </b>
     /// </summary>
     [Fact]
     public void ALongRunningOperationCanBePolledThroughBothClients() {
-        var states = DocumentReader.EnumOf(Document["components"]?["schemas"]?[OpenApiEmitter.OperationStateSchema] as JsonObject ?? []);
+        var states = DocumentReader.EnumOf(
+            Document["components"]?["schemas"]?[OpenApiEmitter.OperationStateSchema] as JsonObject ?? []
+        );
 
         states.ShouldNotBeEmpty();
 
@@ -398,21 +451,37 @@ public sealed class PythonGoSurfaceTests {
         PythonRuntime.ShouldContain("class Operation(Generic[T]):");
         PythonRuntime.ShouldContain("def poll(self) -> OperationStatus:");
         PythonRuntime.ShouldContain("def wait(self, on_progress: Optional[Callable[[OperationProgress], None]] = None");
-        PythonRuntime.ShouldContain("accepted.header(\"azure-asyncoperation\")");
-        PythonClient.ShouldContain("def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: PostgreSQLServerData) -> Operation[PostgreSQLServerResource]:");
-        PythonClient.ShouldContain("def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:");
-        PythonClient.ShouldContain("def begin_restart(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[PostgreSQLServerResource]:");
+        PythonRuntime.ShouldContain("""accepted.header("azure-asyncoperation")""");
+        PythonClient.ShouldContain(
+            "def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: PostgreSQLServerData) -> Operation[PostgreSQLServerResource]:"
+        );
+        PythonClient.ShouldContain(
+            "def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:"
+        );
+        PythonClient.ShouldContain(
+            "def begin_restart(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[PostgreSQLServerResource]:"
+        );
         PythonClient.ShouldContain("def get(self, operation_id: str) -> OperationStatus:");
 
         GoModels.ShouldContain("type OperationStatus struct {");
-        GoModels.ShouldContain("Error *Error `json:\"error,omitempty\"`");
+        GoModels.ShouldContain("""Error *Error `json:"error,omitempty"`""");
         GoRuntime.ShouldContain("func (o *Operation[T]) Poll(ctx context.Context) (*OperationStatus, error) {");
-        GoRuntime.ShouldContain("func (o *Operation[T]) Wait(ctx context.Context, onProgress func(OperationProgress)) (*T, error) {");
-        GoRuntime.ShouldContain("accepted.Header.Get(\"Azure-AsyncOperation\")");
-        GoClient.ShouldContain("BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data PostgreSQLServerData) (*Operation[PostgreSQLServerResource], error) {");
-        GoClient.ShouldContain("BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {");
-        GoClient.ShouldContain("BeginRestart(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[PostgreSQLServerResource], error) {");
-        GoClient.ShouldContain("func (c *OperationsClient) Get(ctx context.Context, operationID string) (*OperationStatus, error) {");
+        GoRuntime.ShouldContain(
+            "func (o *Operation[T]) Wait(ctx context.Context, onProgress func(OperationProgress)) (*T, error) {"
+        );
+        GoRuntime.ShouldContain("""accepted.Header.Get("Azure-AsyncOperation")""");
+        GoClient.ShouldContain(
+            "BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data PostgreSQLServerData) (*Operation[PostgreSQLServerResource], error) {"
+        );
+        GoClient.ShouldContain(
+            "BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {"
+        );
+        GoClient.ShouldContain(
+            "BeginRestart(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[PostgreSQLServerResource], error) {"
+        );
+        GoClient.ShouldContain(
+            "func (c *OperationsClient) Get(ctx context.Context, operationID string) (*OperationStatus, error) {"
+        );
 
         // ⚠ The id is the URL's last segment and the poll goes to the transport's endpoint, never
         // to the URL itself: a bearer token must not follow an origin the response chose.
@@ -421,8 +490,11 @@ public sealed class PythonGoSurfaceTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>A purge's operation reads nothing when it succeeds, on both, and a restore's reads
-    ///     the resource.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A purge's operation reads nothing when it succeeds, on both, and a restore's reads
+    ///         the resource.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -453,23 +525,40 @@ public sealed class PythonGoSurfaceTests {
         var python = PythonSdkEmitter.Emit(document)[PythonModule + "client.py"];
         var go = GoSdkEmitter.Emit(document)[GoPackage + "client.go"];
 
-        python.ShouldContain("def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:");
-        Member(python, "    def begin_purge(").ShouldContain("return Operation(self._transport, response, _nothing, None)");
+        python.ShouldContain(
+            "def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:"
+        );
+        Member(python, "    def begin_purge(").ShouldContain(
+            "return Operation(self._transport, response, _nothing, None)"
+        );
         Member(python, "    def begin_purge(").ShouldNotContain("Resource.from_wire");
         Member(python, "    def begin_purge(").ShouldContain("/purge\"");
-        python.ShouldContain("def begin_restore(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[PostgreSQLServerResource]:");
+        python.ShouldContain(
+            "def begin_restore(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[PostgreSQLServerResource]:"
+        );
         Member(python, "    def begin_restore(").ShouldContain("PostgreSQLServerResource.from_wire, ");
 
-        go.ShouldContain("BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {");
+        go.ShouldContain(
+            "BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {"
+        );
         Member(go, "func (c *PostgreSQLServerClient) BeginPurge(").ShouldContain("/purge\"");
-        Member(go, "func (c *PostgreSQLServerClient) BeginPurge(").ShouldContain("return begin[struct{}](ctx, c.transport, \"POST\", path, nil, \"\")");
-        go.ShouldContain("BeginRestore(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[PostgreSQLServerResource], error) {");
-        Member(go, "func (c *PostgreSQLServerClient) BeginRestore(").ShouldContain("return begin[PostgreSQLServerResource](ctx, c.transport, \"POST\", path+\"/restore\", nil, path)");
+        Member(go, "func (c *PostgreSQLServerClient) BeginPurge(").ShouldContain(
+            "return begin[struct{}](ctx, c.transport, \"POST\", path, nil, \"\")"
+        );
+        go.ShouldContain(
+            "BeginRestore(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[PostgreSQLServerResource], error) {"
+        );
+        Member(go, "func (c *PostgreSQLServerClient) BeginRestore(").ShouldContain(
+            """return begin[PostgreSQLServerResource](ctx, c.transport, "POST", path+"/restore", nil, path)"""
+        );
     }
 
     /// <summary>
-    ///     ⚠ <b>A listing pages by <c>$top</c> and the <c>nextLink</c>'s <c>$skipToken</c>, and
-    ///     the link's origin is dropped.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A listing pages by <c>$top</c> and the <c>nextLink</c>'s <c>$skipToken</c>, and
+    ///         the link's origin is dropped.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     The two names carry their sigil, which is what the gateway reads; a misspelling is not
@@ -479,15 +568,23 @@ public sealed class PythonGoSurfaceTests {
     /// </remarks>
     [Fact]
     public void APagedListFollowsTheSkipTokenAndNeverTheOrigin() {
-        PythonClient.ShouldContain("def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[PostgreSQLServerResource]:");
-        PythonRuntime.ShouldContain("{\"$top\": str(self._top)}");
-        PythonRuntime.ShouldContain("wire.get(\"nextLink\")");
-        PythonRuntime.ShouldContain("return Request(\"GET\", parts.path, dict(urllib_parse.parse_qsl(parts.query, keep_blank_values=True)))");
+        PythonClient.ShouldContain(
+            "def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[PostgreSQLServerResource]:"
+        );
+        PythonRuntime.ShouldContain("""{"$top": str(self._top)}""");
+        PythonRuntime.ShouldContain("""wire.get("nextLink")""");
+        PythonRuntime.ShouldContain(
+            """return Request("GET", parts.path, dict(urllib_parse.parse_qsl(parts.query, keep_blank_values=True)))"""
+        );
 
-        GoClient.ShouldContain("List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[PostgreSQLServerResource] {");
-        GoRuntime.ShouldContain("query.Set(\"$top\", strconv.Itoa(options.Top))");
-        GoRuntime.ShouldContain("NextLink *string `json:\"nextLink,omitempty\"`");
-        GoRuntime.ShouldContain("return &Request{Method: \"GET\", Path: parsed.EscapedPath(), Query: parsed.Query()}, nil");
+        GoClient.ShouldContain(
+            "List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[PostgreSQLServerResource] {"
+        );
+        GoRuntime.ShouldContain("""query.Set("$top", strconv.Itoa(options.Top))""");
+        GoRuntime.ShouldContain("""NextLink *string `json:"nextLink,omitempty"`""");
+        GoRuntime.ShouldContain(
+            """return &Request{Method: "GET", Path: parsed.EscapedPath(), Query: parsed.Query()}, nil"""
+        );
     }
 
     /// <summary>⚠ <b>The one error shape, with the document's codes, on both.</b></summary>
@@ -505,32 +602,42 @@ public sealed class PythonGoSurfaceTests {
         Block(PythonModels, "class CyberCloudError:").ShouldContain("target: Optional[str] = None");
         Block(PythonModels, "class CyberCloudError:").ShouldContain("details: List[CyberCloudError]");
         PythonRuntime.ShouldContain("class RequestFailedError(Exception):");
-        PythonRuntime.ShouldContain("isinstance(body.get(\"error\"), dict)");
+        PythonRuntime.ShouldContain("""isinstance(body.get("error"), dict)""");
 
-        Block(GoModels, "type Error struct {").ShouldContain("Target *string `json:\"target,omitempty\"`");
-        Block(GoModels, "type Error struct {").ShouldContain("Details []Error `json:\"details,omitempty\"`");
+        Block(GoModels, "type Error struct {").ShouldContain("""Target *string `json:"target,omitempty"`""");
+        Block(GoModels, "type Error struct {").ShouldContain("""Details []Error `json:"details,omitempty"`""");
         GoRuntime.ShouldContain("type RequestFailedError struct {");
         GoRuntime.ShouldContain("func (e *RequestFailedError) Unwrap() error {");
     }
 
     /// <summary>
-    ///     ⚠ <b>A secret action's response is a model and an action's own closed set is declared,
-    ///     on both.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A secret action's response is a model and an action's own closed set is declared,
+    ///         on both.
+    ///     </b>
     /// </summary>
     [Fact]
     public void AnActionsShapesAreDeclaredOnBothSurfaces() {
         PythonModels.ShouldContain("\nPostgreSQLServerListKeysContentKeyName = Literal[\"primary\", \"secondary\"]");
         Block(PythonModels, "class PostgreSQLServerListKeysResult:").ShouldContain("Secret material");
-        PythonClient.ShouldContain("def list_keys(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: PostgreSQLServerListKeysContent) -> PostgreSQLServerListKeysResult:");
+        PythonClient.ShouldContain(
+            "def list_keys(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: PostgreSQLServerListKeysContent) -> PostgreSQLServerListKeysResult:"
+        );
 
         GoModels.ShouldContain("\ntype PostgreSQLServerListKeysContentKeyName string\n");
         GoModels.ShouldContain("\tPostgreSQLServerListKeysContentKeyNamePrimary ");
-        GoClient.ShouldContain("ListKeys(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content PostgreSQLServerListKeysContent) (*PostgreSQLServerListKeysResult, error) {");
+        GoClient.ShouldContain(
+            "ListKeys(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content PostgreSQLServerListKeysContent) (*PostgreSQLServerListKeysResult, error) {"
+        );
     }
 
     /// <summary>
-    ///     ⚠ <b>A wire name that is a Python keyword is suffixed and still writes its own name; a
-    ///     Go field never needs to be, because an exported name is never a keyword.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A wire name that is a Python keyword is suffixed and still writes its own name; a
+    ///         Go field never needs to be, because an exported name is never a keyword.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <c>CyberCloud.Cache/redis</c> declares <c>/properties/persistence/class</c>, which is
@@ -543,11 +650,11 @@ public sealed class PythonGoSurfaceTests {
         var go = GoSdkEmitter.Emit(document)[GoPackage + "models.go"];
 
         python.ShouldContain("class_: Optional[str] = None");
-        python.ShouldContain("class_=wire.get(\"class\")");
-        python.ShouldContain("wire[\"class\"] = self.class_");
+        python.ShouldContain("""class_=wire.get("class")""");
+        python.ShouldContain("""wire["class"] = self.class_""");
         python.ShouldNotContain("\n    class: ");
 
-        go.ShouldContain("Class *string `json:\"class,omitempty\"`");
+        go.ShouldContain("""Class *string `json:"class,omitempty"`""");
 
         PythonSdkEmitter.Snake("clusterId").ShouldBe("cluster_id");
         PythonSdkEmitter.Snake("storageGb").ShouldBe("storage_gb");
@@ -557,8 +664,11 @@ public sealed class PythonGoSurfaceTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>Two leaves that are one identifier fail rather than declaring one name twice — on
-    ///     both, for <c>SdkEmitter</c>'s reason.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Two leaves that are one identifier fail rather than declaring one name twice — on
+    ///         both, for <c>SdkEmitter</c>'s reason.
+    ///     </b>
     /// </summary>
     [Fact]
     public void TwoSiblingsThatAreOneIdentifierFailRatherThanDeclaringOneNameTwice() {
@@ -572,7 +682,7 @@ public sealed class PythonGoSurfaceTests {
                             ApiVersion.Parse(Fixtures.FirstVersion),
                             ResourceSchema.Of(
                                 [
-                                    new("/properties", SchemaKind.Nested, Required: true),
+                                    new("/properties", SchemaKind.Nested, true),
                                     new("/properties/maxMemory", SchemaKind.Text),
                                     new("/properties/max_memory", SchemaKind.Text)
                                 ]
@@ -585,13 +695,17 @@ public sealed class PythonGoSurfaceTests {
 
         var document = OpenApiEmitter.Emit(registry, ApiVersion.Parse(Fixtures.FirstVersion));
 
-        Should.Throw<InvalidOperationException>(() => PythonSdkEmitter.Emit(document)).Message.ShouldContain("max_memory");
+        Should.Throw<InvalidOperationException>(() => PythonSdkEmitter.Emit(document))
+            .Message.ShouldContain("max_memory");
         Should.Throw<InvalidOperationException>(() => GoSdkEmitter.Emit(document)).Message.ShouldContain("MaxMemory");
     }
 
     /// <summary>
-    ///     ⚠ <b>Both packages are written under <c>generated/</c>, one row per file, and the
-    ///     self-check is reported once.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Both packages are written under <c>generated/</c>, one row per file, and the
+    ///         self-check is reported once.
+    ///     </b>
     /// </summary>
     [Fact]
     public void DerivedSurfacesWritesBothPackagesAndReportsEveryFile() {
@@ -601,11 +715,15 @@ public sealed class PythonGoSurfaceTests {
             var report = DerivedSurfaces.Generate(
                 new Dictionary<string, JsonObject> { [Fixtures.FirstVersion] = Document },
                 directory,
-                write: true
+                true
             );
 
-            var python = report.Documents.Where(x => x.Surface == PythonSdkEmitter.DirectoryName).Select(x => x.FileName).ToList();
-            var go = report.Documents.Where(x => x.Surface == GoSdkEmitter.DirectoryName).Select(x => x.FileName).ToList();
+            var python = report.Documents.Where(static x => x.Surface == PythonSdkEmitter.DirectoryName)
+                .Select(static x => x.FileName)
+                .ToList();
+            var go = report.Documents.Where(static x => x.Surface == GoSdkEmitter.DirectoryName)
+                .Select(static x => x.FileName)
+                .ToList();
 
             python.ShouldBe(
                 [
@@ -619,20 +737,30 @@ public sealed class PythonGoSurfaceTests {
                 ]
             );
 
-            go.ShouldBe(["sdk-go/api20260801/client.go", "sdk-go/api20260801/models.go", "sdk-go/api20260801/runtime.go", "sdk-go/go.mod"]);
+            go.ShouldBe(
+                [
+                    "sdk-go/api20260801/client.go", "sdk-go/api20260801/models.go", "sdk-go/api20260801/runtime.go",
+                    "sdk-go/go.mod"
+                ]
+            );
 
             foreach (var file in python.Concat(go)) {
                 File.Exists(Path.Combine(directory, file.Replace('/', Path.DirectorySeparatorChar))).ShouldBeTrue(file);
             }
 
-            report.Documents.SelectMany(x => x.Problems).ShouldBeEmpty();
+            report.Documents.SelectMany(static x => x.Problems).ShouldBeEmpty();
             report.Stale.ShouldBeEmpty();
 
             // A second run over the same tree is clean: nothing drifted, nothing is new.
-            DerivedSurfaces.Generate(new Dictionary<string, JsonObject> { [Fixtures.FirstVersion] = Document }, directory, write: false).IsClean.ShouldBeTrue();
+            DerivedSurfaces.Generate(
+                new Dictionary<string, JsonObject> { [Fixtures.FirstVersion] = Document },
+                directory,
+                false
+            )
+                .IsClean.ShouldBeTrue();
         } finally {
             if (Directory.Exists(directory)) {
-                Directory.Delete(directory, recursive: true);
+                Directory.Delete(directory, true);
             }
         }
     }
@@ -648,7 +776,10 @@ public sealed class PythonGoSurfaceTests {
         }
     }
 
-    /// <summary>The text of one declaration, from its opening line to the first line that is a bare <c>}</c> or the next top-level declaration.</summary>
+    /// <summary>
+    ///     The text of one declaration, from its opening line to the first line that is a bare <c>}</c> or the next
+    ///     top-level declaration.
+    /// </summary>
     static string Block(string source, string opening) {
         var start = source.IndexOf(opening, StringComparison.Ordinal);
         start.ShouldBeGreaterThanOrEqualTo(0, opening);
@@ -662,7 +793,10 @@ public sealed class PythonGoSurfaceTests {
         return source[start..(end < 0 ? source.Length : end + 1)];
     }
 
-    /// <summary>The text of one method, from its opening line to the blank line that ends it — a Python <c>def</c> or a Go <c>func</c>, both of which one blank line separates from the next.</summary>
+    /// <summary>
+    ///     The text of one method, from its opening line to the blank line that ends it — a Python <c>def</c> or a Go
+    ///     <c>func</c>, both of which one blank line separates from the next.
+    /// </summary>
     static string Member(string source, string opening) {
         var start = source.IndexOf(opening, StringComparison.Ordinal);
         start.ShouldBeGreaterThanOrEqualTo(0, opening);
@@ -689,8 +823,13 @@ public sealed class PythonGoSurfaceTests {
                     Type = new(Fixtures.Namespace, "servers"),
                     ApiVersions = [new(ApiVersion.Parse(Fixtures.FirstVersion), Fixtures.ServerSchema())],
                     Actions = [
-                        new(SoftDeletePolicy.RestoreAction, ActionKind.Post, "write", Secret: false) { LongRunning = true },
-                        new(SoftDeletePolicy.PurgeAction, ActionKind.Post, SoftDeletePolicy.DefaultPurgePermission, Secret: false) { LongRunning = true }
+                        new(SoftDeletePolicy.RestoreAction, ActionKind.Post, "write", false) { LongRunning = true },
+                        new(
+                            SoftDeletePolicy.PurgeAction,
+                            ActionKind.Post,
+                            SoftDeletePolicy.DefaultPurgePermission,
+                            false
+                        ) { LongRunning = true }
                     ],
                     Display = new("PostgreSQL server", "PostgreSQL servers", "postgres", "A managed Postgres."),
                     ClusterIdPointer = ClusterPlacement.DefaultPointer,
@@ -714,15 +853,21 @@ public sealed class PythonGoSurfaceTests {
                             ApiVersion.Parse(Fixtures.FirstVersion),
                             ResourceSchema.Of(
                                 [
-                                    new("/properties", SchemaKind.Nested, Required: true),
+                                    new("/properties", SchemaKind.Nested, true),
                                     new("/properties/mode", SchemaKind.Text, Description: "The top-level one.") {
                                         AllowedValues = ["Sentinel", "Standalone"]
                                     },
                                     new("/properties/persistence", SchemaKind.Nested),
-                                    new("/properties/persistence/mode", SchemaKind.Text, Description: "The nested one.") {
-                                        AllowedValues = ["None", "RDB", "AOF"]
-                                    },
-                                    new("/properties/persistence/class", SchemaKind.Text, Description: "A StorageClass name.")
+                                    new(
+                                        "/properties/persistence/mode",
+                                        SchemaKind.Text,
+                                        Description: "The nested one."
+                                    ) { AllowedValues = ["None", "RDB", "AOF"] },
+                                    new(
+                                        "/properties/persistence/class",
+                                        SchemaKind.Text,
+                                        Description: "A StorageClass name."
+                                    )
                                 ]
                             )
                         )

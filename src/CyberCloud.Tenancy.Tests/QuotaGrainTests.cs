@@ -236,9 +236,9 @@ public sealed class QuotaGrainTests(TenancyCluster cluster) {
                 )
         );
 
-        attempts.Count(x => x.IsSuccess).ShouldBe(5);
-        attempts.Count(x => x.IsFailure).ShouldBe(15);
-        attempts.Where(x => x.IsFailure).ShouldAllBe(x => x.Error!.Code == ErrorCode.QuotaExceeded);
+        attempts.Count(static x => x.IsSuccess).ShouldBe(5);
+        attempts.Count(static x => x.IsFailure).ShouldBe(15);
+        attempts.Where(static x => x.IsFailure).ShouldAllBe(x => x.Error!.Code == ErrorCode.QuotaExceeded);
 
         (await quota.GetUsageAsync(QuotaMeter.PublicIps)).GetValueOrThrow().Reserved.ShouldBe(5m);
     }
@@ -277,7 +277,7 @@ public sealed class QuotaGrainTests(TenancyCluster cluster) {
     public async Task EveryMeterHasADefaultLimitSoAnUnconfiguredSubscriptionIsNotUnlimited() {
         var (quota, _) = Quota(14);
 
-        foreach (var meter in Enum.GetValues<QuotaMeter>().Where(x => x != QuotaMeter.Unknown)) {
+        foreach (var meter in Enum.GetValues<QuotaMeter>().Where(static x => x != QuotaMeter.Unknown)) {
             (await quota.GetUsageAsync(meter)).GetValueOrThrow()
                 .Limit.ShouldBeGreaterThan(0m, $"{meter} has no default limit, so it is effectively unlimited.");
         }

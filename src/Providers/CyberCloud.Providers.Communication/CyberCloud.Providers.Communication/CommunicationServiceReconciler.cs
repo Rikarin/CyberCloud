@@ -41,7 +41,8 @@ namespace CyberCloud.Providers.Communication;
 /// </remarks>
 /// <param name="clock">Stamps <see cref="ObservedState.ObservedAt" />.</param>
 /// <param name="plane">The module, reached the way identity reaches it.</param>
-public sealed class CommunicationServiceReconciler(IClock clock, ICommunicationControlPlane plane) : IResourceReconciler {
+public sealed class CommunicationServiceReconciler(IClock clock, ICommunicationControlPlane plane) :
+    IResourceReconciler {
     /// <inheritdoc />
     public ResourceTypeName Type => CommunicationServices.Type;
 
@@ -55,7 +56,13 @@ public sealed class CommunicationServiceReconciler(IClock clock, ICommunicationC
 
         context.Log.Report("ensuring", $"ensuring the communication service '{context.Id.Name}' exists", 40);
 
-        var ensured = await plane.EnsureServiceAsync(context.Id.TenantId, serviceId, context.Id.Name, locale, cancellationToken);
+        var ensured = await plane.EnsureServiceAsync(
+            context.Id.TenantId,
+            serviceId,
+            context.Id.Name,
+            locale,
+            cancellationToken
+        );
         if (ensured.TryGetError(out var ensureError)) {
             return ReconcileOutcome.FromFailure(ensureError);
         }
@@ -64,7 +71,10 @@ public sealed class CommunicationServiceReconciler(IClock clock, ICommunicationC
         var read = await plane.DescribeServiceAsync(context.Id.TenantId, serviceId, cancellationToken);
         if (read.TryGetError(out var readError)) {
             return readError.Code == ErrorCode.ResourceNotFound
-                ? ReconcileOutcome.InProgress("the service was ensured and does not read back yet", TimeSpan.FromSeconds(5))
+                ? ReconcileOutcome.InProgress(
+                    "the service was ensured and does not read back yet",
+                    TimeSpan.FromSeconds(5)
+                )
                 : ReconcileOutcome.FromFailure(readError);
         }
 
@@ -106,7 +116,10 @@ public sealed class CommunicationServiceReconciler(IClock clock, ICommunicationC
         // ⚠ Converged once the grain answers not-found, read back — not once the retire returned.
         var read = await plane.DescribeServiceAsync(context.Id.TenantId, serviceId, cancellationToken);
         if (read.IsSuccess) {
-            return ReconcileOutcome.InProgress($"the service '{context.Id.Name}' still describes itself", TimeSpan.FromSeconds(5));
+            return ReconcileOutcome.InProgress(
+                $"the service '{context.Id.Name}' still describes itself",
+                TimeSpan.FromSeconds(5)
+            );
         }
 
         if (read.Error!.Code != ErrorCode.ResourceNotFound) {
@@ -122,7 +135,11 @@ public sealed class CommunicationServiceReconciler(IClock clock, ICommunicationC
         ObserveContext context,
         CancellationToken cancellationToken = default
     ) {
-        var read = await plane.DescribeServiceAsync(context.Id.TenantId, CommunicationServices.ServiceIdOf(context.Id), cancellationToken);
+        var read = await plane.DescribeServiceAsync(
+            context.Id.TenantId,
+            CommunicationServices.ServiceIdOf(context.Id),
+            cancellationToken
+        );
 
         if (read.TryGetError(out _)) {
             return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the service is not provisioned" };
@@ -135,7 +152,8 @@ public sealed class CommunicationServiceReconciler(IClock clock, ICommunicationC
             Exists = true,
             Json = new JsonObject {
                 ["name"] = service.Name,
-                ["serviceId"] = CommunicationServices.ServiceIdOf(context.Id).ToString("D", System.Globalization.CultureInfo.InvariantCulture),
+                ["serviceId"] = CommunicationServices.ServiceIdOf(context.Id)
+                    .ToString("D", System.Globalization.CultureInfo.InvariantCulture),
                 ["defaultLocale"] = service.DefaultLocale,
                 ["channels"] = service.Channels.IsDefault ? 0 : service.Channels.Length,
                 ["createdAt"] = service.CreatedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture)

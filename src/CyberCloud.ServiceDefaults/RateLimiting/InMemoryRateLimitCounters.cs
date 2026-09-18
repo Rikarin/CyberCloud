@@ -29,7 +29,7 @@ public sealed class InMemoryRateLimitCounters(IClock clock) : IRateLimitCounters
         cancellationToken.ThrowIfCancellationRequested();
 
         var now = clock.UtcNow;
-        var stamps = windows.GetOrAdd(key, _ => new Queue<DateTimeOffset>());
+        var stamps = windows.GetOrAdd(key, static _ => new Queue<DateTimeOffset>());
 
         lock (stamps) {
             while (stamps.Count > 0 && stamps.Peek() <= now - window) {

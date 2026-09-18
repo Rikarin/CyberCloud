@@ -65,19 +65,37 @@ public sealed class MonitorCollectorReconciler(IClock clock) : IResourceReconcil
 
         context.Log.Report("applying-config", $"applying the configuration of collector '{name}'", 20);
 
-        if (await Apply(context, cluster, MonitorCollectors.ConfigMapKind, MonitorCollectors.ConfigMapJson(context.Id, context.Desired), cancellationToken) is { } configProblem) {
+        if (await Apply(
+                context,
+                cluster,
+                MonitorCollectors.ConfigMapKind,
+                MonitorCollectors.ConfigMapJson(context.Id, context.Desired),
+                cancellationToken
+            ) is { } configProblem) {
             return configProblem;
         }
 
         context.Log.Report("applying-collector", $"applying collector '{name}' at {MonitorCollectors.Image}", 50);
 
-        if (await Apply(context, cluster, MonitorCollectors.DeploymentKind, MonitorCollectors.DeploymentJson(context.Id, context.Desired), cancellationToken) is { } deploymentProblem) {
+        if (await Apply(
+                context,
+                cluster,
+                MonitorCollectors.DeploymentKind,
+                MonitorCollectors.DeploymentJson(context.Id, context.Desired),
+                cancellationToken
+            ) is { } deploymentProblem) {
             return deploymentProblem;
         }
 
         context.Log.Report("applying-service", $"applying the endpoint of collector '{name}'", 75);
 
-        if (await Apply(context, cluster, MonitorCollectors.ServiceKind, MonitorCollectors.ServiceJson(context.Id, context.Desired), cancellationToken) is { } serviceProblem) {
+        if (await Apply(
+                context,
+                cluster,
+                MonitorCollectors.ServiceKind,
+                MonitorCollectors.ServiceJson(context.Id, context.Desired),
+                cancellationToken
+            ) is { } serviceProblem) {
             return serviceProblem;
         }
 
@@ -87,12 +105,18 @@ public sealed class MonitorCollectorReconciler(IClock clock) : IResourceReconcil
 
             if (read.TryGetError(out var readError)) {
                 return readError.Code == ErrorCode.ResourceNotFound
-                    ? ReconcileOutcome.InProgress($"'{target}' was applied and is not readable back yet", TimeSpan.FromSeconds(5))
+                    ? ReconcileOutcome.InProgress(
+                        $"'{target}' was applied and is not readable back yet",
+                        TimeSpan.FromSeconds(5)
+                    )
                     : ReconcileOutcome.FromFailure(readError);
             }
 
             if (!MonitorCollectors.Matches(read.GetValueOrThrow().Json, context.Id, context.Desired)) {
-                return ReconcileOutcome.InProgress($"'{target}' is readable and does not yet carry the desired collector", TimeSpan.FromSeconds(5));
+                return ReconcileOutcome.InProgress(
+                    $"'{target}' is readable and does not yet carry the desired collector",
+                    TimeSpan.FromSeconds(5)
+                );
             }
         }
 
@@ -172,10 +196,15 @@ public sealed class MonitorCollectorReconciler(IClock clock) : IResourceReconcil
 
         // The Deployment is the observation: it is the object that runs, and a collector whose
         // Deployment is gone has stopped collecting whatever its ConfigMap says.
-        var deployment = await cluster.GetAsync(MonitorCollectors.DeploymentRef(context.Namespace, context.Id), cancellationToken);
+        var deployment = await cluster.GetAsync(
+            MonitorCollectors.DeploymentRef(context.Namespace, context.Id),
+            cancellationToken
+        );
 
         if (deployment.TryGetError(out _)) {
-            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the collector's Deployment is absent" };
+            return new() {
+                Exists = false, ObservedAt = clock.UtcNow, Summary = "the collector's Deployment is absent"
+            };
         }
 
         var found = deployment.GetValueOrThrow();
@@ -183,8 +212,13 @@ public sealed class MonitorCollectorReconciler(IClock clock) : IResourceReconcil
 
         // The Service is observed too: a collector whose Service was deleted is running and
         // unreachable, which is drift rather than absence.
-        var service = await cluster.GetAsync(MonitorCollectors.ServiceRef(context.Namespace, context.Id), cancellationToken);
-        matches = matches && service.IsSuccess && MonitorCollectors.Matches(service.GetValueOrThrow().Json, context.Id, context.Desired);
+        var service = await cluster.GetAsync(
+            MonitorCollectors.ServiceRef(context.Namespace, context.Id),
+            cancellationToken
+        );
+        matches = matches
+            && service.IsSuccess
+            && MonitorCollectors.Matches(service.GetValueOrThrow().Json, context.Id, context.Desired);
 
         return new() {
             Exists = true,

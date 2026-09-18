@@ -124,21 +124,21 @@ public sealed class ValkeyCacheProvider : IResourceProvider {
                 ValkeyCaches.ListKeysAction,
                 ActionKind.Post,
                 ValkeyCaches.ListKeysPermission,
-                secret: true,
+                true,
                 response: ValkeyCaches.ListKeysResponse,
                 handler: typeof(ValkeyCacheListKeysHandler)
             )
             .Display(
                 "Valkey cache",
                 "Valkey caches",
-                shortName: "valkey",
-                summary: "A managed Valkey cache with Sentinel failover, on spotahome/redis-operator. "
+                "valkey",
+                "A managed Valkey cache with Sentinel failover, on spotahome/redis-operator. "
                 + "Valkey rather than Redis, per ADR-011; every Redis client works against it."
             )
             // docs/plan/12 § The pattern, once, piece 1 — and ADR-012's fifth surface, which is the one
             // binding that ties this registration to charts/managed/valkey.
             .Chart(ValkeyCaches.ChartName)
             .SupportsTags()
-            .RequiresCluster(ValkeyCaches.ClusterIdPointer);
+            .RequiresCluster();
     }
 }

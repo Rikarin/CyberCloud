@@ -143,7 +143,7 @@ public sealed class ValkeySecretTests {
 
         secret["metadata"]!["name"]!.GetValue<string>().ShouldBe(reference.Name);
         secret["type"]!.GetValue<string>().ShouldBe("Opaque");
-        secret["data"]!.AsObject().Select(x => x.Key).ShouldBe(["password"]);
+        secret["data"]!.AsObject().Select(static x => x.Key).ShouldBe(["password"]);
         secret["data"]!["password"]!.GetValue<string>()
             .ShouldBe(Convert.ToBase64String(Encoding.UTF8.GetBytes("hunter2")));
     }
@@ -207,12 +207,12 @@ public sealed class ValkeySecretTests {
         // The action's response is the one shape in this provider that carries a credential, and
         // ResourceManagerService audits every `secret: true` action call. Declaring the property
         // without the flag would put the value on a surface that is neither audited nor masked.
-        var password = ValkeyCaches.ListKeysResponse.Properties.Single(x => x.JsonPointer == "/password");
+        var password = ValkeyCaches.ListKeysResponse.Properties.Single(static x => x.JsonPointer == "/password");
 
         password.Secret.ShouldBeTrue();
 
         ValkeyCaches.ListKeysResponse.Properties
-            .Where(x => x.JsonPointer != "/password")
+            .Where(static x => x.JsonPointer != "/password")
             .ShouldAllBe(x => !x.Secret);
     }
 }

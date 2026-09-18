@@ -18,6 +18,6 @@ static class CycRunner {
         var values = globals.Read(parse);
         var settings = CycSettings.Resolve(host.Config, host.Environment, values.Profile);
 
-        return new CycInvocation(host, tree, values, settings);
+        return new(host, tree, values, settings);
     }
 }

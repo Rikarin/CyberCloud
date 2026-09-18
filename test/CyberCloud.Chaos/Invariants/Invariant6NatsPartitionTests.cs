@@ -3,8 +3,11 @@ using CyberCloud.Chaos.Topology;
 namespace CyberCloud.Chaos.Invariants;
 
 /// <summary>
-///     docs/plan/23 § The chaos invariants, 6: <i>partition the NATS cluster → streams recover,
-///     consumers resume from their cursor, no duplicate billing after dedup.</i>
+///     docs/plan/23 § The chaos invariants, 6:
+///     <i>
+///         partition the NATS cluster → streams recover,
+///         consumers resume from their cursor, no duplicate billing after dedup.
+///     </i>
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>Vacuous, and the row says exactly why rather than skipping quietly.</b> No silo in this
@@ -28,7 +31,11 @@ public sealed class Invariant6NatsPartitionTests(ChaosTopology topology) {
 
     [Fact]
     public void Invariant6_PartitioningTheNatsClusterHasNothingToPartitionYet() {
-        topology.Report.Vacuous(6, Reason, new Dictionary<string, double>(StringComparer.Ordinal) { ["natsClientsInAnySilo"] = 0 });
+        topology.Report.Vacuous(
+            6,
+            Reason,
+            new Dictionary<string, double>(StringComparer.Ordinal) { ["natsClientsInAnySilo"] = 0 }
+        );
         Assert.Skip("VACUOUS — " + Reason);
     }
 }

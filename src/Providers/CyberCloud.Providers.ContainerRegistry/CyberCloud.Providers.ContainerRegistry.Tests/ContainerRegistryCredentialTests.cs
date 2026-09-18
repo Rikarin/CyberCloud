@@ -99,7 +99,7 @@ public sealed class ContainerRegistryCredentialTests {
 
             value.ShouldNotBeNull($"'{field}' was not minted at all");
 
-            foreach (var command in connection.Applied.Where(x => x.Target.Kind.Kind != "Secret")) {
+            foreach (var command in connection.Applied.Where(static x => x.Target.Kind.Kind != "Secret")) {
                 command.Body.ShouldNotContain(
                     value,
                     Case.Sensitive,
@@ -125,7 +125,7 @@ public sealed class ContainerRegistryCredentialTests {
             TestContext.Current.CancellationToken
         );
 
-        var rendered = connection.Applied.Single(x => x.Target.Kind.Kind == "Secret").Body;
+        var rendered = connection.Applied.Single(static x => x.Target.Kind.Kind == "Secret").Body;
         var data = JsonNode.Parse(rendered)!["data"]!.AsObject();
 
         var path = ContainerRegistries.SecretPath(

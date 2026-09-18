@@ -40,7 +40,11 @@ public interface IBearerTokenValidator {
     ///     The claims, or <see cref="ErrorCode.AuthorizationFailed" /> with a reason phrased in terms
     ///     of the request rather than the token's contents.
     /// </returns>
-    Task<Result<TokenClaims>> ValidateAsync(string token, HttpContext http, CancellationToken cancellationToken = default);
+    Task<Result<TokenClaims>> ValidateAsync(
+        string token,
+        HttpContext http,
+        CancellationToken cancellationToken = default
+    );
 }
 
 /// <summary>The one refusal shape every validator answers with.</summary>

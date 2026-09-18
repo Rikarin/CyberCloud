@@ -34,8 +34,11 @@ namespace CyberCloud.Providers.ContainerService;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>The connection is reported on the converging pass and attached by the driver, the
-///         way a managed cluster's is.</b> <c>ReconcileContext.ClusterConnections</c> carries an
+///         ⚠
+///         <b>
+///             The connection is reported on the converging pass and attached by the driver, the
+///             way a managed cluster's is.
+///         </b> <c>ReconcileContext.ClusterConnections</c> carries an
 ///         <c>AgentInitiated</c> descriptor with no credential reference — the credential is the
 ///         agent's, hashed in the tunnel grain — and <c>ReconcileDriver</c> stamps the cluster id
 ///         and the owning tenant and attaches after <c>Converged</c>. From then on the cluster's id
@@ -99,7 +102,10 @@ public sealed class ConnectedClusterReconciler(IClock clock) : IResourceReconcil
                 40
             );
 
-            return ReconcileOutcome.InProgress($"the agent for '{name}' has not sent its first heartbeat", WaitingForAgent);
+            return ReconcileOutcome.InProgress(
+                $"the agent for '{name}' has not sent its first heartbeat",
+                WaitingForAgent
+            );
         }
 
         // ⚠ ClusterId and OwningTenantId are deliberately left unset: ReconcileDriver stamps both

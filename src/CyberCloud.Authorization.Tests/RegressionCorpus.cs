@@ -33,7 +33,8 @@ public sealed record CorpusCase(
     IReadOnlyList<CorpusExpectation> Expectations
 ) {
     /// <summary>The tuples, parsed.</summary>
-    public IReadOnlyList<RelationTuple> Parsed() => [.. Tuples.Select(x => RelationTuple.Parse(x).GetValueOrThrow())];
+    public IReadOnlyList<RelationTuple> Parsed() =>
+        [.. Tuples.Select(static x => RelationTuple.Parse(x).GetValueOrThrow())];
 
     /// <inheritdoc />
     public override string ToString() => Name;

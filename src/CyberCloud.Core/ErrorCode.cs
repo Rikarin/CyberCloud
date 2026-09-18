@@ -257,7 +257,7 @@ public sealed class ErrorCode : IEquatable<ErrorCode> {
     ///     </para>
     /// </remarks>
     static readonly FrozenDictionary<string, ErrorCode> ByValue =
-        All.ToFrozenDictionary(x => x.Value, StringComparer.Ordinal);
+        All.ToFrozenDictionary(static x => x.Value, StringComparer.Ordinal);
 
     /// <summary>The wire form — the exact string that appears in <c>error.code</c>.</summary>
     public string Value { get; }
@@ -310,7 +310,8 @@ public sealed class ErrorCode : IEquatable<ErrorCode> {
     ///     else uses adds that response to every generated operation without anyone editing a second
     ///     list.
     /// </remarks>
-    public static ImmutableArray<int> HttpStatuses { get; } = [.. All.Select(x => x.HttpStatus).Distinct().Order()];
+    public static ImmutableArray<int> HttpStatuses { get; } =
+        [.. All.Select(static x => x.HttpStatus).Distinct().Order()];
 
     /// <summary>Every code that renders as one status, in declaration order.</summary>
     /// <param name="httpStatus">The status.</param>

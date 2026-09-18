@@ -113,7 +113,10 @@ public sealed class AuthorizeApi(
     IOptions<IdentityHostOptions> options,
     ILogger<AuthorizeApi> logger
 ) {
-    /// <summary>The page an unauthenticated <c>/authorize</c> lands on, under <see cref="IdentityHostOptions.SignInPageBaseUri" />.</summary>
+    /// <summary>
+    ///     The page an unauthenticated <c>/authorize</c> lands on, under
+    ///     <see cref="IdentityHostOptions.SignInPageBaseUri" />.
+    /// </summary>
     public const string SignInPagePath = "/signin";
 
     /// <summary>The page a tenant-registered client's <c>/authorize</c> lands on, under the same base.</summary>
@@ -193,7 +196,16 @@ public sealed class AuthorizeApi(
         // ⚠ First-party clients are the platform's own pages and are consent-free by registration;
         // everything else is a tenant's, and needs the person's yes — see the type's remarks.
         if (!FirstPartyClients.IsFirstParty(client.ClientId)) {
-            var consented = await ConsentAsync(request, tenantId, userId, client, scopes, promptNone, pathAndQuery, consent);
+            var consented = await ConsentAsync(
+                request,
+                tenantId,
+                userId,
+                client,
+                scopes,
+                promptNone,
+                pathAndQuery,
+                consent
+            );
 
             if (consented is not null) {
                 return consented;
@@ -203,7 +215,12 @@ public sealed class AuthorizeApi(
         GrantLog.AuthorizationCodeIssued(logger, tenantId, userId, sessionId);
 
         return new AuthorizeDecision.IssueCode(
-            TokenApi.BuildCodePrincipal(WithCookieMethods(session.GetValueOrThrow(), user!), profile.GetValueOrThrow(), client, scopes)
+            TokenApi.BuildCodePrincipal(
+                WithCookieMethods(session.GetValueOrThrow(), user!),
+                profile.GetValueOrThrow(),
+                client,
+                scopes
+            )
         );
     }
 
@@ -227,7 +244,12 @@ public sealed class AuthorizeApi(
 
         switch (consent) {
             case ConsentDecision.Deny:
-                GrantLog.AuthorizationRequestRefused(logger, tenantId, OpenIddictConstants.Errors.AccessDenied, "consent-denied");
+                GrantLog.AuthorizationRequestRefused(
+                    logger,
+                    tenantId,
+                    OpenIddictConstants.Errors.AccessDenied,
+                    "consent-denied"
+                );
 
                 return new AuthorizeDecision.Refuse(OpenIddictConstants.Errors.AccessDenied, ConsentDeniedDescription);
 
@@ -238,7 +260,12 @@ public sealed class AuthorizeApi(
                 var granted = await grant.GrantAsync(userId, client.ClientId, scopes);
 
                 if (granted.TryGetError(out var failed)) {
-                    GrantLog.AuthorizationRequestRefused(logger, tenantId, OpenIddictConstants.Errors.ServerError, "consent-not-recorded");
+                    GrantLog.AuthorizationRequestRefused(
+                        logger,
+                        tenantId,
+                        OpenIddictConstants.Errors.ServerError,
+                        "consent-not-recorded"
+                    );
 
                     return new AuthorizeDecision.Refuse(OpenIddictConstants.Errors.ServerError, failed.Message);
                 }
@@ -251,14 +278,24 @@ public sealed class AuthorizeApi(
 
         var recorded = await grant.GetAsync();
 
-        if (recorded.IsSuccess && recorded.GetValueOrThrow().Covers(scopes) && !request.HasPromptValue(OpenIddictConstants.PromptValues.Consent)) {
+        if (recorded.IsSuccess
+            && recorded.GetValueOrThrow().Covers(scopes)
+            && !request.HasPromptValue(OpenIddictConstants.PromptValues.Consent)) {
             return null;
         }
 
         if (promptNone) {
-            GrantLog.AuthorizationRequestRefused(logger, tenantId, OpenIddictConstants.Errors.ConsentRequired, "consent-not-on-record");
+            GrantLog.AuthorizationRequestRefused(
+                logger,
+                tenantId,
+                OpenIddictConstants.Errors.ConsentRequired,
+                "consent-not-on-record"
+            );
 
-            return new AuthorizeDecision.Refuse(OpenIddictConstants.Errors.ConsentRequired, "The person has not consented to this client.");
+            return new AuthorizeDecision.Refuse(
+                OpenIddictConstants.Errors.ConsentRequired,
+                "The person has not consented to this client."
+            );
         }
 
         return new AuthorizeDecision.Consent(ConsentLocation(pathAndQuery));
@@ -278,7 +315,10 @@ public sealed class AuthorizeApi(
     public string ConsentLocation(string pathAndQuery) {
         var returnUrl = ReturnUrl.Sanitize(pathAndQuery);
 
-        return options.SignInPageBaseUri.TrimEnd('/') + ConsentPagePath + "?returnUrl=" + Uri.EscapeDataString(returnUrl);
+        return options.SignInPageBaseUri.TrimEnd('/')
+            + ConsentPagePath
+            + "?returnUrl="
+            + Uri.EscapeDataString(returnUrl);
     }
 
     /// <summary>
@@ -321,7 +361,10 @@ public sealed class AuthorizeApi(
     public string SignInLocation(string pathAndQuery) {
         var returnUrl = ReturnUrl.Sanitize(WithoutPromptLogin(pathAndQuery));
 
-        return options.SignInPageBaseUri.TrimEnd('/') + SignInPagePath + "?returnUrl=" + Uri.EscapeDataString(returnUrl);
+        return options.SignInPageBaseUri.TrimEnd('/')
+            + SignInPagePath
+            + "?returnUrl="
+            + Uri.EscapeDataString(returnUrl);
     }
 
     /// <summary>
@@ -344,7 +387,10 @@ public sealed class AuthorizeApi(
 
         var returnUrl = ReturnUrl.Sanitize(WithoutPair(WithoutPromptLogin(pathAndQuery), TenantHint.ParameterName));
 
-        return options.SignInPageBaseUri.TrimEnd('/') + SignInPagePath + "?returnUrl=" + Uri.EscapeDataString(returnUrl);
+        return options.SignInPageBaseUri.TrimEnd('/')
+            + SignInPagePath
+            + "?returnUrl="
+            + Uri.EscapeDataString(returnUrl);
     }
 
     /// <summary>The path and query without every pair named <paramref name="name" />.</summary>
@@ -367,7 +413,10 @@ public sealed class AuthorizeApi(
         if (promptNone) {
             GrantLog.AuthorizationRequestRefused(logger, Guid.Empty, OpenIddictConstants.Errors.LoginRequired, reason);
 
-            return new AuthorizeDecision.Refuse(OpenIddictConstants.Errors.LoginRequired, "The person is not signed in.");
+            return new AuthorizeDecision.Refuse(
+                OpenIddictConstants.Errors.LoginRequired,
+                "The person is not signed in."
+            );
         }
 
         return new AuthorizeDecision.SignIn(SignInLocation(pathAndQuery));
@@ -383,7 +432,7 @@ public sealed class AuthorizeApi(
         var kept = pathAndQuery[(question + 1)..]
             .Split('&', StringSplitOptions.RemoveEmptyEntries)
             .Select(WithoutLogin)
-            .Where(pair => pair is not null)
+            .Where(static pair => pair is not null)
             .ToList();
 
         return kept.Count == 0 ? pathAndQuery[..question] : pathAndQuery[..question] + "?" + string.Join('&', kept);
@@ -402,7 +451,7 @@ public sealed class AuthorizeApi(
 
         var values = Uri.UnescapeDataString(pair[(equals + 1)..].Replace('+', ' '))
             .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Where(x => !string.Equals(x, OpenIddictConstants.PromptValues.Login, StringComparison.Ordinal))
+            .Where(static x => !string.Equals(x, OpenIddictConstants.PromptValues.Login, StringComparison.Ordinal))
             .ToList();
 
         return values.Count == 0 ? null : "prompt=" + Uri.EscapeDataString(string.Join(' ', values));

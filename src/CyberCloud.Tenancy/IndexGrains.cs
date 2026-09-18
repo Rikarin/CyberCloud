@@ -187,11 +187,11 @@ public sealed class ResourceIndexGrain(
                         // unreachable; if it ever were reachable, a refusal naming a type nobody can
                         // act on is worse than one that undercounts, and the count would be visible in
                         // the resource-graph projection either way.
-                            .Where(x => x.Value > 0 && ResourceTypeName.TryParse(x.Key, out _))
+                            .Where(static x => x.Value > 0 && ResourceTypeName.TryParse(x.Key, out _))
                             // Ordered so a refusal message is the same on every retry. An unordered
                             // dictionary would make "2 databases and 1 firewallRule" and the reverse the
                             // same refusal with two different texts, which reads as two different faults.
-                            .OrderBy(x => x.Key, StringComparer.Ordinal)
+                            .OrderBy(static x => x.Key, StringComparer.Ordinal)
                             .Select(x => new ChildTypeCount { Type = Parse(x.Key), Count = x.Value })
                 ]
             )

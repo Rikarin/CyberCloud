@@ -17,8 +17,11 @@ namespace CyberCloud.Providers.Monitor;
 ///         <see cref="IAlertControlPlane.IsArmedAsync" />), and <c>Converged</c> follows both reads.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Two facts make an enabled rule converged, and the first version checked one
-///         (2026-09-15, #32 review).</b> The rule is held — its spec reads back — and its workspace
+///         ⚠
+///         <b>
+///             Two facts make an enabled rule converged, and the first version checked one
+///             (2026-09-15, #32 review).
+///         </b> The rule is held — its spec reads back — and its workspace
 ///         is armed — a reminder row exists to tick it. The grain writes the two in that order into
 ///         two stores, so a reminder-table fault after the state write leaves the first true and
 ///         the second false, and a reconciler judging on the spec alone reported that rule
@@ -27,16 +30,22 @@ namespace CyberCloud.Providers.Monitor;
 ///         and clause 4 stays in progress until the row is there.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The first reconciler in this family with a <see langword="null" />
-///         <c>ReconcileContext.Cluster</c>, next to one that cannot work without it.</b> The
+///         ⚠
+///         <b>
+///             The first reconciler in this family with a <see langword="null" />
+///             <c>ReconcileContext.Cluster</c>, next to one that cannot work without it.
+///         </b> The
 ///         workspace applies three objects into the cluster its body names; a rule under it applies
 ///         nothing and never reads the connection. The registration says so —
 ///         <c>MonitorProvider</c> declares no <c>RequiresCluster</c> on this type — and the
 ///         conformance suite reads it through an <c>IConvergedModule</c> for that reason.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The action group's service is checked for shape and tenant here, and for
-///         existence at delivery.</b> <see cref="MonitorAlertRules.ToSpec" /> refuses a path that
+///         ⚠
+///         <b>
+///             The action group's service is checked for shape and tenant here, and for
+///             existence at delivery.
+///         </b> <see cref="MonitorAlertRules.ToSpec" /> refuses a path that
 ///         is not this tenant's <c>CyberCloud.Communication/services</c>; whether that service has
 ///         been created and has the channel configured is a fact the sending module owns and
 ///         answers when a notification is sent, per recipient, on the instance. A reconciler that
@@ -82,11 +91,19 @@ public sealed class MonitorAlertRuleReconciler(IClock clock, IAlertControlPlane 
                 }
 
                 if (armed.GetValueOrThrow()) {
-                    context.Log.Report("ready", $"rule '{context.Id.Name}' already carries the desired condition and action group", 100);
+                    context.Log.Report(
+                        "ready",
+                        $"rule '{context.Id.Name}' already carries the desired condition and action group",
+                        100
+                    );
                     return ReconcileOutcome.Converged;
                 }
 
-                context.Log.Report("configuring", $"rule '{context.Id.Name}' is held and its workspace's reminder is not armed; re-arming", 20);
+                context.Log.Report(
+                    "configuring",
+                    $"rule '{context.Id.Name}' is held and its workspace's reminder is not armed; re-arming",
+                    20
+                );
             }
         } else if (held.Error!.Code != ErrorCode.ResourceNotFound) {
             return ReconcileOutcome.FromFailure(held.Error);
@@ -107,12 +124,18 @@ public sealed class MonitorAlertRuleReconciler(IClock clock, IAlertControlPlane 
         var read = await plane.GetRuleAsync(tenantId, evaluatorId, context.Id.Id, cancellationToken);
         if (read.TryGetError(out var readError)) {
             return readError.Code == ErrorCode.ResourceNotFound
-                ? ReconcileOutcome.InProgress("the rule was written and does not read back yet", TimeSpan.FromSeconds(5))
+                ? ReconcileOutcome.InProgress(
+                    "the rule was written and does not read back yet",
+                    TimeSpan.FromSeconds(5)
+                )
                 : ReconcileOutcome.FromFailure(readError);
         }
 
         if (!read.GetValueOrThrow().Spec.SameAs(spec)) {
-            return ReconcileOutcome.InProgress("the rule reads back and does not yet carry the desired spec", TimeSpan.FromSeconds(5));
+            return ReconcileOutcome.InProgress(
+                "the rule reads back and does not yet carry the desired spec",
+                TimeSpan.FromSeconds(5)
+            );
         }
 
         // The second half of clause 4, for the same reason as the first: the arm is observed, not
@@ -152,7 +175,12 @@ public sealed class MonitorAlertRuleReconciler(IClock clock, IAlertControlPlane 
     ///     and a rule that converged on a silo that cannot schedule it would be the false Converged
     ///     this exists to remove.
     /// </remarks>
-    async Task<Result<bool>> ArmedAsync(Guid tenantId, Guid evaluatorId, AlertRuleSpec spec, CancellationToken cancellationToken) =>
+    async Task<Result<bool>> ArmedAsync(
+        Guid tenantId,
+        Guid evaluatorId,
+        AlertRuleSpec spec,
+        CancellationToken cancellationToken
+    ) =>
         spec.Enabled
             ? await plane.IsArmedAsync(tenantId, evaluatorId, cancellationToken)
             : Result<bool>.Success(true);
@@ -194,12 +222,14 @@ public sealed class MonitorAlertRuleReconciler(IClock clock, IAlertControlPlane 
         var read = await plane.GetRuleAsync(context.Id.TenantId, evaluatorId, context.Id.Id, cancellationToken);
 
         if (read.TryGetError(out _)) {
-            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the rule is not on its workspace's evaluator" };
+            return new() {
+                Exists = false, ObservedAt = clock.UtcNow, Summary = "the rule is not on its workspace's evaluator"
+            };
         }
 
         var held = read.GetValueOrThrow();
         var matches = MonitorAlertRules.Matches(held, context.Id, context.Desired);
-        var open = held.Instances.IsDefault ? 0 : held.Instances.Count(x => x.IsOpen);
+        var open = held.Instances.IsDefault ? 0 : held.Instances.Count(static x => x.IsOpen);
 
         return new() {
             Exists = true,
@@ -216,7 +246,8 @@ public sealed class MonitorAlertRuleReconciler(IClock clock, IAlertControlPlane 
             }.ToJsonString(),
             ObservedAt = clock.UtcNow,
             Summary = !matches ? "the rule has drifted from its body"
-                : held.LastError.Length > 0 ? "the rule is held and its last evaluation could not run: " + held.LastError
+                : held.LastError.Length > 0 ? "the rule is held and its last evaluation could not run: "
+                + held.LastError
                 : $"the rule is held and is {MonitorAlertRules.Spell(held.State)}"
         };
     }

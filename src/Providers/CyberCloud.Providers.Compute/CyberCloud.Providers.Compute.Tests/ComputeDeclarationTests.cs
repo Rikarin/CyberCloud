@@ -44,7 +44,7 @@ public sealed class ComputeDeclarationTests {
         // stay clear of all of them and of each other.
         CliTokens.Collisions(
             ProviderRegistry.Build([new ComputeProvider()])
-                .Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+                .Types.Select(static x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
         )
             .ShouldBeEmpty();
 
@@ -55,29 +55,38 @@ public sealed class ComputeDeclarationTests {
 
     [Fact]
     public void TheMachineDrawsWhatTheGuestGetsAndTheRootDiskOnly() {
-        using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, size: "s1.medium", osDiskSize: "40Gi", dataDisks: ["data"]));
+        using var body = JsonDocument.Parse(
+            VirtualMachines.Body(Compute.ClusterId, size: "s1.medium", osDiskSize: "40Gi", dataDisks: ["data"])
+        );
 
-        var drawn = Derived(VirtualMachines.Type).ToDictionary(x => x.Meter, x => x.Derivation!.Amount(body.RootElement).GetValueOrThrow());
+        var drawn = Derived(VirtualMachines.Type).ToDictionary(
+            static x => x.Meter,
+            x => x.Derivation!.Amount(body.RootElement).GetValueOrThrow()
+        );
 
         drawn[QuotaMeter.Vcpu].ShouldBe(2, "the size's cores reach quota and the guest alike");
         drawn[QuotaMeter.MemoryGb].ShouldBe(8);
-        drawn[QuotaMeter.StorageGb].ShouldBe(40, "a data disk is metered on its own type; summing it here would reserve the same gibibytes twice");
+        drawn[QuotaMeter.StorageGb].ShouldBe(
+            40,
+            "a data disk is metered on its own type; summing it here would reserve the same gibibytes twice"
+        );
 
-        Registration(VirtualMachines.Type).Meters.Select(x => x.Meter).ShouldContain(QuotaMeter.Resources);
-        Registration(VirtualMachines.Type).Meters.Select(x => x.Meter).ShouldNotContain(QuotaMeter.Clusters);
+        Registration(VirtualMachines.Type).Meters.Select(static x => x.Meter).ShouldContain(QuotaMeter.Resources);
+        Registration(VirtualMachines.Type).Meters.Select(static x => x.Meter).ShouldNotContain(QuotaMeter.Clusters);
     }
 
     [Fact]
     public void ADiskAndAnImageDrawTheirSizeAndOneResource() {
-        using var disk = JsonDocument.Parse(Disks.Body(Compute.ClusterId, size: "64Gi"));
+        using var disk = JsonDocument.Parse(Disks.Body(Compute.ClusterId, "64Gi"));
         using var image = JsonDocument.Parse(Images.Body(Compute.ClusterId, size: "10Gi"));
 
         Derived(Disks.Type).Single().Derivation!.Amount(disk.RootElement).GetValueOrThrow().ShouldBe(64);
         Derived(Images.Type).Single().Derivation!.Amount(image.RootElement).GetValueOrThrow().ShouldBe(10);
 
         foreach (var type in new[] { Disks.Type, Images.Type }) {
-            Registration(type).Meters.Select(x => x.Meter).ShouldContain(QuotaMeter.Resources);
-            Registration(type).Meters.Select(x => x.Meter).ShouldNotContain(QuotaMeter.Vcpu, "a disk runs nothing");
+            Registration(type).Meters.Select(static x => x.Meter).ShouldContain(QuotaMeter.Resources);
+            Registration(type).Meters.Select(static x => x.Meter)
+                .ShouldNotContain(QuotaMeter.Vcpu, "a disk runs nothing");
         }
     }
 
@@ -87,7 +96,10 @@ public sealed class ComputeDeclarationTests {
         // derivation is a delegate, so no gate can infer them.
         foreach (var meter in Derived(VirtualMachines.Type)) {
             meter.Derivation!.Expression.ShouldNotBeNullOrWhiteSpace(meter.Meter.ToString());
-            meter.Derivation!.Reads.ShouldContain(meter.Meter == QuotaMeter.StorageGb ? "/properties/osDiskSize" : "/properties/size", meter.Meter.ToString());
+            meter.Derivation!.Reads.ShouldContain(
+                meter.Meter == QuotaMeter.StorageGb ? "/properties/osDiskSize" : "/properties/size",
+                meter.Meter.ToString()
+            );
         }
 
         Derived(Disks.Type).Single().Derivation!.Reads.ShouldBe(["/properties/size"]);
@@ -102,7 +114,9 @@ public sealed class ComputeDeclarationTests {
         using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, size: "s1.nano"));
 
         VirtualMachines.Schema2026.Validate(body.RootElement, allowTags: true).IsFailure.ShouldBeTrue();
-        Derived(VirtualMachines.Type).First(x => x.Meter == QuotaMeter.Vcpu).Derivation!.Amount(body.RootElement).IsFailure.ShouldBeTrue();
+        Derived(VirtualMachines.Type).First(static x => x.Meter == QuotaMeter.Vcpu).Derivation!
+            .Amount(body.RootElement)
+            .IsFailure.ShouldBeTrue();
     }
 
     // ── The schema ──────────────────────────────────────────────────────────────────────────────
@@ -113,8 +127,20 @@ public sealed class ComputeDeclarationTests {
                      (VirtualMachines.Schema2026, VirtualMachines.Body(Compute.ClusterId)),
                      (Disks.Schema2026, Disks.Body(Compute.ClusterId)),
                      (Images.Schema2026, Images.Body(Compute.ClusterId)),
-                     (Images.Schema2026, Images.Body(Compute.ClusterId, kind: Images.UrlSource, url: "docker://quay.io/kubevirt/cirros-container-disk-demo:v1.9.0")),
-                     (VirtualMachines.Schema2026, VirtualMachines.Body(Compute.ClusterId, dataDisks: ["data"], virtualNetwork: "vnet", subnet: "web", cloudInit: Compute.VaultPath("web") + "#userdata@3"))
+                     (Images.Schema2026,
+                         Images.Body(
+                             Compute.ClusterId,
+                             Images.UrlSource,
+                             url: "docker://quay.io/kubevirt/cirros-container-disk-demo:v1.9.0"
+                         )),
+                     (VirtualMachines.Schema2026,
+                         VirtualMachines.Body(
+                             Compute.ClusterId,
+                             dataDisks: ["data"],
+                             virtualNetwork: "vnet",
+                             subnet: "web",
+                             cloudInit: Compute.VaultPath("web") + "#userdata@3"
+                         ))
                  }) {
             using var document = JsonDocument.Parse(body);
             var validated = schema.Validate(document.RootElement, allowTags: true);
@@ -130,12 +156,19 @@ public sealed class ComputeDeclarationTests {
         Disks.Schema2026.Properties.ShouldAllBe(x => !x.Secret);
         Images.Schema2026.Properties.ShouldAllBe(x => !x.Secret);
 
-        var handle = VirtualMachines.Schema2026.Properties.Single(x => x.JsonPointer == "/properties/cloudInit/userData");
+        var handle = VirtualMachines.Schema2026.Properties.Single(static x => x.JsonPointer
+            == "/properties/cloudInit/userData"
+        );
         handle.Widget.ShouldBe(WidgetHint.SecretRef);
         handle.Pattern.ShouldBe(VirtualMachines.OptionalSecretRefPattern);
 
-        VirtualMachines.ParseCloudInitRef(Compute.VaultPath("web") + "#userdata@3", Compute.TenantA).GetValueOrThrow()
-            .ShouldBe(new CyberCloud.Core.Contracts.SecretRef { Path = Compute.VaultPath("web"), Field = "userdata", Version = "3" });
+        VirtualMachines.ParseCloudInitRef(Compute.VaultPath("web") + "#userdata@3", Compute.TenantA)
+            .GetValueOrThrow()
+            .ShouldBe(
+                new CyberCloud.Core.Contracts.SecretRef {
+                    Path = Compute.VaultPath("web"), Field = "userdata", Version = "3"
+                }
+            );
         VirtualMachines.ParseCloudInitRef("", Compute.TenantA).GetValueOrThrow().IsEmpty.ShouldBeTrue();
         VirtualMachines.ParseCloudInitRef("no-hash", Compute.TenantA).IsFailure.ShouldBeTrue();
     }
@@ -151,8 +184,7 @@ public sealed class ComputeDeclarationTests {
 
         foreach (var foreign in new[] {
                      Compute.VaultPath("CyberCloud.ContainerRegistry/registries/x", Compute.TenantB) + "#password",
-                     "platform/bootstrap#token",
-                     "tenants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa#userdata",
+                     "platform/bootstrap#token", "tenants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa#userdata",
                      "tenants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/#userdata",
                      "tenants/AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA/web#userdata"
                  }) {
@@ -164,7 +196,10 @@ public sealed class ComputeDeclarationTests {
         }
 
         // The tenant's own credential paths — what listKeys and listCredentials already hand it — are inside.
-        VirtualMachines.ParseCloudInitRef(Compute.VaultPath("CyberCloud.ContainerRegistry/registries/x") + "#password", Compute.TenantA)
+        VirtualMachines.ParseCloudInitRef(
+            Compute.VaultPath("CyberCloud.ContainerRegistry/registries/x") + "#password",
+            Compute.TenantA
+        )
             .IsSuccess.ShouldBeTrue();
     }
 
@@ -175,13 +210,18 @@ public sealed class ComputeDeclarationTests {
         // `{array}` @param — charts/managed/kafka's `cidr-shape-is-unenforced`. So the schema admits
         // any string here, and VirtualMachines.DataDiskProblem is what stands between the body and
         // `persistentVolumeClaim.claimName`; VirtualMachineReconcilerTests drives it through a pass.
-        foreach (var bad in new[] { "Data", "data_1", "-data", new string('d', ResourceNaming.MaxLength + 1), VirtualMachines.RootVolume, VirtualMachines.CloudInitVolume }) {
+        foreach (var bad in new[] {
+                     "Data", "data_1", "-data", new string('d', ResourceNaming.MaxLength + 1),
+                     VirtualMachines.RootVolume, VirtualMachines.CloudInitVolume
+                 }) {
             using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, dataDisks: ["fine", bad]));
 
-            VirtualMachines.Schema2026.Validate(body.RootElement, allowTags: true).IsSuccess.ShouldBeTrue(
-                "the schema refused a disk name, so the chart surface must have grown the per-element constraint it could not carry — retire DataDiskProblem's first check and this test"
-            );
-            VirtualMachines.DataDiskProblem(body.RootElement).ShouldContain(bad, Case.Sensitive, $"'{bad}' was accepted as a disk name");
+            VirtualMachines.Schema2026.Validate(body.RootElement, allowTags: true)
+                .IsSuccess.ShouldBeTrue(
+                    "the schema refused a disk name, so the chart surface must have grown the per-element constraint it could not carry — retire DataDiskProblem's first check and this test"
+                );
+            VirtualMachines.DataDiskProblem(body.RootElement)
+                .ShouldContain(bad, Case.Sensitive, $"'{bad}' was accepted as a disk name");
         }
 
         using var good = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, dataDisks: ["data-1", "logs"]));
@@ -193,13 +233,13 @@ public sealed class ComputeDeclarationTests {
         // CDI refuses a changed DataVolume spec, so every tenant-facing leaf is immutable and the only
         // legal PUT moves tags — conformance.yaml § owed, `nothing-mutable-reaches-the-cluster`.
         foreach (var schema in new[] { Disks.Schema2026, Images.Schema2026 }) {
-            schema.Properties.Where(x => x.Kind != SchemaKind.Nested).ShouldAllBe(x => x.Immutable);
+            schema.Properties.Where(static x => x.Kind != SchemaKind.Nested).ShouldAllBe(x => x.Immutable);
         }
 
         // And on the machine, size and dataDisks are the two a tenant may change.
-        VirtualMachines.Schema2026.Properties.Where(x => x.Kind != SchemaKind.Nested && !x.Immutable)
-            .Select(x => x.JsonPointer)
-            .OrderBy(x => x, StringComparer.Ordinal)
+        VirtualMachines.Schema2026.Properties.Where(static x => x.Kind != SchemaKind.Nested && !x.Immutable)
+            .Select(static x => x.JsonPointer)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ShouldBe(["/properties/cloudInit/userData", "/properties/dataDisks", "/properties/size"]);
     }
 
@@ -209,11 +249,16 @@ public sealed class ComputeDeclarationTests {
 
         foreach (var (name, image) in Images.Catalogue) {
             image.Url.ShouldStartWith(Images.RegistryScheme + "quay.io/containerdisks/", Case.Sensitive, name);
-            image.Url.ShouldContain("@sha256:", Case.Sensitive, $"{name} is pinned by a tag, and a tag names different bytes from one week to the next");
+            image.Url.ShouldContain(
+                "@sha256:",
+                Case.Sensitive,
+                $"{name} is pinned by a tag, and a tag names different bytes from one week to the next"
+            );
             image.Url.ShouldNotContain(":latest");
         }
 
-        Images.Schema2026.Properties.Single(x => x.JsonPointer == "/properties/source/name").AllowedValues.ShouldBe(Images.CatalogueNames);
+        Images.Schema2026.Properties.Single(static x => x.JsonPointer == "/properties/source/name")
+            .AllowedValues.ShouldBe(Images.CatalogueNames);
     }
 
     static ResourceTypeRegistration Registration(ResourceTypeName type) {
@@ -222,5 +267,5 @@ public sealed class ComputeDeclarationTests {
     }
 
     static IReadOnlyList<MeterRegistration> Derived(ResourceTypeName type) =>
-        [.. Registration(type).Meters.Where(x => x.Derivation is not null)];
+        [.. Registration(type).Meters.Where(static x => x.Derivation is not null)];
 }

@@ -35,7 +35,7 @@ public sealed class OpenSearchQuotaTests {
         // ⚠ THE ASSERTION A DERIVATION COPIED FROM CyberCloud.Messaging/natsClusters FAILS. That
         // provider's shape is `replicas × preset`, which is right about the data nodes here and misses
         // three whole JVMs on the default body.
-        var amounts = Amounts(OpenSearchServices.Body(ClusterId, dataNodes: 3, masterNodes: 3));
+        var amounts = Amounts(OpenSearchServices.Body(ClusterId, 3, masterNodes: 3));
 
         // 3 data × m1.medium (1 core) = 3, plus 3 cluster-managers × 500m = 1.5.
         amounts[QuotaMeter.Vcpu].ShouldBe(4.5m);
@@ -83,8 +83,8 @@ public sealed class OpenSearchQuotaTests {
 
     [Fact]
     public void StorageIsTheDataNodesProductPlusEveryOtherNodesFixedVolume() {
-        var three = Amounts(OpenSearchServices.Body(ClusterId, dataNodes: 3, storageSize: "100Gi"));
-        var six = Amounts(OpenSearchServices.Body(ClusterId, dataNodes: 6, storageSize: "100Gi"));
+        var three = Amounts(OpenSearchServices.Body(ClusterId, 3, "100Gi"));
+        var six = Amounts(OpenSearchServices.Body(ClusterId, 6, "100Gi"));
 
         three[QuotaMeter.StorageGb].ShouldBe(330m, "3 × 100Gi + 3 managers × 10Gi");
         six[QuotaMeter.StorageGb].ShouldBe(630m);
@@ -104,9 +104,7 @@ public sealed class OpenSearchQuotaTests {
 
     [Fact]
     public void AnExplicitOverrideBeatsThePresetAndIsCountedPerSizedNode() {
-        var amounts = Amounts(
-            WithSizing(OpenSearchServices.Body(ClusterId, dataNodes: 3, coordinatingNodes: 1), "2", "16Gi")
-        );
+        var amounts = Amounts(WithSizing(OpenSearchServices.Body(ClusterId, 3, coordinatingNodes: 1), "2", "16Gi"));
 
         amounts[QuotaMeter.Vcpu].ShouldBe(9.5m, "2 × 4 sized nodes is 8, plus 3 managers × 500m");
         amounts[QuotaMeter.MemoryGb].ShouldBe(70m, "16Gi × 4 is 64, plus 3 × 2Gi is 6");
@@ -118,7 +116,7 @@ public sealed class OpenSearchQuotaTests {
         // committed amounts from the STORED body through this same function, so a derivation reading a
         // clock, configuration or a static that changes would return a different number on the delete
         // than the create committed — quota drifting upward on every cycle.
-        var body = OpenSearchServices.Body(ClusterId, dataNodes: 6, storageSize: "250Gi");
+        var body = OpenSearchServices.Body(ClusterId, 6, "250Gi");
 
         Amounts(body).ShouldBe(Amounts(body));
     }
@@ -134,7 +132,7 @@ public sealed class OpenSearchQuotaTests {
 
         using var body = JsonDocument.Parse(WithSizing(OpenSearchServices.Body(ClusterId), "not-a-quantity", "8Gi"));
 
-        var vcpu = registration.Meters.Single(x => x.Meter == QuotaMeter.Vcpu).Derivation!;
+        var vcpu = registration.Meters.Single(static x => x.Meter == QuotaMeter.Vcpu).Derivation!;
 
         vcpu.Amount(body.RootElement)
             .IsFailure.ShouldBeTrue("a body whose cpu quantity does not parse reserved an amount instead of refusing.");
@@ -162,10 +160,10 @@ public sealed class OpenSearchQuotaTests {
                     foreach (var size in new[] { "1", "1Ti" }) {
                         var body = OpenSearchServices.Body(
                             ClusterId,
-                            dataNodes: dataNodes,
-                            storageSize: size,
-                            masterNodes: masterNodes,
-                            coordinatingNodes: coordinatingNodes
+                            dataNodes,
+                            size,
+                            masterNodes,
+                            coordinatingNodes
                         );
 
                         foreach (var (meter, amount) in Amounts(body)) {
@@ -190,10 +188,10 @@ public sealed class OpenSearchQuotaTests {
         var amounts = Amounts(
             OpenSearchServices.Body(
                 ClusterId,
-                dataNodes: 1,
-                storageSize: "1",
-                masterNodes: 1,
-                coordinatingNodes: 0
+                1,
+                "1",
+                1,
+                0
             )
         );
 
@@ -209,7 +207,7 @@ public sealed class OpenSearchQuotaTests {
         using var body = JsonDocument.Parse(bodyJson);
         var found = new Dictionary<QuotaMeter, decimal>();
 
-        foreach (var meter in registration.Meters.Where(x => x.Derivation is not null)) {
+        foreach (var meter in registration.Meters.Where(static x => x.Derivation is not null)) {
             var amount = meter.Derivation!.Amount(body.RootElement);
             amount.IsSuccess.ShouldBeTrue(meter.Meter.ToString());
             found[meter.Meter] = amount.GetValueOrThrow();

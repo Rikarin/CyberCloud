@@ -249,7 +249,7 @@ public sealed class CredentialTests {
         var hash = RecoveryCodes.Hash(code);
 
         hash.ShouldBe(RecoveryCodes.Hash(code));
-        hash.ShouldNotContain(RecoveryCodes.Normalize(code), Case.Insensitive);
+        hash.ShouldNotContain(RecoveryCodes.Normalize(code));
     }
 
     // ── Constant-time comparison ───────────────────────────────────────────────────────────────

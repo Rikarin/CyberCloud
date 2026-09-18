@@ -28,14 +28,14 @@ public sealed class RecoveryVaultDeclarationTests {
         registration.ReconcilerType.ShouldBe(typeof(RecoveryVaultReconciler));
         registration.ReadPermission.ShouldBe("read");
 
-        var list = registration.Actions.Single(x => x.Name == "listRecoveryPoints");
+        var list = registration.Actions.Single(static x => x.Name == "listRecoveryPoints");
         list.Secret.ShouldBeFalse("a recovery point is a name, a phase and two timestamps");
         list.Permission.ShouldBe("read");
         list.HandlerType.ShouldBe(typeof(RecoveryVaultListRecoveryPointsHandler));
         list.LongRunning.ShouldBeFalse();
         list.Request.ShouldBeNull();
 
-        var recover = registration.Actions.Single(x => x.Name == "recover");
+        var recover = registration.Actions.Single(static x => x.Name == "recover");
         recover.Permission.ShouldBe("write", "a recover writes a Cluster into the tenant's namespace");
         recover.HandlerType.ShouldBe(typeof(RecoveryVaultRecoverHandler));
         recover.Request.ShouldNotBeNull();
@@ -43,7 +43,7 @@ public sealed class RecoveryVaultDeclarationTests {
 
         // ⚠ Not `restore`: the builder reserves it for soft delete's own dispatch, and this type's first
         // conformance run found the refusal. Pinned so nobody renames it back.
-        registration.Actions.Select(x => x.Name).ShouldNotContain("restore");
+        registration.Actions.Select(static x => x.Name).ShouldNotContain("restore");
     }
 
     [Fact]
@@ -54,7 +54,7 @@ public sealed class RecoveryVaultDeclarationTests {
         // ⚠ A ScheduledBackup is a controller's intent, not a pod. The pods that run a backup are the
         // protected server's and are reserved against the server's meters; a vault that reserved
         // vCPU or memory would count them twice.
-        registration.Meters.Select(x => x.Meter).ShouldBe([QuotaMeter.Resources]);
+        registration.Meters.Select(static x => x.Meter).ShouldBe([QuotaMeter.Resources]);
     }
 
     [Fact]
@@ -63,12 +63,17 @@ public sealed class RecoveryVaultDeclarationTests {
         registry.TryGetType(RecoveryVaults.Type, out var registration).ShouldBeTrue();
 
         registration.Display.Alias.ShouldBe("backupvault");
-        registration.Display.Alias.ShouldNotBe("recoveryservices", "a short name equal to its own group key is the collision CliTokens refuses");
+        registration.Display.Alias.ShouldNotBe(
+            "recoveryservices",
+            "a short name equal to its own group key is the collision CliTokens refuses"
+        );
     }
 
     [Fact]
     public void TheScheduleIsFiveFieldsAndTheObjectGetsSix() {
-        var schedule = RecoveryVaults.Schema2026.Properties.Single(x => x.JsonPointer == "/properties/policy/schedule");
+        var schedule = RecoveryVaults.Schema2026.Properties.Single(static x => x.JsonPointer
+            == "/properties/policy/schedule"
+        );
 
         schedule.Required.ShouldBeTrue();
         schedule.DefaultJson.ShouldBe("\"0 2 * * *\"");
@@ -91,7 +96,9 @@ public sealed class RecoveryVaultDeclarationTests {
 
     [Fact]
     public void ProtectedItemsIsAnArrayOfTextWhoseShapeTheReconcilerChecks() {
-        var items = RecoveryVaults.Schema2026.Properties.Single(x => x.JsonPointer == "/properties/protectedItems");
+        var items = RecoveryVaults.Schema2026.Properties.Single(static x => x.JsonPointer
+            == "/properties/protectedItems"
+        );
 
         items.Kind.ShouldBe(SchemaKind.Array);
         items.ElementKind.ShouldBe(SchemaKind.Text);
@@ -104,7 +111,8 @@ public sealed class RecoveryVaultDeclarationTests {
         items.MaxLength.ShouldBeNull();
 
         using var bad = JsonDocument.Parse(RecoveryVaults.Body(Guid.NewGuid(), ["not-a-path"]));
-        RecoveryVaults.Schema2026.Validate(bad.RootElement).IsSuccess.ShouldBeTrue("the API admits it; the reconciler is where it is refused");
+        RecoveryVaults.Schema2026.Validate(bad.RootElement)
+            .IsSuccess.ShouldBeTrue("the API admits it; the reconciler is where it is refused");
 
         var refused = RecoveryVaults.ItemOf(Ids.Vault("v"), 0, "not-a-path");
         refused.IsFailure.ShouldBeTrue();
@@ -122,11 +130,14 @@ public sealed class RecoveryVaultDeclarationTests {
         RecoveryVaults.Schema2026.Validate(body.RootElement).IsSuccess.ShouldBeTrue();
 
         // The defaults the readers fall back to are the ones the schema publishes.
-        using var bare = JsonDocument.Parse("""{"location":"eu-central","properties":{"clusterId":"eeeeeeee-0000-4000-8000-000000000005","protectedItems":[]}}""");
+        using var bare = JsonDocument.Parse(
+            """{"location":"eu-central","properties":{"clusterId":"eeeeeeee-0000-4000-8000-000000000005","protectedItems":[]}}"""
+        );
         RecoveryVaults.Schedule(bare.RootElement).ShouldBe("0 2 * * *");
         RecoveryVaults.RetentionDays(bare.RootElement).ShouldBe(14);
 
-        RecoveryVaults.Schema2026.Properties.Single(x => x.JsonPointer == "/properties/policy/retentionDays").DefaultJson.ShouldBe("14");
+        RecoveryVaults.Schema2026.Properties.Single(static x => x.JsonPointer == "/properties/policy/retentionDays")
+            .DefaultJson.ShouldBe("14");
     }
 
     [Fact]
@@ -135,14 +146,24 @@ public sealed class RecoveryVaultDeclarationTests {
         // OWN SCHEMA. The shipping vault assembly may not reference PostgresServers (rule 2); this
         // test project may, and it is the one reader that compares the two spellings. A change to the
         // server's backup block turns this red rather than quietly refusing every server.
-        var server = PostgresServers.Schema2026.Properties.ToDictionary(x => x.JsonPointer, StringComparer.Ordinal);
+        var server = PostgresServers.Schema2026.Properties.ToDictionary(
+            static x => x.JsonPointer,
+            StringComparer.Ordinal
+        );
 
         foreach (var pointer in RecoveryVaults.ServerContractPointers) {
-            server.ShouldContainKey(pointer, $"the vault reads '{pointer}' off a PostgreSQL server's body and that type no longer declares it");
+            server.ShouldContainKey(
+                pointer,
+                $"the vault reads '{pointer}' off a PostgreSQL server's body and that type no longer declares it"
+            );
         }
 
-        server["/properties/backup/enabled"].DefaultJson.ShouldBe(RecoveryVaults.ServerBackupEnabledDefault ? "true" : "false");
-        server["/properties/backup/retentionDays"].DefaultJson.ShouldBe(RecoveryVaults.ServerRetentionDaysDefault.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        server["/properties/backup/enabled"].DefaultJson.ShouldBe(
+            RecoveryVaults.ServerBackupEnabledDefault ? "true" : "false"
+        );
+        server["/properties/backup/retentionDays"].DefaultJson.ShouldBe(
+            RecoveryVaults.ServerRetentionDaysDefault.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        );
 
         // And the type name the vault dispatches on is that family's.
         RecoveryVaults.PostgresServerType.ShouldBe(PostgresServers.Type);
@@ -171,7 +192,10 @@ public sealed class RecoveryVaultDeclarationTests {
         folded.Length.ShouldBeLessThanOrEqualTo(63);
         folded.ShouldMatch("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$");
         folded.ShouldStartWith(new string('v', 24) + "-" + new string('i', 24) + "-");
-        folded.ShouldNotBe(RecoveryVaults.ScheduledBackupNameOf(longVault, new string('i', 39) + "j"), "two items that share a 24-character stem folded to one name");
+        folded.ShouldNotBe(
+            RecoveryVaults.ScheduledBackupNameOf(longVault, new string('i', 39) + "j"),
+            "two items that share a 24-character stem folded to one name"
+        );
     }
 
     [Fact]
@@ -190,34 +214,73 @@ public sealed class RecoveryVaultDeclarationTests {
 
     [Fact]
     public void MatchesComparesTheThreeFieldsTheVaultOwnsAndNothingTheOperatorWrites() {
-        using var desired = JsonDocument.Parse(RecoveryVaults.Body(Guid.NewGuid(), [], schedule: "0 2 * * *"));
+        using var desired = JsonDocument.Parse(RecoveryVaults.Body(Guid.NewGuid(), [], "0 2 * * *"));
 
         var rendered = RecoveryVaults.ScheduledBackupJson("nightly", "main", "main", desired.RootElement);
-        RecoveryVaults.Matches(rendered, "main", desired.RootElement).ShouldBeTrue("the object as rendered, before apply, must match");
+        RecoveryVaults.Matches(rendered, "main", desired.RootElement)
+            .ShouldBeTrue("the object as rendered, before apply, must match");
 
         // As the API server hands it back: kind, a defaulted target, a status.
-        var readBack = """{"apiVersion":"postgresql.cnpg.io/v1","kind":"ScheduledBackup","metadata":{"name":"nightly-main"},"spec":{"schedule":"0 0 2 * * *","cluster":{"name":"main"},"backupOwnerReference":"self","method":"barmanObjectStore","immediate":true,"target":"prefer-standby","online":true},"status":{"lastCheckTime":"2026-09-18T02:00:00Z"}}""";
+        var readBack =
+            """{"apiVersion":"postgresql.cnpg.io/v1","kind":"ScheduledBackup","metadata":{"name":"nightly-main"},"spec":{"schedule":"0 0 2 * * *","cluster":{"name":"main"},"backupOwnerReference":"self","method":"barmanObjectStore","immediate":true,"target":"prefer-standby","online":true},"status":{"lastCheckTime":"2026-09-18T02:00:00Z"}}""";
         RecoveryVaults.Matches(readBack, "main", desired.RootElement).ShouldBeTrue();
 
-        RecoveryVaults.Matches(readBack.Replace("0 0 2 * * *", "0 0 3 * * *", StringComparison.Ordinal), "main", desired.RootElement).ShouldBeFalse("a schedule rewritten by hand is a policy the tenant did not set");
+        RecoveryVaults.Matches(
+            readBack.Replace("0 0 2 * * *", "0 0 3 * * *", StringComparison.Ordinal),
+            "main",
+            desired.RootElement
+        )
+            .ShouldBeFalse("a schedule rewritten by hand is a policy the tenant did not set");
         RecoveryVaults.Matches(readBack, "other", desired.RootElement).ShouldBeFalse();
-        RecoveryVaults.Matches(readBack.Replace("\"self\"", "\"none\"", StringComparison.Ordinal), "main", desired.RootElement).ShouldBeFalse();
-        RecoveryVaults.Matches(readBack.Replace("ScheduledBackup", "Backup", StringComparison.Ordinal), "main", desired.RootElement).ShouldBeFalse();
+        RecoveryVaults.Matches(
+            readBack.Replace("\"self\"", "\"none\"", StringComparison.Ordinal),
+            "main",
+            desired.RootElement
+        )
+            .ShouldBeFalse();
+        RecoveryVaults.Matches(
+            readBack.Replace("ScheduledBackup", "Backup", StringComparison.Ordinal),
+            "main",
+            desired.RootElement
+        )
+            .ShouldBeFalse();
     }
 
     [Fact]
     public void ARecoveryPointLineCarriesEverythingTheResponseShapePromises() {
         var point = RecoveryVaults.RecoveryPointOf(
             "main",
-            RecoveryVaults.OperatorBackupJson("ns", "nightly-main", "main", "nightly-main-20260918020000", "failed", new DateTimeOffset(2026, 9, 18, 2, 0, 0, TimeSpan.Zero), new DateTimeOffset(2026, 9, 18, 2, 0, 9, TimeSpan.Zero), error: "invalid destination")
+            RecoveryVaults.OperatorBackupJson(
+                "ns",
+                "nightly-main",
+                "main",
+                "nightly-main-20260918020000",
+                "failed",
+                new DateTimeOffset(2026, 9, 18, 2, 0, 0, TimeSpan.Zero),
+                new DateTimeOffset(2026, 9, 18, 2, 0, 9, TimeSpan.Zero),
+                error: "invalid destination"
+            )
         );
 
         point.ShouldNotBeNull();
         point.Value.IsCompleted.ShouldBeFalse();
         RecoveryVaults.RecoveryPointLine(point.Value)
-            .ShouldBe("main nightly-main-20260918020000 failed started 2026-09-18T02:00:00.0000000+00:00 stopped 2026-09-18T02:00:09.0000000+00:00 method barmanObjectStore: invalid destination");
+            .ShouldBe(
+                "main nightly-main-20260918020000 failed started 2026-09-18T02:00:00.0000000+00:00 stopped 2026-09-18T02:00:09.0000000+00:00 method barmanObjectStore: invalid destination"
+            );
 
-        var completed = RecoveryVaults.RecoveryPointOf("main", RecoveryVaults.OperatorBackupJson("ns", "nightly-main", "main", "x", "completed", DateTimeOffset.UnixEpoch, null));
+        var completed = RecoveryVaults.RecoveryPointOf(
+            "main",
+            RecoveryVaults.OperatorBackupJson(
+                "ns",
+                "nightly-main",
+                "main",
+                "x",
+                "completed",
+                DateTimeOffset.UnixEpoch,
+                null
+            )
+        );
         completed!.Value.IsCompleted.ShouldBeTrue();
         RecoveryVaults.RecoveryPointLine(completed.Value).ShouldEndWith("stopped - method barmanObjectStore");
     }
@@ -226,15 +289,14 @@ public sealed class RecoveryVaultDeclarationTests {
     public void TheOwedFileNamesEveryDebtTheCodeCites() {
         // ⚠ The contracts and the reconciler cite owed rows by id. A row renamed in conformance.yaml
         // and not in the code sends a reader to a debt that is not there.
-        var manifest = File.ReadAllText(Path.Combine(RepositoryRoot(), "charts", "managed", "recovery-vault", "conformance.yaml"));
+        var manifest = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "charts", "managed", "recovery-vault", "conformance.yaml")
+        );
 
         foreach (var id in new[] {
-                     "file-shares-have-no-snapshot-story",
-                     "the-store-is-the-servers",
-                     "retention-is-enforced-on-passes",
-                     "items-in-other-resource-groups",
-                     "a-restore-is-not-yet-a-resource",
-                     "deleting-the-vault-deletes-its-recovery-points"
+                     "file-shares-have-no-snapshot-story", "the-store-is-the-servers",
+                     "retention-is-enforced-on-passes", "items-in-other-resource-groups",
+                     "a-restore-is-not-yet-a-resource", "deleting-the-vault-deletes-its-recovery-points"
                  }) {
             manifest.ShouldContain("- id: " + id);
         }
@@ -246,6 +308,7 @@ public sealed class RecoveryVaultDeclarationTests {
             directory = directory.Parent;
         }
 
-        return directory?.FullName ?? throw new InvalidOperationException("CyberCloud.slnx was not found above the test assembly.");
+        return directory?.FullName
+            ?? throw new InvalidOperationException("CyberCloud.slnx was not found above the test assembly.");
     }
 }

@@ -6,12 +6,12 @@ using CyberCloud.Providers.Monitor.Conformance;
 using CyberCloud.Providers.Monitor.Contracts;
 using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ResourceManager.Reconcile;
-using k8s;
-using k8s.Models;
 using Shouldly;
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
+using k8s;
+using k8s.Models;
 
 namespace CyberCloud.Providers.Monitor.ClusterConformance;
 
@@ -21,8 +21,11 @@ namespace CyberCloud.Providers.Monitor.ClusterConformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE ASSERTION IS ON EACH DATASOURCE'S HEALTH, NOT THE SERVER'S, BECAUSE THE SERVER'S
-///         WAS THE ANSWER THAT LIED.</b> The first version of this branch left the Grafana pod's start
+///         ⚠
+///         <b>
+///             THE ASSERTION IS ON EACH DATASOURCE'S HEALTH, NOT THE SERVER'S, BECAUSE THE SERVER'S
+///             WAS THE ANSWER THAT LIED.
+///         </b> The first version of this branch left the Grafana pod's start
 ///         unproved by record and the adversarial review of #32 ran the image: Grafana 13.2.2's
 ///         installer tried to update the <i>bundled</i> Prometheus plugin in place on the read-only
 ///         root, stopped its process, failed to put it back, and <c>/api/health</c> — the readiness
@@ -48,8 +51,11 @@ namespace CyberCloud.Providers.Monitor.ClusterConformance;
 ///         <c>conformance.yaml § assertions</c>, <c>the-instance-sees-its-workspace-and-nothing-else</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE WORKSPACE'S TWO OBJECTS ARE WRITTEN BY THIS TEST, AND THAT IS RECORDED AS
-///         OWED.</b> The suite registers one provider, so no workspace reconciler runs here, and the
+///         ⚠
+///         <b>
+///             THE WORKSPACE'S TWO OBJECTS ARE WRITTEN BY THIS TEST, AND THAT IS RECORDED AS
+///             OWED.
+///         </b> The suite registers one provider, so no workspace reconciler runs here, and the
 ///         workspace is a body property rather than an ancestor the harness would create. The test
 ///         first watches the kubelet hold the pod in <c>CreateContainerConfigError</c> naming the
 ///         row — which is the documented shape of "a Grafana created before its workspace" — and then
@@ -60,8 +66,11 @@ namespace CyberCloud.Providers.Monitor.ClusterConformance;
 ///         <c>the-workspace-in-the-kubelet-test-is-the-harness-standing-in</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>ANONYMOUS VIEWING IS ON IN THIS TEST'S BODY, BECAUSE THE ADMIN CREDENTIAL CANNOT
-///         TRAVEL THROUGH THE PROXY.</b> The request reaches Grafana through the API server's service
+///         ⚠
+///         <b>
+///             ANONYMOUS VIEWING IS ON IN THIS TEST'S BODY, BECAUSE THE ADMIN CREDENTIAL CANNOT
+///             TRAVEL THROUGH THE PROXY.
+///         </b> The request reaches Grafana through the API server's service
 ///         proxy, and the API server deletes the <c>Authorization</c> header once it has authenticated
 ///         a request — so a basic-auth header for Grafana's admin would be consumed as an attempt to
 ///         authenticate to Kubernetes and never arrive. <c>anonymousViewers</c> is the body's own
@@ -110,7 +119,11 @@ public sealed class GrafanaClusterBackedConformance(ClusterConformanceFixture<Gr
         var token = TestContext.Current.CancellationToken;
         const string name = "real-pod";
 
-        var body = Grafanas.Body(ClusterConformanceHarness<GrafanaCase>.ClusterId, GrafanaCase.HarnessWorkspace, anonymousViewers: true);
+        var body = Grafanas.Body(
+            ClusterConformanceHarness<GrafanaCase>.ClusterId,
+            GrafanaCase.HarnessWorkspace,
+            true
+        );
         var accepted = (await WriteAsync(harness, name, body)).GetValueOrThrow();
         var status = await ConvergeAsync(harness, accepted.OperationId);
 
@@ -164,10 +177,14 @@ public sealed class GrafanaClusterBackedConformance(ClusterConformanceFixture<Gr
 
         try {
             // ── The kubelet's second half: a Ready pod behind the Deployment ──────────────────
-            var available = await WaitForAsync<bool?>(
+            var available = await WaitForAsync(
                 StartBudget,
                 async () => {
-                    var deployment = await harness.Raw.AppsV1.ReadNamespacedDeploymentAsync(objectName, ns, cancellationToken: token);
+                    var deployment = await harness.Raw.AppsV1.ReadNamespacedDeploymentAsync(
+                        objectName,
+                        ns,
+                        cancellationToken: token
+                    );
                     return (deployment.Status?.AvailableReplicas ?? 0) >= 1 ? true : (bool?)null;
                 },
                 token
@@ -200,9 +217,18 @@ public sealed class GrafanaClusterBackedConformance(ClusterConformanceFixture<Gr
                     + "bundled plugin killed by an in-place update on the read-only root; for the ClickHouse one it is a preinstall that did not happen."
                 );
 
-                answer.Status.ShouldNotBe(HttpStatusCode.NotFound, $"datasource '{uid}' is not provisioned at all: {answer.Body}");
-                answer.Status.ShouldNotBe(HttpStatusCode.Unauthorized, $"the anonymous Viewer was refused datasource '{uid}': {answer.Body}");
-                answer.Status.ShouldNotBe(HttpStatusCode.Forbidden, $"the anonymous Viewer was refused datasource '{uid}': {answer.Body}");
+                answer.Status.ShouldNotBe(
+                    HttpStatusCode.NotFound,
+                    $"datasource '{uid}' is not provisioned at all: {answer.Body}"
+                );
+                answer.Status.ShouldNotBe(
+                    HttpStatusCode.Unauthorized,
+                    $"the anonymous Viewer was refused datasource '{uid}': {answer.Body}"
+                );
+                answer.Status.ShouldNotBe(
+                    HttpStatusCode.Forbidden,
+                    $"the anonymous Viewer was refused datasource '{uid}': {answer.Body}"
+                );
             }
 
             // ⚠ The health response quotes the URL the plugin requested, and that URL is the proof of
@@ -235,10 +261,18 @@ public sealed class GrafanaClusterBackedConformance(ClusterConformanceFixture<Gr
     ///     two objects and the test removes them itself. The documents carry no <c>apiVersion</c> and
     ///     no namespace — the platform's apply path adds both — so they are added here.
     /// </remarks>
-    static async Task ApplyWorkspaceObjectsAsync(ClusterConformanceHarness<GrafanaCase> harness, string ns, ResourceId workspace, CancellationToken token) {
-        using var desired = JsonDocument.Parse(MonitorWorkspaces.Body(ClusterConformanceHarness<GrafanaCase>.ClusterId));
+    static async Task ApplyWorkspaceObjectsAsync(
+        ClusterConformanceHarness<GrafanaCase> harness,
+        string ns,
+        ResourceId workspace,
+        CancellationToken token
+    ) {
+        using var desired =
+            JsonDocument.Parse(MonitorWorkspaces.Body(ClusterConformanceHarness<GrafanaCase>.ClusterId));
 
-        var secret = KubernetesJson.Deserialize<V1Secret>(MonitorWorkspaces.KeySecretJson(workspace.Name, MonitorWorkspaces.GenerateIngestKey()));
+        var secret = KubernetesJson.Deserialize<V1Secret>(
+            MonitorWorkspaces.KeySecretJson(workspace.Name, MonitorWorkspaces.GenerateIngestKey())
+        );
         secret.ApiVersion = "v1";
         secret.Metadata.NamespaceProperty = ns;
 
@@ -251,12 +285,27 @@ public sealed class GrafanaClusterBackedConformance(ClusterConformanceFixture<Gr
         await harness.Raw.CoreV1.CreateNamespacedConfigMapAsync(row, ns, cancellationToken: token);
     }
 
-    /// <summary>Removes the two objects <see cref="ApplyWorkspaceObjectsAsync" /> wrote, so the lifecycle test after this one finds the namespace as it expects it.</summary>
-    static async Task RemoveWorkspaceObjectsAsync(ClusterConformanceHarness<GrafanaCase> harness, string ns, CancellationToken token) {
+    /// <summary>
+    ///     Removes the two objects <see cref="ApplyWorkspaceObjectsAsync" /> wrote, so the lifecycle test after this one
+    ///     finds the namespace as it expects it.
+    /// </summary>
+    static async Task RemoveWorkspaceObjectsAsync(
+        ClusterConformanceHarness<GrafanaCase> harness,
+        string ns,
+        CancellationToken token
+    ) {
         foreach (var remove in new Func<Task>[] {
-            () => harness.Raw.CoreV1.DeleteNamespacedConfigMapAsync(MonitorWorkspaces.RowName(GrafanaCase.HarnessWorkspaceName), ns, cancellationToken: token),
-            () => harness.Raw.CoreV1.DeleteNamespacedSecretAsync(MonitorWorkspaces.KeySecretName(GrafanaCase.HarnessWorkspaceName), ns, cancellationToken: token)
-        }) {
+                     () => harness.Raw.CoreV1.DeleteNamespacedConfigMapAsync(
+                         MonitorWorkspaces.RowName(GrafanaCase.HarnessWorkspaceName),
+                         ns,
+                         cancellationToken: token
+                     ),
+                     () => harness.Raw.CoreV1.DeleteNamespacedSecretAsync(
+                         MonitorWorkspaces.KeySecretName(GrafanaCase.HarnessWorkspaceName),
+                         ns,
+                         cancellationToken: token
+                     )
+                 }) {
             try {
                 await remove();
             } catch (k8s.Autorest.HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.NotFound) {
@@ -266,7 +315,13 @@ public sealed class GrafanaClusterBackedConformance(ClusterConformanceFixture<Gr
     }
 
     /// <summary>One datasource's health, asked through the API server's service proxy.</summary>
-    static async Task<(HttpStatusCode Status, string Body)> HealthAsync(HttpClient http, string ns, string objectName, string uid, CancellationToken token) {
+    static async Task<(HttpStatusCode Status, string Body)> HealthAsync(
+        HttpClient http,
+        string ns,
+        string objectName,
+        string uid,
+        CancellationToken token
+    ) {
         var url = $"api/v1/namespaces/{ns}/services/{objectName}:{Grafanas.Port}/proxy/api/datasources/uid/{uid}/health";
         using var response = await http.GetAsync(url, token);
         return (response.StatusCode, await response.Content.ReadAsStringAsync(token));

@@ -1,10 +1,8 @@
 using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.ResourceManager.Reconcile;
-using CyberCloud.ResourceManager.Tests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Shouldly;
 using System.Collections.Concurrent;
 
 namespace CyberCloud.ResourceManager.Tests;
@@ -80,7 +78,7 @@ public sealed class NamespaceMemoInvalidationTests(ResourceManagerCluster cluste
         // an apply into a namespace that is not there fails. ⚠ This is the state the issue describes:
         // the namespace was removed by an operator or by a group delete on ANOTHER silo, and this one
         // still believes in it.
-        FakeWorld.FailWith[accepted.Resource.Id] = "namespaces \"…\" not found";
+        FakeWorld.FailWith[accepted.Resource.Id] = """namespaces "…" not found""";
         FakeWorld.FailCode[accepted.Resource.Id] = ErrorCode.ResourceNotFound;
 
         (await driver.RunAsync(spec, false, TestContext.Current.CancellationToken))
@@ -192,7 +190,7 @@ public sealed class NamespaceMemoInvalidationTests(ResourceManagerCluster cluste
         public Guid ClusterId => cluster;
 
         /// <summary>How many cluster-scoped <c>Namespace</c> applies this connection has seen.</summary>
-        public int Namespaces => applied.Count(x => x.Target.Kind.Kind == "Namespace");
+        public int Namespaces => applied.Count(static x => x.Target.Kind.Kind == "Namespace");
 
         public Task<Result<ApplyOutcome>> ApplyAsync(
             KubeCommand command,

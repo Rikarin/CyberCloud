@@ -38,7 +38,7 @@ public sealed class NatsDeclarationTests {
         // ⚠ `listKeys` does NOT share the read permission. docs/plan/07 § Consistency puts a key
         // export in the fully-consistent row by name; sharing `read` would make every viewer of a
         // cluster a holder of its credentials, and the change that would do it is one word.
-        registration.Actions.Single(x => x.Name == NatsClusters.ListKeysAction)
+        registration.Actions.Single(static x => x.Name == NatsClusters.ListKeysAction)
             .Permission.ShouldNotBe(registration.ReadPermission);
     }
 
@@ -59,7 +59,7 @@ public sealed class NatsDeclarationTests {
 
         // Every derived meter publishes its formula and its read set — the price MeterDerivation
         // charges for putting a delegate on the quota path, and what OpenApiEmitter publishes.
-        foreach (var meter in registration.Meters.Where(x => x.Derivation is not null)) {
+        foreach (var meter in registration.Meters.Where(static x => x.Derivation is not null)) {
             meter.Derivation!.Expression.ShouldNotBeNullOrWhiteSpace(meter.Meter.ToString());
             meter.Derivation.Reads.ShouldNotBeEmpty(meter.Meter.ToString());
 
@@ -81,7 +81,7 @@ public sealed class NatsDeclarationTests {
         // body: this walks each default back into an otherwise-valid body and validates the result,
         // so a default that is individually legal and jointly refused is caught here rather than by
         // the first tenant who omits the property.
-        foreach (var property in NatsClusters.Schema2026.Properties.Where(x => x.DefaultJson.Length > 0)) {
+        foreach (var property in NatsClusters.Schema2026.Properties.Where(static x => x.DefaultJson.Length > 0)) {
             using var body = JsonDocument.Parse(
                 Overridden(NatsClusters.Body(ClusterId), property.JsonPointer, property.DefaultJson)
             );
@@ -149,7 +149,7 @@ public sealed class NatsDeclarationTests {
         // resolve to zero ready pods at first start; one that named the CLIENT Service would resolve
         // to a VIP rather than to peers; one short by a server leaves that server unreachable to the
         // rest. None of the three produces an error anywhere.
-        using var body = JsonDocument.Parse(NatsClusters.Body(ClusterId, servers: 5));
+        using var body = JsonDocument.Parse(NatsClusters.Body(ClusterId, 5));
 
         var config = NatsClusters.ConfigJson("events", body.RootElement);
 
@@ -190,7 +190,7 @@ public sealed class NatsDeclarationTests {
         // A preset the schema offers and the table does not is a body the API accepts and the meter
         // then refuses — a create that returns 500 for a value the schema advertised.
         var declared = NatsClusters.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/sizing/preset")
+            .Single(static x => x.JsonPointer == "/properties/sizing/preset")
             .AllowedValues;
 
         declared.Order(StringComparer.Ordinal)

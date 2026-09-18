@@ -210,7 +210,9 @@ public sealed class QuotaGrain(
             await state.WriteStateAsync();
         }
 
-        return Result<IReadOnlyList<QuotaLease>>.Success([.. state.State.Leases.Values.OrderBy(x => x.ReservedAt)]);
+        return Result<IReadOnlyList<QuotaLease>>.Success(
+            [.. state.State.Leases.Values.OrderBy(static x => x.ReservedAt)]
+        );
     }
 
     /// <inheritdoc />
@@ -232,7 +234,7 @@ public sealed class QuotaGrain(
     bool Sweep(DateTimeOffset now) {
         var dead = state.State.Leases
             .Where(x => x.Value.ExpiresAt <= now)
-            .Select(x => x.Key)
+            .Select(static x => x.Key)
             .ToList();
 
         foreach (var leaseId in dead) {
@@ -248,7 +250,7 @@ public sealed class QuotaGrain(
         new() {
             Meter = meter,
             Committed = Committed(meter),
-            Reserved = state.State.Leases.Values.Where(x => x.Meter == meter).Sum(x => x.Amount),
+            Reserved = state.State.Leases.Values.Where(x => x.Meter == meter).Sum(static x => x.Amount),
             Limit = state.State.Limits.TryGetValue(meter, out var limit)
                 ? limit
                 : Defaults.TryGetValue(meter, out var fallback)

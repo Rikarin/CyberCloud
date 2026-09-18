@@ -33,7 +33,7 @@ public partial class CyberCloudClient : IDisposable {
     ///     The credential. <see cref="DefaultCyberCloudCredential" /> is the one to reach for unless you
     ///     know which single mechanism you want.
     /// </param>
-    public CyberCloudClient(TokenCredential credential) : this(DefaultEndpoint, credential, options: null) { }
+    public CyberCloudClient(TokenCredential credential) : this(DefaultEndpoint, credential, null) { }
 
     /// <summary>Creates a client.</summary>
     /// <param name="endpoint">The service endpoint. A private or regional deployment passes its own.</param>
@@ -45,8 +45,8 @@ public partial class CyberCloudClient : IDisposable {
         ArgumentNullException.ThrowIfNull(credential);
 
         options ??= new CyberCloudClientOptions();
-        pipeline = new CyberCloudPipeline(credential, options);
-        Context = new CyberCloudClientContext(endpoint, pipeline, options);
+        pipeline = new(credential, options);
+        Context = new(endpoint, pipeline, options);
     }
 
     /// <summary>Constructor for mocking. Every generated client has one, by the same convention.</summary>
@@ -66,7 +66,7 @@ public partial class CyberCloudClient : IDisposable {
 
     /// <inheritdoc />
     public void Dispose() {
-        Dispose(disposing: true);
+        Dispose(true);
         GC.SuppressFinalize(this);
     }
 

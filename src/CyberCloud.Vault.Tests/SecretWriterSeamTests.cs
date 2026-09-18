@@ -40,15 +40,15 @@ public sealed class SecretWriterSeamTests {
 
     [Fact]
     public void AHostThatOnlyAddsTheResourceManagerGetsTheRefusingWriter() {
-        Writer(services => services.AddCyberCloudResourceManager())
+        Writer(static services => services.AddCyberCloudResourceManager())
             .ShouldBeOfType<UnavailableSecretWriter>();
     }
 
     [Fact]
     public void WiringOneHostDoesNotChangeWhatAnotherHostGets() {
-        var wired = Writer(services => services.AddCyberCloudResourceManager().AddOpenBaoSecretResolver(Wired));
+        var wired = Writer(static services => services.AddCyberCloudResourceManager().AddOpenBaoSecretResolver(Wired));
 
-        var unwired = Writer(services => services.AddCyberCloudResourceManager());
+        var unwired = Writer(static services => services.AddCyberCloudResourceManager());
 
         wired.ShouldBeOfType<OpenBaoSecretWriter>();
         unwired.ShouldBeOfType<UnavailableSecretWriter>();
@@ -71,7 +71,7 @@ public sealed class SecretWriterSeamTests {
         var services = new ServiceCollection();
         Both(services, managerFirst);
 
-        services.Count(x => x.ServiceType == typeof(ISecretWriter)).ShouldBe(1);
+        services.Count(static x => x.ServiceType == typeof(ISecretWriter)).ShouldBe(1);
     }
 
     [Fact]

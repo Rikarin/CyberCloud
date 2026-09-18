@@ -79,7 +79,7 @@ sealed class ProcessConcurrencyLimiter(ConcurrencyLimits limits) : IConcurrencyL
 
     /// <inheritdoc />
     public void ReleaseConnection(Guid tenantId) =>
-        connections.AddOrUpdate(tenantId, 0, (_, current) => current > 0 ? current - 1 : 0);
+        connections.AddOrUpdate(tenantId, 0, static (_, current) => current > 0 ? current - 1 : 0);
 
     /// <summary>How many connections a tenant holds on this pod. For tests and for a metric.</summary>
     /// <param name="tenantId">The tenant.</param>

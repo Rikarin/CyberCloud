@@ -50,8 +50,11 @@ namespace CyberCloud.Authorization.Grains;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>The Leopard index is read in the first two modes and not the third, and that is
-///         the contract of each.</b> <c>MinimizeLatency</c> and <c>AtLeastAsFresh</c> accept what
+///         ⚠
+///         <b>
+///             The Leopard index is read in the first two modes and not the third, and that is
+///             the contract of each.
+///         </b> <c>MinimizeLatency</c> and <c>AtLeastAsFresh</c> accept what
 ///         the store has written, and the store writes the index before the version a token
 ///         carries moves, so every token covers the index (<c>TupleStoreGrain</c>'s remarks).
 ///         <c>FullyConsistent</c>'s promise is the durable rows themselves — the case where
@@ -326,7 +329,7 @@ public sealed class CheckGrain(
         // at: everything this object has cached under an older version goes.
         var stale = cache.State.Entries
             .Where(x => x.Value.Version < version || x.Value.SchemaVersion != schema.Version)
-            .Select(x => x.Key)
+            .Select(static x => x.Key)
             .ToList();
 
         foreach (var key in stale) {

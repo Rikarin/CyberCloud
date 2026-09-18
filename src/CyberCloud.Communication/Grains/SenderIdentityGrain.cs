@@ -204,8 +204,8 @@ public sealed class SenderIdentityGrain(
             ? []
             : [
                 .. countries
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .Select(x => x.Trim().ToUpperInvariant())
+                    .Where(static x => !string.IsNullOrWhiteSpace(x))
+                    .Select(static x => x.Trim().ToUpperInvariant())
                     .Distinct(StringComparer.Ordinal)
             ];
 

@@ -749,7 +749,7 @@ public static class ManagedClusters {
         }
 
         var behind = controlPlaneMinor - nodeMinor;
-        return behind >= 0 && behind <= MaxKubeletMinorsBehind;
+        return behind is >= 0 and <= MaxKubeletMinorsBehind;
     }
 
     /// <summary>Whether a control-plane version change is a legal step.</summary>
@@ -898,7 +898,7 @@ public static class ManagedClusters {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the cluster is billed in."
                 ) {
                     Format = SchemaFormat.Region,
@@ -910,7 +910,7 @@ public static class ManagedClusters {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The management cluster the control plane runs in. ⚠ This is not the "
                     + "cluster being created: it is the cluster whose API server accepts the Cluster "
                     + "API objects that create one."
@@ -920,7 +920,7 @@ public static class ManagedClusters {
                 new(
                     "/properties/version",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The Kubernetes minor version of the control plane. The patch level is "
                     + "the platform's. ⚠ Upgrade the control plane before the node pools and by at most "
                     + "one minor at a time; a node pool may run up to three minors behind and may never "
@@ -935,7 +935,7 @@ public static class ManagedClusters {
                 new(
                     "/properties/controlPlane/replicas",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "How many copies of the API server, controller manager and scheduler "
                     + "to run. Two survives a node failure; one is offered for development. ⚠ Unlike an "
                     + "etcd quorum this is a plain replica count — the datastore is separate and is "
@@ -949,7 +949,7 @@ public static class ManagedClusters {
                 new(
                     "/properties/network/podCidr",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The CIDR block pods are addressed from. ⚠ It must not overlap the "
                     + "management cluster's own pod or service range, and nothing checks that — an "
                     + "overlap produces a cluster whose nodes route the platform's addresses to "
@@ -964,7 +964,7 @@ public static class ManagedClusters {
                 new(
                     "/properties/network/serviceCidr",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The CIDR block Service cluster IPs are allocated from. The same "
                     + "overlap warning applies."
                 ) {
@@ -983,8 +983,8 @@ public static class ManagedClusters {
                     "/properties/monitoring/enabled",
                     SchemaKind.Boolean,
                     Description: "Whether the control plane's own metrics endpoints are scraped. On by "
-                    + "default — docs/plan/12: \"a managed service the tenant cannot see the health of "
-                    + "is a black box they will not trust with production\". ⚠ It covers the control "
+                    + """default — docs/plan/12: "a managed service the tenant cannot see the health of """
+                    + """is a black box they will not trust with production". ⚠ It covers the control """
                     + "plane, which runs in the management cluster. Nothing scrapes inside the cluster "
                     + "being created; that needs an agent in the bundle."
                 ) { DefaultJson = "true" }
@@ -1008,7 +1008,7 @@ public static class ManagedClusters {
                 new(
                     "/kubeconfig",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Secret: true,
                     Description: "A complete kubeconfig for the cluster, YAML. ⚠ docs/plan/13 requires "
                     + "this to be short-lived and scoped rather than the cluster's admin credential; "
@@ -1018,7 +1018,7 @@ public static class ManagedClusters {
                 new(
                     "/apiServerEndpoint",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The URL the kubeconfig points at, https://host:port. ⚠ It is an "
                     + "address inside the management cluster and is not routable from anywhere else — "
                     + "the control plane is deliberately not exposed, because there is no upstream "
@@ -1028,17 +1028,18 @@ public static class ManagedClusters {
                 new(
                     "/expiresAt",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "When the credential stops working, RFC 3339. ⚠ Returned because a "
                     + "credential with no stated expiry is one every caller will paste into CI and "
-                    + "never rotate — docs/plan/13 makes \"a kubectl credential that expires\" part of "
+                    + """never rotate — docs/plan/13 makes "a kubectl credential that expires" part of """
                     + "what a tenant is buying."
                 ) { Format = SchemaFormat.DateTime }
             ]
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 

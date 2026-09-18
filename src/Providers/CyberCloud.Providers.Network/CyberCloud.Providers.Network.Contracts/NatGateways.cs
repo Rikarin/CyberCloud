@@ -12,8 +12,10 @@ namespace CyberCloud.Providers.Network.Contracts;
 /// <remarks>
 ///     <para>
 ///         <b>The authority is docs/plan/14 § Everything else</b>, whose row reads
-///         <i>"<c>natGateways</c> · M2 · Kube-OVN <c>VpcNatGateway</c> + an SNAT address. Needed the
-///         moment a private subnet wants outbound"</i>, and
+///         <i>
+///             "<c>natGateways</c> · M2 · Kube-OVN <c>VpcNatGateway</c> + an SNAT address. Needed the
+///             moment a private subnet wants outbound"
+///         </i>, and
 ///         <c>charts/managed/kube-ovn-eip/conformance.yaml</c>, which has said since the address type
 ///         shipped that <i>"§ Everything else has natGateways use one for SNAT"</i>.
 ///     </para>
@@ -23,8 +25,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///             NOT A <c>VpcNatGateway</c>, AND docs/plan/14 IS CORRECTED RATHER THAN FOLLOWED ON THAT
 ///             ONE WORD.
 ///         </b> Read firsthand in <c>pkg/apis/kubeovn/v1/vpc-nat-gateway.go</c> at
-///         <c>v1.16.2</c>: a <c>VpcNatGateway</c> <i>"represents a NAT gateway for a VPC, implemented
-///         as a StatefulSet Pod"</i>, and the rules it serves are <c>IptablesSnatRule</c>s whose
+///         <c>v1.16.2</c>: a <c>VpcNatGateway</c>
+///         <i>
+///             "represents a NAT gateway for a VPC, implemented
+///             as a StatefulSet Pod"
+///         </i>, and the rules it serves are <c>IptablesSnatRule</c>s whose
 ///         <c>spec.eip</c> names an <c>IptablesEIP</c> — a <b>second</b> public-address kind, allocated
 ///         by that pod, which <see cref="PublicIpAddresses" /> does not render. A NAT gateway built on
 ///         it would either leave the platform's own address type unable to serve it or need a second
@@ -45,8 +50,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         <c>subnet.Spec.Vpc == c.config.ClusterRouter</c> — the node-side masquerade honors the
 ///         flag <b>only for subnets of the default VPC</b>, and every subnet this provider renders binds
 ///         to a tenant's own <c>Vpc</c>. So on this platform <c>natOutgoing</c> is a control the
-///         substrate ignores, which <c>NetworkSubnets</c>' own remarks call <i>"the worst of the three
-///         possible outcomes"</i>. It stays declared because the api-version is published; its
+///         substrate ignores, which <c>NetworkSubnets</c>' own remarks call
+///         <i>
+///             "the worst of the three
+///             possible outcomes"
+///         </i>. It stays declared because the api-version is published; its
 ///         description now says so, and
 ///         <c>charts/managed/kube-ovn-subnet/conformance.yaml § owed</c>,
 ///         <c>nat-outgoing-is-ignored-in-a-tenant-vpc</c>, records it. A tenant subnet that wants
@@ -66,8 +74,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///             THE TWO JOINS ARE NAMES IN THE SAME RESOURCE GROUP, AND THAT IS WHAT MAKES THEM
 ///             DERIVABLE WITHOUT THE READER THIS FAMILY IS OWED.
 ///         </b> <c>LoadBalancers</c> records that <c>ReconcileContext</c> carries nothing that
-///         resolves a resource id, and that attaching a public address is <i>"a resource id this
-///         provider would have to resolve through <c>CyberCloud.ResourceManager</c>"</i>. It is — for
+///         resolves a resource id, and that attaching a public address is
+///         <i>
+///             "a resource id this
+///             provider would have to resolve through <c>CyberCloud.ResourceManager</c>"
+///         </i>. It is — for
 ///         an address anywhere. For an address in the <b>same subscription and resource group</b>, the
 ///         rendered <c>OvnEip</c> name is <see cref="PublicIpAddresses.ObjectNameOf" /> of this
 ///         resource's own namespace and the address's name, which is a pure function of two strings
@@ -89,9 +100,15 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         </b> Read firsthand in <c>pkg/controller/ovn_snat.go</c> at <c>v1.16.2</c>:
 ///         <c>handleAddOvnSnatRule</c> returns at <i>"already ok"</i> once <c>status.ready</c> is set,
 ///         and <c>handleUpdateOvnSnatRule</c> recomputes the VPC, the address and the CIDR from the
-///         new spec and refuses every difference by name — <i>"vpc changed"</i>, <i>"v4 eip
-///         changed"</i>, <i>"v6 eip changed"</i>, <i>"v4 ip cidr changed"</i>, <i>"v6 ip cidr
-///         changed"</i>. Both body properties are therefore <c>Immutable</c>, and what the shared
+///         new spec and refuses every difference by name — <i>"vpc changed"</i>,
+///         <i>
+///             "v4 eip
+///             changed"
+///         </i>, <i>"v6 eip changed"</i>, <i>"v4 ip cidr changed"</i>,
+///         <i>
+///             "v6 ip cidr
+///             changed"
+///         </i>. Both body properties are therefore <c>Immutable</c>, and what the shared
 ///         suite can and cannot prove about an update is
 ///         <c>conformance.yaml § owed</c>, <c>a-nat-rule-cannot-be-changed</c>.
 ///     </para>
@@ -193,8 +210,11 @@ public static class NatGateways {
     /// <param name="id">The NAT gateway's address.</param>
     /// <exception cref="ArgumentException"><paramref name="id" /> carries no parent name.</exception>
     /// <remarks>
-    ///     ⚠ <b>Three components, for <see cref="NetworkSubnets.ObjectNameOf(string, ResourceId)" />'s
-    ///     reason</b>: the object is cluster-scoped, so the namespace separates subscriptions and the
+    ///     ⚠
+    ///     <b>
+    ///         Three components, for <see cref="NetworkSubnets.ObjectNameOf(string, ResourceId)" />'s
+    ///         reason
+    ///     </b>: the object is cluster-scoped, so the namespace separates subscriptions and the
     ///     network's name separates two networks in one resource group that each hold a gateway
     ///     called <c>egress</c>. Dropping either is a silent collision, and on this kind a collision
     ///     is one tenant's subnet translated to another tenant's address.
@@ -214,8 +234,7 @@ public static class NatGateways {
     /// <param name="ns">The resource's namespace, used as a name component.</param>
     /// <param name="network">The virtual network's name.</param>
     /// <param name="gateway">The NAT gateway's name.</param>
-    public static string ObjectNameOf(string ns, string network, string gateway) =>
-        ns + "-" + network + "-" + gateway;
+    public static string ObjectNameOf(string ns, string network, string gateway) => ns + "-" + network + "-" + gateway;
 
     /// <summary>The parent network's name.</summary>
     /// <param name="id">The NAT gateway's address.</param>
@@ -232,8 +251,11 @@ public static class NatGateways {
     /// <param name="ns">The resource's namespace, used as a name component.</param>
     /// <param name="id">The NAT gateway's address.</param>
     /// <remarks>
-    ///     ⚠ <b>Read off the address and composed through
-    ///     <see cref="VirtualNetworks.ObjectNameOf" /></b>, on <c>NetworkSubnets.VpcRefOf</c>'s rule:
+    ///     ⚠
+    ///     <b>
+    ///         Read off the address and composed through
+    ///         <see cref="VirtualNetworks.ObjectNameOf" />
+    ///     </b>, on <c>NetworkSubnets.VpcRefOf</c>'s rule:
     ///     a second spelling of the parent's object name is the thing that stops agreeing the day the
     ///     parent's naming changes. ⚠ The controller derives the VPC from the subnet and ignores this
     ///     field when <c>vpcSubnet</c> is set; it is sent anyway so that <see cref="Matches" /> has a
@@ -312,7 +334,7 @@ public static class NatGateways {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the NAT gateway is billed in. ⚠ It must be the region "
                     + "its virtual network is in — nothing checks that, because the network's own "
                     + "region is not readable from here."
@@ -326,7 +348,7 @@ public static class NatGateways {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster whose fabric holds the network. ⚠ It must be the cluster "
                     + "the virtual network and the public address were created in: a rule in another "
                     + "cluster names a subnet and an address that do not exist there."
@@ -334,7 +356,7 @@ public static class NatGateways {
                 new(
                     "/properties/subnet",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The subnet of this virtual network whose workloads egress through "
                     + "the address. One subnet per NAT gateway; a network with several private "
                     + "subnets creates one per subnet, and they may share the address. ⚠ A name that "
@@ -351,7 +373,7 @@ public static class NatGateways {
                 new(
                     "/properties/publicIpAddress",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The name of a publicIpAddresses resource in the same resource group "
                     + "whose address the subnet's traffic leaves with. ⚠ A name, not a resource id: "
                     + "the address must be in this subscription and resource group, and one in "
@@ -368,14 +390,18 @@ public static class NatGateways {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     /// <summary>
     ///     What a <c>POST …/showEgress</c> returns.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Every figure is off <c>OvnSnatRule.status</c>, written by the controller once it has
-    ///     resolved both joins.</b> Before that the four addresses are empty and <c>ready</c> is
+    ///     ⚠
+    ///     <b>
+    ///         Every figure is off <c>OvnSnatRule.status</c>, written by the controller once it has
+    ///         resolved both joins.
+    ///     </b> Before that the four addresses are empty and <c>ready</c> is
     ///     false, which is the honest answer to "why is nothing leaving my subnet" during the first
     ///     seconds and forever when the address or the subnet name is wrong.
     /// </remarks>
@@ -385,7 +411,7 @@ public static class NatGateways {
                 new(
                     "/publicV4",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The IPv4 address the subnet's traffic leaves with, or empty until "
                     + "the fabric has resolved the named public address."
                 ),
@@ -398,7 +424,7 @@ public static class NatGateways {
                 new(
                     "/sourceV4",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The IPv4 range being translated — the subnet's prefix as the fabric "
                     + "resolved it, or empty until it has."
                 ),
@@ -410,7 +436,7 @@ public static class NatGateways {
                 new(
                     "/ready",
                     SchemaKind.Boolean,
-                    Required: true,
+                    true,
                     Description: "Whether the fabric has programmed the translation. ⚠ False with "
                     + "every address empty is a rule whose subnet or public address the fabric "
                     + "cannot find — check both names."
@@ -418,7 +444,7 @@ public static class NatGateways {
                 new(
                     "/sampledAt",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "When the platform read the object, RFC 3339."
                 ) { Format = SchemaFormat.DateTime }
             ]
@@ -511,7 +537,7 @@ public static class NatGateways {
         }
 
         return parsed is JsonObject document
-            && document["kind"]?.GetValue<string>() is (null or "OvnSnatRule")
+            && document["kind"]?.GetValue<string>() is null or "OvnSnatRule"
                 ? document
                 : null;
     }

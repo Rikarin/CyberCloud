@@ -658,10 +658,10 @@ public static class StorageAccounts {
     ///     </para>
     /// </remarks>
     public static (string AccessKeyId, string SecretAccessKey) GenerateKeyPair() =>
-        (
-            RandomNumberGenerator.GetString(KeyAlphabet, AccessKeyIdLength),
-            RandomNumberGenerator.GetString(KeyAlphabet, SecretAccessKeyLength)
-        );
+    (
+        RandomNumberGenerator.GetString(KeyAlphabet, AccessKeyIdLength),
+        RandomNumberGenerator.GetString(KeyAlphabet, SecretAccessKeyLength)
+    );
 
     /// <summary>
     ///     Builds the S3 identities file the gateway authenticates against.
@@ -880,7 +880,7 @@ public static class StorageAccounts {
                     SchemaKind.Text,
                     Required: true,
                     Description: "SeaweedFS version. ⚠ SeaweedFS ships a release roughly weekly and "
-                    + "maintains no long-term branch, so docs/plan/12's \"supported major versions\" is "
+                    + """maintains no long-term branch, so docs/plan/12's "supported major versions" is """
                     + "a shape this project does not have; the two values here are the two most recent "
                     + "releases and a new api-version is what adds a third."
                 ) { AllowedValues = ["4.40", "4.41"], DefaultJson = "\"4.41\"" },
@@ -964,7 +964,7 @@ public static class StorageAccounts {
                 new(
                     "/properties/gateway",
                     SchemaKind.Nested,
-                    Description: "The S3 gateway — docs/plan/15's ADR-008: \"the API is S3\"."
+                    Description: """The S3 gateway — docs/plan/15's ADR-008: "the API is S3"."""
                 ),
                 new(
                     "/properties/gateway/replicas",
@@ -982,8 +982,8 @@ public static class StorageAccounts {
                     "/properties/monitoring/enabled",
                     SchemaKind.Boolean,
                     Description: "Whether the operator is asked for a ServiceMonitor per component. On "
-                    + "by default — docs/plan/12: \"a managed service the tenant cannot see the health "
-                    + "of is a black box they will not trust with production\". Turning it off removes "
+                    + """by default — docs/plan/12: "a managed service the tenant cannot see the health """
+                    + """of is a black box they will not trust with production". Turning it off removes """
                     + "the metrics port as well as the scrape, which is the operator's own behaviour "
                     + "rather than this provider's."
                 ) { DefaultJson = "true" }
@@ -1040,7 +1040,8 @@ public static class StorageAccounts {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 

@@ -28,7 +28,11 @@ public sealed class EnvelopeTests {
 
     [Fact]
     public async Task A_GET_carries_the_five_members_the_server_owns() {
-        var transport = new ScriptedTransport((request, index) => Responses.Json(HttpStatusCode.OK, TestClient.WidgetBody));
+        var transport = new ScriptedTransport(static (request, index) => Responses.Json(
+                HttpStatusCode.OK,
+                TestClient.WidgetBody
+            )
+        );
         using var client = TestClient.Create(transport);
 
         var response = await client.Widgets().GetAsync("main", Cancel.Token);
@@ -38,7 +42,7 @@ public sealed class EnvelopeTests {
 
     [Fact]
     public async Task A_list_element_carries_them_too_and_its_URL_comes_from_its_id() {
-        var transport = new ScriptedTransport((request, index) => Responses.Json(
+        var transport = new ScriptedTransport(static (request, index) => Responses.Json(
                 HttpStatusCode.OK,
                 $$"""{"value":[{{TestClient.WidgetNamed("main")}},{{TestClient.WidgetNamed("other", state: "Deleting")}}]}"""
             )
@@ -62,7 +66,7 @@ public sealed class EnvelopeTests {
 
     [Fact]
     public async Task A_completed_operation_s_value_carries_them() {
-        var transport = new ScriptedTransport((request, index) => index switch {
+        var transport = new ScriptedTransport(static (request, index) => index switch {
                 0 => Responses.Accepted(TestClient.OperationUri),
                 1 => Responses.Operation("Succeeded", []),
                 _ => Responses.Json(HttpStatusCode.OK, TestClient.WidgetBody),
@@ -85,7 +89,7 @@ public sealed class EnvelopeTests {
     /// </summary>
     [Fact]
     public async Task A_state_the_document_does_not_declare_is_refused() {
-        var transport = new ScriptedTransport((request, index) => Responses.Json(
+        var transport = new ScriptedTransport(static (request, index) => Responses.Json(
                 HttpStatusCode.OK,
                 TestClient.WidgetNamed("main", state: "Provisioning")
             )

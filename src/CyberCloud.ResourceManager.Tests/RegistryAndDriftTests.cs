@@ -2,7 +2,6 @@ using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.ResourceManager.Drift;
 using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Registry;
-using CyberCloud.ResourceManager.Tests.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Collections.Immutable;
 
@@ -43,11 +42,11 @@ public sealed class ProviderRegistryTests {
         // declaration that carried a handler the registry dropped would be an action that refuses at
         // run time with a message about a missing handler the provider plainly named.
         registration.Actions
-            .Single(x => x.Name == "restart")
+            .Single(static x => x.Name == "restart")
             .HandlerType
             .ShouldBe(typeof(RestartHandler));
 
-        registration.Actions.Single(x => x.Name == "orphaned").HandlerType.ShouldBeNull();
+        registration.Actions.Single(static x => x.Name == "orphaned").HandlerType.ShouldBeNull();
         registration.Meters.Length.ShouldBe(2);
         registration.SupportsTags.ShouldBeTrue();
         registration.ReconcilerType.ShouldBe(typeof(ConformingReconciler));
@@ -116,7 +115,7 @@ public sealed class ProviderRegistryTests {
         // ⚠ "API versions are dates and they are immutable." A second declaration is either a
         // copy-paste or an attempt to change a published version, and the second is the thing the rule
         // forbids outright.
-        Should.Throw<ArgumentException>(() => ProviderRegistry.Build([new DuplicateVersionProvider()]))
+        Should.Throw<ArgumentException>(static () => ProviderRegistry.Build([new DuplicateVersionProvider()]))
             .Message.ShouldContain("immutable");
     }
 
@@ -134,7 +133,7 @@ public sealed class ProviderRegistryTests {
         // KubeCommandBuilder from the resource's own type, and WithLabels throws on an attempt to set
         // it. A caller cannot write the label; this is what stops a caller owning a TYPE that
         // produces it.
-        Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new ReservedNamespaceProvider()]))
+        Should.Throw<InvalidOperationException>(static () => ProviderRegistry.Build([new ReservedNamespaceProvider()]))
             .Message.ShouldContain(KubeLabels.ReservedNamespace);
     }
 
@@ -168,19 +167,19 @@ public sealed class ProviderRegistryTests {
 
     [Fact]
     public void AProviderThatDeclaresNothingIsABuildFailure() {
-        Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new SilentProvider()]))
+        Should.Throw<InvalidOperationException>(static () => ProviderRegistry.Build([new SilentProvider()]))
             .Message.ShouldContain("declared no resource types");
     }
 
     [Fact]
     public void ATypeWithNoApiVersionIsABuildFailure() {
-        Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new VersionlessProvider()]))
+        Should.Throw<InvalidOperationException>(static () => ProviderRegistry.Build([new VersionlessProvider()]))
             .Message.ShouldContain("declares no api-version");
     }
 
     [Fact]
     public void TwoProvidersCannotShareANamespace() {
-        Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build(
+        Should.Throw<InvalidOperationException>(static () => ProviderRegistry.Build(
                 [new TestingProvider(), new TestingProvider()]
             )
         )
@@ -189,13 +188,13 @@ public sealed class ProviderRegistryTests {
 
     [Fact]
     public void ATypeScopedCallBeforeAnyResourceTypeIsABug() {
-        Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new PrematureProvider()]))
+        Should.Throw<InvalidOperationException>(static () => ProviderRegistry.Build([new PrematureProvider()]))
             .Message.ShouldContain("before any ResourceType");
     }
 
     [Fact]
     public void QuotaMeterUnknownIsNotAMeter() {
-        Should.Throw<ArgumentException>(() => ProviderRegistry.Build([new UnknownMeterProvider()]));
+        Should.Throw<ArgumentException>(static () => ProviderRegistry.Build([new UnknownMeterProvider()]));
     }
 
     sealed class ReservedNamespaceProvider : IResourceProvider {
@@ -418,7 +417,7 @@ public sealed class DriftScannerTests {
             "/tenants/…/virtualNetworks/hub/peerings/to-spoke",
             "sha256:peering-body",
             ProvisioningState.Succeeded,
-            [.. fragments.Select(x => new ExpectedFragment(x.On.Target, x.Hash))]
+            [.. fragments.Select(static x => new ExpectedFragment(x.On.Target, x.Hash))]
         );
 
     /// <summary>Both networks, converged, so that their objects are nobody's orphans.</summary>
@@ -503,7 +502,9 @@ public sealed class DriftScannerTests {
             [.. BothOwners, Peering((local, "sha256:local-fragment"), (remote, "sha256:remote-fragment"))]
         );
 
-        converged.Findings.ShouldBeEmpty("two fragments with two hashes on two objects, each the one expected there: " + converged);
+        converged.Findings.ShouldBeEmpty(
+            "two fragments with two hashes on two objects, each the one expected there: " + converged
+        );
 
         // And the hashes are held against the OBJECT, not merely against the set: the remote's
         // hash on the local object is the wrong slice on the wrong router.
@@ -583,7 +584,8 @@ public sealed class DriftScannerTests {
         orphan.Objects.Length.ShouldBe(1);
         orphan.Detail.ShouldContain("no co-writer will ever withdraw");
 
-        report.Findings.Where(x => x.ResourceId == Vpc).ShouldBeEmpty("the owner is converged and its object is its own");
+        report.Findings.Where(static x => x.ResourceId == Vpc)
+            .ShouldBeEmpty("the owner is converged and its object is its own");
     }
 
     [Fact]
@@ -608,7 +610,7 @@ public sealed class DriftScannerTests {
 
         DesiredHash.Of(body).ShouldStartWith("sha256:");
         DesiredHash.Of(body).ShouldBe(DesiredHash.Of(body));
-        DesiredHash.Of(body).ShouldNotBe(DesiredHash.Of(TestingProvider.Body(size: 3)));
+        DesiredHash.Of(body).ShouldNotBe(DesiredHash.Of(TestingProvider.Body(3)));
     }
 }
 
@@ -696,13 +698,16 @@ public sealed class StubbedSeamTests {
         public static NullGrainFactory Instance { get; } = new();
 
         public TGrainInterface GetGrain<TGrainInterface>(Guid primaryKey, string? grainClassNamePrefix = null)
-            where TGrainInterface : IGrainWithGuidKey => throw new NotSupportedException();
+            where TGrainInterface : IGrainWithGuidKey =>
+            throw new NotSupportedException();
 
         public TGrainInterface GetGrain<TGrainInterface>(long primaryKey, string? grainClassNamePrefix = null)
-            where TGrainInterface : IGrainWithIntegerKey => throw new NotSupportedException();
+            where TGrainInterface : IGrainWithIntegerKey =>
+            throw new NotSupportedException();
 
         public TGrainInterface GetGrain<TGrainInterface>(string primaryKey, string? grainClassNamePrefix = null)
-            where TGrainInterface : IGrainWithStringKey => throw new NotSupportedException();
+            where TGrainInterface : IGrainWithStringKey =>
+            throw new NotSupportedException();
 
         public TGrainInterface GetGrain<TGrainInterface>(
             Guid primaryKey,
@@ -726,13 +731,16 @@ public sealed class StubbedSeamTests {
             throw new NotSupportedException();
 
         public TGrainObserverInterface CreateObjectReference<TGrainObserverInterface>(IGrainObserver obj)
-            where TGrainObserverInterface : IGrainObserver => throw new NotSupportedException();
+            where TGrainObserverInterface : IGrainObserver =>
+            throw new NotSupportedException();
 
         public void DeleteObjectReference<TGrainObserverInterface>(IGrainObserver obj)
-            where TGrainObserverInterface : IGrainObserver => throw new NotSupportedException();
+            where TGrainObserverInterface : IGrainObserver =>
+            throw new NotSupportedException();
 
         public TGrainInterface GetGrain<TGrainInterface>(GrainId grainId)
-            where TGrainInterface : IAddressable => throw new NotSupportedException();
+            where TGrainInterface : IAddressable =>
+            throw new NotSupportedException();
 
         public IGrain GetGrain(Type grainInterfaceType, Guid grainPrimaryKey) => throw new NotSupportedException();
 

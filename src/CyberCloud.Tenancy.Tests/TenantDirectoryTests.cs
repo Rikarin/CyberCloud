@@ -36,7 +36,7 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster) {
         (await cluster.DirectoryGrain().LookupAsync(tenant)).GetValueOrThrow().Slug.ShouldBe("dir-1");
         (await cluster.DirectoryGrain().LookupBySlugAsync("dir-1")).GetValueOrThrow()
             .TenantId
-                .ShouldBe(tenant);
+            .ShouldBe(tenant);
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster) {
         // The entry itself stays, so the id can never be reissued either.
         (await cluster.DirectoryGrain().LookupAsync(tenant)).GetValueOrThrow()
             .Status
-                .ShouldBe(TenantStatus.Purged);
+            .ShouldBe(TenantStatus.Purged);
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster) {
         var delta = (await directory.GetDeltaAsync(before)).GetValueOrThrow();
 
         delta.IsFullSnapshot.ShouldBeFalse();
-        delta.Entries.Select(x => x.Slug).ShouldBe(["dir-delta-a", "dir-delta-b"], true);
+        delta.Entries.Select(static x => x.Slug).ShouldBe(["dir-delta-a", "dir-delta-b"], true);
         delta.Version.ShouldBeGreaterThan(before);
     }
 
@@ -152,7 +152,7 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster) {
 
         (await cluster.DirectoryGrain().LookupAsync(tenant)).GetValueOrThrow()
             .Slug
-                .ShouldBe("dir-durable");
+            .ShouldBe("dir-durable");
     }
 
     [Fact]

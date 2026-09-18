@@ -109,7 +109,7 @@ public sealed class DurableSchemaPlanTests {
             }
         }
 
-        repairable.ShouldBe([Empty, HalfApplied, Complete], ignoreOrder: true);
+        repairable.ShouldBe([Empty, HalfApplied, Complete], true);
     }
 
     [Fact]

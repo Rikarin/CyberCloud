@@ -24,7 +24,7 @@ public sealed class OpenApiArtifactsTests : IDisposable {
 
     public void Dispose() {
         if (Directory.Exists(directory)) {
-            Directory.Delete(directory, recursive: true);
+            Directory.Delete(directory, true);
         }
     }
 
@@ -43,7 +43,7 @@ public sealed class OpenApiArtifactsTests : IDisposable {
         report.ResourceTypes.ShouldBe(2);
         report.ApiVersions.ShouldBe(2);
 
-        report.Documents.Select(x => x.FileName)
+        report.Documents.Select(static x => x.FileName)
             .ShouldBe(["2026-08-01.json", "2027-01-01.json", "index.json"]);
 
         File.Exists(FileFor(Fixtures.FirstVersion)).ShouldBeTrue();
@@ -61,7 +61,7 @@ public sealed class OpenApiArtifactsTests : IDisposable {
         report.Providers.ShouldBe(0);
         report.ResourceTypes.ShouldBe(0);
         report.ApiVersions.ShouldBe(0);
-        report.Documents.Select(x => x.FileName).ShouldBe(["index.json"]);
+        report.Documents.Select(static x => x.FileName).ShouldBe(["index.json"]);
         File.Exists(Path.Combine(directory, "index.json")).ShouldBeTrue();
 
         // ⚠ The first run is NOT clean, because a document that is not checked in yet counts as drift
@@ -76,7 +76,7 @@ public sealed class OpenApiArtifactsTests : IDisposable {
     public void CheckModeWritesNothing() {
         // The Architecture gate runs in this mode: a gate that repaired what it was inspecting would
         // be permanently green.
-        Generate(Fixtures.Postgres(), write: false);
+        Generate(Fixtures.Postgres(), false);
 
         Directory.Exists(directory).ShouldBeFalse();
     }
@@ -99,18 +99,18 @@ public sealed class OpenApiArtifactsTests : IDisposable {
         var path = FileFor(Fixtures.FirstVersion);
         var edited = File.ReadAllText(path, Encoding.UTF8)
             .Replace("Cyber Cloud", "Cyber Clouds", StringComparison.Ordinal);
-        File.WriteAllText(path, edited, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        File.WriteAllText(path, edited, new UTF8Encoding(false));
 
-        var checkOnly = Generate(Fixtures.Postgres(), write: false);
+        var checkOnly = Generate(Fixtures.Postgres(), false);
 
         checkOnly.IsClean.ShouldBeFalse();
-        checkOnly.Documents.Single(x => x.FileName == "2026-08-01.json").Drifted.ShouldBeTrue();
-        checkOnly.Documents.Single(x => x.FileName == "index.json").Drifted.ShouldBeFalse();
+        checkOnly.Documents.Single(static x => x.FileName == "2026-08-01.json").Drifted.ShouldBeTrue();
+        checkOnly.Documents.Single(static x => x.FileName == "index.json").Drifted.ShouldBeFalse();
 
         // ⚠ And a writing run repairs the file AND still reports the drift, which is what makes the
         // fix `git add` rather than hand-copying the generator's output out of a log.
         var writing = Generate(Fixtures.Postgres());
-        writing.Documents.Single(x => x.FileName == "2026-08-01.json").Drifted.ShouldBeTrue();
+        writing.Documents.Single(static x => x.FileName == "2026-08-01.json").Drifted.ShouldBeTrue();
 
         Generate(Fixtures.Postgres()).IsClean.ShouldBeTrue();
     }
@@ -122,8 +122,8 @@ public sealed class OpenApiArtifactsTests : IDisposable {
         var path = FileFor(Fixtures.FirstVersion);
         File.WriteAllBytes(path, File.ReadAllBytes(path)[..^1]);
 
-        Generate(Fixtures.Postgres(), write: false)
-            .Documents.Single(x => x.FileName == "2026-08-01.json")
+        Generate(Fixtures.Postgres(), false)
+            .Documents.Single(static x => x.FileName == "2026-08-01.json")
             .Drifted.ShouldBeTrue();
     }
 
@@ -143,13 +143,13 @@ public sealed class OpenApiArtifactsTests : IDisposable {
             )
         );
 
-        var report = Generate(widened, write: false);
+        var report = Generate(widened, false);
 
-        report.Documents.SelectMany(x => x.BreakingChanges).ShouldBeEmpty();
+        report.Documents.SelectMany(static x => x.BreakingChanges).ShouldBeEmpty();
 
         // It is still drift, and still has to be regenerated and committed — the two gates ask
         // different questions and this is the case where they disagree.
-        report.Documents.Single(x => x.FileName == "2026-08-01.json").Drifted.ShouldBeTrue();
+        report.Documents.Single(static x => x.FileName == "2026-08-01.json").Drifted.ShouldBeTrue();
     }
 
     [Fact]
@@ -161,13 +161,18 @@ public sealed class OpenApiArtifactsTests : IDisposable {
                 [
                     .. Fixtures.ServerSchema()
                         .Properties
-                            .Where(x => !string.Equals(x.JsonPointer, "/properties/sku/vcpu", StringComparison.Ordinal))
+                            .Where(static x => !string.Equals(
+                                    x.JsonPointer,
+                                    "/properties/sku/vcpu",
+                                    StringComparison.Ordinal
+                                )
+                            )
                 ]
             )
         );
 
-        var breaking = Generate(narrowed, write: false)
-            .Documents.Single(x => x.FileName == "2026-08-01.json")
+        var breaking = Generate(narrowed, false)
+            .Documents.Single(static x => x.FileName == "2026-08-01.json")
             .BreakingChanges;
 
         breaking.ShouldNotBeEmpty();
@@ -186,14 +191,18 @@ public sealed class OpenApiArtifactsTests : IDisposable {
                 [
                     .. Fixtures.ServerSchema()
                         .Properties
-                            .Where(x => !string.Equals(x.JsonPointer, "/properties/storageGb", StringComparison.Ordinal)
+                            .Where(static x => !string.Equals(
+                                    x.JsonPointer,
+                                    "/properties/storageGb",
+                                    StringComparison.Ordinal
+                                )
                             )
                 ]
             )
         );
 
-        Generate(narrowed, write: false)
-            .Documents.Single(x => x.FileName == "2026-08-01.json")
+        Generate(narrowed, false)
+            .Documents.Single(static x => x.FileName == "2026-08-01.json")
             .BreakingChanges
             .ShouldContain(x => x.Rule == OpenApiCompatibility.Removed);
     }
@@ -215,8 +224,8 @@ public sealed class OpenApiArtifactsTests : IDisposable {
             )
         );
 
-        Generate(narrowed, write: false)
-            .Documents.Single(x => x.FileName == "2026-08-01.json")
+        Generate(narrowed, false)
+            .Documents.Single(static x => x.FileName == "2026-08-01.json")
             .BreakingChanges
             .ShouldContain(x => x.Rule == OpenApiCompatibility.RequiredAdded);
     }
@@ -244,8 +253,8 @@ public sealed class OpenApiArtifactsTests : IDisposable {
             )
         );
 
-        Generate(narrowed, write: false)
-            .Documents.Single(x => x.FileName == "2026-08-01.json")
+        Generate(narrowed, false)
+            .Documents.Single(static x => x.FileName == "2026-08-01.json")
             .BreakingChanges
             .ShouldContain(x => x.Rule == OpenApiCompatibility.Changed
                 && x.JsonPointer.Contains("storageGb", StringComparison.Ordinal)
@@ -256,9 +265,9 @@ public sealed class OpenApiArtifactsTests : IDisposable {
     public void RemovingAWholeResourceTypeIsABreakingChange() {
         Generate(Fixtures.Postgres());
 
-        var report = Generate(Fixtures.PostgresWith(Fixtures.ServerSchema()), write: false);
+        var report = Generate(Fixtures.PostgresWith(Fixtures.ServerSchema()), false);
 
-        report.Documents.Single(x => x.FileName == "2026-08-01.json")
+        report.Documents.Single(static x => x.FileName == "2026-08-01.json")
             .BreakingChanges
                 .ShouldContain(x => x.Rule == OpenApiCompatibility.Removed
                     && x.JsonPointer.Contains("databases", StringComparison.Ordinal)
@@ -283,21 +292,21 @@ public sealed class OpenApiArtifactsTests : IDisposable {
             )
         );
 
-        var report = Generate(reworded, write: false);
+        var report = Generate(reworded, false);
 
-        report.Documents.SelectMany(x => x.BreakingChanges).ShouldBeEmpty();
-        report.Documents.Single(x => x.FileName == "2026-08-01.json").Drifted.ShouldBeTrue();
+        report.Documents.SelectMany(static x => x.BreakingChanges).ShouldBeEmpty();
+        report.Documents.Single(static x => x.FileName == "2026-08-01.json").Drifted.ShouldBeTrue();
     }
 
     [Fact]
     public void ANewApiVersionBreaksNothing() {
         Generate(Fixtures.PostgresWith(Fixtures.ServerSchema()));
 
-        var report = Generate(Fixtures.Postgres(), write: false);
+        var report = Generate(Fixtures.Postgres(), false);
 
         // 2027-01-01 is new here, and a version that was never published cannot be broken.
-        report.Documents.Single(x => x.FileName == "2027-01-01.json").Published.ShouldBeFalse();
-        report.Documents.Single(x => x.FileName == "2027-01-01.json").BreakingChanges.ShouldBeEmpty();
+        report.Documents.Single(static x => x.FileName == "2027-01-01.json").Published.ShouldBeFalse();
+        report.Documents.Single(static x => x.FileName == "2027-01-01.json").BreakingChanges.ShouldBeEmpty();
     }
 
     [Fact]
@@ -305,8 +314,8 @@ public sealed class OpenApiArtifactsTests : IDisposable {
         Generate(Fixtures.Postgres());
         File.WriteAllText(FileFor(Fixtures.FirstVersion), "{ this is not json");
 
-        Generate(Fixtures.Postgres(), write: false)
-            .Documents.Single(x => x.FileName == "2026-08-01.json")
+        Generate(Fixtures.Postgres(), false)
+            .Documents.Single(static x => x.FileName == "2026-08-01.json")
             .BreakingChanges
             .ShouldContain(x => x.Rule == OpenApiCompatibility.Unreadable);
     }
@@ -318,7 +327,7 @@ public sealed class OpenApiArtifactsTests : IDisposable {
         Generate(Fixtures.Postgres());
 
         // Drop the second api-version from the registry. Its document is still checked in.
-        var report = Generate(Fixtures.PostgresWith(Fixtures.ServerSchema()), write: true);
+        var report = Generate(Fixtures.PostgresWith(Fixtures.ServerSchema()), true);
 
         report.Stale.ShouldBe(["2027-01-01.json"]);
         report.IsClean.ShouldBeFalse();

@@ -15,8 +15,11 @@ namespace CyberCloud.Authorization.Contracts;
 ///         object as a subject: every userset a chain reaches it from.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A userset whose relation is not direct-only appears in <see cref="Members" /> and is
-///         never expanded there.</b> A tuple <c>group:g#member@resourceGroup:r#owner</c> is legal,
+///         ⚠
+///         <b>
+///             A userset whose relation is not direct-only appears in <see cref="Members" /> and is
+///             never expanded there.
+///         </b> A tuple <c>group:g#member@resourceGroup:r#owner</c> is legal,
 ///         and what <c>resourceGroup:r#owner</c> contains is a <c>From("parent", …)</c> away from
 ///         anything a closure over tuples can say. The index records the userset as a member and
 ///         stops; a reader that finds one knows the set is not the whole membership and says

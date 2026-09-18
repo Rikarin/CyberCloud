@@ -1,7 +1,5 @@
 using CyberCloud.Core.Time;
-using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.ManagedIdentity;
-using CyberCloud.Identity.Tests.Infrastructure;
 using System.Net;
 using System.Text;
 

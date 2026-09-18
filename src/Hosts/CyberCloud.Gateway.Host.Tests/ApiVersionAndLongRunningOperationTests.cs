@@ -115,7 +115,7 @@ public sealed class LongRunningOperationTests {
             "PUT",
             GatewayHarness.ResourcePath(GatewayHarness.TenantA),
             gateway.Token(GatewayHarness.TenantA),
-            body: "{\"properties\":{\"sku\":\"gp1\"}}"
+            body: """{"properties":{"sku":"gp1"}}"""
         );
 
         response.Status.ShouldBe(StatusCodes.Status202Accepted);
@@ -224,7 +224,7 @@ public sealed class LongRunningOperationTests {
     public async Task AnOperationTheCallerMayNotSeeIsTheCanonical404() {
         var gateway = new GatewayHarness();
 
-        gateway.Operations.OnRead = _ => Result<OperationStatus>.Failure(
+        gateway.Operations.OnRead = static _ => Result<OperationStatus>.Failure(
             ErrorCode.ResourceNotFound,
             "The caller may not read the resource this operation drives."
         );
@@ -290,7 +290,7 @@ public sealed class LongRunningOperationTests {
     [Fact]
     public async Task TheReaderCopiesTheSeamsRefusalRatherThanReinterpretingIt() {
         var manager = new RecordingResourceManager {
-            OnGetOperation = id => Result<OperationStatus>.Failure(
+            OnGetOperation = static id => Result<OperationStatus>.Failure(
                 ErrorCode.ResourceNotFound,
                 $"Operation {id:D} does not exist."
             )

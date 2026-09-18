@@ -16,8 +16,11 @@ namespace CyberCloud.Providers.Compute.Application;
 ///     The compute provider's ABP module — what a host <c>[DependsOn]</c> to load it.
 /// </summary>
 /// <remarks>
-///     docs/plan/03 § Providers: <i>"Each is an ABP module (<c>[DependsOn]</c>), each registers its
-///     resource types into <c>CyberCloud.ResourceManager</c>."</i> Both halves happen here — a host
+///     docs/plan/03 § Providers:
+///     <i>
+///         "Each is an ABP module (<c>[DependsOn]</c>), each registers its
+///         resource types into <c>CyberCloud.ResourceManager</c>."
+///     </i> Both halves happen here — a host
 ///     that <c>[DependsOn]</c> this module gets the provider, its three reconcilers and its power
 ///     handler, and there is no second call it can forget.
 /// </remarks>

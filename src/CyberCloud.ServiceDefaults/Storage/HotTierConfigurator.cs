@@ -60,7 +60,7 @@ public sealed class HotTierConfigurator : IDisposable {
         multiplexer = new(
             () => ConnectionMultiplexer.ConnectAsync(connections.HotCluster())
                 .ContinueWith(
-                    t => (IConnectionMultiplexer)t.GetAwaiter().GetResult(),
+                    static t => (IConnectionMultiplexer)t.GetAwaiter().GetResult(),
                     CancellationToken.None,
                     TaskContinuationOptions.ExecuteSynchronously,
                     TaskScheduler.Default
@@ -82,7 +82,7 @@ public sealed class HotTierConfigurator : IDisposable {
         ArgumentNullException.ThrowIfNull(options);
 
         Interlocked.Increment(ref invocations);
-        invocationsPerTenant.AddOrUpdate(tenantId, 1, (_, previous) => previous + 1);
+        invocationsPerTenant.AddOrUpdate(tenantId, 1, static (_, previous) => previous + 1);
 
         var keys = TenantHotKeys.For(shardMap, tenantId);
         HashTagPerTenant[tenantId] = keys.HashTag;
@@ -158,7 +158,7 @@ public sealed class HotTierConfigurator : IDisposable {
 
     static RedisKey ThrowingKey(string grainType, GrainId grainId) =>
         throw new InvalidOperationException(
-            $"The tenant-unaware bootstrap hot-tier provider was asked for a storage key for "
+            "The tenant-unaware bootstrap hot-tier provider was asked for a storage key for "
             + $"{grainType}/{grainId}. It exists only to initialise shared dependencies at silo "
             + "start (Orleans.Multitenant's addStorageProvider) and must never store state — a key "
             + "from here would sit outside every tenant's hash tag."

@@ -82,7 +82,7 @@ public sealed class CyberCloudClientContext {
         ArgumentNullException.ThrowIfNull(request);
 
         request.Content = new ByteArrayContent(body.ToArray()) {
-            Headers = { ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" } }
+            Headers = { ContentType = new("application/json") { CharSet = "utf-8" } }
         };
     }
 

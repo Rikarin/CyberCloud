@@ -33,8 +33,8 @@ public sealed class RabbitmqQuotaTests {
 
     [Fact]
     public void EachMeterIsAProductOfTheNodeCountAndTheSizeRatherThanOneNodesShare() {
-        var one = Amounts(RabbitmqClusters.Body(ClusterId, nodes: 1, storageSize: "20Gi"));
-        var three = Amounts(RabbitmqClusters.Body(ClusterId, nodes: 3, storageSize: "20Gi"));
+        var one = Amounts(RabbitmqClusters.Body(ClusterId, 1, "20Gi"));
+        var three = Amounts(RabbitmqClusters.Body(ClusterId, 3, "20Gi"));
 
         three[QuotaMeter.Vcpu].ShouldBe(one[QuotaMeter.Vcpu] * 3);
         three[QuotaMeter.MemoryGb].ShouldBe(one[QuotaMeter.MemoryGb] * 3);
@@ -53,7 +53,7 @@ public sealed class RabbitmqQuotaTests {
         // and what MeterDerivation exists for.
         RabbitmqClusters.Body(ClusterId).ShouldNotContain("sizing");
 
-        var amounts = Amounts(RabbitmqClusters.Body(ClusterId, nodes: 3));
+        var amounts = Amounts(RabbitmqClusters.Body(ClusterId, 3));
 
         // c1.small is 1 vCPU and 2Gi, three nodes, 20Gi each.
         amounts[QuotaMeter.Vcpu].ShouldBe(3m);
@@ -63,7 +63,7 @@ public sealed class RabbitmqQuotaTests {
 
     [Fact]
     public void AnExplicitOverrideBeatsThePresetAndIsCountedPerNode() {
-        var amounts = Amounts(WithSizing(RabbitmqClusters.Body(ClusterId, nodes: 3), "500m", "1Gi"));
+        var amounts = Amounts(WithSizing(RabbitmqClusters.Body(ClusterId, 3), "500m", "1Gi"));
 
         amounts[QuotaMeter.Vcpu].ShouldBe(1.5m, "500m × 3 is 1.5 cores, not 1 and not 2");
         amounts[QuotaMeter.MemoryGb].ShouldBe(3m);
@@ -75,7 +75,7 @@ public sealed class RabbitmqQuotaTests {
         // committed amounts from the STORED body through this same function, so a derivation reading
         // a clock, configuration or a mutable static would return a different number on the delete
         // than the create committed — quota drifting upward on every cycle.
-        var body = RabbitmqClusters.Body(ClusterId, nodes: 5, storageSize: "25Gi");
+        var body = RabbitmqClusters.Body(ClusterId, 5, "25Gi");
 
         Amounts(body).ShouldBe(Amounts(body));
     }
@@ -95,7 +95,7 @@ public sealed class RabbitmqQuotaTests {
 
         using var body = JsonDocument.Parse(WithSizing(RabbitmqClusters.Body(ClusterId), "not-a-quantity", "1Gi"));
 
-        registration.Meters.Single(x => x.Meter == QuotaMeter.Vcpu).Derivation!
+        registration.Meters.Single(static x => x.Meter == QuotaMeter.Vcpu).Derivation!
             .Amount(body.RootElement)
             .IsFailure.ShouldBeTrue("a body whose cpu quantity does not parse reserved an amount instead of refusing.");
     }
@@ -110,9 +110,7 @@ public sealed class RabbitmqQuotaTests {
         // extremes of the schema's own ranges.
         foreach (var nodes in new[] { 1, 7 }) {
             foreach (var size in new[] { "1", "20Gi" }) {
-                foreach (var amount in Amounts(
-                             RabbitmqClusters.Body(ClusterId, nodes: nodes, storageSize: size)
-                         ).Values) {
+                foreach (var amount in Amounts(RabbitmqClusters.Body(ClusterId, nodes, size)).Values) {
                     amount.ShouldBeGreaterThan(
                         0m,
                         $"nodes={nodes}, storage={size} derives a zero amount, which "
@@ -131,7 +129,7 @@ public sealed class RabbitmqQuotaTests {
         using var body = JsonDocument.Parse(bodyJson);
         var found = new Dictionary<QuotaMeter, decimal>();
 
-        foreach (var meter in registration.Meters.Where(x => x.Derivation is not null)) {
+        foreach (var meter in registration.Meters.Where(static x => x.Derivation is not null)) {
             var amount = meter.Derivation!.Amount(body.RootElement);
             amount.IsSuccess.ShouldBeTrue(meter.Meter.ToString());
             found[meter.Meter] = amount.GetValueOrThrow();

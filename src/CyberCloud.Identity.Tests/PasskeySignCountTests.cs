@@ -144,7 +144,7 @@ public sealed class PasskeySignCountTests(IdentityCluster cluster) {
 
         (await user.RemovePasskeyAsync("k1")).IsSuccess.ShouldBeTrue();
 
-        (await user.ListPasskeysAsync()).GetValueOrThrow().Select(x => x.CredentialId).ShouldBe(["k2"]);
+        (await user.ListPasskeysAsync()).GetValueOrThrow().Select(static x => x.CredentialId).ShouldBe(["k2"]);
         (await user.RecordPasskeyAssertionAsync("k1", 2))
             .GetValueOrThrow()
             .ShouldBeFalse("a removed key is a lost or stolen key; it must stop working immediately");

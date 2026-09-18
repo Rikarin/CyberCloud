@@ -253,7 +253,7 @@ public sealed class CheckEvaluatorTests {
         // a cap doing harm rather than work.
         List<string> tuples = [
             .. Enumerable.Range(0, 3_000)
-                .Select(i =>
+                .Select(static i =>
                     "doc:one#owner@user:u" + i.ToString(CultureInfo.InvariantCulture)
                 )
         ];
@@ -276,15 +276,21 @@ public sealed class CheckEvaluatorTests {
         // for a closure it holds — MembershipIndexReader's remarks.
         List<string> tuples = [
             .. UsersetFanOut(1_001),
-            .. Enumerable.Range(0, 1_000).Select(i => string.Create(CultureInfo.InvariantCulture, $"group:g{i}#member@user:u{i}")),
+            .. Enumerable.Range(0, 1_000)
+                .Select(static i => string.Create(CultureInfo.InvariantCulture, $"group:g{i}#member@user:u{i}")),
             "group:g1000#member@user:alice"
         ];
         var indexed = InMemoryReverseRelationReader.Parse(Hierarchy, [.. tuples]);
-        var forward = new InMemoryRelationReader(tuples.Select(x => RelationTuple.Parse(x).GetValueOrThrow()));
+        var forward = new InMemoryRelationReader(tuples.Select(static x => RelationTuple.Parse(x).GetValueOrThrow()));
         var answersBefore = AuthorizationMetrics.IndexAnswers;
         var evaluator = new CheckEvaluator(Hierarchy, forward, null, indexed.Index);
 
-        var result = (await evaluator.EvaluateAsync(ObjectRef.Parse("doc:one").GetValueOrThrow(), "read", Alice, TestContext.Current.CancellationToken))
+        var result = (await evaluator.EvaluateAsync(
+                ObjectRef.Parse("doc:one").GetValueOrThrow(),
+                "read",
+                Alice,
+                TestContext.Current.CancellationToken
+            ))
             .GetValueOrThrow();
 
         result.Allowed.ShouldBeTrue("the index answered the 1 001st userset without a walk");
@@ -311,10 +317,15 @@ public sealed class CheckEvaluatorTests {
         }
 
         var indexed = InMemoryReverseRelationReader.Parse(Hierarchy, [.. tuples]);
-        var forward = new InMemoryRelationReader(tuples.Select(x => RelationTuple.Parse(x).GetValueOrThrow()));
+        var forward = new InMemoryRelationReader(tuples.Select(static x => RelationTuple.Parse(x).GetValueOrThrow()));
         var evaluator = new CheckEvaluator(Hierarchy, forward, null, indexed.Index);
 
-        var result = await evaluator.EvaluateAsync(ObjectRef.Parse("doc:one").GetValueOrThrow(), "read", Alice, TestContext.Current.CancellationToken);
+        var result = await evaluator.EvaluateAsync(
+            ObjectRef.Parse("doc:one").GetValueOrThrow(),
+            "read",
+            Alice,
+            TestContext.Current.CancellationToken
+        );
 
         result.GetValueOrThrow().Allowed.ShouldBeTrue();
         forward.Reads.ShouldBe(1, "doc:one, and no group — the chain was answered from the index");
@@ -337,7 +348,11 @@ public sealed class CheckEvaluatorTests {
         var indexed = InMemoryReverseRelationReader.Parse(Hierarchy, [.. tuples]);
         var bob = SubjectRef.Of("user", "bob");
 
-        (await indexed.Index.TryTestMembershipAsync(SubjectRef.Userset("group", "g1", "member"), bob, TestContext.Current.CancellationToken))
+        (await indexed.Index.TryTestMembershipAsync(
+                SubjectRef.Userset("group", "g1", "member"),
+                bob,
+                TestContext.Current.CancellationToken
+            ))
             .ShouldBeNull("g1's closure holds doc:two#owner unexpanded, so it cannot say no");
 
         var result = await Evaluate(Hierarchy, "doc:one", "read", bob, indexed.Index, [.. tuples]);
@@ -369,7 +384,11 @@ public sealed class CheckEvaluatorTests {
         var store = new InMemoryMembershipIndexStore();
         var reader = new MembershipIndexReader(Hierarchy, store);
 
-        (await reader.TryTestMembershipAsync(SubjectRef.Userset("group", "g1", "member"), Alice, TestContext.Current.CancellationToken))
+        (await reader.TryTestMembershipAsync(
+                SubjectRef.Userset("group", "g1", "member"),
+                Alice,
+                TestContext.Current.CancellationToken
+            ))
             .ShouldBeNull("a slice no write has touched says nothing about tuples older than the index");
 
         var result = await Evaluate(Hierarchy, "doc:one", "read", Alice, reader, [.. tuples]);
@@ -386,10 +405,15 @@ public sealed class CheckEvaluatorTests {
         // first, and the store rebuilds every other unwritten slice a change lands on.
         List<string> before = ["doc:one#owner@group:top#member", "group:eng#member@user:alice"];
         var edge = RelationTuple.Parse("group:top#member@group:eng#member").GetValueOrThrow();
-        List<RelationTuple> present = [.. before.Select(x => RelationTuple.Parse(x).GetValueOrThrow()), edge];
+        List<RelationTuple> present = [.. before.Select(static x => RelationTuple.Parse(x).GetValueOrThrow()), edge];
 
         var store = new InMemoryMembershipIndexStore();
-        var maintainer = new MembershipIndexMaintainer(Hierarchy, new InMemoryRelationReader(present), new EntriesOnlyReader(present), store);
+        var maintainer = new MembershipIndexMaintainer(
+            Hierarchy,
+            new InMemoryRelationReader(present),
+            new EntriesOnlyReader(present),
+            store
+        );
         store.Rebuild = maintainer.RebuildAsync;
 
         // Step 6: the forward and reverse halves already hold the edge when the index is updated.
@@ -397,18 +421,38 @@ public sealed class CheckEvaluatorTests {
 
         var top = store.Snapshot(ObjectRef.Of("group", "top"));
         top.SchemaVersion.ShouldBe(Hierarchy.Version);
-        top.MembersOf("member").ShouldBe([SubjectRef.Userset("group", "eng", "member"), Alice], ignoreOrder: true, "the pre-existing member is in the new closure");
+        top.MembersOf("member")
+            .ShouldBe(
+                [SubjectRef.Userset("group", "eng", "member"), Alice],
+                true,
+                "the pre-existing member is in the new closure"
+            );
 
         var alice = store.Snapshot(Alice.Object);
-        alice.UsersetsOf(string.Empty).ShouldBe([SubjectRef.Userset("group", "eng", "member"), SubjectRef.Userset("group", "top", "member")], ignoreOrder: true);
+        alice.UsersetsOf(string.Empty)
+            .ShouldBe(
+                [SubjectRef.Userset("group", "eng", "member"), SubjectRef.Userset("group", "top", "member")],
+                true
+            );
 
         store.Rebuilds.ShouldBeGreaterThanOrEqualTo(1, "alice's slice was unwritten when the union reached it");
 
         var reader = new MembershipIndexReader(Hierarchy, store);
-        (await reader.TryTestMembershipAsync(SubjectRef.Userset("group", "top", "member"), Alice, TestContext.Current.CancellationToken))
+        (await reader.TryTestMembershipAsync(
+                SubjectRef.Userset("group", "top", "member"),
+                Alice,
+                TestContext.Current.CancellationToken
+            ))
             .ShouldBe(true);
 
-        var result = await Evaluate(Hierarchy, "doc:one", "read", Alice, reader, [.. present.Select(x => x.ToString())]);
+        var result = await Evaluate(
+            Hierarchy,
+            "doc:one",
+            "read",
+            Alice,
+            reader,
+            [.. present.Select(static x => x.ToString())]
+        );
         result.Allowed.ShouldBeTrue();
     }
 
@@ -427,14 +471,20 @@ public sealed class CheckEvaluatorTests {
             new() {
                 SchemaVersion = Hierarchy.Version + 1,
                 Reset = true,
-                AddMembers = new Dictionary<string, IReadOnlyList<SubjectRef>> { ["member"] = [SubjectRef.Of("user", "carol")] }
+                AddMembers = new Dictionary<string, IReadOnlyList<SubjectRef>> {
+                    ["member"] = [SubjectRef.Of("user", "carol")]
+                }
             },
             TestContext.Current.CancellationToken
         );
 
         var reader = new MembershipIndexReader(Hierarchy, store);
 
-        (await reader.TryTestMembershipAsync(SubjectRef.Userset("group", "g1", "member"), SubjectRef.Of("user", "carol"), TestContext.Current.CancellationToken))
+        (await reader.TryTestMembershipAsync(
+                SubjectRef.Userset("group", "g1", "member"),
+                SubjectRef.Of("user", "carol"),
+                TestContext.Current.CancellationToken
+            ))
             .ShouldBeNull("a stale slice must not answer, in either direction");
 
         var result = await Evaluate(Hierarchy, "doc:one", "read", Alice, reader, [.. tuples]);
@@ -452,7 +502,7 @@ public sealed class CheckEvaluatorTests {
         List<string> tuples = [
             "doc:one#owner@user:alice",
             .. Enumerable.Range(0, 1_001)
-                .Select(i =>
+                .Select(static i =>
                     "doc:one#suspended@group:s" + i.ToString(CultureInfo.InvariantCulture) + "#member"
                 )
         ];
@@ -558,7 +608,7 @@ public sealed class CheckEvaluatorTests {
     ) {
         var evaluator = new CheckEvaluator(
             schema,
-            new InMemoryRelationReader(tuples.Select(x => RelationTuple.Parse(x).GetValueOrThrow())),
+            new InMemoryRelationReader(tuples.Select(static x => RelationTuple.Parse(x).GetValueOrThrow())),
             null,
             index
         );
@@ -575,19 +625,30 @@ public sealed class CheckEvaluatorTests {
 
     /// <summary>The reverse index over a tuple list, entries only — what a rebuild reads.</summary>
     sealed class EntriesOnlyReader(List<RelationTuple> tuples) : IReverseRelationReader {
-        public ValueTask<Result<IReadOnlyList<SubjectIndexEntry>>> ReadAsync(ObjectRef subjectObject, CancellationToken cancellationToken) {
+        public ValueTask<Result<IReadOnlyList<SubjectIndexEntry>>> ReadAsync(
+            ObjectRef subjectObject,
+            CancellationToken cancellationToken
+        ) {
             IReadOnlyList<SubjectIndexEntry> entries = [
                 .. tuples
                     .Where(t => t.Subject.Object == subjectObject)
-                    .Select(t => new SubjectIndexEntry { Object = t.Object, Relation = t.Relation, SubjectRelation = t.Subject.Relation })
+                    .Select(t => new SubjectIndexEntry {
+                            Object = t.Object, Relation = t.Relation, SubjectRelation = t.Subject.Relation
+                        }
+                    )
                     .Distinct()
             ];
 
             return ValueTask.FromResult(Result<IReadOnlyList<SubjectIndexEntry>>.Success(entries));
         }
 
-        public ValueTask<Result<IReadOnlyList<SubjectRef>>> ReadUsersetsAsync(SubjectRef subject, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("The maintainer never reads the closure it maintains through the reverse reader.");
+        public ValueTask<Result<IReadOnlyList<SubjectRef>>> ReadUsersetsAsync(
+            SubjectRef subject,
+            CancellationToken cancellationToken
+        ) =>
+            throw new InvalidOperationException(
+                "The maintainer never reads the closure it maintains through the reverse reader."
+            );
     }
 
     /// <summary><c>doc:h0 → doc:h1 → … → doc:hN</c>, optionally granting at the far end.</summary>
@@ -604,14 +665,14 @@ public sealed class CheckEvaluatorTests {
     /// <summary><paramref name="count" /> userset subjects on one relation of one object.</summary>
     static IEnumerable<string> UsersetFanOut(int count) =>
         Enumerable.Range(0, count)
-            .Select(i =>
+            .Select(static i =>
                 string.Create(CultureInfo.InvariantCulture, $"doc:one#owner@group:g{i}#member")
             );
 
     /// <summary><paramref name="count" /> tupleset targets on one object.</summary>
     static IEnumerable<string> ParentFanOut(int count) =>
         Enumerable.Range(0, count)
-            .Select(i =>
+            .Select(static i =>
                 string.Create(CultureInfo.InvariantCulture, $"doc:one#parent@doc:p{i}")
             );
 }

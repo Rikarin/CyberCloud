@@ -55,7 +55,11 @@ public sealed class TunnelExchange : ITunnelRoute, IDisposable {
         ArgumentNullException.ThrowIfNull(send);
 
         if (timeout <= TimeSpan.Zero) {
-            throw new ArgumentOutOfRangeException(nameof(timeout), timeout, "A tunnel request needs a positive timeout.");
+            throw new ArgumentOutOfRangeException(
+                nameof(timeout),
+                timeout,
+                "A tunnel request needs a positive timeout."
+            );
         }
 
         this.send = send;
@@ -85,7 +89,9 @@ public sealed class TunnelExchange : ITunnelRoute, IDisposable {
 
         var id = Interlocked.Increment(ref nextId);
         var sent = request with { Id = id };
-        var completion = new TaskCompletionSource<Result<TunnelFrame>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion = new TaskCompletionSource<Result<TunnelFrame>>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
 
         pending[id] = completion;
 

@@ -98,7 +98,7 @@ public sealed class ContainerRegistryDeclarationTests {
         // protection that fails silently open. So this property was absent while the window was
         // withdrawn and came back with it, and neither state is expressible without the other.
         var flag = ContainerRegistries.Schema2026.Properties
-            .Single(x => x.JsonPointer == ContainerRegistries.PurgeProtectionPointer);
+            .Single(static x => x.JsonPointer == ContainerRegistries.PurgeProtectionPointer);
 
         flag.Kind.ShouldBe(SchemaKind.Boolean);
         flag.DefaultJson.ShouldBe(
@@ -136,7 +136,7 @@ public sealed class ContainerRegistryDeclarationTests {
         // CliEmitter.Emit at generation, and GeneratedSurfaceTests over the embedded verb tree.
         CliTokens.Collisions(
             ProviderRegistry.Build([new ContainerRegistryProvider()])
-                .Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+                .Types.Select(static x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
         )
             .ShouldBeEmpty();
     }
@@ -157,7 +157,7 @@ public sealed class ContainerRegistryDeclarationTests {
             meter.Expression.ShouldNotBeNullOrWhiteSpace(meter.Meter.ToString());
         }
 
-        foreach (var meter in derived.Where(x => x.Meter != QuotaMeter.StorageGb)) {
+        foreach (var meter in derived.Where(static x => x.Meter != QuotaMeter.StorageGb)) {
             meter.Reads.ShouldContain("/properties/replicas", meter.Meter.ToString());
             meter.Reads.ShouldContain("/properties/sizing/preset", meter.Meter.ToString());
         }
@@ -166,14 +166,14 @@ public sealed class ContainerRegistryDeclarationTests {
         // than an omission: the three components a replica count moves own no volume, and the three
         // that own a volume run one replica each. A storage derivation that multiplied by `replicas`
         // would reserve three times the disk on the default body.
-        derived.Single(x => x.Meter == QuotaMeter.StorageGb)
+        derived.Single(static x => x.Meter == QuotaMeter.StorageGb)
             .Reads
                 .ShouldNotContain("/properties/replicas");
     }
 
     [Fact]
     public void TheTypeDrawsTheResourceCountAndNotTheClustersMeter() {
-        var drawn = Registration().Meters.Select(x => x.Meter).ToList();
+        var drawn = Registration().Meters.Select(static x => x.Meter).ToList();
 
         drawn.ShouldContain(QuotaMeter.Resources);
         drawn.ShouldContain(QuotaMeter.Vcpu);
@@ -232,7 +232,7 @@ public sealed class ContainerRegistryDeclarationTests {
     [Fact]
     public void ThePresetEnumAndThePresetTableAreTheSameSet() {
         var declared = ContainerRegistries.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/sizing/preset")
+            .Single(static x => x.JsonPointer == "/properties/sizing/preset")
             .AllowedValues;
 
         declared.Order(StringComparer.Ordinal)
@@ -253,7 +253,7 @@ public sealed class ContainerRegistryDeclarationTests {
         // after the caller was told 202 — and nothing in the platform would report it as anything but
         // a resource that never converges.
         var offered = ContainerRegistries.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/version")
+            .Single(static x => x.JsonPointer == "/properties/version")
             .AllowedValues;
 
         offered.Order(StringComparer.Ordinal)
@@ -316,5 +316,5 @@ public sealed class ContainerRegistryDeclarationTests {
         return registration;
     }
 
-    static List<MeterRegistration> Derived() => [.. Registration().Meters.Where(x => x.Derivation is not null)];
+    static List<MeterRegistration> Derived() => [.. Registration().Meters.Where(static x => x.Derivation is not null)];
 }

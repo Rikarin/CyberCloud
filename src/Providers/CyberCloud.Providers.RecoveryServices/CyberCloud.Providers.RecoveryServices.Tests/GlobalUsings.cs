@@ -4,11 +4,11 @@
 
 global using ErrorCode = CyberCloud.Core.ErrorCode;
 global using CyberCloud.Core;
-global using CyberCloud.ResourceManager;
 global using CyberCloud.Core.Resources;
 global using CyberCloud.Core.Time;
 global using CyberCloud.Kubernetes.Contracts;
 global using CyberCloud.Providers.RecoveryServices.Contracts;
+global using CyberCloud.ResourceManager;
 global using CyberCloud.ResourceManager.Contracts;
 global using CyberCloud.ResourceManager.Contracts.Registry;
 global using CyberCloud.Tenancy.Contracts;

@@ -227,7 +227,7 @@ public static class ResourceNaming {
         var builder = new StringBuilder(name.Length + 8);
         foreach (var c in name) {
             if (char.IsControl(c)) {
-                builder.Append("\\u").Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
+                builder.Append("""\u""").Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
             } else {
                 builder.Append(c);
             }

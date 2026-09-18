@@ -218,24 +218,33 @@ public sealed class ReBacScopeAuthorizer(IGrainFactory grains, ILogger<ReBacScop
     ///         the safe direction, and the per-member fallback would refuse it too.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Every way this can fail to answer is <see cref="ScopeCollectionVisibility.Unanswered" />
-    ///         and never an empty answer</b>, for the reason the resource seam gives: a walk past
+    ///         ⚠
+    ///         <b>
+    ///             Every way this can fail to answer is <see cref="ScopeCollectionVisibility.Unanswered" />
+    ///             and never an empty answer
+    ///         </b>, for the reason the resource seam gives: a walk past
     ///         its cap, a schema it cannot evaluate, a store that is down — each has to become "ask
     ///         per member" rather than "show nothing", because an empty page for a tenant whose
     ///         engine is down is indistinguishable from a tenant with no subscriptions, and that is
     ///         the one answer a listing may never fake.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The ids the walk returns are matched against <see cref="ObjectOf" />'s own
-    ///         rendering of each candidate</b>, never re-parsed as GUIDs: a subscription's object id
+    ///         ⚠
+    ///         <b>
+    ///             The ids the walk returns are matched against <see cref="ObjectOf" />'s own
+    ///             rendering of each candidate
+    ///         </b>, never re-parsed as GUIDs: a subscription's object id
     ///         is its GUID in the <c>N</c> form and a group's is <c>{subscriptionId:N}-{name}</c>,
     ///         and the one function that spells both is the one the check side uses. A second
     ///         spelling here would be a filter that dropped every member while every check passed.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The management-group tree is where "depth 1" stops being true, and the two
-    ///         collections it touches answer <see cref="ScopeCollectionVisibility.Unanswered" />
-    ///         rather than a wrong page — issue #39.</b> A subscription assigned to a group hangs off
+    ///         ⚠
+    ///         <b>
+    ///             The management-group tree is where "depth 1" stops being true, and the two
+    ///             collections it touches answer <see cref="ScopeCollectionVisibility.Unanswered" />
+    ///             rather than a wrong page — issue #39.
+    ///         </b> A subscription assigned to a group hangs off
     ///         the group and the group off the tenant, so it is two or more <c>parent</c> hops below
     ///         the tenant and a depth-1 walk does not reach it; a nested group is the same one level
     ///         up; and the tenant's group collection is <i>flat</i>, so its members sit at every depth
@@ -270,7 +279,7 @@ public sealed class ReBacScopeAuthorizer(IGrainFactory grains, ILogger<ReBacScop
             // ⚠ Per member, always — see the remarks: the collection is flat and its members sit
             // at every depth of the tree, which a depth-1 walk cannot see and a deeper walk cannot
             // afford.
-            ScopeKind.ManagementGroup => "",
+
             _ => ""
         };
 

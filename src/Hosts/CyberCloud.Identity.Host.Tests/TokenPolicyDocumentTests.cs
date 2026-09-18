@@ -55,7 +55,7 @@ public sealed class TokenPolicyDocumentTests {
         // vacuously true. That is why `EveryScriptCalledEndpointIsUnderTheApiPrefix` asserts the list
         // is non-empty before it iterates: a mapping that stopped happening must fail this file
         // rather than pass it.
-        return [.. ((IEndpointRouteBuilder)app).DataSources.SelectMany(x => x.Endpoints)];
+        return [.. ((IEndpointRouteBuilder)app).DataSources.SelectMany(static x => x.Endpoints)];
     }
 
     static RouteEndpoint Route(string pattern) =>
@@ -102,7 +102,7 @@ public sealed class TokenPolicyDocumentTests {
 
         var published = document.GetProperty("forbiddenClaims")
             .EnumerateArray()
-            .Select(x => x.GetString())
+            .Select(static x => x.GetString())
             .ToList();
 
         // ⚠ The list is what the gateway needs in order to treat a token carrying one of these names
@@ -115,7 +115,7 @@ public sealed class TokenPolicyDocumentTests {
                 + "should stop advertising a heuristic"
             );
         } else {
-            published.ShouldBe([.. AccessTokenClaims.ForbiddenClaims], ignoreOrder: true);
+            published.ShouldBe([.. AccessTokenClaims.ForbiddenClaims], true);
             published.ShouldNotBeEmpty();
         }
     }
@@ -145,12 +145,13 @@ public sealed class TokenPolicyDocumentTests {
         // exactly what an unauthenticated /authorize answers.
         var navigable = new[] {
             "/health/live", "/.well-known/cybercloud-token-policy", IdentityHostOpenIddict.TokenPath,
-            IdentityHostOpenIddict.UserInfoPath, IdentityHostOpenIddict.AuthorizationPath, IdentityHostOpenIddict.EndSessionPath
+            IdentityHostOpenIddict.UserInfoPath, IdentityHostOpenIddict.AuthorizationPath,
+            IdentityHostOpenIddict.EndSessionPath
         };
 
         var mapped = Endpoints()
             .OfType<RouteEndpoint>()
-            .Select(x => "/" + x.RoutePattern.RawText!.TrimStart('/'))
+            .Select(static x => "/" + x.RoutePattern.RawText!.TrimStart('/'))
             .ToList();
 
         mapped.ShouldNotBeEmpty("MapIdentityEndpoints mapped nothing at all");
@@ -168,7 +169,7 @@ public sealed class TokenPolicyDocumentTests {
     public void TheSignInSurfaceIsTheOneThePagesCall() {
         var mapped = Endpoints()
             .OfType<RouteEndpoint>()
-            .Select(x => "/" + x.RoutePattern.RawText!.TrimStart('/'))
+            .Select(static x => "/" + x.RoutePattern.RawText!.TrimStart('/'))
             .ToHashSet(StringComparer.Ordinal);
 
         // ⚠ Named rather than counted. portal/apps/identity/src/app/identity-api.ts calls exactly
@@ -193,9 +194,18 @@ public sealed class TokenPolicyDocumentTests {
         }
 
         mapped.ShouldContain(IdentityHostOpenIddict.TokenPath, "the token passthrough must have a handler behind it");
-        mapped.ShouldContain(IdentityHostOpenIddict.AuthorizationPath, "the authorization passthrough must have a handler behind it");
-        mapped.ShouldContain(IdentityHostOpenIddict.UserInfoPath, "the userinfo passthrough must have a handler behind it");
-        mapped.ShouldContain(IdentityHostOpenIddict.EndSessionPath, "the end-session passthrough must have a handler behind it");
+        mapped.ShouldContain(
+            IdentityHostOpenIddict.AuthorizationPath,
+            "the authorization passthrough must have a handler behind it"
+        );
+        mapped.ShouldContain(
+            IdentityHostOpenIddict.UserInfoPath,
+            "the userinfo passthrough must have a handler behind it"
+        );
+        mapped.ShouldContain(
+            IdentityHostOpenIddict.EndSessionPath,
+            "the end-session passthrough must have a handler behind it"
+        );
 
         Route(IdentityHostOpenIddict.TokenPath)
             .Metadata.GetMetadata<HttpMethodMetadata>()!
@@ -240,9 +250,11 @@ public sealed class TokenPolicyDocumentTests {
         // lockout counter and the dummy hash and does not need one (IdentityRateLimits' remarks).
         var limited = Endpoints()
             .OfType<RouteEndpoint>()
-            .Select(x => (Route: x.RoutePattern.RawText!, Bucket: x.Metadata.OfType<IdentityRateLimitBucket>().ToList()))
-            .Where(x => x.Bucket.Count > 0)
-            .ToDictionary(x => x.Route, x => x.Bucket.Single().Name, StringComparer.Ordinal);
+            .Select(static x => (Route: x.RoutePattern.RawText!,
+                    Bucket: x.Metadata.OfType<IdentityRateLimitBucket>().ToList())
+            )
+            .Where(static x => x.Bucket.Count > 0)
+            .ToDictionary(static x => x.Route, static x => x.Bucket.Single().Name, StringComparer.Ordinal);
 
         limited.ShouldBe(
             new Dictionary<string, string>(StringComparer.Ordinal) {
@@ -252,10 +264,10 @@ public sealed class TokenPolicyDocumentTests {
                 ["/api/signin/totp"] = IdentityRateLimits.CodeVerify.Name,
                 ["/api/signin/recovery-code"] = IdentityRateLimits.CodeVerify.Name
             },
-            ignoreOrder: true
+            true
         );
 
-        IdentityRateLimits.All.Select(x => x.Name).ShouldBe(["signup-begin", "code-verify"]);
+        IdentityRateLimits.All.Select(static x => x.Name).ShouldBe(["signup-begin", "code-verify"]);
     }
 
     [Fact]
@@ -273,7 +285,7 @@ public sealed class TokenPolicyDocumentTests {
     [Fact]
     public void EverySignInEndpointIsPostOnly() {
         foreach (var endpoint in Endpoints().OfType<RouteEndpoint>()
-                     .Where(x => x.RoutePattern.RawText!.StartsWith("/api/", StringComparison.Ordinal))) {
+                     .Where(static x => x.RoutePattern.RawText!.StartsWith("/api/", StringComparison.Ordinal))) {
             var methods = endpoint.Metadata.GetMetadata<HttpMethodMetadata>();
 
             methods.ShouldNotBeNull(endpoint.RoutePattern.RawText);

@@ -43,7 +43,7 @@ public sealed class CyberCloudCliCredential : TokenCredential {
 
     /// <summary>Runs the CLI. Substituted by the tests.</summary>
     internal Func<IReadOnlyList<string>, CancellationToken, ValueTask<Subprocess.Result>> Run { get; set; } =
-        (arguments, cancellationToken) => Subprocess.RunAsync(Executable, arguments, cancellationToken);
+        static (arguments, cancellationToken) => Subprocess.RunAsync(Executable, arguments, cancellationToken);
 
     /// <inheritdoc />
     public override async ValueTask<AccessToken> GetTokenAsync(
@@ -206,14 +206,14 @@ public class ChainedTokenCredential : TokenCredential, IDisposable {
         // why each declined is the single most common unanswerable support question about a chain.
         throw new CredentialUnavailableException(
             "No credential in the chain could be used:"
-            + string.Concat(unavailable!.Select(x => $"{Environment.NewLine}  • {x.Message}")),
+            + string.Concat(unavailable!.Select(static x => $"{Environment.NewLine}  • {x.Message}")),
             new AggregateException(unavailable!)
         );
     }
 
     /// <inheritdoc />
     public void Dispose() {
-        Dispose(disposing: true);
+        Dispose(true);
         GC.SuppressFinalize(this);
     }
 

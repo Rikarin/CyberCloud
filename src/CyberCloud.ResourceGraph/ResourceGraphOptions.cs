@@ -18,8 +18,11 @@ namespace CyberCloud.ResourceGraph;
 ///         event is a hop the silo does not pay.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="NatsUrl" /> falls back to <c>ConnectionStrings:nats</c>, because that is
-///         the key Aspire writes.</b> The AppHost hands the silos and the gateway the NATS resource
+///         ⚠
+///         <b>
+///             <see cref="NatsUrl" /> falls back to <c>ConnectionStrings:nats</c>, because that is
+///             the key Aspire writes.
+///         </b> The AppHost hands the silos and the gateway the NATS resource
 ///         with <c>WithReference(nats)</c>, which renders as <c>ConnectionStrings__nats</c> and
 ///         nothing else; a section that had to be spelled a second time in the AppHost would be the
 ///         drift <c>CyberCloudResourceExtensions</c> exists to prevent. An explicit

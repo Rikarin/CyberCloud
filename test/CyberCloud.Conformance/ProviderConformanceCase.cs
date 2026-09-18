@@ -543,14 +543,20 @@ public interface IProviderCaseSource {
     ///         like the ancestor at its level.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Here, on the source, with a default, for exactly the reason <see cref="Ancestors" />
-    ///         is.</b> Omitting it is not silent: a type whose body names a sibling that was never
+    ///         ⚠
+    ///         <b>
+    ///             Here, on the source, with a default, for exactly the reason <see cref="Ancestors" />
+    ///             is.
+    ///         </b> Omitting it is not silent: a type whose body names a sibling that was never
     ///         created never converges, and the first convergence assertion fails with the reconciler's
     ///         own words. Nothing stops being asserted.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The sibling's objects survive a reset, and until the first co-writing type they
-    ///         did not.</b> <c>ConformanceState.Reset</c> used to empty the fake cluster between
+    ///         ⚠
+    ///         <b>
+    ///             The sibling's objects survive a reset, and until the first co-writing type they
+    ///             did not.
+    ///         </b> <c>ConformanceState.Reset</c> used to empty the fake cluster between
     ///         assertions, so only the sibling <i>resource</i> — its grain, its index binding, its
     ///         <c>Succeeded</c> state — persisted and its objects were gone. A type that co-writes
     ///         onto a sibling's object needs that object there when a test starts, so the harness now
@@ -561,8 +567,11 @@ public interface IProviderCaseSource {
     ///         pins both halves, and that a test's own objects still do not survive.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A sibling is the case's own provider's; a resource of another provider is a
-    ///         <see cref="Companions" /> entry.</b> The two are the same idea — a resource the body
+    ///         ⚠
+    ///         <b>
+    ///             A sibling is the case's own provider's; a resource of another provider is a
+    ///             <see cref="Companions" /> entry.
+    ///         </b> The two are the same idea — a resource the body
     ///         names, created before the first assertion, kept through every reset — and differ in
     ///         what the harness has to do for them: a sibling is addressed under the harness's own
     ///         ancestors and driven to <c>Succeeded</c>; a companion is top-level, brings a second
@@ -578,8 +587,11 @@ public interface IProviderCaseSource {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A <c>static virtual</c> with a default, for the reason <see cref="Ancestors" />
-    ///         is one: omitting it is not silent.</b> A case whose type declares no
+    ///         ⚠
+    ///         <b>
+    ///             A <c>static virtual</c> with a default, for the reason <see cref="Ancestors" />
+    ///             is one: omitting it is not silent.
+    ///         </b> A case whose type declares no
     ///         <c>RequiresCluster</c> and supplies neither a module nor a
     ///         <see cref="ProviderConformanceCase.DataPlane" /> does not run a smaller suite — it is
     ///         refused by name before its first assertion, because a clusterless run with nothing
@@ -662,8 +674,11 @@ public interface IProviderCaseSource {
     ///         the shipping vault assembly still names nothing of the other family's.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A companion's objects survive the per-test <c>Reset</c>, by the same baseline a
-    ///         sibling's do.</b> Every assertion puts the fake cluster back to the fixture's world
+    ///         ⚠
+    ///         <b>
+    ///             A companion's objects survive the per-test <c>Reset</c>, by the same baseline a
+    ///             sibling's do.
+    ///         </b> Every assertion puts the fake cluster back to the fixture's world
     ///         before it runs, and a vault whose companion's <c>Cluster</c> vanished would refuse the
     ///         item on every assertion after the first. The harness takes that baseline once, after
     ///         the ancestors, <see cref="Siblings" />, and companions have all converged — the
@@ -702,8 +717,11 @@ public sealed record CompanionCase {
     ///     ⚠ <b>Exists because the other family's default body can be one a real operator refuses.</b>
     ///     <c>PostgresServers.Body</c> renders a backup section with a <c>destinationPath</c> and no
     ///     credentials, which the committed definition admits — the fake and the k3s harness both
-    ///     validate against it — and CloudNativePG's admission webhook refuses for <i>"missing
-    ///     credentials"</i>: found the first time a companion met the operator the bundle installs
+    ///     validate against it — and CloudNativePG's admission webhook refuses for
+    ///     <i>
+    ///         "missing
+    ///         credentials"
+    ///     </i>: found the first time a companion met the operator the bundle installs
     ///     (<c>charts/managed/postgres/conformance.yaml § owed</c>,
     ///     <c>the-default-bucket-is-not-filled-in</c>). A lane that runs against the real operator
     ///     gives its companion a body the operator admits — backups off — and asserts what the case

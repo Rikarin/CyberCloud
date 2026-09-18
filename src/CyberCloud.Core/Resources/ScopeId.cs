@@ -8,8 +8,11 @@ namespace CyberCloud.Core.Resources;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The management group was deliberately absent until issue #39, and the sentence that
-///         kept it out is worth keeping.</b> It read: "docs/plan/06 § The hierarchy makes that tree
+///         ⚠
+///         <b>
+///             The management group was deliberately absent until issue #39, and the sentence that
+///             kept it out is worth keeping.
+///         </b> It read: "docs/plan/06 § The hierarchy makes that tree
 ///         optional and docs/plan/01 puts it at M2, so there is no grain, no key and no parent
 ///         pointer for one … A member here would be an address nothing could resolve." All three
 ///         now exist — <c>IManagementGroupGrain</c>, <c>GrainKeys.ManagementGroup</c> and
@@ -66,8 +69,11 @@ public enum ScopeKind {
 ///         <c>ISubscriptionGrain.CreateResourceGroupAsync</c> had no caller outside tests.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Three of the four forms are a strict prefix of a resource id's, and that is the whole
-///         design.</b> The tenant, subscription and resource-group forms are the first two, four and
+///         ⚠
+///         <b>
+///             Three of the four forms are a strict prefix of a resource id's, and that is the whole
+///             design.
+///         </b> The tenant, subscription and resource-group forms are the first two, four and
 ///         six segments of docs/plan/06 § Identifiers' path, spelled with the same literals, the same
 ///         <c>D</c>-form GUID rule and the same DNS-1123 name rule. A resource path is at least ten
 ///         segments, so nothing parses as both — <c>ScopeIdTests</c> asserts the disjointness rather
@@ -75,8 +81,11 @@ public enum ScopeKind {
 ///         unreachable.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The management group is the fourth form and the first that is NOT a prefix of a
-///         resource path — issue #39's "addressing-grammar change".</b> It is four segments like a
+///         ⚠
+///         <b>
+///             The management group is the fourth form and the first that is NOT a prefix of a
+///             resource path — issue #39's "addressing-grammar change".
+///         </b> It is four segments like a
 ///         subscription, and the two are told apart by the literal in the third:
 ///         <c>/tenants/{t}/managementGroups/{name}</c> against
 ///         <c>/tenants/{t}/subscriptions/{s}</c>. <see cref="ResourceId.ParsePath" />'s
@@ -202,8 +211,11 @@ public readonly record struct ScopeId(
     ///         from that.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>For a management group and for a subscription this is the tenant, and the tenant
-    ///         is only the <i>default</i>.</b> The address of a group does not carry its parent group
+    ///         ⚠
+    ///         <b>
+    ///             For a management group and for a subscription this is the tenant, and the tenant
+    ///             is only the <i>default</i>.
+    ///         </b> The address of a group does not carry its parent group
     ///         and the address of a subscription does not carry the group it is assigned to — both are
     ///         state, in <c>ManagementGroupDescriptor.Parent</c> and
     ///         <c>SubscriptionDescriptor.ManagementGroup</c>. The tenant is the implicit root of the

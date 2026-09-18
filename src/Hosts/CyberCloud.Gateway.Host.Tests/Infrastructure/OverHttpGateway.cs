@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System.Net.Http.Headers;
 using System.Net.WebSockets;
 using System.Text;
 
@@ -40,7 +39,7 @@ namespace CyberCloud.Gateway.Host.Tests.Infrastructure;
 /// </remarks>
 sealed class OverHttpGateway : IAsyncDisposable {
     /// <summary>SignalR's record separator — every JSON-protocol frame ends with it.</summary>
-    public const char RecordSeparator = '';
+    public const char RecordSeparator = '\u001E';
 
     readonly WebApplication app;
 
@@ -48,7 +47,7 @@ sealed class OverHttpGateway : IAsyncDisposable {
         Harness = harness;
         this.app = app;
         BaseUri = baseUri;
-        Http = new HttpClient { BaseAddress = baseUri };
+        Http = new() { BaseAddress = baseUri };
     }
 
     /// <summary>The fakes behind the listener.</summary>
@@ -81,19 +80,20 @@ sealed class OverHttpGateway : IAsyncDisposable {
         app.MapGateway();
         await app.StartAsync();
 
-        var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First();
+        var address = app.Services.GetRequiredService<IServer>()
+            .Features.Get<IServerAddressesFeature>()!
+            .Addresses.First();
 
         return new(harness, app, new Uri(address + "/"));
     }
 
     /// <summary>The <c>ws://</c> form of <see cref="BaseUri" /> plus a path and query.</summary>
-    public Uri WebSocketUri(string pathAndQuery) =>
-        new("ws://" + BaseUri.Authority + pathAndQuery);
+    public Uri WebSocketUri(string pathAndQuery) => new("ws://" + BaseUri.Authority + pathAndQuery);
 
     /// <summary>Mints a ticket for a hub the way the portal does: an authenticated <c>POST</c>.</summary>
     public async Task<string> MintTicketAsync(string hub, string token) {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/hubs/{hub}/ticket");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Authorization = new("Bearer", token);
 
         using var response = await Http.SendAsync(request);
         response.EnsureSuccessStatusCode();
@@ -115,7 +115,7 @@ sealed class OverHttpGateway : IAsyncDisposable {
         socket.SendAsync(
             Encoding.UTF8.GetBytes(json + RecordSeparator),
             WebSocketMessageType.Text,
-            endOfMessage: true,
+            true,
             CancellationToken.None
         );
 
@@ -128,7 +128,9 @@ sealed class OverHttpGateway : IAsyncDisposable {
             var result = await socket.ReceiveAsync(buffer, CancellationToken.None);
 
             if (result.MessageType == WebSocketMessageType.Close) {
-                throw new InvalidOperationException($"The hub closed the socket: {result.CloseStatus} {result.CloseStatusDescription}");
+                throw new InvalidOperationException(
+                    $"The hub closed the socket: {result.CloseStatus} {result.CloseStatusDescription}"
+                );
             }
 
             text.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));

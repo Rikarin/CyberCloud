@@ -40,7 +40,7 @@ namespace CyberCloud.Cluster.Conformance;
 /// </remarks>
 public sealed class SkipConventionTests {
     /// <summary>The build's spelling, read out of its source rather than assumed.</summary>
-    static readonly Regex Marker = new("const string PrerequisiteMarker = \"([^\"]+)\";", RegexOptions.Compiled);
+    static readonly Regex Marker = new("""const string PrerequisiteMarker = "([^"]+)";""", RegexOptions.Compiled);
 
     [Fact]
     public void TheBuildReadsTheWordThisAssemblyWritesIntoAPrerequisiteSkip() {
@@ -48,7 +48,7 @@ public sealed class SkipConventionTests {
         var match = Marker.Match(source);
 
         match.Success.ShouldBeTrue(
-            "build/Build.Test.cs no longer declares `const string PrerequisiteMarker = \"…\";`, so this "
+            """build/Build.Test.cs no longer declares `const string PrerequisiteMarker = "…";`, so this """
             + "test cannot say which word the build reads out of a skip. Rename the constant here and "
             + "there together."
         );
@@ -63,13 +63,14 @@ public sealed class SkipConventionTests {
             + "to all of them until the two agree again."
         );
 
-        ClusterInfrastructure.SkipMessage("CyberCloud.Sample/widgets", "nothing").ShouldContain(
-            marker,
-            Case.Sensitive,
-            $"ClusterInfrastructure.SkipMessage no longer carries \"{marker}\", the word build/Build.Test.cs "
-            + "§ PrerequisiteSkips reads to tell a lane that did not run from one that ran and had "
-            + "nothing to say. The guard is blind to this suite's skips until the two agree again."
-        );
+        ClusterInfrastructure.SkipMessage("CyberCloud.Sample/widgets", "nothing")
+            .ShouldContain(
+                marker,
+                Case.Sensitive,
+                $"ClusterInfrastructure.SkipMessage no longer carries \"{marker}\", the word build/Build.Test.cs "
+                + "§ PrerequisiteSkips reads to tell a lane that did not run from one that ran and had "
+                + "nothing to say. The guard is blind to this suite's skips until the two agree again."
+            );
     }
 
     static string RepositoryRoot() {

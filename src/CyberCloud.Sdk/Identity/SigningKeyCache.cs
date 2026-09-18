@@ -270,9 +270,7 @@ public static class IdTokenValidator {
         };
 
         using var ecdsa = ECDsa.Create(
-            new ECParameters {
-                Curve = curve, Q = new ECPoint { X = Base64Url.Decode(key.X), Y = Base64Url.Decode(key.Y) }
-            }
+            new ECParameters { Curve = curve, Q = new() { X = Base64Url.Decode(key.X), Y = Base64Url.Decode(key.Y) } }
         );
 
         return ecdsa.VerifyData(signed, signature, hash);

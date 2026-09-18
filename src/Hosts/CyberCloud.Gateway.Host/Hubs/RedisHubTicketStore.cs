@@ -35,7 +35,11 @@ sealed class RedisHubTicketStore(
 )
     : IHubTicketStore {
     /// <inheritdoc />
-    public async Task<HubTicket> IssueAsync(TokenClaims claims, string hub, CancellationToken cancellationToken = default) {
+    public async Task<HubTicket> IssueAsync(
+        TokenClaims claims,
+        string hub,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentException.ThrowIfNullOrEmpty(hub);
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -68,7 +72,11 @@ sealed class RedisHubTicketStore(
     }
 
     /// <inheritdoc />
-    public async Task<TokenClaims?> RedeemAsync(string ticket, string hub, CancellationToken cancellationToken = default) {
+    public async Task<TokenClaims?> RedeemAsync(
+        string ticket,
+        string hub,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(ticket);
         cancellationToken.ThrowIfCancellationRequested();
 

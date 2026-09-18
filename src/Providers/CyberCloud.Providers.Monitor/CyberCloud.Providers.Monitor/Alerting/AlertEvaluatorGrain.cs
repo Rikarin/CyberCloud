@@ -19,8 +19,11 @@ namespace CyberCloud.Providers.Monitor.Alerting;
 ///         the tick.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The order inside a fire is: record, write, send, record, write — and the write in
-///         the middle is what makes a retry safe.</b> An <see cref="AlertInstance.InstanceId" /> is
+///         ⚠
+///         <b>
+///             The order inside a fire is: record, write, send, record, write — and the write in
+///             the middle is what makes a retry safe.
+///         </b> An <see cref="AlertInstance.InstanceId" /> is
 ///         minted when the rule fires and is half of every idempotency key sent about it. If the
 ///         silo dies between the send and the second write, the next activation finds the instance
 ///         with an empty <see cref="AlertInstance.FireNotification" />, and a hand-driven or
@@ -30,8 +33,11 @@ namespace CyberCloud.Providers.Monitor.Alerting;
 ///         second id on the next tick and page twice.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Suppression is honoured by the sending module and not re-implemented here, and that
-///         is the point of going through <c>IMessageSender</c>.</b> <c>MessageGrain.DispatchAsync</c>
+///         ⚠
+///         <b>
+///             Suppression is honoured by the sending module and not re-implemented here, and that
+///             is the point of going through <c>IMessageSender</c>.
+///         </b> <c>MessageGrain.DispatchAsync</c>
 ///         checks the service's list before a carrier is resolved, for the tenant's sends and the
 ///         platform's alike; a recipient on it comes back as a refusal, which this grain records on
 ///         the instance by name. An evaluator that kept its own list would be a second list that
@@ -141,7 +147,8 @@ public sealed class AlertEvaluatorGrain(
         // made of.
         if (record is { State: AlertRuleState.Firing, Open: { } open, Spec.ActionGroup.NotifyOnResolve: true }) {
             var now = clock.UtcNow;
-            var summary = MonitorAlertRules.Summary(record.Spec, open.Value, now, fired: false) + " — the rule was deleted";
+            var summary = MonitorAlertRules.Summary(record.Spec, open.Value, now, false)
+                + " — the rule was deleted";
             _ = await NotifyAsync(record.Spec, open.InstanceId, summary, "resolved");
         }
 
@@ -157,13 +164,18 @@ public sealed class AlertEvaluatorGrain(
         Task.FromResult(
             state.State.Rules.TryGetValue(ruleId, out var record)
                 ? Result<AlertRuleSnapshot>.Success(record.ToSnapshot())
-                : Result<AlertRuleSnapshot>.Failure(ErrorCode.ResourceNotFound, $"This workspace carries no alert rule {ruleId:D}.")
+                : Result<AlertRuleSnapshot>.Failure(
+                    ErrorCode.ResourceNotFound,
+                    $"This workspace carries no alert rule {ruleId:D}."
+                )
         );
 
     /// <inheritdoc />
     public Task<Result<ImmutableArray<AlertRuleSnapshot>>> ListRulesAsync() =>
         Task.FromResult(
-            Result<ImmutableArray<AlertRuleSnapshot>>.Success([.. state.State.Rules.Values.Select(x => x.ToSnapshot())])
+            Result<ImmutableArray<AlertRuleSnapshot>>.Success(
+                [.. state.State.Rules.Values.Select(static x => x.ToSnapshot())]
+            )
         );
 
     /// <inheritdoc />
@@ -179,8 +191,8 @@ public sealed class AlertEvaluatorGrain(
         // Rule id alone was the first order, and under it a store slow enough to exhaust the budget
         // would have evaluated the same head of the list on every tick and the tail on none.
         var ordered = state.State.Rules.Values
-            .OrderBy(x => x.NextDueAt ?? DateTimeOffset.MinValue)
-            .ThenBy(x => x.Spec.RuleId)
+            .OrderBy(static x => x.NextDueAt ?? DateTimeOffset.MinValue)
+            .ThenBy(static x => x.Spec.RuleId)
             .ToArray();
 
         foreach (var record in ordered) {
@@ -223,7 +235,7 @@ public sealed class AlertEvaluatorGrain(
                         Severity = record.Spec.Severity,
                         FiredAt = now,
                         Value = decision.Value ?? 0d,
-                        Summary = MonitorAlertRules.Summary(record.Spec, decision.Value ?? 0d, now, fired: true)
+                        Summary = MonitorAlertRules.Summary(record.Spec, decision.Value ?? 0d, now, true)
                     };
 
                     record.Instances.Add(instance);
@@ -250,7 +262,12 @@ public sealed class AlertEvaluatorGrain(
                         if (record.Spec.ActionGroup.NotifyOnResolve) {
                             await state.WriteStateAsync();
 
-                            var summary = MonitorAlertRules.Summary(record.Spec, decision.Value ?? closed.Value, now, fired: false);
+                            var summary = MonitorAlertRules.Summary(
+                                record.Spec,
+                                decision.Value ?? closed.Value,
+                                now,
+                                false
+                            );
                             var outcome = await NotifyAsync(record.Spec, closed.InstanceId, summary, "resolved");
                             record.Instances[index] = closed with { ResolveNotification = outcome };
                         } else {
@@ -430,7 +447,9 @@ public sealed class AlertEvaluatorGrain(
             } else {
                 // ⚠ Recorded, never swallowed. A suppressed recipient, a channel with no carrier and
                 // a spend limit reached all land here, each with the sending module's own sentence.
-                outcomes.Append(string.Create(CultureInfo.InvariantCulture, $"{recipient}: refused — {sent.Error!.Message}"));
+                outcomes.Append(
+                    string.Create(CultureInfo.InvariantCulture, $"{recipient}: refused — {sent.Error!.Message}")
+                );
             }
         }
 
@@ -442,8 +461,11 @@ public sealed class AlertEvaluatorGrain(
     /// <summary>Arms the reminder while an enabled rule exists and disarms it otherwise.</summary>
     /// <returns>Whether the reminder is armed afterwards.</returns>
     /// <remarks>
-    ///     ⚠ <b>A reminder-table fault is logged and answered <c>false</c>, and the reconciler is
-    ///     what turns that into a retry (2026-09-15, #32 review).</b> The write that precedes every
+    ///     ⚠
+    ///     <b>
+    ///         A reminder-table fault is logged and answered <c>false</c>, and the reconciler is
+    ///         what turns that into a retry (2026-09-15, #32 review).
+    ///     </b> The write that precedes every
     ///     call here has already happened, so throwing would fail an upsert whose rule is held —
     ///     and the first version did throw, out of the upsert, leaving a held rule with no row that
     ///     the next pass judged converged on its spec alone. Now the upsert succeeds, "held" and
@@ -451,14 +473,18 @@ public sealed class AlertEvaluatorGrain(
     ///     <see cref="IsArmedAsync" /> for the second before it says <c>Converged</c>.
     /// </remarks>
     async Task<bool> ArmOrDisarmAsync() {
-        var wanted = state.State.Rules.Values.Any(x => x.Spec.Enabled);
+        var wanted = state.State.Rules.Values.Any(static x => x.Spec.Enabled);
 
         try {
             var existing = await this.GetReminder(ReminderName);
 
             if (wanted) {
                 if (existing is null) {
-                    _ = await this.RegisterOrUpdateReminder(ReminderName, IAlertEvaluatorGrain.Tick, IAlertEvaluatorGrain.Tick);
+                    _ = await this.RegisterOrUpdateReminder(
+                        ReminderName,
+                        IAlertEvaluatorGrain.Tick,
+                        IAlertEvaluatorGrain.Tick
+                    );
                 }
 
                 return true;
@@ -497,7 +523,8 @@ public sealed class AlertEvaluatorGrain(
     /// <summary>Resolves an open instance without a notification, and returns the rule to <c>Ok</c>.</summary>
     static void Close(AlertRuleRecord record, DateTimeOffset now, string why) {
         if (record.Open is { } open) {
-            record.Instances[record.Instances.IndexOf(open)] = open with { ResolvedAt = now, ResolveNotification = why };
+            record.Instances[record.Instances.IndexOf(open)] =
+                open with { ResolvedAt = now, ResolveNotification = why };
         }
 
         record.State = AlertRuleState.Ok;

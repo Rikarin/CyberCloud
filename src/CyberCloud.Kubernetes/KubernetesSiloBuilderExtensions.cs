@@ -38,7 +38,7 @@ public static class KubernetesSiloBuilderExtensions {
     public static ISiloBuilder AddCyberCloudKubernetes(this ISiloBuilder silo) {
         ArgumentNullException.ThrowIfNull(silo);
 
-        return silo.ConfigureServices(services => {
+        return silo.ConfigureServices(static services => {
                 services.AddSingleton<IIncomingGrainCallFilter, ClusterConnectionTenantFilter>();
 
                 services.TryAddSingleton<IClock, SystemClock>();
@@ -47,7 +47,7 @@ public static class KubernetesSiloBuilderExtensions {
                 // tunnel route rather than to the refusal a silo-less factory gives. A host that
                 // registers its own factory (the silo, with a kubeconfig resolver) has to pass it
                 // too, or every connected cluster it hosts is unreachable by name.
-                services.TryAddSingleton<IKubeApiClientFactory>(sp =>
+                services.TryAddSingleton<IKubeApiClientFactory>(static sp =>
                     new KubeApiClientFactory(
                         sp.GetRequiredService<IClock>(),
                         sp.GetService<ILogger<KubeApiClientFactory>>(),

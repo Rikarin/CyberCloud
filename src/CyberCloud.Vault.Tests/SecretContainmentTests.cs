@@ -43,17 +43,19 @@ public sealed class SecretContainmentTests {
         // tier, and that is the one rule docs/plan/00 § Non-negotiables calls non-negotiable.
         var serializable = Vault
             .GetTypes()
-            .Where(x => x.GetCustomAttributes().Any(a => a.GetType().Name is "GenerateSerializerAttribute"))
-            .Select(x => x.FullName)
+            .Where(static x => x.GetCustomAttributes()
+                    .Any(static a => a.GetType().Name is "GenerateSerializerAttribute")
+            )
+            .Select(static x => x.FullName)
             .ToArray();
 
         serializable.ShouldBeEmpty("CyberCloud.Vault must declare nothing Orleans can serialize — see the remarks");
 
         var identified = Vault
             .GetTypes()
-            .SelectMany(x => x.GetMembers(Flags))
-            .Where(x => x.GetCustomAttributes().Any(a => a.GetType().Name is "IdAttribute"))
-            .Select(x => $"{x.DeclaringType?.Name}.{x.Name}")
+            .SelectMany(static x => x.GetMembers(Flags))
+            .Where(static x => x.GetCustomAttributes().Any(static a => a.GetType().Name is "IdAttribute"))
+            .Select(static x => $"{x.DeclaringType?.Name}.{x.Name}")
             .ToArray();
 
         identified.ShouldBeEmpty(
@@ -78,7 +80,7 @@ public sealed class SecretContainmentTests {
                 typeof(VaultOptions),
                 typeof(Microsoft.Extensions.Logging.ILogger<OpenBaoSecretResolver>)
             ],
-            ignoreOrder: true,
+            true,
             "the resolver's fields are its collaborators and nothing else; a resolved value lives in "
             + "a local for the length of one call. Adding a field here means a plaintext secret "
             + "living as long as the silo does"
@@ -101,7 +103,7 @@ public sealed class SecretContainmentTests {
                 typeof(SemaphoreSlim),
                 typeof(VaultToken)
             ],
-            ignoreOrder: true,
+            true,
             "the token source holds one credential — the leased token — and its collaborators"
         );
     }
@@ -143,6 +145,6 @@ public sealed class SecretContainmentTests {
     /// </remarks>
     static Type[] FieldTypes(Type type) =>
         type.GetFields(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance)
-            .Select(x => Nullable.GetUnderlyingType(x.FieldType) ?? x.FieldType)
+            .Select(static x => Nullable.GetUnderlyingType(x.FieldType) ?? x.FieldType)
             .ToArray();
 }

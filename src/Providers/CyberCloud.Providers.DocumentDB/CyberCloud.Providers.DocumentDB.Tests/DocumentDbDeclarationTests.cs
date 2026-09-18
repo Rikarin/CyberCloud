@@ -33,7 +33,7 @@ public sealed class DocumentDbDeclarationTests {
         // export in the fully-consistent row by name, and what this action returns is a PostgreSQL
         // role's password — the credential FerretDB forwards every client's login to. Sharing `read`
         // would make every viewer of an account a holder of its database password.
-        registration.Actions.Single(x => x.Name == DocumentDbAccounts.ListKeysAction)
+        registration.Actions.Single(static x => x.Name == DocumentDbAccounts.ListKeysAction)
             .Permission.ShouldNotBe(registration.ReadPermission);
     }
 
@@ -65,7 +65,7 @@ public sealed class DocumentDbDeclarationTests {
         registry.TryGetType(DocumentDbAccounts.Type, out var registration).ShouldBeTrue();
 
         CliTokens.Collisions(
-            registry.Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+            registry.Types.Select(static x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
         )
             .ShouldBeEmpty();
 
@@ -129,7 +129,7 @@ public sealed class DocumentDbDeclarationTests {
 
         // Every derived meter publishes its formula and its read set — the price MeterDerivation
         // charges for putting a delegate on the quota path, and what OpenApiEmitter publishes.
-        foreach (var meter in registration.Meters.Where(x => x.Derivation is not null)) {
+        foreach (var meter in registration.Meters.Where(static x => x.Derivation is not null)) {
             meter.Derivation!.Expression.ShouldNotBeNullOrWhiteSpace(meter.Meter.ToString());
             meter.Derivation.Reads.ShouldNotBeEmpty(meter.Meter.ToString());
 
@@ -161,7 +161,7 @@ public sealed class DocumentDbDeclarationTests {
         // ⚠ SchemaProperty checks its own DefaultJson against its own constraints at construction, so
         // a default outside its @range cannot reach here. What THAT check cannot see is the whole
         // body: this walks each default back into an otherwise-valid body and validates the result.
-        foreach (var property in DocumentDbAccounts.Schema2026.Properties.Where(x => x.DefaultJson.Length > 0)) {
+        foreach (var property in DocumentDbAccounts.Schema2026.Properties.Where(static x => x.DefaultJson.Length > 0)) {
             using var body = JsonDocument.Parse(
                 Overridden(DocumentDbAccounts.Body(ClusterId), property.JsonPointer, property.DefaultJson)
             );
@@ -198,7 +198,7 @@ public sealed class DocumentDbDeclarationTests {
             + "says about masking it."
         );
 
-        DocumentDbAccounts.ListKeysResponse.Properties.Count(x => x.Secret).ShouldBe(1);
+        DocumentDbAccounts.ListKeysResponse.Properties.Count(static x => x.Secret).ShouldBe(1);
     }
 
     [Fact]
@@ -223,7 +223,7 @@ public sealed class DocumentDbDeclarationTests {
         // A preset the schema offers and the table does not is a body the API accepts and the meter
         // then refuses — a create that returns 500 for a value the schema advertised.
         DocumentDbAccounts.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/sizing/preset")
+            .Single(static x => x.JsonPointer == "/properties/sizing/preset")
             .AllowedValues
             .Order(StringComparer.Ordinal)
             .ShouldBe(DocumentDbAccounts.Presets.Keys.Order(StringComparer.Ordinal));
@@ -235,7 +235,7 @@ public sealed class DocumentDbDeclarationTests {
         // DocumentDbAccounts.GatewayImage, which indexes the table — so the create would 500 for a
         // value the schema had just advertised.
         DocumentDbAccounts.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/version")
+            .Single(static x => x.JsonPointer == "/properties/version")
             .AllowedValues
             .Order(StringComparer.Ordinal)
             .ShouldBe(DocumentDbAccounts.Versions.Keys.Order(StringComparer.Ordinal));
@@ -320,7 +320,7 @@ public sealed class DocumentDbDeclarationTests {
             .AsObject();
 
         var libraries = postgresql["shared_preload_libraries"]!.AsArray()
-            .Select(x => x!.GetValue<string>())
+            .Select(static x => x!.GetValue<string>())
             .ToList();
 
         libraries.ShouldBe(["pg_cron", "pg_documentdb_core", "pg_documentdb"]);
@@ -351,7 +351,7 @@ public sealed class DocumentDbDeclarationTests {
             .AsObject();
 
         spec["bootstrap"]!["initdb"]!["postInitSQL"]!.AsArray()
-            .Select(x => x!.GetValue<string>())
+            .Select(static x => x!.GetValue<string>())
             .ShouldContain("CREATE EXTENSION IF NOT EXISTS documentdb CASCADE;");
 
         // ⚠ postInitApplicationSQL would put the extension in the application database, which is NOT

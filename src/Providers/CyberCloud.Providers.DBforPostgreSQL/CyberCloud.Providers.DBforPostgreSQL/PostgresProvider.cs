@@ -68,8 +68,11 @@ namespace CyberCloud.Providers.DBforPostgreSQL;
 ///         ⚠ <b>What a restored server gets back, and it is the whole reason the answer is yes.</b> The
 ///         teardown runs, so the <c>Cluster</c> and its pods go; what it does not remove is what a restore
 ///         is made of. Deleting a CloudNativePG <c>Cluster</c> leaves the
-///         <c>PersistentVolumeClaim</c>s its instances were given <b>only because the teardown takes the
-///         operator's controller reference off each of them first</b> — the operator stamps one, and the
+///         <c>PersistentVolumeClaim</c>s its instances were given
+///         <b>
+///             only because the teardown takes the
+///             operator's controller reference off each of them first
+///         </b> — the operator stamps one, and the
 ///         garbage collector would otherwise remove the claims with the <c>Cluster</c>, before the window
 ///         began (issue #69, and <c>PostgresServerReconciler</c>'s remarks) — so the tables are still on
 ///         disk; the resource grain keeps the body the create wrote, so the restore re-applies it byte
@@ -129,15 +132,15 @@ public sealed class PostgresProvider : IResourceProvider {
                 PostgresServers.ListKeysAction,
                 ActionKind.Post,
                 PostgresServers.ListKeysPermission,
-                secret: true,
+                true,
                 response: PostgresServers.ListKeysResponse,
                 handler: typeof(PostgresServerListKeysHandler)
             )
             .Display(
                 "PostgreSQL server",
                 "PostgreSQL servers",
-                shortName: "postgres",
-                summary: "A managed PostgreSQL cluster on CloudNativePG, with replication, PgBouncer "
+                "postgres",
+                "A managed PostgreSQL cluster on CloudNativePG, with replication, PgBouncer "
                 + "and backup to the tenant's object store."
             )
             // docs/plan/12 § The pattern, once, piece 1 — and ADR-012's fifth surface, which is the
@@ -149,7 +152,7 @@ public sealed class PostgresProvider : IResourceProvider {
             // committed — see the remarks on this class for why that is the right price for a database.
             .SupportsSoftDelete(PostgresServers.SoftDeleteDays)
             .SupportsTags()
-            .RequiresCluster(PostgresServers.ClusterIdPointer);
+            .RequiresCluster();
     }
 
     // ── What a server draws ────────────────────────────────────────────────────────────────────
@@ -178,7 +181,7 @@ public sealed class PostgresProvider : IResourceProvider {
         MeterDerivation.Of(
             "replicas × sizing.cpu, in cores, taking sizing.preset when the override is empty",
             ["/properties/replicas", "/properties/sizing/preset", "/properties/sizing/cpu"],
-            body => KubeQuantity.TryParse(PostgresServers.Resources(body).Cpu, out var cores)
+            static body => KubeQuantity.TryParse(PostgresServers.Resources(body).Cpu, out var cores)
                 ? Result<decimal>.Success(PostgresServers.Replicas(body) * cores)
                 : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
         );
@@ -188,7 +191,7 @@ public sealed class PostgresProvider : IResourceProvider {
         MeterDerivation.Of(
             "replicas × sizing.memory, in GiB, taking sizing.preset when the override is empty",
             ["/properties/replicas", "/properties/sizing/preset", "/properties/sizing/memory"],
-            body => KubeQuantity.TryGibibytes(PostgresServers.Resources(body).Memory, out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(PostgresServers.Resources(body).Memory, out var gibibytes)
                 ? Result<decimal>.Success(PostgresServers.Replicas(body) * gibibytes)
                 : Unresolvable("memory", "sizing.memory or the sizing.preset behind it")
         );
@@ -204,7 +207,7 @@ public sealed class PostgresProvider : IResourceProvider {
         MeterDerivation.Of(
             "replicas × (storage.size + storage.walSize), in GiB; walSize empty means one volume",
             ["/properties/replicas", "/properties/storage/size", "/properties/storage/walSize"],
-            body => {
+            static body => {
                 if (!KubeQuantity.TryGibibytes(PostgresServers.StorageSize(body), out var data)) {
                     return Unresolvable("storage", "storage.size");
                 }

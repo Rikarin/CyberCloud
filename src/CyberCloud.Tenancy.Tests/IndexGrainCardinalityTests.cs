@@ -62,13 +62,13 @@ public sealed class IndexGrainCardinalityTests(TenancyCluster cluster) {
     [Fact]
     public void EveryGrainInterfaceHasACardinalityRow() {
         var declared = typeof(ITenantGrain).Assembly.GetTypes()
-            .Where(t => t.IsInterface && typeof(IAddressable).IsAssignableFrom(t))
-            .Select(t => t.Name)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Where(static t => t.IsInterface && typeof(IAddressable).IsAssignableFrom(t))
+            .Select(static t => t.Name)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
 
         declared.ShouldBe(
-            Keys.Select(x => x.Grain).OrderBy(x => x, StringComparer.Ordinal).ToList(),
+            Keys.Select(static x => x.Grain).OrderBy(static x => x, StringComparer.Ordinal).ToList(),
             "a grain interface was added without answering docs/plan/04 § Grain taxonomy's review "
             + "question: what is the cardinality of its key? Add a row to Keys."
         );
@@ -78,7 +78,7 @@ public sealed class IndexGrainCardinalityTests(TenancyCluster cluster) {
     public void NoIndexGrainIsASingleton() {
         // ⚠ THE ⚠. An index grain keyed by something small is a single activation serialising every
         // create in the platform.
-        var indexGrains = Keys.Where(x => x.Key.Contains("idx/", StringComparison.Ordinal)).ToList();
+        var indexGrains = Keys.Where(static x => x.Key.Contains("idx/", StringComparison.Ordinal)).ToList();
 
         indexGrains.Count.ShouldBe(3, "there are exactly three index grains.");
         indexGrains.ShouldAllBe(x => x.Cardinality == Cardinality.PerEntity);
@@ -86,11 +86,11 @@ public sealed class IndexGrainCardinalityTests(TenancyCluster cluster) {
 
     [Fact]
     public void OnlyTheTwoDocumentedPlatformGrainsAreSingletons() =>
-        Keys.Where(x => x.Cardinality == Cardinality.Singleton)
-            .Select(x => x.Grain)
-            .OrderBy(x => x, StringComparer.Ordinal)
+        Keys.Where(static x => x.Cardinality == Cardinality.Singleton)
+            .Select(static x => x.Grain)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ShouldBe(
-                AllowedSingletons.OrderBy(x => x, StringComparer.Ordinal),
+                AllowedSingletons.OrderBy(static x => x, StringComparer.Ordinal),
                 "a new singleton grain needs the argument that its write rate is bounded by "
                 + "something other than the platform's create rate."
             );
@@ -121,10 +121,10 @@ public sealed class IndexGrainCardinalityTests(TenancyCluster cluster) {
         // grain instead — docs/plan/06 § Quota's "the quota grain is per-subscription".
         Enum.GetValues<QuotaMeter>().Length.ShouldBeLessThan(10);
 
-        Keys.Single(x => x.Grain == "IQuotaGrain").Key.ShouldBe("sub/{subscriptionId:N}");
+        Keys.Single(static x => x.Grain == "IQuotaGrain").Key.ShouldBe("sub/{subscriptionId:N}");
 
         typeof(GrainKeys).GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .SelectMany(m => m.GetParameters())
+            .SelectMany(static m => m.GetParameters())
             .ShouldNotContain(
                 p => p.ParameterType == typeof(QuotaMeter),
                 "no key factory takes a meter."

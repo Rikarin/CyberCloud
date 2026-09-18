@@ -255,8 +255,11 @@ public static class IdentityEndpoints {
     ///         pair the page posted back, minus the answer itself.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>POST</c> is the consent page's answer, and the answer counts only from the
-    ///         page.</b> The page posts the request's own parameters back with
+    ///         ⚠
+    ///         <b>
+    ///             <c>POST</c> is the consent page's answer, and the answer counts only from the
+    ///             page.
+    ///         </b> The page posts the request's own parameters back with
     ///         <c>consent=allow</c> or <c>consent=deny</c> (<see cref="AuthorizeApi.ConsentParameter" />);
     ///         OpenIddict reads a <c>POST</c> at this endpoint exactly as it reads a <c>GET</c>, so
     ///         the validator runs unchanged and the passthrough sees one request shape. What differs
@@ -274,7 +277,12 @@ public static class IdentityEndpoints {
         app.MapMethods(
             IdentityHostOpenIddict.AuthorizationPath,
             [HttpMethods.Get, HttpMethods.Post],
-            async (HttpContext context, AuthorizeApi api, IOptions<IdentityHostOptions> options, CancellationToken cancellationToken) => {
+            async (
+                HttpContext context,
+                AuthorizeApi api,
+                IOptions<IdentityHostOptions> options,
+                CancellationToken cancellationToken
+            ) => {
                 var request = context.GetOpenIddictServerRequest()
                     ?? throw new InvalidOperationException(
                         "The authorization endpoint was reached outside OpenIddict's pipeline. "
@@ -287,12 +295,14 @@ public static class IdentityEndpoints {
                 // A hint that named no tenant: to the sign-in page to name one, before anything
                 // reads the cookie — DegradedModeHandlers.UnknownTenantProperty says why this is
                 // not the error page.
-                if (transaction?.Properties.TryGetValue(DegradedModeHandlers.UnknownTenantProperty, out var unknown) == true
+                if (transaction?.Properties.TryGetValue(DegradedModeHandlers.UnknownTenantProperty, out var unknown)
+                    == true
                     && unknown is string hint) {
                     return Results.Redirect(api.SignInLocationWithoutTenant(pathAndQuery, hint, request.ClientId));
                 }
 
-                if (transaction?.Properties.TryGetValue(DegradedModeHandlers.TenantProperty, out var tenantValue) != true
+                if (transaction?.Properties.TryGetValue(DegradedModeHandlers.TenantProperty, out var tenantValue)
+                    != true
                     || tenantValue is not Guid tenantId
                     || !transaction.Properties.TryGetValue(DegradedModeHandlers.ClientProperty, out var clientValue)
                     || clientValue is not ApplicationRegistration client) {
@@ -338,16 +348,22 @@ public static class IdentityEndpoints {
         }
 
         var pairs = request.GetParameters()
-            .Where(x => !string.Equals(x.Key, AuthorizeApi.ConsentParameter, StringComparison.Ordinal))
-            .SelectMany(x => Values(x.Value).Select(value => Uri.EscapeDataString(x.Key) + "=" + Uri.EscapeDataString(value)))
+            .Where(static x => !string.Equals(x.Key, AuthorizeApi.ConsentParameter, StringComparison.Ordinal))
+            .SelectMany(static x => Values(x.Value).Select(value => Uri.EscapeDataString(x.Key)
+                    + "="
+                    + Uri.EscapeDataString(value)
+                )
+            )
             .ToList();
 
-        return pairs.Count == 0 ? context.Request.Path.ToString() : context.Request.Path + "?" + string.Join('&', pairs);
+        return pairs.Count == 0
+            ? context.Request.Path.ToString()
+            : context.Request.Path + "?" + string.Join('&', pairs);
     }
 
     /// <summary>A form parameter's values — one per repeated field, as the browser posted them.</summary>
     static string[] Values(OpenIddictParameter parameter) =>
-        [.. ((StringValues)parameter).Select(x => x ?? string.Empty)];
+        [.. ((StringValues)parameter).Select(static x => x ?? string.Empty)];
 
     /// <summary>
     ///     The consent page's answer, when this request carries one it may be trusted with.
@@ -364,9 +380,12 @@ public static class IdentityEndpoints {
 
         var origin = context.Request.Headers.Origin.ToString();
         var own = context.Request.Scheme + "://" + context.Request.Host;
-        var page = Uri.TryCreate(options.SignInPageBaseUri, UriKind.Absolute, out var pageUri) ? pageUri.GetLeftPart(UriPartial.Authority) : own;
+        var page = Uri.TryCreate(options.SignInPageBaseUri, UriKind.Absolute, out var pageUri)
+            ? pageUri.GetLeftPart(UriPartial.Authority)
+            : own;
 
-        if (!string.Equals(origin, own, StringComparison.Ordinal) && !string.Equals(origin, page, StringComparison.Ordinal)) {
+        if (!string.Equals(origin, own, StringComparison.Ordinal)
+            && !string.Equals(origin, page, StringComparison.Ordinal)) {
             return null;
         }
 
@@ -391,10 +410,10 @@ public static class IdentityEndpoints {
     /// </remarks>
     static void MapConsent(IEndpointRouteBuilder app) {
         app.MapGet(
-                "/api/consent",
-                async (string? returnUrl, HttpContext context, ConsentApi api, CancellationToken cancellationToken) =>
-                    Results.Ok(await api.DescribeAsync(returnUrl, context.User, cancellationToken))
-            )
+            "/api/consent",
+            async (string? returnUrl, HttpContext context, ConsentApi api, CancellationToken cancellationToken) =>
+                Results.Ok(await api.DescribeAsync(returnUrl, context.User, cancellationToken))
+        )
             .RequireAuthorization();
     }
 
@@ -426,8 +445,11 @@ public static class IdentityEndpoints {
     ///         the two cookies, the caller's address, and the session cookie on success.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>begin</c> and <c>verify</c> carry a per-IP bucket, and it sits in front of
-    ///         the uniform answer rather than inside it.</b> <c>begin</c> issues a code per call and
+    ///         ⚠
+    ///         <b>
+    ///             <c>begin</c> and <c>verify</c> carry a per-IP bucket, and it sits in front of
+    ///             the uniform answer rather than inside it.
+    ///         </b> <c>begin</c> issues a code per call and
     ///         the grain caps issues per <i>sign-up</i>, so a caller minting sign-ups was uncapped;
     ///         <c>verify</c> is a guess per call and the grain caps attempts per <i>code</i>. The
     ///         filter decides on the connection's address and on nothing in the body, so the
@@ -441,35 +463,35 @@ public static class IdentityEndpoints {
     /// </remarks>
     static void MapSignUp(IEndpointRouteBuilder app) {
         app.MapPost(
-                "/api/signup/begin",
-                async (
-                    SignUpBeginRequest? request,
-                    HttpContext context,
-                    SignUpApi api,
-                    SignUpTicketCookie tickets,
-                    CancellationToken cancellationToken
-                ) => {
-                    var result = await api.BeginAsync(
-                        request,
-                        tickets.Take(context),
-                        context.Connection.RemoteIpAddress?.ToString() ?? string.Empty,
-                        cancellationToken
-                    );
+            "/api/signup/begin",
+            async (
+                SignUpBeginRequest? request,
+                HttpContext context,
+                SignUpApi api,
+                SignUpTicketCookie tickets,
+                CancellationToken cancellationToken
+            ) => {
+                var result = await api.BeginAsync(
+                    request,
+                    tickets.Take(context),
+                    context.Connection.RemoteIpAddress?.ToString() ?? string.Empty,
+                    cancellationToken
+                );
 
-                    if (result.Ticket is { } ticket) {
-                        tickets.Issue(context, ticket);
-                    }
-
-                    return Results.Ok(result.Body);
+                if (result.Ticket is { } ticket) {
+                    tickets.Issue(context, ticket);
                 }
-            )
+
+                return Results.Ok(result.Body);
+            }
+        )
             .RateLimited(IdentityRateLimits.SignUpBegin);
 
         app.MapPost(
-                "/api/signup/verify",
-                async (SignUpVerifyRequest? request, HttpContext context, SignUpApi api, SignUpTicketCookie tickets) =>
-                    Answer(await api.VerifyAsync(request, tickets.Take(context)))
-            )
+            "/api/signup/verify",
+            async (SignUpVerifyRequest? request, HttpContext context, SignUpApi api, SignUpTicketCookie tickets) =>
+                Answer(await api.VerifyAsync(request, tickets.Take(context)))
+        )
             .RateLimited(IdentityRateLimits.CodeVerify);
 
         app.MapPost(
@@ -523,7 +545,8 @@ public static class IdentityEndpoints {
     }
 
     /// <summary>A sign-up decision as a response: <c>401</c> with no body, or <c>200</c> with its body.</summary>
-    static IResult Answer(SignUpApiResult result) => result.Unauthorized ? Results.Unauthorized() : Results.Ok(result.Body);
+    static IResult Answer(SignUpApiResult result) =>
+        result.Unauthorized ? Results.Unauthorized() : Results.Ok(result.Body);
 
     /// <summary>
     ///     Maps the token endpoint's passthrough — the half of <c>/token</c> that mints.
@@ -559,54 +582,62 @@ public static class IdentityEndpoints {
     /// </remarks>
     static void MapToken(IEndpointRouteBuilder app) {
         app.MapPost(
-                IdentityHostOpenIddict.TokenPath,
-                async (HttpContext context, TokenApi api, CancellationToken cancellationToken) => {
-                    var request = context.GetOpenIddictServerRequest()
-                        ?? throw new InvalidOperationException(
-                            "The token endpoint was reached outside OpenIddict's pipeline. "
-                            + "EnableTokenEndpointPassthrough is what routes a validated request here; "
-                            + "a request that did not come through it has not been validated."
+            IdentityHostOpenIddict.TokenPath,
+            async (HttpContext context, TokenApi api, CancellationToken cancellationToken) => {
+                var request = context.GetOpenIddictServerRequest()
+                    ?? throw new InvalidOperationException(
+                        "The token endpoint was reached outside OpenIddict's pipeline. "
+                        + "EnableTokenEndpointPassthrough is what routes a validated request here; "
+                        + "a request that did not come through it has not been validated."
+                    );
+
+                var transaction = context.Features.Get<OpenIddictServerAspNetCoreFeature>()?.Transaction;
+
+                if (request.IsClientCredentialsGrantType()) {
+                    if (transaction?.Properties.TryGetValue(
+                            DegradedModeHandlers.ServicePrincipalProperty,
+                            out var value
+                        )
+                        != true
+                        || value is not ServicePrincipalDescriptor principal) {
+                        return OpenIddictError(
+                            OpenIddictConstants.Errors.InvalidClient,
+                            TokenApi.InvalidClientDescription
                         );
-
-                    var transaction = context.Features.Get<OpenIddictServerAspNetCoreFeature>()?.Transaction;
-
-                    if (request.IsClientCredentialsGrantType()) {
-                        if (transaction?.Properties.TryGetValue(DegradedModeHandlers.ServicePrincipalProperty, out var value) != true
-                            || value is not ServicePrincipalDescriptor principal) {
-                            return OpenIddictError(OpenIddictConstants.Errors.InvalidClient, TokenApi.InvalidClientDescription);
-                        }
-
-                        return Results.SignIn(
-                            api.Mint(principal, request.ClientId ?? string.Empty, request.GetScopes()),
-                            authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme
-                        );
-                    }
-
-                    if (transaction?.Properties.TryGetValue(DegradedModeHandlers.ClientProperty, out var clientValue) != true
-                        || clientValue is not ApplicationRegistration client) {
-                        return OpenIddictError(OpenIddictConstants.Errors.InvalidClient, "The client was not validated.");
-                    }
-
-                    var token = await context.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
-
-                    if (token.Principal is not { } presented) {
-                        return OpenIddictError(OpenIddictConstants.Errors.InvalidGrant, "The token could not be read.");
-                    }
-
-                    var minted = request.IsRefreshTokenGrantType()
-                        ? await api.MintForRefreshAsync(presented, client, cancellationToken)
-                        : await api.MintForCodeAsync(presented, client, Describe(context), cancellationToken);
-
-                    if (minted.TryGetError(out var refused)) {
-                        return OpenIddictError(OpenIddictConstants.Errors.InvalidGrant, refused.Message);
                     }
 
                     return Results.SignIn(
-                        minted.GetValueOrThrow(),
+                        api.Mint(principal, request.ClientId ?? string.Empty, request.GetScopes()),
                         authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme
                     );
                 }
-            )
+
+                if (transaction?.Properties.TryGetValue(DegradedModeHandlers.ClientProperty, out var clientValue)
+                    != true
+                    || clientValue is not ApplicationRegistration client) {
+                    return OpenIddictError(OpenIddictConstants.Errors.InvalidClient, "The client was not validated.");
+                }
+
+                var token = await context.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+
+                if (token.Principal is not { } presented) {
+                    return OpenIddictError(OpenIddictConstants.Errors.InvalidGrant, "The token could not be read.");
+                }
+
+                var minted = request.IsRefreshTokenGrantType()
+                    ? await api.MintForRefreshAsync(presented, client, cancellationToken)
+                    : await api.MintForCodeAsync(presented, client, Describe(context), cancellationToken);
+
+                if (minted.TryGetError(out var refused)) {
+                    return OpenIddictError(OpenIddictConstants.Errors.InvalidGrant, refused.Message);
+                }
+
+                return Results.SignIn(
+                    minted.GetValueOrThrow(),
+                    authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme
+                );
+            }
+        )
             .RequireCors(FirstPartyClients.CorsPolicy);
     }
 
@@ -653,60 +684,67 @@ public static class IdentityEndpoints {
     /// </remarks>
     static void MapUserInfo(IEndpointRouteBuilder app) {
         app.MapMethods(
-                IdentityHostOpenIddict.UserInfoPath,
-                [HttpMethods.Get, HttpMethods.Post],
-                async (HttpContext context, IGrainFactory grains, CancellationToken cancellationToken) => {
-                    var token = await context.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            IdentityHostOpenIddict.UserInfoPath,
+            [HttpMethods.Get, HttpMethods.Post],
+            async (HttpContext context, IGrainFactory grains, CancellationToken cancellationToken) => {
+                var token = await context.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
 
-                    if (token.Principal is not { } presented
-                        || presented.GetClaim(AccessTokenClaims.Subject) is not { Length: > 0 } subject) {
-                        return UserInfoChallenge("The access token could not be read.");
-                    }
+                if (token.Principal is not { } presented
+                    || presented.GetClaim(AccessTokenClaims.Subject) is not { Length: > 0 } subject) {
+                    return UserInfoChallenge("The access token could not be read.");
+                }
 
-                    var claims = new Dictionary<string, object>(StringComparer.Ordinal) {
-                        [OpenIddictConstants.Claims.Subject] = subject
-                    };
+                var claims = new Dictionary<string, object>(StringComparer.Ordinal) {
+                    [OpenIddictConstants.Claims.Subject] = subject
+                };
 
-                    if (!string.Equals(presented.GetClaim(AccessTokenClaims.SubjectType), SubjectTypes.User, StringComparison.Ordinal)
-                        || !Guid.TryParseExact(presented.GetClaim(AccessTokenClaims.TenantId), "N", out var tenantId)
-                        || !Guid.TryParseExact(subject, "N", out var userId)
-                        || !Guid.TryParseExact(presented.GetClaim(AccessTokenClaims.SessionId), "N", out var sessionId)) {
-                        return Results.Ok(claims);
-                    }
-
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    var tenant = grains.ForTenant(TenantHint.Qualifier(tenantId));
-                    var live = await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(sessionId)).IsLiveAsync();
-
-                    if (live.TryGetError(out _) || !live.GetValueOrThrow()) {
-                        return UserInfoChallenge("The session behind this access token has been revoked.");
-                    }
-
-                    claims[AccessTokenClaims.TenantId] = tenantId.ToString("N", CultureInfo.InvariantCulture);
-                    claims[AccessTokenClaims.SubjectType] = SubjectTypes.User;
-
-                    var scopes = (presented.GetClaim(AccessTokenClaims.Scope) ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-                    if (scopes.Contains(IdentityHostOpenIddict.Scopes.Profile, StringComparer.Ordinal)) {
-                        var profile = await tenant.GetGrain<IUserGrain>(GrainKeys.User(userId)).GetAsync();
-
-                        if (profile.TryGetError(out _)) {
-                            return UserInfoChallenge("The person behind this access token no longer exists.");
-                        }
-
-                        if (profile.GetValueOrThrow().DisplayName is { Length: > 0 } name) {
-                            claims[OpenIddictConstants.Claims.Name] = name;
-                        }
-
-                        if (profile.GetValueOrThrow().Email is { Length: > 0 } email) {
-                            claims[OpenIddictConstants.Claims.Email] = email;
-                        }
-                    }
-
+                if (!string.Equals(
+                        presented.GetClaim(AccessTokenClaims.SubjectType),
+                        SubjectTypes.User,
+                        StringComparison.Ordinal
+                    )
+                    || !Guid.TryParseExact(presented.GetClaim(AccessTokenClaims.TenantId), "N", out var tenantId)
+                    || !Guid.TryParseExact(subject, "N", out var userId)
+                    || !Guid.TryParseExact(presented.GetClaim(AccessTokenClaims.SessionId), "N", out var sessionId)) {
                     return Results.Ok(claims);
                 }
-            )
+
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var tenant = grains.ForTenant(TenantHint.Qualifier(tenantId));
+                var live = await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(sessionId)).IsLiveAsync();
+
+                if (live.TryGetError(out _) || !live.GetValueOrThrow()) {
+                    return UserInfoChallenge("The session behind this access token has been revoked.");
+                }
+
+                claims[AccessTokenClaims.TenantId] = tenantId.ToString("N", CultureInfo.InvariantCulture);
+                claims[AccessTokenClaims.SubjectType] = SubjectTypes.User;
+
+                var scopes = (presented.GetClaim(AccessTokenClaims.Scope) ?? string.Empty).Split(
+                    ' ',
+                    StringSplitOptions.RemoveEmptyEntries
+                );
+
+                if (scopes.Contains(IdentityHostOpenIddict.Scopes.Profile, StringComparer.Ordinal)) {
+                    var profile = await tenant.GetGrain<IUserGrain>(GrainKeys.User(userId)).GetAsync();
+
+                    if (profile.TryGetError(out _)) {
+                        return UserInfoChallenge("The person behind this access token no longer exists.");
+                    }
+
+                    if (profile.GetValueOrThrow().DisplayName is { Length: > 0 } name) {
+                        claims[OpenIddictConstants.Claims.Name] = name;
+                    }
+
+                    if (profile.GetValueOrThrow().Email is { Length: > 0 } email) {
+                        claims[OpenIddictConstants.Claims.Email] = email;
+                    }
+                }
+
+                return Results.Ok(claims);
+            }
+        )
             .RequireCors(FirstPartyClients.CorsPolicy);
     }
 
@@ -760,31 +798,31 @@ public static class IdentityEndpoints {
     /// </remarks>
     static void MapLogout(IEndpointRouteBuilder app) {
         app.MapGet(
-                IdentityHostOpenIddict.EndSessionPath,
-                async (HttpContext context, IGrainFactory grains, ILoggerFactory loggers) => {
-                    var request = context.GetOpenIddictServerRequest()
-                        ?? throw new InvalidOperationException(
-                            "The end-session endpoint was reached outside OpenIddict's pipeline. "
-                            + "EnableEndSessionEndpointPassthrough is what routes a validated request here."
-                        );
-
-                    if (IdentitySessionPrincipal.TenantId(context.User) is { } tenantId
-                        && IdentitySessionPrincipal.SessionId(context.User) is { } sessionId) {
-                        await grains.ForTenant(TenantHint.Qualifier(tenantId))
-                            .GetGrain<ISessionGrain>(GrainKeys.Session(sessionId))
-                            .RevokeAsync(RevocationReason.SignOut);
-
-                        GrantLog.SignedOut(loggers.CreateLogger(typeof(IdentityEndpoints)), tenantId, sessionId);
-                    }
-
-                    RefreshCookie.Clear(context.Response);
-
-                    return Results.SignOut(
-                        new AuthenticationProperties { RedirectUri = request.PostLogoutRedirectUri },
-                        [IdentityHostAuthentication.SchemeName, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme]
+            IdentityHostOpenIddict.EndSessionPath,
+            async (HttpContext context, IGrainFactory grains, ILoggerFactory loggers) => {
+                var request = context.GetOpenIddictServerRequest()
+                    ?? throw new InvalidOperationException(
+                        "The end-session endpoint was reached outside OpenIddict's pipeline. "
+                        + "EnableEndSessionEndpointPassthrough is what routes a validated request here."
                     );
+
+                if (IdentitySessionPrincipal.TenantId(context.User) is { } tenantId
+                    && IdentitySessionPrincipal.SessionId(context.User) is { } sessionId) {
+                    await grains.ForTenant(TenantHint.Qualifier(tenantId))
+                        .GetGrain<ISessionGrain>(GrainKeys.Session(sessionId))
+                        .RevokeAsync(RevocationReason.SignOut);
+
+                    GrantLog.SignedOut(loggers.CreateLogger(typeof(IdentityEndpoints)), tenantId, sessionId);
                 }
-            )
+
+                RefreshCookie.Clear(context.Response);
+
+                return Results.SignOut(
+                    new AuthenticationProperties { RedirectUri = request.PostLogoutRedirectUri },
+                    [IdentityHostAuthentication.SchemeName, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme]
+                );
+            }
+        )
             .RequireCors(FirstPartyClients.CorsPolicy);
     }
 
@@ -913,14 +951,14 @@ public static class IdentityEndpoints {
         // .RequireAuthorization() is what guarantees the principal is there at all — without it the
         // handler would be reasoning about an anonymous identity.
         app.MapPost(
-                "/api/signin/totp",
-                async (
-                    SecondFactorRequest? request,
-                    HttpContext context,
-                    SignInApi api,
-                    CancellationToken cancellationToken
-                ) => await IssueAsync(context, await api.VerifyTotpAsync(request, context.User, cancellationToken))
-            )
+            "/api/signin/totp",
+            async (
+                SecondFactorRequest? request,
+                HttpContext context,
+                SignInApi api,
+                CancellationToken cancellationToken
+            ) => await IssueAsync(context, await api.VerifyTotpAsync(request, context.User, cancellationToken))
+        )
             .RequireAuthorization()
             .RateLimited(IdentityRateLimits.CodeVerify);
 
@@ -946,31 +984,31 @@ public static class IdentityEndpoints {
         // bucket is what keeps a caller from buying more attempts with more codes —
         // IdentityRateLimits' remarks.
         app.MapPost(
-                "/api/signin/otp",
-                async (
-                    SecondFactorRequest? request,
-                    HttpContext context,
-                    SignInApi api,
-                    CancellationToken cancellationToken
-                ) => await IssueAsync(context, await api.VerifyEmailOtpAsync(request, context.User, cancellationToken))
-            )
+            "/api/signin/otp",
+            async (
+                SecondFactorRequest? request,
+                HttpContext context,
+                SignInApi api,
+                CancellationToken cancellationToken
+            ) => await IssueAsync(context, await api.VerifyEmailOtpAsync(request, context.User, cancellationToken))
+        )
             .RequireAuthorization()
             .RateLimited(IdentityRateLimits.CodeVerify);
 
         // In the code-verify bucket with the other three, for the reason IdentityRateLimits gives:
         // it takes a code, and the rule is every route that does.
         app.MapPost(
-                "/api/signin/recovery-code",
-                async (
-                    SecondFactorRequest? request,
-                    HttpContext context,
-                    SignInApi api,
-                    CancellationToken cancellationToken
-                ) => await IssueAsync(
-                    context,
-                    await api.RedeemRecoveryCodeAsync(request, context.User, cancellationToken)
-                )
+            "/api/signin/recovery-code",
+            async (
+                SecondFactorRequest? request,
+                HttpContext context,
+                SignInApi api,
+                CancellationToken cancellationToken
+            ) => await IssueAsync(
+                context,
+                await api.RedeemRecoveryCodeAsync(request, context.User, cancellationToken)
             )
+        )
             .RequireAuthorization()
             .RateLimited(IdentityRateLimits.CodeVerify);
     }

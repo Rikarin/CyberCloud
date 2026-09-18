@@ -56,7 +56,7 @@ public sealed class NetworkLoadBalancerTests {
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
         await Pass(reconciler, connection, bob, bobBody.RootElement);
 
-        var configs = connection.Applied.Where(x => x.Target.Kind.Kind == "ConfigMap").ToList();
+        var configs = connection.Applied.Where(static x => x.Target.Kind.Kind == "ConfigMap").ToList();
 
         configs.Count.ShouldBe(4);
 
@@ -143,7 +143,7 @@ public sealed class NetworkLoadBalancerTests {
         // only the subnet from the body, so no body can place a proxy in another network.
         var id = Address("web", TenantOne, SubscriptionOne);
 
-        using var body = JsonDocument.Parse(LoadBalancers.Body(Cluster, subnet: "app"));
+        using var body = JsonDocument.Parse(LoadBalancers.Body(Cluster, "app"));
 
         var annotations = Annotations(LoadBalancers.DeploymentJson("ns", id, body.RootElement));
 
@@ -246,7 +246,7 @@ public sealed class NetworkLoadBalancerTests {
 
     [Fact]
     public void AnAddressWithNoParentThrowsRatherThanRenderingACollidingName() =>
-        Should.Throw<ArgumentException>(() => LoadBalancers.ObjectNameOf(
+        Should.Throw<ArgumentException>(static () => LoadBalancers.ObjectNameOf(
                 new ResourceId(
                     TenantOne,
                     SubscriptionOne,
@@ -283,7 +283,7 @@ public sealed class NetworkLoadBalancerTests {
         }
 
         Regex.Matches(template, @"""(c1\.[a-z]+)""\s+\(dict", RegexOptions.None, TimeSpan.FromSeconds(5))
-            .Select(x => x.Groups[1].Value)
+            .Select(static x => x.Groups[1].Value)
             .Order(StringComparer.Ordinal)
             .ShouldBe(LoadBalancers.Presets.Keys.Order(StringComparer.Ordinal));
     }

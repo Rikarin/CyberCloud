@@ -36,25 +36,34 @@ public sealed class ConnectedClusterReconcilerTests {
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.InProgress);
         outcome.RetryAfter.ShouldBe(ConnectedClusterReconciler.WaitingForInstall);
         log.Entries.ShouldContain(x => x.Phase == "waiting-for-install-command"
-                                       && x.Detail.Contains(ConnectedClusters.ListInstallCommandAction, StringComparison.Ordinal));
+            && x.Detail.Contains(ConnectedClusters.ListInstallCommandAction, StringComparison.Ordinal)
+        );
         agents.Revocations.ShouldBe(0);
     }
 
     [Fact]
     public async Task AnArmedClusterWithNoHeartbeatIsInProgressAndSaysWhetherTheTokenIsStillGood() {
-        var open = new ScriptedAgents { Status = new() { ClusterId = ResourceId, Armed = true, EnrollmentOpen = true } };
+        var open = new ScriptedAgents {
+            Status = new() { ClusterId = ResourceId, Armed = true, EnrollmentOpen = true }
+        };
         var openLog = new CollectingLog();
 
         (await Reconcile(open, openLog)).Kind.ShouldBe(ReconcileOutcomeKind.InProgress);
-        openLog.Entries.ShouldContain(x => x.Phase == "waiting-for-agent" && x.Detail.Contains("has not connected yet", StringComparison.Ordinal));
+        openLog.Entries.ShouldContain(x => x.Phase == "waiting-for-agent"
+            && x.Detail.Contains("has not connected yet", StringComparison.Ordinal)
+        );
 
         // ⚠ The token expired unspent: the same InProgress, but the message now names the action
         // again, because the tenant has to ask for a fresh command and nothing else will tell them.
-        var expired = new ScriptedAgents { Status = new() { ClusterId = ResourceId, Armed = true, EnrollmentOpen = false } };
+        var expired = new ScriptedAgents {
+            Status = new() { ClusterId = ResourceId, Armed = true, EnrollmentOpen = false }
+        };
         var expiredLog = new CollectingLog();
 
         (await Reconcile(expired, expiredLog)).Kind.ShouldBe(ReconcileOutcomeKind.InProgress);
-        expiredLog.Entries.ShouldContain(x => x.Phase == "waiting-for-agent" && x.Detail.Contains("expired or been spent", StringComparison.Ordinal));
+        expiredLog.Entries.ShouldContain(x => x.Phase == "waiting-for-agent"
+            && x.Detail.Contains("expired or been spent", StringComparison.Ordinal)
+        );
     }
 
     [Fact]
@@ -101,7 +110,9 @@ public sealed class ConnectedClusterReconcilerTests {
         var log = new CollectingLog();
 
         (await Reconcile(agents, log, new RecordingClusterSink())).ShouldBe(ReconcileOutcome.Converged);
-        log.Entries.ShouldContain(x => x.Phase == "connected" && x.Detail.Contains("not connected right now", StringComparison.Ordinal));
+        log.Entries.ShouldContain(x => x.Phase == "connected"
+            && x.Detail.Contains("not connected right now", StringComparison.Ordinal)
+        );
 
         var observed = await new ConnectedClusterReconciler(new FixedClock()).ObserveAsync(
             new(Address(), ConnectedClusters.V2026, Desired(), "ns", null) { Agents = agents },
@@ -132,7 +143,16 @@ public sealed class ConnectedClusterReconcilerTests {
         // The refusing default every hand-built context carries: a pass must not read "not armed"
         // out of a seam that answered nothing.
         var outcome = await new ConnectedClusterReconciler(new FixedClock()).ReconcileAsync(
-            new(Address(), ConnectedClusters.V2026, Desired(), null, "ns", null, new UnavailableSecretResolver(), new NullLog()),
+            new(
+                Address(),
+                ConnectedClusters.V2026,
+                Desired(),
+                null,
+                "ns",
+                null,
+                new UnavailableSecretResolver(),
+                new NullLog()
+            ),
             TestContext.Current.CancellationToken
         );
 
@@ -157,7 +177,7 @@ public sealed class ConnectedClusterReconcilerTests {
         command.ShouldContain("--namespace cybercloud-system --create-namespace");
         command.ShouldContain("--set-string cluster.id=66666666-6666-4666-8666-666666666666");
         // ⚠ --set-string, and the quote inside the token is escaped rather than ending the string.
-        command.ShouldContain("--set-string cluster.enrollmentToken='cca-enroll-abc'\\''def'");
+        command.ShouldContain("""--set-string cluster.enrollmentToken='cca-enroll-abc'\''def'""");
         command.ShouldContain("--set agent.heartbeatSeconds=20");
         command.ShouldContain("--set-string image.reference='ghcr.io/x/cybercloud-agent-host@sha256:abc'");
         command.ShouldNotContain("--set cluster.enrollmentToken");
@@ -175,7 +195,11 @@ public sealed class ConnectedClusterReconcilerTests {
             TestContext.Current.CancellationToken
         );
 
-    static ReconcileContext Context(IAgentTunnels agents, IReconcileLog? log = null, IClusterConnectionSink? clusters = null) =>
+    static ReconcileContext Context(
+        IAgentTunnels agents,
+        IReconcileLog? log = null,
+        IClusterConnectionSink? clusters = null
+    ) =>
         new(
             Address(),
             ConnectedClusters.V2026,
@@ -185,10 +209,7 @@ public sealed class ConnectedClusterReconcilerTests {
             null,
             new UnavailableSecretResolver(),
             log ?? new NullLog()
-        ) {
-            Agents = agents,
-            ClusterConnections = clusters ?? new RecordingClusterSink()
-        };
+        ) { Agents = agents, ClusterConnections = clusters ?? new RecordingClusterSink() };
 
     static ResourceId Address() => new(TenantA, SubscriptionA, "prod", ConnectedClusters.Type, "byo", ResourceId);
 
@@ -207,7 +228,10 @@ public sealed class ConnectedClusterReconcilerTests {
         ) =>
             throw new NotSupportedException("a reconcile pass never mints");
 
-        public Task<Result<AgentTunnelStatus>> GetStatusAsync(Guid clusterId, CancellationToken cancellationToken = default) =>
+        public Task<Result<AgentTunnelStatus>> GetStatusAsync(
+            Guid clusterId,
+            CancellationToken cancellationToken = default
+        ) =>
             Task.FromResult(Result<AgentTunnelStatus>.Success(Status));
 
         public Task<Result> RevokeAsync(Guid clusterId, CancellationToken cancellationToken = default) {

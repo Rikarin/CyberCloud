@@ -4,8 +4,11 @@ using System.Diagnostics;
 namespace CyberCloud.Chaos.Invariants;
 
 /// <summary>
-///     docs/plan/23 § The chaos invariants, 3: <i>fail over a durable shard → writes for that
-///     shard's tenants pause and resume; no data loss; other tenants unaffected.</i>
+///     docs/plan/23 § The chaos invariants, 3:
+///     <i>
+///         fail over a durable shard → writes for that
+///         shard's tenants pause and resume; no data loss; other tenants unaffected.
+///     </i>
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -41,7 +44,11 @@ public sealed class Invariant3ShardFailoverTests(ChaosTopology topology) {
         var output = TestContext.Current.TestOutputHelper;
 
         var affected = await topology.CreateTenantAsync(ChaosTopology.TenantOn(ChaosTopology.ShardA), "shard-a", token);
-        var bystander = await topology.CreateTenantAsync(ChaosTopology.TenantOn(ChaosTopology.ShardB), "shard-b", token);
+        var bystander = await topology.CreateTenantAsync(
+            ChaosTopology.TenantOn(ChaosTopology.ShardB),
+            "shard-b",
+            token
+        );
 
         ChaosTopology.ShardOf(affected.Tenant).ShouldBe(ChaosTopology.ShardA);
         ChaosTopology.ShardOf(bystander.Tenant).ShouldBe(ChaosTopology.ShardB);
@@ -53,8 +60,16 @@ public sealed class Invariant3ShardFailoverTests(ChaosTopology topology) {
             for (var i = 0; i < Seeded; i++) {
                 var name = $"seed-{i}";
                 var accepted = (await topology.PutWidgetAsync(world, name, "seed", token)).GetValueOrThrow();
-                var (last, _) = await topology.DriveUntilTerminalAsync(world.Tenant, accepted.OperationId, ConvergeBudget, token);
-                last?.State.ShouldBe(OperationState.Succeeded, $"seeding {world.Group}/{name} did not converge: {last?.Error?.Message}");
+                var (last, _) = await topology.DriveUntilTerminalAsync(
+                    world.Tenant,
+                    accepted.OperationId,
+                    ConvergeBudget,
+                    token
+                );
+                last?.State.ShouldBe(
+                    OperationState.Succeeded,
+                    $"seeding {world.Group}/{name} did not converge: {last?.Error?.Message}"
+                );
                 before[(world, name)] = (await topology.ReadWidgetAsync(world, name, token)).GetValueOrThrow();
             }
         }
@@ -118,7 +133,7 @@ public sealed class Invariant3ShardFailoverTests(ChaosTopology topology) {
             output?.WriteLine(
                 $"outage {outageLength.TotalSeconds:F0} s: bystander {bystanderAccepted.Count} accepted/{bystanderRefused.Count} refused; "
                 + $"affected {affectedAccepted.Count} accepted/{affectedRefused.Count} refused (slowest refusal "
-                + $"{(affectedRefused.Count == 0 ? 0 : affectedRefused.Max(x => x.Took.TotalSeconds)):F1} s), reads {affectedReadsOk} ok/{affectedReadsFailed} failed"
+                + $"{(affectedRefused.Count == 0 ? 0 : affectedRefused.Max(static x => x.Took.TotalSeconds)):F1} s), reads {affectedReadsOk} ok/{affectedReadsFailed} failed"
             );
         } finally {
             // ── Resume — in a finally, so the shard comes back whatever the outage did to this test. ──
@@ -156,7 +171,9 @@ public sealed class Invariant3ShardFailoverTests(ChaosTopology topology) {
             var (last, _) = await topology.DriveUntilTerminalAsync(tenant, operationId, ConvergeBudget, token);
 
             if (last?.State != OperationState.Succeeded) {
-                notConverged.Add($"{operationId:N} → {last?.State.ToString() ?? "never answered"}: {last?.Error?.Message}");
+                notConverged.Add(
+                    $"{operationId:N} → {last?.State.ToString() ?? "never answered"}: {last?.Error?.Message}"
+                );
             }
         }
 
@@ -167,8 +184,12 @@ public sealed class Invariant3ShardFailoverTests(ChaosTopology topology) {
         foreach (var ((world, name), snapshot) in before) {
             var after = await topology.ReadWidgetAsync(world, name, token);
 
-            if (after.IsFailure || after.GetValueOrThrow().Id != snapshot.Id || after.GetValueOrThrow().ProvisioningState != ProvisioningState.Succeeded) {
-                lost.Add($"{world.Group}/{name}: {(after.IsFailure ? after.Error!.Message : after.GetValueOrThrow().ProvisioningState.ToString())}");
+            if (after.IsFailure
+                || after.GetValueOrThrow().Id != snapshot.Id
+                || after.GetValueOrThrow().ProvisioningState != ProvisioningState.Succeeded) {
+                lost.Add(
+                    $"{world.Group}/{name}: {(after.IsFailure ? after.Error!.Message : after.GetValueOrThrow().ProvisioningState.ToString())}"
+                );
             }
         }
 
@@ -179,7 +200,10 @@ public sealed class Invariant3ShardFailoverTests(ChaosTopology topology) {
             ["bystanderWritesRefused"] = bystanderRefused.Count,
             ["affectedWritesAccepted"] = affectedAccepted.Count,
             ["affectedWritesRefused"] = affectedRefused.Count,
-            ["affectedRefusalSecondsMax"] = Math.Round(affectedRefused.Count == 0 ? 0 : affectedRefused.Max(x => x.Took.TotalSeconds), 1),
+            ["affectedRefusalSecondsMax"] = Math.Round(
+                affectedRefused.Count == 0 ? 0 : affectedRefused.Max(static x => x.Took.TotalSeconds),
+                1
+            ),
             ["affectedReadsOk"] = affectedReadsOk,
             ["affectedReadsFailed"] = affectedReadsFailed,
             ["resumedAfterSeconds"] = resumedAfter == TimeSpan.MaxValue ? -1 : Math.Round(resumedAfter.TotalSeconds, 1),
@@ -189,13 +213,14 @@ public sealed class Invariant3ShardFailoverTests(ChaosTopology topology) {
             ["lost"] = lost.Count
         };
 
-        var refusals = affectedRefused.GroupBy(x => x.Reason, StringComparer.Ordinal).Select(x => $"{x.Key} ×{x.Count()}");
+        var refusals = affectedRefused.GroupBy(static x => x.Reason, StringComparer.Ordinal)
+            .Select(static x => $"{x.Key} ×{x.Count()}");
 
         var detail =
             $"shard {ChaosTopology.ShardA} stopped for {outageLength.TotalSeconds:F0} s over {round} rounds: the bystander tenant on "
             + $"{ChaosTopology.ShardB} had {bystanderAccepted.Count} writes accepted and {bystanderRefused.Count} refused; the affected tenant had "
             + $"{affectedAccepted.Count} accepted and {affectedRefused.Count} refused ({string.Join(", ", refusals)}; slowest refusal "
-            + $"{(affectedRefused.Count == 0 ? 0 : affectedRefused.Max(x => x.Took.TotalSeconds)):F1} s), and {affectedReadsOk}/{affectedReadsOk + affectedReadsFailed} reads of its "
+            + $"{(affectedRefused.Count == 0 ? 0 : affectedRefused.Max(static x => x.Took.TotalSeconds)):F1} s), and {affectedReadsOk}/{affectedReadsOk + affectedReadsFailed} reads of its "
             + $"existing state answered from memory; writes resumed {(resumed is null ? "NEVER" : $"{resumedAfter.TotalSeconds:F1} s")} after the shard came back; "
             + $"{notConverged.Count} accepted writes failed to converge; {lost.Count}/{before.Count} seeded widgets lost.";
 
@@ -222,8 +247,13 @@ public sealed class Invariant3ShardFailoverTests(ChaosTopology topology) {
             + string.Join(", ", affectedAccepted)
         );
 
-        affectedRefused.Count.ShouldBeGreaterThan(0, "no write for the stopped shard's tenant was refused, so the shard was not really down.");
-        resumed.ShouldNotBeNull($"writes for the affected tenant did not resume within {ResumeBudget} of the shard coming back ({resumeAttempts} attempts).");
+        affectedRefused.Count.ShouldBeGreaterThan(
+            0,
+            "no write for the stopped shard's tenant was refused, so the shard was not really down."
+        );
+        resumed.ShouldNotBeNull(
+            $"writes for the affected tenant did not resume within {ResumeBudget} of the shard coming back ({resumeAttempts} attempts)."
+        );
         notConverged.ShouldBeEmpty("accepted writes did not converge: " + string.Join("; ", notConverged));
         lost.ShouldBeEmpty("docs/plan/23 § The chaos invariants, 3: no data loss. Lost: " + string.Join("; ", lost));
     }

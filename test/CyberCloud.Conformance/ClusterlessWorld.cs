@@ -23,8 +23,11 @@ namespace CyberCloud.Conformance;
 ///         stops caring which one it was handed.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What the two shapes agree on is read the same way, and what they differ on is data
-///         on this type rather than a second branch in every test.</b>
+///         ⚠
+///         <b>
+///             What the two shapes agree on is read the same way, and what they differ on is data
+///             on this type rather than a second branch in every test.
+///         </b>
 ///     </para>
 ///     <list type="bullet">
 ///         <item>
@@ -128,7 +131,7 @@ public sealed record ClusterlessWorld {
     /// <param name="cancellationToken">Cancels the readings.</param>
     public ConformanceWorld ForClauseFour(string desiredJson, CancellationToken cancellationToken) =>
         new(
-            BreakAsync: () => BreakAsync(desiredJson, cancellationToken),
-            MatchesDesiredAsync: () => MatchesAsync(desiredJson, cancellationToken)
+            () => BreakAsync(desiredJson, cancellationToken),
+            () => MatchesAsync(desiredJson, cancellationToken)
         );
 }

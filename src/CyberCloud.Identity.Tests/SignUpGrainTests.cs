@@ -9,7 +9,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Orleans.Multitenant;
-using Orleans.Runtime;
 using Orleans.Storage;
 using Orleans.TestingHost;
 using System.Globalization;
@@ -99,7 +98,8 @@ public sealed class SignUpGrainTests(SignUpCluster cluster) {
 
         cluster.Clock.Advance(OtpPolicy.Lifetime + TimeSpan.FromSeconds(1));
 
-        (await grain.VerifyAsync(code)).GetValueOrThrow().ShouldBeFalse("ten minutes is the lifetime — docs/plan/11 § Credentials");
+        (await grain.VerifyAsync(code)).GetValueOrThrow()
+            .ShouldBeFalse("ten minutes is the lifetime — docs/plan/11 § Credentials");
 
         // ⚠ And the whole sign-up, not only the code, after SignUpPolicy.Lifetime: the grain forgets
         // itself, so the ticket a browser still holds names nothing.
@@ -194,7 +194,10 @@ public sealed class SignUpGrainTests(SignUpCluster cluster) {
         delivery.Kind.ShouldBe(CredentialKind.EmailOtp);
         delivery.Destination.ShouldBe(described.Email);
         delivery.TenantId.ShouldBe(Guid.Empty, "the sign-up lives in the platform tenant");
-        delivery.UserId.ShouldBe(described.UserId, "the pre-allocated user id, so the message keys to the user it will become");
+        delivery.UserId.ShouldBe(
+            described.UserId,
+            "the pre-allocated user id, so the message keys to the user it will become"
+        );
         delivery.Code.Length.ShouldBe(OtpPolicy.Digits);
     }
 
@@ -232,7 +235,10 @@ public sealed class SignUpGrainTests(SignUpCluster cluster) {
 
         refused.IsFailure.ShouldBeTrue("the sixth code inside the window is over the cap");
         refused.Error!.Code.ShouldBe(ErrorCode.QuotaExceeded);
-        cluster.Deliveries.Count.ShouldBe(OtpPolicy.MaxIssuesPerWindow, "nothing reached the seam for the refused issue");
+        cluster.Deliveries.Count.ShouldBe(
+            OtpPolicy.MaxIssuesPerWindow,
+            "nothing reached the seam for the refused issue"
+        );
     }
 
     // ── FAILURE CLASS: the code reaches somewhere it should not ────────────────────────────────
@@ -332,8 +338,11 @@ public sealed class RecordingOtpDelivery : IOtpDeliverySeam {
 ///     delivery seam, an in-memory reminder service and a clock the tests drive.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Its own cluster rather than <c>IdentityCluster</c>, for the delivery seam and the clock
-///     reset.</b> <c>SignUpGrain</c> registers a reminder at <c>BeginAsync</c> and that throws on a
+///     ⚠
+///     <b>
+///         Its own cluster rather than <c>IdentityCluster</c>, for the delivery seam and the clock
+///         reset.
+///     </b> <c>SignUpGrain</c> registers a reminder at <c>BeginAsync</c> and that throws on a
 ///     silo with no reminder service — late, inside the grain call — so the fixture wires
 ///     <c>UseInMemoryReminderService</c>, which every fixture that activates a reminding grain has to
 ///     (<c>IdentityCluster</c> does too, since <c>AuthorizationCodeGrain</c> reminds).
@@ -425,7 +434,7 @@ public sealed class SignUpCluster : IAsyncLifetime {
             silo.AddMemoryGrainStorage(StorageTiers.Hot);
             silo.UseInMemoryReminderService();
 
-            silo.ConfigureServices(services => {
+            silo.ConfigureServices(static services => {
                     // FIRST, so the module's TryAdd keeps them.
                     services.AddSingleton<IClock>(TestClock.Instance);
                     services.AddSingleton<IPasswordHasher>(CheapArgon2.Hasher);

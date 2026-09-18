@@ -299,7 +299,7 @@ public sealed class ServerSideApplyTests(K3sFixture k3s) {
         outcome.Drift!.Conflicts.Count.ShouldBeGreaterThanOrEqualTo(
             1,
             "every cause on the 409 must become a FieldConflict: "
-            + string.Join(", ", outcome.Drift.Conflicts.Select(x => x.ToString()))
+            + string.Join(", ", outcome.Drift.Conflicts.Select(static x => x.ToString()))
         );
 
         foreach (var conflict in outcome.Drift.Conflicts) {
@@ -554,7 +554,7 @@ public sealed class ServerSideApplyTests(K3sFixture k3s) {
           }
           """;
 
-    KubeCommand Command(
+    static KubeCommand Command(
         string name,
         int replicas,
         GroupVersionKind? kind = null,

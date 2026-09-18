@@ -24,7 +24,7 @@ public sealed class InformerStaggerTests {
     public void ItIsNotAConstant() {
         // The headline. 30 silos' worth of clusters must not all wake up together.
         var delays = Enumerable.Range(0, 30)
-            .Select(i => InformerStagger.DelayFor(Cluster(i), Window))
+            .Select(static i => InformerStagger.DelayFor(Cluster(i), Window))
             .ToList();
 
         delays.Distinct()

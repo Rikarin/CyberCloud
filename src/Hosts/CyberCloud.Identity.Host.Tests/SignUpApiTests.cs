@@ -35,7 +35,8 @@ public sealed class SignUpApiTests {
     /// <summary>The runner's token, so a hung test is cancellable — xUnit1051.</summary>
     static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    static SignInContext Context => new() { ClientId = "cyc-portal", DeviceLabel = "tests", ClientAddress = "127.0.0.1" };
+    static SignInContext Context =>
+        new() { ClientId = "cyc-portal", DeviceLabel = "tests", ClientAddress = "127.0.0.1" };
 
     static SignUpCompleteRequest Password(string organisation = "Contoso", string returnUrl = "/") =>
         new("Rene", organisation, new(SignUpCredential.PasswordKind, null, "correct-horse-battery-staple"), returnUrl);
@@ -65,9 +66,13 @@ public sealed class SignUpApiTests {
         answers[0].Sent.ShouldBeTrue();
         answers[0].ReturnUrl.ShouldBe("/after");
 
-        (await harness.Api.BeginAsync(null, null, SignUpApiHarness.Caller, Ct)).Body.ShouldBeOfType<SignUpBeginResponse>().ShouldBe(
-            answers[0] with { ReturnUrl = ReturnUrl.Default }
-        );
+        (await harness.Api.BeginAsync(
+                null,
+                null,
+                SignUpApiHarness.Caller,
+                Ct
+            )).Body.ShouldBeOfType<SignUpBeginResponse>()
+            .ShouldBe(answers[0] with { ReturnUrl = ReturnUrl.Default });
     }
 
     [Fact]
@@ -83,7 +88,12 @@ public sealed class SignUpApiTests {
         result.Ticket.ShouldBeNull("nothing was begun, so there is nothing to name");
         result.Body.ShouldBeOfType<SignUpBeginResponse>().Sent.ShouldBeTrue("and the answer is still the one answer");
 
-        var wellFormed = await harness.Api.BeginAsync(new("someone@example.com", "/"), null, SignUpApiHarness.Caller, Ct);
+        var wellFormed = await harness.Api.BeginAsync(
+            new("someone@example.com", "/"),
+            null,
+            SignUpApiHarness.Caller,
+            Ct
+        );
         harness.Grains.References.ShouldBe(1);
         wellFormed.Ticket.ShouldNotBeNull();
     }
@@ -112,15 +122,23 @@ public sealed class SignUpApiTests {
         var answers = new List<SignUpBeginResponse>();
 
         for (var i = 0; i < LockoutPolicy.FreeAttempts + 3; i++) {
-            var result = await harness.Api.BeginAsync(new($"person-{i}@example.com", "/"), null, SignUpApiHarness.Caller, Ct);
+            var result = await harness.Api.BeginAsync(
+                new($"person-{i}@example.com", "/"),
+                null,
+                SignUpApiHarness.Caller,
+                Ct
+            );
             answers.Add(result.Body.ShouldBeOfType<SignUpBeginResponse>());
         }
 
         // Five free, the sixth climbs the ladder — LockoutPolicy.DelayFor(6) is one second and the
         // ladder's clock is frozen — so the seventh and eighth reach no grain and send nothing.
-        harness.Grains.SignUps.Count.ShouldBe(LockoutPolicy.FreeAttempts + 1, "the ladder starts after the free attempts, as it does for sign-in");
+        harness.Grains.SignUps.Count.ShouldBe(
+            LockoutPolicy.FreeAttempts + 1,
+            "the ladder starts after the free attempts, as it does for sign-in"
+        );
         answers.ShouldAllBe(x => x.Sent, "and a held caller is told the same thing as everyone else");
-        answers.Select(x => x.ReturnUrl).Distinct().ShouldHaveSingleItem();
+        answers.Select(static x => x.ReturnUrl).Distinct().ShouldHaveSingleItem();
 
         // A different caller is not held by this one's ladder.
         var other = await harness.Api.BeginAsync(new("person-x@example.com", "/"), null, "198.51.100.9", Ct);
@@ -140,7 +158,12 @@ public sealed class SignUpApiTests {
         // ⚠ Deliberately fail-open: a host that knows no peer would otherwise put every caller in one
         // bucket and ration the whole platform's sign-ups to five — LockoutKey.ForCaller's remarks.
         for (var i = 0; i < LockoutPolicy.FreeAttempts + 3; i++) {
-            (await harness.Api.BeginAsync(new($"person-{i}@example.com", "/"), null, string.Empty, Ct)).Ticket.ShouldNotBeNull();
+            (await harness.Api.BeginAsync(
+                    new($"person-{i}@example.com", "/"),
+                    null,
+                    string.Empty,
+                    Ct
+                )).Ticket.ShouldNotBeNull();
         }
 
         harness.Grains.SignUps.Count.ShouldBe(LockoutPolicy.FreeAttempts + 3);
@@ -162,11 +185,19 @@ public sealed class SignUpApiTests {
     [Fact]
     public async Task AWrongCodeIsFalseAndTheRightOneIsTrueOnce() {
         var harness = new SignUpApiHarness();
-        var ticket = (await harness.Api.BeginAsync(new("someone@example.com", "/"), null, SignUpApiHarness.Caller, Ct)).Ticket!;
+        var ticket = (await harness.Api.BeginAsync(
+                new("someone@example.com", "/"),
+                null,
+                SignUpApiHarness.Caller,
+                Ct
+            )).Ticket!;
 
-        (await harness.Api.VerifyAsync(new("000000"), ticket)).Body.ShouldBeOfType<SignUpVerifyResponse>().Verified.ShouldBeFalse();
-        (await harness.Api.VerifyAsync(new("482913"), ticket)).Body.ShouldBeOfType<SignUpVerifyResponse>().Verified.ShouldBeTrue();
-        (await harness.Api.VerifyAsync(new("482913"), ticket)).Body.ShouldBeOfType<SignUpVerifyResponse>().Verified.ShouldBeFalse();
+        (await harness.Api.VerifyAsync(new("000000"), ticket)).Body.ShouldBeOfType<SignUpVerifyResponse>()
+            .Verified.ShouldBeFalse();
+        (await harness.Api.VerifyAsync(new("482913"), ticket)).Body.ShouldBeOfType<SignUpVerifyResponse>()
+            .Verified.ShouldBeTrue();
+        (await harness.Api.VerifyAsync(new("482913"), ticket)).Body.ShouldBeOfType<SignUpVerifyResponse>()
+            .Verified.ShouldBeFalse();
     }
 
     // ── complete ───────────────────────────────────────────────────────────────────────────────
@@ -174,7 +205,12 @@ public sealed class SignUpApiTests {
     [Fact]
     public async Task CompleteBeforeVerifyIsRefusedByName() {
         var harness = new SignUpApiHarness();
-        var ticket = (await harness.Api.BeginAsync(new("someone@example.com", "/"), null, SignUpApiHarness.Caller, Ct)).Ticket!;
+        var ticket = (await harness.Api.BeginAsync(
+                new("someone@example.com", "/"),
+                null,
+                SignUpApiHarness.Caller,
+                Ct
+            )).Ticket!;
 
         var result = await harness.Api.CompleteAsync(Password(), ticket, null, Context, Ct);
 
@@ -226,12 +262,25 @@ public sealed class SignUpApiTests {
         var password = await withPassword.Api.CompleteAsync(Password(), passwordTicket, null, Context, Ct);
 
         var principal = password.Principal.ShouldNotBeNull("a completed sign-up signs the person in");
-        IdentitySessionPrincipal.IsFullyAuthenticated(principal).ShouldBeTrue("nothing is owed — the code was the second factor");
-        principal.FindAll(AccessTokenClaims.AuthenticationMethods).Select(x => x.Value).ShouldBe(["pwd", "otp"]);
-        principal.FindFirst(AccessTokenClaims.TenantId)!.Value
-            .ShouldBe(withPassword.Grains.SignUps[passwordTicket.SignupId].TenantId.ToString("N", CultureInfo.InvariantCulture));
-        principal.FindFirst(AccessTokenClaims.Subject)!.Value
-            .ShouldBe(withPassword.Grains.SignUps[passwordTicket.SignupId].UserId.ToString("N", CultureInfo.InvariantCulture));
+        IdentitySessionPrincipal.IsFullyAuthenticated(principal)
+            .ShouldBeTrue("nothing is owed — the code was the second factor");
+        principal.FindAll(AccessTokenClaims.AuthenticationMethods).Select(static x => x.Value).ShouldBe(["pwd", "otp"]);
+        principal.FindFirst(AccessTokenClaims.TenantId)!
+            .Value
+                .ShouldBe(
+                    withPassword.Grains.SignUps[passwordTicket.SignupId].TenantId.ToString(
+                        "N",
+                        CultureInfo.InvariantCulture
+                    )
+                );
+        principal.FindFirst(AccessTokenClaims.Subject)!
+            .Value
+                .ShouldBe(
+                    withPassword.Grains.SignUps[passwordTicket.SignupId].UserId.ToString(
+                        "N",
+                        CultureInfo.InvariantCulture
+                    )
+                );
 
         // ── A passkey: two factors on its own, spelled as sign-in spells it. ──────────────────────
         var withPasskey = new SignUpApiHarness();
@@ -240,11 +289,14 @@ public sealed class SignUpApiTests {
         var begun = await withPasskey.Api.BeginPasskeyAsync(new("Rene"), passkeyTicket);
         begun.Body.ShouldBeOfType<PasskeyBeginResponse>().OptionsJson.ShouldNotBeEmpty();
         var challenge = begun.Challenge.ShouldNotBeNull();
-        challenge.Kind.ShouldBe(PasskeyChallengeKind.Registration, "a registration challenge, so sign-in cannot answer it");
+        challenge.Kind.ShouldBe(
+            PasskeyChallengeKind.Registration,
+            "a registration challenge, so sign-in cannot answer it"
+        );
         withPasskey.Passkeys.Requested!.UserId.ShouldBe(withPasskey.Grains.SignUps[passkeyTicket.SignupId].UserId);
 
         var passkey = await withPasskey.Api.CompleteAsync(
-            new("Rene", "Contoso", new(SignUpCredential.PasskeyKind, "{\"id\":\"cred-1\"}", null), "/"),
+            new("Rene", "Contoso", new(SignUpCredential.PasskeyKind, """{"id":"cred-1"}""", null), "/"),
             passkeyTicket,
             challenge,
             Context,
@@ -254,7 +306,8 @@ public sealed class SignUpApiTests {
         passkey.Body.ShouldBeOfType<SignUpCompleteResponse>().Succeeded.ShouldBeTrue();
         var hardware = passkey.Principal.ShouldNotBeNull();
         IdentitySessionPrincipal.IsFullyAuthenticated(hardware).ShouldBeTrue();
-        hardware.FindAll(AccessTokenClaims.AuthenticationMethods).Select(x => x.Value)
+        hardware.FindAll(AccessTokenClaims.AuthenticationMethods)
+            .Select(static x => x.Value)
             .ShouldBe([AuthenticationMethodNames.Of(AuthenticationMethod.Passkey)]);
         withPasskey.UserOf(passkeyTicket)!.Passkey.ShouldBe(withPasskey.Passkeys.Credential);
     }
@@ -286,14 +339,16 @@ public sealed class SignUpApiTests {
         harness.Grains.Directory.Held["contoso"] = Guid.NewGuid();
         var ticket = await harness.VerifiedSignUpAsync();
 
-        var result = await harness.Api.CompleteAsync(Password("Contoso"), ticket, null, Context, Ct);
+        var result = await harness.Api.CompleteAsync(Password(), ticket, null, Context, Ct);
 
         var body = result.Body.ShouldBeOfType<SignUpCompleteResponse>();
         body.Succeeded.ShouldBeFalse();
         body.Message.ShouldBe(SignUpApi.SlugTakenMessage);
 
         // ⚠ Nothing was created, and the sign-up is still live: the person picks another name.
-        harness.Scopes.TenantCreates.ShouldBeEmpty("the directory is asked before CreateTenantAsync, so nothing half-exists");
+        harness.Scopes.TenantCreates.ShouldBeEmpty(
+            "the directory is asked before CreateTenantAsync, so nothing half-exists"
+        );
         result.ClearTicket.ShouldBeFalse();
 
         var retried = await harness.Api.CompleteAsync(Password("Contoso Ltd"), ticket, null, Context, Ct);
@@ -328,7 +383,9 @@ public sealed class SignUpApiTests {
 
         var body = result.Body.ShouldBeOfType<SignUpCompleteResponse>();
         body.Succeeded.ShouldBeFalse();
-        body.Message.ShouldBe(ResourceNaming.Validate(ResourceNaming.Slugify(organisation), "organisation name").Error!.Message);
+        body.Message.ShouldBe(
+            ResourceNaming.Validate(ResourceNaming.Slugify(organisation), "organisation name").Error!.Message
+        );
         harness.Scopes.TenantCreates.ShouldBeEmpty();
     }
 
@@ -392,10 +449,12 @@ public sealed class SignUpApiTests {
         second.Principal.ShouldNotBeNull();
         second.ClearTicket.ShouldBeTrue();
 
-        signup.Steps.ShouldBe([
-            SignUpStep.TenantCreated, SignUpStep.UserCreated, SignUpStep.CredentialSet,
-            SignUpStep.SubscriptionCreated, SignUpStep.ResourceGroupCreated, SignUpStep.Completed
-        ]);
+        signup.Steps.ShouldBe(
+            [
+                SignUpStep.TenantCreated, SignUpStep.UserCreated, SignUpStep.CredentialSet,
+                SignUpStep.SubscriptionCreated, SignUpStep.ResourceGroupCreated, SignUpStep.Completed
+            ]
+        );
 
         // ⚠ ONE tenant, ONE user, and the subscription tried twice — the retry skipped what was
         // recorded and started at the step that failed.
@@ -403,7 +462,9 @@ public sealed class SignUpApiTests {
         harness.UserOf(ticket)!.Creates.ShouldBe(1);
         harness.Scopes.Creates.Count(x => x.Path == ScopeId.Subscription(signup.TenantId, signup.SubscriptionId).Path)
             .ShouldBe(2);
-        harness.Scopes.Creates.Count(x => x.Path == ScopeId.Group(signup.TenantId, signup.SubscriptionId, "default").Path)
+        harness.Scopes.Creates.Count(x => x.Path
+            == ScopeId.Group(signup.TenantId, signup.SubscriptionId, "default").Path
+        )
             .ShouldBe(1);
     }
 
@@ -419,18 +480,24 @@ public sealed class SignUpApiTests {
 
         var result = await harness.Api.CompleteAsync(Password(), ticket, null, Context, Ct);
 
-        result.Body.ShouldBeOfType<SignUpCompleteResponse>().Succeeded.ShouldBeTrue("one retry after OwnerPropagationDelay");
+        result.Body.ShouldBeOfType<SignUpCompleteResponse>()
+            .Succeeded.ShouldBeTrue("one retry after OwnerPropagationDelay");
         harness.Scopes.Creates.Count(x => x.Path == ScopeId.Subscription(signup.TenantId, signup.SubscriptionId).Path)
             .ShouldBe(2);
     }
 
     [Fact]
     public async Task SignUpOffAnswersTheClosedMessage() {
-        var harness = new SignUpApiHarness(selfServe: false);
+        var harness = new SignUpApiHarness(false);
 
         foreach (var (endpoint, result) in new[] {
-                     ("begin", await harness.Api.BeginAsync(new("someone@example.com", "/after"), null, SignUpApiHarness.Caller, Ct)),
-                     ("verify", await harness.Api.VerifyAsync(new("482913"), null)),
+                     ("begin",
+                         await harness.Api.BeginAsync(
+                             new("someone@example.com", "/after"),
+                             null,
+                             SignUpApiHarness.Caller,
+                             Ct
+                         )), ("verify", await harness.Api.VerifyAsync(new("482913"), null)),
                      ("passkey/begin", await harness.Api.BeginPasskeyAsync(new("Rene"), null)),
                      ("complete", await harness.Api.CompleteAsync(Password(), null, null, Context, Ct))
                  }) {
@@ -476,13 +543,18 @@ public sealed class SignUpApiTests {
         subscription.Body.ShouldContain($"\"displayName\":\"{SignUpOrchestrator.DefaultSubscriptionName}\"");
 
         var group = harness.Scopes.Creates[1];
-        group.Path.ShouldBe(ScopeId.Group(signup.TenantId, signup.SubscriptionId, SignUpOrchestrator.DefaultResourceGroupName).Path);
+        group.Path.ShouldBe(
+            ScopeId.Group(signup.TenantId, signup.SubscriptionId, SignUpOrchestrator.DefaultResourceGroupName).Path
+        );
         group.Body.ShouldContain($"\"location\":\"{SignUpApiHarness.Region}\"");
 
         foreach (var scope in harness.Scopes.Creates) {
             scope.Caller.TenantId.ShouldBe(signup.TenantId);
             scope.Caller.SubjectType.ShouldBe(SubjectTypes.User);
-            scope.Caller.SubjectId.ShouldBe(user, $"{scope.Path} is created as the person, exactly as the portal would");
+            scope.Caller.SubjectId.ShouldBe(
+                user,
+                $"{scope.Path} is created as the person, exactly as the portal would"
+            );
         }
 
         // ── And the user: created in the tenant, holding the confirmed email claim. ─────────────

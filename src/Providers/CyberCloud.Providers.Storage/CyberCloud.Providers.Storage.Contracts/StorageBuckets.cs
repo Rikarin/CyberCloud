@@ -348,7 +348,7 @@ public static class StorageBuckets {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the bucket is billed in."
                 ) {
                     Format = SchemaFormat.Region,
@@ -360,7 +360,7 @@ public static class StorageBuckets {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster whose namespace holds the bucket. Must be the cluster the "
                     + "account is in — nothing checks that, and a bucket placed elsewhere is applied "
                     + "into a namespace with no object store in it."
@@ -405,13 +405,13 @@ public static class StorageBuckets {
                 new(
                     "/objectCount",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "How many objects the bucket holds, as of the last sample."
                 ),
                 new(
                     "/sizeBytes",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "How many bytes the bucket holds before replication, as of the last "
                     + "sample. ⚠ Sampled rather than live — the operator refreshes every Bucket's "
                     + "status.usage from collection.list every five minutes — so it is not a number "
@@ -420,7 +420,7 @@ public static class StorageBuckets {
                 new(
                     "/sampledAt",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "When the two figures above were sampled, RFC 3339. ⚠ Returned because "
                     + "a sampled number with no timestamp is a number a caller will read as live."
                 ) { Format = SchemaFormat.DateTime }
@@ -428,7 +428,8 @@ public static class StorageBuckets {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -602,8 +603,11 @@ public static class StorageBuckets {
     /// </summary>
     /// <param name="objectJson">The <c>Bucket</c>'s JSON, as the API server returned it.</param>
     /// <remarks>
-    ///     ⚠ <c>api/v1/bucket_types.go</c>: <c>BucketUsage{objectCount int64, sizeBytes int64,
-    ///     lastUpdated *metav1.Time}</c>, written by <c>bucket_usage.go</c>'s refresher and by nothing
+    ///     ⚠ <c>api/v1/bucket_types.go</c>:
+    ///     <c>
+    /// BucketUsage{objectCount int64, sizeBytes int64,
+    ///     lastUpdated *metav1.Time}
+    ///     </c>, written by <c>bucket_usage.go</c>'s refresher and by nothing
     ///     else. A bucket the main loop has not reconciled (<c>status.bucketName</c> empty) is skipped
     ///     by the refresher, so a fresh bucket has no <c>usage</c> for up to one interval and a
     ///     <see langword="null" /> here is ordinary rather than an error.
@@ -644,7 +648,7 @@ public static class StorageBuckets {
         }
 
         return parsed is JsonObject document
-            && document["kind"]?.GetValue<string>() is (null or "Bucket")
+            && document["kind"]?.GetValue<string>() is null or "Bucket"
             && document["spec"] is JsonObject spec
                 ? spec
                 : null;

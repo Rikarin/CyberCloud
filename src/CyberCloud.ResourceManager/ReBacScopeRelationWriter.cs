@@ -78,11 +78,15 @@ public sealed class ReBacScopeRelationWriter(IGrainFactory grains, ILogger<ReBac
 
         var (parentType, parentId) = ReBacScopeAuthorizer.ObjectOf(parent);
 
-        return await ApplyAsync(scope, ParentRelation, SubjectRef.Of(parentType, parentId), delete: false);
+        return await ApplyAsync(scope, ParentRelation, SubjectRef.Of(parentType, parentId), false);
     }
 
     /// <inheritdoc />
-    public async Task<Result> LinkToParentAsync(ScopeId scope, ScopeId parent, CancellationToken cancellationToken = default) {
+    public async Task<Result> LinkToParentAsync(
+        ScopeId scope,
+        ScopeId parent,
+        CancellationToken cancellationToken = default
+    ) {
         var legal = EnsureCanHangOff(scope, parent);
         if (legal.IsFailure) {
             return legal;
@@ -90,7 +94,7 @@ public sealed class ReBacScopeRelationWriter(IGrainFactory grains, ILogger<ReBac
 
         var (parentType, parentId) = ReBacScopeAuthorizer.ObjectOf(parent);
 
-        return await ApplyAsync(scope, ParentRelation, SubjectRef.Of(parentType, parentId), delete: false);
+        return await ApplyAsync(scope, ParentRelation, SubjectRef.Of(parentType, parentId), false);
     }
 
     /// <inheritdoc />
@@ -113,14 +117,14 @@ public sealed class ReBacScopeRelationWriter(IGrainFactory grains, ILogger<ReBac
         // why the other one is the unsafe one.
         var (fromType, fromId) = ReBacScopeAuthorizer.ObjectOf(currentParent);
 
-        var removed = await ApplyAsync(scope, ParentRelation, SubjectRef.Of(fromType, fromId), delete: true);
+        var removed = await ApplyAsync(scope, ParentRelation, SubjectRef.Of(fromType, fromId), true);
         if (removed.IsFailure) {
             return removed;
         }
 
         var (toType, toId) = ReBacScopeAuthorizer.ObjectOf(newParent);
 
-        return await ApplyAsync(scope, ParentRelation, SubjectRef.Of(toType, toId), delete: false);
+        return await ApplyAsync(scope, ParentRelation, SubjectRef.Of(toType, toId), false);
     }
 
     /// <inheritdoc />
@@ -160,7 +164,7 @@ public sealed class ReBacScopeRelationWriter(IGrainFactory grains, ILogger<ReBac
         // was answered through a grant on this object.
         foreach (var (relation, subjects) in snapshot.GetValueOrThrow().ByRelation) {
             foreach (var subject in subjects) {
-                var removed = await ApplyAsync(scope, relation, subject, delete: true);
+                var removed = await ApplyAsync(scope, relation, subject, true);
                 if (removed.IsFailure) {
                     return removed;
                 }
@@ -189,7 +193,7 @@ public sealed class ReBacScopeRelationWriter(IGrainFactory grains, ILogger<ReBac
             return Result.Failure(subjectError);
         }
 
-        return await ApplyAsync(scope, OwnerRelation, subject.GetValueOrThrow(), delete: false);
+        return await ApplyAsync(scope, OwnerRelation, subject.GetValueOrThrow(), false);
     }
 
     /// <summary>

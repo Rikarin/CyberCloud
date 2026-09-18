@@ -53,7 +53,7 @@ public sealed class SignalRSubscriptionTests {
     public void TheConnectionKeyRefusesAnIdThatWouldAddASegment() {
         ConnectionGrainKeys.Connection("abc123").ShouldBe("conn/abc123");
 
-        Should.Throw<ArgumentException>(() => ConnectionGrainKeys.Connection("abc/123"));
-        Should.Throw<ArgumentException>(() => ConnectionGrainKeys.Connection(""));
+        Should.Throw<ArgumentException>(static () => ConnectionGrainKeys.Connection("abc/123"));
+        Should.Throw<ArgumentException>(static () => ConnectionGrainKeys.Connection(""));
     }
 }

@@ -16,13 +16,13 @@ public sealed class GraphQueryTests {
     const string Address = "/tenants/" + Tenant + "/providers/CyberCloud.ResourceGraph/resources";
 
     const string OnePage = """
-        {"columns":[{"name":"name","type":"string"},{"name":"location","type":"string"}],
-         "value":[{"name":"pg-main","location":"eu-central"}]}
-        """;
+                           {"columns":[{"name":"name","type":"string"},{"name":"location","type":"string"}],
+                            "value":[{"name":"pg-main","location":"eu-central"}]}
+                           """;
 
     [Fact]
     public async Task TheQueryIsPostedAsTheBodyToTheTenantsGraphAddress() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, OnePage));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, OnePage));
         using var host = TestHost.Create(transport);
 
         var code = await host.RunAsync("graph", "query", Kql, "--tenant", Tenant, "--top", "10", "--output", "json");
@@ -47,7 +47,7 @@ public sealed class GraphQueryTests {
 
     [Fact]
     public async Task TheTenantComesFromTheProfileWhenNoFlagIsTyped() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, OnePage));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, OnePage));
         using var host = TestHost.Create(transport, config: $"[default]\ntenant = {Tenant}\n");
 
         var code = await host.RunAsync("graph", "query", Kql, "--output", "none");
@@ -58,7 +58,7 @@ public sealed class GraphQueryTests {
 
     [Fact]
     public async Task NoTenantAnywhereIsAUsageErrorThatNamesTheThreeWaysToSupplyOne() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, OnePage));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, OnePage));
         using var host = TestHost.Create(transport);
 
         var code = await host.RunAsync("graph", "query", Kql, "--output", "none");
@@ -72,7 +72,7 @@ public sealed class GraphQueryTests {
 
     [Fact]
     public async Task AllFollowsTheNextLinkByPostingTheSameQueryWithItsSkipToken() {
-        var transport = new ScriptedTransport((_, index) => index switch {
+        var transport = new ScriptedTransport(static (_, index) => index switch {
                 0 => Responses.Json(
                     HttpStatusCode.OK,
                     """{"columns":[{"name":"name","type":"string"}],"value":[{"name":"a"}],"nextLink":"https://api.cybercloud.io"""
@@ -85,13 +85,27 @@ public sealed class GraphQueryTests {
                     + Address
                     + """?api-version=2026-08-01&$top=1&$skipToken=2.0123456789abcdef"}"""
                 ),
-                _ => Responses.Json(HttpStatusCode.OK, """{"columns":[{"name":"name","type":"string"}],"value":[{"name":"c"}]}""")
+                _ => Responses.Json(
+                    HttpStatusCode.OK,
+                    """{"columns":[{"name":"name","type":"string"}],"value":[{"name":"c"}]}"""
+                )
             }
         );
 
         using var host = TestHost.Create(transport);
 
-        var code = await host.RunAsync("graph", "query", Kql, "--tenant", Tenant, "--top", "1", "--all", "--output", "json");
+        var code = await host.RunAsync(
+            "graph",
+            "query",
+            Kql,
+            "--tenant",
+            Tenant,
+            "--top",
+            "1",
+            "--all",
+            "--output",
+            "json"
+        );
 
         code.ShouldBe((int)ExitCode.Ok, host.Stderr);
         transport.RequestCount.ShouldBe(3);
@@ -106,28 +120,50 @@ public sealed class GraphQueryTests {
         }
 
         JsonDocument.Parse(transport.Requests[0].Body).RootElement.TryGetProperty("$skipToken", out _).ShouldBeFalse();
-        JsonDocument.Parse(transport.Requests[1].Body).RootElement.GetProperty("$skipToken").GetString().ShouldBe("1.0123456789abcdef");
-        JsonDocument.Parse(transport.Requests[2].Body).RootElement.GetProperty("$skipToken").GetString().ShouldBe("2.0123456789abcdef");
+        JsonDocument.Parse(transport.Requests[1].Body)
+            .RootElement.GetProperty("$skipToken")
+            .GetString()
+            .ShouldBe("1.0123456789abcdef");
+        JsonDocument.Parse(transport.Requests[2].Body)
+            .RootElement.GetProperty("$skipToken")
+            .GetString()
+            .ShouldBe("2.0123456789abcdef");
 
         using var output = JsonDocument.Parse(host.Stdout);
-        output.RootElement.GetProperty("value").EnumerateArray().Select(x => x.GetProperty("name").GetString()).ShouldBe(["a", "b", "c"]);
+        output.RootElement.GetProperty("value")
+            .EnumerateArray()
+            .Select(static x => x.GetProperty("name").GetString())
+            .ShouldBe(["a", "b", "c"]);
         output.RootElement.GetProperty("columns").GetArrayLength().ShouldBe(1);
         output.RootElement.TryGetProperty("nextLink", out _).ShouldBeFalse("there is no next page after the last");
     }
 
     [Fact]
     public async Task ASkipTokenTypedByHandIsSentInTheBody() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, OnePage));
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, OnePage));
         using var host = TestHost.Create(transport);
 
-        await host.RunAsync("graph", "query", Kql, "--tenant", Tenant, "--skip-token", "50.0123456789abcdef", "--output", "none");
+        await host.RunAsync(
+            "graph",
+            "query",
+            Kql,
+            "--tenant",
+            Tenant,
+            "--skip-token",
+            "50.0123456789abcdef",
+            "--output",
+            "none"
+        );
 
-        JsonDocument.Parse(transport.Requests[0].Body).RootElement.GetProperty("$skipToken").GetString().ShouldBe("50.0123456789abcdef");
+        JsonDocument.Parse(transport.Requests[0].Body)
+            .RootElement.GetProperty("$skipToken")
+            .GetString()
+            .ShouldBe("50.0123456789abcdef");
     }
 
     [Fact]
     public async Task ARefusedQueryIsTheGatewaysSentenceAndExitOne() {
-        var transport = new ScriptedTransport((_, _) => Responses.Error(
+        var transport = new ScriptedTransport(static (_, _) => Responses.Error(
                 HttpStatusCode.BadRequest,
                 "InvalidRequestBody",
                 "'mv-expand' is not in the resource graph's KQL subset (an operator it does not translate)."
@@ -136,7 +172,15 @@ public sealed class GraphQueryTests {
 
         using var host = TestHost.Create(transport);
 
-        var code = await host.RunAsync("graph", "query", "resources | mv-expand tags", "--tenant", Tenant, "--output", "json");
+        var code = await host.RunAsync(
+            "graph",
+            "query",
+            "resources | mv-expand tags",
+            "--tenant",
+            Tenant,
+            "--output",
+            "json"
+        );
 
         code.ShouldBe((int)ExitCode.ClientError, host.Stderr);
         host.Stderr.ShouldContain("mv-expand");
@@ -145,7 +189,7 @@ public sealed class GraphQueryTests {
 
     [Fact]
     public async Task OnePageWithMoreBehindItSaysSoOnStderrAndNotOnStdout() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(
                 HttpStatusCode.OK,
                 """{"columns":[],"value":[{"name":"a"}],"nextLink":"https://api.cybercloud.io/x?api-version=2026-08-01&$skipToken=1.0"}"""
             )
@@ -172,6 +216,7 @@ public sealed class GraphQueryTests {
                 GlobalOptions.For(test.Host.Catalog),
                 ReservedGroupTests.TreeWith("graph")
             )
-        ).Message.ShouldContain("'graph'");
+        )
+            .Message.ShouldContain("'graph'");
     }
 }

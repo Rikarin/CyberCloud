@@ -280,7 +280,7 @@ public sealed class OpenBaoSecretResolver(
                             reference,
                             options.Address,
                             options.KvMountPath,
-                            data.EnumerateObject().Select(x => x.Name)
+                            data.EnumerateObject().Select(static x => x.Name)
                         )
                     );
                 }
@@ -312,7 +312,7 @@ public sealed class OpenBaoSecretResolver(
                             reference,
                             options.Address,
                             options.KvMountPath,
-                            data.EnumerateObject().Select(x => x.Name)
+                            data.EnumerateObject().Select(static x => x.Name)
                         )
                     );
                 }

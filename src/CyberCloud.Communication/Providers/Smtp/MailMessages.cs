@@ -50,8 +50,10 @@ static class MailAddresses {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>Pure functions over strings, so the whole of what leaves the platform is asserted
-///         without a relay.</b> <c>MailMessagesTests</c> reads the output byte for byte; the
+///         <b>
+///             Pure functions over strings, so the whole of what leaves the platform is asserted
+///             without a relay.
+///         </b> <c>MailMessagesTests</c> reads the output byte for byte; the
 ///         container suite then reads the same headers back from Mailpit, which proves a real
 ///         receiver parses them as this class meant them.
 ///     </para>
@@ -142,10 +144,19 @@ static class MailMessages {
     /// <param name="relay">Where <c>From</c> and the unsubscribe mailbox come from.</param>
     /// <param name="messageId">The <c>Message-ID</c>, from <see cref="MessageIdFor" />.</param>
     /// <param name="date">When it was composed — the <c>Date</c> header.</param>
-    public static string Compose(OutboundMessage message, SmtpRelayOptions relay, string messageId, DateTimeOffset date) {
+    public static string Compose(
+        OutboundMessage message,
+        SmtpRelayOptions relay,
+        string messageId,
+        DateTimeOffset date
+    ) {
         var headers = new StringBuilder(1024);
 
-        Header(headers, "Date", date.ToUniversalTime().ToString("ddd, dd MMM yyyy HH:mm:ss +0000", CultureInfo.InvariantCulture));
+        Header(
+            headers,
+            "Date",
+            date.ToUniversalTime().ToString("ddd, dd MMM yyyy HH:mm:ss +0000", CultureInfo.InvariantCulture)
+        );
         Header(headers, "From", Mailbox(relay.FromName, relay.From));
         Header(headers, "To", string.Concat("<", message.Destination, ">"));
         Header(headers, "Subject", EncodeHeaderValue(SubjectFor(message)));
@@ -156,7 +167,11 @@ static class MailMessages {
         Header(headers, "Auto-Submitted", "auto-generated");
 
         if (relay.UnsubscribeMailbox.Length > 0) {
-            Header(headers, "List-Unsubscribe", string.Concat("<mailto:", relay.UnsubscribeMailbox, "?subject=unsubscribe>"));
+            Header(
+                headers,
+                "List-Unsubscribe",
+                string.Concat("<mailto:", relay.UnsubscribeMailbox, "?subject=unsubscribe>")
+            );
         }
 
         return headers
@@ -176,10 +191,15 @@ static class MailMessages {
         // A display name that is plain letters, digits and a few safe marks goes as an atom
         // sequence; anything else is quoted, and anything outside ASCII or with a control character
         // is an encoded word — which also covers the CR/LF injection case.
-        var phrase = trimmed.All(c => char.IsAsciiLetterOrDigit(c) || c is ' ' or '-' or '_' or '.')
+        var phrase = trimmed.All(static c => char.IsAsciiLetterOrDigit(c) || c is ' ' or '-' or '_' or '.')
             ? trimmed
-            : trimmed.All(c => c is >= ' ' and <= '~')
-                ? string.Concat("\"", trimmed.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal), "\"")
+            : trimmed.All(static c => c is >= ' ' and <= '~')
+                ? string.Concat(
+                    "\"",
+                    trimmed.Replace("\\", "\\\\", StringComparison.Ordinal)
+                        .Replace("\"", "\\\"", StringComparison.Ordinal),
+                    "\""
+                )
                 : EncodeHeaderValue(trimmed);
 
         return string.Concat(phrase, " <", address, ">");
@@ -198,7 +218,7 @@ static class MailMessages {
     ///     header line, and it is checked by <c>MailMessagesTests</c> with a subject that tries.
     /// </remarks>
     public static string EncodeHeaderValue(string value) {
-        if (value.All(c => c is >= ' ' and <= '~')) {
+        if (value.All(static c => c is >= ' ' and <= '~')) {
             return value;
         }
 
@@ -285,7 +305,8 @@ static class MailMessages {
                 continue;
             }
 
-            var atLineEnd = i + 1 == bytes.Length || (bytes[i + 1] == (byte)'\r' && i + 2 < bytes.Length && bytes[i + 2] == (byte)'\n');
+            var atLineEnd = i + 1 == bytes.Length
+                || (bytes[i + 1] == (byte)'\r' && i + 2 < bytes.Length && bytes[i + 2] == (byte)'\n');
             var literal = (b is >= 33 and <= 126 && b != (byte)'=') || (b is (byte)' ' or (byte)'\t' && !atLineEnd);
             var width = literal ? 1 : 3;
 

@@ -23,8 +23,13 @@ public sealed partial class ComputeChartDriftTests {
         var cores = Dictionary(helpers, "$cores");
         var memory = Dictionary(helpers, "$memory");
 
-        cores.Keys.OrderBy(x => x, StringComparer.Ordinal).ShouldBe(VirtualMachines.SizeNames, Case.Sensitive, "the chart offers sizes the schema does not, or the other way round");
-        memory.Keys.OrderBy(x => x, StringComparer.Ordinal).ShouldBe(VirtualMachines.SizeNames);
+        cores.Keys.OrderBy(static x => x, StringComparer.Ordinal)
+            .ShouldBe(
+                VirtualMachines.SizeNames,
+                Case.Sensitive,
+                "the chart offers sizes the schema does not, or the other way round"
+            );
+        memory.Keys.OrderBy(static x => x, StringComparer.Ordinal).ShouldBe(VirtualMachines.SizeNames);
 
         foreach (var (name, (expectedCores, expectedMemory)) in VirtualMachines.Sizes) {
             cores[name].ShouldBe(expectedCores.ToString(System.Globalization.CultureInfo.InvariantCulture), name);
@@ -37,9 +42,18 @@ public sealed partial class ComputeChartDriftTests {
         var helpers = Embedded("image.helpers.tpl");
 
         var rows = CatalogueRow().Matches(helpers)
-            .ToDictionary(x => x.Groups["name"].Value, x => x.Groups["url"].Value, StringComparer.Ordinal);
+            .ToDictionary(
+                static x => x.Groups["name"].Value,
+                static x => x.Groups["url"].Value,
+                StringComparer.Ordinal
+            );
 
-        rows.Keys.OrderBy(x => x, StringComparer.Ordinal).ShouldBe(Images.CatalogueNames, Case.Sensitive, "the chart's catalogue names a different set of images than Images.Catalogue");
+        rows.Keys.OrderBy(static x => x, StringComparer.Ordinal)
+            .ShouldBe(
+                Images.CatalogueNames,
+                Case.Sensitive,
+                "the chart's catalogue names a different set of images than Images.Catalogue"
+            );
 
         foreach (var (name, image) in Images.Catalogue) {
             rows[name].ShouldBe(image.Url, $"{name} is pinned to different bytes in the chart and in C#");
@@ -63,7 +77,11 @@ public sealed partial class ComputeChartDriftTests {
 
         pairs.Count.ShouldBeGreaterThan(0, $"no `{variable} := dict` line with pairs in _helpers.tpl");
 
-        return pairs.ToDictionary(x => x.Groups["key"].Value, x => x.Groups["value"].Value, StringComparer.Ordinal);
+        return pairs.ToDictionary(
+            static x => x.Groups["key"].Value,
+            static x => x.Groups["value"].Value,
+            StringComparer.Ordinal
+        );
     }
 
     static string Embedded(string name) {

@@ -85,8 +85,8 @@ public sealed class MariaDbCompatibilityTests {
         // use case, which takes both halves.
         var subset = MariaDbServers.SupportedSubset;
 
-        subset.Count(x => x.Supported).ShouldBeGreaterThan(0, "the table says nothing works");
-        subset.Count(x => !x.Supported)
+        subset.Count(static x => x.Supported).ShouldBeGreaterThan(0, "the table says nothing works");
+        subset.Count(static x => !x.Supported)
             .ShouldBeGreaterThan(
                 2,
                 "the table names fewer than three limits, which for two engines that diverged in 2012 is "
@@ -102,7 +102,7 @@ public sealed class MariaDbCompatibilityTests {
             );
         }
 
-        subset.Select(x => x.Id).Distinct(StringComparer.Ordinal).Count().ShouldBe(subset.Length);
+        subset.Select(static x => x.Id).Distinct(StringComparer.Ordinal).Count().ShouldBe(subset.Length);
     }
 
     [Theory]

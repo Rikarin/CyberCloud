@@ -338,7 +338,7 @@ public sealed class KubernetesLoginAgainstRealOpenBaoTests(OpenBaoFixture vault)
             + "problem"
         );
 
-        token.Error.Message.ShouldNotContain("not-a-real-projected-token", Case.Insensitive);
+        token.Error.Message.ShouldNotContain("not-a-real-projected-token");
     }
 
     [Fact]

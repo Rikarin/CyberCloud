@@ -149,9 +149,7 @@ sealed class TestHost : IDisposable {
                         })
             };
 
-        var built = new TestHost(host, output, error, state, browsed, launches);
-
-        return built;
+        return new(host, output, error, state, browsed, launches);
     }
 
     /// <summary>The path an extension is told this <c>cyc</c> lives at, so a test can recognise it.</summary>
@@ -187,7 +185,7 @@ sealed class TestHost : IDisposable {
         Error.Dispose();
 
         try {
-            Directory.Delete(stateDirectory, recursive: true);
+            Directory.Delete(stateDirectory, true);
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
             // A leftover temporary directory is not worth failing a passing test over.
         }

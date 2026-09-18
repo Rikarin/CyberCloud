@@ -82,13 +82,13 @@ public sealed class TenancyStateContractTests {
     ];
 
     static IEnumerable<Type> StateTypes =>
-        Tenancy.GetTypes().Where(t => t.GetCustomAttribute<GenerateSerializerAttribute>() is not null);
+        Tenancy.GetTypes().Where(static t => t.GetCustomAttribute<GenerateSerializerAttribute>() is not null);
 
     [Fact]
     public void EveryStateTypeHasAStableAlias() =>
         StateTypes
-            .Where(t => t.GetCustomAttribute<AliasAttribute>() is null)
-            .Select(t => t.Name)
+            .Where(static t => t.GetCustomAttribute<AliasAttribute>() is null)
+            .Select(static t => t.Name)
             .ShouldBeEmpty(
                 "docs/plan/05 § Serialization, rule 5: 'Renaming a type without [Alias] is a "
                 + "data-loss bug.' For state that means the row is still in PostgreSQL and nothing "
@@ -98,26 +98,26 @@ public sealed class TenancyStateContractTests {
     [Fact]
     public void TheAliasesAreTheOnesRecordedHere() =>
         StateTypes
-            .Select(t => (Type: t.Name, Alias: t.GetCustomAttribute<AliasAttribute>()?.Alias ?? "<none>"))
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
+            .Select(static t => (Type: t.Name, Alias: t.GetCustomAttribute<AliasAttribute>()?.Alias ?? "<none>"))
+            .OrderBy(static x => x.Type, StringComparer.Ordinal)
             .ToList()
-            .ShouldBe(Aliases.OrderBy(x => x.Type, StringComparer.Ordinal).ToList());
+            .ShouldBe(Aliases.OrderBy(static x => x.Type, StringComparer.Ordinal).ToList());
 
     [Fact]
     public void TheIdManifestMatchesTheBaseline() {
         var actual = StateTypes
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetMembers(BindingFlags.Public | BindingFlags.Instance)
-                    .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
-                    .Where(x => x.id is not null)
+                    .Select(static member => (member, id: member.GetCustomAttribute<IdAttribute>()))
+                    .Where(static x => x.id is not null)
                     .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
             )
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
-            .ThenBy(x => x.Id)
+            .OrderBy(static x => x.Type, StringComparer.Ordinal)
+            .ThenBy(static x => x.Id)
             .ToList();
 
         actual.ShouldBe(
-            Baseline.OrderBy(x => x.Type, StringComparer.Ordinal).ThenBy(x => x.Id).ToList(),
+            Baseline.OrderBy(static x => x.Type, StringComparer.Ordinal).ThenBy(static x => x.Id).ToList(),
             "[Id(n)] numbers are never reused and never reordered — and unlike a wire payload, the "
             + "old bytes are still in the database."
         );
@@ -126,12 +126,12 @@ public sealed class TenancyStateContractTests {
     [Fact]
     public void EveryPublicMemberOfEveryStateTypeIsNumbered() {
         var unnumbered = StateTypes
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                    .Where(p => p.GetCustomAttribute<IdAttribute>() is null)
+                    .Where(static p => p.GetCustomAttribute<IdAttribute>() is null)
                     .Select(p => string.Create(CultureInfo.InvariantCulture, $"{type.Name}.{p.Name}"))
             )
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
 
         unnumbered.ShouldBeEmpty(
@@ -149,7 +149,7 @@ public sealed class TenancyStateContractTests {
         // Coordinator or a Platform grain, and docs/plan/04 § Grain taxonomy puts all four in
         // Durable — so the list for this assembly is "all of them", and that is checkable now.
         var grains = Tenancy.GetTypes()
-            .Where(t => typeof(Grain).IsAssignableFrom(t) && !t.IsAbstract)
+            .Where(static t => typeof(Grain).IsAssignableFrom(t) && !t.IsAbstract)
             .ToList();
 
         grains.Count.ShouldBe(
@@ -160,10 +160,10 @@ public sealed class TenancyStateContractTests {
 
         foreach (var grain in grains) {
             var bindings = grain.GetConstructors()
-                .SelectMany(c => c.GetParameters())
-                .Select(p => p.GetCustomAttribute<PersistentStateAttribute>())
-                .Where(a => a is not null)
-                .Select(a => a!.StorageName)
+                .SelectMany(static c => c.GetParameters())
+                .Select(static p => p.GetCustomAttribute<PersistentStateAttribute>())
+                .Where(static a => a is not null)
+                .Select(static a => a!.StorageName)
                 .ToList();
 
             bindings.ShouldNotBeEmpty($"{grain.Name} persists nothing.");
@@ -183,10 +183,10 @@ public sealed class TenancyStateContractTests {
         // *Password/*Secret/*Token/*Key outside CyberCloud.Vault". Grain state is JSON in PostgreSQL
         // and in every backup; a secret there is a secret in every backup forever.
         StateTypes
-            .SelectMany(t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .SelectMany(static t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                     .Select(p => $"{t.Name}.{p.Name}")
             )
-            .Where(name =>
+            .Where(static name =>
                 name.EndsWith("Password", StringComparison.OrdinalIgnoreCase)
                 || name.EndsWith("Secret", StringComparison.OrdinalIgnoreCase)
                 || name.EndsWith("Token", StringComparison.OrdinalIgnoreCase)

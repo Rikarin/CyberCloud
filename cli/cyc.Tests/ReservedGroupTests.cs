@@ -77,7 +77,7 @@ public sealed class ReservedGroupTests {
 
         var root = CommandTree.Build(test.Host, GlobalOptions.For(test.Host.Catalog), TreeWith("widgetry"));
 
-        root.Subcommands.Select(x => x.Name).ShouldContain("widgetry");
+        root.Subcommands.Select(static x => x.Name).ShouldContain("widgetry");
     }
 
     /// <summary>

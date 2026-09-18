@@ -1,8 +1,6 @@
 using CyberCloud.Cluster.Conformance.Infrastructure;
 using Shouldly;
-using System.Diagnostics;
 using System.Net;
-using System.Text;
 using System.Text.Json;
 using k8s;
 using k8s.Autorest;
@@ -52,7 +50,7 @@ public sealed class CloudNativePgComponentInstaller {
 
         var run = await BundleInstaller.RunAsync(
             "--dry-run --component " + component,
-            kubeconfig: null,
+            null,
             TestContext.Current.CancellationToken
         );
 
@@ -359,7 +357,7 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
 
         // ── A charts/managed/ custom resource, rendered by helm and applied ────────────────────
         await client.CoreV1.CreateNamespaceAsync(
-            new V1Namespace { Metadata = new V1ObjectMeta { Name = Probe } },
+            new V1Namespace { Metadata = new() { Name = Probe } },
             cancellationToken: token
         );
 
@@ -400,7 +398,7 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
         // subject "a 64Mi directory by a test's own hand-written claim". This claim has a controller
         // owner reference to the custom resource the chart rendered, so it cannot have been written
         // by this test: the API server records who owns it, and it is the Cluster.
-        var owner = claim.Metadata.OwnerReferences?.SingleOrDefault(reference => reference.Controller == true);
+        var owner = claim.Metadata.OwnerReferences?.SingleOrDefault(static reference => reference.Controller == true);
 
         owner.ShouldNotBeNull(
             $"the claim `{claim.Metadata.Name}` has no controlling owner, so nothing on the API "
@@ -491,7 +489,7 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
                     Probe,
                     Plural,
                     Probe,
-                    cancellationToken: token
+                    token
                 );
 
                 return IsReady(JsonSerializer.SerializeToElement(current)) ? "ready" : null;
@@ -540,7 +538,7 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
 
         arguments.AddRange(ChartValues);
 
-        var (exitCode, output) = await CaptureAsync("helm", arguments, input: null, kubeconfig: null, token);
+        var (exitCode, output) = await CaptureAsync("helm", arguments, null, null, token);
 
         exitCode.ShouldBe(0, "`helm template charts/managed/postgres` failed:\n" + output);
 
@@ -578,7 +576,8 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
         string? input,
         string? kubeconfig,
         CancellationToken token
-    ) => BundleInstaller.CaptureAsync(command, arguments, input, kubeconfig, token);
+    ) =>
+        BundleInstaller.CaptureAsync(command, arguments, input, kubeconfig, token);
 
     /// <summary>Polls until <paramref name="read" /> returns non-null, or the budget runs out.</summary>
     static async Task<T?> Poll<T>(TimeSpan budget, Func<Task<T?>> read, CancellationToken token)
@@ -603,7 +602,7 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
         && status.TryGetProperty("conditions", out var conditions)
         && conditions.ValueKind == JsonValueKind.Array
         && conditions.EnumerateArray()
-            .Any(condition =>
+            .Any(static condition =>
                 condition.TryGetProperty("type", out var type)
                 && type.ValueKind == JsonValueKind.String
                 && type.GetString() == "Ready"

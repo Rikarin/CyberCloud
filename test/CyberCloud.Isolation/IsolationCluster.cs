@@ -68,7 +68,7 @@ public sealed record IsolationTarget(
     public static string AncestorName(int level) => "ancestor-" + level.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>The <c>/</c>-separated ancestor names an address for this target carries.</summary>
-    public string ParentNames => string.Join('/', Ancestors.Select((_, level) => AncestorName(level)));
+    public string ParentNames => string.Join('/', Ancestors.Select(static (_, level) => AncestorName(level)));
 
     /// <inheritdoc />
     public override string ToString() => Name;
@@ -90,7 +90,7 @@ public static class IsolationCatalog {
             "CyberCloud.ConformanceReference/probes",
             Conformance.Reference.Probes.Type,
             Conformance.Reference.Probes.V2026,
-            cluster => Conformance.Reference.Probes.Body(cluster),
+            static cluster => Conformance.Reference.Probes.Body(cluster),
             "ping",
             []
         );
@@ -119,7 +119,7 @@ public static class IsolationCatalog {
             "CyberCloud.Storage/accounts",
             StorageAccounts.Type,
             StorageAccounts.V2026,
-            cluster => StorageAccounts.Body(cluster),
+            static cluster => StorageAccounts.Body(cluster),
             StorageAccounts.ListKeysAction,
             []
         );
@@ -130,7 +130,7 @@ public static class IsolationCatalog {
             "CyberCloud.Sample/widgets",
             SampleWidgets.Type,
             SampleWidgets.V2026,
-            cluster => SampleWidgets.Body(cluster),
+            static cluster => SampleWidgets.Body(cluster),
             "ping",
             []
         ),
@@ -153,7 +153,7 @@ public static class IsolationCatalog {
             "CyberCloud.ConformanceReference/probes/samples",
             Conformance.Reference.Probes.ChildType,
             Conformance.Reference.Probes.V2026,
-            cluster => Conformance.Reference.Probes.ChildBody(cluster),
+            static cluster => Conformance.Reference.Probes.ChildBody(cluster),
             "ping",
             [Probes]
         ),
@@ -176,7 +176,7 @@ public static class IsolationCatalog {
             "CyberCloud.Storage/accounts/buckets",
             StorageBuckets.Type,
             StorageBuckets.V2026,
-            cluster => StorageBuckets.Body(cluster),
+            static cluster => StorageBuckets.Body(cluster),
             StorageBuckets.StatsAction,
             [StorageAccount]
         ),
@@ -190,7 +190,7 @@ public static class IsolationCatalog {
             "CyberCloud.Storage/accounts/fileShares",
             StorageFileShares.Type,
             StorageFileShares.V2026,
-            cluster => StorageFileShares.Body(cluster),
+            static cluster => StorageFileShares.Body(cluster),
             StorageFileShares.ListMountTargetsAction,
             [StorageAccount]
         )
@@ -484,7 +484,10 @@ public sealed class IsolationCluster : IAsyncLifetime {
     ///     Creates a user in a tenant's directory and returns the subject id a token would carry
     ///     for them — the GUID in <c>N</c> form, which is also the id a role assignment names.
     /// </summary>
-    /// <param name="tenant">The tenant the user belongs to. ⚠ One tenant, forever — docs/plan/11 § Sign-up and tenant creation.</param>
+    /// <param name="tenant">
+    ///     The tenant the user belongs to. ⚠ One tenant, forever — docs/plan/11 § Sign-up and tenant
+    ///     creation.
+    /// </param>
     /// <param name="userId">The user's GUID.</param>
     /// <param name="status">Their lifecycle state; <see cref="UserStatus.Active" /> unless a test says otherwise.</param>
     /// <remarks>
@@ -659,7 +662,7 @@ public sealed class IsolationCluster : IAsyncLifetime {
         // objects. Views.For(owner) is what a pass receives as ReconcileContext.View, bound to the
         // owner the driver chose — so an attack through this object is an attack on the rule, not on
         // a double of it.
-        Views = new ResourceViews(
+        Views = new(
             Registry,
             cluster.GrainFactory,
             new ReBacResourceAuthorizer(cluster.GrainFactory, NullLogger<ReBacResourceAuthorizer>.Instance),
@@ -734,7 +737,7 @@ public sealed class IsolationCluster : IAsyncLifetime {
     ///     parent's own row in the sweep already proves.
     /// </remarks>
     async Task CreateAncestorsAsync(Guid tenant, Guid subscription, string user) {
-        foreach (var target in IsolationCatalog.Targets.Where(x => !x.Ancestors.IsEmpty)) {
+        foreach (var target in IsolationCatalog.Targets.Where(static x => !x.Ancestors.IsEmpty)) {
             for (var level = 0; level < target.Ancestors.Length; level++) {
                 var ancestor = target.Ancestors[level];
                 var name = IsolationTarget.AncestorName(level);
@@ -786,8 +789,6 @@ public sealed class IsolationCluster : IAsyncLifetime {
             await cluster.StopAllSilosAsync();
             await cluster.DisposeAsync();
         }
-
-        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -807,7 +808,7 @@ public sealed class IsolationCluster : IAsyncLifetime {
             silo.AddMemoryGrainStorage(StorageTiers.Hot);
             silo.UseInMemoryReminderService();
 
-            silo.ConfigureServices(services => {
+            silo.ConfigureServices(static services => {
                     services.AddSingleton<IClock>(new ConformanceClock());
                     services.AddSingleton<IClusterConnectionFactory>(new FakeClusterConnectionFactory(Instance.World));
 
@@ -845,7 +846,7 @@ public sealed class IsolationCluster : IAsyncLifetime {
                     services.AddSingleton<ISecretResolver>(Vault);
                     services.AddSingleton<ISecretWriter>(Vault);
 
-                    services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
+                    services.TryAddSingleton<ILoggerFactory>(static _ => NullLoggerFactory.Instance);
                 }
             );
 

@@ -103,15 +103,18 @@ public sealed class RefusingGrainFactory : IGrainFactory {
 
     /// <inheritdoc />
     public TGrainInterface GetGrain<TGrainInterface>(Guid primaryKey, string? grainClassNamePrefix = null)
-        where TGrainInterface : IGrainWithGuidKey => throw Refuse(typeof(TGrainInterface).Name);
+        where TGrainInterface : IGrainWithGuidKey =>
+        throw Refuse(typeof(TGrainInterface).Name);
 
     /// <inheritdoc />
     public TGrainInterface GetGrain<TGrainInterface>(long primaryKey, string? grainClassNamePrefix = null)
-        where TGrainInterface : IGrainWithIntegerKey => throw Refuse(typeof(TGrainInterface).Name);
+        where TGrainInterface : IGrainWithIntegerKey =>
+        throw Refuse(typeof(TGrainInterface).Name);
 
     /// <inheritdoc />
     public TGrainInterface GetGrain<TGrainInterface>(string primaryKey, string? grainClassNamePrefix = null)
-        where TGrainInterface : IGrainWithStringKey => throw Refuse(typeof(TGrainInterface).Name);
+        where TGrainInterface : IGrainWithStringKey =>
+        throw Refuse(typeof(TGrainInterface).Name);
 
     /// <inheritdoc />
     public TGrainInterface GetGrain<TGrainInterface>(
@@ -150,7 +153,8 @@ public sealed class RefusingGrainFactory : IGrainFactory {
 
     /// <inheritdoc />
     public TGrainInterface GetGrain<TGrainInterface>(GrainId grainId)
-        where TGrainInterface : IAddressable => throw Refuse(typeof(TGrainInterface).Name);
+        where TGrainInterface : IAddressable =>
+        throw Refuse(typeof(TGrainInterface).Name);
 
     /// <inheritdoc />
     public IAddressable GetGrain(GrainId grainId) => throw Refuse(grainId.Type.ToString() ?? nameof(GrainId));
@@ -172,7 +176,8 @@ public sealed class RefusingGrainFactory : IGrainFactory {
     // the default keeps that true without making the type lie about what it guards.
     /// <inheritdoc />
     public TGrainObserverInterface CreateObjectReference<TGrainObserverInterface>(IGrainObserver obj)
-        where TGrainObserverInterface : IGrainObserver => default!;
+        where TGrainObserverInterface : IGrainObserver =>
+        default!;
 
     /// <inheritdoc />
     public void DeleteObjectReference<TGrainObserverInterface>(IGrainObserver obj)

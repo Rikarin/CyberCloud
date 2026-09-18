@@ -29,9 +29,9 @@ public sealed class StorageActionHandlerTests {
         connection.Objects[RecordingConnection.Key(StorageBuckets.BucketRef(ns, address))] =
             StorageBuckets.WithSampledUsage(
                 StorageBuckets.BucketJson(address, body.RootElement),
-                objectCount: 1234,
-                sizeBytes: 987654321,
-                sampledAt: "2026-09-15T10:05:00Z"
+                1234,
+                987654321,
+                "2026-09-15T10:05:00Z"
             );
 
         var answer = await new StorageBucketStatsHandler().InvokeAsync(
@@ -171,7 +171,7 @@ public sealed class StorageActionHandlerTests {
         );
 
         answer.IsSuccess.ShouldBeTrue(answer.Error?.Message);
-        answer.GetValueOrThrow().ShouldNotContain("secret", Case.Insensitive);
+        answer.GetValueOrThrow().ShouldNotContain("secret");
     }
 
     // ── Harness ───────────────────────────────────────────────────────────────────────────────
@@ -180,7 +180,12 @@ public sealed class StorageActionHandlerTests {
     static readonly Guid Tenant = Guid.Parse("11111111-1111-4111-8111-111111111111");
     static readonly Guid Subscription = Guid.Parse("22222222-2222-4222-8222-222222222222");
 
-    static ActionContext Action(IKubeClusterConnection connection, ResourceId address, string action, JsonElement desired) =>
+    static ActionContext Action(
+        IKubeClusterConnection connection,
+        ResourceId address,
+        string action,
+        JsonElement desired
+    ) =>
         new(
             address,
             StorageAccounts.V2026,
@@ -193,8 +198,24 @@ public sealed class StorageActionHandlerTests {
         );
 
     static ResourceId BucketAddress(string name, string account) =>
-        new(Tenant, Subscription, "prod", StorageBuckets.Type, name, Guid.Parse("33333333-3333-4333-8333-333333333333"), account);
+        new(
+            Tenant,
+            Subscription,
+            "prod",
+            StorageBuckets.Type,
+            name,
+            Guid.Parse("33333333-3333-4333-8333-333333333333"),
+            account
+        );
 
     static ResourceId ShareAddress(string name, string account) =>
-        new(Tenant, Subscription, "prod", StorageFileShares.Type, name, Guid.Parse("33333333-3333-4333-8333-333333333334"), account);
+        new(
+            Tenant,
+            Subscription,
+            "prod",
+            StorageFileShares.Type,
+            name,
+            Guid.Parse("33333333-3333-4333-8333-333333333334"),
+            account
+        );
 }

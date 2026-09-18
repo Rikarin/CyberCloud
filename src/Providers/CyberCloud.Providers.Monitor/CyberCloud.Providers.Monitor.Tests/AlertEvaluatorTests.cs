@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -30,11 +29,18 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
     static CancellationToken Ct => AlertTestCluster.Ct;
 
     /// <summary>The messages the email carrier was handed for one destination.</summary>
-    static IReadOnlyList<OutboundMessage> SentTo(string destination) =>
-        [.. Carriers.Email.Sent.Where(x => string.Equals(x.Destination, destination, StringComparison.OrdinalIgnoreCase))];
+    static IReadOnlyList<OutboundMessage> SentTo(string destination) => [
+        .. Carriers.Email.Sent.Where(x => string.Equals(x.Destination, destination, StringComparison.OrdinalIgnoreCase))
+    ];
 
-    static string Body(string service, string recipient, double threshold = 5, int forSeconds = 0, bool enabled = true) =>
-        MonitorAlertRules.Body(service, [recipient], threshold: threshold, forSeconds: forSeconds, enabled: enabled);
+    static string Body(
+        string service,
+        string recipient,
+        double threshold = 5,
+        int forSeconds = 0,
+        bool enabled = true
+    ) =>
+        MonitorAlertRules.Body(service, [recipient], threshold, forSeconds: forSeconds, enabled: enabled);
 
     [Fact]
     public async Task ARealRuleFiresThroughTheCommunicationServiceAndResolves() {
@@ -88,7 +94,10 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
         var early = await cluster.EvaluateAsync(rule);
         early.Evaluated.ShouldBe(0);
         early.Skipped.ShouldBe(1);
-        SentTo(Recipient).Count.ShouldBe(1, "a rule that is not due is not re-evaluated, and a firing rule is not re-notified");
+        SentTo(Recipient).Count.ShouldBe(
+            1,
+            "a rule that is not due is not re-evaluated, and a firing rule is not re-notified"
+        );
 
         // ── The condition stops holding: resolve, and say so ─────────────────────────────────
         AlertTestCluster.Clock.Advance(TimeSpan.FromMinutes(1));
@@ -153,7 +162,7 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
 
         suppressed.IsSuccess.ShouldBeTrue(suppressed.Error?.Message);
 
-        await cluster.ConvergedAsync(rule, MonitorAlertRules.Body(service, [Told, Blocked], threshold: 90));
+        await cluster.ConvergedAsync(rule, MonitorAlertRules.Body(service, [Told, Blocked], 90));
         AlertTestCluster.Queries.Answer(workspace, 97);
 
         var report = await cluster.EvaluateAsync(rule);
@@ -166,7 +175,9 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
         outcome.ShouldContain("suppression list");
 
         SentTo(Told).Count.ShouldBe(1);
-        SentTo(Blocked).ShouldBeEmpty("a complaint reached the carrier — the send path's suppression check was bypassed");
+        SentTo(Blocked).ShouldBeEmpty(
+            "a complaint reached the carrier — the send path's suppression check was bypassed"
+        );
     }
 
     [Fact]
@@ -176,7 +187,7 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
         var workspace = MonitorAlertRules.WorkspaceOf(rule).CanonicalPath;
         const string Recipient = "for-oncall@example.com";
 
-        await cluster.ConvergedAsync(rule, Body(service, Recipient, threshold: 250, forSeconds: 120));
+        await cluster.ConvergedAsync(rule, Body(service, Recipient, 250, 120));
         AlertTestCluster.Queries.Answer(workspace, 400);
 
         var first = await cluster.EvaluateAsync(rule);
@@ -205,7 +216,7 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
         var rule = AlertTestCluster.Rule("ws-down", "queue-deep");
         var workspace = MonitorAlertRules.WorkspaceOf(rule).CanonicalPath;
         const string Recipient = "down-oncall@example.com";
-        var body = Body(service, Recipient, threshold: 100);
+        var body = Body(service, Recipient, 100);
 
         await cluster.ConvergedAsync(rule, body);
         AlertTestCluster.Queries.Answer(workspace, 500);
@@ -250,8 +261,8 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
         var workspace = MonitorAlertRules.WorkspaceOf(first).CanonicalPath;
         const string Recipient = "throws-oncall@example.com";
 
-        await cluster.ConvergedAsync(first, Body(service, Recipient, threshold: 10));
-        await cluster.ConvergedAsync(second, Body(service, Recipient, threshold: 10));
+        await cluster.ConvergedAsync(first, Body(service, Recipient, 10));
+        await cluster.ConvergedAsync(second, Body(service, Recipient, 10));
 
         // ⚠ THE SEAM THROWS RATHER THAN RETURNS — what HttpClient does when vmselect's name does
         // not resolve. The first version caught only its own timeout, so the pass ended at
@@ -289,14 +300,13 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
     public async Task APassStopsAskingAtItsBudgetAndTheDeferredRulesGoFirstNextTick() {
         var service = await cluster.SendingServiceAsync("alerts-budget");
         var rules = new[] {
-            AlertTestCluster.Rule("ws-budget", "a"),
-            AlertTestCluster.Rule("ws-budget", "b"),
+            AlertTestCluster.Rule("ws-budget", "a"), AlertTestCluster.Rule("ws-budget", "b"),
             AlertTestCluster.Rule("ws-budget", "c")
         };
         var workspace = MonitorAlertRules.WorkspaceOf(rules[0]).CanonicalPath;
 
         foreach (var rule in rules) {
-            await cluster.ConvergedAsync(rule, Body(service, "budget@example.com", threshold: 1000));
+            await cluster.ConvergedAsync(rule, Body(service, "budget@example.com", 1000));
         }
 
         // ⚠ EACH QUERY TAKES LONGER THAN THE WHOLE BUDGET, on the clock the grain reads, so a pass
@@ -337,7 +347,7 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
         var rule = AlertTestCluster.Rule("ws-delete", "disk-full");
         var workspace = MonitorAlertRules.WorkspaceOf(rule).CanonicalPath;
         const string Recipient = "delete-oncall@example.com";
-        var body = Body(service, Recipient, threshold: 90);
+        var body = Body(service, Recipient, 90);
 
         await cluster.ConvergedAsync(rule, body);
         AlertTestCluster.Queries.Answer(workspace, 97);
@@ -357,7 +367,7 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
 
         // A rule that never fired, or a firing rule whose action group asked for no resolve, says nothing.
         var quiet = AlertTestCluster.Rule("ws-delete", "quiet");
-        var quietBody = MonitorAlertRules.Body(service, [Recipient], threshold: 90, notifyOnResolve: false);
+        var quietBody = MonitorAlertRules.Body(service, [Recipient], 90, notifyOnResolve: false);
         await cluster.ConvergedAsync(quiet, quietBody);
         (await cluster.EvaluateAsync(quiet)).Fired.ShouldBe(1);
         (await cluster.DeleteAsync(quiet, quietBody)).IsConverged.ShouldBeTrue();
@@ -371,7 +381,8 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
         var evaluator = MonitorAlertRules.EvaluatorIdFor(rule);
         var body = Body(service, "rearm@example.com");
 
-        async Task<bool> ArmedAsync() => (await cluster.Alerts.IsArmedAsync(AlertTestCluster.Tenant, evaluator, Ct)).GetValueOrThrow();
+        async Task<bool> ArmedAsync() =>
+            (await cluster.Alerts.IsArmedAsync(AlertTestCluster.Tenant, evaluator, Ct)).GetValueOrThrow();
 
         await cluster.ConvergedAsync(rule, body);
         (await ArmedAsync()).ShouldBeTrue();
@@ -417,7 +428,9 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
         (await ArmedAsync()).ShouldBeFalse("an evaluator with no rules is ticking");
 
         await cluster.ConvergedAsync(rule, Body(service, Recipient));
-        (await ArmedAsync()).ShouldBeTrue("a workspace with an enabled rule has no reminder, so nothing will ever evaluate it");
+        (await ArmedAsync()).ShouldBeTrue(
+            "a workspace with an enabled rule has no reminder, so nothing will ever evaluate it"
+        );
 
         // Disabled: kept, and the clock stops.
         await cluster.ConvergedAsync(rule, Body(service, Recipient, enabled: false));
@@ -434,7 +447,9 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
         var read = await cluster.Alerts.GetRuleAsync(AlertTestCluster.Tenant, evaluator, rule.Id, Ct);
         read.IsSuccess.ShouldBeFalse();
         read.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
-        (await ArmedAsync()).ShouldBeFalse("the last rule is gone and the evaluator is still ticking over nothing, forever");
+        (await ArmedAsync()).ShouldBeFalse(
+            "the last rule is gone and the evaluator is still ticking over nothing, forever"
+        );
 
         // A second delete is a no-op that converges — the verb grammar's retry-safety.
         (await cluster.DeleteAsync(rule, Body(service, Recipient))).IsConverged.ShouldBeTrue();
@@ -454,12 +469,19 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
             written.IsSuccess.ShouldBeTrue(written.Error?.Message);
         }
 
-        var outcome = await cluster.ReconcileAsync(AlertTestCluster.Rule("ws-cap", "one-too-many"), Body(service, "cap@example.com"));
+        var outcome = await cluster.ReconcileAsync(
+            AlertTestCluster.Rule("ws-cap", "one-too-many"),
+            Body(service, "cap@example.com")
+        );
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
-        outcome.Retryable.ShouldBeFalse("a full workspace is not a condition ten seconds fixes, and an hour of retries against it is what the default would do");
+        outcome.Retryable.ShouldBeFalse(
+            "a full workspace is not a condition ten seconds fixes, and an hour of retries against it is what the default would do"
+        );
         outcome.Error!.Code.ShouldBe(ErrorCode.QuotaExceeded);
-        outcome.Error.Message.ShouldContain(IAlertEvaluatorGrain.MaxRules.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        outcome.Error.Message.ShouldContain(
+            IAlertEvaluatorGrain.MaxRules.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        );
 
         var listed = await cluster.Alerts.ListRulesAsync(AlertTestCluster.Tenant, evaluator, Ct);
         listed.GetValueOrThrow().Length.ShouldBe(IAlertEvaluatorGrain.MaxRules);
@@ -468,7 +490,10 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
     [Fact]
     public async Task ARuleNamingAnotherTenantsServiceIsRefusedAtThePointerAndNothingIsHeld() {
         var rule = AlertTestCluster.Rule("ws-cross", "sneaky");
-        var body = Body(AlertTestCluster.ServicePath("their-service", AlertTestCluster.OtherTenant), "cross@example.com");
+        var body = Body(
+            AlertTestCluster.ServicePath("their-service", AlertTestCluster.OtherTenant),
+            "cross@example.com"
+        );
 
         // ⚠ The schema accepts it — the path parses — so this is the reconciler's refusal, and it
         // has to be, because ResourceSchema.Validate does not know whose tenant a body is for.
@@ -482,7 +507,12 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
         outcome.Error.Target.ShouldBe("/properties/actionGroup/service");
         outcome.Error.Message.ShouldContain(AlertTestCluster.OtherTenant.D());
 
-        var read = await cluster.Alerts.GetRuleAsync(AlertTestCluster.Tenant, MonitorAlertRules.EvaluatorIdFor(rule), rule.Id, Ct);
+        var read = await cluster.Alerts.GetRuleAsync(
+            AlertTestCluster.Tenant,
+            MonitorAlertRules.EvaluatorIdFor(rule),
+            rule.Id,
+            Ct
+        );
         read.IsSuccess.ShouldBeFalse("a rule that was refused was written anyway");
     }
 
@@ -493,14 +523,14 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
         var workspace = MonitorAlertRules.WorkspaceOf(rule).CanonicalPath;
         const string Recipient = "edit-oncall@example.com";
 
-        await cluster.ConvergedAsync(rule, Body(service, Recipient, threshold: 80));
+        await cluster.ConvergedAsync(rule, Body(service, Recipient, 80));
         AlertTestCluster.Queries.Answer(workspace, 95);
         (await cluster.EvaluateAsync(rule)).Fired.ShouldBe(1);
         SentTo(Recipient).Count.ShouldBe(1);
 
         // The tenant raises the threshold above the value: the instance the old condition fired
         // cannot be resolved by evaluating the new one, so the edit closes it, quietly.
-        await cluster.ConvergedAsync(rule, Body(service, Recipient, threshold: 99));
+        await cluster.ConvergedAsync(rule, Body(service, Recipient, 99));
 
         var held = await cluster.HeldAsync(rule);
         held.State.ShouldBe(AlertRuleState.Ok);
@@ -535,7 +565,7 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
         json["enabled"]!.GetValue<bool>().ShouldBeTrue();
         json["instances"]!.GetValue<int>().ShouldBe(0);
 
-        var drifted = await cluster.ObserveAsync(rule, Body(service, "observe@example.com", threshold: 6));
+        var drifted = await cluster.ObserveAsync(rule, Body(service, "observe@example.com", 6));
         drifted.Exists.ShouldBeTrue();
         drifted.Summary.ShouldBe("the rule has drifted from its body");
 
@@ -553,9 +583,13 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
         MonitorAlertRules.EvaluatorIdFor(first).ShouldBe(MonitorAlertRules.EvaluatorIdFor(workspace));
         MonitorAlertRules.EvaluatorIdFor(second).ShouldBe(MonitorAlertRules.EvaluatorIdFor(workspace));
 
-        MonitorAlertRules.EvaluatorIdFor(AlertTestCluster.Rule("ws-other", "a")).ShouldNotBe(MonitorAlertRules.EvaluatorIdFor(first));
+        MonitorAlertRules.EvaluatorIdFor(AlertTestCluster.Rule("ws-other", "a"))
+            .ShouldNotBe(MonitorAlertRules.EvaluatorIdFor(first));
         MonitorAlertRules.EvaluatorIdFor(AlertTestCluster.Rule("ws-shared", "a", AlertTestCluster.OtherTenant))
-            .ShouldNotBe(MonitorAlertRules.EvaluatorIdFor(first), "two tenants' workspaces of one name share an evaluator");
+            .ShouldNotBe(
+                MonitorAlertRules.EvaluatorIdFor(first),
+                "two tenants' workspaces of one name share an evaluator"
+            );
 
         // Case-insensitive on the type, as CanonicalPath is — one spelling, one grain.
         var upper = first with { Type = new("CYBERCLOUD.MONITOR", "WORKSPACES/ALERTRULES") };

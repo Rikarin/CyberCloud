@@ -82,7 +82,12 @@ sealed class SmtpConnection : IAsyncDisposable {
     /// <param name="port">Its port.</param>
     /// <param name="implicitTls">Whether to negotiate TLS before reading the greeting.</param>
     /// <param name="cancellationToken">Cancels the connect and the handshake.</param>
-    public static async Task<SmtpConnection> ConnectAsync(string host, int port, bool implicitTls, CancellationToken cancellationToken) {
+    public static async Task<SmtpConnection> ConnectAsync(
+        string host,
+        int port,
+        bool implicitTls,
+        CancellationToken cancellationToken
+    ) {
         var tcp = new TcpClient { NoDelay = true };
 
         try {
@@ -111,12 +116,20 @@ sealed class SmtpConnection : IAsyncDisposable {
             var line = await ReadLineAsync(cancellationToken);
 
             // `250-EHLO line` continues, `250 last line` ends. Both are at least "nnn".
-            if (line.Length < 3 || !int.TryParse(line.AsSpan(0, 3), NumberStyles.None, CultureInfo.InvariantCulture, out var lineCode)) {
+            if (line.Length < 3
+                || !int.TryParse(
+                    line.AsSpan(0, 3),
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out var lineCode
+                )) {
                 throw new IOException($"The relay answered a line that is not an SMTP reply: \"{line}\".");
             }
 
             if (code != 0 && lineCode != code) {
-                throw new IOException($"The relay changed its reply code mid-reply, from {code} to {lineCode}: \"{line}\".");
+                throw new IOException(
+                    $"The relay changed its reply code mid-reply, from {code} to {lineCode}: \"{line}\"."
+                );
             }
 
             code = lineCode;
@@ -145,7 +158,7 @@ sealed class SmtpConnection : IAsyncDisposable {
     public async Task<SmtpReply> SendDataAsync(string message, CancellationToken cancellationToken) {
         var stuffed = new StringBuilder(message.Length + 8);
 
-        foreach (var line in message.Split(MailMessages.CrLf, StringSplitOptions.None)) {
+        foreach (var line in message.Split(MailMessages.CrLf)) {
             if (line.Length > 0 && line[0] == '.') {
                 stuffed.Append('.');
             }
@@ -177,7 +190,7 @@ sealed class SmtpConnection : IAsyncDisposable {
             );
         }
 
-        var tls = new SslStream(stream, leaveInnerStreamOpen: false);
+        var tls = new SslStream(stream, false);
 
         // ⚠ The default certificate validation — chain and host name — and nothing relaxed. A relay
         // with a certificate the silo does not trust is refused, because "the relay" is otherwise

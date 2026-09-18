@@ -126,8 +126,7 @@ public sealed class ApplicationRegistrationTests(IdentityCluster cluster) {
         var application = cluster.Application(Guid.NewGuid());
 
         var registration = Valid() with {
-            IsPublicClient = true,
-            ClientSecretRef = new SecretRef { Path = "tenants/x/clients/portal", Field = "secret" }
+            IsPublicClient = true, ClientSecretRef = new() { Path = "tenants/x/clients/portal", Field = "secret" }
         };
 
         var created = await application.CreateAsync(registration);
@@ -273,7 +272,13 @@ public sealed class ApplicationRegistrationTests(IdentityCluster cluster) {
 
     /// <summary>Client ids <c>GrainKeys.EnsureValidClientId</c> refuses, one per rule.</summary>
     public static TheoryData<string> ClientIdsNoKeyCanCarry =>
-        new() { "my portal", " portal", "portal\n", "por\ttal", new string('a', GrainKeys.MaxClientIdLength + 1) };
+        new() {
+            "my portal",
+            " portal",
+            "portal\n",
+            "por\ttal",
+            new string('a', GrainKeys.MaxClientIdLength + 1)
+        };
 
     [Theory]
     [MemberData(nameof(ClientIdsNoKeyCanCarry))]

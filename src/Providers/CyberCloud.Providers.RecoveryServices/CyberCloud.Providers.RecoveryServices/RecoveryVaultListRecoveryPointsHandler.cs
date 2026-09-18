@@ -40,7 +40,10 @@ public sealed class RecoveryVaultListRecoveryPointsHandler : IResourceActionHand
     public string Action => RecoveryVaults.ListRecoveryPointsAction;
 
     /// <inheritdoc />
-    public async Task<Result<string>> InvokeAsync(ActionContext context, CancellationToken cancellationToken = default) {
+    public async Task<Result<string>> InvokeAsync(
+        ActionContext context,
+        CancellationToken cancellationToken = default
+    ) {
         if (context.Cluster is not { } cluster) {
             return Result<string>.Failure(
                 ErrorCode.InternalError,
@@ -85,7 +88,9 @@ static class RecoveryPoints {
         var points = new List<RecoveryVaults.RecoveryPoint>();
 
         foreach (var schedule in schedules.GetValueOrThrow()) {
-            var item = schedule.Labels.TryGetValue(RecoveryVaults.ProtectedItemLabel, out var labelled) ? labelled : schedule.Name;
+            var item = schedule.Labels.TryGetValue(RecoveryVaults.ProtectedItemLabel, out var labelled)
+                ? labelled
+                : schedule.Name;
 
             var backups = await cluster.ListAsync(
                 RecoveryVaults.BackupKind,

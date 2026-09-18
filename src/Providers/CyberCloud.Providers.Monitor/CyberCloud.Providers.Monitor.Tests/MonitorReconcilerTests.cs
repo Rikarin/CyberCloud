@@ -83,7 +83,7 @@ public sealed class MonitorReconcilerTests {
         await Pass(reconciler, connection, vault, alice, aliceBody.RootElement);
         await Pass(reconciler, connection, vault, bob, bobBody.RootElement);
 
-        var rows = connection.Applied.Where(x => x.Target.Kind.Kind == "ConfigMap").ToList();
+        var rows = connection.Applied.Where(static x => x.Target.Kind.Kind == "ConfigMap").ToList();
 
         rows.Count.ShouldBe(4);
 
@@ -135,8 +135,8 @@ public sealed class MonitorReconcilerTests {
             body.RootElement
         );
 
-        var accounts = connection.Applied.Where(x => x.Target.Kind.Kind == "ConfigMap")
-            .Select(x => Data(x.Body)["accountId"]!.GetValue<string>())
+        var accounts = connection.Applied.Where(static x => x.Target.Kind.Kind == "ConfigMap")
+            .Select(static x => Data(x.Body)["accountId"]!.GetValue<string>())
             .ToList();
 
         accounts[0].ShouldNotBe(
@@ -145,15 +145,15 @@ public sealed class MonitorReconcilerTests {
             + "either can read the other's metrics."
         );
 
-        var databases = connection.Applied.Where(x => x.Target.Kind.Kind == "ConfigMap")
-            .Select(x => Data(x.Body)["database"]!.GetValue<string>())
+        var databases = connection.Applied.Where(static x => x.Target.Kind.Kind == "ConfigMap")
+            .Select(static x => Data(x.Body)["database"]!.GetValue<string>())
             .ToList();
 
         databases[0].ShouldNotBe(databases[1], "two workspaces were given the same ClickHouse database");
 
         // And the routing carries the same two accounts, so the VMUser and the row cannot disagree.
-        var suffixes = connection.Applied.Where(x => x.Target.Kind.Kind == "VMUser")
-            .Select(x => Suffix(x.Body, 0))
+        var suffixes = connection.Applied.Where(static x => x.Target.Kind.Kind == "VMUser")
+            .Select(static x => Suffix(x.Body, 0))
             .ToList();
 
         suffixes[0].ShouldBe($"/insert/{accounts[0]}/prometheus");
@@ -210,7 +210,7 @@ public sealed class MonitorReconcilerTests {
         // whatever the tier would give every workspace the same retention, would converge, and would
         // be billed at whatever tier the tenant chose.
         foreach (var tier in MonitorWorkspaces.Tiers) {
-            using var body = JsonDocument.Parse(MonitorWorkspaces.Body(ClusterId, metricsTier: tier));
+            using var body = JsonDocument.Parse(MonitorWorkspaces.Body(ClusterId, tier));
 
             var rendered = MonitorWorkspaces.VmUserJson(
                 Address("prod", TenantA, SubscriptionA, WorkspaceA),
@@ -219,7 +219,7 @@ public sealed class MonitorReconcilerTests {
 
             JsonNode.Parse(rendered)!["spec"]!["targetRefs"]!
                 .AsArray()
-                .Select(x => x!["crd"]!["name"]!.GetValue<string>())
+                .Select(static x => x!["crd"]!["name"]!.GetValue<string>())
                 .ShouldAllBe(x => x == "telemetry-" + tier);
         }
     }
@@ -330,7 +330,7 @@ public sealed class MonitorReconcilerTests {
 
         (await Reconcile(connection, body.RootElement)).ShouldBe(ReconcileOutcome.Converged);
 
-        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target))
+        var applied = connection.Applied.Select(static x => RecordingConnection.Key(x.Target))
             .ToHashSet(StringComparer.Ordinal);
 
         // ⚠ The shrink check reads the row before anything is applied, so the read set is a SUPERSET
@@ -361,7 +361,7 @@ public sealed class MonitorReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
-        connection.Applied.Select(x => x.Target.Kind.Kind).ShouldBe(["Secret", "VMUser", "ConfigMap"]);
+        connection.Applied.Select(static x => x.Target.Kind.Kind).ShouldBe(["Secret", "VMUser", "ConfigMap"]);
     }
 
     [Fact]
@@ -394,10 +394,10 @@ public sealed class MonitorReconcilerTests {
         using var body = JsonDocument.Parse(MonitorWorkspaces.Body(ClusterId));
 
         await Reconcile(connection, body.RootElement, vault);
-        var first = connection.Applied.Select(x => x.Body).ToArray();
+        var first = connection.Applied.Select(static x => x.Body).ToArray();
 
         await Reconcile(connection, body.RootElement, vault);
-        var second = connection.Applied.Skip(first.Length).Select(x => x.Body).ToArray();
+        var second = connection.Applied.Skip(first.Length).Select(static x => x.Body).ToArray();
 
         second.ShouldBe(first);
     }
@@ -442,7 +442,7 @@ public sealed class MonitorReconcilerTests {
 
         deleted.ShouldBe(ReconcileOutcome.Converged);
 
-        connection.Deleted.Select(x => x.Kind.Kind)
+        connection.Deleted.Select(static x => x.Kind.Kind)
             .ShouldBe(
                 ["ConfigMap", "VMUser", "Secret"],
                 "the row is withdrawn first, so the ingest host stops believing in the workspace before "
@@ -472,7 +472,7 @@ public sealed class MonitorReconcilerTests {
 
         key.IsSuccess.ShouldBeTrue();
 
-        foreach (var applied in connection.Applied.Where(x => x.Target.Kind.Kind != "Secret")) {
+        foreach (var applied in connection.Applied.Where(static x => x.Target.Kind.Kind != "Secret")) {
             applied.Body.ShouldNotContain(
                 key.GetValueOrThrow(),
                 Case.Sensitive,

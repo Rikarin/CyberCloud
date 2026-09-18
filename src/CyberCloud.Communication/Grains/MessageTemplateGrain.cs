@@ -197,7 +197,7 @@ public sealed class MessageTemplateGrain(
         }
 
         if (version > 0) {
-            var named = state.State.Versions.FirstOrDefault(x => x.Version == version);
+            var named = state.State.Versions.Find(x => x.Version == version);
 
             return Task.FromResult(
                 named is null

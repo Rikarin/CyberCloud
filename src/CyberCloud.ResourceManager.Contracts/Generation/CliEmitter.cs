@@ -61,7 +61,7 @@ public static class CliEmitter {
             var groupName = GroupOf(type);
 
             if (groups[groupName] is not JsonObject group) {
-                group = new JsonObject {
+                group = new() {
                     ["name"] = groupName,
                     ["summary"] = "Commands for the " + type.ProviderNamespace + " provider.",
                     ["commands"] = new JsonObject()
@@ -121,14 +121,15 @@ public static class CliEmitter {
         // have hit the ArgumentException that produces. Derived from the document rather than from a
         // list, because the two lists this replaces went stale twice — CliTokens' own remarks.
         var collisions = CliTokens.Collisions(
-            DocumentReader.TypesOf(document).Select(x => new CliDeclaration(x.ProviderNamespace, x.TypePath, x.Alias))
+            DocumentReader.TypesOf(document)
+                .Select(static x => new CliDeclaration(x.ProviderNamespace, x.TypePath, x.Alias))
         );
 
         if (collisions.Length > 0) {
             throw new InvalidOperationException(string.Join(" ", collisions));
         }
 
-        return new JsonObject {
+        return new() {
             ["format"] = FormatVersion,
             ["apiVersion"] = version,
             // ⚠ Named so a reader can tell which document this was derived from. docs/plan/21
@@ -192,8 +193,8 @@ public static class CliEmitter {
             "PUT",
             type,
             version,
-            [.. flags.Where(x => !x.ReadOnly)],
-            longRunning: true
+            [.. flags.Where(static x => !x.ReadOnly)],
+            true
         );
 
         verbs["update"] = Verb(
@@ -205,11 +206,11 @@ public static class CliEmitter {
             // ⚠ Nothing is required on an update: a merge patch legitimately omits everything it is
             // not changing, and a CLI that demanded every required flag on `update` would make the
             // verb useless.
-            [.. flags.Where(x => !x.ReadOnly).Select(x => x with { Required = false })],
-            longRunning: true
+            [.. flags.Where(static x => !x.ReadOnly).Select(x => x with { Required = false })],
+            true
         );
 
-        verbs["show"] = Verb("show", "Read a " + type.DisplayName + ".", "GET", type, version, [], longRunning: false);
+        verbs["show"] = Verb("show", "Read a " + type.DisplayName + ".", "GET", type, version, [], false);
 
         // ⚠ EMITTED ONLY WHEN THE DOCUMENT DECLARES THE PATH. `cyc … list` with no collection path
         // behind it is a verb whose URL does not exist — and this file's whole premise is that a
@@ -224,8 +225,8 @@ public static class CliEmitter {
                 type,
                 version,
                 PageFlags(type.CollectionQuery),
-                longRunning: false,
-                named: false
+                false,
+                false
             );
 
             list["path"] = type.CollectionPath;
@@ -271,7 +272,7 @@ public static class CliEmitter {
             type,
             version,
             [],
-            longRunning: true
+            true
         );
 
         foreach (var action in type.Actions) {
@@ -313,7 +314,7 @@ public static class CliEmitter {
         var flags = new JsonArray();
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var flag in Address(type, named).AddRange(body).OrderBy(x => x.Name, StringComparer.Ordinal)) {
+        foreach (var flag in Address(type, named).AddRange(body).OrderBy(static x => x.Name, StringComparer.Ordinal)) {
             // ⚠ THE SIBLING OF THE `commands[name] = …` BUG, AND IT FAILS THE OTHER WAY ROUND. A
             // JsonObject indexer REPLACES, so a colliding command name left one type out of the tree
             // and the loss was invisible because an object cannot hold one key twice. A JsonArray
@@ -432,7 +433,7 @@ public static class CliEmitter {
             commands[Kebab(scope.Kind)] = ScopeCommand(scope, version);
         }
 
-        return new JsonObject {
+        return new() {
             ["name"] = ScopeGroupName,
             ["summary"] =
                 "The tenant, subscription and resource group a resource lives in — docs/plan/06 "
@@ -488,7 +489,7 @@ public static class CliEmitter {
                 "list",
                 "List the "
                 + scope.DisplayPlural.ToLowerInvariant()
-                + " the caller may read. ⚠ A short page never means \"that is all there is\".",
+                + """ the caller may read. ⚠ A short page never means "that is all there is".""",
                 "GET",
                 scope,
                 version,
@@ -506,7 +507,7 @@ public static class CliEmitter {
             verbs["list"] = list;
         }
 
-        return new JsonObject {
+        return new() {
             ["name"] = Kebab(scope.Kind),
             // ⚠ The Azure-shaped type string, so a scope command answers the same question a
             // resource command's `resourceType` does. It is NOT a registered resource type and
@@ -531,7 +532,7 @@ public static class CliEmitter {
         var flags = new JsonArray();
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var flag in address.AddRange(body).OrderBy(x => x.Name, StringComparer.Ordinal)) {
+        foreach (var flag in address.AddRange(body).OrderBy(static x => x.Name, StringComparer.Ordinal)) {
             if (!seen.Add(flag.Name)) {
                 throw new InvalidOperationException(
                     $"'{flag.Name}' is the name of two flags on 'scope {Kebab(scope.Kind)} {name}'. A "
@@ -543,7 +544,7 @@ public static class CliEmitter {
             flags.Add(flag.ToJson());
         }
 
-        return new JsonObject {
+        return new() {
             ["name"] = name,
             ["summary"] = summary,
             ["method"] = method,
@@ -608,7 +609,7 @@ public static class CliEmitter {
                 + "'s own name. ⚠ Required, and never taken from the profile: the flag that names "
                 + "what you are addressing is never the flag that remembers where you are working, "
                 + "or a create with the flag left off would create the scope you are already in.",
-                Required: true
+                true
             ) { PathPlaceholder = scope.NamePlaceholder }
         );
 
@@ -653,15 +654,15 @@ public static class CliEmitter {
             "--resource-group",
             "string",
             "The resource group. docs/plan/06 § The hierarchy.",
-            Required: true
+            true
         ) { PathPlaceholder = DocumentReader.ResourceGroupPlaceholder },
         new(
             "--subscription",
             "string",
             "The subscription. Defaults to the current profile.",
-            Required: false
+            false
         ) { Environment = "CYC_SUBSCRIPTION", PathPlaceholder = DocumentReader.SubscriptionPlaceholder },
-        new("--tenant", "string", "The tenant. Defaults to the current profile.", Required: false) {
+        new("--tenant", "string", "The tenant. Defaults to the current profile.", false) {
             Environment = "CYC_TENANT", PathPlaceholder = DocumentReader.TenantPlaceholder
         }
     ];
@@ -713,7 +714,7 @@ public static class CliEmitter {
         // failure the remarks above describe, running in the other direction.
         if (named) {
             flags.Add(
-                new("--name", "string", "The resource's name within its group.", Required: true) {
+                new("--name", "string", "The resource's name within its group.", true) {
                     PathPlaceholder = DocumentReader.ResourceNamePlaceholder
                 }
             );
@@ -731,7 +732,7 @@ public static class CliEmitter {
                     + " lives inside. docs/plan/12 § Child resources: a child is addressed "
                     + "'…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is "
                     + "part of the address rather than part of the body.",
-                    Required: true
+                    true
                 ) { PathPlaceholder = placeholder }
             );
         }
@@ -841,7 +842,7 @@ public static class CliEmitter {
         string clusterIdPointer,
         ImmutableArray<CliFlag> address
     ) {
-        var leaves = DocumentReader.LeavesOf(body).Where(x => !x.IsObject).ToList();
+        var leaves = DocumentReader.LeavesOf(body).Where(static x => !x.IsObject).ToList();
         var taken = new Dictionary<string, int>(StringComparer.Ordinal);
 
         foreach (var leaf in leaves) {
@@ -947,7 +948,7 @@ public static class CliEmitter {
     ///     to whichever it finds first.
     /// </remarks>
     static readonly ImmutableHashSet<string> GlobalFlagNames =
-        [.. GlobalFlags(string.Empty).Select(x => DocumentReader.Text(x?["name"]))];
+        [.. GlobalFlags(string.Empty).Select(static x => DocumentReader.Text(x?["name"]))];
 
     static JsonArray GlobalFlags(string version) =>
         new() {
@@ -1026,7 +1027,7 @@ public static class CliEmitter {
     static JsonObject Sorted(JsonObject value) {
         var sorted = new JsonObject();
 
-        foreach (var member in value.ToList().OrderBy(x => x.Key, StringComparer.Ordinal)) {
+        foreach (var member in value.ToList().OrderBy(static x => x.Key, StringComparer.Ordinal)) {
             value.Remove(member.Key);
             sorted[member.Key] = member.Value;
         }

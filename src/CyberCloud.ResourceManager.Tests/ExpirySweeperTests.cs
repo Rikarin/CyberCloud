@@ -1,8 +1,6 @@
 using CyberCloud.ResourceManager.Expiry;
-using CyberCloud.ResourceManager.Tests.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Orleans.Multitenant;
 
 namespace CyberCloud.ResourceManager.Tests;
 
@@ -206,7 +204,7 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
 
         var after = (await cluster.Parked(address).ListAsync()).GetValueOrThrow();
 
-        after.Select(x => x.ResourceId).ShouldBe(before.Select(x => x.ResourceId));
+        after.Select(static x => x.ResourceId).ShouldBe(before.Select(static x => x.ResourceId));
         after[0].ParkedAt.ShouldBe(
             before[0].ParkedAt,
             "left alone rather than removed and re-added — a re-park would move 'when was this "
@@ -311,7 +309,7 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     public async Task PurgeProtectionDoesNotSurviveTheWindowOnTheClocksPathEither() {
         ResourceManagerCluster.ResetDoubles();
 
-        var address = await ParkedVaultAsync("sweep-protected", "protected", purgeProtection: true);
+        var address = await ParkedVaultAsync("sweep-protected", "protected", true);
         TestClock.Instance.Advance(TimeSpan.FromDays(8));
 
         var swept = await Sweep(address);

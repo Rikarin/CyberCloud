@@ -9,8 +9,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The fourth entry point beside <see cref="IResourceManager" />, <see cref="IScopeManager" />
-///         and <see cref="IRoleAssignmentManager" />, and the one that reads no grain.</b> The
+///         ⚠
+///         <b>
+///             The fourth entry point beside <see cref="IResourceManager" />, <see cref="IScopeManager" />
+///             and <see cref="IRoleAssignmentManager" />, and the one that reads no grain.
+///         </b> The
 ///         other three answer from the resource grains and the ReBAC engine; this one answers from
 ///         the projection, which is eventually consistent and says so — a resource created a second
 ///         ago is in its own blade and not yet in this table. It is a service held by the gateway,
@@ -18,16 +21,22 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///         cluster one read of the caller's membership slice.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The seam is here and the implementation is in <c>CyberCloud.ResourceGraph</c>, for
-///         the reason <see cref="IResourceChangedSink" /> is here and its NATS publisher is there.</b>
+///         ⚠
+///         <b>
+///             The seam is here and the implementation is in <c>CyberCloud.ResourceGraph</c>, for
+///             the reason <see cref="IResourceChangedSink" /> is here and its NATS publisher is there.
+///         </b>
 ///         This assembly names no query language, no ClickHouse and no authorization engine; the
 ///         gateway dispatches to this interface and the host that has a ClickHouse endpoint
 ///         registers the real service over it. The default <c>AddCyberCloudResourceManager</c>
 ///         registers refuses by name, as every other unwired seam does.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Authorization is the access column, ANDed into every query by the implementation,
-///         and nothing at the gateway.</b> docs/plan/08 § The resource-graph projection:
+///         ⚠
+///         <b>
+///             Authorization is the access column, ANDed into every query by the implementation,
+///             and nothing at the gateway.
+///         </b> docs/plan/08 § The resource-graph projection:
 ///         <i>"Access filtering on this table comes from the denormalized column"</i>. The caller's
 ///         subject and the usersets it is closed into are the one parameter no query can leave out
 ///         or override — the caller's KQL never sees the column, and a row the caller may not read is
@@ -121,10 +130,17 @@ public sealed record ResourceGraphQueryRequest {
 
 /// <summary>One column of a query's result, as ClickHouse reported it.</summary>
 /// <param name="Name">The column's name — the KQL name, as the query spelled or the language derived it.</param>
-/// <param name="Type">The KQL scalar type: <c>string</c>, <c>long</c>, <c>real</c>, <c>bool</c>, <c>datetime</c> or <c>dynamic</c>.</param>
+/// <param name="Type">
+///     The KQL scalar type: <c>string</c>, <c>long</c>, <c>real</c>, <c>bool</c>, <c>datetime</c> or
+///     <c>dynamic</c>.
+/// </param>
 [GenerateSerializer]
 [Alias("CyberCloud.ResourceManager.ResourceGraphColumn")]
-public readonly record struct ResourceGraphColumn([property: Id(0)] string Name, [property: Id(1)] string Type);
+public readonly record struct ResourceGraphColumn(
+    [property: Id(0)]
+    string Name,
+    [property: Id(1)]
+    string Type);
 
 /// <summary>One page of a resource graph query's result.</summary>
 /// <remarks>

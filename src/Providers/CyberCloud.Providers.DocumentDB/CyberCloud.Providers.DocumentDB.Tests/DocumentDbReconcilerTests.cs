@@ -70,13 +70,9 @@ public sealed class DocumentDbReconcilerTests {
 
         var connection = new RecordingConnection();
 
-        using var aliceBody = JsonDocument.Parse(
-            DocumentDbAccounts.Body(ClusterId, instances: 2, storageSize: "20Gi", gatewayReplicas: 2)
-        );
+        using var aliceBody = JsonDocument.Parse(DocumentDbAccounts.Body(ClusterId, 2, "20Gi", 2));
 
-        using var bobBody = JsonDocument.Parse(
-            DocumentDbAccounts.Body(ClusterId, instances: 5, storageSize: "500Gi", gatewayReplicas: 7)
-        );
+        using var bobBody = JsonDocument.Parse(DocumentDbAccounts.Body(ClusterId, 5, "500Gi", 7));
 
         // Interleaved, so a cache written on the first pass is read on the third.
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
@@ -85,8 +81,8 @@ public sealed class DocumentDbReconcilerTests {
         await Pass(reconciler, connection, bob, bobBody.RootElement);
 
         // Four passes × four objects.
-        var clusters = connection.Applied.Where(x => x.Target.Kind.Kind == "Cluster").ToList();
-        var deployments = connection.Applied.Where(x => x.Target.Kind.Kind == "Deployment").ToList();
+        var clusters = connection.Applied.Where(static x => x.Target.Kind.Kind == "Cluster").ToList();
+        var deployments = connection.Applied.Where(static x => x.Target.Kind.Kind == "Deployment").ToList();
 
         clusters.Count.ShouldBe(4);
         deployments.Count.ShouldBe(4);
@@ -150,7 +146,7 @@ public sealed class DocumentDbReconcilerTests {
 
         (await Reconcile(connection, body.RootElement)).ShouldBe(ReconcileOutcome.Converged);
 
-        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target))
+        var applied = connection.Applied.Select(static x => RecordingConnection.Key(x.Target))
             .ToHashSet(StringComparer.Ordinal);
 
         var read = connection.Read.Select(RecordingConnection.Key).ToHashSet(StringComparer.Ordinal);
@@ -180,7 +176,7 @@ public sealed class DocumentDbReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
-        var kinds = connection.Applied.Select(x => x.Target.Kind.Kind).ToList();
+        var kinds = connection.Applied.Select(static x => x.Target.Kind.Kind).ToList();
 
         kinds.IndexOf("Cluster").ShouldBeLessThan(kinds.IndexOf("Deployment"));
     }
@@ -202,7 +198,7 @@ public sealed class DocumentDbReconcilerTests {
 
         deleted.ShouldBe(ReconcileOutcome.Converged);
 
-        var kinds = connection.Deleted.Select(x => x.Kind.Kind).ToList();
+        var kinds = connection.Deleted.Select(static x => x.Kind.Kind).ToList();
 
         kinds.Count.ShouldBe(4);
         kinds.IndexOf("Deployment").ShouldBeLessThan(kinds.IndexOf("Cluster"));
@@ -217,10 +213,10 @@ public sealed class DocumentDbReconcilerTests {
         using var body = JsonDocument.Parse(DocumentDbAccounts.Body(ClusterId));
 
         await Reconcile(connection, body.RootElement);
-        var first = connection.Applied.Select(x => x.Body).ToArray();
+        var first = connection.Applied.Select(static x => x.Body).ToArray();
 
         await Reconcile(connection, body.RootElement);
-        var second = connection.Applied.Skip(first.Length).Select(x => x.Body).ToArray();
+        var second = connection.Applied.Skip(first.Length).Select(static x => x.Body).ToArray();
 
         second.ShouldBe(first);
     }
@@ -264,14 +260,14 @@ public sealed class DocumentDbReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
-        var deployment = connection.Applied.Single(x => x.Target.Kind.Kind == "Deployment");
+        var deployment = connection.Applied.Single(static x => x.Target.Kind.Kind == "Deployment");
         var env = JsonNode.Parse(deployment.Body)!["spec"]!["template"]!["spec"]!["containers"]!
             .AsArray()[0]!["env"]!
             .AsArray();
 
         var refs = env.OfType<JsonObject>()
-            .Where(x => x["valueFrom"] is not null)
-            .Select(x => x["valueFrom"]!["secretKeyRef"]!["name"]!.GetValue<string>())
+            .Where(static x => x["valueFrom"] is not null)
+            .Select(static x => x["valueFrom"]!["secretKeyRef"]!["name"]!.GetValue<string>())
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
@@ -281,7 +277,7 @@ public sealed class DocumentDbReconcilerTests {
         // defined EARLIER in the same list, so a reorder that put the URL first would send the
         // literal "$(FERRETDB_PGUSER)" to PostgreSQL as a username — and the failure is an
         // authentication error in a pod log, not anything the control plane sees.
-        var names = env.OfType<JsonObject>().Select(x => x["name"]!.GetValue<string>()).ToList();
+        var names = env.OfType<JsonObject>().Select(static x => x["name"]!.GetValue<string>()).ToList();
 
         names.IndexOf("FERRETDB_PGUSER").ShouldBeLessThan(names.IndexOf("FERRETDB_POSTGRESQL_URL"));
         names.IndexOf("FERRETDB_PGPASSWORD").ShouldBeLessThan(names.IndexOf("FERRETDB_POSTGRESQL_URL"));
@@ -300,14 +296,14 @@ public sealed class DocumentDbReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
-        var deployment = connection.Applied.Single(x => x.Target.Kind.Kind == "Deployment");
+        var deployment = connection.Applied.Single(static x => x.Target.Kind.Kind == "Deployment");
         var env = JsonNode.Parse(deployment.Body)!["spec"]!["template"]!["spec"]!["containers"]!
             .AsArray()[0]!["env"]!
             .AsArray();
 
         env.OfType<JsonObject>()
-            .Where(x => x["valueFrom"] is not null)
-            .Select(x => x["valueFrom"]!["secretKeyRef"]!["key"]!.GetValue<string>())
+            .Where(static x => x["valueFrom"] is not null)
+            .Select(static x => x["valueFrom"]!["secretKeyRef"]!["key"]!.GetValue<string>())
             .ShouldNotContain(
                 "uri",
                 "the superuser Secret's uri key names the database `*`, which does not exist. The two "
@@ -315,7 +311,7 @@ public sealed class DocumentDbReconcilerTests {
             );
 
         var url = env.OfType<JsonObject>()
-            .Single(x => x["name"]!.GetValue<string>() == "FERRETDB_POSTGRESQL_URL")["value"]!
+            .Single(static x => x["name"]!.GetValue<string>() == "FERRETDB_POSTGRESQL_URL")["value"]!
             .GetValue<string>();
 
         url.ShouldBe("postgres://$(FERRETDB_PGUSER):$(FERRETDB_PGPASSWORD)@observed-pg-rw:5432/postgres");
@@ -335,15 +331,15 @@ public sealed class DocumentDbReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
-        var deployment = connection.Applied.Single(x => x.Target.Kind.Kind == "Deployment");
+        var deployment = connection.Applied.Single(static x => x.Target.Kind.Kind == "Deployment");
         var env = JsonNode.Parse(deployment.Body)!["spec"]!["template"]!["spec"]!["containers"]!
             .AsArray()[0]!["env"]!
             .AsArray()
             .OfType<JsonObject>()
-            .Where(x => x["value"] is not null)
+            .Where(static x => x["value"] is not null)
             .ToDictionary(
-                x => x["name"]!.GetValue<string>(),
-                x => x["value"]!.GetValue<string>(),
+                static x => x["name"]!.GetValue<string>(),
+                static x => x["value"]!.GetValue<string>(),
                 StringComparer.Ordinal
             );
 
@@ -396,14 +392,16 @@ public sealed class DocumentDbReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
-        var deployment = JsonNode.Parse(connection.Applied.Single(x => x.Target.Kind.Kind == "Deployment").Body)!;
+        var deployment = JsonNode.Parse(
+            connection.Applied.Single(static x => x.Target.Kind.Kind == "Deployment").Body
+        )!;
 
         var selector = Labels(deployment["spec"]!["selector"]!["matchLabels"]!);
         var template = Labels(deployment["spec"]!["template"]!["metadata"]!["labels"]!);
 
-        var service = JsonNode.Parse(connection.Applied.Single(x => x.Target.Kind.Kind == "Service").Body)!;
+        var service = JsonNode.Parse(connection.Applied.Single(static x => x.Target.Kind.Kind == "Service").Body)!;
 
-        var monitor = JsonNode.Parse(connection.Applied.Single(x => x.Target.Kind.Kind == "PodMonitor").Body)!;
+        var monitor = JsonNode.Parse(connection.Applied.Single(static x => x.Target.Kind.Kind == "PodMonitor").Body)!;
 
         // ⚠ LITERALS, and they are the fourth independent copy after the two templates and
         // charts/managed/ferretdb/conformance.yaml's `additional:` block. Deriving them from
@@ -446,7 +444,8 @@ public sealed class DocumentDbReconcilerTests {
     }
 
     static Dictionary<string, string> Labels(JsonNode node) =>
-        node.AsObject().ToDictionary(x => x.Key, x => x.Value!.GetValue<string>(), StringComparer.Ordinal);
+        node.AsObject()
+            .ToDictionary(static x => x.Key, static x => x.Value!.GetValue<string>(), StringComparer.Ordinal);
 
     // ── Backup: two properties, one answer ───────────────────────────────────────────────────────
 
@@ -457,13 +456,11 @@ public sealed class DocumentDbReconcilerTests {
         // barmanObjectStore.destinationPath: "" — a cluster that comes up, archives nothing, and
         // reports itself as backed up. "Not backed up" is recoverable; "looks backed up" is not.
         var connection = new RecordingConnection();
-        using var body = JsonDocument.Parse(
-            WithBackup(DocumentDbAccounts.Body(ClusterId), enabled: true, destination: string.Empty)
-        );
+        using var body = JsonDocument.Parse(WithBackup(DocumentDbAccounts.Body(ClusterId), true, string.Empty));
 
         await Reconcile(connection, body.RootElement);
 
-        var cluster = connection.Applied.Single(x => x.Target.Kind.Kind == "Cluster");
+        var cluster = connection.Applied.Single(static x => x.Target.Kind.Kind == "Cluster");
 
         JsonNode.Parse(cluster.Body)!["spec"]!
             .AsObject()
@@ -477,14 +474,12 @@ public sealed class DocumentDbReconcilerTests {
     [Fact]
     public async Task BackupEnabledWithADestinationRendersTheWholeBlock() {
         var connection = new RecordingConnection();
-        using var body = JsonDocument.Parse(
-            WithBackup(DocumentDbAccounts.Body(ClusterId), enabled: true, destination: "s3://t/docdb")
-        );
+        using var body = JsonDocument.Parse(WithBackup(DocumentDbAccounts.Body(ClusterId), true, "s3://t/docdb"));
 
         await Reconcile(connection, body.RootElement);
 
         var backup = JsonNode.Parse(
-            connection.Applied.Single(x => x.Target.Kind.Kind == "Cluster").Body
+            connection.Applied.Single(static x => x.Target.Kind.Kind == "Cluster").Body
         )!["spec"]!["backup"]!
             .AsObject();
 

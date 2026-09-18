@@ -4,8 +4,11 @@ namespace CyberCloud.ResourceGraph.Tests.Query;
 
 /// <summary>
 ///     Everything outside the subset is refused by name, with the supported list in the message —
-///     docs/plan/08 § The resource-graph projection, and ADR-011's <i>"state the supported subset
-///     explicitly"</i> applied to a language.
+///     docs/plan/08 § The resource-graph projection, and ADR-011's
+///     <i>
+///         "state the supported subset
+///         explicitly"
+///     </i> applied to a language.
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>Each row asserts the token the refusal names and not only that a refusal happened.</b> A
@@ -61,11 +64,22 @@ public sealed class KqlRefusalTests {
     public void AnOperatorOrFunctionOutsideTheSubsetIsRefusedByName(string kql, string named) {
         var refused = KqlTranslator.Translate(kql, KqlTranslationGoldenTests.Context());
 
-        refused.IsFailure.ShouldBeTrue($"'{kql}' was translated: {(refused.IsSuccess ? refused.GetValueOrThrow().Sql : "")}");
+        refused.IsFailure.ShouldBeTrue(
+            $"'{kql}' was translated: {(refused.IsSuccess ? refused.GetValueOrThrow().Sql : "")}"
+        );
         refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
-        refused.Error.Message.ShouldContain(named, customMessage: $"the refusal for '{kql}' does not name '{named}': {refused.Error.Message}");
-        refused.Error.Message.ShouldContain("resource graph's KQL subset", customMessage: "the refusal does not carry the supported list");
-        refused.Error.Message.ShouldContain("docs/plan/08", customMessage: "the refusal does not say where the subset is written down");
+        refused.Error.Message.ShouldContain(
+            named,
+            customMessage: $"the refusal for '{kql}' does not name '{named}': {refused.Error.Message}"
+        );
+        refused.Error.Message.ShouldContain(
+            "resource graph's KQL subset",
+            customMessage: "the refusal does not carry the supported list"
+        );
+        refused.Error.Message.ShouldContain(
+            "docs/plan/08",
+            customMessage: "the refusal does not say where the subset is written down"
+        );
     }
 
     [Theory]
@@ -112,10 +126,17 @@ public sealed class KqlRefusalTests {
     [InlineData("nots", 500, "brackets 500 deep")]
     [InlineData("nots", 33, "brackets 33 deep")]
     [InlineData("path", 100, "more than 64 levels deep")]
-    public void ASizeThatWouldOverflowTheStackIsRefusedByItsNumberBeforeTheParserRuns(string shape, int count, string named) {
+    public void ASizeThatWouldOverflowTheStackIsRefusedByItsNumberBeforeTheParserRuns(
+        string shape,
+        int count,
+        string named
+    ) {
         var kql = shape switch {
             "pipes" => "resources" + string.Concat(Enumerable.Repeat(" | where true", count)),
-            "nots" => "resources | where " + string.Concat(Enumerable.Repeat("not(", count)) + "true" + new string(')', count),
+            "nots" => "resources | where "
+                + string.Concat(Enumerable.Repeat("not(", count))
+                + "true"
+                + new string(')', count),
             _ => "resources | where tags" + string.Concat(Enumerable.Repeat(".a", count)) + " == 'x'"
         };
 
@@ -140,9 +161,14 @@ public sealed class KqlRefusalTests {
     public void ASizeInsideTheCapsTranslates(string shape, int count) {
         var kql = shape switch {
             "pipes" => "resources" + string.Concat(Enumerable.Repeat(" | where true", count)),
-            "nots" => "resources | where " + string.Concat(Enumerable.Repeat("not(", count)) + "true" + new string(')', count),
+            "nots" => "resources | where "
+                + string.Concat(Enumerable.Repeat("not(", count))
+                + "true"
+                + new string(')', count),
             "ands" => "resources | where true" + string.Concat(Enumerable.Repeat(" and name != 'x'", count)),
-            _ => "resources | where name in (" + string.Join(", ", Enumerable.Range(0, count).Select(i => $"'n{i}'")) + ")"
+            _ => "resources | where name in ("
+                + string.Join(", ", Enumerable.Range(0, count).Select(static i => $"'n{i}'"))
+                + ")"
         };
 
         var translated = KqlTranslator.Translate(kql, KqlTranslationGoldenTests.Context());
@@ -163,7 +189,9 @@ public sealed class KqlRefusalTests {
 
     [Fact]
     public void TheSupportedSentenceNamesEveryListOnce() {
-        foreach (var name in KqlSubset.Operators.Concat(KqlSubset.Aggregates).Concat(KqlSubset.Functions).Concat(KqlSubset.Comparisons)) {
+        foreach (var name in KqlSubset.Operators.Concat(KqlSubset.Aggregates)
+                     .Concat(KqlSubset.Functions)
+                     .Concat(KqlSubset.Comparisons)) {
             KqlSubset.SupportedSentence.ShouldContain(name);
         }
 

@@ -27,7 +27,10 @@ public interface ICallerAccessResolver {
     ///     index could not be read. ⚠ Never empty on success: a caller in no group is still
     ///     themselves.
     /// </returns>
-    Task<Result<ImmutableArray<string>>> SubjectsOfAsync(CallerContext caller, CancellationToken cancellationToken = default);
+    Task<Result<ImmutableArray<string>>> SubjectsOfAsync(
+        CallerContext caller,
+        CancellationToken cancellationToken = default
+    );
 }
 
 /// <summary>
@@ -43,8 +46,11 @@ public interface ICallerAccessResolver {
 ///         the row.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A slice nothing has written is rebuilt before it is trusted, and a stale one is read
-///         as written.</b> <c>SchemaVersion</c> 0 means no write has touched the slice — a tenant
+///         ⚠
+///         <b>
+///             A slice nothing has written is rebuilt before it is trusted, and a stale one is read
+///             as written.
+///         </b> <c>SchemaVersion</c> 0 means no write has touched the slice — a tenant
 ///         upgraded to the index, or restored without it — and reading it as an empty closure would
 ///         hide every group-granted resource from every member (the #37 review finding).
 ///         <c>RebuildAsync</c> derives it from the tuples, once, and the maintainer keeps it from
@@ -66,7 +72,10 @@ public sealed class MembershipIndexCallerAccessResolver : ICallerAccessResolver 
     }
 
     /// <inheritdoc />
-    public async Task<Result<ImmutableArray<string>>> SubjectsOfAsync(CallerContext caller, CancellationToken cancellationToken = default) {
+    public async Task<Result<ImmutableArray<string>>> SubjectsOfAsync(
+        CallerContext caller,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(caller);
 
         var self = SubjectRef.Create(caller.SubjectType, caller.SubjectId);
@@ -89,8 +98,7 @@ public sealed class MembershipIndexCallerAccessResolver : ICallerAccessResolver 
             if (read.IsSuccess && read.GetValueOrThrow().SchemaVersion == 0) {
                 read = await index.RebuildAsync().WaitAsync(cancellationToken);
             }
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException) {
+        } catch (Exception exception) when (exception is not OperationCanceledException) {
             // ⚠ The same rule ReBacResourceAccessResolver applies: a grain call that throws is the
             // engine not answering, and the contract promises a failure for that rather than an
             // Orleans exception type the caller would have to know.
@@ -107,7 +115,7 @@ public sealed class MembershipIndexCallerAccessResolver : ICallerAccessResolver 
 
         var subjects = read.GetValueOrThrow()
             .UsersetsOf("")
-            .Select(userset => userset.ToString())
+            .Select(static userset => userset.ToString())
             .Where(userset => !string.Equals(userset, subject.ToString(), StringComparison.Ordinal))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)

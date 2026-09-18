@@ -14,8 +14,11 @@ namespace CyberCloud.Providers.Storage.Contracts;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>THE AUTHORITY IS docs/plan/15 § File storage, AND ITS TABLE SPELLS THE TYPE WRONG.</b>
-///         § The three kinds writes <i>"File · <c>CyberCloud.Storage/fileShares</c> · SeaweedFS
-///         FUSE/NFS, or LINSTOR RWX + an NFS server · Mounted by VMs and pods"</i> — a top-level type.
+///         § The three kinds writes
+///         <i>
+///             "File · <c>CyberCloud.Storage/fileShares</c> · SeaweedFS
+///             FUSE/NFS, or LINSTOR RWX + an NFS server · Mounted by VMs and pods"
+///         </i> — a top-level type.
 ///         It ships as <c>accounts/fileShares</c>, a child, because a share's bytes live in a
 ///         <b>filer</b> and the only filer this platform runs is the one inside an account's
 ///         <c>Seaweed</c>. A top-level share would need a filer of its own or a platform-wide one, and
@@ -26,8 +29,10 @@ namespace CyberCloud.Providers.Storage.Contracts;
 ///     <para>
 ///         ⚠ <b>THE BACKEND IS THE SEAWEEDFS CSI DRIVER, AND THERE IS NO NFS ANYWHERE BEHIND IT.</b>
 ///         docs/plan/15 § File storage says <i>"NFS first"</i> and names the backing as
-///         <i>"SeaweedFS's NFS/FUSE mount for scale-out shares, or a LINSTOR RWX volume with an NFS
-///         server pod"</i>. Read against the sources rather than the README:
+///         <i>
+///             "SeaweedFS's NFS/FUSE mount for scale-out shares, or a LINSTOR RWX volume with an NFS
+///             server pod"
+///         </i>. Read against the sources rather than the README:
 ///         <c>weed/command/command.go</c> at 4.41 has <c>cmdMount</c>, <c>cmdFuse</c>,
 ///         <c>cmdWebDav</c>, <c>cmdSftp</c> and <c>cmdS3</c> and <b>no NFS command at all</b>, and
 ///         nothing in <c>charts/bundle/</c> installs LINSTOR. What SeaweedFS does have is a CSI
@@ -43,8 +48,11 @@ namespace CyberCloud.Providers.Storage.Contracts;
 ///     <para>
 ///         ⚠ <b>TWO OBJECTS, AND ONE OF THEM IS SHARED WITH EVERY OTHER SHARE IN THE ACCOUNT.</b> The
 ///         CSI driver is one instance per <i>filer</i> — <c>--filer=</c> is a driver argument, not a
-///         StorageClass parameter (<c>seaweedfs-csi-driver</c>'s README: <i>"Adjust your SeaweedFS
-///         Filer address via variable SEAWEEDFS_FILER"</i>) — so the driver belongs to the account
+///         StorageClass parameter (<c>seaweedfs-csi-driver</c>'s README:
+///         <i>
+///             "Adjust your SeaweedFS
+///             Filer address via variable SEAWEEDFS_FILER"
+///         </i>) — so the driver belongs to the account
 ///         and not to the share. It is rendered <i>here</i> rather than by
 ///         <c>StorageAccountReconciler</c> because a driver is a controller Deployment plus a node
 ///         DaemonSet plus a mount DaemonSet on <b>every node</b>, and an account with no shares
@@ -57,8 +65,11 @@ namespace CyberCloud.Providers.Storage.Contracts;
 ///         waits for the released volume as well as for the sibling claims.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The share's <c>quota.size</c> is enforced, and the thing that enforces it is the
-///         mount.</b> <c>pkg/driver/mounter.go</c> passes
+///         ⚠
+///         <b>
+///             The share's <c>quota.size</c> is enforced, and the thing that enforces it is the
+///             mount.
+///         </b> <c>pkg/driver/mounter.go</c> passes
 ///         <c>collectionQuotaMB: initialCollectionQuotaMB(volumeContext[volumeCapacityKey])</c> and
 ///         <c>collection: path.Base(filerPath)</c> to <c>weed mount</c>, so every share is its own
 ///         SeaweedFS <i>collection</i> with a master-enforced ceiling equal to the claim's capacity.
@@ -112,8 +123,11 @@ public static class StorageFileShares {
     ///         ⚠ <b><c>read</c>, not a permission of its own, and not <c>secret: true</c>.</b> Nothing in
     ///         the response is a credential: the filer's HTTP port answers any caller on the cluster
     ///         network, and a claim is mountable by any pod in its namespace whether or not this action
-    ///         was called. docs/plan/07 § Consistency reserves the fully-consistent row for a <i>key
-    ///         export</i>, and a mount target is an address. The access control that would make it more
+    ///         was called. docs/plan/07 § Consistency reserves the fully-consistent row for a
+    ///         <i>
+    ///             key
+    ///             export
+    ///         </i>, and a mount target is an address. The access control that would make it more
     ///         than an address — docs/plan/15's <i>"access rules by subnet and by managed identity"</i>
     ///         — is owed, and this permission is where it would land.
     ///     </para>
@@ -147,7 +161,9 @@ public static class StorageFileShares {
     ///     a cluster-scoped <c>StorageClass</c> named after the driver. The plural is <c>seaweedcsidrivers</c>.
     /// </remarks>
     public static GroupVersionKind CsiDriverKind { get; } =
-        new() { Group = "seaweed.seaweedfs.com", Version = "v1", Kind = "SeaweedCSIDriver", Plural = "seaweedcsidrivers" };
+        new() {
+            Group = "seaweed.seaweedfs.com", Version = "v1", Kind = "SeaweedCSIDriver", Plural = "seaweedcsidrivers"
+        };
 
     /// <summary>
     ///     The <c>core/v1</c> <c>PersistentVolume</c> the provisioner binds a share's claim to — read
@@ -329,18 +345,28 @@ public static class StorageFileShares {
     /// <summary>The body shape at <see cref="V2026" />.</summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>ONE TENANT-FACING LEAF, AND THE THREE docs/plan/15 NAMES BESIDE IT ARE EACH
-    ///         DECLINED WITH A REASON.</b> § File storage lists <i>"size, performance tier, protocol,
-    ///         access rules by subnet and by managed identity"</i>. Size is here. The rest:
+    ///         ⚠
+    ///         <b>
+    ///             ONE TENANT-FACING LEAF, AND THE THREE docs/plan/15 NAMES BESIDE IT ARE EACH
+    ///             DECLINED WITH A REASON.
+    ///         </b> § File storage lists
+    ///         <i>
+    ///             "size, performance tier, protocol,
+    ///             access rules by subnet and by managed identity"
+    ///         </i>. Size is here. The rest:
     ///     </para>
     ///     <list type="bullet">
     ///         <item>
-    ///             <b><c>protocol</c></b> — the only value that document names is NFS and nothing behind
+    ///             <b>
+    ///                 <c>protocol</c>
+    ///             </b> — the only value that document names is NFS and nothing behind
     ///             this type serves it; see the remarks on this class. Declared, it would be an enum
     ///             of one value that the cluster does not honour.
     ///         </item>
     ///         <item>
-    ///             <b><c>tier</c></b> — <i>"derived from the tier, not exposed"</i> chooses between the
+    ///             <b>
+    ///                 <c>tier</c>
+    ///             </b> — <i>"derived from the tier, not exposed"</i> chooses between the
     ///             SeaweedFS mount and a LINSTOR RWX volume, and <c>charts/bundle/</c> installs no
     ///             LINSTOR (docs/plan/15 § Block storage says so in as many words). An enum of one
     ///             value is a property that does nothing.
@@ -362,7 +388,7 @@ public static class StorageFileShares {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the share is billed in."
                 ) {
                     Format = SchemaFormat.Region,
@@ -374,7 +400,7 @@ public static class StorageFileShares {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster whose namespace holds the share. Must be the cluster the "
                     + "account is in — nothing checks that, and a share placed elsewhere is a claim "
                     + "against a driver whose filer reference resolves to nothing."
@@ -387,7 +413,7 @@ public static class StorageFileShares {
                 new(
                     "/properties/quota/size",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The share's size, in Kubernetes quantity form. Enforced as a "
                     + "SeaweedFS collection quota on the mount. Grows online; never shrinks. ⚠ This "
                     + "is a ceiling inside capacity the account's volume servers already reserved; it "
@@ -409,20 +435,20 @@ public static class StorageFileShares {
                 new(
                     "/claimName",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The PersistentVolumeClaim a pod in the resource group's namespace "
                     + "names under volumes[].persistentVolumeClaim.claimName."
                 ),
                 new(
                     "/accessMode",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The access mode the claim was bound with. Always ReadWriteMany."
                 ),
                 new(
                     "/filer",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The account's filer, host:port, for a `weed mount -filer=` from a VM "
                     + "on the cluster network. ⚠ In-cluster only, for the reason the account's "
                     + "listKeys endpoint is."
@@ -430,13 +456,13 @@ public static class StorageFileShares {
                 new(
                     "/path",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The filer path the share lives at — `weed mount -filer.path=`."
                 ),
                 new(
                     "/collection",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The SeaweedFS collection the share's quota is enforced on — "
                     + "`weed mount -collection=`. A mount that omits it writes outside the quota."
                 )
@@ -444,7 +470,8 @@ public static class StorageFileShares {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -475,7 +502,10 @@ public static class StorageFileShares {
     ///         <c>referencegrant.go</c>, <c>if from.Namespace == to.Namespace { return true, nil }</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>reclaimPolicy: Delete</c></b>, for the reason <see cref="StorageBuckets" /> gave
+    ///         ⚠
+    ///         <b>
+    ///             <c>reclaimPolicy: Delete</c>
+    ///         </b>, for the reason <see cref="StorageBuckets" /> gave
     ///         against <c>Retain</c>: a released volume holding a directory no resource addresses is
     ///         untracked, unbilled and removable only by hand. What that costs is a recovery window, and
     ///         it is recorded rather than half-built — <c>conformance.yaml § owed</c>,
@@ -532,8 +562,11 @@ public static class StorageFileShares {
     ///         binds, so an equality comparison would report every bound share as drifted.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The <c>storageClassName</c> is compared and it is the field that most needs
-    ///         comparing</b>: a claim whose class was rewritten is a share provisioned by another
+    ///         ⚠
+    ///         <b>
+    ///             The <c>storageClassName</c> is compared and it is the field that most needs
+    ///             comparing
+    ///         </b>: a claim whose class was rewritten is a share provisioned by another
     ///         account's driver, on another account's filer, under this share's resource id.
     ///     </para>
     ///     <para>
@@ -575,7 +608,7 @@ public static class StorageFileShares {
 
     static bool MatchesClaim(JsonObject spec, string ns, string account, JsonElement desired) =>
         spec["accessModes"] is JsonArray modes
-        && modes.Any(x => x?.GetValue<string>() == AccessMode)
+        && modes.Any(static x => x?.GetValue<string>() == AccessMode)
         && spec["storageClassName"]?.GetValue<string>() == DriverNameOf(ns, account)
         && SameQuantity(
             ((spec["resources"] as JsonObject)?["requests"] as JsonObject)?["storage"]?.GetValue<string>(),

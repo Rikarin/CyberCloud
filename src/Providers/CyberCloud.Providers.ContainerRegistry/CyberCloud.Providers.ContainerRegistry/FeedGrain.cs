@@ -122,10 +122,15 @@ public sealed class FeedGrain(
         ArgumentNullException.ThrowIfNull(entry);
 
         if (!state.State.IsOpen || state.State.IsClosed) {
-            return Result<FeedEntry>.Failure(ErrorCode.Conflict, "This feed is not open, so nothing can be stored in it.");
+            return Result<FeedEntry>.Failure(
+                ErrorCode.Conflict,
+                "This feed is not open, so nothing can be stored in it."
+            );
         }
 
-        if (string.IsNullOrWhiteSpace(entry.Path) || entry.Path.StartsWith('/') || entry.Path.Contains("//", StringComparison.Ordinal)) {
+        if (string.IsNullOrWhiteSpace(entry.Path)
+            || entry.Path.StartsWith('/')
+            || entry.Path.Contains("//", StringComparison.Ordinal)) {
             return Result<FeedEntry>.Failure(ErrorCode.InvalidRequestBody, $"'{entry.Path}' is not a catalogue path.");
         }
 
@@ -160,8 +165,8 @@ public sealed class FeedGrain(
                 [
                     .. state.State.Entries
                         .Where(x => x.Key.StartsWith(pathPrefix, StringComparison.Ordinal))
-                        .OrderBy(x => x.Key, StringComparer.Ordinal)
-                        .Select(x => x.Value)
+                        .OrderBy(static x => x.Key, StringComparer.Ordinal)
+                        .Select(static x => x.Value)
                 ]
             )
         );

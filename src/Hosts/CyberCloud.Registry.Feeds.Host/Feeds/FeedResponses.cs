@@ -45,7 +45,10 @@ public static class FeedResponses {
             return new ChallengeResult(error);
         }
 
-        return Results.Json(new { code = error.Code.Value, message = error.Message }, statusCode: error.Code.HttpStatus);
+        return Results.Json(
+            new { code = error.Code.Value, message = error.Message },
+            statusCode: error.Code.HttpStatus
+        );
     }
 
     /// <summary>A <c>401</c> carrying both challenges — see <see cref="FeedCredentialResolver.Challenge" />.</summary>
@@ -69,7 +72,11 @@ public static class FeedResponses {
     ///     which a chunked upload does not carry. The declared length is checked first so an honest
     ///     client is refused before it sends anything.
     /// </remarks>
-    public static async Task<Result<byte[]>> ReadBodyAsync(HttpContext http, long maxBytes, CancellationToken cancellationToken) {
+    public static async Task<Result<byte[]>> ReadBodyAsync(
+        HttpContext http,
+        long maxBytes,
+        CancellationToken cancellationToken
+    ) {
         ArgumentNullException.ThrowIfNull(http);
 
         if (http.Request.ContentLength is { } declared && declared > maxBytes) {
@@ -83,7 +90,11 @@ public static class FeedResponses {
     /// <param name="stream">The bytes.</param>
     /// <param name="maxBytes">The cap.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
-    public static async Task<Result<byte[]>> ReadBoundedAsync(Stream stream, long maxBytes, CancellationToken cancellationToken) {
+    public static async Task<Result<byte[]>> ReadBoundedAsync(
+        Stream stream,
+        long maxBytes,
+        CancellationToken cancellationToken
+    ) {
         ArgumentNullException.ThrowIfNull(stream);
 
         using var buffer = new MemoryStream();

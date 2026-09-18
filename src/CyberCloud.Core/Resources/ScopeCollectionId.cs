@@ -15,8 +15,11 @@ namespace CyberCloud.Core.Resources;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The third scope grammar, and it partitions the scope-shaped paths with the other
-///         two exactly as <see cref="ResourceCollectionId" /> partitions the resource-shaped ones.</b>
+///         ⚠
+///         <b>
+///             The third scope grammar, and it partitions the scope-shaped paths with the other
+///             two exactly as <see cref="ResourceCollectionId" /> partitions the resource-shaped ones.
+///         </b>
 ///         A scope item is 2, 4 or 6 segments; this is 3 or 5. A resource address is at least ten
 ///         and carries <c>/providers/</c>; so does a role assignment. No path parses as two of
 ///         them, and the router can therefore try this grammar after the item grammar without a
@@ -24,8 +27,11 @@ namespace CyberCloud.Core.Resources;
 ///         it, for the reason <c>ScopeIdTests</c> does.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Since issue #39 the parent no longer determines the members, and
-///         <see cref="MemberKind" /> is a field rather than a derivation.</b> A tenant has two
+///         ⚠
+///         <b>
+///             Since issue #39 the parent no longer determines the members, and
+///             <see cref="MemberKind" /> is a field rather than a derivation.
+///         </b> A tenant has two
 ///         collections — its subscriptions and its management groups — and the address tells them
 ///         apart by the last segment alone. The first version of this type computed the member kind
 ///         from <c>Parent.Kind</c>, which was correct for as long as every parent had exactly one
@@ -190,7 +196,7 @@ public readonly record struct ScopeCollectionId(ScopeId Parent, ScopeKind Member
             : Literal(segments[^1], ResourceId.ManagementGroupsSegment) ? ScopeKind.ManagementGroup
             : ScopeKind.Unknown
             : Literal(segments[^1], ResourceId.ResourceGroupsSegment) ? ScopeKind.ResourceGroup
-            : ScopeKind.Unknown;
+                : ScopeKind.Unknown;
 
         if (members == ScopeKind.Unknown) {
             var expected = segments.Length == 3

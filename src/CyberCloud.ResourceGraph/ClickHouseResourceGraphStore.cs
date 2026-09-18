@@ -32,8 +32,11 @@ public sealed record ResourceGraphLookup(ResourceGraphRow? Row) {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The tenant's database and table are created on first contact and remembered per
-///         process.</b> Nothing else creates them — the Monitor workspace's owed
+///         ⚠
+///         <b>
+///             The tenant's database and table are created on first contact and remembered per
+///             process.
+///         </b> Nothing else creates them — the Monitor workspace's owed
 ///         <c>clickhouse-ttl-is-published-not-applied</c> says in as many words that "nothing in this
 ///         catalogue applies SQL", and this is the first thing that does. <c>IF NOT EXISTS</c> on
 ///         both statements makes two silos racing to the first event of a new tenant both succeed;
@@ -42,8 +45,11 @@ public sealed record ResourceGraphLookup(ResourceGraphRow? Row) {
 ///         meets, which is the right price for not holding a tenant list anywhere.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The version check is read-then-write, and that is acceptable only because of the
-///         engine.</b> Two silos projecting two versions of one resource at once can both read the
+///         ⚠
+///         <b>
+///             The version check is read-then-write, and that is acceptable only because of the
+///             engine.
+///         </b> Two silos projecting two versions of one resource at once can both read the
 ///         same <c>max(version)</c> and both insert; <c>ReplacingMergeTree(version)</c> then keeps the
 ///         higher and a reader saying <c>FINAL</c> never sees the lower. The check exists to make a
 ///         replay of a thousand events a thousand reads and no writes, not to guarantee anything the
@@ -74,8 +80,7 @@ public sealed class ClickHouseResourceGraphStore {
 
         try {
             result = await attempt;
-        }
-        catch (OperationCanceledException) {
+        } catch (OperationCanceledException) {
             // ⚠ The memo holds the FIRST caller's attempt, on the first caller's token. A cancelled
             // attempt must not stay memoized, or every later event for the tenant would await a
             // task that can only throw.
@@ -95,7 +100,10 @@ public sealed class ClickHouseResourceGraphStore {
     /// </summary>
     /// <param name="row">The row, with <see cref="ResourceGraphRow.Version" /> set from the event.</param>
     /// <param name="cancellationToken">Cancels the statements.</param>
-    public async Task<Result<ProjectionOutcome>> ApplyAsync(ResourceGraphRow row, CancellationToken cancellationToken = default) {
+    public async Task<Result<ProjectionOutcome>> ApplyAsync(
+        ResourceGraphRow row,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(row);
 
         var ensured = await EnsureTenantAsync(row.TenantId, cancellationToken);
@@ -128,14 +136,22 @@ public sealed class ClickHouseResourceGraphStore {
     /// <param name="tenantId">The tenant.</param>
     /// <param name="resourceId">The resource.</param>
     /// <param name="cancellationToken">Cancels the query.</param>
-    public async Task<Result<ResourceGraphLookup>> ReadAsync(Guid tenantId, Guid resourceId, CancellationToken cancellationToken = default) {
+    public async Task<Result<ResourceGraphLookup>> ReadAsync(
+        Guid tenantId,
+        Guid resourceId,
+        CancellationToken cancellationToken = default
+    ) {
         var ensured = await EnsureTenantAsync(tenantId, cancellationToken);
 
         if (ensured.TryGetError(out var ensureError)) {
             return Result<ResourceGraphLookup>.Failure(ensureError);
         }
 
-        var read = await clickHouse.ExecuteAsync(ResourceGraphTable.SelectRow(tenantId), ResourceParameter(resourceId), cancellationToken);
+        var read = await clickHouse.ExecuteAsync(
+            ResourceGraphTable.SelectRow(tenantId),
+            ResourceParameter(resourceId),
+            cancellationToken
+        );
 
         if (read.TryGetError(out var readError)) {
             return Result<ResourceGraphLookup>.Failure(readError);
@@ -143,8 +159,7 @@ public sealed class ClickHouseResourceGraphStore {
 
         try {
             return Result<ResourceGraphLookup>.Success(new(ResourceGraphJson.DecodeFirstRow(read.GetValueOrThrow())));
-        }
-        catch (JsonException exception) {
+        } catch (JsonException exception) {
             return NotJson<ResourceGraphLookup>(read.GetValueOrThrow(), exception);
         }
     }
@@ -155,7 +170,11 @@ public sealed class ClickHouseResourceGraphStore {
     ///     from 1 — so "no row" and "version 0" are one answer and it means "nothing held".
     /// </summary>
     async Task<Result<long>> HeldVersionAsync(Guid tenantId, Guid resourceId, CancellationToken cancellationToken) {
-        var read = await clickHouse.ExecuteAsync(ResourceGraphTable.SelectVersion(tenantId), ResourceParameter(resourceId), cancellationToken);
+        var read = await clickHouse.ExecuteAsync(
+            ResourceGraphTable.SelectVersion(tenantId),
+            ResourceParameter(resourceId),
+            cancellationToken
+        );
 
         if (read.TryGetError(out var readError)) {
             return Result<long>.Failure(readError);
@@ -163,8 +182,7 @@ public sealed class ClickHouseResourceGraphStore {
 
         try {
             return Result<long>.Success(ResourceGraphJson.DecodeNumber(read.GetValueOrThrow(), "version") ?? 0);
-        }
-        catch (JsonException exception) {
+        } catch (JsonException exception) {
             return NotJson<long>(read.GetValueOrThrow(), exception);
         }
     }
@@ -184,13 +202,19 @@ public sealed class ClickHouseResourceGraphStore {
     }
 
     async Task<Result> PrepareAsync(Guid tenantId, CancellationToken cancellationToken) {
-        var database = await clickHouse.ExecuteAsync(ResourceGraphTable.CreateDatabase(tenantId), cancellationToken: cancellationToken);
+        var database = await clickHouse.ExecuteAsync(
+            ResourceGraphTable.CreateDatabase(tenantId),
+            cancellationToken: cancellationToken
+        );
 
         if (database.TryGetError(out var databaseError)) {
             return Result.Failure(databaseError);
         }
 
-        var table = await clickHouse.ExecuteAsync(ResourceGraphTable.CreateTable(tenantId), cancellationToken: cancellationToken);
+        var table = await clickHouse.ExecuteAsync(
+            ResourceGraphTable.CreateTable(tenantId),
+            cancellationToken: cancellationToken
+        );
 
         return table.TryGetError(out var tableError) ? Result.Failure(tableError) : Result.Success;
     }

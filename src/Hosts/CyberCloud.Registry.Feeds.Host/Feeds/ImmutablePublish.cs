@@ -75,7 +75,7 @@ public static class ImmutablePublish {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(storedKeys);
 
-        var claimed = await context.Catalogue.PutAsync(entry, replace: false);
+        var claimed = await context.Catalogue.PutAsync(entry, false);
 
         if (!claimed.TryGetError(out var refused) || refused.Code != ErrorCode.ResourceAlreadyExists) {
             return claimed;

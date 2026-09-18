@@ -55,7 +55,7 @@ public class ErrorCodeRegistryTests {
 
     [Fact]
     public void TheRegistryMatchesTheGoldenSetExactly() {
-        var actual = ErrorCode.All.Select(x => x.Value).Order(StringComparer.Ordinal).ToImmutableArray();
+        var actual = ErrorCode.All.Select(static x => x.Value).Order(StringComparer.Ordinal).ToImmutableArray();
 
         actual.ShouldBe(
             Golden.Order(StringComparer.Ordinal).ToImmutableArray(),
@@ -72,8 +72,8 @@ public class ErrorCodeRegistryTests {
         // a code exist but be unresolvable from the wire.
         var declared = typeof(ErrorCode)
             .GetFields(BindingFlags.Public | BindingFlags.Static)
-            .Where(x => x.FieldType == typeof(ErrorCode))
-            .Select(x => (ErrorCode)x.GetValue(null)!)
+            .Where(static x => x.FieldType == typeof(ErrorCode))
+            .Select(static x => (ErrorCode)x.GetValue(null)!)
             .ToImmutableArray();
 
         declared.Length.ShouldBe(ErrorCode.All.Length);
@@ -84,7 +84,7 @@ public class ErrorCodeRegistryTests {
 
     [Fact]
     public void CodesAreUnique() =>
-        ErrorCode.All.Select(x => x.Value)
+        ErrorCode.All.Select(static x => x.Value)
             .Distinct(StringComparer.Ordinal)
             .Count()
             .ShouldBe(ErrorCode.All.Length);
@@ -99,7 +99,7 @@ public class ErrorCodeRegistryTests {
 
         typeof(ErrorCode)
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .Where(x => x.Name is "op_Implicit" or "op_Explicit")
+            .Where(static x => x.Name is "op_Implicit" or "op_Explicit")
             .ShouldBeEmpty();
     }
 

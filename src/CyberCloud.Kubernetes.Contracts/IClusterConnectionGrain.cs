@@ -122,8 +122,11 @@ public interface IClusterConnectionGrain : IGrainWithStringKey {
     /// <param name="ns">The namespace to list in.</param>
     /// <param name="labelSelector">The selector. ⚠ Refused when empty — see <c>IKubeClusterConnection.ListAsync</c>.</param>
     /// <remarks>
-    ///     ⚠ <b>On the reconcile path, unlike <see cref="ListNamespaceAsync" />, and cheap enough to
-    ///     be.</b> One kind under one selector is one call per page, which is what a teardown pays to
+    ///     ⚠
+    ///     <b>
+    ///         On the reconcile path, unlike <see cref="ListNamespaceAsync" />, and cheap enough to
+    ///         be.
+    ///     </b> One kind under one selector is one call per page, which is what a teardown pays to
     ///     learn which claims an operator gave the resource it is about to remove.
     /// </remarks>
     [Alias("ListSelected")]

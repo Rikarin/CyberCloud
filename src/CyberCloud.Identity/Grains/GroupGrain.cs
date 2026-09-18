@@ -208,7 +208,8 @@ public sealed class GroupGrain(
         };
 
     Result<T> NotFound<T>()
-        where T : notnull => Result<T>.Failure(ErrorCode.ResourceNotFound, $"Group {groupId:D} does not exist.");
+        where T : notnull =>
+        Result<T>.Failure(ErrorCode.ResourceNotFound, $"Group {groupId:D} does not exist.");
 
     Result NotFound() => Result.Failure(ErrorCode.ResourceNotFound, $"Group {groupId:D} does not exist.");
 }

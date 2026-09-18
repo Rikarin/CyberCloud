@@ -8,8 +8,11 @@ namespace CyberCloud.Providers.Monitor;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A pure function of the address, the namespace and the body, and it reaches
-///         nothing.</b> The endpoints are the <c>Service</c>'s DNS name and two well-known ports,
+///         ⚠
+///         <b>
+///             A pure function of the address, the namespace and the body, and it reaches
+///             nothing.
+///         </b> The endpoints are the <c>Service</c>'s DNS name and two well-known ports,
 ///         which exist the moment the reconciler applies the Service and are the same whether or
 ///         not a pod is behind them — so a collector that has not converged yet gets an address that
 ///         does not answer rather than an error that says nothing, which is what
@@ -34,8 +37,16 @@ public sealed class MonitorCollectorListEndpointsHandler : IResourceActionHandle
         Task.FromResult(
             Result<string>.Success(
                 new JsonObject {
-                    ["otlpGrpcEndpoint"] = MonitorCollectors.OtlpGrpcEndpoint(context.Namespace, context.Id, context.Desired),
-                    ["otlpHttpEndpoint"] = MonitorCollectors.OtlpHttpEndpoint(context.Namespace, context.Id, context.Desired),
+                    ["otlpGrpcEndpoint"] = MonitorCollectors.OtlpGrpcEndpoint(
+                        context.Namespace,
+                        context.Id,
+                        context.Desired
+                    ),
+                    ["otlpHttpEndpoint"] = MonitorCollectors.OtlpHttpEndpoint(
+                        context.Namespace,
+                        context.Id,
+                        context.Desired
+                    ),
                     ["service"] = MonitorCollectors.ServiceHost(context.Namespace, context.Id),
                     ["workspace"] = MonitorCollectors.WorkspaceNameOf(context.Id)
                 }.ToJsonString()

@@ -9,8 +9,11 @@ namespace CyberCloud.Providers.Compute.ClusterConformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>WHAT A GREEN RUN PROVES, AND WHAT IT DOES NOT.</b> The k3s this starts has <b>no
-///         KubeVirt and no CDI</b>; <c>ClusterConformanceHarness.EnsureCustomResourceDefinitionsAsync</c>
+///         ⚠ <b>WHAT A GREEN RUN PROVES, AND WHAT IT DOES NOT.</b> The k3s this starts has
+///         <b>
+///             no
+///             KubeVirt and no CDI
+///         </b>; <c>ClusterConformanceHarness.EnsureCustomResourceDefinitionsAsync</c>
 ///         derives an open-schema stub per custom kind from the case's <c>Objects</c>. So this suite
 ///         proves the apply path against a real API server, ADR-013's labels under real admission, a
 ///         real <c>kubectl delete</c> corrected on the next pass, a second field manager's <c>409</c>
@@ -19,8 +22,11 @@ namespace CyberCloud.Providers.Compute.ClusterConformance;
 ///         no webhook is behind the stub.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The webhook half is proven elsewhere in this tree, for this family, for the first
-///         time — for one render of each chart, on every merge.</b>
+///         ⚠
+///         <b>
+///             The webhook half is proven elsewhere in this tree, for this family, for the first
+///             time — for one render of each chart, on every merge.
+///         </b>
 ///         <c>CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance § KubeVirtOnAnEmptyCluster</c>,
 ///         the family's second k3s lane in a process of its own, installs CDI and
 ///         KubeVirt through <c>charts/bundle/install.sh</c>, applies a <c>url</c> image, a blank disk
@@ -36,7 +42,8 @@ namespace CyberCloud.Providers.Compute.ClusterConformance;
 /// </remarks>
 /// <param name="fixture">The harness.</param>
 public sealed class VirtualMachineLifecycleConformance(ClusterConformanceFixture<VirtualMachineCase> fixture)
-    : ClusterConformanceTests<VirtualMachineCase>(fixture), IClassFixture<ClusterConformanceFixture<VirtualMachineCase>>;
+    : ClusterConformanceTests<VirtualMachineCase>(fixture),
+    IClassFixture<ClusterConformanceFixture<VirtualMachineCase>>;
 
 /// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the virtual-machine type.</summary>
 public sealed class VirtualMachineSiloKillConformance : SiloKillConformanceTests<VirtualMachineCase>;

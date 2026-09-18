@@ -196,13 +196,13 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
                      "serviceaccount", "jwks", "key", id.ToString("N"), id.ToString("D"),
                      IdentityCluster.Tenant.ToString("D")
                  }) {
-            refused.Error.Message.ShouldNotContain(leak, Case.Insensitive);
+            refused.Error.Message.ShouldNotContain(leak);
         }
     }
 
     [Fact]
     public async Task ATokenSignedByTheRightClusterForTheWrongServiceAccountIsRefused() {
-        var (id, signer) = await BoundAsync("prod", "app");
+        var (id, signer) = await BoundAsync();
 
         foreach (var token in new[] {
                      signer.ProjectedToken("prod", "other", Now.AddHours(1)),
@@ -352,7 +352,7 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
 
         foreach (var type in stateTypes) {
             foreach (var member in type.GetProperties(BindingFlags.Public | BindingFlags.Instance)) {
-                if (member.GetCustomAttributes(typeof(IdAttribute), inherit: false).Length == 0) {
+                if (member.GetCustomAttributes(typeof(IdAttribute), false).Length == 0) {
                     continue;
                 }
 
@@ -390,7 +390,7 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
     public async Task RebindingReReadsTheIssuerAndKeepsTheReBacSubject() {
         // ⚠ Pointing an identity at a new namespace must not be delete-and-recreate: the GUID is the
         // ReBAC subject id, so a new GUID silently revokes every grant made to the old one.
-        var (id, first) = await BoundAsync("prod", "app");
+        var (id, first) = await BoundAsync();
 
         using var second = new ClusterSigner { Issuer = "https://oidc.other-cluster.example" };
         ScriptedClusterOidcDiscovery.Instance.Publish(second, Now);

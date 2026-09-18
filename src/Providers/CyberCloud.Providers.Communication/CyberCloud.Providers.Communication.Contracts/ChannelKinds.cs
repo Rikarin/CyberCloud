@@ -6,8 +6,11 @@ namespace CyberCloud.Providers.Communication.Contracts;
 ///     How a body spells a <see cref="ChannelKind" />, and the way back.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Lower-case words, not the enum's own names, and declared once for every schema that
-///     carries a channel.</b> A published api-version is immutable, so the five values here are a
+///     ⚠
+///     <b>
+///         Lower-case words, not the enum's own names, and declared once for every schema that
+///         carries a channel.
+///     </b> A published api-version is immutable, so the five values here are a
 ///     contract: <c>SchemaProperty.AllowedValues</c> refuses a sixth at the write path and
 ///     <c>OpenApiCompatibility.EnumValueRemoved</c> refuses taking one away. <see cref="ChannelKind" />
 ///     has no sixth member either — chat is M3 and is a different shape, as that enum's remarks say —

@@ -122,7 +122,7 @@ sealed class LibSecretTokenCache : ITokenCache {
                 "secret-tool",
                 ["store", "--label", TokenCache.ServiceName, "service", TokenCache.ServiceName, "account", key],
                 cancellationToken,
-                standardInput: hex
+                hex
             )
             .ConfigureAwait(false);
 
@@ -185,7 +185,8 @@ static class Subprocess {
             info.ArgumentList.Add(argument);
         }
 
-        using var process = new Process { StartInfo = info };
+        using var process = new Process();
+        process.StartInfo = info;
 
         try {
             if (!process.Start()) {
@@ -240,7 +241,7 @@ static class Subprocess {
 
     static void Kill(Process process) {
         try {
-            process.Kill(entireProcessTree: true);
+            process.Kill(true);
         } catch (Exception e) when (e is InvalidOperationException
                                         or NotSupportedException
                                         or System.ComponentModel.Win32Exception) {

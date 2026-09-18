@@ -21,7 +21,9 @@ public sealed class OutputFormatTests {
 
     [Fact]
     public async Task TableIsTheDefaultAndHasAHeader() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, Page)));
+        using var host = TestHost.Create(
+            new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, Page))
+        );
 
         await host.RunAsync(Show());
 
@@ -35,7 +37,9 @@ public sealed class OutputFormatTests {
 
     [Fact]
     public async Task TsvHasNoHeaderBecauseCutCountsColumns() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, Page)));
+        using var host = TestHost.Create(
+            new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, Page))
+        );
 
         await host.RunAsync(Show("--output", "tsv"));
 
@@ -48,7 +52,9 @@ public sealed class OutputFormatTests {
 
     [Fact]
     public async Task NoneWritesNothingAtAll() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, Page)));
+        using var host = TestHost.Create(
+            new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, Page))
+        );
 
         (await host.RunAsync(Show("--output", "none"))).ShouldBe((int)ExitCode.Ok);
 
@@ -58,7 +64,7 @@ public sealed class OutputFormatTests {
     [Fact]
     public async Task YamlRendersTheNestingATableCannot() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, _) =>
+            new ScriptedTransport(static (_, _) =>
                 Responses.Json(HttpStatusCode.OK, """{"name":"w1","properties":{"tier":"free","enabled":true}}""")
             )
         );
@@ -97,7 +103,9 @@ public sealed class OutputFormatTests {
 
     [Fact]
     public async Task QueryProjectsBeforeRendering() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, Page)));
+        using var host = TestHost.Create(
+            new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, Page))
+        );
 
         await host.RunAsync(Show("--query", "[].{name: name, tier: properties.tier}", "--output", "json"));
 
@@ -111,7 +119,9 @@ public sealed class OutputFormatTests {
 
     [Fact]
     public async Task QueryAndTsvIsTheOneLinerPeopleActuallyType() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, Page)));
+        using var host = TestHost.Create(
+            new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, Page))
+        );
 
         await host.RunAsync(Show("--query", "[?properties.tier == 'premium'].name", "--output", "tsv"));
 
@@ -132,6 +142,6 @@ public sealed class OutputFormatTests {
 
         // And the names are exactly the ones --output advertises, so help text and the value an
         // extension receives cannot drift apart.
-        Enum.GetValues<OutputFormat>().Select(OutputFormats.NameOf).ShouldBe(OutputFormats.Names, ignoreOrder: true);
+        Enum.GetValues<OutputFormat>().Select(OutputFormats.NameOf).ShouldBe(OutputFormats.Names, true);
     }
 }

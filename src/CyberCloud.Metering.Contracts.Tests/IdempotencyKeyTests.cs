@@ -94,7 +94,14 @@ public sealed class IdempotencyKeyTests {
     /// </summary>
     [Fact]
     public void AnEventIdCarryingTheSeparatorIsRefused() =>
-        Should.Throw<ArgumentException>(() => UsageEvent.KeyFor(Resource, BillingMeter.Requests, Start, End, "a|b"));
+        Should.Throw<ArgumentException>(static () => UsageEvent.KeyFor(
+                Resource,
+                BillingMeter.Requests,
+                Start,
+                End,
+                "a|b"
+            )
+        );
 
     /// <summary>
     ///     ⚠ Emission time is deliberately not a key component. A redelivery after a silo restart
@@ -115,8 +122,8 @@ public sealed class IdempotencyKeyTests {
     /// </summary>
     [Fact]
     public void QuantityIsNotPartOfTheKey() {
-        var first = Build(quantity: 1m);
-        var second = Build(quantity: 99m);
+        var first = Build(1m);
+        var second = Build(99m);
 
         second.IdempotencyKey.ShouldBe(first.IdempotencyKey);
     }
@@ -138,7 +145,7 @@ public sealed class IdempotencyKeyTests {
             Quantity = 1m,
             WindowStart = Start,
             WindowEnd = End,
-            IdempotencyKey = new string('0', 64)
+            IdempotencyKey = new('0', 64)
         };
 
         forged.IsKeyConsistent().ShouldBeFalse();

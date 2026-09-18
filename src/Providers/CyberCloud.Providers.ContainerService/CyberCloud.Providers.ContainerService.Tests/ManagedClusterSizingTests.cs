@@ -23,7 +23,7 @@ public sealed class ManagedClusterSizingTests {
 
         var block = Regex.Match(
             helpers,
-            "define \"kubernetes\\.controlPlaneResources\" -}}(.*?){{- end",
+            """define "kubernetes\.controlPlaneResources" -}}(.*?){{- end""",
             RegexOptions.Singleline,
             TimeSpan.FromSeconds(5)
         );
@@ -113,7 +113,7 @@ public sealed class ManagedClusterSizingTests {
         // per object rather than at lint time.
         foreach (var chart in new[] { "kubernetes.helpers.tpl", "kubernetes-agentpool.helpers.tpl" }) {
             Embedded(chart).ShouldContain(
-                "replace \"/\" \"_\" | lower",
+                """replace "/" "_" | lower""",
                 Case.Sensitive,
                 chart + " does not fold the resource-type label value"
             );

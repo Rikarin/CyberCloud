@@ -173,7 +173,7 @@ public sealed class SiloHostTests(SiloHostFixture silo) : IClassFixture<SiloHost
 
         var names = json.RootElement.GetProperty("checks")
             .EnumerateArray()
-            .Select(x => x.GetProperty("name").GetString())
+            .Select(static x => x.GetProperty("name").GetString())
             .ToList();
 
         names.ShouldContain("self");

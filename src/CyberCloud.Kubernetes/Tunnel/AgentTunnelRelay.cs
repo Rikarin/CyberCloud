@@ -12,14 +12,20 @@ namespace CyberCloud.Kubernetes.Tunnel;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/09 § Cluster connections: <i>"the tunnel identity is bound to the cluster
-///         resource id at the gateway"</i>. <see cref="AdmitAsync" /> is where that happens — the
+///         docs/plan/09 § Cluster connections:
+///         <i>
+///             "the tunnel identity is bound to the cluster
+///             resource id at the gateway"
+///         </i>. <see cref="AdmitAsync" /> is where that happens — the
 ///         cluster id comes from the request, the credential is hashed here and never leaves this
 ///         process in plaintext, and the grain for exactly that cluster says yes or no.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Here and not in the gateway, because the gateway may not call
-///         <c>IGrainFactory.GetGrain</c> without <c>ForTenant</c></b> —
+///         ⚠
+///         <b>
+///             Here and not in the gateway, because the gateway may not call
+///             <c>IGrainFactory.GetGrain</c> without <c>ForTenant</c>
+///         </b> —
 ///         <c>GatewayIsolationTests.NoGatewaySourceFileTakesAGrainReferenceWithoutForTenant</c> reads
 ///         its source for exactly that. A tunnel grain is null-tenant and <c>ForTenant</c> would fork
 ///         it per tenant, so the one unqualified reference lives in this assembly, where CC1006's
@@ -144,7 +150,8 @@ public sealed class AgentSession : IAgentTunnelObserver {
                 )
             },
             cancellationToken
-        ).ConfigureAwait(false);
+        )
+            .ConfigureAwait(false);
 
         // ⚠ Handed over once. The plaintext is not kept on this object after the welcome went out.
         credentialToHandOver = null;
@@ -158,7 +165,8 @@ public sealed class AgentSession : IAgentTunnelObserver {
                 transport,
                 frame => Grain.DeliverAsync(SessionId, frame),
                 stop.Token
-            ).ConfigureAwait(false);
+            )
+                .ConfigureAwait(false);
         } finally {
             await stop.CancelAsync().ConfigureAwait(false);
 
@@ -172,13 +180,23 @@ public sealed class AgentSession : IAgentTunnelObserver {
         try {
             await Grain.DisconnectedAsync(SessionId, reason).ConfigureAwait(false);
         } catch (Exception ex) when (ex is not OperationCanceledException) {
-            logger.LogWarning(ex, "The tunnel grain for cluster {Cluster} could not be told session {Session} ended.", ClusterId, SessionId);
+            logger.LogWarning(
+                ex,
+                "The tunnel grain for cluster {Cluster} could not be told session {Session} ended.",
+                ClusterId,
+                SessionId
+            );
         }
 
         Abandon();
         await transport.CloseAsync(reason, CancellationToken.None).ConfigureAwait(false);
 
-        logger.LogInformation("Agent session {Session} for cluster {Cluster} ended: {Reason}", SessionId, ClusterId, reason);
+        logger.LogInformation(
+            "Agent session {Session} for cluster {Cluster} ended: {Reason}",
+            SessionId,
+            ClusterId,
+            reason
+        );
         return reason;
     }
 

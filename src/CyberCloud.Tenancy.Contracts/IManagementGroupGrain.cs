@@ -29,8 +29,11 @@ namespace CyberCloud.Tenancy.Contracts;
 ///         is one.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Depth is capped at <see cref="MaxDepth" /> and the cap is Azure's, for the same
-///         reason.</b> Every hop in the tree is a hop in every <c>Check</c> below it: a resource is
+///         ⚠
+///         <b>
+///             Depth is capped at <see cref="MaxDepth" /> and the cap is Azure's, for the same
+///             reason.
+///         </b> Every hop in the tree is a hop in every <c>Check</c> below it: a resource is
 ///         resource → group → subscription → <i>n</i> management groups → tenant, and
 ///         docs/plan/07 § Check caps the walk at twelve. Six group levels puts the deepest resource
 ///         at nine hops, which leaves room for the userset hop a group grant adds and nothing else —
@@ -38,8 +41,11 @@ namespace CyberCloud.Tenancy.Contracts;
 ///         the evaluator's budget.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A group's parent is set at creation and cannot be changed, and that is a decision
-///         with a recorded cost.</b> Azure lets a group be moved. Moving one here would mean
+///         ⚠
+///         <b>
+///             A group's parent is set at creation and cannot be changed, and that is a decision
+///             with a recorded cost.
+///         </b> Azure lets a group be moved. Moving one here would mean
 ///         re-writing its <c>parent</c> tuple, re-checking the depth of every group and subscription
 ///         under it against the cap, and refusing a move that makes the tree a cycle — each of which
 ///         is one grain call per node in the subtree with nothing holding the tree still between

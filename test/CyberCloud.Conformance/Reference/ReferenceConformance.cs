@@ -1,5 +1,4 @@
 using CyberCloud.Conformance.Harness;
-using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
@@ -23,13 +22,13 @@ public sealed class ReferenceCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.ConformanceReference/probes",
-            CreateProvider = () => new ReferenceProvider(),
+            CreateProvider = static () => new ReferenceProvider(),
             ReconcilerType = typeof(ProbeReconciler),
-            CreateReconciler = clock => new ProbeReconciler(clock),
+            CreateReconciler = static clock => new ProbeReconciler(clock),
             Type = Probes.Type,
             ApiVersion = Probes.V2026,
-            Body = cluster => Probes.Body(cluster),
-            ChangedBody = cluster => Probes.Body(cluster, "second"),
+            Body = static cluster => Probes.Body(cluster),
+            ChangedBody = static cluster => Probes.Body(cluster, "second"),
             InvalidBody = Probes.BodyWithoutNote,
             InvalidBodyTarget = "/properties/note",
             ActionName = "ping",
@@ -41,7 +40,7 @@ public sealed class ReferenceCase : IProviderCaseSource {
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => Probes.Matches(match.ObjectJson, match.DesiredJson)
+            ObjectMatchesDesired = static match => Probes.Matches(match.ObjectJson, match.DesiredJson)
         };
 }
 
@@ -74,13 +73,13 @@ public sealed class ReferenceChildCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.ConformanceReference/probes/samples",
-            CreateProvider = () => new ReferenceProvider(),
+            CreateProvider = static () => new ReferenceProvider(),
             ReconcilerType = typeof(SampleReconciler),
-            CreateReconciler = clock => new SampleReconciler(clock),
+            CreateReconciler = static clock => new SampleReconciler(clock),
             Type = Probes.ChildType,
             ApiVersion = Probes.V2026,
-            Body = cluster => Probes.ChildBody(cluster),
-            ChangedBody = cluster => Probes.ChildBody(cluster, "second"),
+            Body = static cluster => Probes.ChildBody(cluster),
+            ChangedBody = static cluster => Probes.ChildBody(cluster, "second"),
             InvalidBody = Probes.ChildBodyWithoutNote,
             InvalidBodyTarget = "/properties/note",
             ActionName = "ping",
@@ -92,7 +91,7 @@ public sealed class ReferenceChildCase : IProviderCaseSource {
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => Probes.Matches(match.ObjectJson, match.DesiredJson)
+            ObjectMatchesDesired = static match => Probes.Matches(match.ObjectJson, match.DesiredJson)
         };
 
     /// <inheritdoc />
@@ -270,8 +269,11 @@ public sealed class ReferenceChildProviderConformance(ProviderTestCluster<Refere
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The 28 inherited assertions are the point, and the three added ones are the
-///         receipt.</b> A sibling in the world must change nothing about how the type under test
+///         ⚠
+///         <b>
+///             The 28 inherited assertions are the point, and the three added ones are the
+///             receipt.
+///         </b> A sibling in the world must change nothing about how the type under test
 ///         behaves — the suite runs unchanged — and the three facts below are the only place the
 ///         harness's claim "the sibling exists, converged, at this address" is read back rather than
 ///         trusted. They are on this class rather than on the shared suite because a sibling is
@@ -341,57 +343,61 @@ public sealed class ReferenceSiblingProviderConformance(ProviderTestCluster<Refe
 
         var address = ProviderTestCluster<ReferenceWithSiblingCase>.SiblingAddress(Sibling);
         var snapshot = (await Cluster.Manager.ReadAsync(
-            new() {
-                Path = address.Path,
-                ApiVersion = Sibling.Case.ApiVersion,
-                Caller = ProviderTestCluster<ReferenceWithSiblingCase>.Caller()
-            },
-            TestContext.Current.CancellationToken
-        )).GetValueOrThrow();
+                new() {
+                    Path = address.Path,
+                    ApiVersion = Sibling.Case.ApiVersion,
+                    Caller = ProviderTestCluster<ReferenceWithSiblingCase>.Caller()
+                },
+                TestContext.Current.CancellationToken
+            )).GetValueOrThrow();
 
         snapshot.ProvisioningState.ShouldBe(ProvisioningState.Succeeded, "the resource persists");
 
         var resolved = address.WithId(snapshot.Id);
 
         foreach (var target in Sibling.Case.Objects(resolved, ReconcileDriver.NamespaceFor(resolved))) {
-            Cluster.World.Holds(target).ShouldBeTrue(
-                $"'{target}' is not in the fake cluster after a Reset. The harness puts the fixture's "
-                + "world back on every Reset so that a co-writing type has an object to write onto — "
-                + "see FakeKubeCluster.Baseline and ProviderTestCluster.InitializeAsync"
-            );
+            Cluster.World.Holds(target)
+                .ShouldBeTrue(
+                    $"'{target}' is not in the fake cluster after a Reset. The harness puts the fixture's "
+                    + "world back on every Reset so that a co-writing type has an object to write onto — "
+                    + "see FakeKubeCluster.Baseline and ProviderTestCluster.InitializeAsync"
+                );
 
-            Cluster.World.OwnerOf(target).ShouldBe(
-                snapshot.Id,
-                $"'{target}' came back from the baseline carrying labels that are not the sibling's own"
-            );
+            Cluster.World.OwnerOf(target)
+                .ShouldBe(
+                    snapshot.Id,
+                    $"'{target}' came back from the baseline carrying labels that are not the sibling's own"
+                );
         }
 
         // ⚠ AND A TEST'S OWN OBJECTS DO NOT COME BACK, which is the half that keeps tests independent.
         var own = (await Cluster.Manager.WriteAsync(
-            new() {
-                Path = ProviderTestCluster<ReferenceWithSiblingCase>.Address("not-in-the-baseline").Path,
-                ApiVersion = Case.ApiVersion,
-                Verb = WriteVerb.Put,
-                Body = Case.Body(ProviderTestCluster<ReferenceWithSiblingCase>.ClusterId),
-                Caller = ProviderTestCluster<ReferenceWithSiblingCase>.Caller()
-            },
-            TestContext.Current.CancellationToken
-        )).GetValueOrThrow();
+                new() {
+                    Path = ProviderTestCluster<ReferenceWithSiblingCase>.Address("not-in-the-baseline").Path,
+                    ApiVersion = Case.ApiVersion,
+                    Verb = WriteVerb.Put,
+                    Body = Case.Body(ProviderTestCluster<ReferenceWithSiblingCase>.ClusterId),
+                    Caller = ProviderTestCluster<ReferenceWithSiblingCase>.Caller()
+                },
+                TestContext.Current.CancellationToken
+            )).GetValueOrThrow();
 
         var operation = Cluster.Operation(ConformanceIds.Tenant, own.OperationId);
         for (var drive = 0; drive < 8 && !(await operation.DriveAsync()).GetValueOrThrow().IsTerminal; drive++) { }
 
-        var ownAddress = ProviderTestCluster<ReferenceWithSiblingCase>.Address("not-in-the-baseline").WithId(own.Resource.Id);
+        var ownAddress = ProviderTestCluster<ReferenceWithSiblingCase>.Address("not-in-the-baseline")
+            .WithId(own.Resource.Id);
         var ownObjects = Case.Objects(ownAddress, ReconcileDriver.NamespaceFor(ownAddress));
         ownObjects.All(Cluster.World.Holds).ShouldBeTrue("the test's own resource converged and its objects are there");
 
         ProviderTestCluster<ReferenceWithSiblingCase>.Reset();
 
-        ownObjects.Any(Cluster.World.Holds).ShouldBeFalse(
-            "an object a TEST created survived a Reset. The baseline is the fixture's world and nothing "
-            + "later; a world that accumulated every test's leftovers would make the twenty-eighth "
-            + "assertion depend on the first"
-        );
+        ownObjects.Any(Cluster.World.Holds)
+            .ShouldBeFalse(
+                "an object a TEST created survived a Reset. The baseline is the fixture's world and nothing "
+                + "later; a world that accumulated every test's leftovers would make the twenty-eighth "
+                + "assertion depend on the first"
+            );
     }
 }
 
@@ -528,13 +534,13 @@ public sealed class SuiteRejectionTests {
         var target = new ObjectRef { Kind = Probes.Kind, Namespace = ns, Name = owner.Name };
 
         (await KubeCommand.For(world)
-            .WithTenantId(owner.TenantId)
-            .WithResourceId(owner)
-            .InNamespace(ns)
-            .WithKind(Probes.Kind)
-            .WithApiVersion(Probes.V2026)
-            .ObjectJson("""{ "spec": { "egress": [ { "to": "anywhere" } ] } }""")
-            .ApplyAsync(TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+                .WithTenantId(owner.TenantId)
+                .WithResourceId(owner)
+                .InNamespace(ns)
+                .WithKind(Probes.Kind)
+                .WithApiVersion(Probes.V2026)
+                .ObjectJson("""{ "spec": { "egress": [ { "to": "anywhere" } ] } }""")
+                .ApplyAsync(TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
 
         var before = JsonNode.Parse(world.Read(target).ShouldNotBeNull())!.AsObject();
         var live = (await world.GetAsync(target, TestContext.Current.CancellationToken)).GetValueOrThrow();
@@ -557,7 +563,9 @@ public sealed class SuiteRejectionTests {
         after["metadata"]!["labels"]!.ToJsonString().ShouldBe(before["metadata"]!["labels"]!.ToJsonString());
         after["metadata"]!["uid"]!.GetValue<string>().ShouldBe(before["metadata"]!["uid"]!.GetValue<string>());
         after["spec"]!["egress"]!.ToJsonString().ShouldBe(before["spec"]!["egress"]!.ToJsonString());
-        after["metadata"]!["annotations"]![KubeLabels.ReconcileHashAnnotation].ShouldNotBeNull("the owner's own annotations stay");
+        after["metadata"]!["annotations"]![KubeLabels.ReconcileHashAnnotation].ShouldNotBeNull(
+            "the owner's own annotations stay"
+        );
 
         // The co-writer's half is beside it.
         after["spec"]!["peerings"]!.AsArray().Count.ShouldBe(1);
@@ -575,7 +583,11 @@ public sealed class SuiteRejectionTests {
             .ObjectJson("""{ "spec": { "peerings": [ { "remote": "elsewhere" } ] } }""")
             .ApplyAsync(TestContext.Current.CancellationToken);
 
-        stale.GetValueOrThrow().Result.ShouldBe(ApplyResult.Stale, "a command carrying a version the object has moved past is not applied");
+        stale.GetValueOrThrow()
+            .Result.ShouldBe(
+                ApplyResult.Stale,
+                "a command carrying a version the object has moved past is not applied"
+            );
         JsonNode.Parse(world.Read(target)!)!["spec"]!["peerings"]![0]!["remote"]!.GetValue<string>().ShouldBe("spoke");
 
         // A second co-writer's slice is ADDED — the atomic list is the union — and the first's stays.
@@ -583,32 +595,39 @@ public sealed class SuiteRejectionTests {
         var fresh = (await world.GetAsync(target, TestContext.Current.CancellationToken)).GetValueOrThrow();
 
         (await KubeCommand.For(world)
-            .WithTenantId(second.TenantId)
-            .WithResourceId(second)
-            .InNamespace(ns)
-            .WithKind(Probes.Kind)
-            .CoWriting(fresh)
-            .ObjectJson("""{ "spec": { "peerings": [ { "remote": "elsewhere" } ] } }""")
-            .ApplyAsync(TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+                .WithTenantId(second.TenantId)
+                .WithResourceId(second)
+                .InNamespace(ns)
+                .WithKind(Probes.Kind)
+                .CoWriting(fresh)
+                .ObjectJson("""{ "spec": { "peerings": [ { "remote": "elsewhere" } ] } }""")
+                .ApplyAsync(TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
 
-        JsonNode.Parse(world.Read(target)!)!["spec"]!["peerings"]!.AsArray().Count.ShouldBe(2, "two co-writers, two entries");
+        JsonNode.Parse(world.Read(target)!)!["spec"]!["peerings"]!
+            .AsArray()
+            .Count.ShouldBe(2, "two co-writers, two entries");
 
         // Withdrawing the first takes exactly its slice and its bookkeeping off, and the object stays.
         var current = (await world.GetAsync(target, TestContext.Current.CancellationToken)).GetValueOrThrow();
 
         (await KubeCommand.For(world)
-            .WithTenantId(coWriter.TenantId)
-            .WithResourceId(coWriter)
-            .InNamespace(ns)
-            .WithKind(Probes.Kind)
-            .CoWriting(current)
-            .DeleteAsync(CascadePolicy.Background, TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+                .WithTenantId(coWriter.TenantId)
+                .WithResourceId(coWriter)
+                .InNamespace(ns)
+                .WithKind(Probes.Kind)
+                .CoWriting(current)
+                .DeleteAsync(CascadePolicy.Background, TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
 
-        var withdrawn = JsonNode.Parse(world.Read(target).ShouldNotBeNull("a withdrawal never deletes the owner's object"))!.AsObject();
+        var withdrawn = JsonNode.Parse(
+            world.Read(target).ShouldNotBeNull("a withdrawal never deletes the owner's object")
+        )!
+            .AsObject();
         withdrawn["spec"]!["peerings"]!.AsArray().Count.ShouldBe(1);
         withdrawn["spec"]!["peerings"]![0]!["remote"]!.GetValue<string>().ShouldBe("elsewhere");
-        (withdrawn["metadata"]!["annotations"] as JsonObject)!.ContainsKey(KubeLabels.FragmentAnnotation(coWriter.Id)).ShouldBeFalse();
-        (withdrawn["metadata"]!["annotations"] as JsonObject)!.ContainsKey(KubeLabels.FragmentAnnotation(second.Id)).ShouldBeTrue();
+        (withdrawn["metadata"]!["annotations"] as JsonObject)!.ContainsKey(KubeLabels.FragmentAnnotation(coWriter.Id))
+            .ShouldBeFalse();
+        (withdrawn["metadata"]!["annotations"] as JsonObject)!.ContainsKey(KubeLabels.FragmentAnnotation(second.Id))
+            .ShouldBeTrue();
         withdrawn["spec"]!["egress"]!.ToJsonString().ShouldBe(before["spec"]!["egress"]!.ToJsonString());
         world.Deleted.ShouldBeEmpty("a withdrawal is not a delete, and the fake's log must not say it was");
 
@@ -742,11 +761,11 @@ public sealed class SuiteRejectionTests {
         );
 
         var breakable = new ConformanceWorld(
-            BreakAsync: () => {
+            () => {
                 world.RemoveBehindTheirBack(target);
                 return Task.CompletedTask;
             },
-            MatchesDesiredAsync: () => Task.FromResult(world.Read(target) is { } json && Probes.Matches(json, desired))
+            () => Task.FromResult(world.Read(target) is { } json && Probes.Matches(json, desired))
         );
 
         var report = await ReconcilerConformance.RunAsync(
@@ -759,10 +778,10 @@ public sealed class SuiteRejectionTests {
 
         report.Conforms.ShouldBeFalse("the suite accepted a reconciler that never reads the world back");
 
-        report.Findings.Select(x => x.Clause)
+        report.Findings.Select(static x => x.Clause)
             .ShouldContain(ReconcilerClause.NoHiddenState, report.ToString());
 
-        report.Findings.Select(x => x.Clause)
+        report.Findings.Select(static x => x.Clause)
             .ShouldContain(ReconcilerClause.ObservesNeverAssumes, report.ToString());
     }
 
@@ -817,10 +836,11 @@ public sealed class SuiteRejectionTests {
         // member. Without this guard it is ResourceId's constructor throwing ArgumentException about
         // parent-name counts, from a static helper every test calls, so xUnit reports all 27 as
         // failed and none of them says which member is missing.
-        var thrown = Should.Throw<InvalidOperationException>(() => ProviderTestCluster<AncestorlessChildCase>.Address(
-                "anything"
-            )
-        );
+        var thrown =
+            Should.Throw<InvalidOperationException>(static () => ProviderTestCluster<AncestorlessChildCase>.Address(
+                    "anything"
+                )
+            );
 
         thrown.Message.ShouldContain("Ancestors");
         thrown.Message.ShouldContain(Probes.ChildTypePath);
@@ -833,10 +853,11 @@ public sealed class SuiteRejectionTests {
         // naming the wrong type. The harness registers ONE provider, so a case pointing at somebody
         // else's parent would have the harness creating a resource this run's registry cannot
         // address — and the create would fail with the registry's message rather than the case's.
-        var thrown = Should.Throw<InvalidOperationException>(() => ProviderTestCluster<WrongAncestorChildCase>.Address(
-                "anything"
-            )
-        );
+        var thrown =
+            Should.Throw<InvalidOperationException>(static () => ProviderTestCluster<WrongAncestorChildCase>.Address(
+                    "anything"
+                )
+            );
 
         thrown.Message.ShouldContain(Probes.ChildTypePath);
         thrown.Message.ShouldContain("the same provider by construction");
@@ -848,7 +869,8 @@ public sealed class SuiteRejectionTests {
         // harness registers ONE provider, and a sibling from another would fail its create with the
         // registry's message about an unknown type, at fixture start, naming neither the case nor
         // the member.
-        var thrown = Should.Throw<InvalidOperationException>(() => ProviderTestCluster<ForeignSiblingCase>.Siblings);
+        var thrown =
+            Should.Throw<InvalidOperationException>(static () => ProviderTestCluster<ForeignSiblingCase>.Siblings);
 
         thrown.Message.ShouldContain("Siblings");
         thrown.Message.ShouldContain("CyberCloud.Elsewhere");
@@ -859,7 +881,8 @@ public sealed class SuiteRejectionTests {
     public void ASiblingNestedDeeperThanTheCasesAncestorChainIsRefusedByName() {
         // A sample beside a probe, with no ancestor-0 for the sample to sit under: without the guard
         // it is ResourceId's constructor throwing about parent-name counts from SiblingAddress.
-        var thrown = Should.Throw<InvalidOperationException>(() => ProviderTestCluster<TooDeepSiblingCase>.Siblings);
+        var thrown =
+            Should.Throw<InvalidOperationException>(static () => ProviderTestCluster<TooDeepSiblingCase>.Siblings);
 
         thrown.Message.ShouldContain("Siblings");
         thrown.Message.ShouldContain("too-deep");
@@ -868,7 +891,8 @@ public sealed class SuiteRejectionTests {
 
     [Fact]
     public void ASiblingUnderAncestorsThatAreNotTheCasesOwnIsRefusedByName() {
-        var thrown = Should.Throw<InvalidOperationException>(() => ProviderTestCluster<WrongChainSiblingCase>.Siblings);
+        var thrown =
+            Should.Throw<InvalidOperationException>(static () => ProviderTestCluster<WrongChainSiblingCase>.Siblings);
 
         thrown.Message.ShouldContain("Siblings");
         thrown.Message.ShouldContain("gauges");
@@ -879,7 +903,9 @@ public sealed class SuiteRejectionTests {
     public void ASiblingNamedLikeTheHarnessesOwnAncestorIsRefusedByName() {
         // The sibling that would be the parent, created twice — and the second create would answer
         // 409 or, worse, converge as the parent and leave the case relating to itself.
-        var thrown = Should.Throw<InvalidOperationException>(() => ProviderTestCluster<AncestorNamedSiblingCase>.Siblings);
+        var thrown =
+            Should.Throw<InvalidOperationException>(static () => ProviderTestCluster<AncestorNamedSiblingCase>.Siblings
+            );
 
         thrown.Message.ShouldContain("Siblings");
         thrown.Message.ShouldContain(ConformanceIds.AncestorName(0));
@@ -892,16 +918,19 @@ public sealed class SuiteRejectionTests {
         // at the root, beside ancestor-0; the top-level source's sibling is a probe at the root too,
         // which is where the case's own address lives.
         var ofChild = ProviderTestCluster<ReferenceChildCase>.SiblingAddress(ReferenceChildCase.Siblings[0]);
-        var ofTopLevel = ProviderTestCluster<ReferenceWithSiblingCase>.SiblingAddress(ReferenceWithSiblingCase.Siblings[0]);
+        var ofTopLevel = ProviderTestCluster<ReferenceWithSiblingCase>.SiblingAddress(
+            ReferenceWithSiblingCase.Siblings[0]
+        );
 
         ofChild.ParentNames.ShouldBeEmpty("a depth-1 sibling of a depth-2 case has no ancestors of its own");
         ofChild.Type.ShouldBe(Probes.Type);
         ofChild.Path.ShouldBe(ofTopLevel.Path, "both sources declare the same probe at the same address");
 
-        ProviderTestCluster<ReferenceChildCase>.Address("x").ParentNames.ShouldBe(
-            ConformanceIds.AncestorName(0),
-            "and the case's own addresses still interleave the ancestor"
-        );
+        ProviderTestCluster<ReferenceChildCase>.Address("x")
+            .ParentNames.ShouldBe(
+                ConformanceIds.AncestorName(0),
+                "and the case's own addresses still interleave the ancestor"
+            );
     }
 
     [Fact]
@@ -911,7 +940,8 @@ public sealed class SuiteRejectionTests {
         var parent = RunnableFactsOf(typeof(ReferenceProviderConformance));
         var withSibling = RunnableFactsOf(typeof(ReferenceSiblingProviderConformance));
 
-        parent.Except(withSibling, StringComparer.Ordinal).ShouldBeEmpty("the sibling suite dropped an inherited assertion");
+        parent.Except(withSibling, StringComparer.Ordinal)
+            .ShouldBeEmpty("the sibling suite dropped an inherited assertion");
         (withSibling.Length - parent.Length).ShouldBe(3);
     }
 
@@ -945,9 +975,9 @@ public sealed class SuiteRejectionTests {
     static ImmutableArray<string> RunnableFactsOf(Type suite) => [
         .. suite
             .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-            .Where(x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
-            .Select(x => x.Name)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Where(static x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
+            .Select(static x => x.Name)
+            .OrderBy(static x => x, StringComparer.Ordinal)
     ];
 
     [Fact]
@@ -963,15 +993,15 @@ public sealed class SuiteRejectionTests {
         // and a case cannot assert on what it was not given. That is the shape that kept every child
         // type's suite smaller than its parent's until the record existed.
         var optional = new[] { typeof(ProviderConformanceCase), typeof(MatchContext) }
-            .SelectMany(type => type.GetProperties().Select(x => (Type: type, Property: x)))
-            .Where(x => x.Property.SetMethod is not null || x.Property.GetMethod is not null)
-            .Where(x => x.Property.GetCustomAttributes(
+            .SelectMany(static type => type.GetProperties().Select(x => (Type: type, Property: x)))
+            .Where(static x => x.Property.SetMethod is not null || x.Property.GetMethod is not null)
+            .Where(static x => x.Property.GetCustomAttributes(
                     typeof(System.Runtime.CompilerServices.RequiredMemberAttribute),
                     false
                 ).Length
                 == 0
             )
-            .Select(x => $"{x.Type.Name}.{x.Property.Name}")
+            .Select(static x => $"{x.Type.Name}.{x.Property.Name}")
             .ToImmutableArray();
 
         optional.ShouldBeEmpty(

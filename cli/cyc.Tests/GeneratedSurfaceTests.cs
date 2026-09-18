@@ -24,7 +24,7 @@ public sealed class GeneratedSurfaceTests {
     [Fact]
     public async Task TheGeneratedAliasWorksAsACommandName() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, _) =>
+            new ScriptedTransport(static (_, _) =>
                 Responses.Json(HttpStatusCode.OK, """{"name":"w1"}""")
             )
         );
@@ -109,21 +109,21 @@ public sealed class GeneratedSurfaceTests {
         var root = CommandTree.Build(host.Host, GlobalOptions.For(TestHost.Catalog()), tree);
 
         var create = root.Subcommands
-            .Single(x => x.Name == "sample")
+            .Single(static x => x.Name == "sample")
             .Subcommands
-            .Single(x => x.Name == "widgets")
+            .Single(static x => x.Name == "widgets")
             .Subcommands
-            .Single(x => x.Name == "create");
+            .Single(static x => x.Name == "create");
 
-        var declared = create.Options.Select(x => x.Name).ToHashSet(StringComparer.Ordinal);
-        var expected = tree.Groups["sample"].Commands["widgets"].Verbs["create"].Flags.Select(x => x.Name);
+        var declared = create.Options.Select(static x => x.Name).ToHashSet(StringComparer.Ordinal);
+        var expected = tree.Groups["sample"].Commands["widgets"].Verbs["create"].Flags.Select(static x => x.Name);
 
         foreach (var flag in expected) {
             declared.ShouldContain(flag);
         }
 
         // The generated flag's alias is declared too — `--cluster` for `--cluster-id`.
-        create.Options.Single(x => x.Name == "--cluster-id").Aliases.ShouldContain("--cluster");
+        create.Options.Single(static x => x.Name == "--cluster-id").Aliases.ShouldContain("--cluster");
     }
 
     [Fact]
@@ -133,7 +133,8 @@ public sealed class GeneratedSurfaceTests {
         using var host = TestHost.Create();
         var root = CommandTree.Build(host.Host, GlobalOptions.For(TestHost.Catalog()), tree);
 
-        var widgets = root.Subcommands.Single(x => x.Name == "sample").Subcommands.Single(x => x.Name == "widgets");
+        var widgets = root.Subcommands.Single(static x => x.Name == "sample")
+            .Subcommands.Single(static x => x.Name == "widgets");
 
         Names(widgets, "create").ShouldContain("--wait");
         Names(widgets, "delete").ShouldContain("--no-wait");
@@ -144,7 +145,7 @@ public sealed class GeneratedSurfaceTests {
         Names(widgets, "ping").ShouldNotContain("--wait");
 
         static IReadOnlyList<string> Names(Command command, string verb) =>
-            [.. command.Subcommands.Single(x => x.Name == verb).Options.Select(x => x.Name)];
+            [.. command.Subcommands.Single(x => x.Name == verb).Options.Select(static x => x.Name)];
     }
 
     [Fact]

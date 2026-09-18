@@ -195,7 +195,7 @@ public class ResourceIdTests {
         Should.Throw<ArgumentException>(() => Sample with { ParentNames = "pg-main" });
 
         // An ancestor's name is validated exactly as the resource's own is.
-        Should.Throw<ArgumentException>(() => Sample.WithType(
+        Should.Throw<ArgumentException>(static () => Sample.WithType(
                 new("CyberCloud.DBforPostgreSQL", "servers/databases"),
                 "PG-Main"
             )
@@ -546,7 +546,7 @@ public class ResourceIdTests {
         // The naming rule is still load-bearing and still enforced — it is now the second of two
         // independent defences rather than the only one. A name with a '/' would still shift the
         // alternation, so it is still unconstructible:
-        Should.Throw<ArgumentException>(() => new ResourceId(
+        Should.Throw<ArgumentException>(static () => new ResourceId(
                 Guid.Parse("2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3"),
                 Guid.Parse("7f2d4e88-1a3b-4c5d-8e9f-0a1b2c3d4e5f"),
                 "prod",
@@ -617,7 +617,7 @@ public class ResourceIdTests {
 
     [Fact]
     public void AResourceIdNeedsARealType() =>
-        Should.Throw<ArgumentException>(() => new ResourceId(
+        Should.Throw<ArgumentException>(static () => new ResourceId(
                 Guid.NewGuid(),
                 Guid.NewGuid(),
                 "prod",

@@ -460,8 +460,11 @@ public sealed record ResourceSnapshot {
     ///     shape the published OpenAPI document gives the type.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Not the inner <c>properties</c> slice, and it was named <c>Properties</c> until that
-    ///     name did exactly the damage a name can do.</b> For a type declaring <c>/location</c> and
+    ///     ⚠
+    ///     <b>
+    ///         Not the inner <c>properties</c> slice, and it was named <c>Properties</c> until that
+    ///         name did exactly the damage a name can do.
+    ///     </b> For a type declaring <c>/location</c> and
     ///     <c>/properties/message</c> this holds <c>{"location":…,"properties":{"message":…}}</c>:
     ///     every declared pointer at its full path, which is what <c>ResourceProjection.Project</c>
     ///     produces, what the quota and purge-protection readers resolve their <c>/properties/…</c>
@@ -1031,8 +1034,11 @@ public sealed record ResourceChangedEvent {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The provider and type tokens are spelled, not copied, because a NATS subject is
-    ///         dot-delimited and both carry characters a token cannot.</b> <c>CyberCloud.Storage</c>
+    ///         ⚠
+    ///         <b>
+    ///             The provider and type tokens are spelled, not copied, because a NATS subject is
+    ///             dot-delimited and both carry characters a token cannot.
+    ///         </b> <c>CyberCloud.Storage</c>
     ///         holds a dot, which would split one token into two and put every later token one
     ///         position to the right; <c>accounts/fileShares</c> holds a slash, which NATS allows but
     ///         which no subject filter can spell as one token. So each is ASCII-lower-cased with
@@ -1138,11 +1144,14 @@ public sealed record DriftReport {
     public ImmutableArray<DriftFinding> Findings { get; init; } = [];
 
     /// <summary>The orphans — labelled objects whose resource grain is gone, <b>and billed for</b>.</summary>
-    public IEnumerable<DriftFinding> Orphans => Findings.Where(x => x.Kind == DriftKind.Orphan);
+    public IEnumerable<DriftFinding> Orphans => Findings.Where(static x => x.Kind == DriftKind.Orphan);
 
     /// <summary>The strays — resources whose objects vanished.</summary>
-    public IEnumerable<DriftFinding> Strays => Findings.Where(x => x.Kind == DriftKind.Stray);
+    public IEnumerable<DriftFinding> Strays => Findings.Where(static x => x.Kind == DriftKind.Stray);
 
-    /// <summary>The divergences — resources whose objects, or whose slices of others' objects, differ from what the grain holds.</summary>
-    public IEnumerable<DriftFinding> Diverged => Findings.Where(x => x.Kind == DriftKind.Diverged);
+    /// <summary>
+    ///     The divergences — resources whose objects, or whose slices of others' objects, differ from what the grain
+    ///     holds.
+    /// </summary>
+    public IEnumerable<DriftFinding> Diverged => Findings.Where(static x => x.Kind == DriftKind.Diverged);
 }

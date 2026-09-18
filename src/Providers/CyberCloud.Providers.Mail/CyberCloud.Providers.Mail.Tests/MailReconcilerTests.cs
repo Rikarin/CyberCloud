@@ -36,13 +36,13 @@ public sealed class MailReconcilerTests {
 
         await reconciler.ReconcileAsync(context, TestContext.Current.CancellationToken);
 
-        var first = connection.Applied.Select(x => x.Target.Name + "\n" + x.Body).ToArray();
+        var first = connection.Applied.Select(static x => x.Target.Name + "\n" + x.Body).ToArray();
 
         connection.Applied.Clear();
 
         await reconciler.ReconcileAsync(context, TestContext.Current.CancellationToken);
 
-        connection.Applied.Select(x => x.Target.Name + "\n" + x.Body).ShouldBe(first);
+        connection.Applied.Select(static x => x.Target.Name + "\n" + x.Body).ShouldBe(first);
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public sealed class MailReconcilerTests {
             TestContext.Current.CancellationToken
         );
 
-        var order = connection.Applied.Select(x => x.Target.Kind.Kind).ToList();
+        var order = connection.Applied.Select(static x => x.Target.Kind.Kind).ToList();
 
         order.IndexOf("Secret").ShouldBeLessThan(order.IndexOf("StatefulSet"));
         order.IndexOf("ConfigMap").ShouldBeLessThan(order.IndexOf("StatefulSet"));
@@ -81,11 +81,11 @@ public sealed class MailReconcilerTests {
             TestContext.Current.CancellationToken
         );
 
-        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target))
+        var applied = connection.Applied.Select(static x => RecordingConnection.Key(x.Target))
             .ToHashSet(StringComparer.Ordinal);
         var read = connection.Read.Select(RecordingConnection.Key).ToHashSet(StringComparer.Ordinal);
 
-        applied.ShouldBe(read, ignoreOrder: true);
+        applied.ShouldBe(read, true);
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public sealed class MailReconcilerTests {
         await reconciler.ReconcileAsync(context, TestContext.Current.CancellationToken);
         await reconciler.DeleteAsync(context, TestContext.Current.CancellationToken);
 
-        var order = connection.Deleted.Select(x => x.Kind.Kind).ToList();
+        var order = connection.Deleted.Select(static x => x.Kind.Kind).ToList();
 
         order.IndexOf("Secret").ShouldBe(order.Count - 1, "the Secret was not removed last");
 
@@ -179,7 +179,7 @@ public sealed class MailReconcilerTests {
                 TestContext.Current.CancellationToken
             );
 
-            foreach (var command in connection.Applied.Where(x => x.Target.Kind.Kind == "Service")) {
+            foreach (var command in connection.Applied.Where(static x => x.Target.Kind.Kind == "Service")) {
                 command.Body.ShouldNotContain("LoadBalancer", Case.Sensitive);
                 command.Body.ShouldNotContain("NodePort", Case.Sensitive);
             }

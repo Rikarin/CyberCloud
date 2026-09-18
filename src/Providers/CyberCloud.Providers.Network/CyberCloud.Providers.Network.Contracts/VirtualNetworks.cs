@@ -275,7 +275,7 @@ public static class VirtualNetworks {
             "not-a-hardware-boundary",
             "Isolation enforced by separate physical hardware.",
             "Kube-OVN separates tenants in Open vSwitch on shared nodes. docs/plan/14: what it does "
-            + "not give is \"a hardware boundary; a kernel bug in OVS is a cross-tenant risk\".",
+            + """not give is "a hardware boundary; a kernel bug in OVS is a cross-tenant risk".""",
             "A dedicated cluster on dedicated hardware, which docs/plan/14 contemplates for exactly "
             + "this requirement."
         ),
@@ -443,7 +443,7 @@ public static class VirtualNetworks {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the virtual network lives in. ⚠ It selects which reserved "
                     + "ranges the address space is checked against — a region's underlay is part of "
                     + "that list."
@@ -461,7 +461,7 @@ public static class VirtualNetworks {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster whose fabric carries the network."
                 ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
                 new(
@@ -474,7 +474,7 @@ public static class VirtualNetworks {
                 new(
                     "/properties/addressSpace/v4",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The IPv4 range the network plans for, in CIDR form. It may overlap "
                     + "another of your own virtual networks — that is what a VPC is for — and it may "
                     + "not overlap a range the platform reserves, which is refused with the "
@@ -536,7 +536,8 @@ public static class VirtualNetworks {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     /// <summary>
     ///     What a <c>POST …/showIsolation</c> returns.
@@ -567,7 +568,7 @@ public static class VirtualNetworks {
                 new(
                     "/claim",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "What tenant isolation this network provides, in one sentence. It is "
                     + "the same sentence for every virtual network on the platform, and it is "
                     + "deliberately narrower than 'isolated'."
@@ -575,7 +576,7 @@ public static class VirtualNetworks {
                 new(
                     "/limits",
                     SchemaKind.Array,
-                    Required: true,
+                    true,
                     Description: "What this network does NOT guarantee, one entry per limit, each "
                     + "naming the guarantee, why the substrate does not deliver it, and what to ask "
                     + "for instead. ⚠ Read this before deciding a virtual network satisfies a "
@@ -584,7 +585,7 @@ public static class VirtualNetworks {
                 new(
                     "/substrate",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The technology enforcing the separation, named so that a tenant's "
                     + "own security review has something to review."
                 ) { ExampleJson = "\"Kube-OVN (Open vSwitch)\"" }
@@ -682,8 +683,11 @@ public static class VirtualNetworks {
     ///             <b>
     ///                 <c>vpcPeerings</c>
     ///             </b> — a peering is an entry here <i>and</i> a static route per exchanged
-    ///             range, on both networks' objects, in two atomic arrays. <b>This type renders
-    ///             neither</b>: the <c>peerings</c> child writes both as a fragment of this object
+    ///             range, on both networks' objects, in two atomic arrays.
+    ///             <b>
+    ///                 This type renders
+    ///                 neither
+    ///             </b>: the <c>peerings</c> child writes both as a fragment of this object
     ///             through the co-owned apply (docs/plan/09 § A second writer on an object), under a
     ///             manager named for this network and beside these labels, and the network's own
     ///             apply never touches the two arrays. A network that rendered an empty
@@ -760,7 +764,7 @@ public static class VirtualNetworks {
         }
 
         return parsed is JsonObject document
-            && document["kind"]?.GetValue<string>() is (null or "Vpc")
+            && document["kind"]?.GetValue<string>() is null or "Vpc"
             && document["spec"] is JsonObject spec
                 ? spec
                 : null;

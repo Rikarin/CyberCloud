@@ -134,7 +134,7 @@ public sealed class UnreachableShardReadinessTests(UnreachableShardReadinessFixt
 
         var shards = json.RootElement.GetProperty("checks")
             .EnumerateArray()
-            .Single(x => x.GetProperty("name").GetString() == DurableShardHealthCheck.Name);
+            .Single(static x => x.GetProperty("name").GetString() == DurableShardHealthCheck.Name);
 
         shards.GetProperty("status").GetString().ShouldBe("Unhealthy");
 

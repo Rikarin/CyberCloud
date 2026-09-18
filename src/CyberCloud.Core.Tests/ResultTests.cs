@@ -108,9 +108,9 @@ public class ResultTests {
 
     [Fact]
     public void NullArgumentsAreProgrammerErrorsAndThrow() {
-        Should.Throw<ArgumentNullException>(() => Result.Failure(null!));
-        Should.Throw<ArgumentNullException>(() => Result<string>.Failure(null!));
-        Should.Throw<ArgumentNullException>(() => Result<string>.Success(null!));
+        Should.Throw<ArgumentNullException>(static () => Result.Failure(null!));
+        Should.Throw<ArgumentNullException>(static () => Result<string>.Failure(null!));
+        Should.Throw<ArgumentNullException>(static () => Result<string>.Success(null!));
     }
 
     [Fact]

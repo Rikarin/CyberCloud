@@ -55,8 +55,15 @@ static class ResponseBodies {
     ///     </para>
     /// </remarks>
     static readonly HashSet<string> EnvelopeMembers = new(StringComparer.Ordinal) {
-        "id", "name", "type", "location", "provisioningState", "etag", "tags"
+        "id",
+        "name",
+        "type",
+        "location",
+        "provisioningState",
+        "etag",
+        "tags"
     };
+
     /// <summary>Renders a resource.</summary>
     /// <param name="snapshot">The projected snapshot.</param>
     public static string Resource(ResourceSnapshot snapshot) {
@@ -378,7 +385,7 @@ static class ResponseBodies {
             foreach (var row in page.Rows) {
                 // ⚠ Raw, and trusted: the text came from ClickHouse's JSON format, which
                 // ResourceGraphQueryService already parsed once to slice the page.
-                writer.WriteRawValue(row, skipInputValidation: false);
+                writer.WriteRawValue(row, false);
             }
 
             writer.WriteEndArray();

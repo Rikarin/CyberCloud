@@ -12,7 +12,6 @@ using CyberCloud.Tenancy.Separation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
-using Orleans.Runtime;
 using Orleans.Storage;
 using Orleans.TestingHost;
 using System.Globalization;
@@ -103,7 +102,10 @@ public sealed class OtpIssuanceTests(OtpIssuanceCluster cluster) {
         // silently close the edge every OTP in the platform depends on; this is the pin that makes
         // it a compile-and-test failure instead. This project is where both modules meet.
         CyberCloudGrainCallTenantSeparator.PlatformMessageGrainInterface
-            .ShouldBe(typeof(IMessageGrain).FullName, "the separator's string is the interface Orleans names in IIncomingGrainCallContext.InterfaceName");
+            .ShouldBe(
+                typeof(IMessageGrain).FullName,
+                "the separator's string is the interface Orleans names in IIncomingGrainCallContext.InterfaceName"
+            );
     }
 
     [Fact]
@@ -293,7 +295,7 @@ public sealed class OtpIssuanceTests(OtpIssuanceCluster cluster) {
 
         state.OtpChallenges.Count.ShouldBe(1, "the challenge must actually be recorded");
 
-        foreach (var member in state.OtpChallenges.Select(x => x.Digest)) {
+        foreach (var member in state.OtpChallenges.Select(static x => x.Digest)) {
             member.ShouldNotContain(code, Case.Sensitive, "the digest is a keyed hash, not an encoding");
         }
 
@@ -577,7 +579,7 @@ public sealed class OtpIssuanceCluster : IAsyncLifetime {
     ///     This is the only place in the suite the plaintext exists, and it exists because a carrier
     ///     is the one party that legitimately sees it.
     /// </remarks>
-    public IReadOnlyList<string> Codes => [.. Email.Sent.Select(x => x.Body.Split(' ', 2)[0])];
+    public IReadOnlyList<string> Codes => [.. Email.Sent.Select(static x => x.Body.Split(' ', 2)[0])];
 
     /// <summary>The most recent code.</summary>
     public string LastCode => Codes[^1];
@@ -704,7 +706,7 @@ public sealed class OtpIssuanceCluster : IAsyncLifetime {
             silo.AddMemoryGrainStorage(StorageTiers.Durable);
             silo.AddMemoryGrainStorage(StorageTiers.Hot);
 
-            silo.ConfigureServices(services => {
+            silo.ConfigureServices(static services => {
                     // FIRST, so both modules' TryAdd keeps them.
                     services.AddSingleton<IClock>(OtpClock.Instance);
                     services.AddSingleton<IPasswordHasher>(CheapArgon2.Hasher);
@@ -745,7 +747,8 @@ public sealed class OtpIssuanceCluster : IAsyncLifetime {
 
         sealed class ForwardingLogger : ILogger {
             public IDisposable? BeginScope<TState>(TState state)
-                where TState : notnull => null;
+                where TState : notnull =>
+                null;
 
             public bool IsEnabled(LogLevel logLevel) => true;
 

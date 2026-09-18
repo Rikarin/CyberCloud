@@ -315,7 +315,7 @@ public sealed class NamespaceEnsurerTests {
 
         var reclaim = Reclaim(
             occupants: [
-                Occupant("PersistentVolumeClaim", "data-harbor-database-0", managed: false)
+                Occupant("PersistentVolumeClaim", "data-harbor-database-0", false)
             ]
         );
 
@@ -342,7 +342,7 @@ public sealed class NamespaceEnsurerTests {
         // where it takes a live resource's pods with it.
         var (ensurer, connection) = Build();
 
-        var reclaim = Reclaim(occupants: [Occupant("StatefulSet", "harbor-core", managed: true)]);
+        var reclaim = Reclaim(occupants: [Occupant("StatefulSet", "harbor-core", true)]);
 
         reclaim.Deletable.ShouldBeFalse();
 
@@ -377,9 +377,9 @@ public sealed class NamespaceEnsurerTests {
 
         var reclaim = Reclaim(
             occupants: [
-                Occupant("ServiceAccount", "default", managed: false),
-                Occupant("ConfigMap", "kube-root-ca.crt", managed: false),
-                Occupant("Event", "harbor-core.17f2a", managed: false)
+                Occupant("ServiceAccount", "default", false),
+                Occupant("ConfigMap", "kube-root-ca.crt", false),
+                Occupant("Event", "harbor-core.17f2a", false)
             ]
         );
 
@@ -399,24 +399,24 @@ public sealed class NamespaceEnsurerTests {
         // tenant object can wear one — but a kind-wide exemption for ServiceAccount or ConfigMap
         // would hide a tenant's own, which is the exact class of object this whole file refuses
         // over. A ConfigMap holding an application's configuration is not ambient.
-        NamespaceReclaim.IsAmbient(Occupant("ServiceAccount", "default", managed: false)).ShouldBeTrue();
-        NamespaceReclaim.IsAmbient(Occupant("ConfigMap", "kube-root-ca.crt", managed: false)).ShouldBeTrue();
+        NamespaceReclaim.IsAmbient(Occupant("ServiceAccount", "default", false)).ShouldBeTrue();
+        NamespaceReclaim.IsAmbient(Occupant("ConfigMap", "kube-root-ca.crt", false)).ShouldBeTrue();
 
-        NamespaceReclaim.IsAmbient(Occupant("ServiceAccount", "harbor-core", managed: false)).ShouldBeFalse();
-        NamespaceReclaim.IsAmbient(Occupant("ConfigMap", "harbor-config", managed: false)).ShouldBeFalse();
+        NamespaceReclaim.IsAmbient(Occupant("ServiceAccount", "harbor-core", false)).ShouldBeFalse();
+        NamespaceReclaim.IsAmbient(Occupant("ConfigMap", "harbor-config", false)).ShouldBeFalse();
 
         // ⚠ NOT the auto-mounted token Secret, which Kubernetes stopped creating in 1.24. The only
         // rule that would match one is a name prefix, and a tenant can occupy a prefix — so an old
         // cluster that still has one reports as an occupant and a person decides.
-        NamespaceReclaim.IsAmbient(Occupant("Secret", "default-token-x9f2b", managed: false)).ShouldBeFalse();
+        NamespaceReclaim.IsAmbient(Occupant("Secret", "default-token-x9f2b", false)).ShouldBeFalse();
     }
 
     [Fact]
     public void OneTenantObjectAmongTheAmbientOnesIsStillARefusal() {
         var reclaim = Reclaim(
             occupants: [
-                Occupant("ServiceAccount", "default", managed: false),
-                Occupant("PersistentVolumeClaim", "data-harbor-database-0", managed: false)
+                Occupant("ServiceAccount", "default", false),
+                Occupant("PersistentVolumeClaim", "data-harbor-database-0", false)
             ]
         );
 
@@ -441,7 +441,7 @@ public sealed class NamespaceEnsurerTests {
         var (ensurer, connection) = Build();
 
         var reclaim = Reclaim(
-            members: [
+            [
                 new() {
                     ResourceId = Address.Id,
                     CanonicalPath = Address.CanonicalPath,
@@ -620,9 +620,9 @@ public sealed class NamespaceEnsurerTests {
             )).GetValueOrThrow();
 
         occupants.Length.ShouldBe(2);
-        occupants.Single(x => x.Name == "ours").IsManaged.ShouldBeTrue();
-        occupants.Single(x => x.Name == "theirs").IsManaged.ShouldBeFalse();
-        occupants.Single(x => x.Name == "ours").Kind.ShouldBe("PersistentVolumeClaim");
+        occupants.Single(static x => x.Name == "ours").IsManaged.ShouldBeTrue();
+        occupants.Single(static x => x.Name == "theirs").IsManaged.ShouldBeFalse();
+        occupants.Single(static x => x.Name == "ours").Kind.ShouldBe("PersistentVolumeClaim");
     }
 
     // ── The harness ──────────────────────────────────────────────────────────────────────────────

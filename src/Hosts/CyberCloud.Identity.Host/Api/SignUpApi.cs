@@ -57,8 +57,11 @@ public sealed record SignUpApiResult(
 ///         sign-up the ticket names, which the caller started, so their answers may be specific.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>begin</c> is the one unauthenticated call that makes the platform send
-///         something, and the caller is bounded before the grain is.</b> Every code it issues
+///         ⚠
+///         <b>
+///             <c>begin</c> is the one unauthenticated call that makes the platform send
+///             something, and the caller is bounded before the grain is.
+///         </b> Every code it issues
 ///         goes out through the platform's own communication service, whose daily cap is shared by
 ///         every tenant's sign-in codes (<c>PlatformCommunicationServiceOptions.MaxEmailsPerDay</c>).
 ///         The per-sign-up issue cap (<see cref="OtpPolicy.MaxIssuesPerWindow" />) bounds one
@@ -164,7 +167,9 @@ public sealed class SignUpApi(
             //    nothing here — the class remarks. Counted on every well-formed begin that passes
             //    the gate, whether the grain then issues a code or refuses one: a resend is a code
             //    too, and a malformed address costs nothing, so it is not counted. ────────────────
-            var caller = string.IsNullOrWhiteSpace(clientAddress) ? (LockoutKey?)null : LockoutKey.ForCaller(clientAddress);
+            var caller = string.IsNullOrWhiteSpace(clientAddress)
+                ? (LockoutKey?)null
+                : LockoutKey.ForCaller(clientAddress);
 
             if (caller is { } key) {
                 if (await lockout.IsLockedAsync(key, cancellationToken)) {
@@ -268,7 +273,13 @@ public sealed class SignUpApi(
 
         return new(
             new PasskeyBeginResponse(issued.OptionsJson),
-            Challenge: new(issued.OptionsJson, signup.Email, issued.ExpiresAt, Guid.Empty, PasskeyChallengeKind.Registration)
+            Challenge: new(
+                issued.OptionsJson,
+                signup.Email,
+                issued.ExpiresAt,
+                Guid.Empty,
+                PasskeyChallengeKind.Registration
+            )
         );
     }
 
@@ -335,7 +346,9 @@ public sealed class SignUpApi(
                 }
 
                 var registered = await passkeys.CompleteRegistrationAsync(
-                    new() { OptionsJson = challenge.OptionsJson, UserId = signup.UserId, ExpiresAt = challenge.ExpiresAt },
+                    new() {
+                        OptionsJson = challenge.OptionsJson, UserId = signup.UserId, ExpiresAt = challenge.ExpiresAt
+                    },
                     request.Credential.AttestationJson
                 );
 
@@ -425,7 +438,12 @@ public sealed class SignUpApi(
         query[TenantParameter] = tenantId;
 
         var rebuilt = QueryString.Create(
-            query.SelectMany(pair => pair.Value.Select(value => new KeyValuePair<string, string?>(pair.Key, value)))
+            query.SelectMany(static pair => pair.Value.Select(value => new KeyValuePair<string, string?>(
+                        pair.Key,
+                        value
+                    )
+                )
+            )
         );
 
         return path + rebuilt.ToUriComponent() + fragment;
@@ -475,7 +493,8 @@ public sealed class SignUpApi(
     static SignUpApiResult Closed(string returnUrl) =>
         new(new SignUpCompleteResponse(false, string.Empty, returnUrl, ClosedMessage));
 
-    static SignUpApiResult Unauthorized() => new(new SignUpCompleteResponse(false, string.Empty, ReturnUrl.Default, string.Empty), Unauthorized: true);
+    static SignUpApiResult Unauthorized() =>
+        new(new SignUpCompleteResponse(false, string.Empty, ReturnUrl.Default, string.Empty), Unauthorized: true);
 
     ISignUpGrain SignUp(Guid signupId) =>
         grains.ForTenant(Guid.Empty.ToString("D", CultureInfo.InvariantCulture))

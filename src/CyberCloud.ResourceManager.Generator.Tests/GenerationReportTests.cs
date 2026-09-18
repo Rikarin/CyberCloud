@@ -101,18 +101,18 @@ public sealed class GenerationReportTests {
     ];
 
     static IReadOnlyList<string> KeysOf(JsonObject value) =>
-        [.. value.Select(x => x.Key).OrderBy(x => x, StringComparer.Ordinal)];
+        [.. value.Select(static x => x.Key).OrderBy(static x => x, StringComparer.Ordinal)];
 
     [Fact]
     public void TheReportSpellsEveryKeyTheBuildReadsAndSpellsThemTheSameWay() {
         using var tree = new TemporaryTree();
 
-        Generator.Run(tree, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(tree, false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
         var report = tree.Report();
 
         KeysOf(report).ShouldBe(
-            [.. RootKeys.OrderBy(x => x, StringComparer.Ordinal)],
+            [.. RootKeys.OrderBy(static x => x, StringComparer.Ordinal)],
             "build/Build.Generate.cs § Parse indexes this object by literal name and null-forgives "
             + "the result, so a key that is renamed, dropped or added here changes the build's "
             + "behaviour with nothing in either compiler to say so"
@@ -124,7 +124,7 @@ public sealed class GenerationReportTests {
         documents.Count.ShouldBe(2);
 
         foreach (var document in documents) {
-            KeysOf(document!.AsObject()).ShouldBe([.. DocumentKeys.OrderBy(x => x, StringComparer.Ordinal)]);
+            KeysOf(document!.AsObject()).ShouldBe([.. DocumentKeys.OrderBy(static x => x, StringComparer.Ordinal)]);
         }
 
         var derived = report["derived"]!.AsArray();
@@ -134,11 +134,11 @@ public sealed class GenerationReportTests {
         // and the Go SDK's three per version and one written once (issue #40). Each file is its own
         // row because each is byte-compared on its own.
         derived.Count.ShouldBe(14);
-        derived.Count(x => x!["surface"]!.GetValue<string>() == "sdk-python").ShouldBe(7);
-        derived.Count(x => x!["surface"]!.GetValue<string>() == "sdk-go").ShouldBe(4);
+        derived.Count(static x => x!["surface"]!.GetValue<string>() == "sdk-python").ShouldBe(7);
+        derived.Count(static x => x!["surface"]!.GetValue<string>() == "sdk-go").ShouldBe(4);
 
         foreach (var surface in derived) {
-            KeysOf(surface!.AsObject()).ShouldBe([.. DerivedKeys.OrderBy(x => x, StringComparer.Ordinal)]);
+            KeysOf(surface!.AsObject()).ShouldBe([.. DerivedKeys.OrderBy(static x => x, StringComparer.Ordinal)]);
         }
 
         var actions = report["actions"]!.AsArray();
@@ -149,7 +149,7 @@ public sealed class GenerationReportTests {
         actions.Count.ShouldBe(1);
 
         foreach (var action in actions) {
-            KeysOf(action!.AsObject()).ShouldBe([.. ActionKeys.OrderBy(x => x, StringComparer.Ordinal)]);
+            KeysOf(action!.AsObject()).ShouldBe([.. ActionKeys.OrderBy(static x => x, StringComparer.Ordinal)]);
         }
     }
 
@@ -161,7 +161,7 @@ public sealed class GenerationReportTests {
         // place with no connection to the change.
         using var tree = new TemporaryTree();
 
-        Generator.Run(tree, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(tree, false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
         var report = tree.Report();
 
@@ -183,8 +183,8 @@ public sealed class GenerationReportTests {
                     read.Add(value["apiVersion"]!.GetValue<string>());
                     read.Add(value["published"]!.GetValue<bool>());
                     read.Add(value["drifted"]!.GetValue<bool>());
-                    read.AddRange(value["structuralProblems"]!.AsArray().Select(x => x!.GetValue<string>()));
-                    read.AddRange(value["breakingChanges"]!.AsArray().Select(x => x!.GetValue<string>()));
+                    read.AddRange(value["structuralProblems"]!.AsArray().Select(static x => x!.GetValue<string>()));
+                    read.AddRange(value["breakingChanges"]!.AsArray().Select(static x => x!.GetValue<string>()));
                 }
 
                 foreach (var surface in report["derived"]!.AsArray()) {
@@ -195,7 +195,7 @@ public sealed class GenerationReportTests {
                     read.Add(value["apiVersion"]!.GetValue<string>());
                     read.Add(value["published"]!.GetValue<bool>());
                     read.Add(value["drifted"]!.GetValue<bool>());
-                    read.AddRange(value["problems"]!.AsArray().Select(x => x!.GetValue<string>()));
+                    read.AddRange(value["problems"]!.AsArray().Select(static x => x!.GetValue<string>()));
                 }
 
                 foreach (var action in report["actions"]!.AsArray()) {
@@ -215,8 +215,8 @@ public sealed class GenerationReportTests {
                     read.Add(value["handler"] is { } handler ? handler.GetValue<string>() : "(none)");
                 }
 
-                read.AddRange(report["stale"]!.AsArray().Select(x => x!.GetValue<string>()));
-                read.AddRange(report["derivedStale"]!.AsArray().Select(x => x!.GetValue<string>()));
+                read.AddRange(report["stale"]!.AsArray().Select(static x => x!.GetValue<string>()));
+                read.AddRange(report["derivedStale"]!.AsArray().Select(static x => x!.GetValue<string>()));
             }
         );
 
@@ -237,7 +237,7 @@ public sealed class GenerationReportTests {
         using var scannedSomething = new TemporaryTree();
 
         Generator.Run(scannedNothing).ExitCode.ShouldBe(Ok);
-        Generator.Run(scannedSomething, check: false, Generator.ProviderlessAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(scannedSomething, false, Generator.ProviderlessAssembly).ExitCode.ShouldBe(Ok);
 
         scannedNothing.Report()["assembliesScanned"]!.GetValue<int>().ShouldBe(0);
         scannedNothing.Report()["providers"]!.GetValue<int>().ShouldBe(0);
@@ -274,7 +274,7 @@ public sealed class GenerationReportTests {
 
         Directory.Exists(Path.GetDirectoryName(tree.ReportFile)!).ShouldBeFalse();
 
-        Generator.Run(tree, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(tree, false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
         File.Exists(tree.ReportFile).ShouldBeTrue();
     }
@@ -291,17 +291,17 @@ public sealed class GenerationReportTests {
         using var tree = new TemporaryTree();
 
         // First run: everything is new, so everything drifted.
-        Generator.Run(tree, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(tree, false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
         tree.Report()["clean"]!.GetValue<bool>().ShouldBeFalse();
 
         // Second run: both halves reproduce what the first wrote.
-        Generator.Run(tree, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(tree, false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
         tree.Report()["clean"]!.GetValue<bool>().ShouldBeTrue();
 
         // Now disturb only a derived surface. The OpenAPI half is untouched and still clean.
         File.WriteAllText(Path.Combine(tree.DerivedDirectory, "cli", "2026-08-01.json"), "{}");
 
-        Generator.Run(tree, check: true, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(tree, true, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
         var report = tree.Report();
 
@@ -318,14 +318,14 @@ public sealed class GenerationReportTests {
         // contract is the failure that window exists to prevent.
         using var tree = new TemporaryTree();
 
-        Generator.Run(tree, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(tree, false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
         var orphan = Path.Combine(tree.OpenApiDirectory, "2019-01-01.json");
         File.WriteAllText(orphan, "{}");
 
-        Generator.Run(tree, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(tree, false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
-        tree.Report()["stale"]!.AsArray().Select(x => x!.GetValue<string>()).ShouldContain("2019-01-01.json");
+        tree.Report()["stale"]!.AsArray().Select(static x => x!.GetValue<string>()).ShouldContain("2019-01-01.json");
         File.Exists(orphan).ShouldBeTrue();
     }
 }

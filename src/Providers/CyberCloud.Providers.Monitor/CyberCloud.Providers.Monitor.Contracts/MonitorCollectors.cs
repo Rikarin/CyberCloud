@@ -13,9 +13,15 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/16 § OTel Collector as a service · <b>M2 · 1.0 EM</b>: <i>"A tenant-owned
-///         collector deployment in their cluster, configured declaratively"</i>, with <i>"the
-///         cybercloud exporter … pre-wired to the tenant's workspace"</i>. Issue #32's second noun
+///         docs/plan/16 § OTel Collector as a service · <b>M2 · 1.0 EM</b>:
+///         <i>
+///             "A tenant-owned
+///             collector deployment in their cluster, configured declaratively"
+///         </i>, with
+///         <i>
+///             "the
+///             cybercloud exporter … pre-wired to the tenant's workspace"
+///         </i>. Issue #32's second noun
 ///         of four. A tenant points their own workloads at the endpoint <c>listEndpoints</c> hands
 ///         back and the collector carries the telemetry into the workspace the collector hangs off.
 ///     </para>
@@ -50,8 +56,11 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 ///     <para>
 ///         ⚠ <b>THE CONFIGURATION IS RENDERED, NOT ACCEPTED.</b> docs/plan/16 describes a tenant
 ///         declaring <c>receivers: [otlp, prometheus, filelog, kubeletstats]</c> and their own
-///         exporters, validated against an allow-list, because <i>"an arbitrary collector config is a
-///         data-exfiltration primitive and a code-execution surface"</i>. This version offers the
+///         exporters, validated against an allow-list, because
+///         <i>
+///             "an arbitrary collector config is a
+///             data-exfiltration primitive and a code-execution surface"
+///         </i>. This version offers the
 ///         allow-list's safest subset as typed properties — which OTLP protocols to listen on — and
 ///         renders the whole file itself, so there is no config to validate and no exporter a tenant
 ///         can point elsewhere. That is the smaller product and the honest one to ship first; the
@@ -217,8 +226,7 @@ public static class MonitorCollectors {
     ///     workspace's own <c>monitor-{name}</c> objects in the same namespace.
     /// </remarks>
     /// <exception cref="ArgumentException"><paramref name="id" /> carries no parent name.</exception>
-    public static string ObjectNameOf(ResourceId id) =>
-        "collector-" + WorkspaceNameOf(id) + "-" + id.Name;
+    public static string ObjectNameOf(ResourceId id) => "collector-" + WorkspaceNameOf(id) + "-" + id.Name;
 
     /// <summary>The workspace a collector feeds, which is its parent's own name.</summary>
     /// <param name="id">The collector's address.</param>
@@ -350,7 +358,8 @@ public static class MonitorCollectors {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     /// <summary>What a <c>listEndpoints</c> returns.</summary>
     /// <remarks>
@@ -444,8 +453,11 @@ public static class MonitorCollectors {
     ///         in iteration order.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>${env:…}</c> is the collector's own substitution syntax and it happens at
-    ///         start</b>, so the accountID, the database and the key never appear in this text, in
+    ///         ⚠
+    ///         <b>
+    ///             <c>${env:…}</c> is the collector's own substitution syntax and it happens at
+    ///             start
+    ///         </b>, so the accountID, the database and the key never appear in this text, in
     ///         the <c>ConfigMap</c>, or in the desired-state document the drift scanner keeps. The
     ///         basic-auth <i>username</i> is spelled in full because it is the workspace's
     ///         <c>VMUser</c> name, a pure function of the workspace's name.
@@ -458,9 +470,12 @@ public static class MonitorCollectors {
     ///         error, and a tenant's SDK then retries into a collector that is up.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The ClickHouse exporter is given the query host and the database as two settings,
-    ///         not <see cref="MonitorWorkspaces.SqlEndpoint(string)" />'s one URL — measured against
-    ///         the real image on 2026-09-17.</b> clickhouse-go reads a DSN's <i>path</i> as the
+    ///         ⚠
+    ///         <b>
+    ///             The ClickHouse exporter is given the query host and the database as two settings,
+    ///             not <see cref="MonitorWorkspaces.SqlEndpoint(string)" />'s one URL — measured against
+    ///             the real image on 2026-09-17.
+    ///         </b> clickhouse-go reads a DSN's <i>path</i> as the
     ///         database name, so <c>https://telemetry.cybercloud.svc/sql/ws_x</c> became
     ///         <c>database=sql%2Fws_x</c> in the first request the collector sent. The host is the
     ///         workspace's query host and the database is the workspace's; the <c>/sql/</c> path is
@@ -556,7 +571,8 @@ public static class MonitorCollectors {
     /// <summary>The hash of the rendered configuration, as the pod template carries it.</summary>
     /// <param name="id">The collector's address.</param>
     /// <param name="desired">The validated desired body.</param>
-    public static string ConfigHash(ResourceId id, JsonElement desired) => KubeLabels.ReconcileHash(CollectorConfig(id, desired));
+    public static string ConfigHash(ResourceId id, JsonElement desired) =>
+        KubeLabels.ReconcileHash(CollectorConfig(id, desired));
 
     // ── The three documents ───────────────────────────────────────────────────────────────────
 
@@ -588,8 +604,11 @@ public static class MonitorCollectors {
     ///         is held by the kubelet, by name, until it has.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The readiness probe asks the <c>health_check</c> extension, not a receiver
-    ///         port.</b> A TCP probe on 4317 would report a collector ready while its exporters were
+    ///         ⚠
+    ///         <b>
+    ///             The readiness probe asks the <c>health_check</c> extension, not a receiver
+    ///             port.
+    ///         </b> A TCP probe on 4317 would report a collector ready while its exporters were
     ///         still starting; the extension answers <c>200</c> only once the whole service has.
     ///     </para>
     /// </remarks>
@@ -600,11 +619,15 @@ public static class MonitorCollectors {
         var ports = new JsonArray();
 
         if (OtlpGrpc(desired)) {
-            ports.Add(new JsonObject { ["name"] = "otlp-grpc", ["containerPort"] = OtlpGrpcPort, ["protocol"] = "TCP" });
+            ports.Add(
+                new JsonObject { ["name"] = "otlp-grpc", ["containerPort"] = OtlpGrpcPort, ["protocol"] = "TCP" }
+            );
         }
 
         if (OtlpHttp(desired)) {
-            ports.Add(new JsonObject { ["name"] = "otlp-http", ["containerPort"] = OtlpHttpPort, ["protocol"] = "TCP" });
+            ports.Add(
+                new JsonObject { ["name"] = "otlp-http", ["containerPort"] = OtlpHttpPort, ["protocol"] = "TCP" }
+            );
         }
 
         return new JsonObject {
@@ -647,7 +670,9 @@ public static class MonitorCollectors {
                                     ["limits"] = new JsonObject { ["cpu"] = cpu, ["memory"] = memory }
                                 },
                                 ["volumeMounts"] = new JsonArray {
-                                    new JsonObject { ["name"] = "config", ["mountPath"] = ConfigDirectory, ["readOnly"] = true }
+                                    new JsonObject {
+                                        ["name"] = "config", ["mountPath"] = ConfigDirectory, ["readOnly"] = true
+                                    }
                                 }
                             }
                         },
@@ -672,11 +697,19 @@ public static class MonitorCollectors {
         var ports = new JsonArray();
 
         if (OtlpGrpc(desired)) {
-            ports.Add(new JsonObject { ["name"] = "otlp-grpc", ["port"] = OtlpGrpcPort, ["targetPort"] = OtlpGrpcPort, ["protocol"] = "TCP" });
+            ports.Add(
+                new JsonObject {
+                    ["name"] = "otlp-grpc", ["port"] = OtlpGrpcPort, ["targetPort"] = OtlpGrpcPort, ["protocol"] = "TCP"
+                }
+            );
         }
 
         if (OtlpHttp(desired)) {
-            ports.Add(new JsonObject { ["name"] = "otlp-http", ["port"] = OtlpHttpPort, ["targetPort"] = OtlpHttpPort, ["protocol"] = "TCP" });
+            ports.Add(
+                new JsonObject {
+                    ["name"] = "otlp-http", ["port"] = OtlpHttpPort, ["targetPort"] = OtlpHttpPort, ["protocol"] = "TCP"
+                }
+            );
         }
 
         return new JsonObject {
@@ -760,7 +793,7 @@ public static class MonitorCollectors {
         }
 
         var found = ports
-            .Select(x => x?["port"]?.GetValue<int>() ?? 0)
+            .Select(static x => x?["port"]?.GetValue<int>() ?? 0)
             .Order()
             .ToArray();
 

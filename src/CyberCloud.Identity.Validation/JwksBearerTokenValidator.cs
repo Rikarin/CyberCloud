@@ -32,8 +32,11 @@ namespace CyberCloud.Identity.Validation;
 ///         still caught. Item 7, the workload exchange, happens at the identity host and never here.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every field of <see cref="TokenClaims" /> is read from the <i>validated</i> principal
-///         and from nothing else.</b> The token's bytes are handed to OpenIddict and what comes back
+///         ⚠
+///         <b>
+///             Every field of <see cref="TokenClaims" /> is read from the <i>validated</i> principal
+///             and from nothing else.
+///         </b> The token's bytes are handed to OpenIddict and what comes back
 ///         is a principal or an exception; no claim is read before the signature is checked, which
 ///         is what makes <c>TenantFromTokenTests.AForgedTokenIs401AndCarriesNoTenantAtAll</c>'s
 ///         property hold for this implementation as it does for the in-process one.
@@ -83,26 +86,26 @@ public sealed class JwksBearerTokenValidator(IClock clock, ILogger<JwksBearerTok
             principal = await validation.ValidateAccessTokenAsync(token, cancellationToken);
         } catch (OpenIddictExceptions.ProtocolException refused)
             when (!string.Equals(refused.Error, OpenIddictConstants.Errors.ServerError, StringComparison.Ordinal)) {
-            // ⚠ The reason stays in the log. "Bad signature", "wrong audience" and "expired" are each
-            // a hint to whoever is probing, and the caller can act on exactly one thing — that they
-            // need a token this platform issued.
-            logger.LogInformation(
-                "A bearer token was refused: {Error} — {Description}",
-                refused.Error,
-                refused.ErrorDescription
-            );
+                // ⚠ The reason stays in the log. "Bad signature", "wrong audience" and "expired" are each
+                // a hint to whoever is probing, and the caller can act on exactly one thing — that they
+                // need a token this platform issued.
+                logger.LogInformation(
+                    "A bearer token was refused: {Error} — {Description}",
+                    refused.Error,
+                    refused.ErrorDescription
+                );
 
-            return Result<TokenClaims>.Failure(
-                BearerTokenErrors.Unauthenticated("the bearer token was not issued by this platform or has expired")
-            );
-        } catch (OpenIddictExceptions.ProtocolException unreachable) {
-            throw new InvalidOperationException(
-                "No bearer token can be validated because the identity host's discovery document or "
-                + "key set could not be retrieved. The host's bearer-token section names the issuer "
-                + $"— OpenIddict said: {unreachable.ErrorDescription}",
-                unreachable
-            );
-        }
+                return Result<TokenClaims>.Failure(
+                    BearerTokenErrors.Unauthenticated("the bearer token was not issued by this platform or has expired")
+                );
+            } catch (OpenIddictExceptions.ProtocolException unreachable) {
+                throw new InvalidOperationException(
+                    "No bearer token can be validated because the identity host's discovery document or "
+                    + "key set could not be retrieved. The host's bearer-token section names the issuer "
+                    + $"— OpenIddict said: {unreachable.ErrorDescription}",
+                    unreachable
+                );
+            }
 
         return ToClaims(principal, clock.UtcNow);
     }

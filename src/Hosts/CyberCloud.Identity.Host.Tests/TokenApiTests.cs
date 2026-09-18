@@ -7,7 +7,6 @@ using CyberCloud.Identity.Host.Tests.Infrastructure;
 using CyberCloud.Identity.Host.Tokens;
 using CyberCloud.Identity.Seams;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
@@ -89,11 +88,16 @@ public sealed partial class TokenApiTests(IdentityHostFixture fixture) {
         // caller learn which GUIDs are service principals in this tenant, which of those are
         // enabled, and which have a credential — from the token endpoint, at volume.
         var unknown = Build(new OneServicePrincipal(null), new OneSecret(Credential, "right"));
-        var disabled = Build(new OneServicePrincipal(Principal with { Enabled = false }), new OneSecret(Credential, "right"));
+        var disabled = Build(
+            new OneServicePrincipal(Principal with { Enabled = false }),
+            new OneSecret(Credential, "right")
+        );
         var wrong = Build(new OneServicePrincipal(Principal), new OneSecret(Credential, "right"));
         var unwired = Build(new OneServicePrincipal(Principal), new UnavailableClientSecrets());
 
-        foreach (var (api, secret) in new[] { (unknown, "right"), (disabled, "right"), (wrong, "wrong"), (unwired, "right") }) {
+        foreach (var (api, secret) in new[] {
+                     (unknown, "right"), (disabled, "right"), (wrong, "wrong"), (unwired, "right")
+                 }) {
             var refused = await api.AuthenticateClientAsync(ClientId, secret, TestContext.Current.CancellationToken);
 
             refused.IsFailure.ShouldBeTrue();
@@ -153,11 +157,18 @@ public sealed partial class TokenApiTests(IdentityHostFixture fixture) {
 
     /// <summary>A vault holding exactly one secret behind one handle, compared in constant time.</summary>
     sealed class OneSecret(SecretRef known, string secret) : IClientSecretSeam {
-        public Task<Result<bool>> VerifyAsync(SecretRef reference, string presented, CancellationToken cancellationToken = default) =>
+        public Task<Result<bool>> VerifyAsync(
+            SecretRef reference,
+            string presented,
+            CancellationToken cancellationToken = default
+        ) =>
             Task.FromResult(
                 Result<bool>.Success(
                     reference == known
-                    && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(presented), Encoding.UTF8.GetBytes(secret))
+                    && CryptographicOperations.FixedTimeEquals(
+                        Encoding.UTF8.GetBytes(presented),
+                        Encoding.UTF8.GetBytes(secret)
+                    )
                 )
             );
     }
@@ -181,24 +192,37 @@ public sealed partial class TokenApiTests(IdentityHostFixture fixture) {
                 : refusing.GetGrain<TGrainInterface>(primaryKey, grainClassNamePrefix);
 
         public TGrainInterface GetGrain<TGrainInterface>(Guid primaryKey, string? grainClassNamePrefix = null)
-            where TGrainInterface : IGrainWithGuidKey => refusing.GetGrain<TGrainInterface>(primaryKey, grainClassNamePrefix);
+            where TGrainInterface : IGrainWithGuidKey =>
+            refusing.GetGrain<TGrainInterface>(primaryKey, grainClassNamePrefix);
 
         public TGrainInterface GetGrain<TGrainInterface>(long primaryKey, string? grainClassNamePrefix = null)
-            where TGrainInterface : IGrainWithIntegerKey => refusing.GetGrain<TGrainInterface>(primaryKey, grainClassNamePrefix);
+            where TGrainInterface : IGrainWithIntegerKey =>
+            refusing.GetGrain<TGrainInterface>(primaryKey, grainClassNamePrefix);
 
-        public TGrainInterface GetGrain<TGrainInterface>(Guid primaryKey, string keyExtension, string? grainClassNamePrefix = null)
+        public TGrainInterface GetGrain<TGrainInterface>(
+            Guid primaryKey,
+            string keyExtension,
+            string? grainClassNamePrefix = null
+        )
             where TGrainInterface : IGrainWithGuidCompoundKey =>
             refusing.GetGrain<TGrainInterface>(primaryKey, keyExtension, grainClassNamePrefix);
 
-        public TGrainInterface GetGrain<TGrainInterface>(long primaryKey, string keyExtension, string? grainClassNamePrefix = null)
+        public TGrainInterface GetGrain<TGrainInterface>(
+            long primaryKey,
+            string keyExtension,
+            string? grainClassNamePrefix = null
+        )
             where TGrainInterface : IGrainWithIntegerCompoundKey =>
             refusing.GetGrain<TGrainInterface>(primaryKey, keyExtension, grainClassNamePrefix);
 
-        public IGrain GetGrain(Type grainInterfaceType, Guid grainPrimaryKey) => refusing.GetGrain(grainInterfaceType, grainPrimaryKey);
+        public IGrain GetGrain(Type grainInterfaceType, Guid grainPrimaryKey) =>
+            refusing.GetGrain(grainInterfaceType, grainPrimaryKey);
 
-        public IGrain GetGrain(Type grainInterfaceType, long grainPrimaryKey) => refusing.GetGrain(grainInterfaceType, grainPrimaryKey);
+        public IGrain GetGrain(Type grainInterfaceType, long grainPrimaryKey) =>
+            refusing.GetGrain(grainInterfaceType, grainPrimaryKey);
 
-        public IGrain GetGrain(Type grainInterfaceType, string grainPrimaryKey) => refusing.GetGrain(grainInterfaceType, grainPrimaryKey);
+        public IGrain GetGrain(Type grainInterfaceType, string grainPrimaryKey) =>
+            refusing.GetGrain(grainInterfaceType, grainPrimaryKey);
 
         public IGrain GetGrain(Type grainInterfaceType, Guid grainPrimaryKey, string keyExtension) =>
             refusing.GetGrain(grainInterfaceType, grainPrimaryKey, keyExtension);
@@ -207,7 +231,8 @@ public sealed partial class TokenApiTests(IdentityHostFixture fixture) {
             refusing.GetGrain(grainInterfaceType, grainPrimaryKey, keyExtension);
 
         public TGrainInterface GetGrain<TGrainInterface>(GrainId grainId)
-            where TGrainInterface : IAddressable => refusing.GetGrain<TGrainInterface>(grainId);
+            where TGrainInterface : IAddressable =>
+            refusing.GetGrain<TGrainInterface>(grainId);
 
         public IAddressable GetGrain(GrainId grainId) => refusing.GetGrain(grainId);
 
@@ -216,10 +241,12 @@ public sealed partial class TokenApiTests(IdentityHostFixture fixture) {
         public IAddressable GetGrain(Type interfaceType, IdSpan grainKey, string grainClassNamePrefix) =>
             refusing.GetGrain(interfaceType, grainKey, grainClassNamePrefix);
 
-        public IAddressable GetGrain(GrainId grainId, GrainInterfaceType interfaceType) => refusing.GetGrain(grainId, interfaceType);
+        public IAddressable GetGrain(GrainId grainId, GrainInterfaceType interfaceType) =>
+            refusing.GetGrain(grainId, interfaceType);
 
         public TGrainObserverInterface CreateObjectReference<TGrainObserverInterface>(IGrainObserver obj)
-            where TGrainObserverInterface : IGrainObserver => default!;
+            where TGrainObserverInterface : IGrainObserver =>
+            default!;
 
         public void DeleteObjectReference<TGrainObserverInterface>(IGrainObserver obj)
             where TGrainObserverInterface : IGrainObserver { }
@@ -235,7 +262,8 @@ public sealed partial class TokenApiTests(IdentityHostFixture fixture) {
             public Task<Result<ServicePrincipalDescriptor>> CreateAsync(ServicePrincipalDescriptor descriptor) =>
                 throw new NotSupportedException();
 
-            public Task<Result<ServicePrincipalDescriptor>> SetEnabledAsync(bool enabled) => throw new NotSupportedException();
+            public Task<Result<ServicePrincipalDescriptor>> SetEnabledAsync(bool enabled) =>
+                throw new NotSupportedException();
 
             public Task<Result<ServicePrincipalDescriptor>> RotateCredentialAsync(SecretRef credentialSecretRef) =>
                 throw new NotSupportedException();
@@ -251,7 +279,8 @@ public sealed partial class TokenApiTests(IdentityHostFixture fixture) {
         public ConcurrentQueue<string> Messages { get; } = new();
 
         public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
+            where TState : notnull =>
+            null;
 
         public bool IsEnabled(LogLevel logLevel) => true;
 

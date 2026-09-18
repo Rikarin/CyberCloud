@@ -6,8 +6,11 @@ namespace CyberCloud.Providers.Monitor;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>An action rather than an <c>alertRules/instances</c> child type, for the reason the
-///         sending module's <c>send</c> is an action rather than a <c>messages</c> type.</b> An
+///         ⚠
+///         <b>
+///             An action rather than an <c>alertRules/instances</c> child type, for the reason the
+///             sending module's <c>send</c> is an action rather than a <c>messages</c> type.
+///         </b> An
 ///         instance is an event the evaluator produced, not desired state a tenant declares: a
 ///         resource for one would have a PUT nothing could apply and a DELETE that could not
 ///         un-fire it. docs/plan/16 § Alerts calls the collection <i>alert instances</i> and this is

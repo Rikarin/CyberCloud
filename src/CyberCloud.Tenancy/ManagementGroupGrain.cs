@@ -45,7 +45,11 @@ public sealed class ManagementGroupGrain(
     }
 
     /// <inheritdoc />
-    public async Task<Result<ManagementGroupDescriptor>> CreateAsync(string displayName, string parent, int parentDepth) {
+    public async Task<Result<ManagementGroupDescriptor>> CreateAsync(
+        string displayName,
+        string parent,
+        int parentDepth
+    ) {
         if (parent.Length > 0) {
             var parentName = ResourceNaming.Validate(parent, "management group name");
             if (parentName.TryGetError(out var invalidParent)) {
@@ -207,9 +211,9 @@ public sealed class ManagementGroupGrain(
                 + "(IScopeManager.DeleteAsync). "
                 + string.Join(
                     ", ",
-                    state.State.Children.Select(x => "group " + x)
+                    state.State.Children.Select(static x => "group " + x)
                         .Concat(
-                            state.State.Subscriptions.Select(x =>
+                            state.State.Subscriptions.Select(static x =>
                                 "subscription " + x.ToString("D", CultureInfo.InvariantCulture)
                             )
                         )

@@ -37,11 +37,11 @@ public sealed class KubeLabelTests {
 
     /// <summary><c>IsValidLabelValue</c> — may be empty, ≤63, alphanumeric-bounded.</summary>
     static readonly Regex LabelValue =
-        new(@"^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$", RegexOptions.None, TimeSpan.FromSeconds(1));
+        new("^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$", RegexOptions.None, TimeSpan.FromSeconds(1));
 
     /// <summary><c>IsQualifiedName</c>'s name part — non-empty, ≤63, alphanumeric-bounded.</summary>
     static readonly Regex QualifiedNamePart =
-        new(@"^([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]$", RegexOptions.None, TimeSpan.FromSeconds(1));
+        new("^([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]$", RegexOptions.None, TimeSpan.FromSeconds(1));
 
     /// <summary><c>IsDNS1123Subdomain</c> — the key prefix. ⚠ Lower case only.</summary>
     static readonly Regex DnsSubdomain =
@@ -302,11 +302,11 @@ public sealed class KubeLabelTests {
 
     [Fact]
     public void AnExtraLabelWithIllegalSyntaxIsRejectedAtTheCallSite() {
-        Should.Throw<ArgumentException>(() =>
+        Should.Throw<ArgumentException>(static () =>
             Builder(NestedResource()).WithLabels(("cybercloud.io/mine", "no spaces allowed"))
         );
 
-        Should.Throw<ArgumentException>(() => Builder(NestedResource()).WithLabels(("Not A Key", "fine")));
+        Should.Throw<ArgumentException>(static () => Builder(NestedResource()).WithLabels(("Not A Key", "fine")));
     }
 
     static bool KubernetesAcceptsValue(string value) => value.Length <= 63 && LabelValue.IsMatch(value);

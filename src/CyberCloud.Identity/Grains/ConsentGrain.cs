@@ -8,8 +8,11 @@ namespace CyberCloud.Identity.Grains;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The key is a digest of the person and the client, so the first grant fixes both and
-///         every later call is checked against them.</b> A caller that computed the key from one
+///         ⚠
+///         <b>
+///             The key is a digest of the person and the client, so the first grant fixes both and
+///             every later call is checked against them.
+///         </b> A caller that computed the key from one
 ///         pair and then handed in another would be recording somebody else's consent under this
 ///         person's key; the mismatch is refused rather than written. Nothing honest ever does that
 ///         — the identity host builds the key and the arguments from the same two values — which is
@@ -48,7 +51,8 @@ public sealed class ConsentGrain(
         }
 
         if (state.State.UserId != Guid.Empty
-            && (state.State.UserId != userId || !string.Equals(state.State.ClientId, clientId, StringComparison.Ordinal))) {
+            && (state.State.UserId != userId
+                || !string.Equals(state.State.ClientId, clientId, StringComparison.Ordinal))) {
             return Result<ConsentGrant>.Failure(
                 ErrorCode.Conflict,
                 "This consent record belongs to another person or another client. The key is a "
@@ -84,7 +88,10 @@ public sealed class ConsentGrain(
         Task.FromResult(
             state.State.Granted
                 ? Result<ConsentGrant>.Success(Descriptor())
-                : Result<ConsentGrant>.Failure(ErrorCode.ResourceNotFound, "No consent is on record for this person and client.")
+                : Result<ConsentGrant>.Failure(
+                    ErrorCode.ResourceNotFound,
+                    "No consent is on record for this person and client."
+                )
         );
 
     /// <inheritdoc />

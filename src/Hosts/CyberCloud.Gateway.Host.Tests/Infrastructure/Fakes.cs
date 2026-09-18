@@ -1,5 +1,4 @@
 using CyberCloud.Core.Time;
-using CyberCloud.Gateway.Host.Hubs;
 using CyberCloud.Gateway.Host.Operations;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Contracts.Registry;
@@ -34,8 +33,11 @@ sealed class OneTypeRegistry : IProviderRegistry {
     ///     which is the smallest schema that has both halves of a published body.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A real schema rather than <see cref="ResourceSchema.Empty" />, because the snapshot
-    ///     this suite renders is projected through it.</b> <see cref="ProjectedSnapshot" /> runs the
+    ///     ⚠
+    ///     <b>
+    ///         A real schema rather than <see cref="ResourceSchema.Empty" />, because the snapshot
+    ///         this suite renders is projected through it.
+    ///     </b> <see cref="ProjectedSnapshot" /> runs the
     ///     real <c>ResourceProjection.Project</c> over these pointers, and an empty list would make
     ///     that projection the whole-superset escape hatch — a passthrough, which is the shape the
     ///     hand-written snapshot had and the reason issue #72 went unseen here. The gateway itself
@@ -44,14 +46,14 @@ sealed class OneTypeRegistry : IProviderRegistry {
     /// </remarks>
     public static ResourceSchema Schema { get; } = ResourceSchema.Of(
         [
-            new("/location", SchemaKind.Text, Required: true),
+            new("/location", SchemaKind.Text, true),
             new("/properties", SchemaKind.Nested),
             new("/properties/sku", SchemaKind.Text)
         ]
     );
 
     /// <summary>The pointers <see cref="Schema" /> declares, as the manager hands them to a grain.</summary>
-    public static ImmutableArray<string> Pointers { get; } = [.. Schema.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers { get; } = [.. Schema.Properties.Select(static x => x.JsonPointer)];
 
     /// <inheritdoc />
     public ImmutableArray<ResourceTypeRegistration> Types { get; } = [
@@ -197,7 +199,7 @@ sealed class RecordingResourceManager : IResourceManager {
 
     /// <summary>What <see cref="ReadAsync" /> answers. Default: a resource that exists.</summary>
     public Func<WriteRequest, Result<ResourceSnapshot>> OnRead { get; set; } =
-        request => Result<ResourceSnapshot>.Success(ProjectedSnapshot.Of(request.Path));
+        static request => Result<ResourceSnapshot>.Success(ProjectedSnapshot.Of(request.Path));
 
     /// <summary>What the three write paths answer. Default: a <c>202</c>.</summary>
     public Func<WriteRequest, Result<WriteAccepted>> OnWrite { get; set; } =
@@ -384,7 +386,10 @@ sealed class RecordingResourceManager : IResourceManager {
 sealed class ScriptedOperationReader : IOperationReader {
     /// <summary>What every read answers.</summary>
     public Func<Guid, Result<OperationStatus>> OnRead { get; set; } =
-        id => Result<OperationStatus>.Failure(ErrorCode.ResourceNotFound, $"'/operations/{id:D}' does not exist.");
+        static id => Result<OperationStatus>.Failure(
+            ErrorCode.ResourceNotFound,
+            $"'/operations/{id:D}' does not exist."
+        );
 
     /// <summary>Which operations were asked for.</summary>
     public List<Guid> Read { get; } = [];
@@ -533,7 +538,7 @@ sealed class RecordingScopeManager : IScopeManager {
     }
 
     /// <summary>What <see cref="DeleteAsync" /> answers. Default: the group went.</summary>
-    public Func<ScopeRequest, Result> OnDelete { get; set; } = _ => Result.Success;
+    public Func<ScopeRequest, Result> OnDelete { get; set; } = static _ => Result.Success;
 
     /// <inheritdoc />
     public Task<Result> DeleteAsync(ScopeRequest request, CancellationToken cancellationToken = default) {
@@ -578,21 +583,21 @@ sealed class RecordingRoleAssignmentManager : IRoleAssignmentManager {
 
     /// <summary>What <see cref="AssignAsync" /> answers. Default: a grant that was written.</summary>
     public Func<RoleAssignmentRequest, Result<RoleAssignmentSnapshot>> OnAssign { get; set; } =
-        request => Result<RoleAssignmentSnapshot>.Success(Snapshot(request, true));
+        static request => Result<RoleAssignmentSnapshot>.Success(Snapshot(request, true));
 
     /// <summary>What <see cref="ReadAsync" /> answers. Default: a grant that exists.</summary>
     public Func<RoleAssignmentRequest, Result<RoleAssignmentSnapshot>> OnRead { get; set; } =
-        request => Result<RoleAssignmentSnapshot>.Success(Snapshot(request, false));
+        static request => Result<RoleAssignmentSnapshot>.Success(Snapshot(request, false));
 
     /// <summary>What <see cref="RevokeAsync" /> answers. Default: the grant went.</summary>
-    public Func<RoleAssignmentRequest, Result> OnRevoke { get; set; } = _ => Result.Success;
+    public Func<RoleAssignmentRequest, Result> OnRevoke { get; set; } = static _ => Result.Success;
 
     /// <summary>
     ///     What <see cref="ListAsync" /> answers. Default: one direct row and one inherited from the
     ///     tenant, with no next page.
     /// </summary>
     public Func<RoleAssignmentListRequest, Result<RoleAssignmentPage>> OnList { get; set; } =
-        request => Result<RoleAssignmentPage>.Success(Page(request));
+        static request => Result<RoleAssignmentPage>.Success(Page(request));
 
     /// <summary>Every collection request this manager was asked to list, in order.</summary>
     public ConcurrentQueue<RoleAssignmentListRequest> Listings { get; } = new();
@@ -693,8 +698,11 @@ sealed class RecordingRoleAssignmentManager : IRoleAssignmentManager {
 ///     A resource graph query that records every request it was asked and answers from a script.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The same substitution <see cref="RecordingRoleAssignmentManager" /> is, with the same
-///     warning.</b> A query route proven against this fake proves that stage 6 admits the address
+///     ⚠
+///     <b>
+///         The same substitution <see cref="RecordingRoleAssignmentManager" /> is, with the same
+///         warning.
+///     </b> A query route proven against this fake proves that stage 6 admits the address
 ///     under its reserved namespace and that stage 8 hands the caller, the text and the page
 ///     parameters over and renders the page. Whether the KQL translates, whether the access column
 ///     is applied and whether ClickHouse answers is <c>ResourceGraphQueryService</c>'s, driven
@@ -713,13 +721,18 @@ sealed class RecordingResourceGraphQuery : IResourceGraphQuery {
         request => Result<ResourceGraphQueryPage>.Success(
             new() {
                 Columns = [new("name", "string"), new("location", "string")],
-                Rows = ["""{"name":"pg-main","location":"eu-central"}""", """{"name":"pg-replica","location":"eu-west"}"""],
+                Rows = [
+                    """{"name":"pg-main","location":"eu-central"}""", """{"name":"pg-replica","location":"eu-west"}"""
+                ],
                 Continuation = "2.0123456789abcdef"
             }
         );
 
     /// <inheritdoc />
-    public Task<Result<ResourceGraphQueryPage>> QueryAsync(ResourceGraphQueryRequest request, CancellationToken cancellationToken = default) {
+    public Task<Result<ResourceGraphQueryPage>> QueryAsync(
+        ResourceGraphQueryRequest request,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(request);
         Requests.Enqueue(request);
         return Task.FromResult(OnQuery(request));

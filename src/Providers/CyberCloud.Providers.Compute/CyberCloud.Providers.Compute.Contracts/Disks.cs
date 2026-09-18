@@ -19,8 +19,11 @@ namespace CyberCloud.Providers.Compute.Contracts;
 ///         an image without its bytes is useless, a disk without a consumer is inventory.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Attaching is the VM's body naming this disk, and it takes effect at the VM's next
-///         start.</b> KubeVirt applies a change to a <c>VirtualMachine</c>'s volumes to the running
+///         ⚠
+///         <b>
+///             Attaching is the VM's body naming this disk, and it takes effect at the VM's next
+///             start.
+///         </b> KubeVirt applies a change to a <c>VirtualMachine</c>'s volumes to the running
 ///         instance only through hotplug, which is a different volume shape
 ///         (<c>hotpluggable: true</c>, added through the <c>addvolume</c> subresource) that this
 ///         platform does not render. So a disk added to a running VM is attached when the VM next
@@ -84,27 +87,35 @@ public static class Disks {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the disk is billed in."
                 ) {
-                    Format = SchemaFormat.Region, Widget = WidgetHint.Region, Immutable = true, ExampleJson = "\"eu-central\""
+                    Format = SchemaFormat.Region,
+                    Widget = WidgetHint.Region,
+                    Immutable = true,
+                    ExampleJson = "\"eu-central\""
                 },
                 new("/properties", SchemaKind.Nested, Description: "The disk's own settings."),
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster the disk is provisioned in. Only a virtual machine in the "
                     + "same cluster and the same resource group can attach it."
                 ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
                 new(
                     "/properties/size",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The disk's size, in Kubernetes quantity form. ⚠ Immutable: growing a "
                     + "disk depends on the storage class and shrinking one is never possible, so a "
                     + "bigger disk is a new disk."
-                ) { Pattern = KubeQuantity.Pattern, Immutable = true, DefaultJson = "\"" + DefaultSize + "\"", ExampleJson = "\"32Gi\"" },
+                ) {
+                    Pattern = KubeQuantity.Pattern,
+                    Immutable = true,
+                    DefaultJson = "\"" + DefaultSize + "\"",
+                    ExampleJson = "\"32Gi\""
+                },
                 new(
                     "/properties/storageClass",
                     SchemaKind.Text,
@@ -116,13 +127,15 @@ public static class Disks {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
     /// <summary>The size a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string Size(JsonElement desired) => ComputeBodies.Text(ComputeBodies.Property(desired, "size"), DefaultSize);
+    public static string Size(JsonElement desired) =>
+        ComputeBodies.Text(ComputeBodies.Property(desired, "size"), DefaultSize);
 
     /// <summary>The storage class a body names, or empty for the cluster's default.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -157,7 +170,8 @@ public static class Disks {
     /// <param name="desired">The desired body.</param>
     /// <remarks>Containment, for the reason <see cref="Images.Matches" /> gives.</remarks>
     public static bool Matches(string objectJson, JsonElement desired) {
-        if (ComputeBodies.Kind(objectJson) != Cdi.DataVolumeKind.Kind || ComputeBodies.Spec(objectJson) is not { } spec) {
+        if (ComputeBodies.Kind(objectJson) != Cdi.DataVolumeKind.Kind
+            || ComputeBodies.Spec(objectJson) is not { } spec) {
             return false;
         }
 

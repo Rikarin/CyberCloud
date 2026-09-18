@@ -99,7 +99,7 @@ public sealed class ApiVersionHandler : DelegatingHandler {
 
         if (uri is not null && !HasApiVersion(uri.Query)) {
             var separator = uri.Query.Length > 0 ? '&' : '?';
-            request.RequestUri = new Uri(
+            request.RequestUri = new(
                 $"{uri.GetLeftPart(UriPartial.Path)}{uri.Query}{separator}{QueryParameter}={apiVersion}"
             );
         }
@@ -170,7 +170,7 @@ public sealed class BearerTokenHandler : DelegatingHandler {
         ArgumentNullException.ThrowIfNull(credential);
         ArgumentNullException.ThrowIfNull(scopes);
 
-        cache = new AccessTokenCache(credential);
+        cache = new(credential);
         context = new TokenRequestContext([.. scopes]);
     }
 
@@ -183,7 +183,7 @@ public sealed class BearerTokenHandler : DelegatingHandler {
 
         var token = await cache.GetTokenAsync(context, cancellationToken).ConfigureAwait(false);
 
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.Token);
+        request.Headers.Authorization = new("Bearer", token.Token);
 
         return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
     }

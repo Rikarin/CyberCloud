@@ -19,8 +19,11 @@ namespace CyberCloud.Authorization.Grains;
 ///         rather than half here and half there.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An incremental change never lands on a slice that is not yet a closure under this
-///         schema.</b> A slice with <see cref="MembershipIndexState.SchemaVersion" /> <c>0</c> has
+///         ⚠
+///         <b>
+///             An incremental change never lands on a slice that is not yet a closure under this
+///             schema.
+///         </b> A slice with <see cref="MembershipIndexState.SchemaVersion" /> <c>0</c> has
 ///         never been written, and the tuples it should close over may be older than the index —
 ///         an upgrade, or a restore of the forward rows without these — so a union applied to it
 ///         and stamped with this version would be a closure that omits every one of them, for good:
@@ -30,7 +33,8 @@ namespace CyberCloud.Authorization.Grains;
 ///         the forward and reverse indexes first — the same recomputation <see cref="RebuildAsync" />
 ///         offers by hand — and applies the change on top. A rebuild is a whole-slice replacement
 ///         (<see cref="MembershipIndexChange.Reset" />) and is exempt, or it would rebuild itself
-///         forever. <c>MembershipIndexGrainTests.RowsThatPredateTheIndexAreWalkedAndThenBackfilledByTheFirstWriteThatTouchesThem</c>
+///         forever.
+///         <c>MembershipIndexGrainTests.RowsThatPredateTheIndexAreWalkedAndThenBackfilledByTheFirstWriteThatTouchesThem</c>
 ///         drives it over rows written without the index.
 ///     </para>
 ///     <para>
@@ -44,8 +48,11 @@ namespace CyberCloud.Authorization.Grains;
 ///         <see cref="ApplyAsync" /> from calling this very activation.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A change computed under another schema version is refused, and during a rolling
-///         upgrade that bumps the version this is a write that fails at step 6.</b> docs/plan/04
+///         ⚠
+///         <b>
+///             A change computed under another schema version is refused, and during a rolling
+///             upgrade that bumps the version this is a write that fails at step 6.
+///         </b> docs/plan/04
 ///         § Failure and upgrade has silos of version N and N+1 coexisting; a tuple write whose
 ///         <c>TupleStoreGrain</c> is on an N silo computes an N change, and an index grain on an
 ///         N+1 silo cannot apply it, so the caller gets this refusal after the forward and reverse
@@ -82,7 +89,8 @@ public sealed class MembershipIndexGrain(
     }
 
     /// <inheritdoc />
-    public Task<Result<MembershipIndexSnapshot>> ReadAsync() => Task.FromResult(Result<MembershipIndexSnapshot>.Success(Snapshot()));
+    public Task<Result<MembershipIndexSnapshot>> ReadAsync() =>
+        Task.FromResult(Result<MembershipIndexSnapshot>.Success(Snapshot()));
 
     /// <inheritdoc />
     public async Task<Result<bool>> ApplyAsync(MembershipIndexChange change) {

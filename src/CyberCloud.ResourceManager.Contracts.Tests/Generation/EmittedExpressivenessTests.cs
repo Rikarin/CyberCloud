@@ -33,7 +33,7 @@ public sealed class EmittedExpressivenessTests {
     public void AClosedSetBecomesAnEnum() {
         var values = Server["properties"]!["properties"]!["properties"]!["sku"]!["properties"]!["name"]!["enum"]!
             .AsArray()
-            .Select(x => x!.GetValue<string>())
+            .Select(static x => x!.GetValue<string>())
             .ToList();
 
         values.ShouldBe(["s1.small", "s1.large", "c1.large", "m1.large"]);
@@ -67,7 +67,7 @@ public sealed class EmittedExpressivenessTests {
     [Fact]
     public void ANullablePropertyBecomesATypeUnion() {
         // OpenAPI 3.1 is JSON Schema 2020-12: nullability is a union, not 3.0's `nullable: true`.
-        var types = Property("retiredOn")["type"]!.AsArray().Select(x => x!.GetValue<string>()).ToList();
+        var types = Property("retiredOn")["type"]!.AsArray().Select(static x => x!.GetValue<string>()).ToList();
 
         types.ShouldBe(["string", "null"]);
     }
@@ -149,7 +149,7 @@ public sealed class EmittedExpressivenessTests {
 
     [Fact]
     public void AnActionThatDeclaresNoResponseStillSaysSoOutLoud() {
-        var registry = Fixtures.PostgresWithActions([new("noop", ActionKind.Post, "write", Secret: false)]);
+        var registry = Fixtures.PostgresWithActions([new("noop", ActionKind.Post, "write", false)]);
         var document = OpenApiEmitter.Emit(registry, ApiVersion.Parse(Fixtures.FirstVersion));
 
         var description = document["paths"]![
@@ -230,7 +230,7 @@ public sealed class EmittedExpressivenessTests {
     public void AResponseNamesTheCodesThatProduceIt() {
         var codes = Document["components"]!["responses"]!["TooManyRequests"]!["x-cybercloud-error-codes"]!
             .AsArray()
-            .Select(x => x!.GetValue<string>())
+            .Select(static x => x!.GetValue<string>())
             .ToList();
 
         codes.ShouldContain("QuotaExceeded");
@@ -284,7 +284,7 @@ public sealed class EmittedExpressivenessTests {
 
     [Fact]
     public void TheTagBagIsOptionalRatherThanRequired() =>
-        Server["required"]!.AsArray().Select(x => x!.GetValue<string>()).ShouldNotContain("tags");
+        Server["required"]!.AsArray().Select(static x => x!.GetValue<string>()).ShouldNotContain("tags");
 
     // ── The cluster pointer ────────────────────────────────────────────────────────────────────
 

@@ -11,8 +11,11 @@ namespace CyberCloud.Communication.Tests;
 /// <remarks>
 ///     <para>
 ///         <c>SmtpChannelProviderTests</c> is the happy path against Mailpit. These are the refusals,
-///         and the property each one pins is the same: <b>nothing was sent, and the failure says
-///         why in the relay's own words.</b> A carrier that swallowed a <c>550</c> into "the carrier
+///         and the property each one pins is the same:
+///         <b>
+///             nothing was sent, and the failure says
+///             why in the relay's own words.
+///         </b> A carrier that swallowed a <c>550</c> into "the carrier
 ///         is down" would send an operator to the wrong console.
 ///     </para>
 ///     <para>
@@ -64,54 +67,73 @@ public sealed class SmtpRefusalTests {
         receipt.Status.ShouldBe(MessageStatus.Dispatched);
         receipt.ProviderMessageId.ShouldEndWith("@cybercloud.example");
 
-        server.Commands.Select(x => x.Split(' ', 2)[0].ToUpperInvariant())
-            .ShouldBe(["EHLO", "MAIL", "RCPT", "DATA", "QUIT"], "RFC 5321's minimal session, no STARTTLS and no AUTH on a relay that trusts the network");
+        server.Commands.Select(static x => x.Split(' ', 2)[0].ToUpperInvariant())
+            .ShouldBe(
+                ["EHLO", "MAIL", "RCPT", "DATA", "QUIT"],
+                "RFC 5321's minimal session, no STARTTLS and no AUTH on a relay that trusts the network"
+            );
 
         server.Commands.ShouldContain("MAIL FROM:<no-reply@cybercloud.example>");
         server.Commands.ShouldContain("RCPT TO:<frank@example.com>");
         server.LastMessage.ShouldContain("Message-ID: <" + receipt.ProviderMessageId + ">");
-        server.LastMessage.ShouldContain("List-Unsubscribe: <mailto:unsubscribe@cybercloud.example?subject=unsubscribe>");
+        server.LastMessage.ShouldContain(
+            "List-Unsubscribe: <mailto:unsubscribe@cybercloud.example?subject=unsubscribe>"
+        );
         server.LastMessage.ShouldEndWith("424242 is your code.\r\n");
     }
 
     [Fact]
     public async Task AGreetingThatIsNot220IsRefusedBeforeAnythingIsSaid() {
-        await using var server = new ScriptedSmtpServer { Greeting = "554 5.3.0 No SMTP service here" };
+        await using var server = new ScriptedSmtpServer();
+        server.Greeting = "554 5.3.0 No SMTP service here";
         server.Start();
 
         var refused = await Carrier(server).SendAsync(Message(), Ct);
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Message.ShouldContain("554");
-        refused.Error.Message.ShouldContain("permanent", Case.Insensitive, "a 5yz reply is permanent, and the text says so");
+        refused.Error.Message.ShouldContain(
+            "permanent",
+            Case.Insensitive,
+            "a 5yz reply is permanent, and the text says so"
+        );
         server.Commands.ShouldBeEmpty("the client said nothing to a relay that refused it at the door");
     }
 
     [Fact]
     public async Task InsistingOnStartTlsAgainstARelayThatDoesNotOfferItSendsNothingInTheClear() {
-        await using var server = new ScriptedSmtpServer { OfferStartTls = false };
+        await using var server = new ScriptedSmtpServer();
+        server.OfferStartTls = false;
         server.Start();
 
-        var refused = await Carrier(server, x => x.Security = SmtpSecurity.StartTls).SendAsync(Message(), Ct);
+        var refused = await Carrier(server, static x => x.Security = SmtpSecurity.StartTls).SendAsync(Message(), Ct);
 
         refused.Error!.Code.ShouldBe(ErrorCode.PolicyViolation);
         refused.Error.Message.ShouldContain("does not offer STARTTLS");
 
         // ⚠ THE ASSERTION. EHLO is fine in the clear; the envelope and the body are not.
         server.Commands.ShouldContain(x => x.StartsWith("EHLO", StringComparison.Ordinal));
-        server.Commands.ShouldNotContain(x => x.StartsWith("MAIL", StringComparison.Ordinal), "nothing after EHLO went in the clear");
+        server.Commands.ShouldNotContain(
+            x => x.StartsWith("MAIL", StringComparison.Ordinal),
+            "nothing after EHLO went in the clear"
+        );
     }
 
     [Fact]
     public async Task ARelayWhoseCertificateIsNotTrustedIsRefusedAtTheHandshake() {
-        await using var server = new ScriptedSmtpServer { OfferStartTls = true };
+        await using var server = new ScriptedSmtpServer();
+        server.OfferStartTls = true;
         server.Start();
 
-        var refused = await Carrier(server, x => x.Security = SmtpSecurity.StartTls).SendAsync(Message(), Ct);
+        var refused = await Carrier(server, static x => x.Security = SmtpSecurity.StartTls).SendAsync(Message(), Ct);
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Message.ShouldContain("could not be spoken to");
-        refused.Error.Message.ShouldContain("AuthenticationException", Case.Sensitive, "the self-signed certificate failed .NET's default validation, which is the validation this client keeps");
+        refused.Error.Message.ShouldContain(
+            "AuthenticationException",
+            Case.Sensitive,
+            "the self-signed certificate failed .NET's default validation, which is the validation this client keeps"
+        );
 
         server.Commands.ShouldContain("STARTTLS");
         server.Commands.ShouldNotContain(x => x.StartsWith("MAIL", StringComparison.Ordinal));
@@ -122,10 +144,13 @@ public sealed class SmtpRefusalTests {
         // ⚠ SmtpRelayOptions.Validate refuses this section at composition; this is the second gate,
         // at the moment it matters, for a carrier constructed around the first — or a relay whose
         // STARTTLS went away between two sends.
-        await using var server = new ScriptedSmtpServer { AuthMechanisms = "PLAIN LOGIN" };
+        await using var server = new ScriptedSmtpServer();
+        server.AuthMechanisms = "PLAIN LOGIN";
         server.Start();
 
-        var refused = await Carrier(server, x => {
+        var refused = await Carrier(
+            server,
+            static x => {
                 x.Username = "smtp-user";
                 x.Password = "smtp-pass";
             }
@@ -133,21 +158,29 @@ public sealed class SmtpRefusalTests {
 
         refused.Error!.Code.ShouldBe(ErrorCode.PolicyViolation);
         refused.Error.Message.ShouldContain("no TLS");
-        server.Commands.ShouldNotContain(x => x.StartsWith("AUTH", StringComparison.Ordinal), "the password never reached the wire");
+        server.Commands.ShouldNotContain(
+            x => x.StartsWith("AUTH", StringComparison.Ordinal),
+            "the password never reached the wire"
+        );
         server.Commands.ShouldNotContain(x => x.StartsWith("MAIL", StringComparison.Ordinal));
     }
 
     [Fact]
     public async Task ARefusedRecipientIsAPermanentFailureInTheRelaysOwnWords() {
-        await using var server = new ScriptedSmtpServer { RecipientReply = "550 5.1.1 <frank@example.com>: Recipient address rejected: User unknown" };
+        await using var server = new ScriptedSmtpServer();
+        server.RecipientReply = "550 5.1.1 <frank@example.com>: Recipient address rejected: User unknown";
         server.Start();
 
         var refused = await Carrier(server).SendAsync(Message(), Ct);
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Message.ShouldContain("refused RCPT TO with 550");
-        refused.Error.Message.ShouldContain("User unknown", Case.Sensitive, "verbatim, because it is the sentence the relay's operator will search for");
-        refused.Error.Message.ShouldContain("permanent", Case.Insensitive);
+        refused.Error.Message.ShouldContain(
+            "User unknown",
+            Case.Sensitive,
+            "verbatim, because it is the sentence the relay's operator will search for"
+        );
+        refused.Error.Message.ShouldContain("permanent");
 
         server.Commands.ShouldNotContain("DATA", "no body follows a refused recipient");
         server.LastMessage.ShouldBeEmpty();
@@ -155,7 +188,8 @@ public sealed class SmtpRefusalTests {
 
     [Fact]
     public async Task ARefusedEhloIsReportedAsTheStepItWas() {
-        await using var server = new ScriptedSmtpServer { RefuseEhloWith = "502 5.5.2 Error: command not recognized" };
+        await using var server = new ScriptedSmtpServer();
+        server.RefuseEhloWith = "502 5.5.2 Error: command not recognized";
         server.Start();
 
         var refused = await Carrier(server).SendAsync(Message(), Ct);
@@ -165,10 +199,11 @@ public sealed class SmtpRefusalTests {
 
     [Fact]
     public async Task ARelayThatNeverAnswersIsATimeoutAndNotAHang() {
-        await using var server = new ScriptedSmtpServer { Silent = true };
+        await using var server = new ScriptedSmtpServer();
+        server.Silent = true;
         server.Start();
 
-        var refused = await Carrier(server, x => x.Timeout = TimeSpan.FromSeconds(2)).SendAsync(Message(), Ct);
+        var refused = await Carrier(server, static x => x.Timeout = TimeSpan.FromSeconds(2)).SendAsync(Message(), Ct);
 
         refused.Error!.Code.ShouldBe(ErrorCode.OperationTimeout);
         refused.Error.Message.ShouldContain("did not finish the exchange within 2 s");
@@ -177,7 +212,11 @@ public sealed class SmtpRefusalTests {
         // carrier failure as Failed —
         // IdempotencyTests.ACarrierThatNeverAnsweredLeavesTheMessageQueuedForADeliberateRetry.
         refused.Error.Message.ShouldContain("keeps it Queued — not Failed", Case.Sensitive);
-        refused.Error.Message.ShouldContain("IMessageGrain.RetryAsync", Case.Sensitive, "and names the one call that moves it on");
+        refused.Error.Message.ShouldContain(
+            "IMessageGrain.RetryAsync",
+            Case.Sensitive,
+            "and names the one call that moves it on"
+        );
     }
 
     [Fact]
@@ -203,7 +242,8 @@ public sealed class SmtpRefusalTests {
 
     [Fact]
     public async Task TheCallersOwnCancellationIsNotReportedAsTheRelaysFault() {
-        await using var server = new ScriptedSmtpServer { Silent = true };
+        await using var server = new ScriptedSmtpServer();
+        server.Silent = true;
         server.Start();
 
         using var caller = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
@@ -228,10 +268,13 @@ public sealed class SmtpRefusalTests {
         var carrier = Carrier(server);
 
         var status = await carrier.GetStatusAsync("abc@cybercloud.example", Ct);
-        status.IsFailure.ShouldBeTrue("SMTP has no status query, and Unknown as a success would read as \"not delivered yet\"");
+        status.IsFailure.ShouldBeTrue(
+            "SMTP has no status query, and Unknown as a success would read as \"not delivered yet\""
+        );
         status.Error!.Message.ShouldContain("communication-receipts-have-no-ingress");
 
         var webhook = await carrier.HandleWebhookAsync(new() { Body = "{}" }, Ct);
-        webhook.GetValueOrThrow().ShouldBe(WebhookOutcome.Empty, "a relay's bounce is mail, not a callback this class can verify");
+        webhook.GetValueOrThrow()
+            .ShouldBe(WebhookOutcome.Empty, "a relay's bounce is mail, not a callback this class can verify");
     }
 }

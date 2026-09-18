@@ -55,8 +55,11 @@ public sealed class PlatformCommunicationServiceOptions {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>docs/plan/17 opens with it:</b> <i>"The platform itself is CyberCloud.Communication's
-///         first customer — every OTP, alert, invitation and invoice goes through it"</i>. Until #93
+///         <b>docs/plan/17 opens with it:</b>
+///         <i>
+///             "The platform itself is CyberCloud.Communication's
+///             first customer — every OTP, alert, invitation and invoice goes through it"
+///         </i>. Until #93
 ///         nothing created that customer's service: <c>SiloIdentityOptions</c> asked an operator to
 ///         create a <c>services</c> resource by hand and paste its derived id into configuration,
 ///         and on a development run nobody did, so the codes went to the console alone.
@@ -91,7 +94,12 @@ public static class PlatformCommunicationService {
     /// <summary>The resource group and the service share the one name that says whose they are.</summary>
     public const string Name = "platform";
 
-    /// <summary>The address — <c>/tenants/{platform}/subscriptions/{platform}/resourceGroups/platform/providers/CyberCloud.Communication/services/platform</c>.</summary>
+    /// <summary>
+    ///     The address —
+    ///     <c>
+    /// /tenants/{platform}/subscriptions/{platform}/resourceGroups/platform/providers/CyberCloud.Communication/services/platform
+    ///     </c>.
+    /// </summary>
     public static ResourceId Address { get; } = new(
         ReBacScopeAuthorizer.PlatformTenant,
         ReBacScopeAuthorizer.PlatformTenant,
@@ -108,10 +116,8 @@ public static class PlatformCommunicationService {
     public static Guid ServiceId { get; } = CommunicationServices.ServiceIdOf(Address);
 
     /// <summary>The route <c>CommunicationOtpDelivery</c> sends the platform's codes through.</summary>
-    public static OtpDeliveryRoute OtpRoute { get; } = new() {
-        TenantId = ReBacScopeAuthorizer.PlatformTenant,
-        ServiceId = ServiceId
-    };
+    public static OtpDeliveryRoute OtpRoute { get; } =
+        new() { TenantId = ReBacScopeAuthorizer.PlatformTenant, ServiceId = ServiceId };
 
     /// <summary>
     ///     The email channel the bootstrap writes: the smtp carrier, the platform's own account, the

@@ -18,7 +18,7 @@ namespace CyberCloud.Cli.Tests;
 public sealed class LoginTests {
     [Fact]
     public async Task DeviceCodePrintsTheCodeAndOpensTheBrowser() {
-        var identity = new ScriptedTransport((request, _) => Identity(request));
+        var identity = new ScriptedTransport(static (request, _) => Identity(request));
 
         using var host = TestHost.Create(credentialOptions: () => new CyberCloudCredentialOptions {
                 Transport = identity, TokenCache = TokenCache.CreateInMemory()
@@ -44,7 +44,7 @@ public sealed class LoginTests {
 
     [Fact]
     public async Task TheAccessTokenNeverReachesEitherStream() {
-        var identity = new ScriptedTransport((request, _) => Identity(request));
+        var identity = new ScriptedTransport(static (request, _) => Identity(request));
 
         using var host = TestHost.Create(credentialOptions: () => new CyberCloudCredentialOptions {
                 Transport = identity, TokenCache = TokenCache.CreateInMemory()
@@ -59,7 +59,7 @@ public sealed class LoginTests {
 
     [Fact]
     public async Task SigningInWritesNothingToTheStateDirectory() {
-        var identity = new ScriptedTransport((request, _) => Identity(request));
+        var identity = new ScriptedTransport(static (request, _) => Identity(request));
 
         using var host = TestHost.Create(credentialOptions: () => new CyberCloudCredentialOptions {
                 Transport = identity, TokenCache = TokenCache.CreateInMemory()
@@ -100,7 +100,7 @@ public sealed class LoginTests {
 
     [Fact]
     public async Task AServicePrincipalReadsItsSecretFromTheEnvironment() {
-        var identity = new ScriptedTransport((request, _) => Identity(request));
+        var identity = new ScriptedTransport(static (request, _) => Identity(request));
 
         using var host = TestHost.Create(
             environment: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
@@ -129,7 +129,7 @@ public sealed class LoginTests {
 
     [Fact]
     public async Task AFailedSignInIsExitThree() {
-        var identity = new ScriptedTransport((request, _) => request.RequestUri!.AbsolutePath.EndsWith(
+        var identity = new ScriptedTransport(static (request, _) => request.RequestUri!.AbsolutePath.EndsWith(
                 "token",
                 StringComparison.Ordinal
             )

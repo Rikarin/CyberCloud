@@ -2,7 +2,6 @@ using CyberCloud.Core.Time;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Xml.Linq;
 
@@ -63,7 +62,10 @@ public sealed class S3ObjectStore : IObjectStore {
     /// </summary>
     /// <param name="options">The section.</param>
     /// <returns>The endpoint, parsed.</returns>
-    /// <exception cref="ArgumentException">A key is empty, the endpoint is not absolute, or it is plain HTTP without opting in.</exception>
+    /// <exception cref="ArgumentException">
+    ///     A key is empty, the endpoint is not absolute, or it is plain HTTP without opting
+    ///     in.
+    /// </exception>
     public static Uri ValidatedEndpoint(ObjectStorageOptions options) {
         ArgumentNullException.ThrowIfNull(options);
 
@@ -86,10 +88,8 @@ public sealed class S3ObjectStore : IObjectStore {
         }
 
         foreach (var (name, value) in new[] {
-                     ("Bucket", options.Bucket),
-                     ("AccessKeyId", options.AccessKeyId),
-                     ("SecretAccessKey", options.SecretAccessKey),
-                     ("Region", options.Region)
+                     ("Bucket", options.Bucket), ("AccessKeyId", options.AccessKeyId),
+                     ("SecretAccessKey", options.SecretAccessKey), ("Region", options.Region)
                  }) {
             if (string.IsNullOrWhiteSpace(value)) {
                 throw new ArgumentException($"{ObjectStorageOptions.SectionName}:{name} is empty.", nameof(options));
@@ -189,7 +189,10 @@ public sealed class S3ObjectStore : IObjectStore {
     }
 
     /// <inheritdoc />
-    public async Task<Result<ImmutableArray<string>>> ListAsync(string prefix, CancellationToken cancellationToken = default) {
+    public async Task<Result<ImmutableArray<string>>> ListAsync(
+        string prefix,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(prefix);
 
         var keys = ImmutableArray.CreateBuilder<string>();
@@ -197,9 +200,7 @@ public sealed class S3ObjectStore : IObjectStore {
 
         do {
             var query = new List<KeyValuePair<string, string>> {
-                new("list-type", "2"),
-                new("prefix", prefix),
-                new("max-keys", "1000")
+                new("list-type", "2"), new("prefix", prefix), new("max-keys", "1000")
             };
 
             if (continuation is not null) {
@@ -259,18 +260,18 @@ public sealed class S3ObjectStore : IObjectStore {
         }
 
         var keys = root.Elements()
-            .Where(x => x.Name.LocalName == "Contents")
-            .Select(x => x.Elements().FirstOrDefault(y => y.Name.LocalName == "Key")?.Value)
+            .Where(static x => x.Name.LocalName == "Contents")
+            .Select(static x => x.Elements().FirstOrDefault(static y => y.Name.LocalName == "Key")?.Value)
             .OfType<string>()
             .ToImmutableArray();
 
         var truncated = string.Equals(
-            root.Elements().FirstOrDefault(x => x.Name.LocalName == "IsTruncated")?.Value,
+            root.Elements().FirstOrDefault(static x => x.Name.LocalName == "IsTruncated")?.Value,
             "true",
             StringComparison.OrdinalIgnoreCase
         );
 
-        var next = root.Elements().FirstOrDefault(x => x.Name.LocalName == "NextContinuationToken")?.Value;
+        var next = root.Elements().FirstOrDefault(static x => x.Name.LocalName == "NextContinuationToken")?.Value;
 
         return Result<(ImmutableArray<string>, string?)>.Success(
             (keys, truncated && !string.IsNullOrEmpty(next) ? next : null)
@@ -297,10 +298,13 @@ public sealed class S3ObjectStore : IObjectStore {
         var signed = new SignatureV4.Request(method.Method, path, query, headers, payloadHash);
 
         var uri = new UriBuilder(endpoint) {
-            Path = SignatureV4.Encode(path, keepSlash: true),
+            Path = SignatureV4.Encode(path, true),
             Query = string.Join(
                 '&',
-                query.Select(x => SignatureV4.Encode(x.Key, keepSlash: false) + "=" + SignatureV4.Encode(x.Value, keepSlash: false))
+                query.Select(static x => SignatureV4.Encode(x.Key, false)
+                    + "="
+                    + SignatureV4.Encode(x.Value, false)
+                )
             )
         }.Uri;
 
@@ -314,9 +318,8 @@ public sealed class S3ObjectStore : IObjectStore {
 
         if (!body.IsEmpty || method == HttpMethod.Put) {
             request.Content = new ReadOnlyMemoryContent(body);
-            request.Content.Headers.ContentType = new MediaTypeHeaderValue(
-                string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType
-            );
+            request.Content.Headers.ContentType =
+                new(string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType);
         }
 
         return request;
@@ -359,7 +362,12 @@ public sealed class S3ObjectStore : IObjectStore {
 
         public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
 
-        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+        public override Task<int> ReadAsync(
+            byte[] buffer,
+            int offset,
+            int count,
+            CancellationToken cancellationToken
+        ) =>
             inner.ReadAsync(buffer, offset, count, cancellationToken);
 
         public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>

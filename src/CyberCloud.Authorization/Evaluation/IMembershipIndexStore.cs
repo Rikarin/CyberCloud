@@ -24,5 +24,9 @@ public interface IMembershipIndexStore {
     /// <param name="subjectObject">The subject object.</param>
     /// <param name="change">The change.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    ValueTask<Result> ApplyAsync(ObjectRef subjectObject, MembershipIndexChange change, CancellationToken cancellationToken);
+    ValueTask<Result> ApplyAsync(
+        ObjectRef subjectObject,
+        MembershipIndexChange change,
+        CancellationToken cancellationToken
+    );
 }

@@ -40,7 +40,9 @@ namespace CyberCloud.Kubernetes.Tunnel;
 ///             </description>
 ///         </item>
 ///         <item>
-///             <term><see cref="ExchangeAsync" /></term>
+///             <term>
+///                 <see cref="ExchangeAsync" />
+///             </term>
 ///             <description>
 ///                 A null-tenant platform grain only — in production, <c>ClusterConnectionGrain</c>,
 ///                 after its owner check. ⚠ Neither a client nor a tenant, because either could
@@ -64,7 +66,8 @@ namespace CyberCloud.Kubernetes.Tunnel;
 [SuppressMessage(
     "Design",
     "CA1001:Types that own disposable fields should be disposable",
-    Justification = "The exchange is a session's, not the grain's: DropSession disposes it on replacement, revocation and deactivation, and a grain's lifetime is Orleans' to end."
+    Justification =
+        "The exchange is a session's, not the grain's: DropSession disposes it on replacement, revocation and deactivation, and a grain's lifetime is Orleans' to end."
 )]
 public sealed class AgentTunnelGrain : Grain, IAgentTunnelGrain {
     readonly IPersistentState<AgentTunnelState> state;
@@ -165,7 +168,8 @@ public sealed class AgentTunnelGrain : Grain, IAgentTunnelGrain {
         state.State.Revoked = false;
         state.State.EnrollmentHash = request.EnrollmentHash;
         state.State.EnrollmentExpiresAt = request.ExpiresAt;
-        state.State.HeartbeatInterval = request.HeartbeatInterval > TimeSpan.Zero ? request.HeartbeatInterval : TimeSpan.Zero;
+        state.State.HeartbeatInterval =
+            request.HeartbeatInterval > TimeSpan.Zero ? request.HeartbeatInterval : TimeSpan.Zero;
 
         await state.WriteStateAsync();
 
@@ -265,7 +269,11 @@ public sealed class AgentTunnelGrain : Grain, IAgentTunnelGrain {
         switch (frame.Kind) {
             case TunnelFrameKind.Response:
                 if (!exchange.Complete(frame)) {
-                    logger.LogDebug("Tunnel for cluster {Cluster}: response #{Id} had no request waiting.", clusterId, frame.Id);
+                    logger.LogDebug(
+                        "Tunnel for cluster {Cluster}: response #{Id} had no request waiting.",
+                        clusterId,
+                        frame.Id
+                    );
                 }
 
                 return;
@@ -274,12 +282,12 @@ public sealed class AgentTunnelGrain : Grain, IAgentTunnelGrain {
                 await RecordHeartbeatAsync(frame);
                 return;
 
-            case TunnelFrameKind.Welcome:
-            case TunnelFrameKind.Request:
-            case TunnelFrameKind.Goodbye:
-            case TunnelFrameKind.Unknown:
             default:
-                logger.LogWarning("Tunnel for cluster {Cluster}: the agent sent a {Kind} frame. Dropped.", clusterId, frame.Kind);
+                logger.LogWarning(
+                    "Tunnel for cluster {Cluster}: the agent sent a {Kind} frame. Dropped.",
+                    clusterId,
+                    frame.Kind
+                );
                 return;
         }
     }
@@ -287,7 +295,12 @@ public sealed class AgentTunnelGrain : Grain, IAgentTunnelGrain {
     /// <inheritdoc />
     public Task DisconnectedAsync(Guid sessionId, string reason) {
         if (CallerIsRelay(nameof(DisconnectedAsync)) && sessionId == this.sessionId) {
-            logger.LogInformation("Tunnel for cluster {Cluster}: session {Session} ended: {Reason}", clusterId, sessionId, reason);
+            logger.LogInformation(
+                "Tunnel for cluster {Cluster}: session {Session} ended: {Reason}",
+                clusterId,
+                sessionId,
+                reason
+            );
             DropSession(reason);
         }
 
@@ -482,7 +495,8 @@ public sealed class AgentTunnelGrain : Grain, IAgentTunnelGrain {
         Result.Failure(ErrorCode.ResourceNotFound, $"Cluster {clusterId:D} does not exist, or you may not reach it.");
 
     Result<T> Refused<T>()
-        where T : notnull => Result<T>.Failure(Refused().Error!);
+        where T : notnull =>
+        Result<T>.Failure(Refused().Error!);
 
     /// <summary>The one refusal every credential failure shares — see <see cref="IAgentTunnelGrain.AcceptAsync" />.</summary>
     Error NotAdmitted() =>

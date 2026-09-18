@@ -18,8 +18,11 @@ namespace CyberCloud.Gateway.Host.Authentication;
 ///         production origin, so the refusal fires only when a deployment blanks it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The issuer is the identity host's origin, exactly as that host spells it in
-///         <c>CyberCloud:Identity:Issuer</c>.</b> Validation fetches
+///         ⚠
+///         <b>
+///             The issuer is the identity host's origin, exactly as that host spells it in
+///             <c>CyberCloud:Identity:Issuer</c>.
+///         </b> Validation fetches
 ///         <c>{Issuer}/.well-known/openid-configuration</c>, refuses a document whose <c>issuer</c>
 ///         differs from this string, and then reads the key set the document names. A trailing-slash
 ///         difference is tolerated; a scheme, host or port difference is a gateway that accepts

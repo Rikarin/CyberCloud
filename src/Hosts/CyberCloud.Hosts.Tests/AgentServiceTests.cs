@@ -7,12 +7,9 @@ using CyberCloud.Kubernetes.Tunnel;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shouldly;
 using System.Collections.Concurrent;
-using System.Net;
-using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using ErrorCode = CyberCloud.Core.ErrorCode;
 
@@ -80,7 +77,9 @@ public sealed class AgentServiceTests {
             // A request down the socket comes back answered by the agent's client.
             var ping = await first.Exchange.ExchangeAsync(TunnelFrame.Request(0, TunnelOperations.Ping, "{}"), Ct);
             ping.IsSuccess.ShouldBeTrue(ping.Error?.Message);
-            TunnelOperations.Open<TunnelOperations.PingAnswer>(ping.GetValueOrThrow().Payload).GetValueOrThrow().Version.ShouldBe("v1.35.0-fake");
+            TunnelOperations.Open<TunnelOperations.PingAnswer>(ping.GetValueOrThrow().Payload)
+                .GetValueOrThrow()
+                .Version.ShouldBe("v1.35.0-fake");
 
             // And a heartbeat arrives without being asked for.
             await first.FirstHeartbeatAsync();
@@ -167,7 +166,8 @@ public sealed class AgentServiceTests {
     public async Task ARefusedAgentKeepsDiallingRatherThanExiting() {
         var clusterId = Guid.NewGuid();
 
-        await using var platform = new FakePlatform(clusterId, expectedEnrollment: "cca-enroll-somebody-else", credential: "");
+        await using var platform =
+            new FakePlatform(clusterId, "cca-enroll-somebody-else", "");
         await platform.StartAsync();
 
         var tokenFile = Path.Combine(Path.GetTempPath(), "cc-agent-" + Guid.NewGuid().ToString("N"));
@@ -182,7 +182,7 @@ public sealed class AgentServiceTests {
                 $"--{AgentOptions.SectionName}:EnrollmentTokenFile={tokenFile}",
                 $"--{AgentOptions.SectionName}:MaxReconnectSeconds=1"
             ],
-            services => services.AddSingleton<IAgentEndpoints>(new FakeEndpoints())
+            static services => services.AddSingleton<IAgentEndpoints>(new FakeEndpoints())
         );
 
         try {
@@ -265,7 +265,8 @@ public sealed class AgentServiceTests {
             app.Map(
                 TunnelCodec.TunnelPath,
                 async (HttpContext http) => {
-                    var bearer = http.Request.Headers.Authorization.ToString().Replace("Bearer ", "", StringComparison.Ordinal);
+                    var bearer = http.Request.Headers.Authorization.ToString()
+                        .Replace("Bearer ", "", StringComparison.Ordinal);
                     var isEnrollment = AgentCredentials.IsEnrollment(bearer);
 
                     var admitted = http.Request.Headers[TunnelCodec.ClusterHeader].ToString() == clusterId.ToString("D")
@@ -323,7 +324,9 @@ public sealed class AgentServiceTests {
 
         public async Task RefusalsAsync(int count) {
             for (var i = 0; i < count; i++) {
-                (await refused.WaitAsync(TimeSpan.FromSeconds(30), Ct)).ShouldBeTrue($"refusal {i + 1} of {count} never came");
+                (await refused.WaitAsync(TimeSpan.FromSeconds(30), Ct)).ShouldBeTrue(
+                    $"refusal {i + 1} of {count} never came"
+                );
             }
         }
 
@@ -379,7 +382,9 @@ public sealed class AgentServiceTests {
             if (refusalsLeft > 0) {
                 refusalsLeft--;
                 Interlocked.Increment(ref refusals);
-                throw new InvalidOperationException("secrets \"cybercloud-agent-credential\" is forbidden: the Role does not grant it");
+                throw new InvalidOperationException(
+                    """secrets "cybercloud-agent-credential" is forbidden: the Role does not grant it"""
+                );
             }
 
             Value = credential;
@@ -396,16 +401,29 @@ public sealed class AgentServiceTests {
         public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) =>
             Task.FromResult(Result<KubeObject>.Failure(ErrorCode.ResourceNotFound, "not here"));
 
-        public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) =>
+        public Task<Result<ApplyOutcome>> ApplyAsync(
+            KubeCommand command,
+            CancellationToken cancellationToken = default
+        ) =>
             Task.FromResult(Result<ApplyOutcome>.Failure(ErrorCode.InternalError, "not scripted"));
 
-        public Task<Result> DeleteAsync(ObjectRef target, CascadePolicy policy, CancellationToken cancellationToken = default) =>
+        public Task<Result> DeleteAsync(
+            ObjectRef target,
+            CascadePolicy policy,
+            CancellationToken cancellationToken = default
+        ) =>
             Task.FromResult(Result.Failure(ErrorCode.InternalError, "not scripted"));
 
-        public Task<Result> SetOwnerAsync(ObjectRef target, OwnerRef? owner, CancellationToken cancellationToken = default) =>
+        public Task<Result> SetOwnerAsync(
+            ObjectRef target,
+            OwnerRef? owner,
+            CancellationToken cancellationToken = default
+        ) =>
             Task.FromResult(Result.Failure(ErrorCode.InternalError, "not scripted"));
 
-        public Task<Result<IReadOnlyList<GroupVersionKind>>> DiscoverNamespacedKindsAsync(CancellationToken cancellationToken = default) =>
+        public Task<Result<IReadOnlyList<GroupVersionKind>>> DiscoverNamespacedKindsAsync(
+            CancellationToken cancellationToken = default
+        ) =>
             Task.FromResult(Result<IReadOnlyList<GroupVersionKind>>.Failure(ErrorCode.InternalError, "not scripted"));
 
         public Task<Result<ListPage>> ListAsync(

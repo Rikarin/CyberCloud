@@ -37,7 +37,7 @@ static class TableWriter {
 
         if (table.HasHeader) {
             writer.WriteLine(Line(table.Columns, widths));
-            writer.WriteLine(Line([.. widths.Select(x => new string('-', x))], widths));
+            writer.WriteLine(Line([.. widths.Select(static x => new string('-', x))], widths));
         }
 
         foreach (var row in table.Rows) {
@@ -80,7 +80,7 @@ static class TableWriter {
                 return ([], [], false);
             }
 
-            if (elements.TrueForAll(x => x.IsObject)) {
+            if (elements.TrueForAll(static x => x.IsObject)) {
                 // Column order is first appearance, not alphabetical: the platform puts `name` and
                 // `location` before `properties` and a human reads the columns in that order.
                 var columns = new List<string>();
@@ -100,11 +100,11 @@ static class TableWriter {
                 return (columns, rows, true);
             }
 
-            return (["Value"], [.. elements.Select(x => new[] { x.ToCell() })], false);
+            return (["Value"], [.. elements.Select(static x => new[] { x.ToCell() })], false);
         }
 
         if (value.IsObject) {
-            var rows = value.Members.Select(x => new[] { x.Key, x.Value.ToCell() }).ToList();
+            var rows = value.Members.Select(static x => new[] { x.Key, x.Value.ToCell() }).ToList();
 
             return (["Name", "Value"], rows, true);
         }
@@ -137,8 +137,8 @@ static class TableWriter {
     /// </remarks>
     static string Escape(string cell) =>
         cell
-            .Replace("\\", "\\\\", StringComparison.Ordinal)
-            .Replace("\t", "\\t", StringComparison.Ordinal)
+            .Replace("""\""", """\\""", StringComparison.Ordinal)
+            .Replace("\t", """\t""", StringComparison.Ordinal)
             .Replace("\r", string.Empty, StringComparison.Ordinal)
-            .Replace("\n", "\\n", StringComparison.Ordinal);
+            .Replace("\n", """\n""", StringComparison.Ordinal);
 }

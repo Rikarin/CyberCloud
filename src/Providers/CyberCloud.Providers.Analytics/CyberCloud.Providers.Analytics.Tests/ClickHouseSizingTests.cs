@@ -61,7 +61,7 @@ public sealed class ClickHouseSizingTests {
         var helpers = Embedded("clickhouse.helpers.tpl");
         var block = Regex.Match(
             helpers,
-            "define \"clickhouse\\.keeperResources\" -}}(.*?){{- end",
+            """define "clickhouse\.keeperResources" -}}(.*?){{- end""",
             RegexOptions.Singleline,
             TimeSpan.FromSeconds(5)
         );

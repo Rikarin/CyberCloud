@@ -220,8 +220,11 @@ public sealed record DocumentQueryParameter(string Name, string Type, string Des
 ///     which ends a parked resource's recovery window. docs/plan/08 § The write path, end to end:
 ///     "A converged delete or purge removes it".
 ///     <para>
-///         ⚠ <b>A poller that reads the resource after this succeeds gets a <c>404</c> for its
-///         success.</b> The Python and Go SDKs' <c>wait()</c> follows a long-running verb's
+///         ⚠
+///         <b>
+///             A poller that reads the resource after this succeeds gets a <c>404</c> for its
+///             success.
+///         </b> The Python and Go SDKs' <c>wait()</c> follows a long-running verb's
 ///         <c>202</c> to the resource — docs/plan/10 § Long-running operations, over HTTP: "then GET
 ///         the resource" — and until this member existed both did so after a purge and raised
 ///         <c>ResourceNotFound</c> from a purge that had worked. It is the document's fact, read once
@@ -308,7 +311,10 @@ public static class DocumentReader {
 
             var component = ComponentOf(item);
             var collection = CollectionOf(paths, document, resourceType);
-            var (body, envelope) = Split(schemas, (component.Length > 0 ? schemas?[component] as JsonObject : null) ?? []);
+            var (body, envelope) = Split(
+                schemas,
+                (component.Length > 0 ? schemas?[component] as JsonObject : null) ?? []
+            );
 
             found.Add(
                 new(
@@ -332,7 +338,7 @@ public static class DocumentReader {
             );
         }
 
-        return [.. found.OrderBy(x => x.ResourceType, StringComparer.Ordinal)];
+        return [.. found.OrderBy(static x => x.ResourceType, StringComparer.Ordinal)];
     }
 
     /// <summary>
@@ -394,7 +400,7 @@ public static class DocumentReader {
             );
         }
 
-        return [.. found.OrderBy(x => x.Path, StringComparer.Ordinal)];
+        return [.. found.OrderBy(static x => x.Path, StringComparer.Ordinal)];
     }
 
     /// <summary>
@@ -521,7 +527,7 @@ public static class DocumentReader {
             );
         }
 
-        return [.. found.OrderBy(x => x.Name, StringComparer.Ordinal)];
+        return [.. found.OrderBy(static x => x.Name, StringComparer.Ordinal)];
     }
 
     /// <summary>The actions declared under one resource path, ordered by name.</summary>
@@ -565,13 +571,13 @@ public static class DocumentReader {
                     // matched as a URL segment is. The name is the identity: ProviderBuilder refuses a
                     // provider that declares `purge` on any type, so the only purge a document can
                     // carry is the one the platform synthesised.
-                    RemovesResource: purgePermission.Length > 0
+                    purgePermission.Length > 0
                     && string.Equals(name, SoftDeletePolicy.PurgeAction, StringComparison.OrdinalIgnoreCase)
                 )
             );
         }
 
-        return [.. found.OrderBy(x => x.Name, StringComparer.Ordinal)];
+        return [.. found.OrderBy(static x => x.Name, StringComparer.Ordinal)];
     }
 
     /// <summary>
@@ -623,7 +629,7 @@ public static class DocumentReader {
         body.Remove("allOf");
 
         if (body["properties"] is JsonObject own) {
-            foreach (var name in members.Select(x => x.Key).ToList()) {
+            foreach (var name in members.Select(static x => x.Key).ToList()) {
                 own.Remove(name);
             }
         }
@@ -654,7 +660,7 @@ public static class DocumentReader {
     }
 
     static IEnumerable<string> Strings(JsonNode? node) =>
-        node is JsonArray array ? array.Select(Text).Where(x => x.Length > 0) : [];
+        node is JsonArray array ? array.Select(Text).Where(static x => x.Length > 0) : [];
 
     /// <summary>The component key a path item's <c>200</c> body points at, or <c>""</c>.</summary>
     static string ComponentOf(JsonObject item) =>
@@ -770,7 +776,7 @@ public static class DocumentReader {
     /// </remarks>
     public static ImmutableArray<string> AncestorPlaceholdersOf(string path) => [
         .. PlaceholdersOf(path)
-            .Where(x =>
+            .Where(static x =>
                 x is not (TenantPlaceholder
                     or SubscriptionPlaceholder
                     or ResourceGroupPlaceholder
@@ -806,7 +812,7 @@ public static class DocumentReader {
             ? names.Select(Text).ToHashSet(StringComparer.Ordinal)
             : [];
 
-        foreach (var member in properties.ToList().OrderBy(x => x.Key, StringComparer.Ordinal)) {
+        foreach (var member in properties.ToList().OrderBy(static x => x.Key, StringComparer.Ordinal)) {
             if (member.Value is not JsonObject child) {
                 continue;
             }
@@ -835,7 +841,7 @@ public static class DocumentReader {
         ArgumentNullException.ThrowIfNull(schema);
 
         return schema["type"] switch {
-            JsonArray union => union.Select(Text).FirstOrDefault(x => x is { Length: > 0 } and not "null")
+            JsonArray union => union.Select(Text).FirstOrDefault(static x => x is { Length: > 0 } and not "null")
                 ?? string.Empty,
             var single => Text(single)
         };
@@ -847,7 +853,7 @@ public static class DocumentReader {
         ArgumentNullException.ThrowIfNull(schema);
 
         return schema["type"] is JsonArray union
-            && union.Any(x => string.Equals(Text(x), "null", StringComparison.Ordinal));
+            && union.Any(static x => string.Equals(Text(x), "null", StringComparison.Ordinal));
     }
 
     /// <summary>A schema's <c>enum</c> values, in document order.</summary>

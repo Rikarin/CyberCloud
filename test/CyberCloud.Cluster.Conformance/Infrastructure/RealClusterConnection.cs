@@ -52,7 +52,7 @@ public sealed class RealClusterConnection(IKubeApiClient api, Guid clusterId) : 
 
     /// <summary>Every drift event the API server produced.</summary>
     public ImmutableArray<DriftEvent> Drift =>
-        [.. Outcomes.Select(x => x.Drift).Where(x => x is not null).Select(x => x!)];
+        [.. Outcomes.Select(static x => x.Drift).Where(static x => x is not null).Select(static x => x!)];
 
     /// <inheritdoc />
     public async Task<Result<ApplyOutcome>> ApplyAsync(
@@ -118,7 +118,11 @@ public sealed class RealClusterConnection(IKubeApiClient api, Guid clusterId) : 
     ///     <c>PersistentVolumeClaim</c>. What it still cannot show is CloudNativePG reattaching the
     ///     claim, because the k3s the lane starts has no operator installed (#2).
     /// </remarks>
-    public Task<Result> SetOwnerAsync(ObjectRef target, OwnerRef? owner, CancellationToken cancellationToken = default) =>
+    public Task<Result> SetOwnerAsync(
+        ObjectRef target,
+        OwnerRef? owner,
+        CancellationToken cancellationToken = default
+    ) =>
         api.SetOwnerAsync(target, owner, cancellationToken);
 }
 

@@ -110,7 +110,6 @@ public sealed class KubeApiClientFactory(
             case ClusterConnectionKind.Kubeconfig:
                 break;
 
-            case ClusterConnectionKind.Unknown:
             default:
                 return Result<IKubeApiClient>.Failure(
                     ErrorCode.InvalidRequestBody,

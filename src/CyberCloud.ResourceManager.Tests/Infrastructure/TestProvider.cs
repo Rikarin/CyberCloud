@@ -134,8 +134,9 @@ public sealed class ConformingReconciler(IClock clock) : IResourceReconciler {
         ReconcileContext context,
         CancellationToken cancellationToken = default
     ) {
-        FakeWorld.Passes.AddOrUpdate(context.Id.Id, 1, (_, count) => count + 1);
-        FakeWorld.Seams[context.Id.Id] = (context.View.GetType().Name, context.Watch.GetType().Name, context.Changes.Length);
+        FakeWorld.Passes.AddOrUpdate(context.Id.Id, 1, static (_, count) => count + 1);
+        FakeWorld.Seams[context.Id.Id] =
+            (context.View.GetType().Name, context.Watch.GetType().Name, context.Changes.Length);
 
         if (FakeWorld.FailWith.TryGetValue(context.Id.Id, out var failure)) {
             context.Log.Report("applying", $"refused: {failure}");
@@ -193,7 +194,7 @@ public sealed class ConformingReconciler(IClock clock) : IResourceReconciler {
         ReconcileContext context,
         CancellationToken cancellationToken = default
     ) {
-        FakeWorld.Deletes.AddOrUpdate(context.Id.Id, 1, (_, count) => count + 1);
+        FakeWorld.Deletes.AddOrUpdate(context.Id.Id, 1, static (_, count) => count + 1);
 
         if (FakeWorld.FailTeardownWith.TryGetValue(context.Id.Id, out var failure)) {
             context.Log.Report("deleting", $"teardown failed: {failure}");
@@ -243,7 +244,7 @@ public sealed class ConformingReconciler(IClock clock) : IResourceReconciler {
 ///     whole of clause 4's read-back is shared and a divergence between the two is impossible.
 /// </remarks>
 /// <param name="clock">The harness's clock.</param>
-public sealed class SoftDeletableReconciler(Core.Time.IClock clock) : IResourceReconciler {
+public sealed class SoftDeletableReconciler(IClock clock) : IResourceReconciler {
     readonly ConformingReconciler inner = new(clock);
 
     /// <inheritdoc />
@@ -429,9 +430,9 @@ public sealed class TestingProvider : IResourceProvider {
     public static ResourceSchema Schema2026 { get; } =
         ResourceSchema.Of(
             [
-                new("/location", SchemaKind.Text, Required: true),
+                new("/location", SchemaKind.Text, true),
                 new("/properties", SchemaKind.Nested),
-                new("/properties/size", SchemaKind.WholeNumber, Required: true),
+                new("/properties/size", SchemaKind.WholeNumber, true),
                 new("/properties/label", SchemaKind.Text),
                 new("/properties/adminPassword", SchemaKind.Text, Secret: true)
             ]
@@ -441,9 +442,9 @@ public sealed class TestingProvider : IResourceProvider {
     public static ResourceSchema Schema2027 { get; } =
         ResourceSchema.Of(
             [
-                new("/location", SchemaKind.Text, Required: true),
+                new("/location", SchemaKind.Text, true),
                 new("/properties", SchemaKind.Nested),
-                new("/properties/size", SchemaKind.WholeNumber, Required: true),
+                new("/properties/size", SchemaKind.WholeNumber, true),
                 new("/properties/label", SchemaKind.Text),
                 new("/properties/adminPassword", SchemaKind.Text, Secret: true),
                 new("/properties/tier", SchemaKind.Text)
@@ -471,7 +472,7 @@ public sealed class TestingProvider : IResourceProvider {
                 "listKeys",
                 ActionKind.Post,
                 "listKeys",
-                secret: true,
+                true,
                 response: ListKeysResponse,
                 handler: typeof(ListKeysHandler)
             )
@@ -487,7 +488,7 @@ public sealed class TestingProvider : IResourceProvider {
                 response: ResizeResponse,
                 longRunning: true
             )
-            .Display("Testing widget", "Testing widgets", shortName: "twidget")
+            .Display("Testing widget", "Testing widgets", "twidget")
             // ⚠ NO SupportsSoftDelete, AND IT USED TO DECLARE ONE. While nothing in the manager read
             // SoftDeleteDays the declaration was inert and this type could carry it for the emitters'
             // benefit. It is read now — a positive window makes DELETE park the resource instead of
@@ -516,7 +517,7 @@ public sealed class TestingProvider : IResourceProvider {
             .Meter(QuotaMeter.StorageGb, MeterDerivation.Quantity(DiskPointer, QuantityUnit.Gibibytes))
             .Meters(QuotaMeter.Resources)
             .Permissions("read", "write", "delete")
-            .Display("Sized widget", "Sized widgets", shortName: "swidget")
+            .Display("Sized widget", "Sized widgets", "swidget")
             // ── The third type: a CHILD, and the only nested type in the codebase ────────────────
             //
             // ⚠ NO PROVIDER IN THE CATALOGUE DECLARES A NESTED TYPE YET. docs/plan/12 § The
@@ -532,7 +533,7 @@ public sealed class TestingProvider : IResourceProvider {
             .ApiVersion(V2026, ChildSchema)
             .Meters(QuotaMeter.Resources)
             .Permissions("read", "write", "delete")
-            .Display("Gadget", "Gadgets", shortName: "gadget")
+            .Display("Gadget", "Gadgets", "gadget")
             // ── The fourth type: the only SOFT-DELETABLE one ─────────────────────────────────────
             //
             // ⚠ NO PROVIDER IN THE CATALOGUE DECLARES A RECOVERY WINDOW YET, and docs/plan/08 § Soft
@@ -561,7 +562,7 @@ public sealed class TestingProvider : IResourceProvider {
             // separable, and a fixture that spelled them the same would make every purge-authorization
             // test pass without the separation existing.
             .SupportsSoftDelete(7, "purge", PurgeProtectionPointer)
-            .Display("Testing vault", "Testing vaults", shortName: "tvault");
+            .Display("Testing vault", "Testing vaults", "tvault");
     }
 
     // ── The fourth type: soft-deletable ────────────────────────────────────────────────────────
@@ -589,9 +590,9 @@ public sealed class TestingProvider : IResourceProvider {
     public static ResourceSchema VaultSchema { get; } =
         ResourceSchema.Of(
             [
-                new("/location", SchemaKind.Text, Required: true),
+                new("/location", SchemaKind.Text, true),
                 new("/properties", SchemaKind.Nested),
-                new("/properties/size", SchemaKind.WholeNumber, Required: true),
+                new("/properties/size", SchemaKind.WholeNumber, true),
                 new(PurgeProtectionPointer, SchemaKind.Boolean)
             ]
         );
@@ -613,7 +614,7 @@ public sealed class TestingProvider : IResourceProvider {
     }
 
     /// <summary>The declared pointers of <see cref="VaultSchema" />.</summary>
-    public static ImmutableArray<string> VaultPointers => [.. VaultSchema.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> VaultPointers => [.. VaultSchema.Properties.Select(static x => x.JsonPointer)];
 
     // ── The third type: a child of `widgets` ───────────────────────────────────────────────────
 
@@ -627,7 +628,7 @@ public sealed class TestingProvider : IResourceProvider {
     public static ResourceSchema ChildSchema { get; } =
         ResourceSchema.Of(
             [
-                new("/location", SchemaKind.Text, Required: true),
+                new("/location", SchemaKind.Text, true),
                 new("/properties", SchemaKind.Nested),
                 new("/properties/label", SchemaKind.Text)
             ]
@@ -653,7 +654,7 @@ public sealed class TestingProvider : IResourceProvider {
         MeterDerivation.Of(
             "replicas × cpu, in cores",
             ["/properties/replicas", "/properties/cpu"],
-            body => MeterDerivation.TryQuantityAt(body, "/properties/cpu", QuantityUnit.Base, out var cores)
+            static body => MeterDerivation.TryQuantityAt(body, "/properties/cpu", QuantityUnit.Base, out var cores)
                 && MeterDerivation.Resolve(body, "/properties/replicas") is { ValueKind: JsonValueKind.Number } count
                     ? Result<decimal>.Success(count.GetInt32() * cores)
                     : Result<decimal>.Failure(ErrorCode.InternalError, "cpu or replicas is not readable")
@@ -663,14 +664,14 @@ public sealed class TestingProvider : IResourceProvider {
     public static ResourceSchema ResizeRequest { get; } =
         ResourceSchema.Of(
             [
-                new("/size", SchemaKind.WholeNumber, Required: true) { Minimum = 1, Maximum = 8 },
+                new("/size", SchemaKind.WholeNumber, true) { Minimum = 1, Maximum = 8 },
                 new("/tier", SchemaKind.Text) { AllowedValues = ["basic", "standard"] }
             ]
         );
 
     /// <summary>What a <c>POST …/resize</c> returns.</summary>
     public static ResourceSchema ResizeResponse { get; } =
-        ResourceSchema.Of([new("/accepted", SchemaKind.Boolean, Required: true)]);
+        ResourceSchema.Of([new("/accepted", SchemaKind.Boolean, true)]);
 
     /// <summary>A body that satisfies <see cref="Schema2026" />.</summary>
     /// <param name="size">The size, which is also the vcpu quota draw.</param>
@@ -683,7 +684,7 @@ public sealed class TestingProvider : IResourceProvider {
         );
 
     /// <summary>The declared pointers of <see cref="Schema2026" />.</summary>
-    public static ImmutableArray<string> Pointers2026 => [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 => [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The second type: quantities, not numbers ───────────────────────────────────────────────
 
@@ -708,10 +709,10 @@ public sealed class TestingProvider : IResourceProvider {
     public static ResourceSchema SizedSchema { get; } =
         ResourceSchema.Of(
             [
-                new("/location", SchemaKind.Text, Required: true),
+                new("/location", SchemaKind.Text, true),
                 new("/properties", SchemaKind.Nested),
-                new("/properties/replicas", SchemaKind.WholeNumber, Required: true) { Minimum = 1, Maximum = 9 },
-                new("/properties/cpu", SchemaKind.Text, Required: true) { Pattern = QuantityPattern },
+                new("/properties/replicas", SchemaKind.WholeNumber, true) { Minimum = 1, Maximum = 9 },
+                new("/properties/cpu", SchemaKind.Text, true) { Pattern = QuantityPattern },
                 new(DiskPointer, SchemaKind.Text) { Pattern = QuantityPattern }
             ]
         );
@@ -737,11 +738,11 @@ public sealed class TestingProvider : IResourceProvider {
     public static ResourceSchema ListKeysResponse { get; } =
         ResourceSchema.Of(
             [
-                new("/accessKeyId", SchemaKind.Text, Required: true, Description: "The key id."),
+                new("/accessKeyId", SchemaKind.Text, true, Description: "The key id."),
                 new(
                     "/secretAccessKey",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Secret: true,
                     Description: "The secret."
                 )

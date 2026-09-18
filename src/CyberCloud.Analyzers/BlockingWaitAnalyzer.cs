@@ -72,8 +72,8 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer {
             compilation.GetTypeByMetadataName(WellKnown.ValueTask),
             compilation.GetTypeByMetadataName(WellKnown.ValueTaskOfT)
         }
-                .Where(x => x is not null)
-                .Select(x => x!)
+                .Where(static x => x is not null)
+                .Select(static x => x!)
                 .ToImmutableArray();
 
         if (taskTypes.IsEmpty) {

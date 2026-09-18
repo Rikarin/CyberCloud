@@ -20,7 +20,7 @@ public sealed class MachineReadableFailureTests {
     [Fact]
     public async Task StdoutIsEmptyWhenTheRequestFails() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, _) =>
+            new ScriptedTransport(static (_, _) =>
                 Responses.Error(HttpStatusCode.NotFound, "ResourceNotFound", "No widget called 'w1' in 'prod'.")
             )
         );
@@ -54,7 +54,7 @@ public sealed class MachineReadableFailureTests {
     [Fact]
     public async Task TheErrorItselfIsJsonOnStderr() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, _) =>
+            new ScriptedTransport(static (_, _) =>
                 Responses.Error(HttpStatusCode.Conflict, "ResourceLocked", "A CanNotDelete lock is on 'prod'.")
             )
         );
@@ -74,7 +74,7 @@ public sealed class MachineReadableFailureTests {
     [Fact]
     public async Task ASucceedingCommandWritesOneDocumentAndNothingElse() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, _) =>
+            new ScriptedTransport(static (_, _) =>
                 Responses.Json(HttpStatusCode.OK, """{"name":"w1","properties":{"tier":"free"}}""")
             )
         );
@@ -88,7 +88,7 @@ public sealed class MachineReadableFailureTests {
     [Fact]
     public async Task ProgressNeverReachesStdout() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, index) => index switch {
+            new ScriptedTransport(static (_, index) => index switch {
                     0 => Responses.Accepted("https://api.cybercloud.io/operations/op-1"),
                     1 => Responses.Json(
                         HttpStatusCode.OK,

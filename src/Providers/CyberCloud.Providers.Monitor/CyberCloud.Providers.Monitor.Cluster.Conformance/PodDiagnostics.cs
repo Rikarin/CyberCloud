@@ -19,17 +19,24 @@ static class PodDiagnostics {
     /// <param name="instanceLabel">The label key the Deployment selects its pods by.</param>
     /// <param name="objectName">The label's value — the Deployment's name.</param>
     /// <param name="token">The test's token.</param>
-    public static async Task<string> DescribeAsync(IKubernetes raw, string ns, string instanceLabel, string objectName, CancellationToken token) {
+    public static async Task<string> DescribeAsync(
+        IKubernetes raw,
+        string ns,
+        string instanceLabel,
+        string objectName,
+        CancellationToken token
+    ) {
         var pods = await ListAsync(raw, ns, instanceLabel, objectName, token);
 
         if (pods.Count == 0) {
             return "The Deployment has no pods at all, which is a ReplicaSet the controller never made — read the Deployment's conditions.";
         }
 
-        var lines = pods.Select(pod => {
-            var states = pod.Status?.ContainerStatuses?.Select(Describe) ?? ["no container statuses yet"];
-            return $"{pod.Metadata.Name} phase={pod.Status?.Phase}: {string.Join("; ", states)}";
-        });
+        var lines = pods.Select(static pod => {
+                var states = pod.Status?.ContainerStatuses?.Select(Describe) ?? ["no container statuses yet"];
+                return $"{pod.Metadata.Name} phase={pod.Status?.Phase}: {string.Join("; ", states)}";
+            }
+        );
 
         return "Pods: " + string.Join(" | ", lines);
     }
@@ -63,7 +70,10 @@ static class PodDiagnostics {
         foreach (var pod in pods) {
             foreach (var container in pod.Status?.ContainerStatuses ?? []) {
                 if (container.State?.Waiting is { Reason: { Length: > 0 } reason } waiting
-                    && reason is not ("ContainerCreating" or "ImagePullBackOff" or "ErrImagePull" or "PodInitializing")) {
+                    && reason is not ("ContainerCreating"
+                        or "ImagePullBackOff"
+                        or "ErrImagePull"
+                        or "PodInitializing")) {
                     return (reason, waiting.Message ?? string.Empty);
                 }
             }
@@ -72,8 +82,18 @@ static class PodDiagnostics {
         return null;
     }
 
-    static async Task<IList<V1Pod>> ListAsync(IKubernetes raw, string ns, string instanceLabel, string objectName, CancellationToken token) {
-        var pods = await raw.CoreV1.ListNamespacedPodAsync(ns, labelSelector: $"{instanceLabel}={objectName}", cancellationToken: token);
+    static async Task<IList<V1Pod>> ListAsync(
+        IKubernetes raw,
+        string ns,
+        string instanceLabel,
+        string objectName,
+        CancellationToken token
+    ) {
+        var pods = await raw.CoreV1.ListNamespacedPodAsync(
+            ns,
+            labelSelector: $"{instanceLabel}={objectName}",
+            cancellationToken: token
+        );
         return pods.Items;
     }
 

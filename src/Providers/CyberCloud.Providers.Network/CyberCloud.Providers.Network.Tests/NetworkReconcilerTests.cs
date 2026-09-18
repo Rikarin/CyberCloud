@@ -186,11 +186,9 @@ public sealed class NetworkReconcilerTests {
 
         var connection = new RecordingConnection();
 
-        using var aliceBody = JsonDocument.Parse(VirtualNetworks.Body(ClusterId, addressSpaceV4: "10.20.0.0/16"));
+        using var aliceBody = JsonDocument.Parse(VirtualNetworks.Body(ClusterId, "10.20.0.0/16"));
 
-        using var bobBody = JsonDocument.Parse(
-            VirtualNetworks.Body(ClusterId, addressSpaceV4: "10.20.0.0/16", enableExternal: true)
-        );
+        using var bobBody = JsonDocument.Parse(VirtualNetworks.Body(ClusterId, "10.20.0.0/16", enableExternal: true));
 
         // Interleaved, so a cache written on the first pass is read on the third.
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
@@ -235,11 +233,9 @@ public sealed class NetworkReconcilerTests {
 
         var connection = new RecordingConnection();
 
-        using var aliceBody = JsonDocument.Parse(NetworkSubnets.Body(ClusterId, prefixV4: "10.20.1.0/24"));
+        using var aliceBody = JsonDocument.Parse(NetworkSubnets.Body(ClusterId, "10.20.1.0/24"));
 
-        using var bobBody = JsonDocument.Parse(
-            NetworkSubnets.Body(ClusterId, prefixV4: "10.20.2.0/24", natOutgoing: true)
-        );
+        using var bobBody = JsonDocument.Parse(NetworkSubnets.Body(ClusterId, "10.20.2.0/24", natOutgoing: true));
 
         await PassSubnet(reconciler, connection, alice, aliceBody.RootElement);
         await PassSubnet(reconciler, connection, bob, bobBody.RootElement);
@@ -304,7 +300,7 @@ public sealed class NetworkReconcilerTests {
         var reconciler = new VirtualNetworkReconciler(new FixedClock());
         var connection = new RecordingConnection();
 
-        using var body = JsonDocument.Parse(VirtualNetworks.Body(ClusterId, addressSpaceV4: "10.96.0.0/12"));
+        using var body = JsonDocument.Parse(VirtualNetworks.Body(ClusterId, "10.96.0.0/12"));
 
         var outcome = await Pass(
             reconciler,
@@ -327,7 +323,7 @@ public sealed class NetworkReconcilerTests {
         var reconciler = new NetworkSubnetReconciler(new FixedClock());
         var connection = new RecordingConnection();
 
-        using var body = JsonDocument.Parse(NetworkSubnets.Body(ClusterId, prefixV4: "10.16.5.0/24"));
+        using var body = JsonDocument.Parse(NetworkSubnets.Body(ClusterId, "10.16.5.0/24"));
 
         var outcome = await PassSubnet(
             reconciler,

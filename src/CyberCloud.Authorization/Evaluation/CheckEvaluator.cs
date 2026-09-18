@@ -240,7 +240,7 @@ public sealed class CheckEvaluator {
         // A true is a real derivation and can never be withdrawn, so it is always written down.
         // A false is only written down when nothing under it was cut short and nothing under it
         // leaned on an in-progress marker.
-        if (result.Value || (!result.Cyclic && !result.Truncated)) {
+        if (result.Value || result is { Cyclic: false, Truncated: false }) {
             memo[triple] = result.Value;
         }
 

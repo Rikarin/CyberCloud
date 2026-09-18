@@ -15,8 +15,11 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 ///         an <c>IGrainFactory</c> gets that right in one place rather than in one place per caller.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The implementation lives in this family's own implementation assembly, which is the
-///         first provider to hold one.</b> The sending module put its control plane beside its
+///         ⚠
+///         <b>
+///             The implementation lives in this family's own implementation assembly, which is the
+///             first provider to hold one.
+///         </b> The sending module put its control plane beside its
 ///         grains in <c>CyberCloud.Communication</c> because identity reaches those grains and rule
 ///         2 forbids identity reaching a provider. Nothing outside this family reaches an
 ///         evaluator, so the grain and its seam stay in the provider — which is where docs/plan/03
@@ -41,26 +44,44 @@ public interface IAlertControlPlane {
     /// <param name="evaluatorId">The workspace's evaluator.</param>
     /// <param name="ruleId">The rule.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    Task<Result> RemoveRuleAsync(Guid tenantId, Guid evaluatorId, Guid ruleId, CancellationToken cancellationToken = default);
+    Task<Result> RemoveRuleAsync(
+        Guid tenantId,
+        Guid evaluatorId,
+        Guid ruleId,
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>One rule, as held.</summary>
     /// <param name="tenantId">The tenant.</param>
     /// <param name="evaluatorId">The workspace's evaluator.</param>
     /// <param name="ruleId">The rule.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    Task<Result<AlertRuleSnapshot>> GetRuleAsync(Guid tenantId, Guid evaluatorId, Guid ruleId, CancellationToken cancellationToken = default);
+    Task<Result<AlertRuleSnapshot>> GetRuleAsync(
+        Guid tenantId,
+        Guid evaluatorId,
+        Guid ruleId,
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>Every rule a workspace carries.</summary>
     /// <param name="tenantId">The tenant.</param>
     /// <param name="evaluatorId">The workspace's evaluator.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    Task<Result<ImmutableArray<AlertRuleSnapshot>>> ListRulesAsync(Guid tenantId, Guid evaluatorId, CancellationToken cancellationToken = default);
+    Task<Result<ImmutableArray<AlertRuleSnapshot>>> ListRulesAsync(
+        Guid tenantId,
+        Guid evaluatorId,
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>Runs one evaluation pass by hand. What a test drives instead of waiting a minute.</summary>
     /// <param name="tenantId">The tenant.</param>
     /// <param name="evaluatorId">The workspace's evaluator.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    Task<Result<AlertEvaluationReport>> EvaluateAsync(Guid tenantId, Guid evaluatorId, CancellationToken cancellationToken = default);
+    Task<Result<AlertEvaluationReport>> EvaluateAsync(
+        Guid tenantId,
+        Guid evaluatorId,
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>Whether the workspace's reminder is registered.</summary>
     /// <param name="tenantId">The tenant.</param>

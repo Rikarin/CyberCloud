@@ -147,7 +147,7 @@ public sealed class ClusterConnectionTenancyTests(KubeTestCluster cluster) {
 
             reached.ShouldBe("Unknown", "the platform operator reaches the connection.");
 
-            var lines = LogCapture.Lines.Select(x => x.Message).ToList();
+            var lines = LogCapture.Lines.Select(static x => x.Message).ToList();
 
             lines.ShouldContain(
                 x => x.Contains("user:ops-7f3c", StringComparison.Ordinal)
@@ -173,8 +173,8 @@ public sealed class ClusterConnectionTenancyTests(KubeTestCluster cluster) {
         await cluster.Reacher(TenantB).ReachHealthAsync(clusterId);
 
         var errors = LogCapture.Lines
-            .Where(x => x.Level >= LogLevel.Error)
-            .Select(x => x.Message)
+            .Where(static x => x.Level >= LogLevel.Error)
+            .Select(static x => x.Message)
             .ToList();
 
         errors.ShouldContain(

@@ -62,7 +62,8 @@ public sealed class ValkeyOpenApiCasingTests {
             "no path carries the provider namespace and type as declared"
         );
 
-        foreach (var path in paths.Where(x => x.Contains("cybercloud.cache", StringComparison.OrdinalIgnoreCase))) {
+        foreach (var path in paths.Where(static x => x.Contains("cybercloud.cache", StringComparison.OrdinalIgnoreCase)
+                 )) {
             path.Contains("CyberCloud.Cache", StringComparison.Ordinal).ShouldBeTrue(path);
         }
     }
@@ -113,7 +114,7 @@ public sealed class ValkeyOpenApiCasingTests {
         return OpenApiEmitter.Emit(registry, OpenApiEmitter.ApiVersionsOf(registry).Single());
     }
 
-    static ImmutableArray<string> Paths() => [.. Document()["paths"]!.AsObject().Select(x => x.Key)];
+    static ImmutableArray<string> Paths() => [.. Document()["paths"]!.AsObject().Select(static x => x.Key)];
 
     static void Collect(JsonNode? node, HashSet<string> names) {
         switch (node) {
@@ -130,9 +131,6 @@ public sealed class ValkeyOpenApiCasingTests {
                     Collect(item, names);
                 }
 
-                break;
-
-            default:
                 break;
         }
     }

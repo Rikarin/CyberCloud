@@ -119,7 +119,7 @@ public sealed class RedisClusterHashTagTests : IAsyncLifetime {
         var keys = new List<string> { "foo", "somekey", "{}:empty-tag", "no-braces-at-all" };
         keys.AddRange(
             Enumerable.Range(0, 40)
-                .Select(i =>
+                .Select(static i =>
                     TenantHotKeys.Format(
                         "cc:t:" + StorageFixture.Tenant(i).ToString("N", CultureInfo.InvariantCulture),
                         "CyberCloud.Tests.Hot",
@@ -129,7 +129,7 @@ public sealed class RedisClusterHashTagTests : IAsyncLifetime {
         );
 
         foreach (var key in keys) {
-            var fromServer = (int)(long)(RedisResult)server.Execute("CLUSTER", "KEYSLOT", key);
+            var fromServer = (int)(long)server.Execute("CLUSTER", "KEYSLOT", key);
 
             RedisHashSlot.Of(key).ShouldBe(fromServer, $"slot mismatch for '{key}'");
             multiplexer.HashSlot(key).ShouldBe(fromServer);
@@ -170,7 +170,7 @@ public sealed class RedisClusterHashTagTests : IAsyncLifetime {
         await database.StringSetAsync(b1, "3");
 
         var within = await database.StringGetAsync([a1, a2]);
-        within.Select(x => x.ToString()).ShouldBe(["1", "2"]);
+        within.Select(static x => x.ToString()).ShouldBe(["1", "2"]);
 
         // Two halves, because the failure has two layers and both are worth pinning.
         //

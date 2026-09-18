@@ -107,12 +107,12 @@ public sealed class DiscoveryTests {
         await credential.GetTokenAsync(new TokenRequestContext([CyberCloudScopes.Default]), Cancel.Token);
 
         server.DiscoveryReads.ShouldBe(1);
-        server.Requests.Count(x => x.Path == "/connect/token").ShouldBe(2);
+        server.Requests.Count(static x => x.Path == "/connect/token").ShouldBe(2);
     }
 
     [Fact]
     public async Task A_discovery_document_with_no_token_endpoint_fails_with_a_message_that_names_the_problem() {
-        var transport = new ScriptedTransport((request, index) => Responses.Json(
+        var transport = new ScriptedTransport(static (request, index) => Responses.Json(
                 HttpStatusCode.OK,
                 """{"issuer":"https://x/"}"""
             )
@@ -123,7 +123,7 @@ public sealed class DiscoveryTests {
             "client",
             "secret",
             new CyberCloudCredentialOptions {
-                AuthorityHost = new Uri("https://login.cybercloud.test/"), Transport = transport
+                AuthorityHost = new("https://login.cybercloud.test/"), Transport = transport
             }
         );
 
@@ -142,7 +142,7 @@ public sealed class MachineGrantTests {
     [Fact]
     public async Task Client_credentials_sends_the_grant_the_client_id_and_the_tenant() {
         using var server = new FakeIdentityServer();
-        server.TokenResponses.Enqueue(FakeIdentityServer.Token("t1", expiresIn: 600));
+        server.TokenResponses.Enqueue(FakeIdentityServer.Token("t1", 600));
 
         using var credential = new ClientSecretCredential("tenant-1", "client-1", "secret", server.Options());
 
@@ -206,7 +206,7 @@ public sealed class MachineGrantTests {
             .ShouldBeTrue();
 
         // The private key is not on the wire in any form.
-        string.Join("&", server.LastForm.Select(x => $"{x.Key}={x.Value}"))
+        string.Join("&", server.LastForm.Select(static x => $"{x.Key}={x.Value}"))
             .ShouldNotContain(Convert.ToBase64String(certificate.GetRSAPrivateKey()!.ExportRSAPrivateKey())[..32]);
     }
 
@@ -246,10 +246,10 @@ public sealed class MachineGrantTests {
 
     [Fact]
     public async Task Workload_identity_is_unavailable_rather_than_broken_when_nothing_is_projected() {
-        var thrown = Should.Throw<CredentialUnavailableException>(() => new WorkloadIdentityCredential(
-                tokenFilePath: null,
-                clientId: null,
-                tenantId: null
+        var thrown = Should.Throw<CredentialUnavailableException>(static () => new WorkloadIdentityCredential(
+                null,
+                null,
+                null
             )
         );
 
@@ -283,7 +283,8 @@ public sealed class DeviceCodeTests {
     /// </summary>
     [Fact]
     public async Task The_user_code_reaches_the_caller_through_the_callback_and_the_poll_honours_pending_and_slow_down() {
-        using var server = new FakeIdentityServer { DeviceResponse = _ => Device() };
+        using var server = new FakeIdentityServer { DeviceResponse = static _ => Device() };
+        server.DeviceResponse = _ => Device();
 
         server.TokenResponses.Enqueue(FakeIdentityServer.Error(HttpStatusCode.BadRequest, "authorization_pending"));
         server.TokenResponses.Enqueue(FakeIdentityServer.Error(HttpStatusCode.BadRequest, "slow_down"));
@@ -300,7 +301,8 @@ public sealed class DeviceCodeTests {
                 return Task.CompletedTask;
             },
             server.Options(cache)
-        ) { Delay = (interval, cancellationToken) => Task.CompletedTask };
+        ) { Delay = static (interval, cancellationToken) => Task.CompletedTask };
+        credential.Delay = (interval, cancellationToken) => Task.CompletedTask;
 
         var token = await credential.GetTokenAsync(new TokenRequestContext([CyberCloudScopes.Default]), Cancel.Token);
 
@@ -310,7 +312,7 @@ public sealed class DeviceCodeTests {
         shown.UserCode.ShouldBe("WDJB-MJHT");
         shown.VerificationUriComplete!.ToString().ShouldContain("WDJB-MJHT");
 
-        server.Requests.Count(x => x.Path == "/connect/token").ShouldBe(3);
+        server.Requests.Count(static x => x.Path == "/connect/token").ShouldBe(3);
 
         // The refresh token is kept so the next process finds a sign-in — see ITokenCache's remarks on
         // why the SDK owns both halves.
@@ -341,7 +343,7 @@ public sealed class RefreshTokenTests {
     }
 
     static DeviceCodeCredential Credential(FakeIdentityServer server, ITokenCache cache) =>
-        new("cyc", (info, cancellationToken) => Task.CompletedTask, server.Options(cache));
+        new("cyc", static (info, cancellationToken) => Task.CompletedTask, server.Options(cache));
 
     [Fact]
     public async Task A_cached_refresh_token_is_redeemed_and_the_rotated_one_is_stored() {
@@ -384,7 +386,7 @@ public sealed class RefreshTokenTests {
 
         // The device flow it falls back to has nothing scripted, so the fall-through fails loudly and
         // the test can assert on the cache rather than on a second sign-in.
-        server.DeviceResponse = _ => throw new InvalidOperationException("fell through to a fresh sign-in");
+        server.DeviceResponse = static _ => throw new InvalidOperationException("fell through to a fresh sign-in");
 
         using var credential = Credential(server, cache);
 
@@ -400,7 +402,7 @@ public sealed class RefreshTokenTests {
         stored.RefreshToken.ShouldBe("r1");
 
         // Exactly one attempt. Not two, not three.
-        server.Requests.Count(x => x.Path == "/connect/token").ShouldBe(1);
+        server.Requests.Count(static x => x.Path == "/connect/token").ShouldBe(1);
     }
 
     [Fact]
@@ -414,7 +416,7 @@ public sealed class RefreshTokenTests {
             Cancel.Token
         );
 
-        server.DeviceResponse = _ => throw new InvalidOperationException("fell through to a fresh sign-in");
+        server.DeviceResponse = static _ => throw new InvalidOperationException("fell through to a fresh sign-in");
 
         using var credential = Credential(server, cache);
 
@@ -424,7 +426,7 @@ public sealed class RefreshTokenTests {
             )
         );
 
-        server.Requests.Count(x => x.Path == "/connect/token").ShouldBe(0);
+        server.Requests.Count(static x => x.Path == "/connect/token").ShouldBe(0);
     }
 
     /// <summary>An <c>invalid_grant</c> is an answer: the chain is finished, so the entry goes.</summary>
@@ -434,7 +436,7 @@ public sealed class RefreshTokenTests {
         using var _ = server;
 
         server.TokenResponses.Enqueue(FakeIdentityServer.Error(HttpStatusCode.BadRequest, "invalid_grant"));
-        server.DeviceResponse = _ => throw new InvalidOperationException("fell through to a fresh sign-in");
+        server.DeviceResponse = static _ => throw new InvalidOperationException("fell through to a fresh sign-in");
 
         using var credential = Credential(server, cache);
 
@@ -488,7 +490,8 @@ public sealed class InteractiveFlowTests {
                 return Task.CompletedTask;
             },
             server.Options()
-        ) { Listener = new FakeListener() };
+        );
+        credential.Listener = new FakeListener();
 
         var token = await credential.GetTokenAsync(new TokenRequestContext([CyberCloudScopes.Default]), Cancel.Token);
 
@@ -526,9 +529,10 @@ public sealed class InteractiveFlowTests {
 
         using var credential = new InteractiveBrowserCredential(
             "cyc",
-            (uri, cancellationToken) => Task.CompletedTask,
+            static (uri, cancellationToken) => Task.CompletedTask,
             server.Options()
-        ) { Listener = new FakeListener { StateToReturn = "not-the-state-we-sent" } };
+        );
+        credential.Listener = new FakeListener { StateToReturn = "not-the-state-we-sent" };
 
         await Should.ThrowAsync<AuthenticationFailedException>(async () => await credential.GetTokenAsync(
                 new TokenRequestContext([CyberCloudScopes.Default]),
@@ -536,7 +540,7 @@ public sealed class InteractiveFlowTests {
             )
         );
 
-        server.Requests.Count(x => x.Path == "/connect/token").ShouldBe(0);
+        server.Requests.Count(static x => x.Path == "/connect/token").ShouldBe(0);
     }
 }
 
@@ -551,7 +555,7 @@ public sealed class SigningKeyCacheTests {
     static HttpResponseMessage Keys(params string[] keyIds) =>
         Responses.Json(
             HttpStatusCode.OK,
-            $$"""{"keys":[{{string.Join(",", keyIds.Select(x => $$"""{"kty":"RSA","kid":"{{x}}","n":"AQAB","e":"AQAB"}"""))}}]}"""
+            $$"""{"keys":[{{string.Join(",", keyIds.Select(static x => $$"""{"kty":"RSA","kid":"{{x}}","n":"AQAB","e":"AQAB"}"""))}}]}"""
         );
 
     /// <summary>
@@ -593,7 +597,7 @@ public sealed class SigningKeyCacheTests {
     [Fact]
     public async Task A_key_id_that_does_not_exist_does_not_refetch_on_every_call() {
         using var server = new FakeIdentityServer();
-        server.KeysResponse = () => Keys("key-1");
+        server.KeysResponse = static () => Keys("key-1");
 
         using var identity = new IdentityClient(server.Authority, server);
         var cache = new SigningKeyCache(identity);
@@ -670,7 +674,7 @@ public sealed class CliCredentialTests {
     public async Task A_live_cached_token_is_used_without_launching_the_cli() {
         var cache = TokenCache.CreateInMemory();
         var options = new CyberCloudCredentialOptions {
-            AuthorityHost = new Uri("https://login.cybercloud.test/"), TokenCache = cache
+            AuthorityHost = new("https://login.cybercloud.test/"), TokenCache = cache
         };
 
         await cache.SetAsync(
@@ -680,7 +684,9 @@ public sealed class CliCredentialTests {
         );
 
         var credential = new CyberCloudCliCredential(options) {
-            Run = (arguments, cancellationToken) => throw new InvalidOperationException("the CLI must not be launched")
+            Run = static (arguments, cancellationToken) => throw new InvalidOperationException(
+                "the CLI must not be launched"
+            )
         };
 
         (await credential.GetTokenAsync(new TokenRequestContext([CyberCloudScopes.Default]), Cancel.Token)).Token
@@ -719,7 +725,7 @@ public sealed class CliCredentialTests {
         var credential = new CyberCloudCliCredential(
             new CyberCloudCredentialOptions { TokenCache = TokenCache.CreateInMemory() }
         ) {
-                Run = (arguments, cancellationToken) => ValueTask.FromResult(
+                Run = static (arguments, cancellationToken) => ValueTask.FromResult(
                     new Subprocess.Result(3, string.Empty, string.Empty)
                 )
             };
@@ -739,7 +745,7 @@ public sealed class CliCredentialTests {
         var credential = new CyberCloudCliCredential(
             new CyberCloudCredentialOptions { TokenCache = TokenCache.CreateInMemory() }
         ) {
-                Run = (arguments, cancellationToken) =>
+                Run = static (arguments, cancellationToken) =>
                     ValueTask.FromResult(
                         new Subprocess.Result(0, """{"accessToken":"leaked-token", oops""", string.Empty)
                     )

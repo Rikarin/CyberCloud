@@ -2,20 +2,25 @@ using CyberCloud.Chaos.Topology;
 using CyberCloud.ResourceManager.Grains;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Orleans.Hosting;
 using System.Diagnostics;
 
 namespace CyberCloud.Chaos.Invariants;
 
 /// <summary>
-///     docs/plan/23 § The chaos invariants, 2: <i>FLUSHALL the hot tier → zero durable state lost,
-///     zero acknowledged control-plane writes lost, full function within 60 s.</i> docs/plan/25 § R2
+///     docs/plan/23 § The chaos invariants, 2:
+///     <i>
+///         FLUSHALL the hot tier → zero durable state lost,
+///         zero acknowledged control-plane writes lost, full function within 60 s.
+///     </i> docs/plan/25 § R2
 ///     names this run as the thing that makes ADR-003's two tiers true "in month fourteen".
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The flush is a real <c>FLUSHALL</c> on the Redis every silo's hot tier and reminder
-///         table live in</b>, and the reads afterwards come out of PostgreSQL rather than out of an
+///         ⚠
+///         <b>
+///             The flush is a real <c>FLUSHALL</c> on the Redis every silo's hot tier and reminder
+///             table live in
+///         </b>, and the reads afterwards come out of PostgreSQL rather than out of an
 ///         activation's memory, because every idle activation is collected first. Without that step
 ///         the assertion would be that an in-memory object survived a Redis command, which nobody
 ///         doubted.
@@ -65,21 +70,39 @@ public sealed class Invariant2HotTierFlushTests(ChaosTopology topology) {
         for (var i = 0; i < Seeded; i++) {
             var name = $"flush-{i}";
             var accepted = (await topology.PutWidgetAsync(world, name, $"before-{i}", token)).GetValueOrThrow();
-            var (last, _) = await topology.DriveUntilTerminalAsync(world.Tenant, accepted.OperationId, ConvergeBudget, token);
-            last?.State.ShouldBe(OperationState.Succeeded, $"seeding '{name}' did not converge: {last?.Error?.Message}");
+            var (last, _) = await topology.DriveUntilTerminalAsync(
+                world.Tenant,
+                accepted.OperationId,
+                ConvergeBudget,
+                token
+            );
+            last?.State.ShouldBe(
+                OperationState.Succeeded,
+                $"seeding '{name}' did not converge: {last?.Error?.Message}"
+            );
             seeded[name] = (await topology.ReadWidgetAsync(world, name, token)).GetValueOrThrow();
         }
 
         // An acknowledged write whose only driver is its reminder — the 202 came back and nothing
         // has driven it yet.
-        var inFlight = (await topology.PutWidgetAsync(world, "flush-in-flight", "acknowledged", token)).GetValueOrThrow();
+        var inFlight = (await topology.PutWidgetAsync(
+                world,
+                "flush-in-flight",
+                "acknowledged",
+                token
+            )).GetValueOrThrow();
         var inFlightOperation = topology.Operation(world.Tenant, inFlight.OperationId);
 
-        (await topology.ReminderRowsAsync(inFlightOperation)).ShouldBeGreaterThan(0, "the in-flight operation has no reminder before the flush, so the flush cannot be blamed for its absence.");
+        (await topology.ReminderRowsAsync(inFlightOperation)).ShouldBeGreaterThan(
+            0,
+            "the in-flight operation has no reminder before the flush, so the flush cannot be blamed for its absence."
+        );
 
         var remindersBefore = await topology.AllReminderRowsAsync();
         var keysBefore = await topology.HotTierKeysAsync();
-        var refreshPeriod = topology.Cluster.GetSiloServiceProvider().GetRequiredService<IOptions<ReminderOptions>>().Value.RefreshReminderListPeriod;
+        var refreshPeriod =
+            topology.Cluster.GetSiloServiceProvider().GetRequiredService<
+                IOptions<ReminderOptions>>().Value.RefreshReminderListPeriod;
 
         // ── The flush. ────────────────────────────────────────────────────────────────────────
         var flushed = await topology.FlushHotTierAsync(token);
@@ -97,7 +120,8 @@ public sealed class Invariant2HotTierFlushTests(ChaosTopology topology) {
         TimeSpan? reminderRowBackAt = null;
         using var watching = CancellationTokenSource.CreateLinkedTokenSource(token);
 
-        var reminderWatch = Task.Run(async () => {
+        var reminderWatch = Task.Run(
+            async () => {
                 while (!watching.IsCancellationRequested) {
                     if (await topology.ReminderRowsAsync(inFlightOperation) > 0) {
                         reminderRowBackAt = since.Elapsed;
@@ -138,7 +162,12 @@ public sealed class Invariant2HotTierFlushTests(ChaosTopology topology) {
         var freshSucceeded = false;
 
         if (fresh is not null) {
-            var (freshLast, _) = await topology.DriveUntilTerminalAsync(world.Tenant, fresh.OperationId, ConvergeBudget, token);
+            var (freshLast, _) = await topology.DriveUntilTerminalAsync(
+                world.Tenant,
+                fresh.OperationId,
+                ConvergeBudget,
+                token
+            );
             freshSucceeded = freshLast?.State == OperationState.Succeeded;
         }
 
@@ -158,12 +187,21 @@ public sealed class Invariant2HotTierFlushTests(ChaosTopology topology) {
 
             var snapshot = after.GetValueOrThrow();
 
-            if (snapshot.Id != before.Id || snapshot.ProvisioningState != ProvisioningState.Succeeded || snapshot.Body != before.Body) {
-                lost.Add($"{name}: was {before.ProvisioningState} {before.Id:N}, reads {snapshot.ProvisioningState} {snapshot.Id:N}");
+            if (snapshot.Id != before.Id
+                || snapshot.ProvisioningState != ProvisioningState.Succeeded
+                || snapshot.Body != before.Body) {
+                lost.Add(
+                    $"{name}: was {before.ProvisioningState} {before.Id:N}, reads {snapshot.ProvisioningState} {snapshot.Id:N}"
+                );
             }
 
             // And the row is in PostgreSQL, around Orleans.
-            if ((await topology.DurableRowsAsync(ChaosTopology.ShardOf(world.Tenant), before.Id.ToString("N"), token)).Count == 0) {
+            if ((await topology.DurableRowsAsync(
+                        ChaosTopology.ShardOf(world.Tenant),
+                        before.Id.ToString("N"),
+                        token
+                    )).Count
+                == 0) {
                 durableRowsMissing.Add(name);
             }
         }
@@ -187,18 +225,22 @@ public sealed class Invariant2HotTierFlushTests(ChaosTopology topology) {
             ["reminderRowsAfter"] = remindersAfter,
             ["reminderListRefreshMinutes"] = refreshPeriod.TotalMinutes,
             ["inFlightReminderRowsAfter"] = inFlightReminderAfter,
-            ["inFlightReminderRowBackAfterSeconds"] = reminderRowBackAt is { } back ? Math.Round(back.TotalSeconds, 1) : -1,
+            ["inFlightReminderRowBackAfterSeconds"] =
+                reminderRowBackAt is { } back ? Math.Round(back.TotalSeconds, 1) : -1,
             ["inFlightReminderPasses"] = inFlightPasses,
             ["inFlightActivations"] = inFlightActivations,
-            ["inFlightTerminalAfterSeconds"] = inFlightTerminalAt is { } terminal ? Math.Round(terminal.TotalSeconds, 1) : -1,
+            ["inFlightTerminalAfterSeconds"] =
+                inFlightTerminalAt is { } terminal ? Math.Round(terminal.TotalSeconds, 1) : -1,
             ["inFlightConverged"] = inFlightSucceeded ? 1 : 0,
             ["durableWidgets"] = seeded.Count,
             ["durableLost"] = lost.Count,
             ["durableRowsMissing"] = durableRowsMissing.Count,
             ["groupReadable"] = groupReadable ? 1 : 0,
             ["freshWriteFaults"] = writeFaults,
-            ["freshWriteAcceptedAfterSeconds"] = acceptedAfter == TimeSpan.MaxValue ? -1 : Math.Round(acceptedAfter.TotalSeconds, 1),
-            ["wholeAgainAfterSeconds"] = wholeAgainAfter == TimeSpan.MaxValue ? -1 : Math.Round(wholeAgainAfter.TotalSeconds, 1),
+            ["freshWriteAcceptedAfterSeconds"] =
+                acceptedAfter == TimeSpan.MaxValue ? -1 : Math.Round(acceptedAfter.TotalSeconds, 1),
+            ["wholeAgainAfterSeconds"] =
+                wholeAgainAfter == TimeSpan.MaxValue ? -1 : Math.Round(wholeAgainAfter.TotalSeconds, 1),
             ["budgetSeconds"] = RecoveryBudget.TotalSeconds
         };
 
@@ -231,8 +273,12 @@ public sealed class Invariant2HotTierFlushTests(ChaosTopology topology) {
             topology.Report.Violated(2, detail, numbers);
         }
 
-        lost.ShouldBeEmpty("docs/plan/23 § The chaos invariants, 2: zero durable state lost. Lost: " + string.Join("; ", lost));
-        durableRowsMissing.ShouldBeEmpty("a widget reads back but has no row in its shard: " + string.Join(", ", durableRowsMissing));
+        lost.ShouldBeEmpty(
+            "docs/plan/23 § The chaos invariants, 2: zero durable state lost. Lost: " + string.Join("; ", lost)
+        );
+        durableRowsMissing.ShouldBeEmpty(
+            "a widget reads back but has no row in its shard: " + string.Join(", ", durableRowsMissing)
+        );
         groupReadable.ShouldBeTrue($"the resource group is not readable after the flush: {group.Error?.Message}");
 
         inFlightSucceeded.ShouldBeTrue(

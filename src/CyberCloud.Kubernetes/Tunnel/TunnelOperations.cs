@@ -10,8 +10,11 @@ namespace CyberCloud.Kubernetes.Tunnel;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The tunnel carries <see cref="IKubeApiClient" /> calls and not HTTP, and that is a
-///         security decision before it is a convenience.</b> docs/plan/09 § Cluster connections
+///         ⚠
+///         <b>
+///             The tunnel carries <see cref="IKubeApiClient" /> calls and not HTTP, and that is a
+///             security decision before it is a convenience.
+///         </b> docs/plan/09 § Cluster connections
 ///         calls the agent "a reverse-tunnel client and a scoped proxy". A proxy that forwarded raw
 ///         HTTP would let a compromised platform — or a platform bug — send <i>any</i> request to
 ///         the tenant's API server with the agent's service account. A proxy that understands
@@ -228,7 +231,8 @@ public static class TunnelOperations {
         return value.Ok ? Result.Success : Result.Failure(Unwire(value.Error));
     }
 
-    static WireError Wire(Error error) => new() { Code = error.Code.Value, Message = error.Message, Target = error.Target };
+    static WireError Wire(Error error) =>
+        new() { Code = error.Code.Value, Message = error.Message, Target = error.Target };
 
     static Error Unwire(WireError? error) {
         if (error is null) {

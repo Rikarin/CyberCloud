@@ -1,5 +1,4 @@
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.Core.Resources;
 using CyberCloud.Providers.Network.Contracts;
 using Shouldly;
@@ -53,25 +52,25 @@ public sealed class VirtualNetworkCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Network/virtualNetworks",
-            CreateProvider = () => new NetworkProvider(),
+            CreateProvider = static () => new NetworkProvider(),
             ReconcilerType = typeof(VirtualNetworkReconciler),
-            CreateReconciler = clock => new VirtualNetworkReconciler(clock),
+            CreateReconciler = static clock => new VirtualNetworkReconciler(clock),
             Type = VirtualNetworks.Type,
             ApiVersion = VirtualNetworks.V2026,
-            Body = cluster => VirtualNetworks.Body(cluster),
+            Body = static cluster => VirtualNetworks.Body(cluster),
             // ⚠ Changes `enableExternal`, which is the ONE field this provider renders into the Vpc.
             // A changed body that moved only `addressSpace` would pass the update test while proving
             // nothing reached the cluster at all — the address space is deliberately not rendered, so
             // it is invisible from the object, which makes it exactly the wrong axis to vary here.
-            ChangedBody = cluster => VirtualNetworks.Body(cluster, enableExternal: true),
+            ChangedBody = static cluster => VirtualNetworks.Body(cluster, enableExternal: true),
             // Drops the required `/properties/addressSpace/v4`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written:
             // a hand-written invalid body drifts out of date the day the schema gains a property and
             // then tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => WithoutAddressSpace(VirtualNetworks.Body(cluster)),
+            InvalidBody = static cluster => WithoutAddressSpace(VirtualNetworks.Body(cluster)),
             InvalidBodyTarget = "/properties/addressSpace/v4",
             ActionName = VirtualNetworks.ShowIsolationAction,
-            Objects = (id, ns) => [VirtualNetworks.VpcRef(ns, id.Name)],
+            Objects = static (id, ns) => [VirtualNetworks.VpcRef(ns, id.Name)],
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
@@ -79,7 +78,7 @@ public sealed class VirtualNetworkCase : IProviderCaseSource {
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return VirtualNetworks.Matches(match.ObjectJson, desired.RootElement);
             }
@@ -120,22 +119,22 @@ public sealed class NetworkSubnetCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Network/virtualNetworks/subnets",
-            CreateProvider = () => new NetworkProvider(),
+            CreateProvider = static () => new NetworkProvider(),
             ReconcilerType = typeof(NetworkSubnetReconciler),
-            CreateReconciler = clock => new NetworkSubnetReconciler(clock),
+            CreateReconciler = static clock => new NetworkSubnetReconciler(clock),
             Type = NetworkSubnets.Type,
             ApiVersion = NetworkSubnets.V2026,
-            Body = cluster => NetworkSubnets.Body(cluster),
+            Body = static cluster => NetworkSubnets.Body(cluster),
             // ⚠ Changes `natOutgoing`, which the rendered object carries as a bare boolean. The
             // tempting axis is the prefix, and it is the wrong one twice over: it is Immutable, and
             // the controller canonicalizes it, so a changed-prefix body would be testing the two
             // things this family most needs kept out of an update test.
-            ChangedBody = cluster => NetworkSubnets.Body(cluster, natOutgoing: true),
+            ChangedBody = static cluster => NetworkSubnets.Body(cluster, natOutgoing: true),
             // Drops the required `/properties/addressPrefix/v4`.
-            InvalidBody = cluster => WithoutPrefix(NetworkSubnets.Body(cluster)),
+            InvalidBody = static cluster => WithoutPrefix(NetworkSubnets.Body(cluster)),
             InvalidBodyTarget = "/properties/addressPrefix/v4",
             ActionName = NetworkSubnets.AddressUsageAction,
-            Objects = (id, ns) => [NetworkSubnets.SubnetRef(ns, id)],
+            Objects = static (id, ns) => [NetworkSubnets.SubnetRef(ns, id)],
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
@@ -160,7 +159,7 @@ public sealed class NetworkSubnetCase : IProviderCaseSource {
             //
             // ⚠ `NetworkReconcilerTests` KEEPS ITS OWN ASSERTIONS: two networks in ONE resource group
             // each holding a subnet called `web` is a collision this harness still cannot build.
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return NetworkSubnets.Matches(
                     match.ObjectJson,
@@ -212,21 +211,21 @@ public sealed class NetworkSecurityGroupCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Network/virtualNetworks/securityGroups",
-            CreateProvider = () => new NetworkProvider(),
+            CreateProvider = static () => new NetworkProvider(),
             ReconcilerType = typeof(NetworkSecurityGroupReconciler),
-            CreateReconciler = clock => new NetworkSecurityGroupReconciler(clock),
+            CreateReconciler = static clock => new NetworkSecurityGroupReconciler(clock),
             Type = NetworkSecurityGroups.Type,
             ApiVersion = NetworkSecurityGroups.V2026,
-            Body = cluster => NetworkSecurityGroups.Body(cluster),
+            Body = static cluster => NetworkSecurityGroups.Body(cluster),
             // ⚠ Adds a port, which changes the RULE COUNT as well as the rules — the rendered object
             // grows an element. The tempting axis is `allowSameGroupTraffic`, and it is the weaker
             // one: it is a single boolean the renderer copies straight through, so an update test
             // over it would pass against a renderer that never expanded a rule at all.
-            ChangedBody = cluster => NetworkSecurityGroups.Body(cluster, ingressTcpPorts: "80,443,8080"),
-            InvalidBody = cluster => NetworkSecurityGroups.Body(cluster, ingressTcpPorts: "0"),
+            ChangedBody = static cluster => NetworkSecurityGroups.Body(cluster, ingressTcpPorts: "80,443,8080"),
+            InvalidBody = static cluster => NetworkSecurityGroups.Body(cluster, ingressTcpPorts: "0"),
             InvalidBodyTarget = "/properties/ingress/tcpPorts",
             ActionName = NetworkSecurityGroups.EffectiveRulesAction,
-            Objects = (id, ns) => [NetworkSecurityGroups.SecurityGroupRef(ns, id)],
+            Objects = static (id, ns) => [NetworkSecurityGroups.SecurityGroupRef(ns, id)],
             // ⚠ THE WHOLE PREDICATE, UNLIKE THE SUBNET'S. `ObjectMatchesDesired` carries no address —
             // which for a subnet costs the `spec.vpc` half of its comparison. A SecurityGroup has no
             // field derived from the address at all, so nothing is left out here and the shared suite
@@ -238,7 +237,7 @@ public sealed class NetworkSecurityGroupCase : IProviderCaseSource {
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return NetworkSecurityGroups.Matches(match.ObjectJson, desired.RootElement);
             }
@@ -305,20 +304,20 @@ public sealed class PublicIpAddressCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Network/publicIpAddresses",
-            CreateProvider = () => new NetworkProvider(),
+            CreateProvider = static () => new NetworkProvider(),
             ReconcilerType = typeof(PublicIpAddressReconciler),
-            CreateReconciler = clock => new PublicIpAddressReconciler(clock),
+            CreateReconciler = static clock => new PublicIpAddressReconciler(clock),
             Type = PublicIpAddresses.Type,
             ApiVersion = PublicIpAddresses.V2026,
             // ⚠ The default asks for no particular address, which is the body whose rendered object
             // OMITS `spec.v4Ip` entirely. That is the case that deadlocks if the key is emitted empty
             // — see PublicIpAddresses.OvnEipJson — so it is the one the whole suite runs against.
-            Body = cluster => PublicIpAddresses.Body(cluster),
-            ChangedBody = cluster => PublicIpAddresses.Body(cluster, addressV4: "10.100.0.7"),
-            InvalidBody = cluster => PublicIpAddresses.Body(cluster, addressV4: "10.0.0"),
+            Body = static cluster => PublicIpAddresses.Body(cluster),
+            ChangedBody = static cluster => PublicIpAddresses.Body(cluster, "10.100.0.7"),
+            InvalidBody = static cluster => PublicIpAddresses.Body(cluster, "10.0.0"),
             InvalidBodyTarget = "/properties/address/v4",
             ActionName = PublicIpAddresses.AllocationAction,
-            Objects = (id, ns) => [PublicIpAddresses.OvnEipRef(ns, id.Name)],
+            Objects = static (id, ns) => [PublicIpAddresses.OvnEipRef(ns, id.Name)],
             // ⚠ THE WHOLE PREDICATE, like the security group's and unlike the subnet's — and this
             // type reads NOTHING off `match`'s address half, which is a fact about the type rather
             // than a limit of the member. `PublicIpAddresses.Matches` compares `type`, `v4Ip` and
@@ -340,7 +339,7 @@ public sealed class PublicIpAddressCase : IProviderCaseSource {
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return PublicIpAddresses.Matches(match.ObjectJson, desired.RootElement);
             }
@@ -400,18 +399,18 @@ public sealed class LoadBalancerCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Network/virtualNetworks/loadBalancers",
-            CreateProvider = () => new NetworkProvider(),
+            CreateProvider = static () => new NetworkProvider(),
             ReconcilerType = typeof(LoadBalancerReconciler),
-            CreateReconciler = clock => new LoadBalancerReconciler(clock),
+            CreateReconciler = static clock => new LoadBalancerReconciler(clock),
             Type = LoadBalancers.Type,
             ApiVersion = LoadBalancers.V2026,
-            Body = cluster => LoadBalancers.Body(cluster),
-            ChangedBody = cluster =>
+            Body = static cluster => LoadBalancers.Body(cluster),
+            ChangedBody = static cluster =>
                 LoadBalancers.Body(cluster, backendAddresses: "10.20.1.11,10.20.1.12"),
-            InvalidBody = cluster => LoadBalancers.Body(cluster, frontendPort: 0),
+            InvalidBody = static cluster => LoadBalancers.Body(cluster, frontendPort: 0),
             InvalidBodyTarget = "/properties/frontend/port",
             ActionName = LoadBalancers.BackendsAction,
-            Objects = (id, ns) => LoadBalancers.Objects(ns, id),
+            Objects = static (id, ns) => LoadBalancers.Objects(ns, id),
             // ⚠ Empty, and it is a statement rather than a formality. `showBackends` reads a
             // Deployment's status and the resource's own stored body; there is no Secret in this
             // type's object set at all, because an L4 proxy terminates nothing and holds no key.
@@ -419,7 +418,7 @@ public sealed class LoadBalancerCase : IProviderCaseSource {
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
 
                 return LoadBalancers.Matches(
@@ -478,17 +477,17 @@ public sealed class NatGatewayCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Network/virtualNetworks/natGateways",
-            CreateProvider = () => new NetworkProvider(),
+            CreateProvider = static () => new NetworkProvider(),
             ReconcilerType = typeof(NatGatewayReconciler),
-            CreateReconciler = clock => new NatGatewayReconciler(clock),
+            CreateReconciler = static clock => new NatGatewayReconciler(clock),
             Type = NatGateways.Type,
             ApiVersion = NatGateways.V2026,
-            Body = cluster => NatGateways.Body(cluster),
-            ChangedBody = cluster => NatGateways.Body(cluster, subnet: "db"),
-            InvalidBody = cluster => NatGateways.Body(cluster, subnet: "Web_Tier"),
+            Body = static cluster => NatGateways.Body(cluster),
+            ChangedBody = static cluster => NatGateways.Body(cluster, "db"),
+            InvalidBody = static cluster => NatGateways.Body(cluster, "Web_Tier"),
             InvalidBodyTarget = "/properties/subnet",
             ActionName = NatGateways.EgressAction,
-            Objects = (id, ns) => [NatGateways.OvnSnatRuleRef(ns, id)],
+            Objects = static (id, ns) => [NatGateways.OvnSnatRuleRef(ns, id)],
             // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
             DataPlane = null,
             StoragePrefix = null,
@@ -499,7 +498,7 @@ public sealed class NatGatewayCase : IProviderCaseSource {
             // `spec.vpc` and the network half of `spec.vpcSubnet`. It is the subnet case's reason for
             // reading `match.Namespace` and `match.Id`, on the kind where a wrong binding translates
             // another tenant's range out through this tenant's address.
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return NatGateways.Matches(match.ObjectJson, match.Namespace, match.Id, desired.RootElement);
             }
@@ -515,8 +514,11 @@ public sealed class NatGatewayCase : IProviderCaseSource {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b><see cref="ProviderConformanceCase.Objects" /> NAMES TWO OTHER RESOURCES' <c>Vpc</c>s,
-///         AND THE SUITE READS THAT OFF THE WORLD RATHER THAN OFF THIS CASE.</b> Every case before
+///         ⚠
+///         <b>
+///             <see cref="ProviderConformanceCase.Objects" /> NAMES TWO OTHER RESOURCES' <c>Vpc</c>s,
+///             AND THE SUITE READS THAT OFF THE WORLD RATHER THAN OFF THIS CASE.
+///         </b> Every case before
 ///         this one named what its type applies and owns. A peering applies nothing of its own: it
 ///         writes a fragment onto its parent network's <c>Vpc</c> and onto the remote's — the harness's
 ///         <c>ancestor-0</c> and the sibling <see cref="Siblings" /> declares — so those two are what
@@ -546,26 +548,30 @@ public sealed class VirtualNetworkPeeringCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Network/virtualNetworks/peerings",
-            CreateProvider = () => new NetworkProvider(),
+            CreateProvider = static () => new NetworkProvider(),
             ReconcilerType = typeof(VirtualNetworkPeeringReconciler),
-            CreateReconciler = clock => new VirtualNetworkPeeringReconciler(clock),
+            CreateReconciler = static clock => new VirtualNetworkPeeringReconciler(clock),
             Type = VirtualNetworkPeerings.Type,
             ApiVersion = VirtualNetworkPeerings.V2026,
             // ⚠ The remote is the sibling below, by name — the harness creates it before the first
             // assertion and drives it to Succeeded, so its Vpc is there to write onto.
-            Body = cluster => VirtualNetworkPeerings.Body(cluster, remoteNetwork: RemoteNetworkName),
-            ChangedBody = cluster => VirtualNetworkPeerings.Body(
+            Body = static cluster => VirtualNetworkPeerings.Body(cluster, RemoteNetworkName),
+            ChangedBody = static cluster => VirtualNetworkPeerings.Body(
                 cluster,
-                remoteNetwork: RemoteNetworkName,
+                RemoteNetworkName,
                 remoteAddressSpaceV4: "10.31.0.0/16"
             ),
-            InvalidBody = cluster => VirtualNetworkPeerings.Body(cluster, remoteNetwork: RemoteNetworkName, linkV4: "not-a-prefix"),
+            InvalidBody = static cluster => VirtualNetworkPeerings.Body(
+                cluster,
+                RemoteNetworkName,
+                linkV4: "not-a-prefix"
+            ),
             InvalidBodyTarget = "/properties/link/v4",
             ActionName = VirtualNetworkPeerings.RoutesAction,
             // ⚠ BOTH Vpcs, NEITHER OWNED. The local one is the parent's — rendered off the address,
             // whose parent is the harness's ancestor-0 — and the remote's is the sibling's, rendered
             // off the body's default remote, which is the sibling's name.
-            Objects = (id, ns) => [
+            Objects = static (id, ns) => [
                 VirtualNetworkPeerings.LocalVpcRef(ns, id),
                 VirtualNetworks.VpcRef(ns, RemoteNetworkName)
             ],
@@ -578,14 +584,20 @@ public sealed class VirtualNetworkPeeringCase : IProviderCaseSource {
             // ⚠ Dispatches on WHICH Vpc it was handed, because the two fragments are mirror images
             // and a predicate that checked the local one's shape on the remote's object would be
             // checking that the remote routes to itself.
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
 
                 var side = match.Target.Name == VirtualNetworkPeerings.LocalVpcNameOf(match.Namespace, match.Id)
                     ? VirtualNetworkPeerings.Side.Local
                     : VirtualNetworkPeerings.Side.Remote;
 
-                return VirtualNetworkPeerings.Matches(match.ObjectJson, match.Namespace, match.Id, desired.RootElement, side);
+                return VirtualNetworkPeerings.Matches(
+                    match.ObjectJson,
+                    match.Namespace,
+                    match.Id,
+                    desired.RootElement,
+                    side
+                );
             }
         };
 
@@ -856,7 +868,8 @@ public sealed class NetworkSuiteShapeTests {
 
         using var body = JsonDocument.Parse(VirtualNetworkPeeringCase.ProviderCase.Body(Guid.NewGuid()));
 
-        VirtualNetworkPeerings.RemoteNetwork(body.RootElement).ShouldBe(peering[0].Name, "the case's body names the sibling");
+        VirtualNetworkPeerings.RemoteNetwork(body.RootElement)
+            .ShouldBe(peering[0].Name, "the case's body names the sibling");
 
         // And the two objects the case names are the two Vpcs the fragments land on, cluster-scoped.
         var objects = VirtualNetworkPeeringCase.ProviderCase.Objects(address, "ns");
@@ -889,7 +902,7 @@ public sealed class NetworkSuiteShapeTests {
         vpc.Length.ShouldBe(1);
 
         vpc[0].IsClusterScoped.ShouldBeTrue(
-            "a Kube-OVN Vpc is +kubebuilder:resource:scope=\"Cluster\". An ObjectRef carrying a "
+            """a Kube-OVN Vpc is +kubebuilder:resource:scope="Cluster". An ObjectRef carrying a """
             + "namespace would make the harness install a Namespaced CRD stub, and the suite would go "
             + "green against a REST path the real substrate does not serve."
         );
@@ -910,17 +923,17 @@ public sealed class NetworkSuiteShapeTests {
 
         group.Length.ShouldBe(1);
 
-        group[0].IsClusterScoped.ShouldBeTrue("a Kube-OVN SecurityGroup is +kubebuilder:resource:scope=\"Cluster\".");
+        group[0].IsClusterScoped.ShouldBeTrue("""a Kube-OVN SecurityGroup is +kubebuilder:resource:scope="Cluster".""");
 
         var address = PublicIpAddressCase.ProviderCase.Objects(id, "ns");
 
         address.Length.ShouldBe(1);
 
-        address[0].IsClusterScoped.ShouldBeTrue("a Kube-OVN OvnEip is +kubebuilder:resource:scope=\"Cluster\".");
+        address[0].IsClusterScoped.ShouldBeTrue("""a Kube-OVN OvnEip is +kubebuilder:resource:scope="Cluster".""");
 
         address[0].Kind.Plural.ShouldBe(
             "ovn-eips",
-            "the plural is HYPHENATED — +kubebuilder:resource:path=\"ovn-eips\". "
+            """the plural is HYPHENATED — +kubebuilder:resource:path="ovn-eips". """
             + "ClusterConformanceHarness derives its CRD stub's path from GroupVersionKind.Plural, so "
             + "`ovneips` would install a definition at a path the apply never reaches — and the "
             + "symptom is a discovery error naming a missing operator rather than a wrong plural."
@@ -964,30 +977,32 @@ public sealed class NetworkSuiteShapeTests {
         var gateway = NatGatewayCase.ProviderCase.Objects(child with { Type = NatGateways.Type }, "ns");
 
         gateway.Length.ShouldBe(1);
-        gateway[0].IsClusterScoped.ShouldBeTrue("a Kube-OVN OvnSnatRule is +kubebuilder:resource:scope=\"Cluster\".");
+        gateway[0].IsClusterScoped.ShouldBeTrue("""a Kube-OVN OvnSnatRule is +kubebuilder:resource:scope="Cluster".""");
         gateway[0].Name.ShouldBe("ns-net-web");
 
         gateway[0].Kind.Plural.ShouldBe(
             "ovn-snat-rules",
-            "the plural is HYPHENATED — +kubebuilder:resource:path=\"ovn-snat-rules\". "
+            """the plural is HYPHENATED — +kubebuilder:resource:path="ovn-snat-rules". """
             + "ClusterConformanceHarness derives its CRD stub's path from GroupVersionKind.Plural, so "
             + "`ovnsnatrules` would install a definition at a path the apply never reaches."
         );
     }
 
     static ImmutableArray<ProviderConformanceCase> AncestorsOf<TSource>()
-        where TSource : IProviderCaseSource => TSource.Ancestors;
+        where TSource : IProviderCaseSource =>
+        TSource.Ancestors;
 
     static ImmutableArray<SiblingResource> SiblingsOf<TSource>()
-        where TSource : IProviderCaseSource => TSource.Siblings;
+        where TSource : IProviderCaseSource =>
+        TSource.Siblings;
 
     /// <summary>Every <c>[Fact]</c> a test class runs, by name, ordered.</summary>
     /// <param name="suite">The closed test class.</param>
     static ImmutableArray<string> RunnableFactsOf(Type suite) => [
         .. suite
             .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-            .Where(x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
-            .Select(x => x.Name)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Where(static x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
+            .Select(static x => x.Name)
+            .OrderBy(static x => x, StringComparer.Ordinal)
     ];
 }

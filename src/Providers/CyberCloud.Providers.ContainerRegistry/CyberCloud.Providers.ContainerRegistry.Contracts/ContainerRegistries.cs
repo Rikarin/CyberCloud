@@ -553,7 +553,11 @@ public static class ContainerRegistries {
     ///     <see cref="RetainedVolume" /> checks against.
     /// </summary>
     static ImmutableDictionary<string, string> Ownership(string name, string component) =>
-        PodLabels(name, component).ToImmutableDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
+        PodLabels(name, component).ToImmutableDictionary(
+            static x => x.Key,
+            static x => x.Value,
+            StringComparer.Ordinal
+        );
 
     /// <summary>The core <c>Deployment</c>.</summary>
     public static ObjectRef CoreDeploymentRef(string ns, string name) =>
@@ -1036,8 +1040,8 @@ public static class ContainerRegistries {
                     "/properties/monitoring/enabled",
                     SchemaKind.Boolean,
                     Description: "Whether Harbor's core exports Prometheus metrics and a PodMonitor "
-                    + "selects them. On by default — docs/plan/12: \"a managed service the tenant "
-                    + "cannot see the health of is a black box they will not trust with production\". "
+                    + """selects them. On by default — docs/plan/12: "a managed service the tenant """
+                    + """cannot see the health of is a black box they will not trust with production". """
                     + "Turning it off removes the metrics port as well as the scrape, so nothing is "
                     + "left listening on an unscraped address."
                 ) { DefaultJson = "true" },
@@ -1110,7 +1114,8 @@ public static class ContainerRegistries {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -1328,7 +1333,7 @@ public static class ContainerRegistries {
             + "  workers: 10\n"
             + "  backend: \"redis\"\n"
             + "  redis_pool:\n"
-            + "    redis_url: \"redis://"
+            + """    redis_url: "redis://"""
             + RedisName(name)
             + ":"
             + Text(RedisPort)

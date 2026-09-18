@@ -43,7 +43,15 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
     public async Task<IResult> ServiceIndexAsync(HttpContext http, Guid subscription, string group, string feed) {
         ArgumentNullException.ThrowIfNull(http);
 
-        var resolved = await access.ResolveAsync(http, FeedKind.NuGet, subscription, group, feed, FeedIntent.Read, http.RequestAborted);
+        var resolved = await access.ResolveAsync(
+            http,
+            FeedKind.NuGet,
+            subscription,
+            group,
+            feed,
+            FeedIntent.Read,
+            http.RequestAborted
+        );
 
         if (resolved.TryGetError(out var refused)) {
             return FeedResponses.Refuse(refused, http);
@@ -54,16 +62,13 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
         var resources = new JsonArray();
 
         foreach (var (type, path) in new[] {
-                     ("PackagePublish/2.0.0", "/v2/package"),
-                     ("PackageBaseAddress/3.0.0", "/v3/flatcontainer/"),
+                     ("PackagePublish/2.0.0", "/v2/package"), ("PackageBaseAddress/3.0.0", "/v3/flatcontainer/"),
                      ("RegistrationsBaseUrl", "/v3/registration/"),
                      ("RegistrationsBaseUrl/3.0.0-rc", "/v3/registration/"),
                      ("RegistrationsBaseUrl/3.0.0-beta", "/v3/registration/"),
                      ("RegistrationsBaseUrl/3.4.0", "/v3/registration/"),
-                     ("RegistrationsBaseUrl/3.6.0", "/v3/registration/"),
-                     ("SearchQueryService", "/v3/query"),
-                     ("SearchQueryService/3.0.0-rc", "/v3/query"),
-                     ("SearchQueryService/3.0.0-beta", "/v3/query")
+                     ("RegistrationsBaseUrl/3.6.0", "/v3/registration/"), ("SearchQueryService", "/v3/query"),
+                     ("SearchQueryService/3.0.0-rc", "/v3/query"), ("SearchQueryService/3.0.0-beta", "/v3/query")
                  }) {
             resources.Add(new JsonObject { ["@id"] = @base + path, ["@type"] = type });
         }
@@ -78,7 +83,15 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
     public async Task<IResult> PushAsync(HttpContext http, Guid subscription, string group, string feed) {
         ArgumentNullException.ThrowIfNull(http);
 
-        var resolved = await access.ResolveAsync(http, FeedKind.NuGet, subscription, group, feed, FeedIntent.Write, http.RequestAborted);
+        var resolved = await access.ResolveAsync(
+            http,
+            FeedKind.NuGet,
+            subscription,
+            group,
+            feed,
+            FeedIntent.Write,
+            http.RequestAborted
+        );
 
         if (resolved.TryGetError(out var refused)) {
             return FeedResponses.Refuse(refused, http);
@@ -109,7 +122,10 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
 
         if (taken.IsSuccess) {
             return FeedResponses.Refuse(
-                new(ErrorCode.ResourceAlreadyExists, $"{package.Id} {package.Version.Normalized} is already in this feed. A published version is immutable."),
+                new(
+                    ErrorCode.ResourceAlreadyExists,
+                    $"{package.Id} {package.Version.Normalized} is already in this feed. A published version is immutable."
+                ),
                 http
             );
         }
@@ -119,13 +135,23 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
         var nupkgAt = ImmutablePublish.StoredAt(path, sha256, $"{package.IdLower}.{package.Version.PathForm}.nupkg");
         var nuspecAt = NuspecBeside(nupkgAt, package.IdLower);
 
-        var stored = await objects.PutAsync(context.StoragePrefix + nupkgAt, content, "application/octet-stream", http.RequestAborted);
+        var stored = await objects.PutAsync(
+            context.StoragePrefix + nupkgAt,
+            content,
+            "application/octet-stream",
+            http.RequestAborted
+        );
 
         if (stored.TryGetError(out var storeError)) {
             return FeedResponses.Refuse(storeError, http);
         }
 
-        var nuspecStored = await objects.PutAsync(context.StoragePrefix + nuspecAt, package.NuspecBytes, "application/xml", http.RequestAborted);
+        var nuspecStored = await objects.PutAsync(
+            context.StoragePrefix + nuspecAt,
+            package.NuspecBytes,
+            "application/xml",
+            http.RequestAborted
+        );
 
         if (nuspecStored.TryGetError(out var nuspecError)) {
             return FeedResponses.Refuse(nuspecError, http);
@@ -156,18 +182,46 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
     }
 
     /// <summary><c>DELETE {base}/v2/package/{id}/{version}</c> — an unlist, as NuGet defines it.</summary>
-    public Task<IResult> UnlistAsync(HttpContext http, Guid subscription, string group, string feed, string id, string version) =>
-        SetListedAsync(http, subscription, group, feed, id, version, listed: false);
+    public Task<IResult> UnlistAsync(
+        HttpContext http,
+        Guid subscription,
+        string group,
+        string feed,
+        string id,
+        string version
+    ) =>
+        SetListedAsync(http, subscription, group, feed, id, version, false);
 
     /// <summary><c>POST {base}/v2/package/{id}/{version}</c> — a relist.</summary>
-    public Task<IResult> RelistAsync(HttpContext http, Guid subscription, string group, string feed, string id, string version) =>
-        SetListedAsync(http, subscription, group, feed, id, version, listed: true);
+    public Task<IResult> RelistAsync(
+        HttpContext http,
+        Guid subscription,
+        string group,
+        string feed,
+        string id,
+        string version
+    ) =>
+        SetListedAsync(http, subscription, group, feed, id, version, true);
 
     /// <summary><c>GET {base}/v3/flatcontainer/{id}/index.json</c> — every version, listed or not, ascending.</summary>
-    public async Task<IResult> VersionsAsync(HttpContext http, Guid subscription, string group, string feed, string id) {
+    public async Task<IResult> VersionsAsync(
+        HttpContext http,
+        Guid subscription,
+        string group,
+        string feed,
+        string id
+    ) {
         ArgumentNullException.ThrowIfNull(http);
 
-        var resolved = await access.ResolveAsync(http, FeedKind.NuGet, subscription, group, feed, FeedIntent.Read, http.RequestAborted);
+        var resolved = await access.ResolveAsync(
+            http,
+            FeedKind.NuGet,
+            subscription,
+            group,
+            feed,
+            FeedIntent.Read,
+            http.RequestAborted
+        );
 
         if (resolved.TryGetError(out var refused)) {
             return FeedResponses.Refuse(refused, http);
@@ -179,17 +233,37 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
             return Results.NotFound();
         }
 
-        return Results.Json(new JsonObject { ["versions"] = new JsonArray([.. versions.Select(x => (JsonNode)x.Version.PathForm)]) });
+        return Results.Json(
+            new JsonObject {
+                ["versions"] = new JsonArray([.. versions.Select(static x => (JsonNode)x.Version.PathForm)])
+            }
+        );
     }
 
     /// <summary>
     ///     <c>GET {base}/v3/flatcontainer/{id}/{version}/{file}</c> — the <c>.nupkg</c> or the
     ///     <c>.nuspec</c>.
     /// </summary>
-    public async Task<IResult> DownloadAsync(HttpContext http, Guid subscription, string group, string feed, string id, string version, string file) {
+    public async Task<IResult> DownloadAsync(
+        HttpContext http,
+        Guid subscription,
+        string group,
+        string feed,
+        string id,
+        string version,
+        string file
+    ) {
         ArgumentNullException.ThrowIfNull(http);
 
-        var resolved = await access.ResolveAsync(http, FeedKind.NuGet, subscription, group, feed, FeedIntent.Read, http.RequestAborted);
+        var resolved = await access.ResolveAsync(
+            http,
+            FeedKind.NuGet,
+            subscription,
+            group,
+            feed,
+            FeedIntent.Read,
+            http.RequestAborted
+        );
 
         if (resolved.TryGetError(out var refused)) {
             return FeedResponses.Refuse(refused, http);
@@ -227,7 +301,9 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
         var read = await objects.GetAsync(context.StoragePrefix + at, http.RequestAborted);
 
         if (read.TryGetError(out var missing)) {
-            return missing.Code == ErrorCode.ResourceNotFound ? Results.NotFound() : FeedResponses.Refuse(missing, http);
+            return missing.Code == ErrorCode.ResourceNotFound
+                ? Results.NotFound()
+                : FeedResponses.Refuse(missing, http);
         }
 
         var found = read.GetValueOrThrow();
@@ -235,10 +311,24 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
     }
 
     /// <summary><c>GET {base}/v3/registration/{id}/index.json</c> — one inline page of every version.</summary>
-    public async Task<IResult> RegistrationIndexAsync(HttpContext http, Guid subscription, string group, string feed, string id) {
+    public async Task<IResult> RegistrationIndexAsync(
+        HttpContext http,
+        Guid subscription,
+        string group,
+        string feed,
+        string id
+    ) {
         ArgumentNullException.ThrowIfNull(http);
 
-        var resolved = await access.ResolveAsync(http, FeedKind.NuGet, subscription, group, feed, FeedIntent.Read, http.RequestAborted);
+        var resolved = await access.ResolveAsync(
+            http,
+            FeedKind.NuGet,
+            subscription,
+            group,
+            feed,
+            FeedIntent.Read,
+            http.RequestAborted
+        );
 
         if (resolved.TryGetError(out var refused)) {
             return FeedResponses.Refuse(refused, http);
@@ -273,10 +363,25 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
     }
 
     /// <summary><c>GET {base}/v3/registration/{id}/{version}.json</c> — one leaf.</summary>
-    public async Task<IResult> RegistrationLeafAsync(HttpContext http, Guid subscription, string group, string feed, string id, string version) {
+    public async Task<IResult> RegistrationLeafAsync(
+        HttpContext http,
+        Guid subscription,
+        string group,
+        string feed,
+        string id,
+        string version
+    ) {
         ArgumentNullException.ThrowIfNull(http);
 
-        var resolved = await access.ResolveAsync(http, FeedKind.NuGet, subscription, group, feed, FeedIntent.Read, http.RequestAborted);
+        var resolved = await access.ResolveAsync(
+            http,
+            FeedKind.NuGet,
+            subscription,
+            group,
+            feed,
+            FeedIntent.Read,
+            http.RequestAborted
+        );
 
         if (resolved.TryGetError(out var refused)) {
             return FeedResponses.Refuse(refused, http);
@@ -289,21 +394,38 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
         }
 
         var idLower = id.ToLowerInvariant();
-        var entry = await resolved.GetValueOrThrow().Catalogue.GetAsync(EntryPath(idLower, parsed.GetValueOrThrow().PathForm));
+        var entry = await resolved.GetValueOrThrow()
+            .Catalogue.GetAsync(EntryPath(idLower, parsed.GetValueOrThrow().PathForm));
 
         if (entry.IsFailure) {
             return Results.NotFound();
         }
 
         var @base = FeedUrls.BaseOf(http, options, FeedKind.NuGet, subscription, group, feed);
-        return Results.Json(Leaf(@base, idLower, entry.GetValueOrThrow(), parsed.GetValueOrThrow(), $"{@base}/v3/registration/{idLower}/index.json"));
+        return Results.Json(
+            Leaf(
+                @base,
+                idLower,
+                entry.GetValueOrThrow(),
+                parsed.GetValueOrThrow(),
+                $"{@base}/v3/registration/{idLower}/index.json"
+            )
+        );
     }
 
     /// <summary><c>GET {base}/v3/query?q=&amp;skip=&amp;take=&amp;prerelease=</c> — search over listed versions.</summary>
     public async Task<IResult> SearchAsync(HttpContext http, Guid subscription, string group, string feed) {
         ArgumentNullException.ThrowIfNull(http);
 
-        var resolved = await access.ResolveAsync(http, FeedKind.NuGet, subscription, group, feed, FeedIntent.Read, http.RequestAborted);
+        var resolved = await access.ResolveAsync(
+            http,
+            FeedKind.NuGet,
+            subscription,
+            group,
+            feed,
+            FeedIntent.Read,
+            http.RequestAborted
+        );
 
         if (resolved.TryGetError(out var refused)) {
             return FeedResponses.Refuse(refused, http);
@@ -323,20 +445,22 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
         var @base = FeedUrls.BaseOf(http, options, FeedKind.NuGet, subscription, group, feed);
 
         var packages = listed.GetValueOrThrow()
-            .Where(x => x.Listed)
-            .Select(x => (Entry: x, Version: NuGetVersion.Parse(Nuspec.MetadataOf(x.Metadata)["version"]?.GetValue<string>())))
-            .Where(x => x.Version.IsSuccess)
-            .Select(x => (x.Entry, Version: x.Version.GetValueOrThrow()))
+            .Where(static x => x.Listed)
+            .Select(static x => (Entry: x,
+                    Version: NuGetVersion.Parse(Nuspec.MetadataOf(x.Metadata)["version"]?.GetValue<string>()))
+            )
+            .Where(static x => x.Version.IsSuccess)
+            .Select(static x => (x.Entry, Version: x.Version.GetValueOrThrow()))
             .Where(x => prerelease || !x.Version.IsPrerelease)
-            .GroupBy(x => IdOf(x.Entry.Path), StringComparer.Ordinal)
+            .GroupBy(static x => IdOf(x.Entry.Path), StringComparer.Ordinal)
             .Where(g => query.Length == 0 || Matches(g.First().Entry, query))
-            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .OrderBy(static g => g.Key, StringComparer.Ordinal)
             .ToList();
 
         var data = new JsonArray();
 
         foreach (var package in packages.Skip(skip).Take(take)) {
-            var ordered = package.OrderBy(x => x.Version).ToList();
+            var ordered = package.OrderBy(static x => x.Version).ToList();
             var latest = ordered[^1];
             var metadata = Nuspec.MetadataOf(latest.Entry.Metadata);
             var registration = $"{@base}/v3/registration/{package.Key}/index.json";
@@ -361,8 +485,12 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
                     ["id"] = metadata["id"]?.GetValue<string>() ?? package.Key,
                     ["version"] = latest.Version.Normalized,
                     ["description"] = metadata["description"]?.GetValue<string>() ?? "",
-                    ["authors"] = new JsonArray([.. Split(metadata["authors"]?.GetValue<string>(), ',').Select(x => (JsonNode)x)]),
-                    ["tags"] = new JsonArray([.. Split(metadata["tags"]?.GetValue<string>(), ' ').Select(x => (JsonNode)x)]),
+                    ["authors"] = new JsonArray(
+                        [.. Split(metadata["authors"]?.GetValue<string>(), ',').Select(static x => (JsonNode)x)]
+                    ),
+                    ["tags"] = new JsonArray(
+                        [.. Split(metadata["tags"]?.GetValue<string>(), ' ').Select(static x => (JsonNode)x)]
+                    ),
                     ["totalDownloads"] = 0,
                     ["verified"] = false,
                     ["versions"] = versions
@@ -373,8 +501,24 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
         return Results.Json(new JsonObject { ["totalHits"] = packages.Count, ["data"] = data });
     }
 
-    async Task<IResult> SetListedAsync(HttpContext http, Guid subscription, string group, string feed, string id, string version, bool listed) {
-        var resolved = await access.ResolveAsync(http, FeedKind.NuGet, subscription, group, feed, FeedIntent.Write, http.RequestAborted);
+    async Task<IResult> SetListedAsync(
+        HttpContext http,
+        Guid subscription,
+        string group,
+        string feed,
+        string id,
+        string version,
+        bool listed
+    ) {
+        var resolved = await access.ResolveAsync(
+            http,
+            FeedKind.NuGet,
+            subscription,
+            group,
+            feed,
+            FeedIntent.Write,
+            http.RequestAborted
+        );
 
         if (resolved.TryGetError(out var refused)) {
             return FeedResponses.Refuse(refused, http);
@@ -394,7 +538,7 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
             return Results.NotFound();
         }
 
-        var updated = await catalogue.PutAsync(entry.GetValueOrThrow() with { Listed = listed }, replace: true);
+        var updated = await catalogue.PutAsync(entry.GetValueOrThrow() with { Listed = listed }, true);
 
         return updated.TryGetError(out var error)
             ? FeedResponses.Refuse(error, http)
@@ -403,7 +547,8 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
 
     /// <summary>The package's bytes, from the multipart the client sends or from a raw body.</summary>
     /// <summary>Where a version's <c>.nuspec</c> is: beside its <c>.nupkg</c>, in the same hash-named directory.</summary>
-    static string NuspecBeside(string nupkgAt, string idLower) => $"{ImmutablePublish.DirectoryOf(nupkgAt)}/{idLower}.nuspec";
+    static string NuspecBeside(string nupkgAt, string idLower) =>
+        $"{ImmutablePublish.DirectoryOf(nupkgAt)}/{idLower}.nuspec";
 
     async Task<Result<byte[]>> ReadPackageAsync(HttpContext http) {
         if (http.Request.HasFormContentType) {
@@ -416,7 +561,10 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
             var file = form.Files[0];
 
             if (file.Length > options.MaxArtifactBytes) {
-                return Result<byte[]>.Failure(ErrorCode.InvalidRequestBody, $"The package is larger than this host accepts ({options.MaxArtifactBytes} bytes). {FeedsOptions.SectionName}:MaxArtifactBytes is the cap.");
+                return Result<byte[]>.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    $"The package is larger than this host accepts ({options.MaxArtifactBytes} bytes). {FeedsOptions.SectionName}:MaxArtifactBytes is the cap."
+                );
             }
 
             await using var stream = file.OpenReadStream();
@@ -426,7 +574,10 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
         return await FeedResponses.ReadBodyAsync(http, options.MaxArtifactBytes, http.RequestAborted);
     }
 
-    async Task<ImmutableArray<(FeedEntry Entry, NuGetVersion Version)>> VersionsOf(FeedContext context, string idLower) {
+    static async Task<ImmutableArray<(FeedEntry Entry, NuGetVersion Version)>> VersionsOf(
+        FeedContext context,
+        string idLower
+    ) {
         var listed = await context.Catalogue.ListAsync(PathPrefix + idLower + "/");
 
         if (listed.IsFailure) {
@@ -435,10 +586,12 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
 
         return [
             .. listed.GetValueOrThrow()
-                .Select(x => (Entry: x, Version: NuGetVersion.Parse(Nuspec.MetadataOf(x.Metadata)["version"]?.GetValue<string>())))
-                .Where(x => x.Version.IsSuccess)
-                .Select(x => (x.Entry, x.Version.GetValueOrThrow()))
-                .OrderBy(x => x.Item2)
+                .Select(static x => (Entry: x,
+                        Version: NuGetVersion.Parse(Nuspec.MetadataOf(x.Metadata)["version"]?.GetValue<string>()))
+                )
+                .Where(static x => x.Version.IsSuccess)
+                .Select(static x => (x.Entry, x.Version.GetValueOrThrow()))
+                .OrderBy(static x => x.Item2)
         ];
     }
 
@@ -476,7 +629,7 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
             }
         }
 
-        return new JsonObject {
+        return new() {
             ["@id"] = leaf,
             ["@type"] = "Package",
             ["catalogEntry"] = new JsonObject {

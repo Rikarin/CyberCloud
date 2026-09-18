@@ -6,8 +6,11 @@ namespace CyberCloud.Kubernetes.Contracts.Tunnel;
 ///     A <see cref="KubeCommand" /> as JSON, for the tunnel.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>In this assembly because the command's constructor is <c>internal</c>, and that is the
-///     type-state chain's guarantee rather than an obstacle to route around.</b> Only
+///     ⚠
+///     <b>
+///         In this assembly because the command's constructor is <c>internal</c>, and that is the
+///         type-state chain's guarantee rather than an obstacle to route around.
+///     </b> Only
 ///     <c>KubeCommandBuilder</c> may mint a command, so nothing outside this assembly can build one
 ///     from JSON either — which is right: a command that crossed the tunnel was built by the
 ///     builder on the platform side, labels injected and checked, and what the agent applies is
@@ -92,8 +95,11 @@ public static class KubeCommandJson {
     ///         one thing ADR-013 makes impossible to build.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A co-owned command carries no labels by design, and the check does not
-    ///         invert — it is replaced.</b> The seven are the owner's and stay on the object, so a
+    ///         ⚠
+    ///         <b>
+    ///             A co-owned command carries no labels by design, and the check does not
+    ///             invert — it is replaced.
+    ///         </b> The seven are the owner's and stay on the object, so a
     ///         co-owned command that did carry labels would be a co-writer claiming the owner's
     ///         identity and is refused. But "no labels" alone is not a guard: a frame with
     ///         <c>ownerResourceId</c> set and nothing else right would be an unlabelled body applied

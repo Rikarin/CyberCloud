@@ -34,7 +34,7 @@ public sealed record GeneratedGraph(
         + Environment.NewLine
         + "tuples:"
         + Environment.NewLine
-        + string.Join(Environment.NewLine, Tuples.Select(x => "  " + x));
+        + string.Join(Environment.NewLine, Tuples.Select(static x => "  " + x));
 }
 
 /// <summary>

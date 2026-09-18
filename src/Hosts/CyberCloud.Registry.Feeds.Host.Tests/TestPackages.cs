@@ -14,7 +14,13 @@ public static class TestPackages {
     /// <param name="description">The description.</param>
     /// <param name="dependency">An optional dependency, rendered in a <c>net8.0</c> group.</param>
     /// <param name="payloadBytes">How large the one file under <c>lib/</c> is.</param>
-    public static byte[] NuGet(string id, string version, string description = "A test package.", (string Id, string Range)? dependency = null, int payloadBytes = 16) {
+    public static byte[] NuGet(
+        string id,
+        string version,
+        string description = "A test package.",
+        (string Id, string Range)? dependency = null,
+        int payloadBytes = 16
+    ) {
         var dependencies = dependency is { } d
             ? $"""<dependencies><group targetFramework="net8.0"><dependency id="{d.Id}" version="{d.Range}" /></group></dependencies>"""
             : "";
@@ -36,14 +42,18 @@ public static class TestPackages {
 
         using var buffer = new MemoryStream();
 
-        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true)) {
+        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, true)) {
             Write(zip, id + ".nuspec", Encoding.UTF8.GetBytes(nuspec));
             // ⚠ Random bytes, because a zip of zeros is a few hundred bytes whatever payloadBytes says,
             // and the cap is on the bytes pushed.
             var payload = new byte[payloadBytes];
             System.Security.Cryptography.RandomNumberGenerator.Fill(payload);
             Write(zip, "lib/net8.0/" + id + ".dll", payload);
-            Write(zip, "[Content_Types].xml", "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\" />"u8.ToArray());
+            Write(
+                zip,
+                "[Content_Types].xml",
+                "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\" />"u8.ToArray()
+            );
         }
 
         return buffer.ToArray();
@@ -53,7 +63,7 @@ public static class TestPackages {
     public static byte[] ZipWithoutNuspec() {
         using var buffer = new MemoryStream();
 
-        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true)) {
+        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, true)) {
             Write(zip, "readme.txt", "not a package"u8.ToArray());
         }
 
@@ -77,11 +87,19 @@ public static class TestPackages {
     /// <param name="version">The version.</param>
     /// <param name="description">The description.</param>
     /// <param name="tags">Extra dist-tags to send beside <c>latest</c>.</param>
-    public static (string Document, byte[] Tarball, string FileName) Npm(string name, string version, string description = "A test module.", params (string Tag, string Version)[] tags) {
-        var manifest = $$"""{"name":"{{name}}","version":"{{version}}","description":"{{description}}","main":"index.js"}""";
+    public static (string Document, byte[] Tarball, string FileName) Npm(
+        string name,
+        string version,
+        string description = "A test module.",
+        params (string Tag, string Version)[] tags
+    ) {
+        var manifest =
+            $$"""{"name":"{{name}}","version":"{{version}}","description":"{{description}}","main":"index.js"}""";
         var tarball = Gzip(Tar("package/package.json", Encoding.UTF8.GetBytes(manifest)));
 
-        var bare = name.Contains('/', StringComparison.Ordinal) ? name[(name.IndexOf('/', StringComparison.Ordinal) + 1)..] : name;
+        var bare = name.Contains('/', StringComparison.Ordinal)
+            ? name[(name.IndexOf('/', StringComparison.Ordinal) + 1)..]
+            : name;
         var fileName = $"{bare}-{version}.tgz";
 
         var distTags = new StringBuilder($"\"latest\":\"{version}\"");
@@ -114,7 +132,7 @@ public static class TestPackages {
     static byte[] Gzip(byte[] bytes) {
         using var buffer = new MemoryStream();
 
-        using (var gzip = new GZipStream(buffer, CompressionLevel.Fastest, leaveOpen: true)) {
+        using (var gzip = new GZipStream(buffer, CompressionLevel.Fastest, true)) {
             gzip.Write(bytes);
         }
 
@@ -135,7 +153,7 @@ public static class TestPackages {
         Encoding.ASCII.GetBytes("ustar\0").CopyTo(header, 257);
         Encoding.ASCII.GetBytes("00").CopyTo(header, 263);
 
-        var checksum = header.Sum(b => (int)b);
+        var checksum = header.Sum(static b => (int)b);
         Encoding.ASCII.GetBytes(Convert.ToString(checksum, 8).PadLeft(6, '0') + "\0 ").CopyTo(header, 148);
 
         using var buffer = new MemoryStream();

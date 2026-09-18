@@ -9,8 +9,11 @@ namespace CyberCloud.ResourceGraph;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>JSON and not the Orleans serializer, because the stream has consumers that are not
-///         Orleans.</b> docs/plan/04 § Streams lists the portal's SignalR fan-out, the audit sink and
+///         ⚠
+///         <b>
+///             JSON and not the Orleans serializer, because the stream has consumers that are not
+///             Orleans.
+///         </b> docs/plan/04 § Streams lists the portal's SignalR fan-out, the audit sink and
 ///         billing beside the projection, and docs/plan/03 § Hosts makes the ingest host "not an
 ///         Orleans client at all". An Orleans-serialized payload is readable by exactly one runtime;
 ///         a JSON one by anything that can subscribe. The cost is a second serializer for one type,
@@ -48,10 +51,12 @@ public static class ResourceChangedJson {
             var decoded = JsonSerializer.Deserialize<ResourceChangedEvent>(payload.Span, Options);
 
             return decoded is null
-                ? Result<ResourceChangedEvent>.Failure(ErrorCode.InvalidRequestBody, "The payload is the JSON literal null, which is not a resource-changed event.")
+                ? Result<ResourceChangedEvent>.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    "The payload is the JSON literal null, which is not a resource-changed event."
+                )
                 : Result<ResourceChangedEvent>.Success(decoded);
-        }
-        catch (JsonException exception) {
+        } catch (JsonException exception) {
             return Result<ResourceChangedEvent>.Failure(
                 ErrorCode.InvalidRequestBody,
                 $"The payload is not a resource-changed event: {exception.Message}"

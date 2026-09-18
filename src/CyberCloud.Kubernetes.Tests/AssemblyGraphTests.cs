@@ -57,10 +57,10 @@ public sealed class AssemblyGraphTests {
                          | BindingFlags.DeclaredOnly
                      )) {
                 var types = member switch {
-                    MethodInfo m => m.GetParameters().Select(p => p.ParameterType).Append(m.ReturnType),
+                    MethodInfo m => m.GetParameters().Select(static p => p.ParameterType).Append(m.ReturnType),
                     PropertyInfo p => [p.PropertyType],
                     FieldInfo f => new[] { f.FieldType },
-                    ConstructorInfo c => c.GetParameters().Select(p => p.ParameterType),
+                    ConstructorInfo c => c.GetParameters().Select(static p => p.ParameterType),
                     _ => []
                 };
 
@@ -96,10 +96,10 @@ public sealed class AssemblyGraphTests {
         // tested without an API server — and what would make swapping the client library a change
         // to one file rather than to the assembly.
         var offenders = Kubernetes.GetTypes()
-            .Where(x => x.Namespace is not null
+            .Where(static x => x.Namespace is not null
                 && !x.Namespace.StartsWith("CyberCloud.Kubernetes.Apply", StringComparison.Ordinal)
             )
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetMembers(
                         BindingFlags.Public
                         | BindingFlags.NonPublic
@@ -108,12 +108,12 @@ public sealed class AssemblyGraphTests {
                         | BindingFlags.DeclaredOnly
                     )
                     .OfType<MethodInfo>()
-                    .Where(m => (m.ReturnType.Namespace ?? string.Empty).StartsWith(
+                    .Where(static m => (m.ReturnType.Namespace ?? string.Empty).StartsWith(
                             "k8s",
                             StringComparison.OrdinalIgnoreCase
                         )
                         || m.GetParameters()
-                            .Any(p =>
+                            .Any(static p =>
                                 (p.ParameterType.Namespace ?? string.Empty).StartsWith(
                                     "k8s",
                                     StringComparison.OrdinalIgnoreCase
@@ -122,7 +122,7 @@ public sealed class AssemblyGraphTests {
                     )
                     .Select(m => $"{type.FullName}.{m.Name}")
             )
-            .Where(x => !x.Contains('<'))
+            .Where(static x => !x.Contains('<'))
             .ToList();
 
         offenders.ShouldBeEmpty("k8s types outside CyberCloud.Kubernetes.Apply: " + string.Join(", ", offenders));
@@ -146,7 +146,7 @@ public sealed class AssemblyGraphTests {
     }
 
     static IEnumerable<string> ReferencesOf(Assembly assembly) =>
-        assembly.GetReferencedAssemblies().Select(x => x.Name ?? string.Empty);
+        assembly.GetReferencedAssemblies().Select(static x => x.Name ?? string.Empty);
 
     static bool IsKubernetesClient(string name) =>
         name.StartsWith("k8s", StringComparison.OrdinalIgnoreCase)

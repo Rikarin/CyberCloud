@@ -73,11 +73,22 @@ public class ScopeCollectionIdTests {
 
     [Fact]
     public void AParentAndAMemberKindThatDoNotGoTogetherAreRefused() {
-        Should.Throw<ArgumentException>(() => new ScopeCollectionId(ScopeId.Subscription(Tenant, Subscription), ScopeKind.ManagementGroup));
-        Should.Throw<ArgumentException>(() => new ScopeCollectionId(ScopeId.Tenant(Tenant), ScopeKind.ResourceGroup));
+        Should.Throw<ArgumentException>(static () => new ScopeCollectionId(
+                ScopeId.Subscription(Tenant, Subscription),
+                ScopeKind.ManagementGroup
+            )
+        );
+        Should.Throw<ArgumentException>(static () => new ScopeCollectionId(
+                ScopeId.Tenant(Tenant),
+                ScopeKind.ResourceGroup
+            )
+        );
 
         // ⚠ And a management group is not a parent: the tree is listed flat under the tenant.
-        Should.Throw<ArgumentException>(() => new ScopeCollectionId(ScopeId.ManagementGroupOf(Tenant, "platform")));
+        Should.Throw<ArgumentException>(static () => new ScopeCollectionId(
+                ScopeId.ManagementGroupOf(Tenant, "platform")
+            )
+        );
     }
 
     [Fact]
@@ -94,15 +105,15 @@ public class ScopeCollectionIdTests {
     /// </summary>
     [Fact]
     public void AResourceGroupCannotBeACollectionsParent() =>
-        Should.Throw<ArgumentException>(() => new ScopeCollectionId(ScopeId.Group(Tenant, Subscription, "prod")));
+        Should.Throw<ArgumentException>(static () => new ScopeCollectionId(ScopeId.Group(Tenant, Subscription, "prod"))
+        );
 
     // ── Disjointness from the other grammars ───────────────────────────────────────────────────
 
     [Fact]
     public void NoCollectionPathIsAlsoAScopeItemOrAResourcePath() {
         foreach (var path in new[] {
-                     ScopeCollectionId.SubscriptionsOf(Tenant).Path,
-                     ScopeCollectionId.ManagementGroupsOf(Tenant).Path,
+                     ScopeCollectionId.SubscriptionsOf(Tenant).Path, ScopeCollectionId.ManagementGroupsOf(Tenant).Path,
                      ScopeCollectionId.ResourceGroupsOf(Tenant, Subscription).Path
                  }) {
             ScopeId.TryParsePath(path, out _)
@@ -125,7 +136,9 @@ public class ScopeCollectionIdTests {
     [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Cache/redis")]
     public void NoItemOrResourcePathIsAlsoACollectionPath(string template) =>
         ScopeCollectionId.TryParsePath(Fill(template), out _)
-            .ShouldBeFalse($"'{Fill(template)}' parses as a scope collection, so the collection grammar would swallow it.");
+            .ShouldBeFalse(
+                $"'{Fill(template)}' parses as a scope collection, so the collection grammar would swallow it."
+            );
 
     // ── Refusals ───────────────────────────────────────────────────────────────────────────────
 
@@ -152,7 +165,10 @@ public class ScopeCollectionIdTests {
 
     [Fact]
     public void TheLiteralsAreMatchedCaseInsensitivelyAndTheGuidIsTheDFormOnly() {
-        ScopeCollectionId.TryParsePath($"/Tenants/{Tenant:D}/Subscriptions/{Subscription:D}/ResourceGroups", out var loose)
+        ScopeCollectionId.TryParsePath(
+            $"/Tenants/{Tenant:D}/Subscriptions/{Subscription:D}/ResourceGroups",
+            out var loose
+        )
             .ShouldBeTrue();
 
         loose.ShouldBe(ScopeCollectionId.ResourceGroupsOf(Tenant, Subscription));

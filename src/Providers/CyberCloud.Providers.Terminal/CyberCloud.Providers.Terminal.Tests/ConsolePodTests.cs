@@ -81,7 +81,7 @@ public sealed class ConsolePodTests {
 
         inner["allowPrivilegeEscalation"]!.GetValue<bool>().ShouldBeFalse();
         inner["readOnlyRootFilesystem"]!.GetValue<bool>().ShouldBeTrue();
-        inner["capabilities"]!["drop"]!.AsArray().Select(x => x!.GetValue<string>()).ShouldBe(["ALL"]);
+        inner["capabilities"]!["drop"]!.AsArray().Select(static x => x!.GetValue<string>()).ShouldBe(["ALL"]);
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public sealed class ConsolePodTests {
         // wrong.
         var drop = Pod()["spec"]!["containers"]!.AsArray()[0]!["securityContext"]!["capabilities"]!["drop"]!
             .AsArray()
-            .Select(x => x!.GetValue<string>())
+            .Select(static x => x!.GetValue<string>())
             .ToList();
 
         drop.ShouldBe(["ALL"]);
@@ -120,7 +120,7 @@ public sealed class ConsolePodTests {
         var policy = Policy();
 
         policy["spec"]!["policyTypes"]!.AsArray()
-            .Select(x => x!.GetValue<string>())
+            .Select(static x => x!.GetValue<string>())
             .ShouldBe(["Ingress", "Egress"]);
 
         policy["spec"]!["ingress"]!.AsArray().Count.ShouldBe(0);
@@ -150,11 +150,11 @@ public sealed class ConsolePodTests {
         // ⚠ BOTH PROTOCOLS. A UDP-only rule works until a response exceeds 512 bytes and the resolver
         // retries over TCP, which presents as "curl works and dig doesn't, sometimes".
         egress[2]!["ports"]!.AsArray()
-            .Select(x => x!["protocol"]!.GetValue<string>())
+            .Select(static x => x!["protocol"]!.GetValue<string>())
             .ShouldBe(["UDP", "TCP"]);
 
         var except = egress[3]!["to"]![0]!["ipBlock"]!["except"]!.AsArray()
-            .Select(x => x!.GetValue<string>())
+            .Select(static x => x!.GetValue<string>())
             .ToList();
 
         egress[3]!["to"]![0]!["ipBlock"]!["cidr"]!.GetValue<string>().ShouldBe("0.0.0.0/0");
@@ -212,7 +212,7 @@ public sealed class ConsolePodTests {
             .AsArray();
 
         egress.Count.ShouldBe(3);
-        egress.ShouldAllBe(x => x!["to"]![0]!.AsObject().ContainsKey("ipBlock") == false);
+        egress.ShouldAllBe(x => !x!["to"]![0]!.AsObject().ContainsKey("ipBlock"));
     }
 
     [Fact]
@@ -238,7 +238,7 @@ public sealed class ConsolePodTests {
         (await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
         (await ConsoleReconcilerTests.Connect(connection, desired.RootElement)).IsSuccess.ShouldBeTrue();
 
-        var pod = connection.Applied.Single(x => x.Target.Kind.Kind == "Pod");
+        var pod = connection.Applied.Single(static x => x.Target.Kind.Kind == "Pod");
 
         foreach (var label in KubeLabels.Mandatory) {
             pod.Labels.ShouldContainKey(label, pod.Target.ToString());
@@ -247,7 +247,7 @@ public sealed class ConsolePodTests {
 
         pod.Labels[KubeLabels.ResourceType].ShouldBe("cybercloud.terminal_consoles");
 
-        var policy = connection.Applied.Single(x => x.Target.Kind.Kind == "NetworkPolicy");
+        var policy = connection.Applied.Single(static x => x.Target.Kind.Kind == "NetworkPolicy");
 
         JsonNode.Parse(policy.Body)!["spec"]!["podSelector"]!["matchLabels"]![KubeLabels.ResourceType]!
             .GetValue<string>()
@@ -295,14 +295,14 @@ public sealed class ConsolePodTests {
         // to a year, would have a terminal they closed a week ago that is still costing them, which is
         // the exact failure docs/plan/19 § The pod calls the design constraint.
         var property = CloudConsoles.Schema2026.Properties
-            .Single(x => x.JsonPointer == CloudConsoles.IdleTimeoutMinutesPointer);
+            .Single(static x => x.JsonPointer == CloudConsoles.IdleTimeoutMinutesPointer);
 
         property.Minimum.ShouldBe(5);
         property.Maximum.ShouldBe(120);
         minutes.ShouldBeInRange(5, 120);
 
         var cap = CloudConsoles.Schema2026.Properties
-            .Single(x => x.JsonPointer == CloudConsoles.MaxDurationHoursPointer);
+            .Single(static x => x.JsonPointer == CloudConsoles.MaxDurationHoursPointer);
 
         cap.Minimum.ShouldBe(1);
         cap.Maximum.ShouldBe(24);
@@ -349,14 +349,14 @@ public sealed class ConsolePodTests {
         // requirement stays recorded for its whole life.
         // conformance.yaml § owed, `recording-is-per-console`.
         CloudConsoles.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/audit/sessionRecording")
+            .Single(static x => x.JsonPointer == "/properties/audit/sessionRecording")
             .Immutable
             .ShouldBeTrue();
 
         // And the identity is immutable for the matching reason: an audit trail naming a principal the
         // shell no longer runs as is worse than none.
         CloudConsoles.Schema2026.Properties
-            .Single(x => x.JsonPointer == CloudConsoles.PrincipalIdPointer)
+            .Single(static x => x.JsonPointer == CloudConsoles.PrincipalIdPointer)
             .Immutable
             .ShouldBeTrue();
     }
@@ -383,7 +383,7 @@ public sealed class ConsolePodTests {
 
         var mounts = pod["spec"]!["containers"]!.AsArray()[0]!["volumeMounts"]!
             .AsArray()
-            .Select(x => x!["mountPath"]!.GetValue<string>())
+            .Select(static x => x!["mountPath"]!.GetValue<string>())
             .ToList();
 
         mounts.ShouldBe([CloudConsoles.HomePath, "/tmp"]);
@@ -420,7 +420,7 @@ public sealed class ConsolePodTests {
 
         Pod()["spec"]!["containers"]!.AsArray()[0]!["command"]!
             .AsArray()
-            .Select(x => x!.GetValue<string>())
+            .Select(static x => x!.GetValue<string>())
             .ShouldBe(["/bin/bash", "-l"]);
     }
 

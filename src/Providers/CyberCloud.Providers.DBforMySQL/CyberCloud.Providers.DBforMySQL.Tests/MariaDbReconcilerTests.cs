@@ -54,13 +54,9 @@ public sealed class MariaDbReconcilerTests {
         // `spec.replicas` AND whether a `galera` block exists), the volume size, and the database
         // name. A reconciler that kept one of them would be caught; one that kept a whole rendered
         // document would be caught three times over.
-        using var aliceBody = JsonDocument.Parse(
-            MariaDbServers.Body(ClusterId, highAvailability: "Galera", storageSize: "20Gi", database: "alice")
-        );
+        using var aliceBody = JsonDocument.Parse(MariaDbServers.Body(ClusterId, "Galera", "20Gi", "alice"));
 
-        using var bobBody = JsonDocument.Parse(
-            MariaDbServers.Body(ClusterId, highAvailability: "None", storageSize: "64Gi", database: "bob")
-        );
+        using var bobBody = JsonDocument.Parse(MariaDbServers.Body(ClusterId, "None", "64Gi", "bob"));
 
         // Interleaved on purpose: A, B, A. A reconciler that remembered anything from its first pass
         // would answer the third pass with B's values.
@@ -330,7 +326,7 @@ public sealed class MariaDbReconcilerTests {
         // The other direction of the same test: with `highAvailability: None` the operator may leave
         // `spec.galera` absent or write `enabled: false`, and both mean the same thing to it. A
         // Matches that demanded the key would report drift forever on every single-instance server.
-        using var desired = JsonDocument.Parse(MariaDbServers.Body(ClusterId, highAvailability: "None"));
+        using var desired = JsonDocument.Parse(MariaDbServers.Body(ClusterId, "None"));
 
         var rendered = JsonNode.Parse(MariaDbServers.ServerJson("single", desired.RootElement))!.AsObject();
         MariaDbServers.Matches(rendered.ToJsonString(), desired.RootElement).ShouldBeTrue();
@@ -358,7 +354,7 @@ public sealed class MariaDbReconcilerTests {
         // whether a second claim per instance exists at all — the operator's Galera.SetDefaults fills
         // in a 100Mi config.volumeClaimTemplate that nothing in this repository asks for, so a purge
         // reading only `storage` would leave three disks behind on every HA server.
-        using var desired = JsonDocument.Parse(MariaDbServers.Body(ClusterId, highAvailability: topology));
+        using var desired = JsonDocument.Parse(MariaDbServers.Body(ClusterId, topology));
 
         var spec = Spec(MariaDbServers.ServerJson("observed", desired.RootElement));
 
@@ -367,7 +363,7 @@ public sealed class MariaDbReconcilerTests {
 
         var claims = MariaDbServers.RetainedClaims("ns", "observed", desired.RootElement);
 
-        claims.Select(x => x.Claim.Name)
+        claims.Select(static x => x.Claim.Name)
             .ShouldBe(
                 galera
                     ? [
@@ -414,7 +410,11 @@ public sealed class MariaDbReconcilerTests {
                     ["name"] = claim.Claim.Name,
                     ["namespace"] = claim.Claim.Namespace,
                     ["labels"] = new JsonObject(
-                        claim.OwnedBy.Select(x => KeyValuePair.Create(x.Key, (JsonNode?)JsonValue.Create(x.Value)))
+                        claim.OwnedBy.Select(static x => KeyValuePair.Create(
+                                x.Key,
+                                (JsonNode?)JsonValue.Create(x.Value)
+                            )
+                        )
                     )
                 }
             }.ToJsonString();

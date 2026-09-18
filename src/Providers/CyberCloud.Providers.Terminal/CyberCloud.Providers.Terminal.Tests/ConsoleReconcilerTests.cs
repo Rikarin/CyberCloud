@@ -1,4 +1,3 @@
-using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
@@ -68,13 +67,9 @@ public sealed class ConsoleReconcilerTests {
         // egress posture (the policy's rule count) and the principal (the service account's
         // annotation). A reconciler that kept one would be caught; one that kept a whole rendered
         // document would be caught three times over.
-        using var aliceBody = JsonDocument.Parse(
-            CloudConsoles.Body(ClusterId, principalId: PrincipalA, homeSize: "5Gi", egress: "Internet")
-        );
+        using var aliceBody = JsonDocument.Parse(CloudConsoles.Body(ClusterId, PrincipalA, "5Gi", egress: "Internet"));
 
-        using var bobBody = JsonDocument.Parse(
-            CloudConsoles.Body(ClusterId, principalId: PrincipalB, homeSize: "50Gi", egress: "TenantOnly")
-        );
+        using var bobBody = JsonDocument.Parse(CloudConsoles.Body(ClusterId, PrincipalB, "50Gi", egress: "TenantOnly"));
 
         // Interleaved on purpose: A, B, A. A reconciler that remembered anything from its first pass
         // would answer the third with B's values.
@@ -159,10 +154,10 @@ public sealed class ConsoleReconcilerTests {
         using var desired = JsonDocument.Parse(CloudConsoles.Body(ClusterId));
 
         (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
-        var first = connection.Applied.Select(x => x.Body).ToList();
+        var first = connection.Applied.Select(static x => x.Body).ToList();
 
         (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
-        var second = connection.Applied.Skip(first.Count).Select(x => x.Body).ToList();
+        var second = connection.Applied.Skip(first.Count).Select(static x => x.Body).ToList();
 
         second.ShouldBe(first, "a rendered object changed between two identical passes");
     }
@@ -238,7 +233,7 @@ public sealed class ConsoleReconcilerTests {
 
         (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
 
-        connection.Applied.Select(x => x.Target.Kind.Kind)
+        connection.Applied.Select(static x => x.Target.Kind.Kind)
             .ShouldBe(["PersistentVolumeClaim", "ServiceAccount", "NetworkPolicy"]);
     }
 
@@ -260,7 +255,7 @@ public sealed class ConsoleReconcilerTests {
         torn.IsConverged.ShouldBeTrue(torn.ToString());
         connection.Objects.ShouldBeEmpty();
 
-        connection.Deleted.Select(x => x.Kind.Kind)
+        connection.Deleted.Select(static x => x.Kind.Kind)
             .ShouldBe(["Pod", "NetworkPolicy", "ServiceAccount", "PersistentVolumeClaim"]);
 
         // ⚠ FOREGROUND. A background cascade returns as soon as the object is marked, so the read-back
@@ -466,7 +461,7 @@ public sealed class ConsoleReconcilerTests {
         );
 
     static List<string> Applied(RecordingConnection world, string kind) =>
-        world.Applied.Where(x => x.Target.Kind.Kind == kind).Select(x => x.Body).ToList();
+        world.Applied.Where(x => x.Target.Kind.Kind == kind).Select(static x => x.Body).ToList();
 
     static string Size(string claimJson) =>
         JsonNode.Parse(claimJson)!["spec"]!["resources"]!["requests"]!["storage"]!.GetValue<string>();
@@ -479,7 +474,7 @@ public sealed class ConsoleReconcilerTests {
 
     static string TenantSelector(string policyJson) =>
         Egress(policyJson)
-            .Select(x => x!["to"]![0]!["namespaceSelector"]?["matchLabels"]?[KubeLabels.TenantId])
-            .First(x => x is not null)!
+            .Select(static x => x!["to"]![0]!["namespaceSelector"]?["matchLabels"]?[KubeLabels.TenantId])
+            .First(static x => x is not null)!
             .GetValue<string>();
 }

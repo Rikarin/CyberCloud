@@ -60,13 +60,13 @@ public sealed class AuthorizationStateContractTests {
 
     static IEnumerable<Type> StateTypes =>
         Authorization.GetTypes()
-            .Where(t => t.GetCustomAttribute<GenerateSerializerAttribute>() is not null);
+            .Where(static t => t.GetCustomAttribute<GenerateSerializerAttribute>() is not null);
 
     [Fact]
     public void EveryStateTypeHasAStableAlias() =>
         StateTypes
-            .Where(t => t.GetCustomAttribute<AliasAttribute>() is null)
-            .Select(t => t.Name)
+            .Where(static t => t.GetCustomAttribute<AliasAttribute>() is null)
+            .Select(static t => t.Name)
             .ShouldBeEmpty(
                 "docs/plan/05 § Serialization, rule 5. For state that means the row is still in "
                 + "PostgreSQL and nothing can read it."
@@ -75,26 +75,26 @@ public sealed class AuthorizationStateContractTests {
     [Fact]
     public void TheAliasesAreTheOnesRecordedHere() =>
         StateTypes
-            .Select(t => (Type: t.Name, Alias: t.GetCustomAttribute<AliasAttribute>()?.Alias ?? "<none>"))
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
+            .Select(static t => (Type: t.Name, Alias: t.GetCustomAttribute<AliasAttribute>()?.Alias ?? "<none>"))
+            .OrderBy(static x => x.Type, StringComparer.Ordinal)
             .ToList()
-            .ShouldBe(Aliases.OrderBy(x => x.Type, StringComparer.Ordinal).ToList());
+            .ShouldBe(Aliases.OrderBy(static x => x.Type, StringComparer.Ordinal).ToList());
 
     [Fact]
     public void TheIdManifestMatchesTheBaseline() {
         var actual = StateTypes
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetMembers(BindingFlags.Public | BindingFlags.Instance)
-                    .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
-                    .Where(x => x.id is not null)
+                    .Select(static member => (member, id: member.GetCustomAttribute<IdAttribute>()))
+                    .Where(static x => x.id is not null)
                     .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
             )
-            .OrderBy(x => x.Type, StringComparer.Ordinal)
-            .ThenBy(x => x.Id)
+            .OrderBy(static x => x.Type, StringComparer.Ordinal)
+            .ThenBy(static x => x.Id)
             .ToList();
 
         actual.ShouldBe(
-            Baseline.OrderBy(x => x.Type, StringComparer.Ordinal).ThenBy(x => x.Id).ToList(),
+            Baseline.OrderBy(static x => x.Type, StringComparer.Ordinal).ThenBy(static x => x.Id).ToList(),
             "[Id(n)] numbers are never reused and never reordered — and unlike a wire payload, the "
             + "old bytes are still in the database."
         );
@@ -106,15 +106,15 @@ public sealed class AuthorizationStateContractTests {
         // get-only collection and does not populate it on read: the payload in PostgreSQL is
         // correct and the grain comes back empty, silently.
         var getOnly = StateTypes
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                    .Where(p => typeof(IEnumerable).IsAssignableFrom(p.PropertyType)
+                    .Where(static p => typeof(IEnumerable).IsAssignableFrom(p.PropertyType)
                         && p.PropertyType != typeof(string)
                     )
-                    .Where(p => p.SetMethod is null)
+                    .Where(static p => p.SetMethod is null)
                     .Select(p => string.Create(CultureInfo.InvariantCulture, $"{type.Name}.{p.Name}"))
             )
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
 
         getOnly.ShouldBeEmpty(
@@ -131,10 +131,10 @@ public sealed class AuthorizationStateContractTests {
         // across a restart. Dictionary<string, …> is exempt because its default comparer already
         // IS ordinal.
         var risky = StateTypes
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                    .Where(p => p.PropertyType.IsGenericType)
-                    .Where(p => p.PropertyType.GetGenericTypeDefinition() == typeof(HashSet<>)
+                    .Where(static p => p.PropertyType.IsGenericType)
+                    .Where(static p => p.PropertyType.GetGenericTypeDefinition() == typeof(HashSet<>)
                         || p.PropertyType.GetGenericTypeDefinition() == typeof(SortedSet<>)
                         || p.PropertyType.GetGenericTypeDefinition() == typeof(SortedDictionary<,>)
                     )
@@ -151,12 +151,12 @@ public sealed class AuthorizationStateContractTests {
     [Fact]
     public void EveryPublicMemberOfEveryStateTypeIsNumbered() {
         var unnumbered = StateTypes
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                    .Where(p => p.GetCustomAttribute<IdAttribute>() is null)
+                    .Where(static p => p.GetCustomAttribute<IdAttribute>() is null)
                     .Select(p => string.Create(CultureInfo.InvariantCulture, $"{type.Name}.{p.Name}"))
             )
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
 
         unnumbered.ShouldBeEmpty("a member with no [Id(n)] is not persisted at all.");

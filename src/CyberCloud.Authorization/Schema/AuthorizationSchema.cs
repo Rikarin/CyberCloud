@@ -32,11 +32,11 @@ public sealed record SchemaMember(
     ///     beyond the object's own tuple read.
     /// </remarks>
     public bool IsDirectOnly { get; } =
-        Expression.DescendantsAndSelf().All(x => x is ThisExpression or UnionExpression);
+        Expression.DescendantsAndSelf().All(static x => x is ThisExpression or UnionExpression);
 
     /// <summary>Whether the rewrite contains an exclusion anywhere.</summary>
     public bool ContainsNegation { get; } =
-        Expression.DescendantsAndSelf().Any(x => x is ExclusionExpression);
+        Expression.DescendantsAndSelf().Any(static x => x is ExclusionExpression);
 }
 
 /// <summary>One object type and its members.</summary>
@@ -60,14 +60,20 @@ public sealed class SchemaType {
 
     internal SchemaType(string name, IEnumerable<SchemaMember> members) {
         Name = name;
-        this.members = members.ToFrozenDictionary(x => x.Name, StringComparer.Ordinal);
+        this.members = members.ToFrozenDictionary(static x => x.Name, StringComparer.Ordinal);
         Relations = [
-            .. this.members.Values.Where(x => !x.IsPermission).Select(x => x.Name).Order(StringComparer.Ordinal)
+            .. this.members.Values.Where(static x => !x.IsPermission)
+                .Select(static x => x.Name)
+                .Order(StringComparer.Ordinal)
         ];
         Permissions = [
-            .. this.members.Values.Where(x => x.IsPermission).Select(x => x.Name).Order(StringComparer.Ordinal)
+            .. this.members.Values.Where(static x => x.IsPermission)
+                .Select(static x => x.Name)
+                .Order(StringComparer.Ordinal)
         ];
-        Roles = [.. this.members.Values.Where(x => x.IsRole).Select(x => x.Name).Order(StringComparer.Ordinal)];
+        Roles = [
+            .. this.members.Values.Where(static x => x.IsRole).Select(static x => x.Name).Order(StringComparer.Ordinal)
+        ];
     }
 
     /// <summary>A member by name, or <see langword="null" />.</summary>
@@ -108,7 +114,7 @@ public sealed class AuthorizationSchema {
 
     internal AuthorizationSchema(int version, IEnumerable<SchemaType> types) {
         Version = version;
-        this.types = types.ToFrozenDictionary(x => x.Name, StringComparer.Ordinal);
+        this.types = types.ToFrozenDictionary(static x => x.Name, StringComparer.Ordinal);
         TypeNames = [.. this.types.Keys.Order(StringComparer.Ordinal)];
     }
 

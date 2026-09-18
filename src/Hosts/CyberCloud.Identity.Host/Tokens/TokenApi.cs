@@ -40,8 +40,11 @@ namespace CyberCloud.Identity.Host.Tokens;
 ///         chain derived from a sign-in without enumerating them.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every refusal after the token validated is <c>invalid_grant</c> and one of three
-///         sentences.</b> A revoked interactive session, a replayed handle, an expired chain and a
+///         ⚠
+///         <b>
+///             Every refusal after the token validated is <c>invalid_grant</c> and one of three
+///             sentences.
+///         </b> A revoked interactive session, a replayed handle, an expired chain and a
 ///         session that no longer exists are told apart in the log
 ///         (<c>GrantLog.GrantRefused</c>) and not in the body — a body that distinguished "replayed"
 ///         from "expired" would tell whoever holds a stolen token whether the legitimate client is
@@ -97,7 +100,8 @@ public sealed class TokenApi(
     ///     generic refusal would hide, because the code was single-use by contract and the client
     ///     that exchanged it first has already been signed out by this very answer.
     /// </remarks>
-    public const string CodeReplayedDescription = "That authorization code was already used. The session it opened has been revoked; sign in again.";
+    public const string CodeReplayedDescription =
+        "That authorization code was already used. The session it opened has been revoked; sign in again.";
 
     /// <summary>
     ///     Authenticates the client behind a client-credentials request.
@@ -176,14 +180,20 @@ public sealed class TokenApi(
     /// <returns>A principal OpenIddict can sign in with, carrying only the closed claim set.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The audience is <see cref="AccessTokenPolicy.Audience" /> and is not negotiable
-    ///         from the request.</b> A <c>resource</c> parameter that chose the audience would let a
+    ///         ⚠
+    ///         <b>
+    ///             The audience is <see cref="AccessTokenPolicy.Audience" /> and is not negotiable
+    ///             from the request.
+    ///         </b> A <c>resource</c> parameter that chose the audience would let a
     ///         client mint a token for a relying party it was never registered with. There is one API
     ///         and one audience; a second relying party is a design change, not a parameter.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>aud</c> and <c>azp</c> travel as OpenIddict's own audience and presenter as
-    ///         well as as claims.</b> OpenIddict writes <c>aud</c> from the principal's registered
+    ///         ⚠
+    ///         <b>
+    ///             <c>aud</c> and <c>azp</c> travel as OpenIddict's own audience and presenter as
+    ///             well as as claims.
+    ///         </b> OpenIddict writes <c>aud</c> from the principal's registered
     ///         audiences and would otherwise write none, and the gateway pins <c>aud</c> — so a
     ///         principal that carried the claim and not the registration would mint a token the
     ///         gateway refuses. Both are set from the same two values, in this one place.
@@ -261,9 +271,9 @@ public sealed class TokenApi(
         ArgumentNullException.ThrowIfNull(scopes);
 
         var identity = new ClaimsIdentity(
-            authenticationType: "CyberCloud.AuthorizationCode",
-            nameType: AccessTokenClaims.Subject,
-            roleType: "urn:cybercloud:roles-are-not-in-the-token"
+            "CyberCloud.AuthorizationCode",
+            AccessTokenClaims.Subject,
+            "urn:cybercloud:roles-are-not-in-the-token"
         );
 
         identity.AddClaim(new Claim(AccessTokenClaims.Subject, N(interactive.UserId)));
@@ -280,7 +290,9 @@ public sealed class TokenApi(
         );
 
         foreach (var method in interactive.Methods) {
-            identity.AddClaim(new Claim(AccessTokenClaims.AuthenticationMethods, AccessTokenPrincipalFactory.AmrValue(method)));
+            identity.AddClaim(
+                new Claim(AccessTokenClaims.AuthenticationMethods, AccessTokenPrincipalFactory.AmrValue(method))
+            );
         }
 
         identity.AddClaim(new Claim(AccessTokenClaims.Scope, string.Join(' ', scopes)));
@@ -315,8 +327,11 @@ public sealed class TokenApi(
     ///         reaches it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The code is burnt between the two, and the order of the three grain calls is the
-    ///         whole of RFC 6749 § 4.1.2.</b> The token session's id is minted here, before anything
+    ///         ⚠
+    ///         <b>
+    ///             The code is burnt between the two, and the order of the three grain calls is the
+    ///             whole of RFC 6749 § 4.1.2.
+    ///         </b> The token session's id is minted here, before anything
     ///         is written; <see cref="IAuthorizationCodeGrain.ConsumeAsync" /> records it against
     ///         the code's <c>jti</c> in one grain turn; only then is the session opened under that
     ///         id. A second exchange of the same code — a replay from a log, a <c>Referer</c>, or a
@@ -346,17 +361,30 @@ public sealed class TokenApi(
         ArgumentNullException.ThrowIfNull(context);
 
         if (Read(code) is not { } facts) {
-            return Refused(Guid.Empty, OpenIddictConstants.GrantTypes.AuthorizationCode, Guid.Empty, "code-missing-claims", SessionRevokedDescription);
+            return Refused(
+                Guid.Empty,
+                OpenIddictConstants.GrantTypes.AuthorizationCode,
+                Guid.Empty,
+                "code-missing-claims",
+                SessionRevokedDescription
+            );
         }
 
         cancellationToken.ThrowIfCancellationRequested();
 
         var tenant = grains.ForTenant(TenantHint.Qualifier(facts.TenantId));
 
-        var interactive = await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(facts.InteractiveSessionId)).GetAsync();
+        var interactive = await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(facts.InteractiveSessionId))
+            .GetAsync();
 
         if (interactive.TryGetError(out _) || !interactive.GetValueOrThrow().IsLive) {
-            return Refused(facts.TenantId, OpenIddictConstants.GrantTypes.AuthorizationCode, facts.InteractiveSessionId, "interactive-session-not-live", SessionRevokedDescription);
+            return Refused(
+                facts.TenantId,
+                OpenIddictConstants.GrantTypes.AuthorizationCode,
+                facts.InteractiveSessionId,
+                "interactive-session-not-live",
+                SessionRevokedDescription
+            );
         }
 
         var signedIn = interactive.GetValueOrThrow();
@@ -373,7 +401,13 @@ public sealed class TokenApi(
         }
 
         if (!Guid.TryParseExact(code.GetTokenId(), "N", out var codeId) || codeId == Guid.Empty) {
-            return Refused(facts.TenantId, OpenIddictConstants.GrantTypes.AuthorizationCode, facts.InteractiveSessionId, "code-missing-id", SessionRevokedDescription);
+            return Refused(
+                facts.TenantId,
+                OpenIddictConstants.GrantTypes.AuthorizationCode,
+                facts.InteractiveSessionId,
+                "code-missing-id",
+                SessionRevokedDescription
+            );
         }
 
         var tokenSessionId = Guid.NewGuid();
@@ -383,20 +417,36 @@ public sealed class TokenApi(
         // as long as OpenIddict would accept the code, plus the grain's skew grace.
         var consumed = await tenant
             .GetGrain<IAuthorizationCodeGrain>(GrainKeys.AuthorizationCode(codeId))
-            .ConsumeAsync(tokenSessionId, code.GetExpirationDate() ?? clock.UtcNow + AccessTokenPolicy.AuthorizationCodeLifetime);
+            .ConsumeAsync(
+                tokenSessionId,
+                code.GetExpirationDate() ?? clock.UtcNow + AccessTokenPolicy.AuthorizationCodeLifetime
+            );
 
         if (consumed.TryGetError(out var notConsumed)) {
-            return Refused(facts.TenantId, OpenIddictConstants.GrantTypes.AuthorizationCode, facts.InteractiveSessionId, notConsumed.Message, SessionRevokedDescription);
+            return Refused(
+                facts.TenantId,
+                OpenIddictConstants.GrantTypes.AuthorizationCode,
+                facts.InteractiveSessionId,
+                notConsumed.Message,
+                SessionRevokedDescription
+            );
         }
 
         if (!consumed.GetValueOrThrow().FirstUse) {
             var firstSession = consumed.GetValueOrThrow().TokenSessionId;
 
-            await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(firstSession)).RevokeAsync(RevocationReason.AuthorizationCodeReuseDetected);
+            await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(firstSession))
+                .RevokeAsync(RevocationReason.AuthorizationCodeReuseDetected);
 
             GrantLog.AuthorizationCodeReplayed(logger, facts.TenantId, facts.UserId, codeId, firstSession);
 
-            return Refused(facts.TenantId, OpenIddictConstants.GrantTypes.AuthorizationCode, firstSession, "code-replayed", CodeReplayedDescription);
+            return Refused(
+                facts.TenantId,
+                OpenIddictConstants.GrantTypes.AuthorizationCode,
+                firstSession,
+                "code-replayed",
+                CodeReplayedDescription
+            );
         }
 
         var opened = await tenant
@@ -410,7 +460,13 @@ public sealed class TokenApi(
             );
 
         if (opened.TryGetError(out var failed)) {
-            return Refused(facts.TenantId, OpenIddictConstants.GrantTypes.AuthorizationCode, tokenSessionId, failed.Message, SessionRevokedDescription);
+            return Refused(
+                facts.TenantId,
+                OpenIddictConstants.GrantTypes.AuthorizationCode,
+                tokenSessionId,
+                failed.Message,
+                SessionRevokedDescription
+            );
         }
 
         await tenant.GetGrain<IUserGrain>(GrainKeys.User(facts.UserId)).TrackSessionAsync(tokenSessionId);
@@ -443,8 +499,11 @@ public sealed class TokenApi(
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The interactive session is checked before the chain is touched, and a dead one
-    ///         revokes the token session on the spot.</b> A person who signed out — or whose session
+    ///         ⚠
+    ///         <b>
+    ///             The interactive session is checked before the chain is touched, and a dead one
+    ///             revokes the token session on the spot.
+    ///         </b> A person who signed out — or whose session
     ///         an administrator revoked — must not be refreshed back into the API by a portal tab
     ///         that still holds a cookie. Revoking the token session here rather than leaving it to
     ///         expire means a stolen refresh token stops working at the same moment.
@@ -466,8 +525,16 @@ public sealed class TokenApi(
         ArgumentNullException.ThrowIfNull(refresh);
         ArgumentNullException.ThrowIfNull(client);
 
-        if (Read(refresh) is not { } facts || facts.TokenSessionId is null || string.IsNullOrEmpty(facts.RefreshHandle)) {
-            return Refused(Guid.Empty, OpenIddictConstants.GrantTypes.RefreshToken, Guid.Empty, "refresh-token-missing-claims", RefreshRejectedDescription);
+        if (Read(refresh) is not { } facts
+            || facts.TokenSessionId is null
+            || string.IsNullOrEmpty(facts.RefreshHandle)) {
+            return Refused(
+                Guid.Empty,
+                OpenIddictConstants.GrantTypes.RefreshToken,
+                Guid.Empty,
+                "refresh-token-missing-claims",
+                RefreshRejectedDescription
+            );
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -475,24 +542,43 @@ public sealed class TokenApi(
         var tenant = grains.ForTenant(TenantHint.Qualifier(facts.TenantId));
         var tokenSession = tenant.GetGrain<ISessionGrain>(GrainKeys.Session(facts.TokenSessionId.Value));
 
-        var interactiveLive = await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(facts.InteractiveSessionId)).IsLiveAsync();
+        var interactiveLive = await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(facts.InteractiveSessionId))
+            .IsLiveAsync();
 
         if (interactiveLive.TryGetError(out _) || !interactiveLive.GetValueOrThrow()) {
             await tokenSession.RevokeAsync(RevocationReason.SignOut);
 
-            return Refused(facts.TenantId, OpenIddictConstants.GrantTypes.RefreshToken, facts.TokenSessionId.Value, "interactive-session-not-live", SessionRevokedDescription);
+            return Refused(
+                facts.TenantId,
+                OpenIddictConstants.GrantTypes.RefreshToken,
+                facts.TokenSessionId.Value,
+                "interactive-session-not-live",
+                SessionRevokedDescription
+            );
         }
 
         var described = await tokenSession.GetAsync();
 
         if (described.TryGetError(out _)) {
-            return Refused(facts.TenantId, OpenIddictConstants.GrantTypes.RefreshToken, facts.TokenSessionId.Value, "token-session-unknown", RefreshRejectedDescription);
+            return Refused(
+                facts.TenantId,
+                OpenIddictConstants.GrantTypes.RefreshToken,
+                facts.TokenSessionId.Value,
+                "token-session-unknown",
+                RefreshRejectedDescription
+            );
         }
 
         var rotated = await tokenSession.RefreshAsync(facts.RefreshHandle);
 
         if (rotated.TryGetError(out var refused)) {
-            return Refused(facts.TenantId, OpenIddictConstants.GrantTypes.RefreshToken, facts.TokenSessionId.Value, refused.Message, RefreshRejectedDescription);
+            return Refused(
+                facts.TenantId,
+                OpenIddictConstants.GrantTypes.RefreshToken,
+                facts.TokenSessionId.Value,
+                refused.Message,
+                RefreshRejectedDescription
+            );
         }
 
         var session = described.GetValueOrThrow() with { AuthenticatedAt = facts.AuthenticatedAt };
@@ -530,18 +616,43 @@ public sealed class TokenApi(
         if (!TryGuid(principal, AccessTokenClaims.TenantId, out var tenantId)
             || !TryGuid(principal, AccessTokenClaims.Subject, out var userId)
             || !TryGuid(principal, AccessTokenClaims.SessionId, out var sid)
-            || !long.TryParse(principal.GetClaim(AccessTokenClaims.AuthenticationTime), NumberStyles.None, CultureInfo.InvariantCulture, out var authTime)) {
+            || !long.TryParse(
+                principal.GetClaim(AccessTokenClaims.AuthenticationTime),
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out var authTime
+            )) {
             return null;
         }
 
         var handle = principal.GetClaim(AccessTokenPrincipalFactory.RefreshHandleClaim);
 
         if (string.IsNullOrEmpty(handle)) {
-            return new(tenantId, userId, sid, null, DateTimeOffset.FromUnixTimeSeconds(authTime), [.. principal.GetScopes()], null, principal.GetClaim(OpenIddictConstants.Claims.Email), principal.GetClaim(OpenIddictConstants.Claims.Name));
+            return new(
+                tenantId,
+                userId,
+                sid,
+                null,
+                DateTimeOffset.FromUnixTimeSeconds(authTime),
+                [.. principal.GetScopes()],
+                null,
+                principal.GetClaim(OpenIddictConstants.Claims.Email),
+                principal.GetClaim(OpenIddictConstants.Claims.Name)
+            );
         }
 
         return TryGuid(principal, AccessTokenPrincipalFactory.InteractiveSessionClaim, out var isid)
-            ? new(tenantId, userId, isid, sid, DateTimeOffset.FromUnixTimeSeconds(authTime), [.. principal.GetScopes()], handle, principal.GetClaim(OpenIddictConstants.Claims.Email), principal.GetClaim(OpenIddictConstants.Claims.Name))
+            ? new(
+                tenantId,
+                userId,
+                isid,
+                sid,
+                DateTimeOffset.FromUnixTimeSeconds(authTime),
+                [.. principal.GetScopes()],
+                handle,
+                principal.GetClaim(OpenIddictConstants.Claims.Email),
+                principal.GetClaim(OpenIddictConstants.Claims.Name)
+            )
             : null;
     }
 
@@ -553,21 +664,36 @@ public sealed class TokenApi(
     ///     refresh-only and id_token-only claims beside it.
     /// </summary>
     ClaimsPrincipal Assemble(SessionDescriptor session, Facts facts, string handle, string grantType) {
-        var principal = AccessTokenPrincipalFactory.Build(session, AccessTokenPolicy.Audience, facts.Scopes, SubjectTypes.User);
+        var principal = AccessTokenPrincipalFactory.Build(
+            session,
+            AccessTokenPolicy.Audience,
+            facts.Scopes,
+            SubjectTypes.User
+        );
 
         principal.SetAudiences(AccessTokenPolicy.Audience);
         principal.SetPresenters(session.ClientId);
         principal.SetScopes(facts.Scopes);
 
         AccessTokenPrincipalFactory.AppendRefreshOnly(principal, handle, facts.InteractiveSessionId);
-        AccessTokenPrincipalFactory.AppendIdentityTokenOnly(principal, facts.Email ?? string.Empty, facts.Name ?? string.Empty);
+        AccessTokenPrincipalFactory.AppendIdentityTokenOnly(
+            principal,
+            facts.Email ?? string.Empty,
+            facts.Name ?? string.Empty
+        );
 
         IdentityLog.TokenIssued(logger, session.TenantId, SubjectTypes.User, session.UserId, grantType);
 
         return principal;
     }
 
-    Result<ClaimsPrincipal> Refused(Guid tenantId, string grantType, Guid sessionId, string reason, string description) {
+    Result<ClaimsPrincipal> Refused(
+        Guid tenantId,
+        string grantType,
+        Guid sessionId,
+        string reason,
+        string description
+    ) {
         GrantLog.GrantRefused(logger, tenantId, grantType, sessionId, reason);
 
         return Result<ClaimsPrincipal>.Failure(ErrorCode.AuthorizationFailed, description);

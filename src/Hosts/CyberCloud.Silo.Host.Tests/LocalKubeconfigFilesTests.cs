@@ -60,7 +60,7 @@ public sealed class LocalKubeconfigFilesTests : IDisposable {
     /// <inheritdoc />
     public void Dispose() {
         if (Directory.Exists(root)) {
-            Directory.Delete(root, recursive: true);
+            Directory.Delete(root, true);
         }
     }
 
@@ -84,7 +84,7 @@ public sealed class LocalKubeconfigFilesTests : IDisposable {
             error.Code.ShouldBe(ErrorCode.AuthorizationFailed);
             error.Message.ShouldContain(root);
         } finally {
-            sibling.Delete(recursive: true);
+            sibling.Delete(true);
         }
     }
 

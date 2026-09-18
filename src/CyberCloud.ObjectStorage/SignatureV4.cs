@@ -16,8 +16,11 @@ namespace CyberCloud.ObjectStorage;
 ///         the literal <c>aws4_request</c>. Every step here is one of those sentences.
 ///     </para>
 ///     <para>
-///         ⚠ <b>S3 encodes the path once, and this signer follows S3 rather than the general SigV4
-///         rule.</b> The general algorithm URI-encodes each path segment twice; S3's own examples —
+///         ⚠
+///         <b>
+///             S3 encodes the path once, and this signer follows S3 rather than the general SigV4
+///             rule.
+///         </b> The general algorithm URI-encodes each path segment twice; S3's own examples —
 ///         <c>/test$file.text</c> — encode it once, and a signer that double-encoded would compute a
 ///         different canonical request from the one the service computes for the same bytes on the
 ///         wire. <c>SignatureV4Tests.ThePutObjectExampleFromTheS3Documentation</c> is the vector
@@ -78,8 +81,8 @@ public static class SignatureV4 {
         ArgumentNullException.ThrowIfNull(request);
 
         var headers = request.Headers
-            .Select(x => (Name: x.Key.ToLowerInvariant(), Value: Collapse(x.Value)))
-            .OrderBy(x => x.Name, StringComparer.Ordinal)
+            .Select(static x => (Name: x.Key.ToLowerInvariant(), Value: Collapse(x.Value)))
+            .OrderBy(static x => x.Name, StringComparer.Ordinal)
             .ToList();
 
         var builder = new StringBuilder();
@@ -103,7 +106,7 @@ public static class SignatureV4 {
     public static string SignedHeaders(IReadOnlyDictionary<string, string> headers) {
         ArgumentNullException.ThrowIfNull(headers);
 
-        return string.Join(';', headers.Keys.Select(x => x.ToLowerInvariant()).Order(StringComparer.Ordinal));
+        return string.Join(';', headers.Keys.Select(static x => x.ToLowerInvariant()).Order(StringComparer.Ordinal));
     }
 
     /// <summary>The string to sign — the algorithm, the date, the scope and the canonical request's hash.</summary>
@@ -187,16 +190,16 @@ public static class SignatureV4 {
         return builder.ToString();
     }
 
-    static string CanonicalPath(string path) => path.Length == 0 ? "/" : Encode(path, keepSlash: true);
+    static string CanonicalPath(string path) => path.Length == 0 ? "/" : Encode(path, true);
 
     static string CanonicalQuery(IReadOnlyList<KeyValuePair<string, string>> query) =>
         string.Join(
             '&',
             query
-                .Select(x => (Name: Encode(x.Key, keepSlash: false), Value: Encode(x.Value, keepSlash: false)))
-                .OrderBy(x => x.Name, StringComparer.Ordinal)
-                .ThenBy(x => x.Value, StringComparer.Ordinal)
-                .Select(x => x.Name + "=" + x.Value)
+                .Select(static x => (Name: Encode(x.Key, false), Value: Encode(x.Value, false)))
+                .OrderBy(static x => x.Name, StringComparer.Ordinal)
+                .ThenBy(static x => x.Value, StringComparer.Ordinal)
+                .Select(static x => x.Name + "=" + x.Value)
         );
 
     /// <summary>Trims a header value and collapses runs of spaces, as the canonical form requires.</summary>

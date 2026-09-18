@@ -39,20 +39,22 @@ public sealed class MembershipIndexGrainTests(AuthorizationCluster cluster) {
 
         // Up from alice: every group on the chain, in one slice.
         var alice = await ReadAsync(tenant, Alice.Object);
-        alice.UsersetsOf(string.Empty).ShouldBe([Member("i1-g1"), Member("i1-g2"), Member("i1-g3")], ignoreOrder: true);
+        alice.UsersetsOf(string.Empty).ShouldBe([Member("i1-g1"), Member("i1-g2"), Member("i1-g3")], true);
         alice.SchemaVersion.ShouldBe(CyberCloudSchema.SchemaVersion);
 
         // Down from the top: the nested usersets and the one concrete member.
         var top = await ReadAsync(tenant, ObjectRef.Of(ObjectTypes.Group, "i1-g3"));
-        top.MembersOf(Relations.Member).ShouldBe([Member("i1-g2"), Member("i1-g1"), Alice], ignoreOrder: true);
+        top.MembersOf(Relations.Member).ShouldBe([Member("i1-g2"), Member("i1-g1"), Alice], true);
 
         // ⚠ THE DELETE, THROUGH THE STORE. Cutting g2 out of g3 has to recompute g3's members from
         // the tuples, not merely drop g2: alice and g1 reached g3 through g2 and go with it.
         await cluster.RevokeAsync(tenant, "group:i1-g3#member@group:i1-g2#member");
 
-        (await ReadAsync(tenant, Alice.Object)).UsersetsOf(string.Empty).ShouldBe([Member("i1-g1"), Member("i1-g2")], ignoreOrder: true);
+        (await ReadAsync(tenant, Alice.Object)).UsersetsOf(string.Empty)
+            .ShouldBe([Member("i1-g1"), Member("i1-g2")], true);
         (await ReadAsync(tenant, ObjectRef.Of(ObjectTypes.Group, "i1-g3"))).MembersOf(Relations.Member).ShouldBeEmpty();
-        (await ReadAsync(tenant, ObjectRef.Of(ObjectTypes.Group, "i1-g2"))).MembersOf(Relations.Member).ShouldBe([Member("i1-g1"), Alice], ignoreOrder: true);
+        (await ReadAsync(tenant, ObjectRef.Of(ObjectTypes.Group, "i1-g2"))).MembersOf(Relations.Member)
+            .ShouldBe([Member("i1-g1"), Alice], true);
     }
 
     [Fact]
@@ -87,11 +89,13 @@ public sealed class MembershipIndexGrainTests(AuthorizationCluster cluster) {
 
         // Indexed first: nothing is cached yet, so this is a walk over the index. FullyConsistent
         // second, because it never reads the cache the first one filled.
-        var indexed = await cluster.Check(tenant, resource).CheckAsync(Permissions.Read, Alice, Consistency.MinimizeLatency);
+        var indexed = await cluster.Check(tenant, resource)
+            .CheckAsync(Permissions.Read, Alice, Consistency.MinimizeLatency);
         indexed.GetValueOrThrow().Allowed.ShouldBeTrue();
         indexed.GetValueOrThrow().FromCache.ShouldBeFalse();
 
-        var walked = await cluster.Check(tenant, resource).CheckAsync(Permissions.Read, Alice, Consistency.FullyConsistent);
+        var walked = await cluster.Check(tenant, resource)
+            .CheckAsync(Permissions.Read, Alice, Consistency.FullyConsistent);
         walked.GetValueOrThrow().Allowed.ShouldBeTrue();
         walked.GetValueOrThrow().FromCache.ShouldBeFalse();
 
@@ -121,13 +125,18 @@ public sealed class MembershipIndexGrainTests(AuthorizationCluster cluster) {
         await cluster.WriteAsync(tenant, "group:i4-g#member@user:bob");
 
         cluster.Interceptor.Armed = true;
-        await Should.ThrowAsync<Exception>(() => cluster.Store(tenant).WriteAsync(RelationTuple.Parse("group:i4-g#member@user:alice").GetValueOrThrow()));
+        await Should.ThrowAsync<Exception>(() => cluster.Store(tenant)
+                .WriteAsync(RelationTuple.Parse("group:i4-g#member@user:alice").GetValueOrThrow())
+        );
 
         (await ReadAsync(tenant, Alice.Object)).UsersetsOf(string.Empty).ShouldBeEmpty("the write died before step 6");
-        (await ReadAsync(tenant, ObjectRef.Of(ObjectTypes.Group, "i4-g"))).MembersOf(Relations.Member).ShouldBe([SubjectRef.Of(ObjectTypes.User, "bob")]);
+        (await ReadAsync(tenant, ObjectRef.Of(ObjectTypes.Group, "i4-g"))).MembersOf(Relations.Member)
+            .ShouldBe([SubjectRef.Of(ObjectTypes.User, "bob")]);
 
-        var before = await cluster.Check(tenant, scope).CheckAsync(Permissions.Read, Alice, Consistency.MinimizeLatency);
-        before.GetValueOrThrow().Allowed.ShouldBeFalse("i4-g's closure is complete and does not hold alice — fail-closed");
+        var before = await cluster.Check(tenant, scope)
+            .CheckAsync(Permissions.Read, Alice, Consistency.MinimizeLatency);
+        before.GetValueOrThrow()
+            .Allowed.ShouldBeFalse("i4-g's closure is complete and does not hold alice — fail-closed");
 
         var swept = (await cluster.Store(tenant).SweepAsync()).GetValueOrThrow();
         swept.Repaired.ShouldBe(1);
@@ -135,8 +144,12 @@ public sealed class MembershipIndexGrainTests(AuthorizationCluster cluster) {
         (await ReadAsync(tenant, Alice.Object)).UsersetsOf(string.Empty).ShouldBe([Member("i4-g")]);
 
         var token = (await cluster.Store(tenant).GetTokenAsync()).GetValueOrThrow();
-        var after = await cluster.Check(tenant, scope).CheckAsync(Permissions.Read, Alice, Consistency.AtLeastAsFresh(token));
-        after.GetValueOrThrow().Allowed.ShouldBeTrue("the sweep moved the version, so the cached deny is behind the token and the index now says yes");
+        var after = await cluster.Check(tenant, scope)
+            .CheckAsync(Permissions.Read, Alice, Consistency.AtLeastAsFresh(token));
+        after.GetValueOrThrow()
+            .Allowed.ShouldBeTrue(
+                "the sweep moved the version, so the cached deny is behind the token and the index now says yes"
+            );
     }
 
     [Fact]
@@ -149,17 +162,22 @@ public sealed class MembershipIndexGrainTests(AuthorizationCluster cluster) {
         (await ReadAsync(tenant, Alice.Object)).UsersetsOf(string.Empty).ShouldBe([Member("i5-g")]);
 
         cluster.Interceptor.Armed = true;
-        await Should.ThrowAsync<Exception>(() => cluster.Store(tenant).DeleteAsync(RelationTuple.Parse("group:i5-g#member@user:alice").GetValueOrThrow()));
+        await Should.ThrowAsync<Exception>(() => cluster.Store(tenant)
+                .DeleteAsync(RelationTuple.Parse("group:i5-g#member@user:alice").GetValueOrThrow())
+        );
 
-        (await ReadAsync(tenant, Alice.Object)).UsersetsOf(string.Empty).ShouldBeEmpty("step 2 ran before the interruption");
+        (await ReadAsync(tenant, Alice.Object)).UsersetsOf(string.Empty)
+            .ShouldBeEmpty("step 2 ran before the interruption");
         (await ReadAsync(tenant, ObjectRef.Of(ObjectTypes.Group, "i5-g"))).MembersOf(Relations.Member).ShouldBeEmpty();
-        (await cluster.SubjectIndex(tenant, Alice).ListAsync()).GetValueOrThrow().ShouldNotBeEmpty("the reverse half is step 5 and never ran");
+        (await cluster.SubjectIndex(tenant, Alice).ListAsync()).GetValueOrThrow()
+            .ShouldNotBeEmpty("the reverse half is step 5 and never ran");
 
         var swept = (await cluster.Store(tenant).SweepAsync()).GetValueOrThrow();
         swept.Repaired.ShouldBe(1);
 
         (await cluster.SubjectIndex(tenant, Alice).ListAsync()).GetValueOrThrow().ShouldBeEmpty();
-        (await ReadAsync(tenant, Alice.Object)).UsersetsOf(string.Empty).ShouldBeEmpty("a replayed delete is the same delete");
+        (await ReadAsync(tenant, Alice.Object)).UsersetsOf(string.Empty)
+            .ShouldBeEmpty("a replayed delete is the same delete");
     }
 
     [Fact]
@@ -184,7 +202,7 @@ public sealed class MembershipIndexGrainTests(AuthorizationCluster cluster) {
 
         var rebuilt = (await cluster.Index(tenant, top).RebuildAsync()).GetValueOrThrow();
 
-        rebuilt.MembersOf(Relations.Member).ShouldBe([Member("i6-g1"), Alice], ignoreOrder: true);
+        rebuilt.MembersOf(Relations.Member).ShouldBe([Member("i6-g1"), Alice], true);
         rebuilt.UsersetsOf(Relations.Member).ShouldBeEmpty("nothing is above the top group");
         (await ReadAsync(tenant, top)).MembersOf(Relations.Member).ShouldNotContain(mallory);
     }
@@ -203,8 +221,11 @@ public sealed class MembershipIndexGrainTests(AuthorizationCluster cluster) {
             .ListObjectsAsync(new() { ObjectType = ObjectTypes.Resource, Permission = Permissions.Read });
 
         var page = listed.GetValueOrThrow();
-        page.Objects.Select(x => x.Id).ShouldBe(["i7-a", "i7-b"]);
-        page.IndexReads.ShouldBe(1, "alice's slice names all four groups; a group inside a closure is never read for its own");
+        page.Objects.Select(static x => x.Id).ShouldBe(["i7-a", "i7-b"]);
+        page.IndexReads.ShouldBe(
+            1,
+            "alice's slice names all four groups; a group inside a closure is never read for its own"
+        );
     }
 
     [Fact]
@@ -226,24 +247,37 @@ public sealed class MembershipIndexGrainTests(AuthorizationCluster cluster) {
         (await ReadAsync(tenant, eng)).SchemaVersion.ShouldBe(0, "no write through the store has touched the group");
         (await ReadAsync(tenant, Alice.Object)).SchemaVersion.ShouldBe(0);
 
-        var walked = await cluster.Check(tenant, scope).CheckAsync(Permissions.Read, Alice, Consistency.MinimizeLatency);
-        walked.GetValueOrThrow().Allowed.ShouldBeTrue("an unwritten slice is 'walk it', and the walk finds alice in the rows");
+        var walked = await cluster.Check(tenant, scope)
+            .CheckAsync(Permissions.Read, Alice, Consistency.MinimizeLatency);
+        walked.GetValueOrThrow()
+            .Allowed.ShouldBeTrue("an unwritten slice is 'walk it', and the walk finds alice in the rows");
 
         // The first write that touches eng: a nesting edge, through the store.
         var token = await cluster.WriteAsync(tenant, "group:i9-top#member@group:i9-eng#member");
 
         var topSlice = await ReadAsync(tenant, top);
         topSlice.SchemaVersion.ShouldBe(CyberCloudSchema.SchemaVersion);
-        topSlice.MembersOf(Relations.Member).ShouldBe([Member("i9-eng"), Alice], ignoreOrder: true, "the pre-existing member is in the new closure, not only the edge");
+        topSlice.MembersOf(Relations.Member)
+            .ShouldBe(
+                [Member("i9-eng"), Alice],
+                true,
+                "the pre-existing member is in the new closure, not only the edge"
+            );
 
         var engSlice = await ReadAsync(tenant, eng);
         engSlice.SchemaVersion.ShouldBe(CyberCloudSchema.SchemaVersion);
         engSlice.MembersOf(Relations.Member).ShouldBe([Alice]);
         engSlice.UsersetsOf(Relations.Member).ShouldBe([Member("i9-top")]);
 
-        (await ReadAsync(tenant, Alice.Object)).UsersetsOf(string.Empty).ShouldBe([Member("i9-eng"), Member("i9-top")], ignoreOrder: true, "alice's slice was unwritten when the union reached it and was rebuilt first");
+        (await ReadAsync(tenant, Alice.Object)).UsersetsOf(string.Empty)
+            .ShouldBe(
+                [Member("i9-eng"), Member("i9-top")],
+                true,
+                "alice's slice was unwritten when the union reached it and was rebuilt first"
+            );
 
-        var after = await cluster.Check(tenant, scope).CheckAsync(Permissions.Read, Alice, Consistency.AtLeastAsFresh(token));
+        var after = await cluster.Check(tenant, scope)
+            .CheckAsync(Permissions.Read, Alice, Consistency.AtLeastAsFresh(token));
         after.GetValueOrThrow().Allowed.ShouldBeTrue("the backfilled closures say what the rows say");
     }
 
@@ -274,9 +308,12 @@ public sealed class MembershipIndexGrainTests(AuthorizationCluster cluster) {
     async Task WriteHalvesAsync(Guid tenant, string text) {
         var tuple = RelationTuple.Parse(text).GetValueOrThrow();
 
-        (await cluster.Objects(tenant, tuple.Object).WriteAsync(tuple.Relation, tuple.Subject)).IsSuccess.ShouldBeTrue();
+        (await cluster.Objects(tenant, tuple.Object)
+                .WriteAsync(tuple.Relation, tuple.Subject)).IsSuccess.ShouldBeTrue();
         (await cluster.SubjectIndex(tenant, tuple.Subject)
-                .AddAsync(new() { Object = tuple.Object, Relation = tuple.Relation, SubjectRelation = tuple.Subject.Relation }))
+                .AddAsync(
+                    new() { Object = tuple.Object, Relation = tuple.Relation, SubjectRelation = tuple.Subject.Relation }
+                ))
             .IsSuccess.ShouldBeTrue();
     }
 

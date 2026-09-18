@@ -89,10 +89,10 @@ public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster) {
 
         (await cluster.Directory.LookupAsync(Existing)).GetValueOrThrow()
             .Slug
-                .ShouldBe("blackhole-a");
+            .ShouldBe("blackhole-a");
         (await cluster.Directory.LookupAsync(AlsoExisting)).GetValueOrThrow()
             .Slug
-                .ShouldBe("blackhole-b");
+            .ShouldBe("blackhole-b");
 
         // 2. The shard map still routes every tenant it knows about.
         cluster.ShardMap.DurableShardFor(TenancyCluster.Id(Existing)).ShouldBe(shardOfExisting);
@@ -102,7 +102,7 @@ public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster) {
         //    directory's database stopped.
         (await cluster.TenantGrain(Existing).GetAsync()).GetValueOrThrow()
             .Slug
-                .ShouldBe("blackhole-a");
+            .ShouldBe("blackhole-a");
 
         (await cluster.TenantGrain(Existing).AddSubscriptionAsync(Guid.NewGuid())).IsSuccess
             .ShouldBeTrue("a write for an existing tenant is unaffected by the global cluster.");
@@ -159,7 +159,7 @@ public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster) {
         //    failures above are known not to have broken them.
         (await cluster.TenantGrain(Existing).GetAsync()).GetValueOrThrow()
             .Slug
-                .ShouldBe("blackhole-a");
+            .ShouldBe("blackhole-a");
         (await cluster.Directory.LookupAsync(AlsoExisting)).IsSuccess.ShouldBeTrue();
     }
 

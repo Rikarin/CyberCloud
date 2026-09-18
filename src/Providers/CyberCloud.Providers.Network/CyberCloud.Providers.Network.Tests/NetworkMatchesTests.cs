@@ -49,7 +49,7 @@ public sealed class NetworkMatchesTests {
         using var desired = JsonDocument.Parse(VirtualNetworks.Body(Cluster));
 
         var applied = VirtualNetworks.VpcJson("ns", "net", desired.RootElement);
-        var readBack = WithSpec(applied, spec => spec["bfdPort"] = new JsonObject { ["enabled"] = false });
+        var readBack = WithSpec(applied, static spec => spec["bfdPort"] = new JsonObject { ["enabled"] = false });
 
         VirtualNetworks.Matches(readBack, desired.RootElement)
             .ShouldBeTrue(
@@ -73,7 +73,7 @@ public sealed class NetworkMatchesTests {
 
         var readBack = WithSpec(
             applied,
-            spec => {
+            static spec => {
                 spec["namespaces"] = new JsonArray();
                 spec["staticRoutes"] = new JsonArray(
                     new JsonObject { ["cidr"] = "0.0.0.0/0", ["nextHopIP"] = "10.0.0.1", ["policy"] = "policyDst" }
@@ -93,7 +93,7 @@ public sealed class NetworkMatchesTests {
         using var desired = JsonDocument.Parse(VirtualNetworks.Body(Cluster));
 
         var applied = VirtualNetworks.VpcJson("ns", "net", desired.RootElement);
-        var tampered = WithSpec(applied, spec => spec["enableExternal"] = true);
+        var tampered = WithSpec(applied, static spec => spec["enableExternal"] = true);
 
         VirtualNetworks.Matches(tampered, desired.RootElement)
             .ShouldBeFalse(
@@ -128,14 +128,14 @@ public sealed class NetworkMatchesTests {
         // A string comparison here reports drift on a perfectly converged subnet FOREVER: the
         // reconciler answers InProgress every pass, the resource never reaches Succeeded, and the
         // message says "does not yet carry the desired spec" while the cluster is exactly right.
-        using var desired = JsonDocument.Parse(NetworkSubnets.Body(Cluster, prefixV4: "10.20.5.7/24"));
+        using var desired = JsonDocument.Parse(NetworkSubnets.Body(Cluster, "10.20.5.7/24"));
 
         var applied = NetworkSubnets.SubnetJson("ns", Address("web", "net"), desired.RootElement);
 
         // What this provider sent, verbatim — host bits and all.
         Spec(applied)["cidrBlock"]!.GetValue<string>().ShouldBe("10.20.5.7/24");
 
-        var readBack = WithSpec(applied, spec => spec["cidrBlock"] = "10.20.5.0/24");
+        var readBack = WithSpec(applied, static spec => spec["cidrBlock"] = "10.20.5.0/24");
 
         NetworkSubnets.MatchesBody(readBack, desired.RootElement)
             .ShouldBeTrue(
@@ -157,7 +157,7 @@ public sealed class NetworkMatchesTests {
 
         var readBack = WithSpec(
             applied,
-            spec => {
+            static spec => {
                 spec["protocol"] = "IPv4";
                 spec["provider"] = "ovn";
                 spec["gateway"] = "10.20.1.1";
@@ -174,9 +174,7 @@ public sealed class NetworkMatchesTests {
 
     [Fact]
     public void ADualStackSubnetSurvivesCanonicalizationOfBothFamilies() {
-        using var desired = JsonDocument.Parse(
-            NetworkSubnets.Body(Cluster, prefixV4: "10.20.1.0/24", prefixV6: "fd00:20:1::/64")
-        );
+        using var desired = JsonDocument.Parse(NetworkSubnets.Body(Cluster, "10.20.1.0/24", "fd00:20:1::/64"));
 
         var applied = NetworkSubnets.SubnetJson("ns", Address("web", "net"), desired.RootElement);
 
@@ -185,7 +183,7 @@ public sealed class NetworkMatchesTests {
         // the same order.
         Spec(applied)["cidrBlock"]!.GetValue<string>().ShouldBe("10.20.1.0/24,fd00:20:1::/64");
 
-        var readBack = WithSpec(applied, spec => spec["cidrBlock"] = "10.20.1.0/24,fd00:20:1:0::/64");
+        var readBack = WithSpec(applied, static spec => spec["cidrBlock"] = "10.20.1.0/24,fd00:20:1:0::/64");
 
         NetworkSubnets.MatchesBody(readBack, desired.RootElement)
             .ShouldBeTrue("the v6 half was re-spelled by the controller and the comparison did not survive it");
@@ -196,7 +194,7 @@ public sealed class NetworkMatchesTests {
         using var desired = JsonDocument.Parse(NetworkSubnets.Body(Cluster));
 
         var applied = NetworkSubnets.SubnetJson("ns", Address("web", "net"), desired.RootElement);
-        var tampered = WithSpec(applied, spec => spec["cidrBlock"] = "10.99.9.0/24");
+        var tampered = WithSpec(applied, static spec => spec["cidrBlock"] = "10.99.9.0/24");
 
         NetworkSubnets.MatchesBody(tampered, desired.RootElement)
             .ShouldBeFalse("the parsed-network comparison has become an accept-everything comparison");
@@ -209,7 +207,7 @@ public sealed class NetworkMatchesTests {
         using var desired = JsonDocument.Parse(NetworkSubnets.Body(Cluster, prefixV6: "fd00:20:1::/64"));
 
         var applied = NetworkSubnets.SubnetJson("ns", Address("web", "net"), desired.RootElement);
-        var tampered = WithSpec(applied, spec => spec["cidrBlock"] = "10.20.1.0/24");
+        var tampered = WithSpec(applied, static spec => spec["cidrBlock"] = "10.20.1.0/24");
 
         NetworkSubnets.MatchesBody(tampered, desired.RootElement).ShouldBeFalse();
     }
@@ -224,7 +222,7 @@ public sealed class NetworkMatchesTests {
 
         var id = Address("web", "net");
         var applied = NetworkSubnets.SubnetJson("ns", id, desired.RootElement);
-        var tampered = WithSpec(applied, spec => spec["vpc"] = "ns-someone-elses-network");
+        var tampered = WithSpec(applied, static spec => spec["vpc"] = "ns-someone-elses-network");
 
         NetworkSubnets.MatchesBody(tampered, desired.RootElement)
             .ShouldBeTrue("the body half cannot see the address — that is the documented limit of MatchesBody");

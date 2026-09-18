@@ -33,7 +33,8 @@ public sealed class KubeCoWriterTests {
         "hub"
     );
 
-    const string Fragment = """{ "spec": { "vpcPeerings": [ { "remoteVpc": "spoke-vpc", "localConnectIP": "10.0.0.1/30" } ] } }""";
+    const string Fragment =
+        """{ "spec": { "vpcPeerings": [ { "remoteVpc": "spoke-vpc", "localConnectIP": "10.0.0.1/30" } ] } }""";
 
     [Fact]
     public async Task AnAbsentOwnerObjectIsAFailureAndNeverACreate() {
@@ -92,7 +93,10 @@ public sealed class KubeCoWriterTests {
 
         result.IsSuccess.ShouldBeTrue("stale is an outcome the reconciler reports as InProgress, not a failure");
         result.GetValueOrThrow().Result.ShouldBe(ApplyResult.Stale);
-        result.GetValueOrThrow().Message.ShouldContain(KubeCoWriter.MaxAttempts.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        result.GetValueOrThrow()
+            .Message.ShouldContain(
+                KubeCoWriter.MaxAttempts.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            );
         cluster.Applied.Count.ShouldBe(KubeCoWriter.MaxAttempts);
     }
 
@@ -111,7 +115,7 @@ public sealed class KubeCoWriterTests {
 
     [Fact]
     public async Task WithdrawingAppliesTheOthersUnionAndNeverDeletes() {
-        var cluster = new ScriptedConnection { Live = Live("41", withOwnFragment: true) };
+        var cluster = new ScriptedConnection { Live = Live("41", true) };
         var writer = new KubeCoWriter(cluster);
 
         var result = await writer.WithdrawFragmentAsync(Peering, Target, TestContext.Current.CancellationToken);
@@ -128,7 +132,7 @@ public sealed class KubeCoWriterTests {
         // never got as far as applying. The builder's bare-Result DeleteAsync cannot tell "withdrew"
         // from "nothing to withdraw", so the seam decides on the read: no fragment annotation of
         // this writer's on the object means nothing to take back, and no PATCH is sent.
-        var cluster = new ScriptedConnection { Live = Live("41", withOwnFragment: false) };
+        var cluster = new ScriptedConnection { Live = Live("41", false) };
         var writer = new KubeCoWriter(cluster);
 
         var result = await writer.WithdrawFragmentAsync(Peering, Target, TestContext.Current.CancellationToken);
@@ -142,7 +146,7 @@ public sealed class KubeCoWriterTests {
 
     [Fact]
     public async Task AStaleWithdrawalIsReadAgainToo() {
-        var cluster = new ScriptedConnection { Live = Live("41", withOwnFragment: true), StaleTimes = 1 };
+        var cluster = new ScriptedConnection { Live = Live("41", true), StaleTimes = 1 };
         var writer = new KubeCoWriter(cluster);
 
         var result = await writer.WithdrawFragmentAsync(Peering, Target, TestContext.Current.CancellationToken);
@@ -222,7 +226,10 @@ public sealed class KubeCoWriterTests {
             );
         }
 
-        public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) {
+        public Task<Result<ApplyOutcome>> ApplyAsync(
+            KubeCommand command,
+            CancellationToken cancellationToken = default
+        ) {
             Applied.Add(command);
 
             if (Applied.Count <= StaleTimes) {
@@ -241,7 +248,9 @@ public sealed class KubeCoWriterTests {
 
             return Task.FromResult(
                 Result<ApplyOutcome>.Success(
-                    new() { Result = ApplyResult.Updated, Target = command.Target, ResourceVersion = Live!.ResourceVersion }
+                    new() {
+                        Result = ApplyResult.Updated, Target = command.Target, ResourceVersion = Live!.ResourceVersion
+                    }
                 )
             );
         }

@@ -65,7 +65,7 @@ public static class ResourceManagerSiloBuilderExtensions {
     public static ISiloBuilder AddCyberCloudResourceManager(this ISiloBuilder silo) {
         ArgumentNullException.ThrowIfNull(silo);
 
-        return silo.ConfigureServices(services => {
+        return silo.ConfigureServices(static services => {
                 services.AddCyberCloudResourceManager();
 
                 // ⚠ ON THE SILO OVERLOAD ONLY, AND THAT IS THE WHOLE REASON THIS METHOD NOW HAS A
@@ -122,7 +122,9 @@ public static class ResourceManagerSiloBuilderExtensions {
 
         // Built from whatever providers the container holds at first resolve — see the remarks on
         // ordering.
-        services.TryAddSingleton<IProviderRegistry>(provider => BuildRegistry(provider.GetServices<IResourceProvider>())
+        services.TryAddSingleton<IProviderRegistry>(static provider => BuildRegistry(
+                provider.GetServices<IResourceProvider>()
+            )
         );
 
         services.TryAddSingleton<IPolicyEvaluator, NotSupportedPolicyEvaluator>();
@@ -264,7 +266,7 @@ public static class ResourceManagerSiloBuilderExtensions {
         where TProvider : class, IResourceProvider, new() {
         ArgumentNullException.ThrowIfNull(silo);
 
-        return silo.ConfigureServices(services => services.AddCyberCloudProvider(new TProvider()));
+        return silo.ConfigureServices(static services => services.AddCyberCloudProvider(new TProvider()));
     }
 
     /// <summary>
@@ -372,7 +374,7 @@ public static class ResourceManagerSiloBuilderExtensions {
                 + "a platform that serves no resource type at all. Every resource and action path "
                 + "would answer 404 and nothing would say why. A host that calls "
                 + "AddCyberCloudResourceManager registers its providers too — "
-                + "docs/plan/04 § Silo composition, \"every silo loads every provider module\"."
+                + """docs/plan/04 § Silo composition, "every silo loads every provider module"."""
             );
         }
 

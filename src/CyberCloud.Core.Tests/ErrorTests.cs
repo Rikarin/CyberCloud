@@ -73,7 +73,7 @@ public class ErrorTests {
         Should.Throw<ArgumentException>(() => new Error(ErrorCode.InternalError, message!));
 
     [Fact]
-    public void ANullCodeThrows() => Should.Throw<ArgumentNullException>(() => new Error(null!, "x"));
+    public void ANullCodeThrows() => Should.Throw<ArgumentNullException>(static () => new Error(null!, "x"));
 
     [Fact]
     public void ThereIsNoPlaceToPutAStackTrace() {
@@ -81,7 +81,7 @@ public class ErrorTests {
         // review: if someone adds an Exception-shaped member, this fails.
         var members = typeof(Error)
             .GetProperties()
-            .Select(x => x.Name)
+            .Select(static x => x.Name)
             .Order(StringComparer.Ordinal)
             .ToImmutableArray();
 

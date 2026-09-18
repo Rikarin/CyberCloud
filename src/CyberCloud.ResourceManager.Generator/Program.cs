@@ -203,7 +203,7 @@ static class Program {
             documents.Add(
                 new JsonObject {
                     ["apiVersion"] = document.ApiVersion,
-                    ["breakingChanges"] = Lines(document.BreakingChanges.Select(x => x.ToString())),
+                    ["breakingChanges"] = Lines(document.BreakingChanges.Select(static x => x.ToString())),
                     ["drifted"] = document.Drifted,
                     ["file"] = document.FileName,
                     ["published"] = document.Published,
@@ -280,7 +280,7 @@ static class Program {
             );
         }
 
-        return new JsonObject {
+        return new() {
             ["actions"] = actions,
             ["apiVersions"] = generated.ApiVersions,
             ["assembliesScanned"] = assembliesScanned,

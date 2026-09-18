@@ -78,7 +78,9 @@ public abstract class AsyncPageable<T> : IAsyncEnumerable<T> {
         ArgumentNullException.ThrowIfNull(pages);
 
         return new FuncAsyncPageable<T>(
-            (token, size, cancellation) => throw new InvalidOperationException("A static pageable fetches nothing."),
+            static (token, size, cancellation) => throw new InvalidOperationException(
+                "A static pageable fetches nothing."
+            ),
             CancellationToken.None
         ) { Static = [.. pages] };
     }

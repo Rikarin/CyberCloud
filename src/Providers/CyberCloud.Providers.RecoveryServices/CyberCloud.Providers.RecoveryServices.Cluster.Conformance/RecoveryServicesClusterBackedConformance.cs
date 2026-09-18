@@ -10,8 +10,11 @@ namespace CyberCloud.Providers.RecoveryServices.ClusterConformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Two class declarations over the case <c>CyberCloud.Providers.RecoveryServices.Conformance</c>
-///         already declares</b>, plus the companion PostgreSQL server the harness now creates before
+///         ⚠
+///         <b>
+///             Two class declarations over the case <c>CyberCloud.Providers.RecoveryServices.Conformance</c>
+///             already declares
+///         </b>, plus the companion PostgreSQL server the harness now creates before
 ///         the vault's first assertion — against the same real API server, so the vault's view lists
 ///         a namespace k3s holds and finds the companion's <c>Cluster</c> by ADR-013's label on an
 ///         object the API server really admitted.

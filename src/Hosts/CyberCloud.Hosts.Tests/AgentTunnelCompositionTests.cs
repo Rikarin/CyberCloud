@@ -98,7 +98,7 @@ public sealed class AgentTunnelCompositionTests {
                 $"--{AgentOptions.SectionName}:HeartbeatSeconds=20",
                 $"--{AgentOptions.SectionName}:CredentialSecretName=tenant-named-credential"
             ],
-            services => services.AddSingleton<IAgentEndpoints>(new NoPod())
+            static services => services.AddSingleton<IAgentEndpoints>(new NoPod())
         );
 
         var options = app.Services.GetRequiredService<IOptions<AgentOptions>>().Value;
@@ -123,7 +123,9 @@ public sealed class AgentTunnelCompositionTests {
         // manifest into every assembly that references them, and that manifest names
         // Orleans.Serialization's attributes. What a pod must not hold is a client — Orleans.Core,
         // Orleans.Runtime, the multitenant factory — and it holds none of them.
-        var referenced = typeof(AgentComposition).Assembly.GetReferencedAssemblies().Select(x => x.Name ?? "").ToList();
+        var referenced = typeof(AgentComposition).Assembly.GetReferencedAssemblies()
+            .Select(static x => x.Name ?? "")
+            .ToList();
 
         foreach (var forbidden in new[] {
                      "Orleans.Core", "Orleans.Core.Abstractions", "Orleans.Runtime", "Orleans.Multitenant",

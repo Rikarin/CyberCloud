@@ -8,7 +8,6 @@ using CyberCloud.ServiceDefaults;
 using CyberCloud.Tenancy.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
-using Orleans.Configuration;
 using Orleans.Multitenant;
 using System.Diagnostics;
 using System.Globalization;
@@ -205,7 +204,7 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
         );
 
         accepted.IsSuccess.ShouldBeTrue(
-            $"the write path refused a create the caller is entitled to make: "
+            "the write path refused a create the caller is entitled to make: "
             + $"{accepted.Error?.Code} — {accepted.Error?.Message}. A ResourceNotFound here is the "
             + "enforcement seam answering for a check that could not be made, not for a resource "
             + "that does not exist — see the silo's CyberCloud.Authorization reference."
@@ -625,8 +624,11 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
     ///     constructed <c>ResourceManagerService</c> itself would be choosing its own seams, which is
     ///     what every other suite does and what this one exists not to do.
     ///     <para>
-    ///         ⚠ <b>An identity issuer is named because the composition refuses to build without
-    ///         one</b> — https://github.com/Rikarin/CyberCloud/issues/68's guard. This file never
+    ///         ⚠
+    ///         <b>
+    ///             An identity issuer is named because the composition refuses to build without
+    ///             one
+    ///         </b> — https://github.com/Rikarin/CyberCloud/issues/68's guard. This file never
     ///         sends an HTTP request, so the resolver it registers never fetches anything and the
     ///         origin can be one nothing listens on; what matters is that the gateway composed here
     ///         is the gateway that ships, stage 2 included, rather than one with a stage missing that

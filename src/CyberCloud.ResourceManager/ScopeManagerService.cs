@@ -319,8 +319,11 @@ public sealed class ScopeManagerService(
     ///         by-id <c>GET</c> uses, so an element and a read of that element are one shape.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The continuation is the last member <i>examined</i> and not the last one
-    ///         returned.</b> A page made entirely of scopes the caller cannot read must still
+    ///         ⚠
+    ///         <b>
+    ///             The continuation is the last member <i>examined</i> and not the last one
+    ///             returned.
+    ///         </b> A page made entirely of scopes the caller cannot read must still
     ///         advance, or a caller with narrow rights in a wide tenant loops on one page forever.
     ///     </para>
     ///     <para>
@@ -706,8 +709,11 @@ public sealed class ScopeManagerService(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The group is named in the BODY, so a group that is not there is a <c>400</c> and
-    ///         not the canonical <c>404</c>.</b> The 404 rule protects an address the caller typed
+    ///         ⚠
+    ///         <b>
+    ///             The group is named in the BODY, so a group that is not there is a <c>400</c> and
+    ///             not the canonical <c>404</c>.
+    ///         </b> The 404 rule protects an address the caller typed
     ///         into the URL from confirming a sibling's existence; a body property that names a
     ///         group the caller cannot see is answered with the same sentence whether the group is
     ///         absent or hidden — <see cref="IScopeAuthorizer.AuthorizeAsync" /> is asked first and
@@ -923,8 +929,8 @@ public sealed class ScopeManagerService(
                 ErrorCode.Conflict,
                 $"'{scope.Path}' already exists under "
                 + (existing.GetValueOrThrow().Parent.Length == 0
-                    ? "the tenant"
-                    : $"'{existing.GetValueOrThrow().Parent}'")
+                        ? "the tenant"
+                        : $"'{existing.GetValueOrThrow().Parent}'")
                 + " and this request names "
                 + (parentName.Length == 0 ? "the tenant" : $"'{parentName}'")
                 + " as its parent. A group's parent is set at creation and a move is not built — "
@@ -1032,7 +1038,11 @@ public sealed class ScopeManagerService(
     ///         found it. <see cref="IScopeRelationWriter.ClearAsync" /> is the sweep.
     ///     </para>
     /// </remarks>
-    async Task<Result> DeleteManagementGroupAsync(ScopeId scope, CallerContext caller, CancellationToken cancellationToken) {
+    async Task<Result> DeleteManagementGroupAsync(
+        ScopeId scope,
+        CallerContext caller,
+        CancellationToken cancellationToken
+    ) {
         // ⚠ On the group itself, as for a resource group's delete — it exists, so it has an object.
         var permitted = await authorizer.AuthorizeAsync(
             scope,
@@ -1354,9 +1364,11 @@ public sealed class ScopeManagerService(
         // ReBacScopeAuthorizer.ObjectOf spells and what the tuple store keys, so a reader comparing
         // a continuation against a log line sees one spelling.
         var candidates = listed.GetValueOrThrow()
-            .Select(id => (Key: id.ToString("N", CultureInfo.InvariantCulture), Scope: ScopeId.Subscription(tenantScope.TenantId, id)))
+            .Select(id => (Key: id.ToString("N", CultureInfo.InvariantCulture),
+                    Scope: ScopeId.Subscription(tenantScope.TenantId, id))
+            )
             .Where(x => string.CompareOrdinal(x.Key, request.Continuation) > 0)
-            .OrderBy(x => x.Key, StringComparer.Ordinal)
+            .OrderBy(static x => x.Key, StringComparer.Ordinal)
             .Take(request.PageSize)
             .ToArray();
 
@@ -1394,7 +1406,7 @@ public sealed class ScopeManagerService(
         var candidates = listed.GetValueOrThrow()
             .Select(name => (Key: name, Scope: ScopeId.ManagementGroupOf(tenantScope.TenantId, name)))
             .Where(x => string.CompareOrdinal(x.Key, request.Continuation) > 0)
-            .OrderBy(x => x.Key, StringComparer.Ordinal)
+            .OrderBy(static x => x.Key, StringComparer.Ordinal)
             .Take(request.PageSize)
             .ToArray();
 
@@ -1450,9 +1462,11 @@ public sealed class ScopeManagerService(
         // Ordered by name, ordinally — a group's name is unique within its subscription by the
         // grain's own construction, and it is the continuation.
         var candidates = listed.GetValueOrThrow()
-            .Select(name => (Key: name, Scope: ScopeId.Group(subscriptionScope.TenantId, subscriptionScope.SubscriptionId, name)))
+            .Select(name => (Key: name,
+                    Scope: ScopeId.Group(subscriptionScope.TenantId, subscriptionScope.SubscriptionId, name))
+            )
             .Where(x => string.CompareOrdinal(x.Key, request.Continuation) > 0)
-            .OrderBy(x => x.Key, StringComparer.Ordinal)
+            .OrderBy(static x => x.Key, StringComparer.Ordinal)
             .Take(request.PageSize)
             .ToArray();
 
@@ -1489,7 +1503,7 @@ public sealed class ScopeManagerService(
         var readable = candidates.Length > 0
             ? await authorizer.ListReadableAsync(
                 collection,
-                [.. candidates.Select(x => x.Scope)],
+                [.. candidates.Select(static x => x.Scope)],
                 Permissions.Read,
                 request.Caller,
                 cancellationToken
@@ -1497,7 +1511,7 @@ public sealed class ScopeManagerService(
             : ScopeCollectionVisibility.Unanswered;
 
         if (readable.IsAnswered) {
-            visible.AddRange(candidates.Select(x => x.Scope).Where(readable.Visible.Contains));
+            visible.AddRange(candidates.Select(static x => x.Scope).Where(readable.Visible.Contains));
         } else {
             foreach (var (_, scope) in candidates) {
                 var authorized = await authorizer.AuthorizeAsync(
@@ -1597,8 +1611,11 @@ public sealed class ScopeManagerService(
     ///     answered as the <c>400</c> every other body problem gets.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Before the name is turned into a <see cref="ScopeId" />, and that is the whole
-    ///     point.</b> A group named in the URL is validated by <see cref="ScopeId.ParsePath" />; a group
+    ///     ⚠
+    ///     <b>
+    ///         Before the name is turned into a <see cref="ScopeId" />, and that is the whole
+    ///         point.
+    ///     </b> A group named in the URL is validated by <see cref="ScopeId.ParsePath" />; a group
     ///     named in <see cref="ScopeBodyProperties.ManagementGroup" /> reaches
     ///     <see cref="ScopeId.ManagementGroupOf" /> unparsed, and the first thing to look at the name
     ///     after that is <c>GrainKeys.ManagementGroup</c> — through the authorizer's cache key or the

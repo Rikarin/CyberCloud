@@ -45,7 +45,7 @@ public sealed class ConsoleSizingTests {
         // And no extra rows: a preset the chart offers and the API refuses is a values file that
         // renders and a resource body that 400s.
         Regex.Matches(template, @"""(c1\.[a-z]+)""\s+\(dict", RegexOptions.None, TimeSpan.FromSeconds(5))
-            .Select(x => x.Groups[1].Value)
+            .Select(static x => x.Groups[1].Value)
             .Order(StringComparer.Ordinal)
             .ShouldBe(CloudConsoles.Presets.Keys.Order(StringComparer.Ordinal));
     }

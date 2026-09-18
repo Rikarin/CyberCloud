@@ -50,7 +50,9 @@ public sealed class UnknownSurfaceTests {
 
     [Fact]
     public async Task AQueryThatDoesNotParseNamesTheOffset() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}")));
+        using var host = TestHost.Create(
+            new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, "{}"))
+        );
 
         var code = await host.RunAsync(
             "sample",
@@ -74,7 +76,9 @@ public sealed class UnknownSurfaceTests {
 
     [Fact]
     public async Task AnUnknownFunctionNamesTheOnesThatExist() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}")));
+        using var host = TestHost.Create(
+            new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, "{}"))
+        );
 
         var code = await host.RunAsync(
             "sample",

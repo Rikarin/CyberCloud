@@ -53,7 +53,7 @@ public sealed class OtpSeamWiringTests {
         // calls AddCommunicationOtpDelivery when CyberCloud:Identity:OtpDelivery is configured, so
         // the unwired case below is a real deployment shape and UnwiredOtpDeliveryTests drives the
         // refusal end to end through UserGrain.IssueOtpAsync.
-        Seam(silo => silo.AddCyberCloudIdentity()).ShouldBeOfType<UnavailableOtpDelivery>();
+        Seam(static silo => silo.AddCyberCloudIdentity()).ShouldBeOfType<UnavailableOtpDelivery>();
     }
 
     [Fact]
@@ -63,10 +63,10 @@ public sealed class OtpSeamWiringTests {
         // let the unwired hosts pick it up. The second is silent — a host with no communication
         // module in it would fail at the first ACTIVATION with a DI error naming IMessageSender,
         // which is a stack trace rather than the sentence UnavailableOtpDelivery hands the operator.
-        var wired = Seam(silo => silo.AddCyberCloudIdentity()
+        var wired = Seam(static silo => silo.AddCyberCloudIdentity()
                 .AddCommunicationOtpDelivery(Guid.NewGuid(), Guid.NewGuid())
         );
-        var unwired = Seam(silo => silo.AddCyberCloudIdentity());
+        var unwired = Seam(static silo => silo.AddCyberCloudIdentity());
 
         wired.ShouldBeOfType<CommunicationOtpDelivery>();
         unwired.ShouldBeOfType<UnavailableOtpDelivery>();
@@ -109,7 +109,7 @@ public sealed class OtpSeamWiringTests {
         // that goes red under Add.
         var services = Compose(silo => Both(silo, identityFirst));
 
-        services.Count(x => x.ServiceType == typeof(IOtpDeliverySeam))
+        services.Count(static x => x.ServiceType == typeof(IOtpDeliverySeam))
             .ShouldBe(
                 1,
                 "a host that opted in should have one IOtpDeliverySeam registration, not the real one "
@@ -123,8 +123,8 @@ public sealed class OtpSeamWiringTests {
         // Development — SiloIdentityComposition.AddSiloIdentity. A laptop's relay is Mailpit on the
         // AppHost, and without it (a silo run on its own, #93) an enrolment code that goes to
         // UnavailableOtpDelivery is a sign-up nobody can finish, so the code goes to the log.
-        var services = Compose(silo => silo.AddCyberCloudIdentity()
-            .AddDevelopmentOtpDelivery(new FixedEnvironment(Environments.Development))
+        var services = Compose(static silo => silo.AddCyberCloudIdentity()
+                .AddDevelopmentOtpDelivery(new FixedEnvironment(Environments.Development))
         );
 
         services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
@@ -132,7 +132,7 @@ public sealed class OtpSeamWiringTests {
 
         services.BuildServiceProvider().GetRequiredService<IOtpDeliverySeam>().ShouldBeOfType<DevelopmentOtpDelivery>();
 
-        services.Count(x => x.ServiceType == typeof(IOtpDeliverySeam))
+        services.Count(static x => x.ServiceType == typeof(IOtpDeliverySeam))
             .ShouldBe(1, "Replace, for the descriptor-count reason OptingInLeavesNoRefusingSeamBehindIt gives");
     }
 
@@ -145,7 +145,7 @@ public sealed class OtpSeamWiringTests {
         // stays — and DevelopmentOtpDelivery's own constructor would refuse a second time if it were
         // ever registered anyway (DevelopmentOtpDeliveryTests.RefusesToConstructOutsideDevelopment).
         var seam = Seam(silo => silo.AddCyberCloudIdentity()
-            .AddDevelopmentOtpDelivery(new FixedEnvironment(environmentName))
+                .AddDevelopmentOtpDelivery(new FixedEnvironment(environmentName))
         );
 
         seam.ShouldBeOfType<UnavailableOtpDelivery>(
@@ -159,19 +159,21 @@ public sealed class OtpSeamWiringTests {
         // the route is unset, in Development (#93): one seam, which logs the code AND hands it to
         // CommunicationOtpDelivery over the platform's own service — the AppHost's Mailpit.
         var services = Compose(silo => silo.AddCyberCloudIdentity()
-            .AddDevelopmentOtpDelivery(
-                new FixedEnvironment(Environments.Development),
-                new OtpDeliveryRoute { TenantId = Guid.Empty, ServiceId = Guid.NewGuid() }
-            )
+                .AddDevelopmentOtpDelivery(
+                    new FixedEnvironment(Environments.Development),
+                    new OtpDeliveryRoute { TenantId = Guid.Empty, ServiceId = Guid.NewGuid() }
+                )
         );
 
         services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
         services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
-        var seam = services.BuildServiceProvider().GetRequiredService<IOtpDeliverySeam>().ShouldBeOfType<DevelopmentOtpDelivery>();
+        var seam = services.BuildServiceProvider()
+            .GetRequiredService<IOtpDeliverySeam>()
+            .ShouldBeOfType<DevelopmentOtpDelivery>();
         seam.AlsoMails.ShouldBeTrue("the relay is configured, so the code goes to the inbox as well as the console");
 
-        services.Count(x => x.ServiceType == typeof(IOtpDeliverySeam)).ShouldBe(1);
+        services.Count(static x => x.ServiceType == typeof(IOtpDeliverySeam)).ShouldBe(1);
     }
 
     [Theory]
@@ -183,10 +185,10 @@ public sealed class OtpSeamWiringTests {
         // operator's to configure — CyberCloud:Identity:OtpDelivery — and the relay alone opts
         // nobody in. The logging seam's constructor would refuse a second time anyway.
         var seam = Seam(silo => silo.AddCyberCloudIdentity()
-            .AddDevelopmentOtpDelivery(
-                new FixedEnvironment(environmentName),
-                new OtpDeliveryRoute { TenantId = Guid.Empty, ServiceId = Guid.NewGuid() }
-            )
+                .AddDevelopmentOtpDelivery(
+                    new FixedEnvironment(environmentName),
+                    new OtpDeliveryRoute { TenantId = Guid.Empty, ServiceId = Guid.NewGuid() }
+                )
         );
 
         seam.ShouldBeOfType<UnavailableOtpDelivery>();
@@ -196,12 +198,14 @@ public sealed class OtpSeamWiringTests {
     public void AConfiguredRouteWinsOverTheDevelopmentSeam() {
         // The composition calls one or the other, never both; this pins that the real seam is what a
         // developer who wired a communication service gets even if both calls were made.
-        var services = Compose(silo => silo.AddCyberCloudIdentity()
-            .AddDevelopmentOtpDelivery(new FixedEnvironment(Environments.Development))
-            .AddCommunicationOtpDelivery(Guid.NewGuid(), Guid.NewGuid())
+        var services = Compose(static silo => silo.AddCyberCloudIdentity()
+                .AddDevelopmentOtpDelivery(new FixedEnvironment(Environments.Development))
+                .AddCommunicationOtpDelivery(Guid.NewGuid(), Guid.NewGuid())
         );
 
-        services.BuildServiceProvider().GetRequiredService<IOtpDeliverySeam>().ShouldBeOfType<CommunicationOtpDelivery>();
+        services.BuildServiceProvider()
+            .GetRequiredService<IOtpDeliverySeam>()
+            .ShouldBeOfType<CommunicationOtpDelivery>();
     }
 
     [Fact]
@@ -220,7 +224,7 @@ public sealed class OtpSeamWiringTests {
         var builder = new ServiceCollectionSiloBuilder();
         builder.AddCyberCloudIdentity();
 
-        builder.Services.Any(x => x.ServiceType == typeof(IMessageSender))
+        builder.Services.Any(static x => x.ServiceType == typeof(IMessageSender))
             .ShouldBeFalse(
                 "AddCyberCloudIdentity must not drag the sending module into a silo that did not ask "
                 + "for it — module independence, docs/plan/17"

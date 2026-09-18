@@ -87,6 +87,7 @@ public sealed class KubeApiClient(
             var status = ((int?)ex.Response?.StatusCode ?? 0).ToString(CultureInfo.InvariantCulture);
 
             logger?.LogError(
+                ex,
                 "Cluster {Cluster} answered a version probe with HTTP {Status}: {Body}",
                 clusterId,
                 status,
@@ -323,7 +324,7 @@ public sealed class KubeApiClient(
                     },
                     Message = conflicts.Count > 0
                         ? $"{conflicts.Count.ToString(CultureInfo.InvariantCulture)} field(s) on {target} "
-                        + $"are owned by another field manager and were not overwritten: "
+                        + "are owned by another field manager and were not overwritten: "
                         + string.Join(", ", conflicts)
                         : "The apply conflicted with another field manager. " + ex.Response.Content
                 }
@@ -566,7 +567,7 @@ public sealed class KubeApiClient(
     /// </remarks>
     static IEnumerable<GroupVersionKind> Namespaced(V1APIResourceList document, string group, string version) {
         foreach (var resource in document?.Resources ?? []) {
-            if (resource.Namespaced != true) {
+            if (!resource.Namespaced) {
                 continue;
             }
 

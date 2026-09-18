@@ -288,7 +288,7 @@ public sealed class ResourceManagerService(
                 && x.CanonicalPath.IndexOf('/', canonicalPrefix.Length) < 0
             )
             .Where(x => string.CompareOrdinal(x.CanonicalPath, request.Continuation) > 0)
-            .OrderBy(x => x.CanonicalPath, StringComparer.Ordinal)
+            .OrderBy(static x => x.CanonicalPath, StringComparer.Ordinal)
             .Take(request.PageSize)
             .ToArray();
 
@@ -339,7 +339,7 @@ public sealed class ResourceManagerService(
             ? await authorizer.ListReadableAsync(
                 collection,
                 parent,
-                [.. candidates.Select(x => x.ResourceId)],
+                [.. candidates.Select(static x => x.ResourceId)],
                 found.Registration.ReadPermission,
                 request.Caller,
                 cancellationToken
@@ -427,7 +427,7 @@ public sealed class ResourceManagerService(
     ///     collection is still listable — by the per-member <c>Check</c>, which needs no scope. A
     ///     <c>404</c> here would hide members whose own reads answer <c>200</c>.
     /// </remarks>
-    async Task<Guid?> ParentResourceIdOfAsync(TenantGrainFactory tenant, ResourceCollectionId collection) {
+    static async Task<Guid?> ParentResourceIdOfAsync(TenantGrainFactory tenant, ResourceCollectionId collection) {
         if (collection.Member("a").Parent is not { } parent) {
             return Guid.Empty;
         }
@@ -1696,7 +1696,7 @@ public sealed class ResourceManagerService(
             return Result<WriteAccepted>.Failure(
                 ErrorCode.InvalidRequestBody,
                 $"'{request.Action}' is not an action on '{target.Id.Type}'. The declared actions are "
-                + $"[{string.Join(", ", target.Registration.Actions.Select(x => x.Name))}]."
+                + $"[{string.Join(", ", target.Registration.Actions.Select(static x => x.Name))}]."
             );
         }
 
@@ -1900,7 +1900,7 @@ public sealed class ResourceManagerService(
     ///     </para>
     /// </remarks>
     static string ChildRefusal(string path, ImmutableArray<ChildTypeCount> children) {
-        var parts = children.Select(x => string.Create(
+        var parts = children.Select(static x => string.Create(
                 CultureInfo.InvariantCulture,
                 $"{x.Count} of type '{x.Type}'"
             )
@@ -2988,10 +2988,11 @@ public sealed class ResourceManagerService(
     // SchemaProperty. This stops a secret round-tripping through the API; it does not keep one out of
     // Postgres or out of a backup.
 
-    static ImmutableArray<string> Pointers(ResourceSchema schema) => [.. schema.Properties.Select(x => x.JsonPointer)];
+    static ImmutableArray<string> Pointers(ResourceSchema schema) =>
+        [.. schema.Properties.Select(static x => x.JsonPointer)];
 
     static ImmutableArray<string> ReadablePointers(ResourceSchema schema) =>
-        [.. schema.Properties.Where(x => !x.Secret).Select(x => x.JsonPointer)];
+        [.. schema.Properties.Where(static x => !x.Secret).Select(static x => x.JsonPointer)];
 
     static ImmutableDictionary<string, string> TagsFrom(JsonElement body, ResourceTypeRegistration registration) {
         if (!registration.SupportsTags

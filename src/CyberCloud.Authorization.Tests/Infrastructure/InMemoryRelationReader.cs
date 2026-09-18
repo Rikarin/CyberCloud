@@ -45,7 +45,7 @@ public sealed class InMemoryRelationReader : IRelationReader {
     /// <summary>Builds a reader from the tuple grammar.</summary>
     /// <param name="tuples">Tuples as <c>object#relation@subject</c>.</param>
     public static InMemoryRelationReader Parse(params string[] tuples) =>
-        new(tuples.Select(x => RelationTuple.Parse(x).GetValueOrThrow()));
+        new(tuples.Select(static x => RelationTuple.Parse(x).GetValueOrThrow()));
 
     /// <inheritdoc />
     public ValueTask<Result<ObjectRelationsSnapshot>> ReadAsync(

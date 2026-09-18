@@ -71,7 +71,7 @@ public sealed class RabbitmqSizingTests {
         // queues are unreplicated, start cleanly, and report nothing.
         var block = Regex.Match(
             Embedded("rabbitmq.helpers.tpl"),
-            "define \"rabbitmq\\.additionalConfig\" -}}(.*?){{ end",
+            """define "rabbitmq\.additionalConfig" -}}(.*?){{ end""",
             RegexOptions.Singleline,
             TimeSpan.FromSeconds(5)
         );
@@ -101,8 +101,8 @@ public sealed class RabbitmqSizingTests {
     /// <summary>The assignment keys of an INI fragment, in order.</summary>
     /// <param name="fragment">The fragment, possibly carrying Helm actions.</param>
     static string[] Keys(string fragment) => [
-        .. Regex.Matches(fragment, "^\\s*([a-z_.]+)\\s*=", RegexOptions.Multiline, TimeSpan.FromSeconds(5))
-            .Select(x => x.Groups[1].Value)
+        .. Regex.Matches(fragment, """^\s*([a-z_.]+)\s*=""", RegexOptions.Multiline, TimeSpan.FromSeconds(5))
+            .Select(static x => x.Groups[1].Value)
     ];
 
     static string Embedded(string name) {

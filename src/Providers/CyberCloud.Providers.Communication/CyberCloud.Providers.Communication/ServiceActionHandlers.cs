@@ -34,7 +34,10 @@ public sealed class ServiceSendHandler(IMessageSender sender) : IResourceActionH
     public string Action => CommunicationServices.SendAction;
 
     /// <inheritdoc />
-    public async Task<Result<string>> InvokeAsync(ActionContext context, CancellationToken cancellationToken = default) {
+    public async Task<Result<string>> InvokeAsync(
+        ActionContext context,
+        CancellationToken cancellationToken = default
+    ) {
         var request = CommunicationServices.ToSendRequest(CommunicationServices.ServiceIdOf(context.Id), context.Body);
         if (request.TryGetError(out var malformed)) {
             return Result<string>.Failure(malformed);
@@ -67,14 +70,22 @@ public sealed class ServiceStatusHandler(IMessageSender sender) : IResourceActio
     public string Action => CommunicationServices.StatusAction;
 
     /// <inheritdoc />
-    public async Task<Result<string>> InvokeAsync(ActionContext context, CancellationToken cancellationToken = default) {
+    public async Task<Result<string>> InvokeAsync(
+        ActionContext context,
+        CancellationToken cancellationToken = default
+    ) {
         var key = context.Body.ValueKind == JsonValueKind.Object
             && context.Body.TryGetProperty("idempotencyKey", out var found)
             && found.ValueKind == JsonValueKind.String
                 ? found.GetString() ?? string.Empty
                 : string.Empty;
 
-        var status = await sender.GetStatusAsync(context.Id.TenantId, CommunicationServices.ServiceIdOf(context.Id), key, cancellationToken);
+        var status = await sender.GetStatusAsync(
+            context.Id.TenantId,
+            CommunicationServices.ServiceIdOf(context.Id),
+            key,
+            cancellationToken
+        );
 
         return status.TryGetError(out var missing)
             ? Result<string>.Failure(missing)
@@ -95,7 +106,10 @@ public sealed class ServiceCheckSuppressionHandler(ICommunicationControlPlane pl
     public string Action => CommunicationServices.CheckSuppressionAction;
 
     /// <inheritdoc />
-    public async Task<Result<string>> InvokeAsync(ActionContext context, CancellationToken cancellationToken = default) {
+    public async Task<Result<string>> InvokeAsync(
+        ActionContext context,
+        CancellationToken cancellationToken = default
+    ) {
         var channel = ChannelKinds.Parse(Text(context.Body, "channel"));
         if (channel == ChannelKind.Unknown) {
             return Result<string>.Failure(
@@ -119,7 +133,9 @@ public sealed class ServiceCheckSuppressionHandler(ICommunicationControlPlane pl
     }
 
     internal static string Text(JsonElement body, string name) =>
-        body.ValueKind == JsonValueKind.Object && body.TryGetProperty(name, out var found) && found.ValueKind == JsonValueKind.String
+        body.ValueKind == JsonValueKind.Object
+        && body.TryGetProperty(name, out var found)
+        && found.ValueKind == JsonValueKind.String
             ? found.GetString() ?? string.Empty
             : string.Empty;
 }
@@ -137,7 +153,10 @@ public sealed class ServiceListSuppressionsHandler(ICommunicationControlPlane pl
     public string Action => CommunicationServices.ListSuppressionsAction;
 
     /// <inheritdoc />
-    public async Task<Result<string>> InvokeAsync(ActionContext context, CancellationToken cancellationToken = default) {
+    public async Task<Result<string>> InvokeAsync(
+        ActionContext context,
+        CancellationToken cancellationToken = default
+    ) {
         var spelled = ServiceCheckSuppressionHandler.Text(context.Body, "channel");
         var channel = ChannelKinds.Parse(spelled);
 
@@ -146,12 +165,19 @@ public sealed class ServiceListSuppressionsHandler(ICommunicationControlPlane pl
         if (channel == ChannelKind.Unknown && spelled.Length > 0) {
             return Result<string>.Failure(
                 ErrorCode.InvalidRequestBody,
-                $"'{spelled}' is not a channel. Name one of " + string.Join(", ", ChannelKinds.AllowedValues) + ", or none for all of them.",
+                $"'{spelled}' is not a channel. Name one of "
+                + string.Join(", ", ChannelKinds.AllowedValues)
+                + ", or none for all of them.",
                 "/channel"
             );
         }
 
-        var listed = await plane.ListSuppressionsAsync(context.Id.TenantId, CommunicationServices.ServiceIdOf(context.Id), channel, cancellationToken);
+        var listed = await plane.ListSuppressionsAsync(
+            context.Id.TenantId,
+            CommunicationServices.ServiceIdOf(context.Id),
+            channel,
+            cancellationToken
+        );
 
         return listed.TryGetError(out var failed)
             ? Result<string>.Failure(failed)
@@ -180,7 +206,9 @@ public sealed class TemplateRenderHandler : IResourceActionHandler {
     /// <inheritdoc />
     public Task<Result<string>> InvokeAsync(ActionContext context, CancellationToken cancellationToken = default) {
         var arguments = CommunicationServices.ParseArguments(
-            context.Body.ValueKind == JsonValueKind.Object && context.Body.TryGetProperty("arguments", out var found) ? found : null
+            context.Body.ValueKind == JsonValueKind.Object && context.Body.TryGetProperty("arguments", out var found)
+                ? found
+                : null
         );
 
         if (arguments.TryGetError(out var malformed)) {
@@ -188,7 +216,11 @@ public sealed class TemplateRenderHandler : IResourceActionHandler {
         }
 
         var version = CommunicationTemplates.VersionOf(context.Desired);
-        var rendered = TemplateRenderer.Render(version, CommunicationTemplates.BodyOf(context.Desired).Locale, arguments.GetValueOrThrow());
+        var rendered = TemplateRenderer.Render(
+            version,
+            CommunicationTemplates.BodyOf(context.Desired).Locale,
+            arguments.GetValueOrThrow()
+        );
 
         return Task.FromResult(
             rendered.TryGetError(out var refused)

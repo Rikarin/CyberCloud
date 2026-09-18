@@ -92,7 +92,7 @@ public sealed class StorageSizingTests {
         var helpers = Embedded("seaweedfs.helpers.tpl");
         var block = Regex.Match(
             helpers,
-            "define \"seaweedfs\\.controlPlaneResources\" -}}(.*?){{- end",
+            """define "seaweedfs\.controlPlaneResources" -}}(.*?){{- end""",
             RegexOptions.Singleline,
             TimeSpan.FromSeconds(5)
         );

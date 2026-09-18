@@ -120,7 +120,10 @@ public static class ObjectKeys {
         }
 
         if (key[0] == '/') {
-            return Result.Failure(ErrorCode.InvalidRequestBody, $"'{key}' starts with a slash; keys are relative to the bucket.");
+            return Result.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"'{key}' starts with a slash; keys are relative to the bucket."
+            );
         }
 
         foreach (var segment in key.Split('/')) {

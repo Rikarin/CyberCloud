@@ -78,7 +78,14 @@ public sealed class ChaosReport {
     /// <param name="reason">What the machine lacks, precisely enough that the reader knows what would change it.</param>
     /// <param name="numbers">Anything that was measured on the way to that conclusion, or empty.</param>
     public void Vacuous(int number, string reason, IReadOnlyDictionary<string, double>? numbers = null) =>
-        Record(new(number, InvariantStatus.Vacuous, reason, numbers ?? new Dictionary<string, double>(StringComparer.Ordinal)));
+        Record(
+            new(
+                number,
+                InvariantStatus.Vacuous,
+                reason,
+                numbers ?? new Dictionary<string, double>(StringComparer.Ordinal)
+            )
+        );
 
     /// <summary>Where the file goes: the build's variable, or beside the host.</summary>
     public static string ResultsPath =>
@@ -93,23 +100,21 @@ public sealed class ChaosReport {
 
         var invariants = new JsonObject();
 
-        foreach (var outcome in outcomes.Values.OrderBy(x => x.Number)) {
+        foreach (var outcome in outcomes.Values.OrderBy(static x => x.Number)) {
             var numbers = new JsonObject();
 
-            foreach (var (name, value) in outcome.Numbers.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+            foreach (var (name, value) in outcome.Numbers.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
                 numbers[name] = value;
             }
 
             invariants[outcome.Number.ToString(CultureInfo.InvariantCulture)] = new JsonObject {
-                ["status"] = outcome.Status.ToString(),
-                ["detail"] = outcome.Detail,
-                ["numbers"] = numbers
+                ["status"] = outcome.Status.ToString(), ["detail"] = outcome.Detail, ["numbers"] = numbers
             };
         }
 
         var facts = new JsonObject();
 
-        foreach (var (name, value) in topology.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+        foreach (var (name, value) in topology.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
             facts[name] = value;
         }
 
@@ -128,8 +133,6 @@ public sealed class ChaosReport {
     void Record(InvariantOutcome outcome) {
         outcomes[outcome.Number] = outcome;
 
-        Console.WriteLine(
-            $"[CyberCloud.Chaos] invariant {outcome.Number}: {outcome.Status} — {outcome.Detail}"
-        );
+        Console.WriteLine($"[CyberCloud.Chaos] invariant {outcome.Number}: {outcome.Status} — {outcome.Detail}");
     }
 }

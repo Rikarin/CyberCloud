@@ -668,7 +668,7 @@ partial class Build {
                         + "through ReconcileContext.View and hear about it through ReconcileContext.Watch — the "
                         + "write path's steps, the seams it calls and the grains behind them are the manager's alone"
                     )
-                )
+            )
                 .Concat(providers.SelectMany(ManagerImplementationViolations))
         );
 
@@ -758,8 +758,11 @@ partial class Build {
     ///     that is not the registration call.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Two different measures for the two kinds of assembly, and the split is where the
-    ///     legitimate use is.</b> An implementation or <c>.Contracts</c> assembly has no reason to
+    ///     ⚠
+    ///     <b>
+    ///         Two different measures for the two kinds of assembly, and the split is where the
+    ///         legitimate use is.
+    ///     </b> An implementation or <c>.Contracts</c> assembly has no reason to
     ///     see the manager at all, so for those the edge is the violation, read the way rule 2 reads
     ///     it — a <c>ProjectReference</c> whose only use the compiler erased still declares the
     ///     dependency. A <c>.Application</c> assembly must reference it, for one static class, so
@@ -1666,8 +1669,11 @@ partial class Build {
     ///         "the file in git is not valid C#" is the sentence issue #73 is about.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>And since issue #79 it asks one question the compiler cannot: is any wire name
-    ///         declared twice by one type.</b> Issue #73's <c>CS0102</c> fix renamed the colliding
+    ///         ⚠
+    ///         <b>
+    ///             And since issue #79 it asks one question the compiler cannot: is any wire name
+    ///             declared twice by one type.
+    ///         </b> Issue #73's <c>CS0102</c> fix renamed the colliding
     ///         identifiers and left each <c>[JsonPropertyName]</c> as the leaf's own name, so the
     ///         file compiled for ten days carrying fourteen duplicated wire names across eight
     ///         types — <c>"mode"</c> twice on <c>ValkeyCacheData</c>, <c>"enabled"</c> three times
@@ -1753,7 +1759,10 @@ partial class Build {
     // ── Gates: the generated Python and Go SDKs compile — issue #40, not in docs/plan/23 ──────
 
     /// <summary>Where the Python SDK is checked in — <c>PythonSdkEmitter.DirectoryName</c>.</summary>
-    /// <remarks>⚠ A literal, for <see cref="SdkSurfaceDirectory" />'s reason: <c>build/_build.csproj</c> references nothing under <c>src/</c>.</remarks>
+    /// <remarks>
+    ///     ⚠ A literal, for <see cref="SdkSurfaceDirectory" />'s reason: <c>build/_build.csproj</c> references nothing
+    ///     under <c>src/</c>.
+    /// </remarks>
     const string PythonSdkDirectory = "sdk-python";
 
     /// <summary>Where the Go SDK is checked in — <c>GoSdkEmitter.DirectoryName</c>.</summary>
@@ -1765,8 +1774,11 @@ partial class Build {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>○ when neither <c>python</c> nor <c>python3</c> is an interpreter on
-    ///         <c>PATH</c>, never ✔.</b> The row above this one
+    ///         ⚠
+    ///         <b>
+    ///             ○ when neither <c>python</c> nor <c>python3</c> is an interpreter on
+    ///             <c>PATH</c>, never ✔.
+    ///         </b> The row above this one
     ///         had to be added because a generated surface nothing consumed shipped four defect
     ///         families green; a Python package nothing interprets is the same state one language
     ///         over, and a row that said ✔ on a machine with no interpreter would be that state
@@ -1794,7 +1806,12 @@ partial class Build {
         var classes = GeneratedPackageSurface.Declarations(files, "class ", indented: true);
 
         if (files.Count == 0) {
-            return GateOutcome.From(Gate, 0, $"file(s) under generated/{PythonSdkDirectory}, so there was nothing to hand to an interpreter", []);
+            return GateOutcome.From(
+                Gate,
+                0,
+                $"file(s) under generated/{PythonSdkDirectory}, so there was nothing to hand to an interpreter",
+                []
+            );
         }
 
         var violations = new List<string>();
@@ -1803,8 +1820,7 @@ partial class Build {
         // next to every module it compiles, and a gate that littered generated/ would make the
         // Generated surfaces row report a stale file of its own making on the next run.
         var environment = new Dictionary<string, string>(StringComparer.Ordinal) {
-            ["PYTHONPYCACHEPREFIX"] = ArtifactsDirectory / "pycache",
-            ["PYTHONDONTWRITEBYTECODE"] = "1"
+            ["PYTHONPYCACHEPREFIX"] = ArtifactsDirectory / "pycache", ["PYTHONDONTWRITEBYTECODE"] = "1"
         };
 
         // ⚠ `python` first, then `python3`, and each is probed before it is used, because "on PATH"
@@ -1827,7 +1843,9 @@ partial class Build {
             var probe = GeneratedPackageSurface.Run(found, "--version", root, environment);
 
             if (probe.ExitCode != 0) {
-                reasons.Add($"`{candidate}` is on PATH and exited {probe.ExitCode} on --version, so it is not an interpreter");
+                reasons.Add(
+                    $"`{candidate}` is on PATH and exited {probe.ExitCode} on --version, so it is not an interpreter"
+                );
                 continue;
             }
 
@@ -1846,13 +1864,18 @@ partial class Build {
                 []
             );
         }
+
         var compiled = GeneratedPackageSurface.Run(python, $"-m compileall -q -f {root}", root, environment);
 
         if (compiled.ExitCode != 0) {
-            violations.AddRange(compiled.Problems.Select(x => $"generated/{PythonSdkDirectory} does not compile — {x}"));
+            violations.AddRange(
+                compiled.Problems.Select(x => $"generated/{PythonSdkDirectory} does not compile — {x}")
+            );
 
             if (!compiled.Problems.Any()) {
-                violations.Add($"`python -m compileall` over generated/{PythonSdkDirectory} exited {compiled.ExitCode} and said nothing");
+                violations.Add(
+                    $"`python -m compileall` over generated/{PythonSdkDirectory} exited {compiled.ExitCode} and said nothing"
+                );
             }
         }
 
@@ -1876,10 +1899,14 @@ partial class Build {
             );
 
             if (checkedTypes.ExitCode != 0) {
-                violations.AddRange(checkedTypes.Problems.Select(x => $"generated/{PythonSdkDirectory} does not type-check — {x}"));
+                violations.AddRange(
+                    checkedTypes.Problems.Select(x => $"generated/{PythonSdkDirectory} does not type-check — {x}")
+                );
 
                 if (!checkedTypes.Problems.Any()) {
-                    violations.Add($"`mypy --strict` over generated/{PythonSdkDirectory} exited {checkedTypes.ExitCode} and said nothing");
+                    violations.Add(
+                        $"`mypy --strict` over generated/{PythonSdkDirectory} exited {checkedTypes.ExitCode} and said nothing"
+                    );
                 }
             }
         }
@@ -1890,8 +1917,8 @@ partial class Build {
             $"file(s) under generated/{PythonSdkDirectory} declaring {classes} class(es), byte-compiled by "
             + $"`{interpreter} -m compileall` ({version})"
             + (typed
-                ? " and type-checked by `mypy --strict`"
-                : "; ⚠ mypy is not installed, so the types were not checked — `pip install mypy` closes that gap"),
+                    ? " and type-checked by `mypy --strict`"
+                    : "; ⚠ mypy is not installed, so the types were not checked — `pip install mypy` closes that gap"),
             violations
         );
     }
@@ -1923,7 +1950,12 @@ partial class Build {
         var types = GeneratedPackageSurface.Declarations(files, "type ", indented: false);
 
         if (files.Count == 0) {
-            return GateOutcome.From(Gate, 0, $"file(s) under generated/{GoSdkDirectory}, so there was nothing to hand to a compiler", []);
+            return GateOutcome.From(
+                Gate,
+                0,
+                $"file(s) under generated/{GoSdkDirectory}, so there was nothing to hand to a compiler",
+                []
+            );
         }
 
         if (GeneratedPackageSurface.Resolve("go", out var absent) is not { } go) {
@@ -1952,7 +1984,9 @@ partial class Build {
             violations.AddRange(vetted.Problems.Select(x => $"generated/{GoSdkDirectory} does not vet — {x}"));
 
             if (!vetted.Problems.Any()) {
-                violations.Add($"`go vet ./...` over generated/{GoSdkDirectory} exited {vetted.ExitCode} and said nothing");
+                violations.Add(
+                    $"`go vet ./...` over generated/{GoSdkDirectory} exited {vetted.ExitCode} and said nothing"
+                );
             }
         }
 
@@ -1983,7 +2017,10 @@ partial class Build {
             Gate,
             files.Count,
             $"file(s) under generated/{GoSdkDirectory} declaring {types} type(s), vetted by `go vet ./...` as one "
-            + "module" + (gofmt is null ? "; ⚠ gofmt was not found beside go, so formatting was not checked" : " and checked by `gofmt -l`"),
+            + "module"
+            + (gofmt is null
+                    ? "; ⚠ gofmt was not found beside go, so formatting was not checked"
+                    : " and checked by `gofmt -l`"),
             violations
         );
     }
@@ -3003,7 +3040,7 @@ partial class Build {
             .Descendants()
             .Where(x => string.Equals(x.Name.LocalName, "ProjectReference", StringComparison.Ordinal))
             .Any(x => (x.Attribute("Include")?.Value ?? string.Empty)
-                    .EndsWith("CyberCloud.Analyzers.csproj", StringComparison.Ordinal)
+                .EndsWith("CyberCloud.Analyzers.csproj", StringComparison.Ordinal)
                 && string.Equals(x.Attribute("OutputItemType")?.Value, "Analyzer", StringComparison.Ordinal)
             );
 

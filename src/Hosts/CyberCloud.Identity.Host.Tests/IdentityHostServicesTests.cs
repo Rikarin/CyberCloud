@@ -6,7 +6,6 @@ using CyberCloud.Identity.SignIn;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 namespace CyberCloud.Identity.Host.Tests;
 
@@ -49,7 +48,9 @@ public sealed class IdentityHostServicesTests {
         services.AddSingleton<IHostEnvironment>(TestEnvironment.Development);
 
         services.AddIdentityHostApi(
-            new ConfigurationBuilder().AddInMemoryCollection(configuration.ToDictionary(x => x.Key, x => x.Value))
+            new ConfigurationBuilder().AddInMemoryCollection(
+                configuration.ToDictionary(static x => x.Key, static x => x.Value)
+            )
                 .Build()
         );
 
@@ -71,7 +72,7 @@ public sealed class IdentityHostServicesTests {
     public void TheWebAuthnServiceResolvesSoThePasskeyEndpointsAreReal() =>
         // Fido2PasskeyService needs an IFido2, which comes from AddFido2 — a call it is easy to omit
         // because nothing else in the host names it. Without it, /api/signin/passkey/begin is a 500.
-        Should.NotThrow(() => Build().GetRequiredService<IPasskeyService>());
+        Should.NotThrow(static () => Build().GetRequiredService<IPasskeyService>());
 
     [Fact]
     public void TheTenantComesFromConfiguration() {
@@ -108,29 +109,40 @@ public sealed class IdentityHostServicesTests {
             ($"{IdentityHostOptions.SectionName}:TrustedProxies:1", "10.43.0.0/16")
         );
 
-        var forwarded = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>>().Value;
+        var forwarded =
+            provider.GetRequiredService<
+                Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>>().Value;
 
         forwarded.KnownProxies.ShouldBe([System.Net.IPAddress.Parse("10.42.0.17")]);
         forwarded.KnownIPNetworks.ShouldBe([System.Net.IPNetwork.Parse("10.43.0.0/16")]);
         forwarded.ForwardLimit.ShouldBe(1);
-        TrustedProxies.AreConfigured(provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<IdentityHostOptions>>().Value).ShouldBeTrue();
+        TrustedProxies.AreConfigured(
+            provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<IdentityHostOptions>>().Value
+        )
+            .ShouldBeTrue();
 
         // Empty: nothing on either list — not even the framework's loopback default — and the
         // middleware stays out of the pipeline, because a cleared list is "believe anybody", which
         // TrustedProxies' remarks explain.
         using var unset = Build();
 
-        var untouched = unset.GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>>().Value;
+        var untouched =
+            unset.GetRequiredService<
+                Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>>().Value;
 
         untouched.KnownProxies.ShouldBeEmpty();
         untouched.KnownIPNetworks.ShouldBeEmpty();
-        TrustedProxies.AreConfigured(unset.GetRequiredService<Microsoft.Extensions.Options.IOptions<IdentityHostOptions>>().Value).ShouldBeFalse();
+        TrustedProxies.AreConfigured(
+            unset.GetRequiredService<Microsoft.Extensions.Options.IOptions<IdentityHostOptions>>().Value
+        )
+            .ShouldBeFalse();
 
         // A value that is neither: the first resolution — start-up — fails with the setting's name.
         using var broken = Build(($"{IdentityHostOptions.SectionName}:TrustedProxies:0", "the-ingress"));
 
         var refused = Should.Throw<InvalidOperationException>(() =>
-            broken.GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>>().Value
+            broken.GetRequiredService<
+                Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>>().Value
         );
 
         refused.Message.ShouldContain("CyberCloud:Identity:TrustedProxies");

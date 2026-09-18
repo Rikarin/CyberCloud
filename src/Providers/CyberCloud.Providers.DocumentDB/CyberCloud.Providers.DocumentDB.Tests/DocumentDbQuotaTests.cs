@@ -68,8 +68,8 @@ public sealed class DocumentDbQuotaTests {
         // physical copy, not a share of one volume. A meter that reserved `storage.size` once would
         // under-reserve by (instances - 1) volumes, which on a five-instance account is four times the
         // declared figure.
-        using var one = JsonDocument.Parse(DocumentDbAccounts.Body(ClusterId, instances: 1));
-        using var five = JsonDocument.Parse(DocumentDbAccounts.Body(ClusterId, instances: 5));
+        using var one = JsonDocument.Parse(DocumentDbAccounts.Body(ClusterId, 1));
+        using var five = JsonDocument.Parse(DocumentDbAccounts.Body(ClusterId, 5));
 
         var storage = Derivation(QuotaMeter.StorageGb);
 
@@ -79,7 +79,7 @@ public sealed class DocumentDbQuotaTests {
         // ⚠ And the gateway pods add nothing to it. FerretDB writes nothing durable, which is the same
         // reason it is a Deployment rather than a StatefulSet.
         using var manyGateways =
-            JsonDocument.Parse(DocumentDbAccounts.Body(ClusterId, instances: 1, gatewayReplicas: 10));
+            JsonDocument.Parse(DocumentDbAccounts.Body(ClusterId, 1, gatewayReplicas: 10));
 
         Amount(storage, manyGateways.RootElement).ShouldBe(20m);
     }
@@ -98,7 +98,7 @@ public sealed class DocumentDbQuotaTests {
         foreach (var instances in new[] { 1, 5 }) {
             foreach (var gateways in new[] { 1, 10 }) {
                 using var body = JsonDocument.Parse(
-                    DocumentDbAccounts.Body(ClusterId, instances: instances, gatewayReplicas: gateways)
+                    DocumentDbAccounts.Body(ClusterId, instances, gatewayReplicas: gateways)
                 );
 
                 foreach (var derivation in derivations) {

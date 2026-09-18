@@ -10,8 +10,11 @@ namespace CyberCloud.ResourceGraph;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Never throws out of <see cref="PublishAsync" />, because the write path treats a
-///         failure as a warning and an exception as a 500.</b> <c>IResourceChangedSink</c>'s contract
+///         ⚠
+///         <b>
+///             Never throws out of <see cref="PublishAsync" />, because the write path treats a
+///             failure as a warning and an exception as a 500.
+///         </b> <c>IResourceChangedSink</c>'s contract
 ///         is a <see cref="Result" /> — docs/plan/08 § The resource-graph projection makes the
 ///         projection eventually consistent, so a create is not refused because a list will lag — and
 ///         a NATS client that cannot reach its server throws. Every path here turns that into a
@@ -51,7 +54,7 @@ public sealed class NatsResourceChangedSink : IResourceChangedSink, IAsyncDispos
         this.options = options;
         this.logger = logger;
         connection = ResourceChangedLog.Connect(options, "cybercloud-resource-changed-publisher");
-        jetStream = new NatsJSContext(connection);
+        jetStream = new(connection);
     }
 
     /// <inheritdoc />
@@ -86,26 +89,29 @@ public sealed class NatsResourceChangedSink : IResourceChangedSink, IAsyncDispos
             // below turns into the Result the caller expects. ProjectionRoundTripTests
             // .ARetriedPublishIsOneMessageOnTheStream is what found the order mattered.
             if (acknowledged.Duplicate) {
-                logger.LogDebug("resource-changed {Subject} at version {Version} was already on the stream", subject, change.Version);
+                logger.LogDebug(
+                    "resource-changed {Subject} at version {Version} was already on the stream",
+                    subject,
+                    change.Version
+                );
                 return Result.Success;
             }
 
             acknowledged.EnsureSuccess();
 
             return Result.Success;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+        } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
             throw;
-        }
-        catch (OperationCanceledException) {
+        } catch (OperationCanceledException) {
             return Result.Failure(
                 ErrorCode.InternalError,
                 $"Publishing resource-changed on '{subject}' to NATS at '{ResourceChangedLog.RedactedUrl(options.NatsUrl)}' did not complete "
                 + $"within {options.PublishTimeout.TotalSeconds:0}s. The write stands; the resource-graph "
                 + "projection is behind by this event until the resource changes again."
             );
-        }
-        catch (Exception exception) when (exception is NatsException or TimeoutException or InvalidOperationException) {
+        } catch (Exception exception) when (exception is NatsException
+                                                or TimeoutException
+                                                or InvalidOperationException) {
             return Result.Failure(
                 ErrorCode.InternalError,
                 $"Publishing resource-changed on '{subject}' to NATS at '{ResourceChangedLog.RedactedUrl(options.NatsUrl)}' failed: "
@@ -129,8 +135,7 @@ public sealed class NatsResourceChangedSink : IResourceChangedSink, IAsyncDispos
 
             await ResourceChangedLog.EnsureAsync(jetStream, options, cancellationToken);
             declared = true;
-        }
-        finally {
+        } finally {
             declaring.Release();
         }
     }

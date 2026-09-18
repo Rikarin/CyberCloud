@@ -45,7 +45,7 @@ public sealed class CyberCloudPipeline : IDisposable {
         ArgumentNullException.ThrowIfNull(options);
 
         // Innermost first: each handler wraps the one built before it.
-        HttpMessageHandler handler = options.Transport ?? CreateDefaultTransport();
+        var handler = options.Transport ?? CreateDefaultTransport();
 
         handler = new BearerTokenHandler(credential, options.Scopes) { InnerHandler = handler };
         handler = new RetryHandler(options.Retry) { InnerHandler = handler };
@@ -57,7 +57,7 @@ public sealed class CyberCloudPipeline : IDisposable {
         // retry and every backoff, so a legitimate 429-with-Retry-After-60 followed by a slow attempt
         // would surface as a TaskCanceledException that looks like a caller cancellation. Cancellation
         // in this SDK means the caller asked; nothing else is allowed to produce it.
-        client = new HttpClient(handler, disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan };
+        client = new(handler, true) { Timeout = Timeout.InfiniteTimeSpan };
     }
 
     /// <summary>Sends a request and buffers the response.</summary>
@@ -79,7 +79,7 @@ public sealed class CyberCloudPipeline : IDisposable {
     }
 
     static SocketsHttpHandler CreateDefaultTransport() =>
-        new SocketsHttpHandler {
+        new() {
             // The control plane is chatty in bursts and idle between them; recycling the connection
             // every two minutes is what keeps a client that lives for days from pinning itself to a
             // gateway pod that has since been drained.

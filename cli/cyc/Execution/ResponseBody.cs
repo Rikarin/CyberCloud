@@ -43,7 +43,7 @@ sealed class ResponseBody : IDisposable {
         try {
             var parsed = JsonDocument.Parse(response.Content);
 
-            return new ResponseBody(parsed, Payload.Of(parsed.RootElement));
+            return new(parsed, Payload.Of(parsed.RootElement));
         } catch (JsonException e) {
             throw new CycClientException(
                 $"The response to this request was not JSON (status {response.Status}, "

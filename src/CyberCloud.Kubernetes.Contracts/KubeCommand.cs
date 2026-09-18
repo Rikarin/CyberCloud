@@ -101,8 +101,11 @@ public sealed record KubeCommand {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Read off the live object's <c>cybercloud.io/resource-id</c> label, never
-    ///         supplied.</b> It is what a cluster connection keys two refusals on: a co-owned apply
+    ///         ⚠
+    ///         <b>
+    ///             Read off the live object's <c>cybercloud.io/resource-id</c> label, never
+    ///             supplied.
+    ///         </b> It is what a cluster connection keys two refusals on: a co-owned apply
     ///         against an object that is not there is refused rather than creating an unlabelled
     ///         object under the owner's name, and a co-owned <c>DeleteAsync</c> withdraws the fragment
     ///         rather than deleting the owner's object.
@@ -185,11 +188,15 @@ public sealed record KubeCommand {
         }
 
         if (OwnerResourceId == ResourceId) {
-            return Refuse("names itself as the owner. The co-owned mode is for a second writer; the owner applies with no CoWriting call.");
+            return Refuse(
+                "names itself as the owner. The co-owned mode is for a second writer; the owner applies with no CoWriting call."
+            );
         }
 
         if (Force) {
-            return Refuse("has Force set. A co-writer never forces: a conflict with the owner's fields is drift with a name.");
+            return Refuse(
+                "has Force set. A co-writer never forces: a conflict with the owner's fields is drift with a name."
+            );
         }
 
         if (ResourceGroup.Length == 0) {
@@ -200,7 +207,8 @@ public sealed record KubeCommand {
             );
         }
 
-        if (!KubeLabels.TryReadCoWriterFieldManager(FieldManager, out _, out var managerOwner) || managerOwner != OwnerResourceId) {
+        if (!KubeLabels.TryReadCoWriterFieldManager(FieldManager, out _, out var managerOwner)
+            || managerOwner != OwnerResourceId) {
             return Refuse(
                 $"applies under field manager '{FieldManager}', and a co-owned apply goes under "
                 + $"'cybercloud/{{ownerType}}/{OwnerResourceId:D}' — KubeLabels.CoWriterFieldManager, named for "
@@ -259,11 +267,15 @@ public sealed record KubeCommand {
         }
 
         if (root.TryGetProperty("status", out _)) {
-            return Refuse("carries 'status'. Status is the controller's report on the owner's object, and a co-writer applies desired state only.");
+            return Refuse(
+                "carries 'status'. Status is the controller's report on the owner's object, and a co-writer applies desired state only."
+            );
         }
 
         if (!root.TryGetProperty("metadata", out var metadata) || metadata.ValueKind != JsonValueKind.Object) {
-            return Refuse("has a body without 'metadata'. A co-owned apply carries metadata.resourceVersion as its optimistic lock.");
+            return Refuse(
+                "has a body without 'metadata'. A co-owned apply carries metadata.resourceVersion as its optimistic lock."
+            );
         }
 
         if (!metadata.TryGetProperty("resourceVersion", out var version)
@@ -322,8 +334,11 @@ public sealed record KubeCommand {
     ///         that is the object it means.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The subscription and the group are boundaries, and the object's labels draw
-    ///         them.</b> A co-writer's caller was authorized on the co-writer's address alone, so what
+    ///         ⚠
+    ///         <b>
+    ///             The subscription and the group are boundaries, and the object's labels draw
+    ///             them.
+    ///         </b> A co-writer's caller was authorized on the co-writer's address alone, so what
     ///         lets it change the owner's object is that write on one implies write on the other —
     ///         which holds inside one resource group and nowhere wider (docs/plan/07 grants roles on
     ///         subscriptions and groups). The builder held the same labels against the writer when it
@@ -358,7 +373,9 @@ public sealed record KubeCommand {
 
         var managedBy = Label(KubeLabels.ManagedBy);
         if (!string.Equals(managedBy, KubeLabels.ManagedByValue, StringComparison.Ordinal)) {
-            return Refuse($"is managed by '{managedBy}', not by this platform. A co-writer writes only onto an object a Cyber Cloud resource rendered.");
+            return Refuse(
+                $"is managed by '{managedBy}', not by this platform. A co-writer writes only onto an object a Cyber Cloud resource rendered."
+            );
         }
 
         var ownerValue = Label(KubeLabels.ResourceId);
@@ -373,7 +390,9 @@ public sealed record KubeCommand {
 
         var tenant = Label(KubeLabels.TenantId);
         if (!string.Equals(tenant, KubeLabels.GuidValue(TenantId), StringComparison.Ordinal)) {
-            return Refuse($"belongs to tenant {tenant} and the co-writer is in tenant {TenantId:D}. A co-writer never reaches across a tenant.");
+            return Refuse(
+                $"belongs to tenant {tenant} and the co-writer is in tenant {TenantId:D}. A co-writer never reaches across a tenant."
+            );
         }
 
         var subscription = Label(KubeLabels.SubscriptionId);

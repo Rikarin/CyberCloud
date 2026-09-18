@@ -50,7 +50,7 @@ static class HostCommands {
                 var key = TokenCache.KeyFor(
                     CyberCloudAuthorityHosts.Default,
                     CyberCloudCliCredential.CliClientId,
-                    tenantId: null
+                    null
                 );
 
                 await cache.RemoveAsync(key, cancellationToken).ConfigureAwait(false);

@@ -59,8 +59,8 @@ public sealed class ResourceWatchTests(IsolationCluster cluster) {
 
         // Acknowledged — the way the driver does it after a converged pass — and gone.
         (await cluster.For(IsolationCluster.Victim)
-            .GetGrain<IResourceGrain>(GrainKeys.Resource(watcher.Id))
-            .AcknowledgeChangesAsync(input.ChangeSequence)).IsSuccess.ShouldBeTrue();
+                .GetGrain<IResourceGrain>(GrainKeys.Resource(watcher.Id))
+                .AcknowledgeChangesAsync(input.ChangeSequence)).IsSuccess.ShouldBeTrue();
 
         (await Pending(IsolationCluster.Victim, watcher.Id)).ShouldBeEmpty();
 
@@ -83,7 +83,9 @@ public sealed class ResourceWatchTests(IsolationCluster cluster) {
 
         await PatchAsync(watched, Probes, IsolationCluster.Victim, IsolationCluster.VictimUser);
 
-        (await Pending(IsolationCluster.Victim, watcher.Id)).ShouldBeEmpty("an ungranted watcher learned a resource's path");
+        (await Pending(IsolationCluster.Victim, watcher.Id)).ShouldBeEmpty(
+            "an ungranted watcher learned a resource's path"
+        );
     }
 
     [Fact]
@@ -119,15 +121,22 @@ public sealed class ResourceWatchTests(IsolationCluster cluster) {
         // before the engine.
         await cluster.WriteTupleAsync(
             IsolationCluster.Victim,
-            Authorization.Contracts.ObjectRef.Of(ObjectTypes.ResourceGroup, ReBacResourceAuthorizer.GroupObjectId(victim)),
+            Authorization.Contracts.ObjectRef.Of(
+                ObjectTypes.ResourceGroup,
+                ReBacResourceAuthorizer.GroupObjectId(victim)
+            ),
             Relations.Reader,
             SubjectRef.Of(ObjectTypes.Resource, attacker.Id)
         );
 
         var accepted = await PatchAsync(victim, Probes, IsolationCluster.Victim, IsolationCluster.VictimUser);
-        accepted.IsSuccess.ShouldBeTrue("a bystander's refusal disturbed the tenant's own write: " + accepted.Error?.Message);
+        accepted.IsSuccess.ShouldBeTrue(
+            "a bystander's refusal disturbed the tenant's own write: " + accepted.Error?.Message
+        );
 
-        (await Pending(IsolationCluster.Attacker, attacker.Id)).ShouldBeEmpty("the tenant gate on delivery did not hold");
+        (await Pending(IsolationCluster.Attacker, attacker.Id)).ShouldBeEmpty(
+            "the tenant gate on delivery did not hold"
+        );
 
         // The victim tenant's grain for the attacker's GUID was never created by the delivery either.
         var ghost = await cluster.For(IsolationCluster.Victim)
@@ -158,28 +167,42 @@ public sealed class ResourceWatchTests(IsolationCluster cluster) {
         var index = cluster.For(IsolationCluster.Victim)
             .GetGrain<IResourceWatchGrain>(GrainKeys.WatchIndex(IsolationCluster.VictimSubscription, Probes.Type));
 
-        (await index.ListAsync()).GetValueOrThrow().ShouldContain(x => x.ResourceId == watcher.Id, "the subscription was not indexed");
+        (await index.ListAsync()).GetValueOrThrow()
+            .ShouldContain(x => x.ResourceId == watcher.Id, "the subscription was not indexed");
 
         // ── The watcher goes: a widget has no soft-delete window, so its grain is cleared ────────
         var deleted = await cluster.Manager.DeleteAsync(
-            new() { Path = watcher.Path, ApiVersion = Widgets.ApiVersion, Caller = IsolationCluster.Caller(IsolationCluster.Victim, IsolationCluster.VictimUser) },
+            new() {
+                Path = watcher.Path,
+                ApiVersion = Widgets.ApiVersion,
+                Caller = IsolationCluster.Caller(IsolationCluster.Victim, IsolationCluster.VictimUser)
+            },
             TestContext.Current.CancellationToken
         );
 
         deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
         await DriveAsync(IsolationCluster.Victim, deleted.GetValueOrThrow().OperationId);
 
-        var gone = await cluster.For(IsolationCluster.Victim).GetGrain<IResourceGrain>(GrainKeys.Resource(watcher.Id)).GetReconcileInputAsync();
+        var gone = await cluster.For(IsolationCluster.Victim)
+            .GetGrain<IResourceGrain>(GrainKeys.Resource(watcher.Id))
+            .GetReconcileInputAsync();
         gone.IsFailure.ShouldBeTrue("the fixture's delete left the watcher's grain in place, so nothing here is dead");
 
         // Still indexed: nothing on the delete path touched the watch list.
-        (await index.ListAsync()).GetValueOrThrow().ShouldContain(x => x.ResourceId == watcher.Id, "the delete path unsubscribed, which this test says it does not");
+        (await index.ListAsync()).GetValueOrThrow()
+            .ShouldContain(
+                x => x.ResourceId == watcher.Id,
+                "the delete path unsubscribed, which this test says it does not"
+            );
 
         // ── The change: delivered to nobody, refused by the dead grain, and the write stands ──────
         var accepted = await PatchAsync(watched, Probes, IsolationCluster.Victim, IsolationCluster.VictimUser);
-        accepted.IsSuccess.ShouldBeTrue("a dead watcher's failed delivery disturbed the tenant's own write: " + accepted.Error?.Message);
+        accepted.IsSuccess.ShouldBeTrue(
+            "a dead watcher's failed delivery disturbed the tenant's own write: " + accepted.Error?.Message
+        );
 
-        (await index.ListAsync()).GetValueOrThrow().ShouldNotContain(x => x.ResourceId == watcher.Id, "the dead watcher was not pruned from the index");
+        (await index.ListAsync()).GetValueOrThrow()
+            .ShouldNotContain(x => x.ResourceId == watcher.Id, "the dead watcher was not pruned from the index");
 
         // And the next change costs the dead watcher nothing — the list is what the fan-out reads.
         var again = await PatchAsync(watched, Probes, IsolationCluster.Victim, IsolationCluster.VictimUser, "eu-north");
@@ -197,7 +220,9 @@ public sealed class ResourceWatchTests(IsolationCluster cluster) {
         await GrantReaderToResourceAsync(watcher.Id);
         await PatchAsync(watcher, Widgets, IsolationCluster.Victim, IsolationCluster.VictimUser);
 
-        (await Pending(IsolationCluster.Victim, watcher.Id)).ShouldBeEmpty("a resource was told about the pass it is already in");
+        (await Pending(IsolationCluster.Victim, watcher.Id)).ShouldBeEmpty(
+            "a resource was told about the pass it is already in"
+        );
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
@@ -207,7 +232,13 @@ public sealed class ResourceWatchTests(IsolationCluster cluster) {
         .GetValueOrThrow()
         .PendingChanges;
 
-    async Task<Result<WriteAccepted>> PatchAsync(ResourceId target, IsolationTarget type, Guid tenant, string user, string location = "eu-west") {
+    async Task<Result<WriteAccepted>> PatchAsync(
+        ResourceId target,
+        IsolationTarget type,
+        Guid tenant,
+        string user,
+        string location = "eu-west"
+    ) {
         var accepted = await cluster.Manager.WriteAsync(
             new() {
                 Path = target.Path,
@@ -251,7 +282,8 @@ public sealed class ResourceWatchTests(IsolationCluster cluster) {
         var granted = await cluster.Roles.AssignAsync(
             new() {
                 Path = assignment.Path,
-                Body = $$$"""{"{{{RoleAssignmentBodyProperties.PrincipalId}}}":"{{{principal}}}","{{{RoleAssignmentBodyProperties.RoleDefinitionId}}}":"reader"}""",
+                Body =
+                    $$$"""{"{{{RoleAssignmentBodyProperties.PrincipalId}}}":"{{{principal}}}","{{{RoleAssignmentBodyProperties.RoleDefinitionId}}}":"reader"}""",
                 Caller = IsolationCluster.Caller(IsolationCluster.Victim, IsolationCluster.VictimUser)
             },
             TestContext.Current.CancellationToken
@@ -261,12 +293,26 @@ public sealed class ResourceWatchTests(IsolationCluster cluster) {
     }
 
     async Task<ResourceId> VictimResourceAsync(IsolationTarget target, string name) {
-        var id = await cluster.CreateAsync(target, name, IsolationCluster.Victim, IsolationCluster.VictimSubscription, IsolationCluster.VictimUser);
-        return IsolationCluster.Address(target, name, IsolationCluster.Victim, IsolationCluster.VictimSubscription).WithId(id);
+        var id = await cluster.CreateAsync(
+            target,
+            name,
+            IsolationCluster.Victim,
+            IsolationCluster.VictimSubscription,
+            IsolationCluster.VictimUser
+        );
+        return IsolationCluster.Address(target, name, IsolationCluster.Victim, IsolationCluster.VictimSubscription)
+            .WithId(id);
     }
 
     async Task<ResourceId> AttackerResourceAsync(IsolationTarget target, string name) {
-        var id = await cluster.CreateAsync(target, name, IsolationCluster.Attacker, IsolationCluster.AttackerSubscription, IsolationCluster.AttackerUser);
-        return IsolationCluster.Address(target, name, IsolationCluster.Attacker, IsolationCluster.AttackerSubscription).WithId(id);
+        var id = await cluster.CreateAsync(
+            target,
+            name,
+            IsolationCluster.Attacker,
+            IsolationCluster.AttackerSubscription,
+            IsolationCluster.AttackerUser
+        );
+        return IsolationCluster.Address(target, name, IsolationCluster.Attacker, IsolationCluster.AttackerSubscription)
+            .WithId(id);
     }
 }

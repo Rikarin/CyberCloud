@@ -25,8 +25,11 @@ namespace CyberCloud.Providers.Compute;
 ///         machine's body, resolved to a claim in the same namespace, exactly as a machine's image is.
 ///     </para>
 ///     <para>
-///         ⚠ <b>No <c>SupportsSoftDelete</c>, and the reason is this type's rather than the
-///         platform's.</b> docs/plan/08 § Soft delete is built. A soft-deleted machine would hold its
+///         ⚠
+///         <b>
+///             No <c>SupportsSoftDelete</c>, and the reason is this type's rather than the
+///             platform's.
+///         </b> docs/plan/08 § Soft delete is built. A soft-deleted machine would hold its
 ///         root clone and its cloud-init Secret for the window, which is recoverable — but a disk
 ///         detached by the machine's teardown and reattached by its restore is a disk another machine
 ///         may have taken in between, and nothing here can see that. The window lands with the check.
@@ -107,15 +110,15 @@ public sealed class ComputeProvider : IResourceProvider {
             .Display(
                 "Virtual machine",
                 "Virtual machines",
-                shortName: MachineShortName,
-                summary: "A virtual machine on KubeVirt: a size from the platform catalogue, a root "
+                MachineShortName,
+                "A virtual machine on KubeVirt: a size from the platform catalogue, a root "
                 + "disk cloned from an image, managed disks by name, a tenant subnet, and cloud-init "
                 + "from a vault handle. Start, stop and restart are actions; stop releases compute "
                 + "and keeps every disk."
             )
             .Chart(VirtualMachines.ChartName)
             .SupportsTags()
-            .RequiresCluster(VirtualMachines.ClusterIdPointer)
+            .RequiresCluster()
             // ── Managed disks ─────────────────────────────────────────────────────────────────────
             .ResourceType(Disks.TypePath)
             .ApiVersion(Disks.V2026, Disks.Schema2026)
@@ -126,13 +129,13 @@ public sealed class ComputeProvider : IResourceProvider {
             .Display(
                 "Managed disk",
                 "Managed disks",
-                shortName: DiskShortName,
-                summary: "A blank data disk of a size and a storage class, provisioned on its own and "
+                DiskShortName,
+                "A blank data disk of a size and a storage class, provisioned on its own and "
                 + "attached to a virtual machine by name. It outlives the machine."
             )
             .Chart(Disks.ChartName)
             .SupportsTags()
-            .RequiresCluster(Disks.ClusterIdPointer)
+            .RequiresCluster()
             // ── Images ────────────────────────────────────────────────────────────────────────────
             .ResourceType(Images.TypePath)
             .ApiVersion(Images.V2026, Images.Schema2026)
@@ -143,14 +146,14 @@ public sealed class ComputeProvider : IResourceProvider {
             .Display(
                 "Image",
                 "Images",
-                shortName: ImageShortName,
-                summary: "A bootable disk image imported once into your resource group — one of the "
+                ImageShortName,
+                "A bootable disk image imported once into your resource group — one of the "
                 + "platform's Ubuntu and Debian cloud images, pinned by digest, or a container disk "
                 + "or HTTP address you supply — and cloned by every machine that boots from it."
             )
             .Chart(Images.ChartName)
             .SupportsTags()
-            .RequiresCluster(Images.ClusterIdPointer);
+            .RequiresCluster();
     }
 
     // ── What a machine draws ───────────────────────────────────────────────────────────────────
@@ -160,7 +163,7 @@ public sealed class ComputeProvider : IResourceProvider {
         MeterDerivation.Of(
             "the size's cores",
             ["/properties/size"],
-            body => VirtualMachines.Resources(body) is { Cores: > 0 } size
+            static body => VirtualMachines.Resources(body) is { Cores: > 0 } size
                 ? Result<decimal>.Success(size.Cores)
                 : Unresolvable("cpu", "the size catalogue")
         );
@@ -170,7 +173,7 @@ public sealed class ComputeProvider : IResourceProvider {
         MeterDerivation.Of(
             "the size's guest memory, in GiB",
             ["/properties/size"],
-            body => KubeQuantity.TryGibibytes(VirtualMachines.Resources(body).Memory, out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(VirtualMachines.Resources(body).Memory, out var gibibytes)
                 ? Result<decimal>.Success(gibibytes)
                 : Unresolvable("memory", "the size catalogue")
         );
@@ -180,7 +183,7 @@ public sealed class ComputeProvider : IResourceProvider {
         MeterDerivation.Of(
             "osDiskSize, in GiB",
             ["/properties/osDiskSize"],
-            body => KubeQuantity.TryGibibytes(VirtualMachines.OsDiskSize(body), out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(VirtualMachines.OsDiskSize(body), out var gibibytes)
                 ? Result<decimal>.Success(gibibytes)
                 : Unresolvable("storage", "osDiskSize")
         );
@@ -190,7 +193,7 @@ public sealed class ComputeProvider : IResourceProvider {
         MeterDerivation.Of(
             "size, in GiB",
             ["/properties/size"],
-            body => KubeQuantity.TryGibibytes(Disks.Size(body), out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(Disks.Size(body), out var gibibytes)
                 ? Result<decimal>.Success(gibibytes)
                 : Unresolvable("storage", "size")
         );
@@ -200,7 +203,7 @@ public sealed class ComputeProvider : IResourceProvider {
         MeterDerivation.Of(
             "size, in GiB",
             ["/properties/size"],
-            body => KubeQuantity.TryGibibytes(Images.Size(body), out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(Images.Size(body), out var gibibytes)
                 ? Result<decimal>.Success(gibibytes)
                 : Unresolvable("storage", "size")
         );

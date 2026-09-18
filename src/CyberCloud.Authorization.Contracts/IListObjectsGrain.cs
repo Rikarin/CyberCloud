@@ -15,16 +15,22 @@ namespace CyberCloud.Authorization.Contracts;
 ///         the walk starts from the subject's reverse index, which is why the subject is the key.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The signature is not docs/plan/07 § ListObjects', for the reasons
-///         <see cref="ICheckGrain" /> gives.</b> The document writes
+///         ⚠
+///         <b>
+///             The signature is not docs/plan/07 § ListObjects', for the reasons
+///             <see cref="ICheckGrain" /> gives.
+///         </b> The document writes
 ///         <c>ListObjectsAsync(objectType, permission, subject, ContinuationToken? ct)</c>; here the
 ///         subject is the key and the rest travels in a <see cref="ListObjectsRequest" />, which also
 ///         carries the one bound the document does not name — <see cref="ListObjectsRequest.Within" />
 ///         — and the page size the document assumes.
 ///     </para>
 ///     <para>
-///         ⚠ <b>It reads the half of the store that is allowed to be stale, and that is the
-///         document's own trade.</b> docs/plan/07 § Storage: the reverse index "is written together"
+///         ⚠
+///         <b>
+///             It reads the half of the store that is allowed to be stale, and that is the
+///             document's own trade.
+///         </b> docs/plan/07 § Storage: the reverse index "is written together"
 ///         with the forward one, "object first, then subject", and "a subject index missing an entry
 ///         costs a <c>ListObjects</c> a miss, not a <c>Check</c> an incorrect answer". The window is
 ///         exact: between step 3 and step 5 of <c>TupleStoreGrain.ApplyAsync</c> a tuple is in the

@@ -51,8 +51,11 @@ public sealed record SignInApiResult(
 ///         project.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Which tenant is decided once, at the first factor, and read back everywhere
-///         else.</b> The three first-factor requests carry a <c>tenant</c> hint that
+///         ⚠
+///         <b>
+///             Which tenant is decided once, at the first factor, and read back everywhere
+///             else.
+///         </b> The three first-factor requests carry a <c>tenant</c> hint that
 ///         <see cref="TenantHint" /> resolves through the platform directory before any per-tenant
 ///         grain is touched — an unknown value is <see cref="Reject" /> with no grain call, because
 ///         a grain keyed from an unauthenticated caller's string is an activation table filled by
@@ -89,7 +92,6 @@ public sealed class SignInApi(
     IClock clock,
     ILogger<SignInApi> logger
 ) {
-
     /// <summary>
     ///     What <c>POST /api/signin/begin</c> offers, for every address.
     /// </summary>

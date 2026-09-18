@@ -20,8 +20,9 @@ public sealed class RecoveryVaultChartPairTests {
     public void TheTemplateSpellsTheSecondsFieldTheOwnerReferenceAndTheMethodAsTheRendererDoes() {
         var template = Template();
 
-        using var desired = JsonDocument.Parse(RecoveryVaults.Body(Guid.NewGuid(), [], schedule: "0 2 * * *"));
-        var spec = JsonNode.Parse(RecoveryVaults.ScheduledBackupJson("v", "i", "c", desired.RootElement))!["spec"]!.AsObject();
+        using var desired = JsonDocument.Parse(RecoveryVaults.Body(Guid.NewGuid(), [], "0 2 * * *"));
+        var spec = JsonNode.Parse(RecoveryVaults.ScheduledBackupJson("v", "i", "c", desired.RootElement))!["spec"]!
+            .AsObject();
 
         // The seconds field: the template prepends "0 " to the five the tenant wrote, and so does the C#.
         template.ShouldContain("""schedule: {{ printf "0 %s" .Values.policy.schedule | quote }}""");
@@ -42,11 +43,15 @@ public sealed class RecoveryVaultChartPairTests {
         var template = Template();
 
         template.ShouldContain("recovery-vault.clusterName");
-        template.ShouldNotContain(".Values.platform.protectedItem }}", customMessage: "the item's name is a label, never the cluster's name");
+        template.ShouldNotContain(
+            ".Values.platform.protectedItem }}",
+            customMessage: "the item's name is a label, never the cluster's name"
+        );
     }
 
     static string Template() {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("recovery-vault.scheduledbackup.yaml")
+        using var stream = Assembly.GetExecutingAssembly()
+            .GetManifestResourceStream("recovery-vault.scheduledbackup.yaml")
             ?? throw new InvalidOperationException("the chart template is not embedded — see the .csproj");
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();

@@ -131,8 +131,8 @@ public sealed class ShardMapGrain(
         }
 
         var accepting = state.State.Shards
-            .Where(x => x.Value)
-            .Select(x => x.Key)
+            .Where(static x => x.Value)
+            .Select(static x => x.Key)
             .Order(StringComparer.Ordinal)
             .ToList();
 
@@ -303,7 +303,7 @@ public sealed class ShardMapGrain(
             return preferred;
         }
 
-        var load = accepting.ToDictionary(x => x, _ => 0, StringComparer.Ordinal);
+        var load = accepting.ToDictionary(static x => x, static _ => 0, StringComparer.Ordinal);
         foreach (var assignment in state.State.Assignments.Values) {
             if (load.TryGetValue(assignment.DurableShard, out var count)) {
                 load[assignment.DurableShard] = count + 1;
@@ -311,8 +311,8 @@ public sealed class ShardMapGrain(
         }
 
         return load
-            .OrderBy(x => x.Value)
-            .ThenBy(x => x.Key, StringComparer.Ordinal)
+            .OrderBy(static x => x.Value)
+            .ThenBy(static x => x.Key, StringComparer.Ordinal)
             .First()
             .Key;
     }
@@ -321,10 +321,10 @@ public sealed class ShardMapGrain(
         var full = knownVersion <= 0 || state.State.Version - knownVersion > DeltaWindow;
 
         var assignments = full
-            ? state.State.Assignments.Values.OrderBy(x => x.Version).ToList()
+            ? state.State.Assignments.Values.OrderBy(static x => x.Version).ToList()
             : state.State.Assignments.Values
                 .Where(x => x.Version > knownVersion)
-                .OrderBy(x => x.Version)
+                .OrderBy(static x => x.Version)
                 .ToList();
 
         return new() {

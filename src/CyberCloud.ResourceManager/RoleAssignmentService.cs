@@ -21,8 +21,11 @@ namespace CyberCloud.ResourceManager;
 ///             <description>
 ///                 <b>Resolve.</b> Parse the address; the tenant in it must be the caller's; the role
 ///                 must be one of the three the schema calls a role and the principal type one the
-///                 tuple store spells; the scope must exist — and for a resource, exist <i>as a
-///                 confirmed index binding</i>, because that read is also what supplies the GUID the
+///                 tuple store spells; the scope must exist — and for a resource, exist
+///                 <i>
+///                     as a
+///                     confirmed index binding
+///                 </i>, because that read is also what supplies the GUID the
 ///                 tuple is written on. Every refusal that could leak is the canonical <c>404</c>.
 ///             </description>
 ///         </item>
@@ -333,8 +336,8 @@ public sealed class RoleAssignmentService(
         // address — so "the first row after the token" is well defined, and a grant or a revoke
         // between two pages moves only its own row.
         var rows = listed.GetValueOrThrow()
+            .OrderBy(static x => x.Path, StringComparer.Ordinal)
             .OrderBy(x => x.Path, StringComparer.Ordinal)
-            .Where(x => request.Continuation.Length == 0 || string.CompareOrdinal(x.Path, request.Continuation) > 0)
             .Take(request.PageSize + 1)
             .ToList();
 
@@ -367,7 +370,12 @@ public sealed class RoleAssignmentService(
         var name = assignment.Name;
 
         if (!string.Equals(name.PrincipalType, ObjectTypes.Resource, StringComparison.Ordinal)) {
-            return await directory.ExistsAsync(assignment.TenantId, name.PrincipalType, name.PrincipalId, cancellationToken);
+            return await directory.ExistsAsync(
+                assignment.TenantId,
+                name.PrincipalType,
+                name.PrincipalId,
+                cancellationToken
+            );
         }
 
         if (!Guid.TryParseExact(name.PrincipalId, "N", out var resourceId) || resourceId == Guid.Empty) {
@@ -401,8 +409,11 @@ public sealed class RoleAssignmentService(
     ///         somebody deletes that one. <c>404</c> and never <c>403</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The role and the principal type are refused here as a <c>400</c>, before any
-    ///         grain is touched.</b> Both are the caller's own URL and neither is a secret, so the
+    ///         ⚠
+    ///         <b>
+    ///             The role and the principal type are refused here as a <c>400</c>, before any
+    ///             grain is touched.
+    ///         </b> Both are the caller's own URL and neither is a secret, so the
     ///         enumeration argument does not apply; and refusing them after the check would let a
     ///         caller with no grant at all learn which relation names exist from the difference
     ///         between two <c>404</c> messages.
@@ -411,7 +422,8 @@ public sealed class RoleAssignmentService(
     ///         ⚠ <b>Existence is read from the scope's own grain and not inferred from the check.</b>
     ///         A check on a scope that does not exist fails closed — no tuple, no parent edge, no
     ///         answer but <c>false</c> — so the inference would usually hold. It would not hold for
-    ///         the residue <see cref="IScopeRelationWriter.LinkToParentAsync(ScopeId, CancellationToken)" />'s remarks describe:
+    ///         the residue <see cref="IScopeRelationWriter.LinkToParentAsync(ScopeId, CancellationToken)" />'s remarks
+    ///         describe:
     ///         a <c>parent</c> edge aimed at a scope whose create then failed. The edge is inert for
     ///         every other purpose; through this path it would let the tenant's owner write role
     ///         tuples on a subscription that was never created.
@@ -490,19 +502,19 @@ public sealed class RoleAssignmentService(
 
         var exists = scope.Kind switch {
             ScopeKind.Tenant => (await tenant
-                .GetGrain<ITenantGrain>(GrainKeys.Tenant(scope.TenantId))
-                .GetAsync()).IsSuccess,
+                    .GetGrain<ITenantGrain>(GrainKeys.Tenant(scope.TenantId))
+                    .GetAsync()).IsSuccess,
             ScopeKind.Subscription => (await tenant
-                .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(scope.SubscriptionId))
-                .GetAsync()).IsSuccess,
+                    .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(scope.SubscriptionId))
+                    .GetAsync()).IsSuccess,
             ScopeKind.ResourceGroup => (await tenant
-                .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(scope.SubscriptionId, scope.ResourceGroup))
-                .GetAsync()).IsSuccess,
+                    .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(scope.SubscriptionId, scope.ResourceGroup))
+                    .GetAsync()).IsSuccess,
             // #70's assignments at the new scope, issue #39 — the same existence question, asked of
             // the group's own grain.
             ScopeKind.ManagementGroup => (await tenant
-                .GetGrain<IManagementGroupGrain>(GrainKeys.ManagementGroup(scope.ManagementGroup))
-                .GetAsync()).IsSuccess,
+                    .GetGrain<IManagementGroupGrain>(GrainKeys.ManagementGroup(scope.ManagementGroup))
+                    .GetAsync()).IsSuccess,
             _ => false
         };
 
@@ -524,7 +536,13 @@ public sealed class RoleAssignmentService(
         bool fullyConsistent,
         CancellationToken cancellationToken
     ) =>
-        AuthorizeAsync(RoleAssignmentCollectionId.Of(assignment), permission, caller, fullyConsistent, cancellationToken);
+        AuthorizeAsync(
+            RoleAssignmentCollectionId.Of(assignment),
+            permission,
+            caller,
+            fullyConsistent,
+            cancellationToken
+        );
 
     Task<Result> AuthorizeAsync(
         RoleAssignmentCollectionId scope,

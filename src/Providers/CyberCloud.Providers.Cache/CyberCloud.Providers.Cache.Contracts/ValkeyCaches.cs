@@ -284,7 +284,7 @@ public static class ValkeyCaches {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the cache is billed in."
                 ) {
                     Format = SchemaFormat.Region,
@@ -296,7 +296,7 @@ public static class ValkeyCaches {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster whose namespace holds the RedisFailover."
                 ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
@@ -304,7 +304,7 @@ public static class ValkeyCaches {
                 new(
                     "/properties/version",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "Major Valkey version. Minor upgrades are applied automatically in "
                     + "the maintenance window."
                 ) { AllowedValues = ["7", "8"], DefaultJson = "\"8\"" },
@@ -318,7 +318,7 @@ public static class ValkeyCaches {
                 new(
                     "/properties/replicas",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "Number of Valkey instances, including the primary. One is a single "
                     + "point of failure and is offered for development only."
                 ) { Minimum = 1, Maximum = 5, DefaultJson = "3" },
@@ -434,7 +434,7 @@ public static class ValkeyCaches {
                 new(
                     "/host",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The in-cluster DNS name of the Sentinel service. ⚠ Not the primary's "
                     + "own address — a client asks Sentinel which member is the primary, because that "
                     + "answer changes at every failover."
@@ -442,20 +442,20 @@ public static class ValkeyCaches {
                 new(
                     "/port",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "The Sentinel TCP port."
                 ) { Minimum = 1, Maximum = 65535 },
                 new(
                     "/masterName",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The Sentinel master group to ask for. Every client library takes this "
                     + "as a separate argument from the host."
                 ),
                 new(
                     "/password",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Secret: true,
                     Description: "The requirepass value, read from the tenant's Vault for this call "
                     + "only."
@@ -498,7 +498,8 @@ public static class ValkeyCaches {
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── Addressing ────────────────────────────────────────────────────────────────────────────
 
@@ -1140,7 +1141,7 @@ public static class ValkeyCaches {
     /// </remarks>
     static JsonObject Storage(string name, JsonElement desired) {
         if (!IsPersistent(desired)) {
-            return new JsonObject { ["emptyDir"] = new JsonObject() };
+            return new() { ["emptyDir"] = new JsonObject() };
         }
 
         var claim = new JsonObject {
@@ -1156,7 +1157,7 @@ public static class ValkeyCaches {
             claim["storageClassName"] = storageClass;
         }
 
-        return new JsonObject {
+        return new() {
             // ⚠ Kept, and the operator's own default is to delete. A cache is not durable and its
             // volume still holds the last AOF: deleting the claim with the pod turns every rolling
             // restart into a cold start, which on a large cache is a latency incident for whatever is
@@ -1182,7 +1183,7 @@ public static class ValkeyCaches {
     static JsonObject Quantities(string cpu, string memory) {
         var quantities = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
 
-        return new JsonObject { ["requests"] = quantities.DeepClone(), ["limits"] = quantities };
+        return new() { ["requests"] = quantities.DeepClone(), ["limits"] = quantities };
     }
 
     /// <summary>

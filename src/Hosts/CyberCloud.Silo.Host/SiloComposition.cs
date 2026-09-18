@@ -55,8 +55,8 @@ public static class SiloComposition {
 
         var builder = OrleansApplication.CreateSilo(
             args,
-            configureCluster: null,
-            configureStorage: ConfigureStorage
+            null,
+            ConfigureStorage
         );
 
         // ⚠ Through UseOrleans rather than CreateSilo's configureCluster, because ConfigureCluster
@@ -232,7 +232,7 @@ public static class SiloComposition {
                 // first or the refusing defaults win — NoClusterConnectionFactory, which answers null to
                 // every Connect, and UnavailableClusterConnectionRegistrar, which refuses every attach.
                 .AddCyberCloudKubernetes()
-                .ConfigureServices(services => {
+                .ConfigureServices(static services => {
                         // ── The cluster fabric, docs/plan/09 ────────────────────────────────────────
                         //
                         // ⚠ THE ONLY IMPLEMENTATIONS OF THESE TWO OUTSIDE A TEST, AND UNTIL THEY EXISTED
@@ -262,10 +262,9 @@ public static class SiloComposition {
                 // PlatformBootstrapTask carries both halves and why each is idempotent. It runs at the
                 // silo's Active stage, when grain calls route, and skips itself on a silo with no
                 // durable shard configured.
-                .ConfigureServices(services => services.AddSingleton<PlatformBootstrapTask>())
-                .AddStartupTask(
-                    (services, cancellationToken) =>
-                        services.GetRequiredService<PlatformBootstrapTask>().ExecuteAsync(cancellationToken)
+                .ConfigureServices(static services => services.AddSingleton<PlatformBootstrapTask>())
+                .AddStartupTask(static (services, cancellationToken) =>
+                    services.GetRequiredService<PlatformBootstrapTask>().ExecuteAsync(cancellationToken)
                 );
     }
 

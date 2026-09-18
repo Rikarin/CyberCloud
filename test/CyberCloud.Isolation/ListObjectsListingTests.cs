@@ -55,7 +55,8 @@ public sealed class ListObjectsListingTests(IsolationCluster cluster) {
             Authorization.Contracts.ObjectRef.Of(ObjectTypes.ResourceGroup, GroupObjectId(IsolationCluster.Group)),
             Relations.Reader,
             SubjectRef.Of(ObjectTypes.User, Reader)
-        ).GetValueOrThrow();
+        )
+            .GetValueOrThrow();
 
         var written = await Store().WriteAsync(grant);
         written.IsSuccess.ShouldBeTrue(written.Error?.Message);
@@ -65,24 +66,34 @@ public sealed class ListObjectsListingTests(IsolationCluster cluster) {
 
         var prod = await ListAsync(target, IsolationCluster.Group, Reader);
 
-        prod.Resources.Select(x => x.Name).ShouldContain("listobjects-prod", "a group reader lists the group");
-        prod.Resources.Select(x => x.Name).ShouldNotContain("listobjects-staging");
+        prod.Resources.Select(static x => x.Name).ShouldContain("listobjects-prod", "a group reader lists the group");
+        prod.Resources.Select(static x => x.Name).ShouldNotContain("listobjects-staging");
 
         // ⚠ THE PATH, NOT ONLY THE VERDICT. One walk for the page; the per-member Check is the
         // fallback and was not taken. A listing that reached the right answer through N checks would
         // pass every other assertion in this file and be the O(N) issue #37 exists to remove.
-        (AuthorizationMetrics.ListObjects - walksBefore).ShouldBeGreaterThanOrEqualTo(1, "the page was answered by ListObjects");
-        (AuthorizationMetrics.Checks - checksBefore).ShouldBe(0, "no member was Check-ed: the walk answered for the whole page");
+        (AuthorizationMetrics.ListObjects - walksBefore).ShouldBeGreaterThanOrEqualTo(
+            1,
+            "the page was answered by ListObjects"
+        );
+        (AuthorizationMetrics.Checks - checksBefore).ShouldBe(
+            0,
+            "no member was Check-ed: the walk answered for the whole page"
+        );
 
         var staging = await ListAsync(target, Sibling, Reader);
-        staging.Resources.ShouldBeEmpty("a grant on prod is nothing on staging — the scope is the group the page hangs off");
+        staging.Resources.ShouldBeEmpty(
+            "a grant on prod is nothing on staging — the scope is the group the page hangs off"
+        );
 
         // ── The revoke, through the store ───────────────────────────────────────────────────────
         var revoked = await Store().DeleteAsync(grant);
         revoked.IsSuccess.ShouldBeTrue(revoked.Error?.Message);
 
         var after = await ListAsync(target, IsolationCluster.Group, Reader);
-        after.Resources.ShouldBeEmpty("the reverse index lost the entry with the forward one, so the walk finds nothing");
+        after.Resources.ShouldBeEmpty(
+            "the reverse index lost the entry with the forward one, so the walk finds nothing"
+        );
     }
 
     [Fact]
@@ -103,7 +114,7 @@ public sealed class ListObjectsListingTests(IsolationCluster cluster) {
             .WithId(id);
 
         (await ListAsync(target, IsolationCluster.Group, IsolationCluster.VictimUser))
-            .Resources.Select(x => x.Name)
+            .Resources.Select(static x => x.Name)
             .ShouldContain(name, "the control: the group owner lists what they created");
 
         // ⚠ THE EDGE ALONE, NOT THE WHOLE PARK. OperationGrain.ParkAsync also unlists the member,
@@ -115,18 +126,26 @@ public sealed class ListObjectsListingTests(IsolationCluster cluster) {
         // scoped to the group does not reach it.
         var writer = new ReBacResourceRelationWriter(cluster.Grains, NullLogger<ReBacResourceRelationWriter>.Instance);
 
-        var parked = await writer.ReparentToSubscriptionAsync(address, Guid.Empty, TestContext.Current.CancellationToken);
+        var parked = await writer.ReparentToSubscriptionAsync(
+            address,
+            Guid.Empty,
+            TestContext.Current.CancellationToken
+        );
         parked.IsSuccess.ShouldBeTrue(parked.Error?.Message);
 
         (await ListAsync(target, IsolationCluster.Group, IsolationCluster.VictimUser))
-            .Resources.Select(x => x.Name)
+            .Resources.Select(static x => x.Name)
             .ShouldNotContain(name, "a resource whose parent is the subscription is not under the group");
 
-        var restored = await writer.ReparentFromSubscriptionAsync(address, Guid.Empty, TestContext.Current.CancellationToken);
+        var restored = await writer.ReparentFromSubscriptionAsync(
+            address,
+            Guid.Empty,
+            TestContext.Current.CancellationToken
+        );
         restored.IsSuccess.ShouldBeTrue(restored.Error?.Message);
 
         (await ListAsync(target, IsolationCluster.Group, IsolationCluster.VictimUser))
-            .Resources.Select(x => x.Name)
+            .Resources.Select(static x => x.Name)
             .ShouldContain(name, "and a restore puts it back in the listing");
     }
 
@@ -134,7 +153,15 @@ public sealed class ListObjectsListingTests(IsolationCluster cluster) {
 
     async Task<ResourceListPage> ListAsync(IsolationTarget target, string group, string user) {
         var collection = ResourceCollectionId.Of(
-            new(IsolationCluster.Victim, IsolationCluster.VictimSubscription, group, target.Type, "probe", Guid.Empty, target.ParentNames)
+            new(
+                IsolationCluster.Victim,
+                IsolationCluster.VictimSubscription,
+                group,
+                target.Type,
+                "probe",
+                Guid.Empty,
+                target.ParentNames
+            )
         );
 
         var listed = await cluster.Manager.ListAsync(

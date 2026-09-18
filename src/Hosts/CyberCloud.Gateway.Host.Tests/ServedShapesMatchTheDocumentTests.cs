@@ -136,7 +136,9 @@ public sealed class ServedShapesMatchTheDocumentTests {
                 ResourcePath = GatewayHarness.ResourcePath(GatewayHarness.TenantA),
                 StartedAt = gateway.Clock.UtcNow,
                 Progress = [
-                    new() { At = gateway.Clock.UtcNow, Step = "etcd", Detail = "etcd cluster ready", PercentComplete = 40 }
+                    new() {
+                        At = gateway.Clock.UtcNow, Step = "etcd", Detail = "etcd cluster ready", PercentComplete = 40
+                    }
                 ]
             }
         );
@@ -277,7 +279,7 @@ public sealed class ServedShapesMatchTheDocumentTests {
         var schema = ResponseSchema(ResourceTemplate, "get", "200");
         var served = ResponseBodies.Resource(ProjectedSnapshot.Of(GatewayHarness.ResourcePath(GatewayHarness.TenantA)));
 
-        var forged = served[..^1] + ",\"lastModifiedBy\":\"nobody\"}";
+        var forged = served[..^1] + ""","lastModifiedBy":"nobody"}""";
 
         Should.Throw<ShouldAssertException>(() => Conforms(forged, schema))
             .Message.ShouldContain("lastModifiedBy");
@@ -323,7 +325,9 @@ public sealed class ServedShapesMatchTheDocumentTests {
                     var pointer = where + "/" + member.Name;
 
                     if (closed && (own is null || !own.ContainsKey(member.Name))) {
-                        problems.Add($"{pointer} is served and the schema, which says additionalProperties: false, does not name it");
+                        problems.Add(
+                            $"{pointer} is served and the schema, which says additionalProperties: false, does not name it"
+                        );
                         continue;
                     }
 
@@ -350,7 +354,12 @@ public sealed class ServedShapesMatchTheDocumentTests {
 
             case JsonValueKind.String:
                 if (schema["enum"] is JsonArray values
-                    && !values.Any(x => string.Equals(DocumentReader.Text(x), instance.GetString(), StringComparison.Ordinal))) {
+                    && !values.Any(x => string.Equals(
+                            DocumentReader.Text(x),
+                            instance.GetString(),
+                            StringComparison.Ordinal
+                        )
+                    )) {
                     problems.Add($"{where} is \"{instance.GetString()}\", which the schema's enum does not list");
                 }
 
@@ -372,7 +381,7 @@ public sealed class ServedShapesMatchTheDocumentTests {
         }
 
         if (schema["required"] is JsonArray names) {
-            required.AddRange(names.Select(DocumentReader.Text).Where(x => x.Length > 0));
+            required.AddRange(names.Select(DocumentReader.Text).Where(static x => x.Length > 0));
         }
 
         if (schema["allOf"] is JsonArray inherits) {

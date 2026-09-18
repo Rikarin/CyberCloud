@@ -50,7 +50,12 @@ static partial class GrantLog {
         Level = LogLevel.Information,
         Message = "Authorization code issued to user {UserId} in tenant {TenantId} from session {InteractiveSessionId}."
     )]
-    public static partial void AuthorizationCodeIssued(ILogger logger, Guid tenantId, Guid userId, Guid interactiveSessionId);
+    public static partial void AuthorizationCodeIssued(
+        ILogger logger,
+        Guid tenantId,
+        Guid userId,
+        Guid interactiveSessionId
+    );
 
     /// <summary>A code exchange or a refresh was refused after the token itself validated.</summary>
     /// <param name="logger">The sink.</param>
@@ -63,7 +68,13 @@ static partial class GrantLog {
         Level = LogLevel.Information,
         Message = "Grant {GrantType} refused for session {SessionId} in tenant {TenantId}: {Reason}"
     )]
-    public static partial void GrantRefused(ILogger logger, Guid tenantId, string grantType, Guid sessionId, string reason);
+    public static partial void GrantRefused(
+        ILogger logger,
+        Guid tenantId,
+        string grantType,
+        Guid sessionId,
+        string reason
+    );
 
     /// <summary>A token session was opened for a client at a code exchange.</summary>
     /// <param name="logger">The sink.</param>
@@ -74,7 +85,8 @@ static partial class GrantLog {
     [LoggerMessage(
         EventId = 1133,
         Level = LogLevel.Information,
-        Message = "Token session {SessionId} opened for user {UserId} in tenant {TenantId}, bound to session {InteractiveSessionId}."
+        Message =
+            "Token session {SessionId} opened for user {UserId} in tenant {TenantId}, bound to session {InteractiveSessionId}."
     )]
     public static partial void TokenSessionOpened(
         ILogger logger,
@@ -100,9 +112,16 @@ static partial class GrantLog {
     [LoggerMessage(
         EventId = 1137,
         Level = LogLevel.Warning,
-        Message = "Authorization code {CodeId} for user {UserId} in tenant {TenantId} was presented again; token session {RevokedSessionId} revoked."
+        Message =
+            "Authorization code {CodeId} for user {UserId} in tenant {TenantId} was presented again; token session {RevokedSessionId} revoked."
     )]
-    public static partial void AuthorizationCodeReplayed(ILogger logger, Guid tenantId, Guid userId, Guid codeId, Guid revokedSessionId);
+    public static partial void AuthorizationCodeReplayed(
+        ILogger logger,
+        Guid tenantId,
+        Guid userId,
+        Guid codeId,
+        Guid revokedSessionId
+    );
 
     /// <summary>A person allowed a tenant-registered client — the consent page's yes, recorded.</summary>
     /// <param name="logger">The sink.</param>

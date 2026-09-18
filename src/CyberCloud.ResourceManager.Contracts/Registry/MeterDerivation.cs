@@ -165,7 +165,7 @@ public sealed record MeterDerivation {
             throw new ArgumentException(
                 $"The derivation '{expression}' declares no pointers. A derivation that reads nothing "
                 + "from the body is a constant, and a constant amount is `Meters(meter)` or "
-                + "`Meter(meter, \"\", fallback)` rather than a function.",
+                + """`Meter(meter, "", fallback)` rather than a function.""",
                 nameof(reads)
             );
         }

@@ -50,10 +50,10 @@ public sealed class PostgresQuotaTests {
     public void TheTypeDeclaresTheFourMetersARealServerDraws() {
         var meters = Registration().Meters;
 
-        meters.Select(x => x.Meter)
+        meters.Select(static x => x.Meter)
             .ShouldBe(
                 [QuotaMeter.Vcpu, QuotaMeter.MemoryGb, QuotaMeter.StorageGb, QuotaMeter.Resources],
-                ignoreOrder: true
+                true
             );
     }
 
@@ -79,7 +79,7 @@ public sealed class PostgresQuotaTests {
 
     [Fact]
     public void AThreeInstanceServerOnALargerVolumeScalesEveryMeterWithIt() {
-        var body = PostgresServers.Body(Guid.NewGuid(), replicas: 3, storageSize: "100Gi");
+        var body = PostgresServers.Body(Guid.NewGuid(), 3, "100Gi");
 
         Draw(QuotaMeter.Vcpu, body).ShouldBe(1.5m, "3 × 500m — not 1, which is free CPU, and not 2");
         Draw(QuotaMeter.MemoryGb, body).ShouldBe(6m);
@@ -126,7 +126,7 @@ public sealed class PostgresQuotaTests {
         // failing on anyway: the failure it catches is somebody adding a preset to the enum and not to
         // PostgresServers.Presets, at which point the server would provision unmetered.
         var body = WithSizing(PostgresServers.Body(Guid.NewGuid()), "s1.enormous");
-        var declared = Registration().Meters.Single(x => x.Meter == QuotaMeter.Vcpu);
+        var declared = Registration().Meters.Single(static x => x.Meter == QuotaMeter.Vcpu);
 
         using var document = JsonDocument.Parse(body);
         var amount = declared.Derivation!.Amount(document.RootElement);
@@ -140,7 +140,7 @@ public sealed class PostgresQuotaTests {
         // ⚠ The reason a delegate is acceptable at all. IResourceTypeBuilder.Meter's remarks argue that
         // a delegate "cannot be GENERATED from"; a derivation that carries its own description can be,
         // and OpenApiEmitter writes both members for every meter.
-        foreach (var meter in Registration().Meters.Where(x => x.Derivation is not null)) {
+        foreach (var meter in Registration().Meters.Where(static x => x.Derivation is not null)) {
             meter.Expression.ShouldNotBeNullOrWhiteSpace();
             meter.Reads.ShouldNotBeEmpty();
 

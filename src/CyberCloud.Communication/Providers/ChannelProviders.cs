@@ -56,7 +56,7 @@ static class Refusal {
         Result<DeliveryStatus>.Failure(
             ErrorCode.InternalError,
             $"No {channel} carrier is registered, so where a message got to is unknown. ⚠ Reporting "
-            + "MessageStatus.Unknown as a success would let a caller read it as \"not delivered yet\" "
+            + """MessageStatus.Unknown as a success would let a caller read it as "not delivered yet" """
             + "and keep waiting, which is indistinguishable from the carrier being slow."
         );
 
@@ -157,7 +157,8 @@ public sealed class UnavailableSmsProvider(ILogger<UnavailableSmsProvider> logge
 ///     a clear failure when neither exists — which is what <c>MessageGrain</c> already refuses on
 ///     before it gets here.
 /// </remarks>
-public sealed class UnavailableWhatsAppProvider(ILogger<UnavailableWhatsAppProvider> logger) : IRefusingChannelProvider {
+public sealed class UnavailableWhatsAppProvider(ILogger<UnavailableWhatsAppProvider> logger) :
+    IRefusingChannelProvider {
     /// <inheritdoc />
     public ChannelKind Kind => ChannelKind.WhatsApp;
 
@@ -438,7 +439,9 @@ public sealed class InMemoryChannelProvider(ChannelKind kind) : IChannelProvider
         }
 
         if (TimeOut) {
-            return Task.FromResult(Result<DispatchReceipt>.Failure(ErrorCode.OperationTimeout, "the carrier never answered"));
+            return Task.FromResult(
+                Result<DispatchReceipt>.Failure(ErrorCode.OperationTimeout, "the carrier never answered")
+            );
         }
 
         sent.Enqueue(message);
@@ -517,14 +520,14 @@ public sealed class ChannelProviderRegistry(IEnumerable<IChannelProvider> provid
                 ErrorCode.InternalError,
                 $"No IChannelProvider serves {channel}. Every channel needs at least one, even if it "
                 + "is the refusing seam — a channel with none means a send fails with a wiring error "
-                + "instead of an honest \"there is no carrier\"."
+                + """instead of an honest "there is no carrier"."""
             );
         }
 
         if (string.IsNullOrWhiteSpace(name)) {
             // The refusing seam is what an unnamed channel falls back to, never what it competes
             // with — IRefusingChannelProvider's remarks.
-            var carriers = forChannel.Where(x => x is not IRefusingChannelProvider).ToImmutableArray();
+            var carriers = forChannel.Where(static x => x is not IRefusingChannelProvider).ToImmutableArray();
             var candidates = carriers.Length > 0 ? carriers : forChannel;
 
             return candidates.Length == 1
@@ -533,7 +536,7 @@ public sealed class ChannelProviderRegistry(IEnumerable<IChannelProvider> provid
                     ErrorCode.InvalidRequestBody,
                     $"{channel} has {candidates.Length.ToString(CultureInfo.InvariantCulture)} "
                     + "registered carriers ("
-                    + string.Join(", ", candidates.Select(x => x.Name))
+                    + string.Join(", ", candidates.Select(static x => x.Name))
                     + ") and the channel configuration names none. Set "
                     + "ChannelConfiguration.Provider — which carrier a tenant sends through is not a "
                     + "thing to decide by registration order."
@@ -549,7 +552,7 @@ public sealed class ChannelProviderRegistry(IEnumerable<IChannelProvider> provid
         return Result<IChannelProvider>.Failure(
             ErrorCode.ResourceNotFound,
             $"No IChannelProvider named '{name}' serves {channel}. Registered: "
-            + string.Join(", ", forChannel.Select(x => x.Name))
+            + string.Join(", ", forChannel.Select(static x => x.Name))
             + "."
         );
     }

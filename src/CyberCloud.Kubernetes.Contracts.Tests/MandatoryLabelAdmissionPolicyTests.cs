@@ -1,4 +1,3 @@
-using CyberCloud.Kubernetes.Contracts;
 using Shouldly;
 
 namespace CyberCloud.Kubernetes.Contracts.Tests;
@@ -41,16 +40,16 @@ public class MandatoryLabelAdmissionPolicyTests {
 
         ListVariable(lines, "mandatory").ShouldBe(
             KubeLabels.Mandatory.ToList(),
-            customMessage:
             $"{PolicyFile}'s `mandatory` variable is not KubeLabels.Mandatory, in ADR-013's order. "
-            + "The C# is the source; the list to paste is:\n" + Block(KubeLabels.Mandatory)
+            + "The C# is the source; the list to paste is:\n"
+            + Block(KubeLabels.Mandatory)
         );
 
         ListVariable(lines, "lifetimeStable").ShouldBe(
             KubeLabels.LifetimeStable.ToList(),
-            customMessage:
             $"{PolicyFile}'s `lifetimeStable` variable is not KubeLabels.LifetimeStable. The C# is "
-            + "the source; the list to paste is:\n" + Block(KubeLabels.LifetimeStable)
+            + "the source; the list to paste is:\n"
+            + Block(KubeLabels.LifetimeStable)
         );
     }
 
@@ -61,7 +60,7 @@ public class MandatoryLabelAdmissionPolicyTests {
         // ⚠ The bindings, not the policies, decide which namespaces are held, and both must select
         // on the selector every informer already filters by — docs/plan/09 § Observing. Two
         // bindings, two identical lines; a third binding would need a third.
-        lines.Count(line => line == "        " + KubeLabels.ManagedBy + ": " + KubeLabels.ManagedByValue)
+        lines.Count(static line => line == "        " + KubeLabels.ManagedBy + ": " + KubeLabels.ManagedByValue)
             .ShouldBe(
                 2,
                 $"{PolicyFile}'s two ValidatingAdmissionPolicyBindings must each carry "
@@ -70,14 +69,14 @@ public class MandatoryLabelAdmissionPolicyTests {
 
         // The CEL spells the key and the value as literals in several rules. Every spelling is
         // KubeLabels', so a rename on one side cannot leave a rule reading a label nobody writes.
-        lines.Where(line => !line.TrimStart().StartsWith('#'))
-            .Where(line => line.Contains("managed-by", StringComparison.Ordinal) && line.Contains('\''))
+        lines.Where(static line => !line.TrimStart().StartsWith('#'))
+            .Where(static line => line.Contains("managed-by", StringComparison.Ordinal) && line.Contains('\''))
             .ShouldAllBe(
                 line => line.Contains("'" + KubeLabels.ManagedBy + "'", StringComparison.Ordinal),
                 $"a CEL line in {PolicyFile} quotes a managed-by key that is not KubeLabels.ManagedBy"
             );
 
-        lines.Count(line => line.Contains("== '" + KubeLabels.ManagedByValue + "'", StringComparison.Ordinal))
+        lines.Count(static line => line.Contains("== '" + KubeLabels.ManagedByValue + "'", StringComparison.Ordinal))
             .ShouldBeGreaterThanOrEqualTo(
                 2,
                 $"{PolicyFile} must compare the label's value to KubeLabels.ManagedByValue in the rule "
@@ -106,7 +105,7 @@ public class MandatoryLabelAdmissionPolicyTests {
     }
 
     static string Block(IEnumerable<string> keys) =>
-        "        [\n" + string.Join(",\n", keys.Select(key => "          '" + key + "'")) + "\n        ]";
+        "        [\n" + string.Join(",\n", keys.Select(static key => "          '" + key + "'")) + "\n        ]";
 
     /// <summary>The repository root — the directory holding <c>CyberCloud.slnx</c>, walked up to.</summary>
     static string RepositoryRoot() {

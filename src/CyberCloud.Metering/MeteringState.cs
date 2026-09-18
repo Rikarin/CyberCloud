@@ -68,9 +68,9 @@ public sealed class UsageRollupState {
         "CyberCloud.Security",
         "CC1005:A secret must not be a serialized member of grain state",
         Justification =
-        "Not secrets. These are UsageEvent.IdempotencyKey values — sha256 digests of a resource "
-        + "id, a meter name and two window boundaries, all of which are already in this grain's "
-        + "own Pending list and in the ledger. See the justification on UsageEvent.IdempotencyKey."
+            "Not secrets. These are UsageEvent.IdempotencyKey values — sha256 digests of a resource "
+            + "id, a meter name and two window boundaries, all of which are already in this grain's "
+            + "own Pending list and in the ledger. See the justification on UsageEvent.IdempotencyKey."
     )]
     public Dictionary<string, DateTimeOffset> SeenKeys { get; set; } = new(StringComparer.Ordinal);
 

@@ -27,7 +27,10 @@ public sealed class GrafanaUrlHandler : IResourceActionHandler {
     public string Action => Grafanas.UrlAction;
 
     /// <inheritdoc />
-    public async Task<Result<string>> InvokeAsync(ActionContext context, CancellationToken cancellationToken = default) {
+    public async Task<Result<string>> InvokeAsync(
+        ActionContext context,
+        CancellationToken cancellationToken = default
+    ) {
         var password = await context.Secrets.ResolveAsync(Grafanas.AdminPasswordRef(context.Id), cancellationToken);
 
         if (password.TryGetError(out var error)) {

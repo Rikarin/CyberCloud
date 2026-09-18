@@ -142,12 +142,12 @@ sealed class DurableShardHealthCheck : IHealthCheck, IDisposable {
         var results = await ResultsAsync(cancellationToken).ConfigureAwait(false);
 
         var unreachable = results
-            .Where(x => !string.Equals(x.Value, Reachable, StringComparison.Ordinal))
-            .Select(x => x.Key)
+            .Where(static x => !string.Equals(x.Value, Reachable, StringComparison.Ordinal))
+            .Select(static x => x.Key)
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        var data = results.ToDictionary(x => x.Key, x => (object)x.Value, StringComparer.Ordinal);
+        var data = results.ToDictionary(static x => x.Key, static x => (object)x.Value, StringComparer.Ordinal);
 
         return unreachable.Count == 0
             ? HealthCheckResult.Healthy(
@@ -194,7 +194,7 @@ sealed class DurableShardHealthCheck : IHealthCheck, IDisposable {
             var probes = shards.Select(async shard => (shard, result: await ProbeAsync(shard, cancellationToken)));
             var probed = await Task.WhenAll(probes).ConfigureAwait(false);
 
-            lastResults = probed.ToDictionary(x => x.shard, x => x.result, StringComparer.Ordinal);
+            lastResults = probed.ToDictionary(static x => x.shard, static x => x.result, StringComparer.Ordinal);
             lastProbedAt = time.GetTimestamp();
 
             return lastResults;

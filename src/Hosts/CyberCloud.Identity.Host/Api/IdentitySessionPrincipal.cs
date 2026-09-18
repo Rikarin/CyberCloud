@@ -93,7 +93,7 @@ public static class IdentitySessionPrincipal {
 
         // Everything except the two claims this call is here to change.
         identity.AddClaims(
-            principal.Claims.Where(x => !string.Equals(x.Type, SecondFactorClaim, StringComparison.Ordinal)
+            principal.Claims.Where(static x => !string.Equals(x.Type, SecondFactorClaim, StringComparison.Ordinal)
                 && !string.Equals(x.Type, AccessTokenClaims.AuthenticationMethods, StringComparison.Ordinal)
             )
         );

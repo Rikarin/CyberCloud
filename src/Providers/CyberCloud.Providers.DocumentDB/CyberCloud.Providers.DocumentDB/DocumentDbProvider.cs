@@ -157,7 +157,7 @@ public sealed class DocumentDbProvider : IResourceProvider {
                 DocumentDbAccounts.ListKeysAction,
                 ActionKind.Post,
                 DocumentDbAccounts.ListKeysPermission,
-                secret: true,
+                true,
                 response: DocumentDbAccounts.ListKeysResponse,
                 handler: typeof(DocumentDbAccountListKeysHandler)
             )
@@ -185,14 +185,14 @@ public sealed class DocumentDbProvider : IResourceProvider {
             .Display(
                 "Document database account",
                 "Document database accounts",
-                shortName: "docdb",
-                summary: DocumentDbAccounts.CompatibilityStatement
+                "docdb",
+                DocumentDbAccounts.CompatibilityStatement
                 + " Runs on a CloudNativePG cluster, so failover, backup and point-in-time recovery "
                 + "are the operator's."
             )
             .Chart(DocumentDbAccounts.ChartName)
             .SupportsTags()
-            .RequiresCluster(DocumentDbAccounts.ClusterIdPointer);
+            .RequiresCluster();
     }
 
     // ── What an account draws ──────────────────────────────────────────────────────────────────
@@ -229,7 +229,7 @@ public sealed class DocumentDbProvider : IResourceProvider {
                 "/properties/sizing/cpu",
                 "/properties/gateway/replicas"
             ],
-            body => KubeQuantity.TryParse(DocumentDbAccounts.Resources(body).Cpu, out var cores)
+            static body => KubeQuantity.TryParse(DocumentDbAccounts.Resources(body).Cpu, out var cores)
                 && KubeQuantity.TryParse(DocumentDbAccounts.GatewayCpu, out var share)
                     ? Result<decimal>.Success(
                         DocumentDbAccounts.Instances(body) * cores
@@ -249,7 +249,7 @@ public sealed class DocumentDbProvider : IResourceProvider {
                 "/properties/sizing/memory",
                 "/properties/gateway/replicas"
             ],
-            body => KubeQuantity.TryGibibytes(DocumentDbAccounts.Resources(body).Memory, out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(DocumentDbAccounts.Resources(body).Memory, out var gibibytes)
                 && KubeQuantity.TryGibibytes(DocumentDbAccounts.GatewayMemory, out var share)
                     ? Result<decimal>.Success(
                         DocumentDbAccounts.Instances(body) * gibibytes
@@ -270,7 +270,7 @@ public sealed class DocumentDbProvider : IResourceProvider {
         MeterDerivation.Of(
             "postgres.instances × storage.size, in GiB",
             ["/properties/postgres/instances", "/properties/storage/size"],
-            body => KubeQuantity.TryGibibytes(DocumentDbAccounts.StorageSize(body), out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(DocumentDbAccounts.StorageSize(body), out var gibibytes)
                 ? Result<decimal>.Success(DocumentDbAccounts.Instances(body) * gibibytes)
                 : Unresolvable("storage", "storage.size")
         );

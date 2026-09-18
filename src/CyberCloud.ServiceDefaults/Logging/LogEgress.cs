@@ -59,7 +59,7 @@ static class LogEgress {
         ArgumentNullException.ThrowIfNull(to);
         ArgumentNullException.ThrowIfNull(configure);
 
-        var wrapped = LoggerSinkConfiguration.Wrap(inner => new SecretScrubbingSink(inner), configure);
+        var wrapped = LoggerSinkConfiguration.Wrap(static inner => new SecretScrubbingSink(inner), configure);
 
         return to.Sink(wrapped, LevelAlias.Minimum);
     }

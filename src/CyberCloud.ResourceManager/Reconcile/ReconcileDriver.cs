@@ -253,9 +253,6 @@ public sealed class ReconcileDriver(
                     );
 
                     break;
-
-                default:
-                    break;
             }
 
             // ── Which clusters this group's namespaces are on ────────────────────────────────────

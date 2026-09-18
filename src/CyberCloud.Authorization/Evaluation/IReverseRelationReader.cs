@@ -9,8 +9,11 @@ namespace CyberCloud.Authorization.Evaluation;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A second interface rather than a second method on <see cref="IRelationReader" />,
-///         and the split is the asymmetry docs/plan/07 § Storage is built on.</b>
+///         ⚠
+///         <b>
+///             A second interface rather than a second method on <see cref="IRelationReader" />,
+///             and the split is the asymmetry docs/plan/07 § Storage is built on.
+///         </b>
 ///         <c>CheckEvaluator</c> takes an <see cref="IRelationReader" /> and nothing else, so the
 ///         check path <i>cannot</i> reach the reverse index — "the direction that can be stale is
 ///         the one where staleness is a performance bug, not a security bug" is true by
@@ -19,8 +22,11 @@ namespace CyberCloud.Authorization.Evaluation;
 ///         forward one.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Two methods, because the Leopard index answers a different question from the
-///         reverse index and the walk asks both.</b> <see cref="ReadAsync" /> is the record: every
+///         ⚠
+///         <b>
+///             Two methods, because the Leopard index answers a different question from the
+///             reverse index and the walk asks both.
+///         </b> <see cref="ReadAsync" /> is the record: every
 ///         tuple naming the subject object, which the tupleset rule needs verbatim — a child's
 ///         <c>parent</c> tuple is an entry here and nowhere else. <see cref="ReadUsersetsAsync" />
 ///         is the closure: every userset the subject is transitively in, in one read, which is the

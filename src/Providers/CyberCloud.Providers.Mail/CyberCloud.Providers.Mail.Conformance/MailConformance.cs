@@ -1,5 +1,4 @@
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.Providers.Mail.Contracts;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -44,12 +43,12 @@ public sealed class MailDomainCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Mail/domains",
-            CreateProvider = () => new MailProvider(),
+            CreateProvider = static () => new MailProvider(),
             ReconcilerType = typeof(MailDomainReconciler),
-            CreateReconciler = clock => new MailDomainReconciler(clock),
+            CreateReconciler = static clock => new MailDomainReconciler(clock),
             Type = MailDomains.Type,
             ApiVersion = MailDomains.V2026,
-            Body = cluster => MailDomains.Body(cluster),
+            Body = static cluster => MailDomains.Body(cluster),
             // ⚠ Changes `storage.size`, which the reconciler renders into the claim template and
             // MailDomains.Matches reads back off the StatefulSet. Two other candidates were wrong for
             // two different reasons, and both look right:
@@ -59,12 +58,12 @@ public sealed class MailDomainCase : IProviderCaseSource {
             //     the change entirely.
             //   * `sieve` DOES change the Service's port count and would work here, but it changes
             //     the ConfigMap too, so a failure would not say which document was wrong.
-            ChangedBody = cluster => MailDomains.Body(cluster, storageSize: "40Gi"),
+            ChangedBody = static cluster => MailDomains.Body(cluster, storageSize: "40Gi"),
             // Drops the required `/properties/storage/size`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written: a
             // hand-written invalid body drifts out of date the day the schema gains a property and
             // then tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => WithoutStorageSize(MailDomains.Body(cluster)),
+            InvalidBody = static cluster => WithoutStorageSize(MailDomains.Body(cluster)),
             InvalidBodyTarget = "/properties/storage/size",
             // ⚠ EXPLICITLY EMPTY, AND THIS IS THE ONLY CASE IN THE TREE THAT SAYS SO. This type
             // declares no action at all — MailProvider carries the argument, which is that
@@ -79,7 +78,7 @@ public sealed class MailDomainCase : IProviderCaseSource {
             // EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile caught exactly that
             // attempt. One explicit line here is the cost of keeping the accident impossible.
             ActionName = string.Empty,
-            Objects = (id, ns) => MailDomains.Objects(ns, id.Name),
+            Objects = static (id, ns) => MailDomains.Objects(ns, id.Name),
             // ⚠ NOTHING. There is no operator for any of the three components, so no controller
             // writes an object this provider reads back. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
@@ -87,7 +86,7 @@ public sealed class MailDomainCase : IProviderCaseSource {
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
 
                 return MailDomains.Matches(match.ObjectJson, desired.RootElement);

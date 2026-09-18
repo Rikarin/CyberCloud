@@ -104,14 +104,14 @@ public sealed class KubeCoWriter(IKubeClusterConnection cluster) : IKubeCoWriter
         return RunAsync(
             writer,
             target,
-            absent: () => Result<ApplyOutcome>.Failure(
+            () => Result<ApplyOutcome>.Failure(
                 ErrorCode.ResourceNotFound,
                 $"'{target}' is not in cluster {cluster.ClusterId:D}, so there is nothing for resource "
                 + $"{writer.Id:D} to co-write onto. A co-writer never creates the owner's object — it "
                 + "would be created under the owner's name without the seven labels — so the owner's "
                 + "own reconcile has to have converged first."
             ),
-            attempt: (live, ct) => KubeCommand.For(cluster)
+            (live, ct) => KubeCommand.For(cluster)
                 .WithTenantId(writer.TenantId)
                 .WithResourceId(writer)
                 .WithKind(target.Kind)
@@ -133,7 +133,7 @@ public sealed class KubeCoWriter(IKubeClusterConnection cluster) : IKubeCoWriter
         return RunAsync(
             writer,
             target,
-            absent: () => Result<ApplyOutcome>.Success(
+            () => Result<ApplyOutcome>.Success(
                 new() {
                     Result = ApplyResult.Unchanged,
                     Target = target,
@@ -141,7 +141,7 @@ public sealed class KubeCoWriter(IKubeClusterConnection cluster) : IKubeCoWriter
                         + $"delete wins and resource {writer.Id:D}'s fragment went with it."
                 }
             ),
-            attempt: async (live, ct) => {
+            async (live, ct) => {
                 if (!CarriesFragmentOf(live, writer.Id)) {
                     return Result<ApplyOutcome>.Success(
                         new() {

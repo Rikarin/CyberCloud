@@ -239,15 +239,21 @@ sealed class DispatchStage(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The same page parameters as a resource collection, read the same way and
-    ///         echoed into <c>nextLink</c> the same way</b> — <c>$top</c> parsed leniently and used
+    ///         ⚠
+    ///         <b>
+    ///             The same page parameters as a resource collection, read the same way and
+    ///             echoed into <c>nextLink</c> the same way
+    ///         </b> — <c>$top</c> parsed leniently and used
     ///         twice (#76), <c>$skipToken</c> passed through verbatim — for the reasons
     ///         <see cref="CollectionAsync" /> gives. A client that pages one collection of this API
     ///         pages this one with no branch.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The manager takes the <i>parent's</i> path and the link is built from the
-    ///         <i>collection's</i>.</b> A scope collection has no grain, so
+    ///         ⚠
+    ///         <b>
+    ///             The manager takes the <i>parent's</i> path and the link is built from the
+    ///             <i>collection's</i>.
+    ///         </b> A scope collection has no grain, so
     ///         <c>IScopeManager.ListAsync</c> is addressed at the tenant or subscription whose
     ///         listing it reads; the <c>nextLink</c> has to be the URL the caller requested, which
     ///         is the collection's. Both come off the rebuilt route, carrying the token's tenant.
@@ -388,8 +394,11 @@ sealed class DispatchStage(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The same page parameters as a resource collection, read the same way and echoed
-    ///         into <c>nextLink</c> the same way</b> — <c>$top</c> parsed leniently, <c>$skipToken</c>
+    ///         ⚠
+    ///         <b>
+    ///             The same page parameters as a resource collection, read the same way and echoed
+    ///             into <c>nextLink</c> the same way
+    ///         </b> — <c>$top</c> parsed leniently, <c>$skipToken</c>
     ///         passed through verbatim, and the caller's own <c>$top</c> in the link rather than the
     ///         clamp, for the reasons <see cref="CollectionAsync" /> gives. A client that pages one
     ///         collection of this API pages this one with no branch.
@@ -441,14 +450,20 @@ sealed class DispatchStage(
     }
 
     /// <summary>
-    ///     The resource graph query <c>POST</c> — <c>{ "query": "resources | …", "$top": n,
-    ///     "$skipToken": "…" }</c> to <c>IResourceGraphQuery</c>, answered in the collection
+    ///     The resource graph query <c>POST</c> —
+    ///     <c>
+    /// { "query": "resources | …", "$top": n,
+    ///     "$skipToken": "…" }
+    ///     </c> to <c>IResourceGraphQuery</c>, answered in the collection
     ///     envelope. docs/plan/08 § The resource-graph projection, the query half of #54.
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The page parameters are read from the body first and the query string second,
-    ///         and the <c>nextLink</c> carries them in the query string.</b> A <c>POST</c> has a body
+    ///         ⚠
+    ///         <b>
+    ///             The page parameters are read from the body first and the query string second,
+    ///             and the <c>nextLink</c> carries them in the query string.
+    ///         </b> A <c>POST</c> has a body
     ///         to put <c>$top</c> in, and Azure Resource Graph's clients put it there; but a
     ///         <c>nextLink</c> is a URL, and the collection rule of this API — the link is the whole
     ///         next request (#76) — means the offset has to survive in it. So a client follows the
@@ -479,7 +494,7 @@ sealed class DispatchStage(
                 Error = new(
                     ErrorCode.InvalidRequestBody,
                     $"{context.Http.Request.Method} is not supported on the resource graph. A query is a POST with "
-                    + "{ \"query\": \"resources | …\" } as the body — docs/plan/08 § The resource-graph projection."
+                    + """{ "query": "resources | …" } as the body — docs/plan/08 § The resource-graph projection."""
                 )
             }.WithHeader(GatewayHeaders.Allow, "POST");
         }
@@ -664,9 +679,9 @@ sealed class DispatchStage(
             // than minting from an empty caller, because a ticket with no tenant behind it would be
             // the one thing this route must never hand out.
             return GatewayOutcome.Failure(
-                    StatusCodes.Status401Unauthorized,
-                    BearerTokenErrors.Unauthenticated("a hub ticket needs the caller's own token")
-                )
+                StatusCodes.Status401Unauthorized,
+                BearerTokenErrors.Unauthenticated("a hub ticket needs the caller's own token")
+            )
                 .WithHeader("WWW-Authenticate", "Bearer");
         }
 
@@ -676,8 +691,8 @@ sealed class DispatchStage(
         // this body is a credential, thirty seconds of one, and a proxy that kept it would hand the
         // next requester somebody else's hub.
         return new GatewayOutcome {
-                StatusCode = StatusCodes.Status200OK, Json = HubTickets.Body(ticket, context.Route.HubName)
-            }
+            StatusCode = StatusCodes.Status200OK, Json = HubTickets.Body(ticket, context.Route.HubName)
+        }
             .WithHeader(GatewayHeaders.CacheControl, "no-store");
     }
 

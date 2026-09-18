@@ -156,8 +156,11 @@ public sealed partial class WidgetResource {
     /// <param name="context">The client context the resource keeps.</param>
     /// <param name="served">The resource object, exactly as <c>ResponseBodies.Resource</c> wrote it.</param>
     /// <remarks>
-    ///     ⚠ <b>The hand-written half's one way to make a resource from a response, and the same
-    ///     bytes are read twice.</b> The wire is flat and the SDK is not — the remarks on
+    ///     ⚠
+    ///     <b>
+    ///         The hand-written half's one way to make a resource from a response, and the same
+    ///         bytes are read twice.
+    ///     </b> The wire is flat and the SDK is not — the remarks on
     ///     <see cref="ResourceEnvelope{TProvisioningState}" /> carry the argument — so the element is
     ///     deserialised once as the envelope and once as <see cref="WidgetData" />, and each read
     ///     ignores the other's members. The URL is the envelope's <c>id</c>, which the document
@@ -168,7 +171,7 @@ public sealed partial class WidgetResource {
         var envelope = JsonSerializer.Deserialize(served, WidgetJsonContext.Default.WidgetEnvelope)!;
         var data = JsonSerializer.Deserialize(served, WidgetJsonContext.Default.WidgetData)!;
 
-        return new WidgetResource(context, new Uri(context.Endpoint, envelope.Id), data) {
+        return new(context, new Uri(context.Endpoint, envelope.Id), data) {
             Id = envelope.Id,
             Name = envelope.Name,
             Type = envelope.Type,

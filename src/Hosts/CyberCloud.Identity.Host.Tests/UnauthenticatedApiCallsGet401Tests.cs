@@ -35,7 +35,7 @@ public sealed class UnauthenticatedApiCallsGet401Tests {
 
         return new(
             context,
-            new(IdentityHostAuthentication.SchemeName, displayName: null, typeof(CookieAuthenticationHandler)),
+            new(IdentityHostAuthentication.SchemeName, null, typeof(CookieAuthenticationHandler)),
             options,
             new AuthenticationProperties(),
             "https://identity.example/signin?returnUrl=" + Uri.EscapeDataString(path)

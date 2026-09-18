@@ -67,9 +67,9 @@ public sealed class SubjectRelationsGrain(
             Result<IReadOnlyList<SubjectIndexEntry>>.Success(
                 [
                     .. state.State.Entries
-                        .OrderBy(x => x.Object.ToString(), StringComparer.Ordinal)
-                        .ThenBy(x => x.Relation, StringComparer.Ordinal)
-                        .ThenBy(x => x.SubjectRelation, StringComparer.Ordinal)
+                        .OrderBy(static x => x.Object.ToString(), StringComparer.Ordinal)
+                        .ThenBy(static x => x.Relation, StringComparer.Ordinal)
+                        .ThenBy(static x => x.SubjectRelation, StringComparer.Ordinal)
                 ]
             )
         );

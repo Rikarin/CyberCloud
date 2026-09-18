@@ -14,12 +14,12 @@ public sealed class TokenRefreshedMidPollTests {
     public async Task A_token_that_expires_during_a_poll_is_replaced_without_the_operation_failing() {
         // Token 1 expires 250 ms out; token 2 is good for an hour. The poll interval is 150 ms and the
         // operation takes five polls, so the expiry lands in the middle of the poll loop.
-        var credential = new FakeCredential(call => call == 1
+        var credential = new FakeCredential(static call => call == 1
                 ? new AccessToken("token-expiring", DateTimeOffset.UtcNow.AddMilliseconds(250))
                 : new AccessToken("token-fresh", DateTimeOffset.UtcNow.AddHours(1))
         );
 
-        var transport = new ScriptedTransport((request, index) => index switch {
+        var transport = new ScriptedTransport(static (request, index) => index switch {
                 0 => Responses.Accepted(TestClient.OperationUri),
                 < 5 => Responses.Operation("Running", [("etcd", "still going", 20)]),
                 5 => Responses.Operation("Succeeded", [("etcd", "still going", 20), ("ready", "done", 100)]),
@@ -30,7 +30,7 @@ public sealed class TokenRefreshedMidPollTests {
         using var client = TestClient.Create(
             transport,
             credential,
-            options => options.PollingInterval = TimeSpan.FromMilliseconds(150)
+            static options => options.PollingInterval = TimeSpan.FromMilliseconds(150)
         );
 
         var operation = await client.Widgets()
@@ -42,7 +42,7 @@ public sealed class TokenRefreshedMidPollTests {
         // The credential was asked more than once — the expiry was noticed.
         credential.Calls.ShouldBeGreaterThan(1);
 
-        var authorizations = transport.Requests.Select(x => x.Authorization).ToList();
+        var authorizations = transport.Requests.Select(static x => x.Authorization).ToList();
 
         authorizations.ShouldContain("Bearer token-expiring");
         authorizations.ShouldContain("Bearer token-fresh");
@@ -56,7 +56,7 @@ public sealed class TokenRefreshedMidPollTests {
     [Fact]
     public async Task A_live_token_is_reused_across_calls() {
         var credential = new FakeCredential("token-1", TimeSpan.FromHours(1));
-        var transport = new ScriptedTransport((request, index) => Responses.Json(
+        var transport = new ScriptedTransport(static (request, index) => Responses.Json(
                 HttpStatusCode.OK,
                 TestClient.WidgetBody
             )
@@ -79,8 +79,8 @@ public sealed class TokenRefreshedMidPollTests {
     /// </summary>
     [Fact]
     public async Task Concurrent_calls_ask_the_credential_once() {
-        var credential = new FakeCredential(async: true);
-        var transport = new ScriptedTransport((request, index) => Responses.Json(
+        var credential = new FakeCredential(true);
+        var transport = new ScriptedTransport(static (request, index) => Responses.Json(
                 HttpStatusCode.OK,
                 TestClient.WidgetBody
             )
@@ -118,7 +118,7 @@ public sealed class CredentialsNeverLeakTests {
 
     static CyberCloudCredentialOptions Options(ScriptedTransport transport) =>
         new() {
-            AuthorityHost = new Uri("https://login.cybercloud.test/"),
+            AuthorityHost = new("https://login.cybercloud.test/"),
             Transport = transport,
             TokenCache = TokenCache.CreateInMemory()
         };
@@ -162,7 +162,7 @@ public sealed class CredentialsNeverLeakTests {
     /// </summary>
     [Fact]
     public async Task A_request_failure_never_carries_the_authorization_header() {
-        var transport = new ScriptedTransport((request, index) =>
+        var transport = new ScriptedTransport(static (request, index) =>
             Responses.Json(
                 HttpStatusCode.Forbidden,
                 """{"error":{"code":"AuthorizationFailed","message":"Not permitted."}}"""
@@ -183,7 +183,7 @@ public sealed class CredentialsNeverLeakTests {
     public async Task A_certificate_credentials_assertion_never_appears_in_a_failure() {
         using var certificate = TestCertificates.CreateRsa();
 
-        var transport = Discovery((request, index) =>
+        var transport = Discovery(static (request, index) =>
             Responses.Json(
                 HttpStatusCode.Unauthorized,
                 """{"error":"invalid_client","error_description":"Unknown certificate."}"""
@@ -208,7 +208,7 @@ public sealed class CredentialsNeverLeakTests {
     static string Describe(Exception exception) {
         var builder = new StringBuilder();
 
-        for (Exception? current = exception; current is not null; current = current.InnerException) {
+        for (var current = exception; current is not null; current = current.InnerException) {
             builder.AppendLine(current.ToString());
         }
 

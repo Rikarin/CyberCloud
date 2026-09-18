@@ -86,7 +86,7 @@ public class ResourceNamingTests {
 
         result.IsFailure.ShouldBeTrue();
         result.Error!.Message.ShouldNotContain("\0");
-        result.Error.Message.ShouldContain("\\u0000");
+        result.Error.Message.ShouldContain("""\u0000""");
         result.Error.Message.ShouldContain("the character U+0000");
     }
 

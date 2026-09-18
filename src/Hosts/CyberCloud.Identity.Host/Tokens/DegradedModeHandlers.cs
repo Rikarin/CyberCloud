@@ -28,14 +28,20 @@ namespace CyberCloud.Identity.Host.Tokens;
 ///         throws <i>"The core services must be registered"</i> on the first token request — which
 ///         is what this host did for as long as it mapped no token endpoint. Enabling the degraded
 ///         mode turns those built-in checks off and makes the server refuse any request for which
-///         no custom validator is registered: <i>"No custom token request validation handler was
-///         found. When enabling the degraded mode, a custom
-///         'IOpenIddictServerHandler&lt;ValidateTokenRequestContext&gt;' must be implemented"</i>.
+///         no custom validator is registered:
+///         <i>
+///             "No custom token request validation handler was
+///             found. When enabling the degraded mode, a custom
+///             'IOpenIddictServerHandler&lt;ValidateTokenRequestContext&gt;' must be implemented"
+///         </i>.
 ///         Every handler here exists to answer one of those sentences.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What degraded mode switches off is wider than the store lookups, and two of the
-///         checks below exist to put it back.</b> OpenIddict's <c>ValidateClientRedirectUri</c>,
+///         ⚠
+///         <b>
+///             What degraded mode switches off is wider than the store lookups, and two of the
+///             checks below exist to put it back.
+///         </b> OpenIddict's <c>ValidateClientRedirectUri</c>,
 ///         its grant and scope permission checks and — less obviously — its
 ///         <c>ValidateProofKeyForCodeExchangeRequirement</c> all carry the
 ///         <c>RequireDegradedModeDisabled</c> filter, so <c>RequireProofKeyForCodeExchange()</c> is
@@ -150,13 +156,21 @@ public static class DegradedModeHandlers {
             // removed; the request resumes with the tenant they name. A request that names nothing
             // and has no fallback, or a tenant client (whose registration lives IN a tenant), still
             // gets the error: there is no registration to validate the redirect_uri against.
-            if (tenantId is null && !string.IsNullOrWhiteSpace(hint) && FirstPartyClients.IsFirstParty(context.ClientId)) {
+            if (tenantId is null
+                && !string.IsNullOrWhiteSpace(hint)
+                && FirstPartyClients.IsFirstParty(context.ClientId)) {
                 context.Transaction.Properties[UnknownTenantProperty] = hint;
                 tenantId = Guid.Empty;
             }
 
             if (tenantId is null) {
-                Refuse(context, Guid.Empty, OpenIddictConstants.Errors.InvalidRequest, "A tenant is required: name one with the 'tenant' parameter, as a tenant id or a slug.", "no-tenant");
+                Refuse(
+                    context,
+                    Guid.Empty,
+                    OpenIddictConstants.Errors.InvalidRequest,
+                    "A tenant is required: name one with the 'tenant' parameter, as a tenant id or a slug.",
+                    "no-tenant"
+                );
 
                 return;
             }
@@ -164,25 +178,49 @@ public static class DegradedModeHandlers {
             var client = await clients.ResolveAsync(tenantId.Value, context.ClientId, context.CancellationToken);
 
             if (client is null) {
-                Refuse(context, tenantId.Value, OpenIddictConstants.Errors.InvalidClient, "The client is not registered.", "unknown-client");
+                Refuse(
+                    context,
+                    tenantId.Value,
+                    OpenIddictConstants.Errors.InvalidClient,
+                    "The client is not registered.",
+                    "unknown-client"
+                );
 
                 return;
             }
 
             if (!FirstPartyClients.IsRegisteredRedirectUri(client, context.RedirectUri)) {
-                Refuse(context, tenantId.Value, OpenIddictConstants.Errors.InvalidRequest, "The 'redirect_uri' parameter is not registered for this client.", "unregistered-redirect-uri");
+                Refuse(
+                    context,
+                    tenantId.Value,
+                    OpenIddictConstants.Errors.InvalidRequest,
+                    "The 'redirect_uri' parameter is not registered for this client.",
+                    "unregistered-redirect-uri"
+                );
 
                 return;
             }
 
             if (!client.AllowedGrants.Contains(GrantType.AuthorizationCode)) {
-                Refuse(context, tenantId.Value, OpenIddictConstants.Errors.UnauthorizedClient, "This client may not use the authorization-code flow.", "grant-not-allowed");
+                Refuse(
+                    context,
+                    tenantId.Value,
+                    OpenIddictConstants.Errors.UnauthorizedClient,
+                    "This client may not use the authorization-code flow.",
+                    "grant-not-allowed"
+                );
 
                 return;
             }
 
             if (context.Request.GetScopes().Any(x => !client.AllowedScopes.Contains(x, StringComparer.Ordinal))) {
-                Refuse(context, tenantId.Value, OpenIddictConstants.Errors.InvalidScope, "A requested scope is not allowed for this client.", "scope-not-allowed");
+                Refuse(
+                    context,
+                    tenantId.Value,
+                    OpenIddictConstants.Errors.InvalidScope,
+                    "A requested scope is not allowed for this client.",
+                    "scope-not-allowed"
+                );
 
                 return;
             }
@@ -191,7 +229,13 @@ public static class DegradedModeHandlers {
             // remarks — so the one setting docs/plan/11 § Protocol makes non-negotiable is enforced
             // here. Only the presence: the method's spelling is OpenIddict's parameter check.
             if (string.IsNullOrEmpty(context.Request.CodeChallenge)) {
-                Refuse(context, tenantId.Value, OpenIddictConstants.Errors.InvalidRequest, "The 'code_challenge' parameter is required: this server accepts the authorization-code flow only with PKCE.", "pkce-missing");
+                Refuse(
+                    context,
+                    tenantId.Value,
+                    OpenIddictConstants.Errors.InvalidRequest,
+                    "The 'code_challenge' parameter is required: this server accepts the authorization-code flow only with PKCE.",
+                    "pkce-missing"
+                );
 
                 return;
             }
@@ -200,7 +244,13 @@ public static class DegradedModeHandlers {
             context.Transaction.Properties[ClientProperty] = client;
         }
 
-        void Refuse(ValidateAuthorizationRequestContext context, Guid tenantId, string error, string description, string reason) {
+        void Refuse(
+            ValidateAuthorizationRequestContext context,
+            Guid tenantId,
+            string error,
+            string description,
+            string reason
+        ) {
             GrantLog.AuthorizationRequestRefused(logger, tenantId, error, reason);
             context.Reject(error, description);
         }
@@ -215,8 +265,11 @@ public static class DegradedModeHandlers {
     /// <param name="clients">The first-party registrations, for the origin allow-list.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The <c>Origin</c> check runs before any grain call and before the cookie is even
-    ///         read.</b> <c>SameSite=Lax</c> lets the browser send the cookie on a same-site
+    ///         ⚠
+    ///         <b>
+    ///             The <c>Origin</c> check runs before any grain call and before the cookie is even
+    ///             read.
+    ///         </b> <c>SameSite=Lax</c> lets the browser send the cookie on a same-site
     ///         <c>POST</c>, and a tenant's subdomain is same-site with the identity host
     ///         (docs/plan/11 § Hosts). A page on such a subdomain could therefore <c>POST</c>
     ///         <c>grant_type=refresh_token&amp;client_id=cyc-portal</c> and have the browser attach
@@ -235,7 +288,8 @@ public static class DegradedModeHandlers {
     ///         parameter is missing, which is what the portal's first load expects.
     ///     </para>
     /// </remarks>
-    public sealed class ExtractRefreshTokenFromCookie(FirstPartyClients clients) : IOpenIddictServerHandler<ExtractTokenRequestContext> {
+    public sealed class ExtractRefreshTokenFromCookie(FirstPartyClients clients) :
+        IOpenIddictServerHandler<ExtractTokenRequestContext> {
         /// <summary>The refusal, verbatim, for a request whose origin is not a first-party browser's.</summary>
         public const string OriginNotAllowed = "The request's origin is not allowed to present the refresh cookie.";
 
@@ -243,7 +297,10 @@ public static class DegradedModeHandlers {
         public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
             OpenIddictServerHandlerDescriptor.CreateBuilder<ExtractTokenRequestContext>()
                 .UseSingletonHandler<ExtractRefreshTokenFromCookie>()
-                .SetOrder(OpenIddictServerAspNetCoreHandlers.ExtractPostRequest<ExtractTokenRequestContext>.Descriptor.Order + 10_000)
+                .SetOrder(
+                    OpenIddictServerAspNetCoreHandlers.ExtractPostRequest<ExtractTokenRequestContext>.Descriptor.Order
+                    + 10_000
+                )
                 .SetType(OpenIddictServerHandlerType.Custom)
                 .Build();
 
@@ -292,9 +349,12 @@ public static class DegradedModeHandlers {
     /// <param name="firstParty">The first-party registrations, for the origin allow-list.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A browser client's token request is refused unless its <c>Origin</c> is one of
-    ///         that client's redirect-URI origins — the code exchange and the body-borne refresh
-    ///         both, not only the cookie-borne refresh.</b> The cookie is written by
+    ///         ⚠
+    ///         <b>
+    ///             A browser client's token request is refused unless its <c>Origin</c> is one of
+    ///             that client's redirect-URI origins — the code exchange and the body-borne refresh
+    ///             both, not only the cookie-borne refresh.
+    ///         </b> The cookie is written by
     ///         <see cref="MoveRefreshTokenToCookie" /> into whichever browser made the request, and
     ///         <c>Set-Cookie</c> on a top-level cross-site form <c>POST</c> is honoured whatever
     ///         <c>SameSite</c> says. Without this rule an attacker holding a code and its verifier
@@ -323,8 +383,11 @@ public static class DegradedModeHandlers {
     ///         exchange say otherwise would be letting it move a code between tenants.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A confidential client authenticates on the code and refresh grants, and the
-    ///         check is here rather than in the passthrough.</b> RFC 6749 § 4.1.3 and § 6: a client
+    ///         ⚠
+    ///         <b>
+    ///             A confidential client authenticates on the code and refresh grants, and the
+    ///             check is here rather than in the passthrough.
+    ///         </b> RFC 6749 § 4.1.3 and § 6: a client
     ///         that was issued credentials MUST authenticate at the token endpoint, and the reason
     ///         is the code — a confidential client's redirect URI may be a server nobody but the
     ///         client can read, so anyone who lifts a code from a log or a <c>Referer</c> should
@@ -431,7 +494,10 @@ public static class DegradedModeHandlers {
             // ⚠ A public client presents no secret, and one that does is misconfigured in a way worth
             // refusing: a "secret" a SPA or a CLI holds is one every copy of it holds.
             if (client.IsPublicClient && !string.IsNullOrEmpty(context.Request.ClientSecret)) {
-                context.Reject(OpenIddictConstants.Errors.InvalidClient, "A public client must not send a client_secret.");
+                context.Reject(
+                    OpenIddictConstants.Errors.InvalidClient,
+                    "A public client must not send a client_secret."
+                );
 
                 return;
             }
@@ -457,7 +523,11 @@ public static class DegradedModeHandlers {
                     return;
                 }
 
-                var verified = await secrets.VerifyAsync(client.ClientSecretRef, context.Request.ClientSecret, context.CancellationToken);
+                var verified = await secrets.VerifyAsync(
+                    client.ClientSecretRef,
+                    context.Request.ClientSecret,
+                    context.CancellationToken
+                );
 
                 if (verified.TryGetError(out var unavailable)) {
                     // ⚠ Verbatim: this is the sentence naming the missing IClientSecretSeam
@@ -485,7 +555,9 @@ public static class DegradedModeHandlers {
                 return;
             }
 
-            var grant = context.Request.IsRefreshTokenGrantType() ? GrantType.RefreshToken : GrantType.AuthorizationCode;
+            var grant = context.Request.IsRefreshTokenGrantType()
+                ? GrantType.RefreshToken
+                : GrantType.AuthorizationCode;
 
             if (!client.AllowedGrants.Contains(grant)) {
                 context.Reject(OpenIddictConstants.Errors.UnauthorizedClient, "This client may not use this grant.");
@@ -518,9 +590,12 @@ public static class DegradedModeHandlers {
     ///         <c>RefreshCookieTests.OnlyBrowserClientsGetTheCookie</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The cookie is written only for a request whose <c>Origin</c> is the browser
-    ///         client's own — the second lock on the login-CSRF <see cref="ValidateTokenRequest" />
-    ///         refuses first.</b> That validator is what answers a foreign origin, so a token
+    ///         ⚠
+    ///         <b>
+    ///             The cookie is written only for a request whose <c>Origin</c> is the browser
+    ///             client's own — the second lock on the login-CSRF <see cref="ValidateTokenRequest" />
+    ///             refuses first.
+    ///         </b> That validator is what answers a foreign origin, so a token
     ///         response for one should never reach this handler; if one does — a handler reordered,
     ///         a validator dropped — the refresh token is handed to nobody: not to the cookie, which
     ///         would plant it in the victim's browser, and not to the body, which the portal's
@@ -534,12 +609,16 @@ public static class DegradedModeHandlers {
     ///         portal that keeps sending it keeps getting <c>invalid_grant</c> instead of a sign-in.
     ///     </para>
     /// </remarks>
-    public sealed class MoveRefreshTokenToCookie(FirstPartyClients clients) : IOpenIddictServerHandler<ApplyTokenResponseContext> {
+    public sealed class MoveRefreshTokenToCookie(FirstPartyClients clients) :
+        IOpenIddictServerHandler<ApplyTokenResponseContext> {
         /// <summary>The registration — before the JSON body is written.</summary>
         public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
             OpenIddictServerHandlerDescriptor.CreateBuilder<ApplyTokenResponseContext>()
                 .UseSingletonHandler<MoveRefreshTokenToCookie>()
-                .SetOrder(OpenIddictServerAspNetCoreHandlers.ProcessJsonResponse<ApplyTokenResponseContext>.Descriptor.Order - 1_000)
+                .SetOrder(
+                    OpenIddictServerAspNetCoreHandlers.ProcessJsonResponse<ApplyTokenResponseContext>.Descriptor.Order
+                    - 1_000
+                )
                 .SetType(OpenIddictServerHandlerType.Custom)
                 .Build();
 
@@ -591,7 +670,8 @@ public static class DegradedModeHandlers {
     ///     cookie is the only thing that says where the person signed in. First-party clients are
     ///     tenant-independent and need neither.
     /// </remarks>
-    public sealed class ValidateEndSessionRequest(TenantHint tenants, IClientResolver clients) : IOpenIddictServerHandler<ValidateEndSessionRequestContext> {
+    public sealed class ValidateEndSessionRequest(TenantHint tenants, IClientResolver clients) :
+        IOpenIddictServerHandler<ValidateEndSessionRequestContext> {
         /// <summary>The registration.</summary>
         public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
             OpenIddictServerHandlerDescriptor.CreateBuilder<ValidateEndSessionRequestContext>()
@@ -612,7 +692,9 @@ public static class DegradedModeHandlers {
 
             var tenantId = await TenantOfAsync(context);
 
-            var client = tenantId is null ? null : await clients.ResolveAsync(tenantId.Value, context.ClientId, context.CancellationToken);
+            var client = tenantId is null
+                ? null
+                : await clients.ResolveAsync(tenantId.Value, context.ClientId, context.CancellationToken);
 
             if (client is null) {
                 context.Reject(OpenIddictConstants.Errors.InvalidClient, "The client is not registered.");
@@ -622,7 +704,10 @@ public static class DegradedModeHandlers {
 
             if (!string.IsNullOrEmpty(context.PostLogoutRedirectUri)
                 && !FirstPartyClients.IsRegisteredPostLogoutRedirectUri(client, context.PostLogoutRedirectUri)) {
-                context.Reject(OpenIddictConstants.Errors.InvalidRequest, "The 'post_logout_redirect_uri' parameter is not registered for this client.");
+                context.Reject(
+                    OpenIddictConstants.Errors.InvalidRequest,
+                    "The 'post_logout_redirect_uri' parameter is not registered for this client."
+                );
 
                 return;
             }
@@ -726,8 +811,11 @@ public static class DegradedModeHandlers {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>In degraded mode a code has no id at all, and that is the whole reason this
-    ///         handler exists.</b> OpenIddict's <c>CreateTokenEntry</c> is what sets the token id,
+    ///         ⚠
+    ///         <b>
+    ///             In degraded mode a code has no id at all, and that is the whole reason this
+    ///             handler exists.
+    ///         </b> OpenIddict's <c>CreateTokenEntry</c> is what sets the token id,
     ///         and it carries <c>RequireDegradedModeDisabled</c> — it writes the token store, which
     ///         this host does not have. Its <c>AttachTokenMetadata</c> stamps a fresh <c>jti</c> on
     ///         an <i>access</i> token and on nothing else. So a code minted by this server was a
@@ -757,7 +845,7 @@ public static class DegradedModeHandlers {
         public ValueTask HandleAsync(GenerateTokenContext context) {
             ArgumentNullException.ThrowIfNull(context);
 
-            if (context.TokenType is OpenIddictConstants.TokenTypeIdentifiers.Private.AuthorizationCode
+            if (context.TokenType is not null
                 && context.Principal is { } principal
                 && string.IsNullOrEmpty(principal.GetTokenId())) {
                 principal.SetTokenId(Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture));
@@ -832,9 +920,12 @@ public static class DegradedModeHandlers {
     ///     self-contained — a user types the user code into a page, so something has to map it back
     ///     — and its post-configuration refuses to build the server options at all when the device
     ///     flow is allowed and no custom <c>ValidateTokenContext</c> and <c>GenerateTokenContext</c>
-    ///     handler exists: <i>"No custom token validation handler was found. When enabling the
-    ///     degraded mode, a custom 'IOpenIddictServerHandler&lt;ValidateTokenContext&gt;' must be
-    ///     implemented to handle device and user codes"</i>.
+    ///     handler exists:
+    ///     <i>
+    ///         "No custom token validation handler was found. When enabling the
+    ///         degraded mode, a custom 'IOpenIddictServerHandler&lt;ValidateTokenContext&gt;' must be
+    ///         implemented to handle device and user codes"
+    ///     </i>.
     ///     <c>OpenIddictServerOptionsTests.TheOptionsCanBeMaterialisedAtAll</c> found it. ⚠ Both
     ///     handlers act on those two token types and no other — an access token, a code and a
     ///     refresh token pass through untouched, which is what makes them safe to register beside
@@ -881,7 +972,7 @@ public static class DegradedModeHandlers {
             // Only when the caller could ONLY be presenting a device or user code. A validation that
             // would also accept an access token or a refresh token is somebody else's to answer.
             if (context.ValidTokenTypes.Count > 0
-                && context.ValidTokenTypes.All(x =>
+                && context.ValidTokenTypes.All(static x =>
                     x is OpenIddictConstants.TokenTypeIdentifiers.Private.DeviceCode
                         or OpenIddictConstants.TokenTypeIdentifiers.Private.UserCode
                 )) {

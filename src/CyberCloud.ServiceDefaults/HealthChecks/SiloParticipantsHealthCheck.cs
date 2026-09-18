@@ -47,8 +47,8 @@ sealed class SiloParticipantsHealthCheck(IEnumerable<IHealthCheckParticipant> pa
             .Select(participant =>
                 (participant, healthy: participant.CheckHealth(lastChecked, out var reason), reason)
             )
-            .Where(x => !x.healthy)
-            .Select(x => $"{x.participant.GetType().Name}: {x.reason}")
+            .Where(static x => !x.healthy)
+            .Select(static x => $"{x.participant.GetType().Name}: {x.reason}")
             .ToList();
 
         return Task.FromResult(

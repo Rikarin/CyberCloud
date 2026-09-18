@@ -89,7 +89,7 @@ public static class IdentitySiloBuilderExtensions {
             )
         );
         builder.Services.TryAddSingleton<ITokenExchange, GrainTokenExchange>();
-        builder.Services.TryAddSingleton<SignInOptions>(_ => SignInOptions.Default);
+        builder.Services.TryAddSingleton(static _ => SignInOptions.Default);
         builder.Services.TryAddSingleton<SignInService>();
 
         return builder;

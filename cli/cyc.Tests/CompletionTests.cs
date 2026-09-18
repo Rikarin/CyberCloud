@@ -38,7 +38,7 @@ public sealed class CompletionTests {
             CompletionCommand.Script(shell).ShouldNotBeNullOrWhiteSpace();
         }
 
-        Should.Throw<CycUsageException>(() => CompletionCommand.Script("csh"))
+        Should.Throw<CycUsageException>(static () => CompletionCommand.Script("csh"))
             .Message.ShouldContain("bash, zsh, fish, pwsh");
     }
 

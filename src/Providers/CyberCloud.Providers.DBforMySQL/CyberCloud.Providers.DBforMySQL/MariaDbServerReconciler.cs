@@ -133,9 +133,6 @@ public sealed class MariaDbServerReconciler(IClock clock) : IResourceReconciler 
                     ?? "another field manager owns part of the MariaDB and it was not overwritten",
                     TimeSpan.FromSeconds(30)
                 );
-
-            default:
-                break;
         }
 
         // ── Clause 4. Everything above this line is a claim; this is the reading. ───────────────

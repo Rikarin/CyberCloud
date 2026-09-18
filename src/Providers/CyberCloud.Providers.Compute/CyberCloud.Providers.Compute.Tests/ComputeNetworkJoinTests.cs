@@ -8,8 +8,11 @@ namespace CyberCloud.Providers.Compute.Tests;
 ///     family's own spelling of it.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The first test in the tree to cross a provider family boundary, and the reason is the
-///     rule that forbids the shipped assemblies from crossing it.</b> docs/plan/03 § Assembly graph
+///     ⚠
+///     <b>
+///         The first test in the tree to cross a provider family boundary, and the reason is the
+///         rule that forbids the shipped assemblies from crossing it.
+///     </b> docs/plan/03 § Assembly graph
 ///     rules, rule 2, keeps <c>CyberCloud.Providers.Compute</c> off
 ///     <c>CyberCloud.Providers.Network.Contracts</c>, so <see cref="VirtualMachines.LogicalSwitchOf" />
 ///     has to spell <c>{namespace}-{network}-{subnet}</c> itself. A test project is outside the rule
@@ -21,18 +24,32 @@ public sealed class ComputeNetworkJoinTests {
     [Fact]
     public void TheMachinesLogicalSwitchIsTheSubnetsOwnObjectName() {
         var ns = "11111111111141118111111111111111-prod";
-        using var body = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, virtualNetwork: "vnet", subnet: "web"));
-
-        VirtualMachines.LogicalSwitchOf(ns, body.RootElement).ShouldBe(
-            NetworkSubnets.ObjectNameOf(ns, "vnet", "web"),
-            "the machine would put its interface on a switch the Network family does not render"
+        using var body = JsonDocument.Parse(
+            VirtualMachines.Body(Compute.ClusterId, virtualNetwork: "vnet", subnet: "web")
         );
 
+        VirtualMachines.LogicalSwitchOf(ns, body.RootElement)
+            .ShouldBe(
+                NetworkSubnets.ObjectNameOf(ns, "vnet", "web"),
+                "the machine would put its interface on a switch the Network family does not render"
+            );
+
         // And through the subnet's own address, which is the rule the Network family applies to itself.
-        var subnet = new ResourceId(Compute.TenantA, Compute.SubscriptionA, "prod", NetworkSubnets.Type, "web", Guid.NewGuid(), "vnet");
+        var subnet = new ResourceId(
+            Compute.TenantA,
+            Compute.SubscriptionA,
+            "prod",
+            NetworkSubnets.Type,
+            "web",
+            Guid.NewGuid(),
+            "vnet"
+        );
         VirtualMachines.LogicalSwitchOf(ns, body.RootElement).ShouldBe(NetworkSubnets.ObjectNameOf(ns, subnet));
 
-        VirtualMachines.LogicalSwitchAnnotation.ShouldBe(LoadBalancers.LogicalSwitchAnnotation, "the fabric reads one annotation key, and a proxy pod and a machine must use the same one");
+        VirtualMachines.LogicalSwitchAnnotation.ShouldBe(
+            LoadBalancers.LogicalSwitchAnnotation,
+            "the fabric reads one annotation key, and a proxy pod and a machine must use the same one"
+        );
     }
 
     [Fact]

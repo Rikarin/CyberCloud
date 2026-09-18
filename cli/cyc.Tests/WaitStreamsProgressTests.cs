@@ -25,7 +25,7 @@ public sealed class WaitStreamsProgressTests {
         TestHost? host = null;
 
         var transport = new ScriptedTransport(
-            (_, index) => index switch {
+            static (_, index) => index switch {
                 0 => Responses.Accepted("https://api.cybercloud.io/operations/op-1"),
                 1 => Poll(20, Entry(20, "applying", "namespace created")),
                 2 => Poll(
@@ -85,7 +85,7 @@ public sealed class WaitStreamsProgressTests {
 
     [Fact]
     public async Task NoWaitReturnsTheOperationIdWithoutPolling() {
-        var transport = new ScriptedTransport((_, index) => index == 0
+        var transport = new ScriptedTransport(static (_, index) => index == 0
                 ? Responses.Accepted("https://api.cybercloud.io/operations/op-77")
                 : throw new ShouldAssertException("--no-wait polled the operation.")
         );
@@ -150,7 +150,7 @@ public sealed class WaitStreamsProgressTests {
     [Fact]
     public async Task AFailedOperationIsAServerFailureRatherThanExitZero() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, index) => index switch {
+            new ScriptedTransport(static (_, index) => index switch {
                     0 => Responses.Accepted("https://api.cybercloud.io/operations/op-1"),
                     _ => Responses.Json(
                         HttpStatusCode.OK,

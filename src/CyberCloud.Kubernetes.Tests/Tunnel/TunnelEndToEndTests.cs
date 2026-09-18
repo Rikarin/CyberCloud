@@ -1,7 +1,6 @@
 using CyberCloud.Core.Resources;
 using CyberCloud.Kubernetes.Apply;
 using CyberCloud.Kubernetes.Contracts.Tunnel;
-using CyberCloud.Kubernetes.Tests.Infrastructure;
 using CyberCloud.Kubernetes.Tunnel;
 using Shouldly;
 
@@ -53,9 +52,13 @@ public sealed class TunnelEndToEndTests {
         await using var tunnel = new InProcessTunnel();
         tunnel.Start();
 
-        var stripped = KubeCommandJson.ToJson(Command()).Replace(KubeLabels.TenantId, "x-not-a-label", StringComparison.Ordinal);
+        var stripped = KubeCommandJson.ToJson(Command())
+            .Replace(KubeLabels.TenantId, "x-not-a-label", StringComparison.Ordinal);
 
-        var response = await tunnel.Exchange.ExchangeAsync(TunnelFrame.Request(0, TunnelOperations.Apply, stripped), Ct);
+        var response = await tunnel.Exchange.ExchangeAsync(
+            TunnelFrame.Request(0, TunnelOperations.Apply, stripped),
+            Ct
+        );
 
         response.IsSuccess.ShouldBeTrue();
         var opened = TunnelOperations.Open<ApplyOutcome>(response.GetValueOrThrow().Payload);
@@ -88,30 +91,38 @@ public sealed class TunnelEndToEndTests {
         (await tunnel.Client.PingAsync(Ct)).GetValueOrThrow().ShouldBe("v1.35.0");
         tunnel.Api.Pings.ShouldBeGreaterThanOrEqualTo(1);
 
-        (await tunnel.Client.DeleteAsync(new() { Kind = Deployments, Namespace = "ns", Name = "main" }, CascadePolicy.Foreground, Ct))
+        (await tunnel.Client.DeleteAsync(
+                new() { Kind = Deployments, Namespace = "ns", Name = "main" },
+                CascadePolicy.Foreground,
+                Ct
+            ))
             .IsSuccess.ShouldBeTrue();
 
         var owner = new OwnerRef { ApiVersion = "apps/v1", Kind = "Deployment", Name = "main", Uid = "uid-main" };
         (await tunnel.Client.SetOwnerAsync(new() { Kind = Deployments, Namespace = "ns", Name = "claim" }, owner, Ct))
             .IsSuccess.ShouldBeTrue();
-        tunnel.Api.OwnerChanges.Any(x => x.Owner?.Uid == "uid-main").ShouldBeTrue();
+        tunnel.Api.OwnerChanges.Exists(static x => x.Owner?.Uid == "uid-main").ShouldBeTrue();
 
         (await tunnel.Client.SetOwnerAsync(new() { Kind = Deployments, Namespace = "ns", Name = "claim" }, null, Ct))
             .IsSuccess.ShouldBeTrue();
-        tunnel.Api.OwnerChanges.Any(x => x.Owner == null).ShouldBeTrue();
+        tunnel.Api.OwnerChanges.Exists(static x => x.Owner == null).ShouldBeTrue();
 
         tunnel.Api.Discovery = Result<IReadOnlyList<GroupVersionKind>>.Success([Deployments]);
         var kinds = await tunnel.Client.DiscoverNamespacedKindsAsync(Ct);
         kinds.IsSuccess.ShouldBeTrue(kinds.Error?.Message);
         kinds.GetValueOrThrow().ShouldBe(tunnel.Api.Discovery.GetValueOrThrow());
 
-        tunnel.Api.Pages.Enqueue(Result<ListPage>.Success(new(["{\"a\":1}", "{\"b\":2}"], "77", "next-page")));
+        tunnel.Api.Pages.Enqueue(Result<ListPage>.Success(new(["""{"a":1}""", """{"b":2}"""], "77", "next-page")));
         var page = await tunnel.Client.ListAsync(Deployments, "ns", "app=x", "42", null, 100, Ct);
         page.IsSuccess.ShouldBeTrue(page.Error?.Message);
-        page.GetValueOrThrow().Items.ShouldBe(["{\"a\":1}", "{\"b\":2}"]);
+        page.GetValueOrThrow().Items.ShouldBe(["""{"a":1}""", """{"b":2}"""]);
         page.GetValueOrThrow().ResourceVersion.ShouldBe("77");
         page.GetValueOrThrow().ContinueToken.ShouldBe("next-page");
-        tunnel.Api.Lists.ShouldContain(x => x.Kind == Deployments && x.Namespace == "ns" && x.Selector == "app=x" && x.ResourceVersion == "42");
+        tunnel.Api.Lists.ShouldContain(x => x.Kind == Deployments
+            && x.Namespace == "ns"
+            && x.Selector == "app=x"
+            && x.ResourceVersion == "42"
+        );
     }
 
     [Fact]
@@ -119,8 +130,8 @@ public sealed class TunnelEndToEndTests {
         // Every IKubeApiClient member except the one stream (WatchAsync) and Dispose.
         var unary = typeof(IKubeApiClient)
             .GetMethods()
-            .Where(x => x.Name != nameof(IKubeApiClient.WatchAsync) && x.Name != nameof(IDisposable.Dispose))
-            .Select(x => x.Name)
+            .Where(static x => x.Name != nameof(IKubeApiClient.WatchAsync) && x.Name != nameof(IDisposable.Dispose))
+            .Select(static x => x.Name)
             .Order()
             .ToArray();
 
@@ -176,7 +187,7 @@ public sealed class TunnelEndToEndTests {
 
     [Fact]
     public async Task ARequestTheAgentNeverAnswersTimesOutWithACodeTheHealthTrackerReadsAsUnreachable() {
-        await using var tunnel = new InProcessTunnel(requestTimeout: TimeSpan.FromMilliseconds(300));
+        await using var tunnel = new InProcessTunnel(TimeSpan.FromMilliseconds(300));
         tunnel.Start();
 
         var never = new TaskCompletionSource();
@@ -194,7 +205,7 @@ public sealed class TunnelEndToEndTests {
 
     [Fact]
     public async Task AKilledAgentFailsEveryPendingRequestRatherThanLeavingItOpen() {
-        await using var tunnel = new InProcessTunnel(requestTimeout: TimeSpan.FromSeconds(30));
+        await using var tunnel = new InProcessTunnel(TimeSpan.FromSeconds(30));
         tunnel.Start();
 
         var never = new TaskCompletionSource();
@@ -227,12 +238,16 @@ public sealed class TunnelEndToEndTests {
         // the host's Secret write refused by the Role — used to propagate out of the agent's
         // RunAsync and take the host down with nothing stored, so the session outliving the throw
         // is what gives the host a chance to retry.
-        await using var tunnel = new InProcessTunnel(
-            onWelcome: (_, _) => throw new InvalidOperationException("secrets is forbidden: the Role does not grant it")
+        await using var tunnel = new InProcessTunnel(onWelcome: static (_, _) => throw new InvalidOperationException(
+                "secrets is forbidden: the Role does not grant it"
+            )
         );
         tunnel.Start();
 
-        await tunnel.WelcomeAsync(new() { SessionId = Guid.NewGuid(), HeartbeatSeconds = 1, Credential = "cca-cred-x" }, Ct);
+        await tunnel.WelcomeAsync(
+            new() { SessionId = Guid.NewGuid(), HeartbeatSeconds = 1, Credential = "cca-cred-x" },
+            Ct
+        );
 
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
         while (tunnel.Agent.Welcome is null && DateTime.UtcNow < deadline) {
@@ -270,7 +285,7 @@ public sealed class TunnelEndToEndTests {
 
     [Fact]
     public void AFrameRoundTripsThroughTheCodecAndAnUnknownKindIsRefused() {
-        var frame = TunnelFrame.Request(7, TunnelOperations.Get, "{\"name\":\"x\"}");
+        var frame = TunnelFrame.Request(7, TunnelOperations.Get, """{"name":"x"}""");
         var decoded = TunnelCodec.Decode(TunnelCodec.Encode(frame));
 
         decoded.GetValueOrThrow().ShouldBe(frame);
@@ -301,7 +316,10 @@ public sealed class TunnelEndToEndTests {
     }
 
     sealed class NeverRoute : ITunnelRoute {
-        public Task<Result<TunnelFrame>> ExchangeAsync(TunnelFrame request, CancellationToken cancellationToken = default) =>
+        public Task<Result<TunnelFrame>> ExchangeAsync(
+            TunnelFrame request,
+            CancellationToken cancellationToken = default
+        ) =>
             throw new InvalidOperationException("not expected");
     }
 }

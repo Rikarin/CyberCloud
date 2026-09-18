@@ -29,7 +29,7 @@ public sealed class SampleApplicationModuleTests {
         // which is the whole of this assembly's executable code.
         using var application = await AbpApplicationFactory.CreateAsync<SampleApplicationModule>();
 
-        var loaded = application.Modules.Select(x => x.Type).ToList();
+        var loaded = application.Modules.Select(static x => x.Type).ToList();
 
         loaded.ShouldContain(typeof(SampleApplicationModule));
 
@@ -60,7 +60,7 @@ public sealed class SampleApplicationModuleTests {
         var declared = typeof(SampleApplicationModule).Assembly.GetTypes();
 
         declared
-            .Where(x => typeof(IApplicationService).IsAssignableFrom(x))
+            .Where(static x => typeof(IApplicationService).IsAssignableFrom(x))
             .ShouldBeEmpty(
                 "docs/plan/03 § Providers routes every widget operation as a generic resource-manager "
                 + "verb from the provider registry (docs/plan/02 § ADR-012), so an application service "
@@ -68,7 +68,7 @@ public sealed class SampleApplicationModuleTests {
             );
 
         // The module and nothing else. Compiler-generated types are not public.
-        declared.Where(x => x.IsPublic).ShouldBe([typeof(SampleApplicationModule)]);
+        declared.Where(static x => x.IsPublic).ShouldBe([typeof(SampleApplicationModule)]);
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public sealed class SampleApplicationModuleTests {
         // three prohibitions were one real one and two that were carrying it.
         var bound = typeof(SampleApplicationModule).Assembly
             .GetReferencedAssemblies()
-            .Select(x => x.Name ?? string.Empty)
+            .Select(static x => x.Name ?? string.Empty)
             .ToList();
 
         // Exact rather than StartsWith: CyberCloud.Providers.Sample.Contracts is a different

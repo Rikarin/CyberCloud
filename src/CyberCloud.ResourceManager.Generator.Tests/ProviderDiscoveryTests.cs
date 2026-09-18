@@ -32,7 +32,7 @@ public sealed class ProviderDiscoveryTests {
     public void ARealProviderAssemblyBecomesADocumentRatherThanASuccessfulRunThatFoundNothing() {
         using var tree = new TemporaryTree();
 
-        var run = Generator.Run(tree, check: false, Generator.SampleProviderAssembly);
+        var run = Generator.Run(tree, false, Generator.SampleProviderAssembly);
 
         run.ExitCode.ShouldBe(Ok);
 
@@ -84,7 +84,7 @@ public sealed class ProviderDiscoveryTests {
         // the file that was actually written.
         using var tree = new TemporaryTree();
 
-        Generator.Run(tree, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(tree, false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
         var document = File.ReadAllText(Path.Combine(tree.OpenApiDirectory, DocumentFile));
 
@@ -111,11 +111,11 @@ public sealed class ProviderDiscoveryTests {
         // the Generated surfaces gate compares bytes.
         using var tree = new TemporaryTree();
 
-        Generator.Run(tree, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(tree, false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
         tree.Report()["documents"]!
             .AsArray()
-            .Select(x => x!["apiVersion"]!.GetValue<string>())
+            .Select(static x => x!["apiVersion"]!.GetValue<string>())
             .ShouldContain(SampleWidgets.V2026);
 
         File.Exists(Path.Combine(tree.OpenApiDirectory, DocumentFile)).ShouldBeTrue();
@@ -135,8 +135,8 @@ public sealed class ProviderDiscoveryTests {
         using var first = new TemporaryTree();
         using var second = new TemporaryTree();
 
-        Generator.Run(first, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
-        Generator.Run(second, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(first, false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(second, false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
         foreach (var directory in new[] { "openapi", "generated" }) {
             var left = Path.Combine(first.Root, directory);
@@ -164,14 +164,14 @@ public sealed class ProviderDiscoveryTests {
         // a leaked path is also a leaked run.
         using var tree = new TemporaryTree();
 
-        Generator.Run(tree, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(tree, false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
         foreach (var directory in new[] { tree.OpenApiDirectory, tree.DerivedDirectory }) {
             foreach (var file in TemporaryTree.FilesUnder(directory)) {
                 var text = File.ReadAllText(Path.Combine(directory, file));
 
-                text.ShouldNotContain(tree.Root, Case.Insensitive);
-                text.ShouldNotContain(Environment.MachineName, Case.Insensitive);
+                text.ShouldNotContain(tree.Root);
+                text.ShouldNotContain(Environment.MachineName);
             }
         }
     }
@@ -184,7 +184,7 @@ public sealed class ProviderDiscoveryTests {
         // notice anyone gets.
         using var tree = new TemporaryTree();
 
-        var run = Generator.Run(tree, check: true, Generator.SampleProviderAssembly);
+        var run = Generator.Run(tree, true, Generator.SampleProviderAssembly);
 
         run.ExitCode.ShouldBe(Ok);
 
@@ -208,13 +208,13 @@ public sealed class ProviderDiscoveryTests {
         // fixing it.
         using var tree = new TemporaryTree();
 
-        Generator.Run(tree, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(tree, false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
         var edited = Path.Combine(tree.OpenApiDirectory, DocumentFile);
         var original = File.ReadAllBytes(edited);
-        File.WriteAllText(edited, "{\"openapi\":\"3.1.0\"}");
+        File.WriteAllText(edited, """{"openapi":"3.1.0"}""");
 
-        Generator.Run(tree, check: true, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(tree, true, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
         tree.Report()["documents"]!
             .AsArray()
@@ -225,7 +225,7 @@ public sealed class ProviderDiscoveryTests {
 
         // Untouched by the run that reported it.
         File.ReadAllBytes(edited).ShouldNotBe(original);
-        File.ReadAllText(edited).ShouldBe("{\"openapi\":\"3.1.0\"}");
+        File.ReadAllText(edited).ShouldBe("""{"openapi":"3.1.0"}""");
     }
 
     [Fact]
@@ -236,13 +236,13 @@ public sealed class ProviderDiscoveryTests {
         // hand-copy JSON out of a build log.
         using var tree = new TemporaryTree();
 
-        Generator.Run(tree, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(tree, false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
         var document = Path.Combine(tree.OpenApiDirectory, DocumentFile);
         var generated = File.ReadAllBytes(document);
-        File.WriteAllText(document, "{\"openapi\":\"3.1.0\"}");
+        File.WriteAllText(document, """{"openapi":"3.1.0"}""");
 
-        Generator.Run(tree, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
+        Generator.Run(tree, false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
         File.ReadAllBytes(document).ShouldBe(generated);
         tree.Report()["documents"]!

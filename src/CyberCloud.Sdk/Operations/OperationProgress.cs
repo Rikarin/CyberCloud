@@ -72,7 +72,7 @@ public sealed class OperationProgress {
             ? p.GetInt32()
             : (int?)null;
 
-        return new OperationProgress(timestamp, step.GetString()!, message, percent);
+        return new(timestamp, step.GetString()!, message, percent);
     }
 
     /// <inheritdoc />

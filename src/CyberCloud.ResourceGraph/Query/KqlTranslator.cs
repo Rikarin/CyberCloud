@@ -21,7 +21,11 @@ namespace CyberCloud.ResourceGraph.Query;
 /// </param>
 /// <param name="PageSize">How many rows the page holds. The statement fetches one more.</param>
 /// <param name="Offset">How many rows to skip — the continuation's offset.</param>
-public sealed record KqlTranslationContext(Guid TenantId, ImmutableArray<string> AccessSubjects, int PageSize, long Offset);
+public sealed record KqlTranslationContext(
+    Guid TenantId,
+    ImmutableArray<string> AccessSubjects,
+    int PageSize,
+    long Offset);
 
 /// <summary>
 ///     Translates the resource graph's KQL subset into one parameterised ClickHouse statement over the
@@ -36,12 +40,18 @@ public sealed record KqlTranslationContext(Guid TenantId, ImmutableArray<string>
 ///         the node kinds <see cref="KqlSubset" /> lists and refuses every other by name.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Each tabular operator either merges into the current <c>SELECT</c> or opens a new one
-///         over it, and the rule is what keeps the SQL readable and the order of rows honest.</b> A
+///         ⚠
+///         <b>
+///             Each tabular operator either merges into the current <c>SELECT</c> or opens a new one
+///             over it, and the rule is what keeps the SQL readable and the order of rows honest.
+///         </b> A
 ///         <c>where</c>, <c>project</c>, <c>extend</c> or <c>order by</c> merges into a <c>SELECT</c>
 ///         that has no <c>GROUP BY</c>, <c>DISTINCT</c> or <c>LIMIT</c> yet, with column references
-///         inlined to the expressions that define them — so <c>extend x = tolower(name) | where x ==
-///         'a'</c> is one <c>SELECT … WHERE lowerUTF8(name) = {p0:String}</c> and never a
+///         inlined to the expressions that define them — so
+///         <c>
+/// extend x = tolower(name) | where x ==
+///         'a'
+///         </c> is one <c>SELECT … WHERE lowerUTF8(name) = {p0:String}</c> and never a
 ///         <c>WHERE</c> that names an alias. Anything after a <c>GROUP BY</c>, <c>DISTINCT</c> or
 ///         <c>LIMIT</c>, and <c>count</c> always, wraps the statement so far as a derived table. The
 ///         inlining is also why <c>prefer_column_name_to_alias</c> is set on the request: with an
@@ -49,8 +59,11 @@ public sealed record KqlTranslationContext(Guid TenantId, ImmutableArray<string>
 ///         would otherwise read the alias inside its own definition and report a cycle.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every literal is a parameter, and the tenant's database is the one identifier
-///         interpolated.</b> A string, a number, a date or a tag key from the query text becomes
+///         ⚠
+///         <b>
+///             Every literal is a parameter, and the tenant's database is the one identifier
+///             interpolated.
+///         </b> A string, a number, a date or a tag key from the query text becomes
 ///         <c>{pN:Type}</c> and a <see cref="SqlParameter" />; the database name is derived from the
 ///         tenant's GUID by <see cref="ResourceGraphTable.Database" /> and a column name is a KQL
 ///         identifier the translator has checked against <c>[A-Za-z_][A-Za-z0-9_]*</c>. Nothing the
@@ -64,8 +77,11 @@ public sealed record KqlTranslationContext(Guid TenantId, ImmutableArray<string>
 ///         <c>OFFSET</c> are numbers this translator computed and are written as numbers.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Four sizes are refused before anything recurses, because a stack overflow is the
-///         one exception .NET does not let a process catch (#54 review).</b> The first cut recursed
+///         ⚠
+///         <b>
+///             Four sizes are refused before anything recurses, because a stack overflow is the
+///             one exception .NET does not let a process catch (#54 review).
+///         </b> The first cut recursed
 ///         once per pipe and once per nesting level with no limit, and <c>resources</c> followed by
 ///         eight thousand <c>| where true</c> — 104 KB, a tenth of the gateway's body cap — killed
 ///         the test host from inside the walk. Microsoft's parser has the same shape: measured on a
@@ -82,7 +98,11 @@ public sealed record KqlTranslationContext(Guid TenantId, ImmutableArray<string>
 ///     </para>
 /// </remarks>
 public static class KqlTranslator {
-    static readonly Regex Identifier = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, TimeSpan.FromSeconds(1));
+    static readonly Regex Identifier = new(
+        "^[A-Za-z_][A-Za-z0-9_]*$",
+        RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
+        TimeSpan.FromSeconds(1)
+    );
 
     /// <summary>The placeholder name the access filter binds.</summary>
     public const string AccessParameter = "access";
@@ -123,11 +143,16 @@ public static class KqlTranslator {
         ArgumentNullException.ThrowIfNull(context);
 
         if (string.IsNullOrWhiteSpace(kql)) {
-            return Refuse("The query is empty. It starts with the table: 'resources | where …'. " + KqlSubset.SupportedSentence);
+            return Refuse(
+                "The query is empty. It starts with the table: 'resources | where …'. " + KqlSubset.SupportedSentence
+            );
         }
 
         if (context.AccessSubjects.IsDefaultOrEmpty) {
-            throw new ArgumentException("A query needs the caller's subjects for the access filter; none were given.", nameof(context));
+            throw new ArgumentException(
+                "A query needs the caller's subjects for the access filter; none were given.",
+                nameof(context)
+            );
         }
 
         if (Size(kql) is { } tooLarge) {
@@ -135,7 +160,7 @@ public static class KqlTranslator {
         }
 
         var code = KustoCode.ParseAndAnalyze(kql, ResourceGraphSchema.Globals);
-        var bound = code.GetDiagnostics().FirstOrDefault(x => x.Severity == DiagnosticSeverity.Error);
+        var bound = code.GetDiagnostics().FirstOrDefault(static x => x.Severity == DiagnosticSeverity.Error);
 
         // ⚠ THE WALK RUNS EVEN WHEN THE BINDER FOUND AN ERROR, AND WHICH MESSAGE WINS IS DECIDED
         // HERE. The binder's sentence is the right one for a name it does not know ("'foo' does not
@@ -150,14 +175,14 @@ public static class KqlTranslator {
             var translated = translation.Translate((QueryBlock)code.Syntax);
 
             return bound is null ? Result<TranslatedQuery>.Success(translated) : Refuse(Bound(bound));
-        }
-        catch (KqlRefusedException refused) when (refused.NamesTheSubset || bound is null) {
+        } catch (KqlRefusedException refused) when (refused.NamesTheSubset || bound is null) {
             return Refuse(refused.Message);
-        }
-        catch (KqlRefusedException) {
+        } catch (KqlRefusedException) {
             return Refuse(Bound(bound!));
-        }
-        catch (Exception exception) when (bound is not null && exception is IndexOutOfRangeException or InvalidCastException or NullReferenceException) {
+        } catch (Exception exception) when (bound is not null
+                                            && exception is IndexOutOfRangeException
+                                                or InvalidCastException
+                                                or NullReferenceException) {
             // ⚠ A tree the binder rejected is not the tree the walk was written for: a `project`
             // that names a column twice has fewer result columns than expressions, and the walk's
             // index into them is off the end. The binder's sentence is the answer; the walk's
@@ -176,7 +201,8 @@ public static class KqlTranslator {
 
         if (tokens.Length > MaxTokens) {
             return $"The query has {tokens.Length} tokens and the resource graph takes at most {MaxTokens}. "
-                + "Split it, or narrow it with a where. " + KqlSubset.SupportedSentence;
+                + "Split it, or narrow it with a where. "
+                + KqlSubset.SupportedSentence;
         }
 
         var depth = 0;
@@ -199,13 +225,16 @@ public static class KqlTranslator {
         }
 
         return deepest > MaxNesting
-            ? $"The query nests brackets {deepest} deep and the resource graph takes at most {MaxNesting}. " + KqlSubset.SupportedSentence
+            ? $"The query nests brackets {deepest} deep and the resource graph takes at most {MaxNesting}. "
+            + KqlSubset.SupportedSentence
             : null;
     }
 
-    static string Bound(Diagnostic diagnostic) => $"{diagnostic.Message} (at character {diagnostic.Start}). " + KqlSubset.SupportedSentence;
+    static string Bound(Diagnostic diagnostic) =>
+        $"{diagnostic.Message} (at character {diagnostic.Start}). " + KqlSubset.SupportedSentence;
 
-    static Result<TranslatedQuery> Refuse(string message) => Result<TranslatedQuery>.Failure(ErrorCode.InvalidRequestBody, message);
+    static Result<TranslatedQuery> Refuse(string message) =>
+        Result<TranslatedQuery>.Failure(ErrorCode.InvalidRequestBody, message);
 
     /// <summary>
     ///     A refusal raised from deep in the walk and turned into a <see cref="Result" /> at the top.
@@ -250,7 +279,8 @@ public static class KqlTranslator {
         /// <summary>Whether another operator may merge into this stage or has to wrap it.</summary>
         public bool AcceptsMerge => GroupBy.Count == 0 && !Distinct && Limit is null;
 
-        public OutputColumn? Find(string name) => Columns.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.Ordinal));
+        public OutputColumn? Find(string name) =>
+            Columns.Find(x => string.Equals(x.Name, name, StringComparison.Ordinal));
     }
 
     sealed class Translation(KqlTranslationContext context) {
@@ -265,7 +295,8 @@ public static class KqlTranslator {
             if (statements.Count != 1) {
                 throw new KqlRefusedException(
                     $"The query has {statements.Count} statements and the subset takes exactly one: the table and its pipe. "
-                    + "'let' and a second query are not supported. " + KqlSubset.SupportedSentence
+                    + "'let' and a second query are not supported. "
+                    + KqlSubset.SupportedSentence
                 );
             }
 
@@ -277,11 +308,11 @@ public static class KqlTranslator {
             stage = Page(stage);
 
             var columns = stage.Columns
-                .Select(x => new ResourceGraphColumn(x.Name, ResourceGraphSchema.WireName(x.Type)))
+                .Select(static x => new ResourceGraphColumn(x.Name, ResourceGraphSchema.WireName(x.Type)))
                 .ToImmutableArray();
 
             return new() {
-                Sql = Render(stage, top: true),
+                Sql = Render(stage, true),
                 Parameters = [.. parameters],
                 Columns = columns,
                 PageSize = context.PageSize,
@@ -332,14 +363,17 @@ public static class KqlTranslator {
         Stage Base() {
             var stage = new Stage {
                 Inner = null,
-                Columns = ResourceGraphSchema.Columns.Select(x => new OutputColumn(x.Name, x.Sql, x.Type)).ToList()
+                Columns = ResourceGraphSchema.Columns.Select(static x => new OutputColumn(x.Name, x.Sql, x.Type))
+                    .ToList()
             };
 
             // ⚠ THE TWO FILTERS NO QUERY CAN REMOVE, on the base SELECT before any operator runs:
             // a tombstone is not a resource, and a row the caller may not read is not there. The
             // caller's KQL cannot name either column — the binder does not know them.
             stage.Where.Add("is_deleted = 0");
-            stage.Where.Add($"hasAny(access, {Parameter(AccessParameter, "Array(String)", SqlParameter.ArrayOfStrings(context.AccessSubjects))})");
+            stage.Where.Add(
+                $"hasAny(access, {Parameter(AccessParameter, "Array(String)", SqlParameter.ArrayOfStrings(context.AccessSubjects))})"
+            );
 
             return stage;
         }
@@ -384,7 +418,7 @@ public static class KqlTranslator {
                 var name = element is SimpleNamedExpression named ? Declared(named) : resultColumns[i].Name;
                 var scalar = Scalar(stage, element is SimpleNamedExpression n ? n.Expression : element);
 
-                if (columns.Any(x => string.Equals(x.Name, name, StringComparison.Ordinal))) {
+                if (columns.Exists(x => string.Equals(x.Name, name, StringComparison.Ordinal))) {
                     throw new KqlRefusedException($"'project' names the column '{name}' twice.");
                 }
 
@@ -415,8 +449,7 @@ public static class KqlTranslator {
 
                 if (existing >= 0) {
                     stage.Columns[existing] = column;
-                }
-                else {
+                } else {
                     stage.Columns.Add(column);
                 }
             }
@@ -431,8 +464,8 @@ public static class KqlTranslator {
             // declaration order — which is where an unnamed `count()` gets `count_` and an unnamed
             // `min(version)` gets `min_version`.
             var resultColumns = ResultColumns(summarize);
-            var keys = summarize.ByClause?.Expressions.Select(x => x.Element).ToList() ?? [];
-            var aggregates = summarize.Aggregates.Select(x => x.Element).ToList();
+            var keys = summarize.ByClause?.Expressions.Select(static x => x.Element).ToList() ?? [];
+            var aggregates = summarize.Aggregates.Select(static x => x.Element).ToList();
 
             if (keys.Count + aggregates.Count != resultColumns.Count) {
                 throw new KqlRefusedException(
@@ -455,7 +488,9 @@ public static class KqlTranslator {
 
             for (var i = 0; i < aggregates.Count; i++) {
                 var aggregate = aggregates[i];
-                var name = aggregate is SimpleNamedExpression named ? Declared(named) : resultColumns[keys.Count + i].Name;
+                var name = aggregate is SimpleNamedExpression named
+                    ? Declared(named)
+                    : resultColumns[keys.Count + i].Name;
                 var scalar = Aggregate(stage, aggregate is SimpleNamedExpression n ? n.Expression : aggregate);
                 columns.Add(new(name, scalar.Sql, scalar.Type));
             }
@@ -477,7 +512,7 @@ public static class KqlTranslator {
             }
 
             var name = call.Name.SimpleName;
-            var arguments = call.ArgumentList.Expressions.Select(x => x.Element).ToList();
+            var arguments = call.ArgumentList.Expressions.Select(static x => x.Element).ToList();
 
             if (!KqlSubset.AggregateSet.Contains(name)) {
                 throw new KqlRefusedException(
@@ -488,14 +523,18 @@ public static class KqlTranslator {
 
             if (string.Equals(name, "count", StringComparison.Ordinal)) {
                 if (arguments.Count != 0) {
-                    throw new KqlRefusedException("'count()' takes no argument in this subset; use dcount(column) for a distinct count.");
+                    throw new KqlRefusedException(
+                        "'count()' takes no argument in this subset; use dcount(column) for a distinct count."
+                    );
                 }
 
                 return new("count()", KqlType.Long);
             }
 
             if (arguments.Count != 1) {
-                throw new KqlRefusedException($"'{name}' takes one argument and '{Text(call)}' gives it {arguments.Count}.");
+                throw new KqlRefusedException(
+                    $"'{name}' takes one argument and '{Text(call)}' gives it {arguments.Count}."
+                );
             }
 
             inAggregate = true;
@@ -503,8 +542,7 @@ public static class KqlTranslator {
 
             try {
                 argument = Scalar(stage, arguments[0]);
-            }
-            finally {
+            } finally {
                 inAggregate = false;
             }
 
@@ -550,8 +588,9 @@ public static class KqlTranslator {
                     if (clause.NullsClause is not null) {
                         throw new KqlRefusedException(
                             $"'{Text(clause.NullsClause)}' is not in the resource graph's KQL subset: no column here is nullable, so "
-                            + "'nulls first' and 'nulls last' have nothing to order. " + KqlSubset.SupportedSentence,
-                            namesTheSubset: true
+                            + "'nulls first' and 'nulls last' have nothing to order. "
+                            + KqlSubset.SupportedSentence,
+                            true
                         );
                     }
 
@@ -564,11 +603,14 @@ public static class KqlTranslator {
         }
 
         Stage Take(Stage stage, TakeOperator take) {
-            if (take.Expression is not LiteralExpression { Kind: SyntaxKind.LongLiteralExpression or SyntaxKind.IntLiteralExpression } literal
+            if (take.Expression is not LiteralExpression {
+                    Kind: SyntaxKind.LongLiteralExpression or SyntaxKind.IntLiteralExpression
+                } literal
                 || literal.LiteralValue is not (long or int)) {
                 throw new KqlRefusedException(
-                    $"'take' and 'limit' take a whole number and '{Text(take.Expression)}' is not one. " + KqlSubset.SupportedSentence,
-                    namesTheSubset: true
+                    $"'take' and 'limit' take a whole number and '{Text(take.Expression)}' is not one. "
+                    + KqlSubset.SupportedSentence,
+                    true
                 );
             }
 
@@ -594,8 +636,9 @@ public static class KqlTranslator {
                 if (separated.Element is not NameReference reference) {
                     throw new KqlRefusedException(
                         $"'distinct' takes column names and '{Text(separated.Element)}' is not one; 'distinct *' is not in the subset "
-                        + "either — name the columns. " + KqlSubset.SupportedSentence,
-                        namesTheSubset: true
+                        + "either — name the columns. "
+                        + KqlSubset.SupportedSentence,
+                        true
                     );
                 }
 
@@ -610,11 +653,7 @@ public static class KqlTranslator {
             return stage;
         }
 
-        static Stage Count(Stage stage) =>
-            new() {
-                Inner = stage,
-                Columns = [new("Count", "count()", KqlType.Long)]
-            };
+        static Stage Count(Stage stage) => new() { Inner = stage, Columns = [new("Count", "count()", KqlType.Long)] };
 
         /// <summary>
         ///     Opens a new <c>SELECT</c> over the stage so far, carrying its order forward where the
@@ -623,17 +662,16 @@ public static class KqlTranslator {
         Stage Wrap(Stage inner) {
             var stage = new Stage {
                 Inner = inner,
-                Columns = inner.Columns.Select(x => new OutputColumn(x.Name, Quote(x.Name), x.Type)).ToList()
+                Columns = inner.Columns.Select(static x => new OutputColumn(x.Name, Quote(x.Name), x.Type)).ToList()
             };
 
             // ⚠ A subquery's ORDER BY is not a promise about the outer query's rows — ClickHouse may
             // read a sorted subquery through several threads — so the order is re-stated on the
             // wrapping SELECT. It can be, only while the columns it names are still there.
-            foreach (var (_, _, node) in inner.OrderBy.Where(x => x.Node is not null)) {
+            foreach (var (_, _, node) in inner.OrderBy.Where(static x => x.Node is not null)) {
                 try {
                     stage.OrderBy.Add(Ordering(stage, node!));
-                }
-                catch (KqlRefusedException) {
+                } catch (KqlRefusedException) {
                     stage.OrderBy.Clear();
                     break;
                 }
@@ -665,7 +703,8 @@ public static class KqlTranslator {
         }
 
         /// <summary>A sort key for an expression: the tag map sorts by its JSON text, everything else by itself.</summary>
-        static string SortKey(SqlExpression scalar) => scalar.Type == KqlType.Dynamic ? $"toJSONString({scalar.Sql})" : scalar.Sql;
+        static string SortKey(SqlExpression scalar) =>
+            scalar.Type == KqlType.Dynamic ? $"toJSONString({scalar.Sql})" : scalar.Sql;
 
         // ── Scalar expressions ─────────────────────────────────────────────────────────────────
 
@@ -679,8 +718,7 @@ public static class KqlTranslator {
 
             try {
                 return Nested(stage, expression);
-            }
-            finally {
+            } finally {
                 depth--;
             }
         }
@@ -697,23 +735,37 @@ public static class KqlTranslator {
                     return Literal(literal);
 
                 case CompoundStringLiteralExpression compound:
-                    return new(Parameter("String", string.Concat(compound.Tokens.Select(x => x.ValueText))), KqlType.String);
+                    return new(
+                        Parameter("String", string.Concat(compound.Tokens.Select(static x => x.ValueText))),
+                        KqlType.String
+                    );
 
-                case PrefixUnaryExpression { Kind: SyntaxKind.UnaryMinusExpression, Expression: LiteralExpression negated } unary:
-                    return Literal(negated, negate: true, whole: unary);
+                case PrefixUnaryExpression {
+                    Kind: SyntaxKind.UnaryMinusExpression,
+                    Expression: LiteralExpression negated
+                } unary:
+                    return Literal(negated, true, unary);
 
                 case PathExpression path:
-                    return TagRead(stage, path.Expression, path.Selector is NameReference member ? member.SimpleName : throw Refused(path, "tag read"), path);
+                    return TagRead(
+                        stage,
+                        path.Expression,
+                        path.Selector is NameReference member ? member.SimpleName : throw Refused(path, "tag read"),
+                        path
+                    );
 
                 case ElementExpression element:
                     return TagRead(
                         stage,
                         element.Expression,
-                        element.Selector is BracketedExpression { Expression: LiteralExpression { Kind: SyntaxKind.StringLiteralExpression } bracketed }
+                        element.Selector is BracketedExpression {
+                            Expression: LiteralExpression { Kind: SyntaxKind.StringLiteralExpression } bracketed
+                        }
                             ? bracketed.LiteralValue as string ?? ""
                             : throw new KqlRefusedException(
                                 $"'{Text(element)}' is not in the resource graph's KQL subset: a tag is read as tags.key or tags['key'] "
-                                + "with a literal key. " + KqlSubset.SupportedSentence
+                                + "with a literal key. "
+                                + KqlSubset.SupportedSentence
                             ),
                         element
                     );
@@ -732,18 +784,19 @@ public static class KqlTranslator {
             }
         }
 
-        SqlExpression Column(Stage stage, NameReference reference) {
+        static SqlExpression Column(Stage stage, NameReference reference) {
             if (reference.ReferencedSymbol is not ColumnSymbol) {
                 throw new KqlRefusedException(
                     $"'{reference.SimpleName}' is not a column of 'resources'. Columns: "
-                    + $"{string.Join(", ", ResourceGraphSchema.Columns.Select(x => x.Name))}. " + KqlSubset.SupportedSentence
+                    + $"{string.Join(", ", ResourceGraphSchema.Columns.Select(static x => x.Name))}. "
+                    + KqlSubset.SupportedSentence
                 );
             }
 
             var column = stage.Find(reference.SimpleName)
                 ?? throw new KqlRefusedException(
                     $"'{reference.SimpleName}' is not a column at this point of the query; the columns here are "
-                    + $"{string.Join(", ", stage.Columns.Select(x => x.Name))}."
+                    + $"{string.Join(", ", stage.Columns.Select(static x => x.Name))}."
                 );
 
             return new(column.Sql, column.Type);
@@ -758,11 +811,17 @@ public static class KqlTranslator {
 
                 case SyntaxKind.LongLiteralExpression or SyntaxKind.IntLiteralExpression when value is long or int: {
                     var number = Convert.ToInt64(value, CultureInfo.InvariantCulture);
-                    return new(Parameter("Int64", (negate ? -number : number).ToString(CultureInfo.InvariantCulture)), KqlType.Long);
+                    return new(
+                        Parameter("Int64", (negate ? -number : number).ToString(CultureInfo.InvariantCulture)),
+                        KqlType.Long
+                    );
                 }
 
                 case SyntaxKind.RealLiteralExpression when value is double real:
-                    return new(Parameter("Float64", (negate ? -real : real).ToString("R", CultureInfo.InvariantCulture)), KqlType.Real);
+                    return new(
+                        Parameter("Float64", (negate ? -real : real).ToString("R", CultureInfo.InvariantCulture)),
+                        KqlType.Real
+                    );
 
                 case SyntaxKind.BooleanLiteralExpression when !negate && value is bool flag:
                     return new(Parameter("Bool", flag ? "true" : "false"), KqlType.Bool);
@@ -785,13 +844,17 @@ public static class KqlTranslator {
                     // `DateTime64(3, 'UTC')` — every suite passed because the containers ran in UTC
                     // (#54 review). ProjectionFixture now starts its ClickHouse in Europe/Prague so
                     // that the suite would find it again.
-                    return new(Parameter(SqlParameter.DateTimeType, SqlParameter.DateTime64(new DateTimeOffset(utc))), KqlType.DateTime);
+                    return new(
+                        Parameter(SqlParameter.DateTimeType, SqlParameter.DateTime64(new DateTimeOffset(utc))),
+                        KqlType.DateTime
+                    );
                 }
 
                 default:
                     throw new KqlRefusedException(
                         $"'{Text(whole ?? literal)}' is not a literal in the resource graph's KQL subset. Literals: a string, a whole "
-                        + "number, a real, true or false, and datetime(…) in UTC. " + KqlSubset.SupportedSentence
+                        + "number, a real, true or false, and datetime(…) in UTC. "
+                        + KqlSubset.SupportedSentence
                     );
             }
         }
@@ -802,8 +865,9 @@ public static class KqlTranslator {
             if (source.Type != KqlType.Dynamic) {
                 throw new KqlRefusedException(
                     $"'{Text(whole)}' reads a key of '{Text(map)}', which is a {ResourceGraphSchema.WireName(source.Type)} and not a "
-                    + "property bag; only tags (and todynamic(…)) has keys. " + KqlSubset.SupportedSentence,
-                    namesTheSubset: true
+                    + "property bag; only tags (and todynamic(…)) has keys. "
+                    + KqlSubset.SupportedSentence,
+                    true
                 );
             }
 
@@ -899,7 +963,8 @@ public static class KqlTranslator {
                         || needle.LiteralValue is not string term) {
                         throw new KqlRefusedException(
                             $"'has' takes a string literal on its right and '{Text(binary.Right)}' is not one; use contains for a "
-                            + "column-to-column test. " + KqlSubset.SupportedSentence
+                            + "column-to-column test. "
+                            + KqlSubset.SupportedSentence
                         );
                     }
 
@@ -908,7 +973,7 @@ public static class KqlTranslator {
                     // The first cut handed ClickHouse the Map itself, and ClickHouse refused it
                     // ("Illegal type Map(String, String) of argument of function match") for the
                     // most natural tag query there is (#54 review).
-                    var pattern = "(?i)(^|[^\\p{L}\\p{N}_])" + EscapeRe2(term) + "($|[^\\p{L}\\p{N}_])";
+                    var pattern = """(?i)(^|[^\p{L}\p{N}_])""" + EscapeRe2(term) + """($|[^\p{L}\p{N}_])""";
                     return new($"match({AsString(left)}, {Parameter("String", pattern)})", KqlType.Bool);
                 }
 
@@ -985,7 +1050,8 @@ public static class KqlTranslator {
             foreach (var separated in inExpression.Right.Expressions) {
                 var member = Scalar(stage, separated.Element);
 
-                if (member.Type != left.Type && !(left.Type is KqlType.Long or KqlType.Real && member.Type is KqlType.Long or KqlType.Real)) {
+                if (member.Type != left.Type
+                    && !(left.Type is KqlType.Long or KqlType.Real && member.Type is KqlType.Long or KqlType.Real)) {
                     throw new KqlRefusedException(
                         $"'{Text(inExpression)}' tests a {ResourceGraphSchema.WireName(left.Type)} against a "
                         + $"{ResourceGraphSchema.WireName(member.Type)} ('{Text(separated.Element)}')."
@@ -1004,11 +1070,12 @@ public static class KqlTranslator {
 
         SqlExpression Function(Stage stage, FunctionCallExpression call) {
             var name = call.Name.SimpleName;
-            var arguments = call.ArgumentList.Expressions.Select(x => x.Element).ToList();
+            var arguments = call.ArgumentList.Expressions.Select(static x => x.Element).ToList();
 
             if (KqlSubset.AggregateSet.Contains(name) && !inAggregate) {
                 throw new KqlRefusedException(
-                    $"'{name}()' is an aggregate and belongs in 'summarize'; it is not a scalar function. " + KqlSubset.SupportedSentence
+                    $"'{name}()' is an aggregate and belongs in 'summarize'; it is not a scalar function. "
+                    + KqlSubset.SupportedSentence
                 );
             }
 
@@ -1025,7 +1092,9 @@ public static class KqlTranslator {
 
                 case "strcat": {
                     if (arguments.Count < 2) {
-                        throw new KqlRefusedException($"'strcat' takes at least two arguments and '{Text(call)}' gives it {arguments.Count}.");
+                        throw new KqlRefusedException(
+                            $"'strcat' takes at least two arguments and '{Text(call)}' gives it {arguments.Count}."
+                        );
                     }
 
                     var parts = arguments.Select(x => Scalar(stage, x)).Select(AsString);
@@ -1034,7 +1103,9 @@ public static class KqlTranslator {
 
                 case "split": {
                     if (arguments.Count is not (2 or 3)) {
-                        throw new KqlRefusedException($"'split' takes a string, a separator and optionally an index; '{Text(call)}' gives it {arguments.Count}.");
+                        throw new KqlRefusedException(
+                            $"'split' takes a string, a separator and optionally an index; '{Text(call)}' gives it {arguments.Count}."
+                        );
                     }
 
                     var source = Scalar(stage, arguments[0]);
@@ -1054,7 +1125,9 @@ public static class KqlTranslator {
                     var index = Scalar(stage, arguments[2]);
 
                     if (index.Type != KqlType.Long) {
-                        throw new KqlRefusedException($"'split' takes a whole-number index; '{Text(arguments[2])}' is not one.");
+                        throw new KqlRefusedException(
+                            $"'split' takes a whole-number index; '{Text(arguments[2])}' is not one."
+                        );
                     }
 
                     // KQL indexes from 0 and ClickHouse from 1; an index past the end is '' in both.
@@ -1064,7 +1137,9 @@ public static class KqlTranslator {
                 case "isnotempty":
                 case "isempty": {
                     if (arguments.Count != 1) {
-                        throw new KqlRefusedException($"'{name}' takes one argument and '{Text(call)}' gives it {arguments.Count}.");
+                        throw new KqlRefusedException(
+                            $"'{name}' takes one argument and '{Text(call)}' gives it {arguments.Count}."
+                        );
                     }
 
                     var argument = Scalar(stage, arguments[0]);
@@ -1072,7 +1147,10 @@ public static class KqlTranslator {
 
                     return argument.Type switch {
                         KqlType.String => new($"({argument.Sql} {op} '')", KqlType.Bool),
-                        KqlType.Dynamic => new($"({(name == "isempty" ? "" : "NOT ")}empty({argument.Sql}))", KqlType.Bool),
+                        KqlType.Dynamic => new(
+                            $"({(name == "isempty" ? "" : "NOT ")}empty({argument.Sql}))",
+                            KqlType.Bool
+                        ),
                         _ => throw new KqlRefusedException(
                             $"'{name}' asks whether a string or a tag is empty; '{Text(arguments[0])}' is a "
                             + $"{ResourceGraphSchema.WireName(argument.Type)}, which is never empty here."
@@ -1082,7 +1160,9 @@ public static class KqlTranslator {
 
                 case "tostring": {
                     if (arguments.Count != 1) {
-                        throw new KqlRefusedException($"'tostring' takes one argument and '{Text(call)}' gives it {arguments.Count}.");
+                        throw new KqlRefusedException(
+                            $"'tostring' takes one argument and '{Text(call)}' gives it {arguments.Count}."
+                        );
                     }
 
                     return new(AsString(Scalar(stage, arguments[0])), KqlType.String);
@@ -1090,7 +1170,9 @@ public static class KqlTranslator {
 
                 case "todynamic": {
                     if (arguments.Count != 1) {
-                        throw new KqlRefusedException($"'todynamic' takes one argument and '{Text(call)}' gives it {arguments.Count}.");
+                        throw new KqlRefusedException(
+                            $"'todynamic' takes one argument and '{Text(call)}' gives it {arguments.Count}."
+                        );
                     }
 
                     var argument = Scalar(stage, arguments[0]);
@@ -1108,7 +1190,9 @@ public static class KqlTranslator {
 
                 case "not": {
                     if (arguments.Count != 1) {
-                        throw new KqlRefusedException($"'not' takes one condition and '{Text(call)}' gives it {arguments.Count}.");
+                        throw new KqlRefusedException(
+                            $"'not' takes one condition and '{Text(call)}' gives it {arguments.Count}."
+                        );
                     }
 
                     return new($"NOT {Boolean(stage, arguments[0]).Sql}", KqlType.Bool);
@@ -1121,7 +1205,9 @@ public static class KqlTranslator {
 
         SqlExpression OneString(Stage stage, FunctionCallExpression call, List<Expression> arguments) {
             if (arguments.Count != 1) {
-                throw new KqlRefusedException($"'{call.Name.SimpleName}' takes one argument and '{Text(call)}' gives it {arguments.Count}.");
+                throw new KqlRefusedException(
+                    $"'{call.Name.SimpleName}' takes one argument and '{Text(call)}' gives it {arguments.Count}."
+                );
             }
 
             var argument = Scalar(stage, arguments[0]);
@@ -1193,7 +1279,7 @@ public static class KqlTranslator {
             new(
                 $"'{token ?? Text(node)}' is not in the resource graph's KQL subset (an {what} it does not translate). "
                 + KqlSubset.SupportedSentence,
-                namesTheSubset: true
+                true
             );
 
         /// <summary>Escapes a term for RE2 so that it matches itself and nothing more.</summary>
@@ -1203,8 +1289,7 @@ public static class KqlTranslator {
             foreach (var character in term) {
                 if (char.IsLetterOrDigit(character) || character == '_' || character == ' ' || character == '-') {
                     built.Append(character);
-                }
-                else {
+                } else {
                     built.Append('\\').Append(character);
                 }
             }
@@ -1226,14 +1311,17 @@ public static class KqlTranslator {
             // bool column the true/false a KQL reader expects. Only on the way out — inside an
             // expression a UInt8 is what AND, OR and NOT take — and a no-op on a column that is
             // already Bool.
-            sql.AppendJoin(", ", stage.Columns.Select(x => $"{(x.Type == KqlType.Bool ? $"toBool({x.Sql})" : x.Sql)} AS {Quote(x.Name)}"));
+            sql.AppendJoin(
+                ", ",
+                stage.Columns.Select(static x => $"{(x.Type == KqlType.Bool ? $"toBool({x.Sql})" : x.Sql)} AS {Quote(x.Name)}"
+                )
+            );
             sql.Append(" FROM ");
 
             if (stage.Inner is null) {
                 sql.Append(ResourceGraphTable.Qualified(context.TenantId)).Append(" FINAL");
-            }
-            else {
-                sql.Append('(').Append(Render(stage.Inner, top: false)).Append(')');
+            } else {
+                sql.Append('(').Append(Render(stage.Inner, false)).Append(')');
             }
 
             if (stage.Where.Count > 0) {
@@ -1245,7 +1333,8 @@ public static class KqlTranslator {
             }
 
             if (stage.OrderBy.Count > 0) {
-                sql.Append(" ORDER BY ").AppendJoin(", ", stage.OrderBy.Select(x => x.Sql + (x.Descending ? " DESC" : " ASC")));
+                sql.Append(" ORDER BY ")
+                    .AppendJoin(", ", stage.OrderBy.Select(static x => x.Sql + (x.Descending ? " DESC" : " ASC")));
             }
 
             if (stage.Limit is { } limit) {

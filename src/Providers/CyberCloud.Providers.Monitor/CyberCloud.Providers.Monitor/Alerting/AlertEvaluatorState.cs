@@ -52,7 +52,7 @@ public sealed class AlertRuleRecord {
     public List<AlertInstance> Instances { get; set; } = [];
 
     /// <summary>The firing that has not resolved, or <see langword="null" />.</summary>
-    public AlertInstance? Open => Instances.LastOrDefault(x => x.IsOpen);
+    public AlertInstance? Open => Instances.LastOrDefault(static x => x.IsOpen);
 
     /// <summary>What a caller sees.</summary>
     public AlertRuleSnapshot ToSnapshot() =>

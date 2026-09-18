@@ -82,7 +82,7 @@ public static class ArtifactFeeds {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the feed is billed in and served from."
                 ) {
                     Format = SchemaFormat.Region,
@@ -94,7 +94,7 @@ public static class ArtifactFeeds {
                 new(
                     KindPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "Which protocol the feed speaks: nuget (the v3 API), npm (the registry "
                     + "API) or maven (the repository layout). Immutable, because the three have three "
                     + "versioning models."
@@ -118,7 +118,8 @@ public static class ArtifactFeeds {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     /// <summary>Builds a body that satisfies <see cref="Schema2026" />.</summary>
     /// <param name="kind">One of <see cref="KindNames" />.</param>
@@ -177,13 +178,19 @@ public static class ArtifactFeeds {
     /// <param name="tenantId">The tenant.</param>
     /// <param name="feedId">The feed resource's GUID.</param>
     /// <remarks>
-    ///     ⚠ <b>This string is the whole contract between the host that writes and the reconciler
-    ///     that deletes.</b> The host stores every artefact at <c>{prefix}{entry.Path}</c>; the
+    ///     ⚠
+    ///     <b>
+    ///         This string is the whole contract between the host that writes and the reconciler
+    ///         that deletes.
+    ///     </b> The host stores every artefact at <c>{prefix}{entry.Path}</c>; the
     ///     teardown lists this prefix and removes what it finds. A host that wrote outside the prefix
     ///     would leave bytes no teardown reaches, and a prefix that did not start with the tenant
     ///     would let one tenant's teardown list another's. The tenant is first for that reason and
     ///     <c>ArtifactFeedDeclarationTests.TheStoragePrefixStartsWithTheTenantAndEndsWithASlash</c> pins it.
     /// </remarks>
     public static string StoragePrefix(Guid tenantId, Guid feedId) =>
-        tenantId.ToString("N", CultureInfo.InvariantCulture) + "/" + feedId.ToString("N", CultureInfo.InvariantCulture) + "/";
+        tenantId.ToString("N", CultureInfo.InvariantCulture)
+        + "/"
+        + feedId.ToString("N", CultureInfo.InvariantCulture)
+        + "/";
 }

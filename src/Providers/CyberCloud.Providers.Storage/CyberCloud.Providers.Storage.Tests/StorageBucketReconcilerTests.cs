@@ -73,7 +73,7 @@ public sealed class StorageBucketReconcilerTests {
         var bob = Address("assets", "media", TenantB, SubscriptionB);
 
         using var aliceBody = JsonDocument.Parse(StorageBuckets.Body(ClusterId, "10Gi"));
-        using var bobBody = JsonDocument.Parse(StorageBuckets.Body(ClusterId, "999Gi", versioning: true));
+        using var bobBody = JsonDocument.Parse(StorageBuckets.Body(ClusterId, "999Gi", true));
 
         // Interleaved, so a cache written on the first pass is read on the third.
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
@@ -241,7 +241,7 @@ public sealed class StorageBucketReconcilerTests {
         // A Seaweed the account owns, sitting in the same namespace, exactly as it would be.
         var ns = ReconcileDriver.NamespaceFor(address);
         var seaweed = StorageAccounts.SeaweedRef(ns, "media");
-        connection.Objects[RecordingConnection.Key(seaweed)] = "{\"kind\":\"Seaweed\"}";
+        connection.Objects[RecordingConnection.Key(seaweed)] = """{"kind":"Seaweed"}""";
 
         await Pass(reconciler, connection, address, body.RootElement);
 
@@ -292,10 +292,10 @@ public sealed class StorageBucketReconcilerTests {
         using var body = JsonDocument.Parse(StorageBuckets.Body(ClusterId));
 
         await Pass(reconciler, connection, address, body.RootElement);
-        var first = connection.Applied.Select(x => x.Body).ToArray();
+        var first = connection.Applied.Select(static x => x.Body).ToArray();
 
         await Pass(reconciler, connection, address, body.RootElement);
-        connection.Applied.Skip(first.Length).Select(x => x.Body).ToArray().ShouldBe(first);
+        connection.Applied.Skip(first.Length).Select(static x => x.Body).ToArray().ShouldBe(first);
     }
 
     [Fact]
@@ -306,7 +306,7 @@ public sealed class StorageBucketReconcilerTests {
         var connection = new RecordingConnection();
         var address = Address("assets", "media", TenantA, SubscriptionA);
 
-        using var body = JsonDocument.Parse(StorageBuckets.Body(ClusterId, quotaSize: string.Empty));
+        using var body = JsonDocument.Parse(StorageBuckets.Body(ClusterId, string.Empty));
 
         await Pass(new StorageBucketReconciler(new FixedClock()), connection, address, body.RootElement);
 

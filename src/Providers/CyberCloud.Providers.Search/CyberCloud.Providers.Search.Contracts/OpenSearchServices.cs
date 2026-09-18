@@ -481,7 +481,7 @@ public static class OpenSearchServices {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the service is billed in."
                 ) {
                     Format = SchemaFormat.Region,
@@ -493,7 +493,7 @@ public static class OpenSearchServices {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster whose namespace holds the search service."
                 ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
@@ -501,7 +501,7 @@ public static class OpenSearchServices {
                 new(
                     "/properties/version",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "OpenSearch version. ⚠ OpenSearch is a fork of Elasticsearch 7.10 "
                     + "(ADR-011 — Elasticsearch is SSPL and is not available to us) and the two have "
                     + "diverged since, so an Elasticsearch 8 client is not promised anything here. "
@@ -511,7 +511,7 @@ public static class OpenSearchServices {
                 new(
                     "/properties/dataNodes",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "Number of data nodes. This is the capacity axis: total raw capacity "
                     + "is this count times the disk size below, before replicas. Every data node also "
                     + "carries the ingest role, so an indexing pipeline needs no separate pool."
@@ -519,7 +519,7 @@ public static class OpenSearchServices {
                 new(
                     "/properties/masterNodes",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "Number of dedicated cluster-manager nodes. They hold the cluster "
                     + "state in a quorum, so three is the smallest count that survives losing one. One "
                     + "is offered for development and has no quorum at all. An even count is worse "
@@ -529,7 +529,7 @@ public static class OpenSearchServices {
                 new(
                     "/properties/coordinatingNodes",
                     SchemaKind.WholeNumber,
-                    Required: true,
+                    true,
                     Description: "Number of coordinating-only nodes — nodes that hold no data and no "
                     + "cluster state and exist to fan a search out and merge the results. Zero is the "
                     + "default and is right until a query pattern makes one data node the bottleneck "
@@ -576,7 +576,7 @@ public static class OpenSearchServices {
                 new(
                     "/properties/storage/size",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "Disk size per data node, in Kubernetes quantity form. Grows online; "
                     + "never shrinks. The cluster-manager and coordinating nodes get a fixed 10Gi that "
                     + "is not configurable and is counted against the storage quota anyway."
@@ -596,8 +596,8 @@ public static class OpenSearchServices {
                     "/properties/monitoring/enabled",
                     SchemaKind.Boolean,
                     Description: "Whether the operator is asked for a ServiceMonitor. On by default — "
-                    + "docs/plan/12: \"a managed service the tenant cannot see the health of is a black "
-                    + "box they will not trust with production\". ⚠ The metrics themselves come from "
+                    + """docs/plan/12: "a managed service the tenant cannot see the health of is a black """
+                    + """box they will not trust with production". ⚠ The metrics themselves come from """
                     + "the prometheus-exporter plugin, which the operator installs into every node on "
                     + "the first reconcile after this is turned on — so turning it on restarts the "
                     + "pods and turning it off does not remove the plugin."
@@ -636,7 +636,7 @@ public static class OpenSearchServices {
                 new(
                     "/endpoint",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The in-cluster REST endpoint, https://host:port. ⚠ No external "
                     + "address is returned, because there is none — see the service's own "
                     + "documentation on exposure."
@@ -644,14 +644,14 @@ public static class OpenSearchServices {
                 new(
                     "/username",
                     SchemaKind.Text,
-                    Required: true,
-                    Description: "The administrative user. Always \"admin\": the operator generates "
+                    true,
+                    Description: """The administrative user. Always "admin": the operator generates """
                     + "exactly one credential and does not name it."
                 ),
                 new(
                     "/password",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Secret: true,
                     Description: "The administrative password, read from the tenant's Vault for this "
                     + "call only."
@@ -660,7 +660,8 @@ public static class OpenSearchServices {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -1068,7 +1069,7 @@ public static class OpenSearchServices {
             ["component"] = component,
             ["replicas"] = replicas,
             ["diskSize"] = diskSize,
-            ["roles"] = new JsonArray([.. roles.Select(x => (JsonNode)JsonValue.Create(x))])
+            ["roles"] = new JsonArray([.. roles.Select(static x => (JsonNode)JsonValue.Create(x))])
         };
 
         if (cpu.Length > 0 && memory.Length > 0) {

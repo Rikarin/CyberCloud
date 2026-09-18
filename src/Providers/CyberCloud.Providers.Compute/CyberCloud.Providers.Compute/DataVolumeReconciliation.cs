@@ -78,7 +78,8 @@ static class DataVolumeReconciliation {
                 context.Log.Report("conflict", outcome.Drift?.Describe() ?? outcome.Message);
 
                 return ReconcileOutcome.InProgress(
-                    outcome.Drift?.Describe() ?? "another field manager owns part of the DataVolume and it was not overwritten",
+                    outcome.Drift?.Describe()
+                    ?? "another field manager owns part of the DataVolume and it was not overwritten",
                     TimeSpan.FromSeconds(30)
                 );
         }
@@ -88,14 +89,20 @@ static class DataVolumeReconciliation {
 
         if (read.TryGetError(out var readError)) {
             return readError.Code == ErrorCode.ResourceNotFound
-                ? ReconcileOutcome.InProgress("the DataVolume was applied and is not readable back yet", TimeSpan.FromSeconds(5))
+                ? ReconcileOutcome.InProgress(
+                    "the DataVolume was applied and is not readable back yet",
+                    TimeSpan.FromSeconds(5)
+                )
                 : ReconcileOutcome.FromFailure(readError);
         }
 
         var json = read.GetValueOrThrow().Json;
 
         if (!shape.Matches(json, context.Desired)) {
-            return ReconcileOutcome.InProgress("the DataVolume is readable and does not yet carry the desired spec", TimeSpan.FromSeconds(5));
+            return ReconcileOutcome.InProgress(
+                "the DataVolume is readable and does not yet carry the desired spec",
+                TimeSpan.FromSeconds(5)
+            );
         }
 
         var phase = Cdi.Phase(json);
@@ -105,7 +112,11 @@ static class DataVolumeReconciliation {
             // takes when no Cluster API controller has reported, and the same owed row:
             // conformance.yaml § owed, `converged-is-not-ready`. A harness with a derived CRD stub and
             // no CDI behind it lands here; a real cluster writes a phase within seconds.
-            context.Log.Report("ready", $"the DataVolume of '{name}' reads back as desired; CDI has not reported on it yet", 100);
+            context.Log.Report(
+                "ready",
+                $"the DataVolume of '{name}' reads back as desired; CDI has not reported on it yet",
+                100
+            );
 
             return ReconcileOutcome.Converged;
         }
@@ -166,7 +177,10 @@ static class DataVolumeReconciliation {
         var read = await cluster.GetAsync(shape.Target(context.Namespace, name), cancellationToken);
 
         if (read.IsSuccess) {
-            return ReconcileOutcome.InProgress($"'{shape.Target(context.Namespace, name)}' is still readable", TimeSpan.FromSeconds(5));
+            return ReconcileOutcome.InProgress(
+                $"'{shape.Target(context.Namespace, name)}' is still readable",
+                TimeSpan.FromSeconds(5)
+            );
         }
 
         if (read.Error!.Code != ErrorCode.ResourceNotFound) {

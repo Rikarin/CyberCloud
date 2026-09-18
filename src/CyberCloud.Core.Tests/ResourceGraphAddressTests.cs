@@ -39,8 +39,10 @@ public class ResourceGraphAddressTests {
         var pasted = $"/Tenants/{Tenant:D}/Providers/cybercloud.resourcegraph/Resources";
 
         ResourceGraphAddress.IsUnderNamespace(pasted).ShouldBeTrue();
-        ResourceGraphAddress.ParsePath(pasted).GetValueOrThrow().Path
-            .ShouldBe($"/tenants/{Tenant:D}{ResourceGraphAddress.Suffix}");
+        ResourceGraphAddress.ParsePath(pasted)
+            .GetValueOrThrow()
+            .Path
+                .ShouldBe($"/tenants/{Tenant:D}{ResourceGraphAddress.Suffix}");
     }
 
     // ── Refusals under the namespace ───────────────────────────────────────────────────────────
@@ -68,7 +70,10 @@ public class ResourceGraphAddressTests {
 
         parsed.IsFailure.ShouldBeTrue($"'{path}' was accepted");
         parsed.Error!.Code.ShouldBe(ErrorCode.InvalidResourceId);
-        parsed.Error.Message.ShouldContain(ResourceGraphAddress.Suffix, customMessage: "the refusal names the one address");
+        parsed.Error.Message.ShouldContain(
+            ResourceGraphAddress.Suffix,
+            customMessage: "the refusal names the one address"
+        );
 
         // ⚠ Both halves matter to the router: under the namespace, a parse failure is the 400 the
         // caller gets, and NOT a fall-through into the scope, collection or resource grammars —
@@ -107,7 +112,9 @@ public class ResourceGraphAddressTests {
     [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Cache/redis/main")]
     // ⚠ A resource whose TYPE is 'resources' under another namespace is that provider's.
     [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Cache/resources/main")]
-    [InlineData("/tenants/{t}/providers/CyberCloud.Authorization/roleAssignments/reader-user-7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d")]
+    [InlineData(
+        "/tenants/{t}/providers/CyberCloud.Authorization/roleAssignments/reader-user-7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d"
+    )]
     [InlineData("/tenants/{t}/providers/CyberCloud.Authorization/roleAssignments")]
     public void NoOtherGrammarsPathIsUnderThisNamespace(string template) {
         var path = Fill(template);

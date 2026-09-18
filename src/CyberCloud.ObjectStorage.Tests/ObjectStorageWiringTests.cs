@@ -69,6 +69,6 @@ public sealed class ObjectStorageWiringTests {
     public void IsConfiguredNeedsAllFourKeys() {
         Configured().IsConfigured.ShouldBeTrue();
         new ObjectStorageOptions().IsConfigured.ShouldBeFalse();
-        Configured().With(x => x.Bucket = "").IsConfigured.ShouldBeFalse();
+        Configured().With(static x => x.Bucket = "").IsConfigured.ShouldBeFalse();
     }
 }

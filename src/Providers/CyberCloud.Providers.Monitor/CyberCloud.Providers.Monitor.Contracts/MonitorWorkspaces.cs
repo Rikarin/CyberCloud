@@ -723,7 +723,8 @@ public static class MonitorWorkspaces {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ───────────────────────────────────────────────────────────────
 
@@ -1303,7 +1304,8 @@ public static class MonitorWorkspaces {
 
     /// <summary>The read-only PromQL datasource, for one workspace.</summary>
     /// <param name="id">The resource, with its GUID resolved.</param>
-    public static string PromqlEndpoint(ResourceId id) => PromqlEndpoint(AccountId(id).ToString(CultureInfo.InvariantCulture));
+    public static string PromqlEndpoint(ResourceId id) =>
+        PromqlEndpoint(AccountId(id).ToString(CultureInfo.InvariantCulture));
 
     /// <inheritdoc cref="RemoteWriteEndpoint(string)" />
     /// <summary>The read-only PromQL datasource, for the workspace whose <c>accountID</c> this is.</summary>
@@ -1359,8 +1361,11 @@ public static class MonitorWorkspaces {
     ///         </item>
     ///     </list>
     ///     <para>
-    ///         ⚠ <b>The keys are the row's own spelling and are constants here so a rename fails to
-    ///         compile in three places rather than starting a pod with an empty accountID.</b> The
+    ///         ⚠
+    ///         <b>
+    ///             The keys are the row's own spelling and are constants here so a rename fails to
+    ///             compile in three places rather than starting a pod with an empty accountID.
+    ///         </b> The
     ///         set is the three a data plane under a workspace needs: which account, which database,
     ///         and what authenticates.
     ///     </para>

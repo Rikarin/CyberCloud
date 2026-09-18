@@ -51,10 +51,15 @@ public interface IShardMapMirror {
 ///     <c>IManagementGrain.SendControlCommandToProvider</c> lands on, on each silo.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>A concrete class in the contracts assembly, because the runtime matches on the concrete
-///     type.</b> Orleans 10.2.2's <c>SiloControl.SendControlCommandToProvider&lt;T&gt;</c> is, decompiled,
-///     <c>GetKeyedServices&lt;IControllable&gt;(providerName).FirstOrDefault(svc =&gt; svc.GetType() ==
-///     typeof(T))</c>: the registration is keyed as <see cref="IControllable" />, and <c>T</c> has to
+///     ⚠
+///     <b>
+///         A concrete class in the contracts assembly, because the runtime matches on the concrete
+///         type.
+///     </b> Orleans 10.2.2's <c>SiloControl.SendControlCommandToProvider&lt;T&gt;</c> is, decompiled,
+///     <c>
+/// GetKeyedServices&lt;IControllable&gt;(providerName).FirstOrDefault(svc =&gt; svc.GetType() ==
+///     typeof(T))
+///     </c>: the registration is keyed as <see cref="IControllable" />, and <c>T</c> has to
 ///     be the registered object's own type — neither an interface it implements nor a base — or the
 ///     silo answers "Could not find a controllable service for type Orleans.Providers.IControllable"
 ///     (observed, with the mirror registered under an interface). The caller is in the resource
@@ -68,8 +73,11 @@ public interface IShardMapMirror {
 ///     <c>SendControlCommandToProvider&lt;ShardMapMirrorController&gt;</c> is a grain call whose
 ///     invokable is generic over this type, and a caller in another PROCESS — the identity host, an
 ///     Orleans client, creating a tenant at sign-up — serialises that invokable with the type in it.
-///     Without an alias Orleans refuses the whole call: <c>Type "…Invokable_IManagementGrain_…
-///     [[ShardMapMirrorController…]]" is not allowed</c>, and the sign-up fails at its first step.
+///     Without an alias Orleans refuses the whole call:
+///     <c>
+/// Type "…Invokable_IManagementGrain_…
+///     [[ShardMapMirrorController…]]" is not allowed
+///     </c>, and the sign-up fails at its first step.
 ///     Every in-process test passed without it (a TestCluster's client and silos share one type
 ///     manifest); the AppHost's real process boundary is where it showed, on the merge of #39.
 /// </remarks>
@@ -164,7 +172,9 @@ public static class ShardMapPropagation {
             return Result.Failure(
                 ErrorCode.OperationTimeout,
                 $"Tenant {tenantId} is recorded on durable shard '{assignment.DurableShard}' but not "
-                + "every silo confirmed it: " + exception.Message + " No durable row has been written "
+                + "every silo confirmed it: "
+                + exception.Message
+                + " No durable row has been written "
                 + "for the tenant; retry the create once the cluster answers. Proceeding would let a "
                 + "silo that has not refreshed its shard map place the tenant's first rows on the "
                 + "shard the hash names instead — docs/plan/05 § The shard map."
@@ -172,7 +182,7 @@ public static class ShardMapPropagation {
         }
 
         var disagreeing = answers
-            .Select(x => x as string ?? "")
+            .Select(static x => x as string ?? "")
             .Where(x => !string.Equals(x, assignment.DurableShard, StringComparison.Ordinal))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)

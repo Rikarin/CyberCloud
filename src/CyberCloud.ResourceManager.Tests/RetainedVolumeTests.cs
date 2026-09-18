@@ -123,7 +123,7 @@ public sealed class RetainedVolumeTests {
     public async Task AClaimWithNoLabelsAtAllIsRefusedAndSurvives() {
         var cluster = new FakeClaimCluster();
         var claim = Claim("data-vault-0");
-        cluster.Plant(claim, ImmutableDictionary<string, string>.Empty, labelled: false);
+        cluster.Plant(claim, ImmutableDictionary<string, string>.Empty, false);
 
         var outcome = await VolumeReclaimer.ReclaimAsync(
             new DeclaringReconciler([Volume(claim)]),
@@ -285,7 +285,7 @@ public sealed class RetainedVolumeTests {
     public async Task VolumesWithNoClusterConnectionDoNotConverge() {
         var outcome = await VolumeReclaimer.ReclaimAsync(
             new DeclaringReconciler([Volume(Claim("data-vault-0"))]),
-            Context(cluster: null),
+            Context(null),
             TestContext.Current.CancellationToken
         );
 
@@ -364,7 +364,7 @@ public sealed class RetainedVolumeTests {
     public void OfSetNamesOneClaimPerReplicaInKubernetesOwnShape() {
         var volumes = RetainedVolume.OfSet(Namespace, "store", "broker", 3, Ownership, "the file store");
 
-        volumes.Select(x => x.Claim.Name)
+        volumes.Select(static x => x.Claim.Name)
             .ShouldBe(["store-broker-0", "store-broker-1", "store-broker-2"]);
 
         volumes.ShouldAllBe(x => x.Claim.Namespace == Namespace);
@@ -378,7 +378,7 @@ public sealed class RetainedVolumeTests {
     /// </summary>
     [Fact]
     public void OfSetRefusesToDeclareClaimsWithNoOwnershipLabels() =>
-        Should.Throw<ArgumentException>(() => RetainedVolume.OfSet(
+        Should.Throw<ArgumentException>(static () => RetainedVolume.OfSet(
                 Namespace,
                 "store",
                 "broker",

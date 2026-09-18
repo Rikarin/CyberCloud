@@ -71,7 +71,7 @@ public sealed class MailSizingTests {
         var helpers = Embedded("mail.helpers.tpl");
         var block = Regex.Match(
             helpers,
-            "define \"mail\\.selectorLabels\" -}}(.*?){{- end",
+            """define "mail\.selectorLabels" -}}(.*?){{- end""",
             RegexOptions.Singleline,
             TimeSpan.FromSeconds(5)
         );
@@ -93,7 +93,7 @@ public sealed class MailSizingTests {
         // ⚠ And the other direction, which is the half that catches an ADDED key.
         foreach (Match line in Regex.Matches(
                      declared,
-                     "^\\s*(app\\.kubernetes\\.io/[a-z-]+):",
+                     """^\s*(app\.kubernetes\.io/[a-z-]+):""",
                      RegexOptions.Multiline,
                      TimeSpan.FromSeconds(5)
                  )) {

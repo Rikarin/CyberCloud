@@ -11,8 +11,11 @@ namespace CyberCloud.Gateway.Host.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Every snapshot here comes from <see cref="ProjectedSnapshot" />, which runs the real
-///         projection.</b> That is the whole point of the class. The body was served as
+///         ⚠
+///         <b>
+///             Every snapshot here comes from <see cref="ProjectedSnapshot" />, which runs the real
+///             projection.
+///         </b> That is the whole point of the class. The body was served as
 ///         <c>properties.properties.*</c> with <c>location</c> twice for as long as this suite
 ///         rendered a hand-written snapshot, because the writer and the substitute agreed with each
 ///         other and neither agreed with the grain. <c>TenantOverHttpTests</c> found it by driving the
@@ -50,12 +53,14 @@ public sealed class ResourceBodyShapeTests {
         resource.GetProperty("properties").GetProperty("sku").GetString().ShouldBe("gp1");
 
         // The two symptoms of #72, by name.
-        resource.GetProperty("properties").TryGetProperty("properties", out _)
+        resource.GetProperty("properties")
+            .TryGetProperty("properties", out _)
             .ShouldBeFalse("the projected document was nested under a second `properties` member");
-        resource.GetProperty("properties").TryGetProperty("location", out _)
+        resource.GetProperty("properties")
+            .TryGetProperty("location", out _)
             .ShouldBeFalse("`location` reached the wire inside `properties` as well as beside it");
 
-        Names(resource).Count(x => x == "location").ShouldBe(1, "`location` is served once, at the top level");
+        Names(resource).Count(static x => x == "location").ShouldBe(1, "`location` is served once, at the top level");
         resource.GetProperty("location").GetString().ShouldBe("eu-central");
 
         Names(resource).ShouldBe(
@@ -94,9 +99,8 @@ public sealed class ResourceBodyShapeTests {
         var gateway = new GatewayHarness();
         var path = GatewayHarness.ResourcePath(GatewayHarness.TenantA);
 
-        gateway.Manager.OnList = _ => Result<ResourceListPage>.Success(
-            new() { Resources = [ProjectedSnapshot.Of(path)] }
-        );
+        gateway.Manager.OnList =
+            _ => Result<ResourceListPage>.Success(new() { Resources = [ProjectedSnapshot.Of(path)] });
 
         var single = await gateway.SendAsync("GET", path, gateway.Token(GatewayHarness.TenantA));
         var listed = await gateway.SendAsync(
@@ -122,9 +126,7 @@ public sealed class ResourceBodyShapeTests {
     [Fact]
     public void TheWriterRendersTheEnvelopeThenTheBodyThenTags() {
         var snapshot = ProjectedSnapshot.Of("/tenants/t/subscriptions/s/resourceGroups/prod/providers/N/t/main")
-            with {
-                Tags = ImmutableDictionary<string, string>.Empty.Add("env", "prod")
-            };
+            with { Tags = ImmutableDictionary<string, string>.Empty.Add("env", "prod") };
 
         ResponseBodies.Resource(snapshot)
             .ShouldBe(
@@ -147,19 +149,17 @@ public sealed class ResourceBodyShapeTests {
     [Fact]
     public void ABodyMemberNamedLikeAnEnvelopeMemberIsNotWrittenTwice() {
         var snapshot = ProjectedSnapshot.Of("/tenants/t/subscriptions/s/resourceGroups/prod/providers/N/t/main")
-            with {
-                Body = """{"id":"forged","etag":"forged","location":"forged","properties":{"sku":"gp1"}}"""
-            };
+            with { Body = """{"id":"forged","etag":"forged","location":"forged","properties":{"sku":"gp1"}}""" };
 
         using var document = JsonDocument.Parse(ResponseBodies.Resource(snapshot));
         var names = Names(document.RootElement).ToList();
 
-        names.Count(x => x == "id").ShouldBe(1);
-        names.Count(x => x == "etag").ShouldBe(1);
-        names.Count(x => x == "location").ShouldBe(1);
+        names.Count(static x => x == "id").ShouldBe(1);
+        names.Count(static x => x == "etag").ShouldBe(1);
+        names.Count(static x => x == "location").ShouldBe(1);
         document.RootElement.GetProperty("etag").GetString().ShouldBe("etag-1");
         document.RootElement.GetProperty("location").GetString().ShouldBe("eu-central");
     }
 
-    static IEnumerable<string> Names(JsonElement element) => element.EnumerateObject().Select(x => x.Name);
+    static IEnumerable<string> Names(JsonElement element) => element.EnumerateObject().Select(static x => x.Name);
 }

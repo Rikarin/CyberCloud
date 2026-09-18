@@ -59,7 +59,10 @@ public sealed class ArtifactFeedReconcilerTests {
         feed.OpenAsync(FeedKind.NuGet).Returns(Result<FeedDescriptor>.Success(Open(FeedKind.NuGet)));
         feed.DescribeAsync().Returns(Result<FeedDescriptor>.Success(Open(FeedKind.NuGet)));
 
-        var outcome = await reconciler.ReconcileAsync(Context(objects, ArtifactFeeds.Body("nuget")), TestContext.Current.CancellationToken);
+        var outcome = await reconciler.ReconcileAsync(
+            Context(objects, ArtifactFeeds.Body()),
+            TestContext.Current.CancellationToken
+        );
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.Converged);
         await feed.Received(1).OpenAsync(FeedKind.NuGet);
@@ -73,7 +76,10 @@ public sealed class ArtifactFeedReconcilerTests {
         feed.OpenAsync(FeedKind.Npm).Returns(Result<FeedDescriptor>.Success(Open(FeedKind.Npm)));
         feed.DescribeAsync().Returns(Result<FeedDescriptor>.Success(new() { Kind = FeedKind.Npm, IsOpen = false }));
 
-        var outcome = await reconciler.ReconcileAsync(Context(objects, ArtifactFeeds.Body("npm")), TestContext.Current.CancellationToken);
+        var outcome = await reconciler.ReconcileAsync(
+            Context(objects, ArtifactFeeds.Body("npm")),
+            TestContext.Current.CancellationToken
+        );
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.InProgress);
     }
@@ -83,7 +89,10 @@ public sealed class ArtifactFeedReconcilerTests {
         var (reconciler, feed, objects) = Build();
         feed.OpenAsync(FeedKind.Maven).Returns(Result<FeedDescriptor>.Failure(ErrorCode.Conflict, "open as nuget"));
 
-        var outcome = await reconciler.ReconcileAsync(Context(objects, ArtifactFeeds.Body("maven")), TestContext.Current.CancellationToken);
+        var outcome = await reconciler.ReconcileAsync(
+            Context(objects, ArtifactFeeds.Body("maven")),
+            TestContext.Current.CancellationToken
+        );
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
         outcome.Error!.Code.ShouldBe(ErrorCode.Conflict);
@@ -93,7 +102,10 @@ public sealed class ArtifactFeedReconcilerTests {
     public async Task ABodyWithNoKindFailsByNameRatherThanOpeningAnUnknownFeed() {
         var (reconciler, feed, objects) = Build();
 
-        var outcome = await reconciler.ReconcileAsync(Context(objects, """{"location":"eu-central","properties":{}}"""), TestContext.Current.CancellationToken);
+        var outcome = await reconciler.ReconcileAsync(
+            Context(objects, """{"location":"eu-central","properties":{}}"""),
+            TestContext.Current.CancellationToken
+        );
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
         outcome.Error!.Message.ShouldContain(ArtifactFeeds.KindPointer);
@@ -109,9 +121,14 @@ public sealed class ArtifactFeedReconcilerTests {
         var token = TestContext.Current.CancellationToken;
         await objects.PutAsync(prefix + "nuget/a/1.0.0/a.nupkg", "a"u8.ToArray(), "application/octet-stream", token);
         await objects.PutAsync(prefix + "nuget/b/1.0.0/b.nupkg", "b"u8.ToArray(), "application/octet-stream", token);
-        await objects.PutAsync(ArtifactFeeds.StoragePrefix(Tenant, Guid.NewGuid()) + "nuget/c/1.0.0/c.nupkg", "c"u8.ToArray(), "application/octet-stream", token);
+        await objects.PutAsync(
+            ArtifactFeeds.StoragePrefix(Tenant, Guid.NewGuid()) + "nuget/c/1.0.0/c.nupkg",
+            "c"u8.ToArray(),
+            "application/octet-stream",
+            token
+        );
 
-        var outcome = await reconciler.DeleteAsync(Context(objects, ArtifactFeeds.Body("nuget")), token);
+        var outcome = await reconciler.DeleteAsync(Context(objects, ArtifactFeeds.Body()), token);
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.Converged);
         await feed.Received(1).CloseAsync();
@@ -126,7 +143,9 @@ public sealed class ArtifactFeedReconcilerTests {
         var (reconciler, feed, _) = Build();
         feed.CloseAsync().Returns(Result<FeedClosure>.Success(new()));
 
-        var context = Context(new InMemoryObjectStore(), ArtifactFeeds.Body("nuget")) with { Objects = new RefusingObjectStore() };
+        var context = Context(new InMemoryObjectStore(), ArtifactFeeds.Body()) with {
+            Objects = new RefusingObjectStore()
+        };
 
         var outcome = await reconciler.DeleteAsync(context, TestContext.Current.CancellationToken);
 
@@ -143,7 +162,7 @@ public sealed class ArtifactFeedReconcilerTests {
 
         var prefix = ArtifactFeeds.StoragePrefix(Tenant, FeedId);
         var sticky = new StickyListingStore(prefix + "nuget/a/1.0.0/a.nupkg");
-        var context = Context(new InMemoryObjectStore(), ArtifactFeeds.Body("nuget")) with { Objects = sticky };
+        var context = Context(new InMemoryObjectStore(), ArtifactFeeds.Body()) with { Objects = sticky };
 
         var outcome = await reconciler.DeleteAsync(context, TestContext.Current.CancellationToken);
 
@@ -154,9 +173,10 @@ public sealed class ArtifactFeedReconcilerTests {
     [Fact]
     public async Task ObserveReportsTheCatalogueAndNeverThrows() {
         var (reconciler, feed, _) = Build();
-        feed.DescribeAsync().Returns(Result<FeedDescriptor>.Success(new() { Kind = FeedKind.NuGet, IsOpen = true, EntryCount = 3 }));
+        feed.DescribeAsync()
+            .Returns(Result<FeedDescriptor>.Success(new() { Kind = FeedKind.NuGet, IsOpen = true, EntryCount = 3 }));
 
-        using var body = JsonDocument.Parse(ArtifactFeeds.Body("nuget"));
+        using var body = JsonDocument.Parse(ArtifactFeeds.Body());
         var observed = await reconciler.ObserveAsync(
             new(Address, ArtifactFeeds.V2026, body.RootElement, "", null),
             TestContext.Current.CancellationToken
@@ -166,7 +186,10 @@ public sealed class ArtifactFeedReconcilerTests {
         observed.Summary.ShouldContain("3 entries");
 
         feed.DescribeAsync().Returns(Result<FeedDescriptor>.Success(new() { IsClosed = true }));
-        (await reconciler.ObserveAsync(new(Address, ArtifactFeeds.V2026, body.RootElement, "", null), TestContext.Current.CancellationToken))
+        (await reconciler.ObserveAsync(
+                new(Address, ArtifactFeeds.V2026, body.RootElement, "", null),
+                TestContext.Current.CancellationToken
+            ))
             .Exists.ShouldBeFalse();
     }
 
@@ -181,7 +204,12 @@ public sealed class ArtifactFeedReconcilerTests {
     sealed class StickyListingStore(string key) : IObjectStore {
         public int Deletes { get; private set; }
 
-        public Task<Result> PutAsync(string k, ReadOnlyMemory<byte> content, string contentType, CancellationToken cancellationToken = default) =>
+        public Task<Result> PutAsync(
+            string k,
+            ReadOnlyMemory<byte> content,
+            string contentType,
+            CancellationToken cancellationToken = default
+        ) =>
             Task.FromResult(Result.Success);
 
         public Task<Result<StoredObject>> GetAsync(string k, CancellationToken cancellationToken = default) =>
@@ -192,7 +220,10 @@ public sealed class ArtifactFeedReconcilerTests {
             return Task.FromResult(Result.Success);
         }
 
-        public Task<Result<ImmutableArray<string>>> ListAsync(string prefix, CancellationToken cancellationToken = default) =>
+        public Task<Result<ImmutableArray<string>>> ListAsync(
+            string prefix,
+            CancellationToken cancellationToken = default
+        ) =>
             Task.FromResult(Result<ImmutableArray<string>>.Success([key]));
     }
 }

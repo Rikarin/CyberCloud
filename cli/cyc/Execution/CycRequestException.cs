@@ -54,7 +54,7 @@ sealed class CycRequestException : Exception {
 
         var failure = CyberCloudClientContext.CreateFailure(response);
 
-        return new CycRequestException(failure.Message, failure) {
+        return new(failure.Message, failure) {
             Status = failure.Status,
             ErrorCode = failure.ErrorCode,
             Flag = flag,
@@ -67,7 +67,7 @@ sealed class CycRequestException : Exception {
     public static CycRequestException From(CyberCloudRequestFailedException failure) {
         ArgumentNullException.ThrowIfNull(failure);
 
-        return new CycRequestException(failure.Message, failure) {
+        return new(failure.Message, failure) {
             // ⚠ A poll that reports a failed operation is itself a 200, so the status here is the
             // poll's. Mapping that to exit 0 would be absurd; an operation that failed is a server
             // failure unless its error code says otherwise, which is what Program's mapping reads.

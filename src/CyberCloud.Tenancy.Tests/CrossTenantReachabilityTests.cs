@@ -389,19 +389,33 @@ public sealed class CrossTenantReachabilityTests(TenancyCluster cluster) {
         // platform tenant's TenantGrain, reached from tenant B's grain, is still refused.
         var platform = PlatformCrossTenantAuthorizer.PlatformTenantId;
 
-        CyberCloudGrainCallTenantSeparator.IsPlatformServiceEdge(CyberCloudGrainCallTenantSeparator.PlatformMessageGrainInterface, platform)
+        CyberCloudGrainCallTenantSeparator.IsPlatformServiceEdge(
+            CyberCloudGrainCallTenantSeparator.PlatformMessageGrainInterface,
+            platform
+        )
             .ShouldBeTrue("a send through the platform's service, from any tenant");
 
-        CyberCloudGrainCallTenantSeparator.IsPlatformServiceEdge(CyberCloudGrainCallTenantSeparator.PlatformMessageGrainInterface, TenancyCluster.Id(A(21)))
-            .ShouldBeFalse("a message grain in ANOTHER tenant is another tenant's service — the spam route this must not open");
+        CyberCloudGrainCallTenantSeparator.IsPlatformServiceEdge(
+            CyberCloudGrainCallTenantSeparator.PlatformMessageGrainInterface,
+            TenancyCluster.Id(A(21))
+        )
+            .ShouldBeFalse(
+                "a message grain in ANOTHER tenant is another tenant's service — the spam route this must not open"
+            );
 
         CyberCloudGrainCallTenantSeparator.IsPlatformServiceEdge("CyberCloud.Tenancy.Contracts.ITenantGrain", platform)
             .ShouldBeFalse("any other grain in the platform tenant stays separated");
 
-        CyberCloudGrainCallTenantSeparator.IsPlatformServiceEdge("CyberCloud.Authorization.Contracts.ITupleStoreGrain", platform)
+        CyberCloudGrainCallTenantSeparator.IsPlatformServiceEdge(
+            "CyberCloud.Authorization.Contracts.ITupleStoreGrain",
+            platform
+        )
             .ShouldBeFalse("the platform's tuple store above all — platform:root#operator lives there");
 
-        CyberCloudGrainCallTenantSeparator.IsPlatformServiceEdge(CyberCloudGrainCallTenantSeparator.PlatformMessageGrainInterface, null)
+        CyberCloudGrainCallTenantSeparator.IsPlatformServiceEdge(
+            CyberCloudGrainCallTenantSeparator.PlatformMessageGrainInterface,
+            null
+        )
             .ShouldBeFalse("a null-tenant grain is the authorizer's business, not this edge's");
 
         // And against the real filter: tenant B's grain reaching the platform tenant's TenantGrain
@@ -410,7 +424,10 @@ public sealed class CrossTenantReachabilityTests(TenancyCluster cluster) {
         var platformTenantKey = cluster.TenantGrain(Guid.Empty).GetGrainId().Key.ToString()!;
         var attacker = cluster.For(b).GetGrain<IReacherGrain>("res/route21");
 
-        var thrown = await Should.ThrowAsync<UnauthorizedAccessException>(() => attacker.ReachTenantByRawKeyAsync(platformTenantKey));
+        var thrown = await Should.ThrowAsync<UnauthorizedAccessException>(() => attacker.ReachTenantByRawKeyAsync(
+                platformTenantKey
+            )
+        );
         thrown.Message.ShouldContain(platform);
         thrown.Message.ShouldContain(TenancyCluster.Id(b));
     }

@@ -568,7 +568,7 @@ public sealed class ClusterConnectionGrain : Grain, IClusterConnectionGrain {
             return Task.FromResult(Refused<IReadOnlyList<InformerLease>>(allowed));
         }
 
-        IReadOnlyList<InformerLease> leases = [.. informers.Values.Select(x => x.Lease)];
+        IReadOnlyList<InformerLease> leases = [.. informers.Values.Select(static x => x.Lease)];
         return Task.FromResult(Result<IReadOnlyList<InformerLease>>.Success(leases));
     }
 
@@ -698,7 +698,8 @@ public sealed class ClusterConnectionGrain : Grain, IClusterConnectionGrain {
         );
 
     static Result<T> Refused<T>(Result refusal)
-        where T : notnull => Result<T>.Failure(refusal.Error!);
+        where T : notnull =>
+        Result<T>.Failure(refusal.Error!);
 
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
 

@@ -1,5 +1,3 @@
-using CyberCloud.ResourceManager.Tests.Infrastructure;
-
 namespace CyberCloud.ResourceManager.Tests;
 
 /// <summary>
@@ -85,7 +83,7 @@ public sealed class EnforcementSeamTests(ResourceManagerCluster cluster) {
                 Path = address.Path,
                 ApiVersion = TestingProvider.V2026,
                 Verb = WriteVerb.Put,
-                Body = TestingProvider.Body(size: 4),
+                Body = TestingProvider.Body(4),
                 Caller = ResourceManagerCluster.Caller()
             },
             TestContext.Current.CancellationToken
@@ -110,7 +108,7 @@ public sealed class EnforcementSeamTests(ResourceManagerCluster cluster) {
                 Path = address.Path,
                 ApiVersion = TestingProvider.V2026,
                 Verb = WriteVerb.Put,
-                Body = TestingProvider.Body(size: 4),
+                Body = TestingProvider.Body(4),
                 Caller = ResourceManagerCluster.Caller()
             },
             TestContext.Current.CancellationToken

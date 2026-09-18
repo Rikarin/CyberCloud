@@ -207,19 +207,19 @@ public sealed class MessagingProvider : IResourceProvider {
                 KafkaClusters.ListKeysAction,
                 ActionKind.Post,
                 KafkaClusters.ListKeysPermission,
-                secret: true,
+                true,
                 response: KafkaClusters.ListKeysResponse
             )
             .Display(
                 "Kafka cluster",
                 "Kafka clusters",
-                shortName: "kafka",
-                summary: "A managed Apache Kafka cluster on Strimzi in KRaft mode, with Cruise "
+                "kafka",
+                "A managed Apache Kafka cluster on Strimzi in KRaft mode, with Cruise "
                 + "Control, configurable retention and an optional firewalled external listener."
             )
             .Chart(KafkaClusters.ChartName)
             .SupportsTags()
-            .RequiresCluster(KafkaClusters.ClusterIdPointer)
+            .RequiresCluster()
 
             // ── The second type, chained off the first exactly as docs/plan/08's example does ───
             .ResourceType(NatsClusters.TypePath)
@@ -248,19 +248,19 @@ public sealed class MessagingProvider : IResourceProvider {
                 NatsClusters.ListKeysAction,
                 ActionKind.Post,
                 NatsClusters.ListKeysPermission,
-                secret: true,
+                true,
                 response: NatsClusters.ListKeysResponse
             )
             .Display(
                 "NATS cluster",
                 "NATS clusters",
-                shortName: "nats",
-                summary: "A managed NATS cluster with JetStream on file storage, optional leaf-node "
+                "nats",
+                "A managed NATS cluster with JetStream on file storage, optional leaf-node "
                 + "connectivity and an optional firewalled external listener."
             )
             .Chart(NatsClusters.ChartName)
             .SupportsTags()
-            .RequiresCluster(NatsClusters.ClusterIdPointer)
+            .RequiresCluster()
 
             // ── The third type ──────────────────────────────────────────────────────────────────
             .ResourceType(RabbitmqClusters.TypePath)
@@ -297,7 +297,7 @@ public sealed class MessagingProvider : IResourceProvider {
                 RabbitmqClusters.ListKeysAction,
                 ActionKind.Post,
                 RabbitmqClusters.ListKeysPermission,
-                secret: true,
+                true,
                 response: RabbitmqClusters.ListKeysResponse,
                 // ⚠ The one listKeys of this provider's three that can run, and the difference is not
                 // this file. The RabbitMQ cluster-operator generates a default user; Strimzi generates
@@ -318,13 +318,13 @@ public sealed class MessagingProvider : IResourceProvider {
                 // CliTokens carries the rule, CliTokenTests carries the measurements, and
                 // RabbitmqDeclarationTests.TheShortNameIsNoneOfTheCliGroupNamesTheNamespacesAlreadyProduce
                 // asks the derived question here.
-                shortName: "rabbitmq",
-                summary: "A managed RabbitMQ cluster on the RabbitMQ Cluster Operator, with quorum "
+                "rabbitmq",
+                "A managed RabbitMQ cluster on the RabbitMQ Cluster Operator, with quorum "
                 + "queues as the default queue type and the management UI reachable only in-cluster."
             )
             .Chart(RabbitmqClusters.ChartName)
             .SupportsTags()
-            .RequiresCluster(RabbitmqClusters.ClusterIdPointer);
+            .RequiresCluster();
     }
 
     // ── What a NATS cluster draws ──────────────────────────────────────────────────────────────
@@ -365,7 +365,7 @@ public sealed class MessagingProvider : IResourceProvider {
         MeterDerivation.Of(
             "servers × sizing.cpu, in cores, taking sizing.preset when the override is empty",
             ["/properties/servers", "/properties/sizing/preset", "/properties/sizing/cpu"],
-            body => KubeQuantity.TryParse(NatsClusters.Resources(body).Cpu, out var cores)
+            static body => KubeQuantity.TryParse(NatsClusters.Resources(body).Cpu, out var cores)
                 ? Result<decimal>.Success(NatsClusters.Servers(body) * cores)
                 : NatsUnresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
         );
@@ -375,7 +375,7 @@ public sealed class MessagingProvider : IResourceProvider {
         MeterDerivation.Of(
             "servers × sizing.memory, in GiB, taking sizing.preset when the override is empty",
             ["/properties/servers", "/properties/sizing/preset", "/properties/sizing/memory"],
-            body => KubeQuantity.TryGibibytes(NatsClusters.Resources(body).Memory, out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(NatsClusters.Resources(body).Memory, out var gibibytes)
                 ? Result<decimal>.Success(NatsClusters.Servers(body) * gibibytes)
                 : NatsUnresolvable("memory", "sizing.memory or the sizing.preset behind it")
         );
@@ -391,7 +391,7 @@ public sealed class MessagingProvider : IResourceProvider {
         MeterDerivation.Of(
             "servers × storage.size, in GiB",
             ["/properties/servers", "/properties/storage/size"],
-            body => KubeQuantity.TryGibibytes(NatsClusters.StorageSize(body), out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(NatsClusters.StorageSize(body), out var gibibytes)
                 ? Result<decimal>.Success(NatsClusters.Servers(body) * gibibytes)
                 : NatsUnresolvable("storage", "storage.size")
         );
@@ -437,7 +437,7 @@ public sealed class MessagingProvider : IResourceProvider {
         MeterDerivation.Of(
             "nodes × sizing.cpu, in cores, taking sizing.preset when the override is empty",
             ["/properties/nodes", "/properties/sizing/preset", "/properties/sizing/cpu"],
-            body => KubeQuantity.TryParse(RabbitmqClusters.Resources(body).Cpu, out var cores)
+            static body => KubeQuantity.TryParse(RabbitmqClusters.Resources(body).Cpu, out var cores)
                 ? Result<decimal>.Success(RabbitmqClusters.Nodes(body) * cores)
                 : RabbitmqUnresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
         );
@@ -447,7 +447,7 @@ public sealed class MessagingProvider : IResourceProvider {
         MeterDerivation.Of(
             "nodes × sizing.memory, in GiB, taking sizing.preset when the override is empty",
             ["/properties/nodes", "/properties/sizing/preset", "/properties/sizing/memory"],
-            body => KubeQuantity.TryGibibytes(RabbitmqClusters.Resources(body).Memory, out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(RabbitmqClusters.Resources(body).Memory, out var gibibytes)
                 ? Result<decimal>.Success(RabbitmqClusters.Nodes(body) * gibibytes)
                 : RabbitmqUnresolvable("memory", "sizing.memory or the sizing.preset behind it")
         );
@@ -457,7 +457,7 @@ public sealed class MessagingProvider : IResourceProvider {
         MeterDerivation.Of(
             "nodes × storage.size, in GiB",
             ["/properties/nodes", "/properties/storage/size"],
-            body => KubeQuantity.TryGibibytes(RabbitmqClusters.StorageSize(body), out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(RabbitmqClusters.StorageSize(body), out var gibibytes)
                 ? Result<decimal>.Success(RabbitmqClusters.Nodes(body) * gibibytes)
                 : RabbitmqUnresolvable("storage", "storage.size")
         );

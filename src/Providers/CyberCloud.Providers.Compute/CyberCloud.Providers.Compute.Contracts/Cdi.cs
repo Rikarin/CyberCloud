@@ -14,8 +14,11 @@ namespace CyberCloud.Providers.Compute.Contracts;
 ///         one of them the day CDI renames it.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>v1beta1</c>, which is the only version <c>charts/bundle/containerized-data-importer</c>
-///         claims to serve</b> — its <c>serves:</c> line names <c>cdi.kubevirt.io/v1beta1</c> alone,
+///         ⚠
+///         <b>
+///             <c>v1beta1</c>, which is the only version <c>charts/bundle/containerized-data-importer</c>
+///             claims to serve
+///         </b> — its <c>serves:</c> line names <c>cdi.kubevirt.io/v1beta1</c> alone,
 ///         and the Bundle gate requires every group/version a managed chart renders to be served by
 ///         exactly one component. Rendering <c>v1alpha1</c> here would fail that gate before it failed
 ///         a cluster.
@@ -31,8 +34,11 @@ public static class Cdi {
     ///     instead of waiting for a pod that will never come.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>On an image and never on a disk, and the asymmetry is the whole point of the two
-    ///     types.</b> An image is imported once and consumed by clones; nothing ever mounts it, so a
+    ///     ⚠
+    ///     <b>
+    ///         On an image and never on a disk, and the asymmetry is the whole point of the two
+    ///         types.
+    ///     </b> An image is imported once and consumed by clones; nothing ever mounts it, so a
     ///     claim on a <c>WaitForFirstConsumer</c> class — which is what <c>charts/bundle/openebs-localpv</c>
     ///     installs — would stay unbound forever and the import would never start. A disk is mounted
     ///     by the VM that attaches it, and binding it early on node-local storage would pin the disk
@@ -56,8 +62,11 @@ public static class Cdi {
     ///     CDI 1.66 fills a <c>DataVolume</c> through a volume populator when the class allows it, and
     ///     the phase it then reports for "waiting for a consumer" is this one rather than
     ///     <see cref="WaitForFirstConsumer" />. KubeVirt's own VM controller treats the two as one —
-    ///     <c>pkg/virt-controller/watch/vm/vm.go</c> lists <c>Succeeded, WaitForFirstConsumer,
-    ///     PendingPopulation</c> in one case — and so does this platform.
+    ///     <c>pkg/virt-controller/watch/vm/vm.go</c> lists
+    ///     <c>
+    /// Succeeded, WaitForFirstConsumer,
+    ///     PendingPopulation
+    ///     </c> in one case — and so does this platform.
     /// </remarks>
     public const string PendingPopulation = "PendingPopulation";
 
@@ -77,8 +86,7 @@ public static class Cdi {
     ///     as far as CDI can take it.
     /// </summary>
     /// <param name="phase">A value of <see cref="Phase" />.</param>
-    public static bool IsProvisioned(string phase) =>
-        phase is Succeeded or WaitForFirstConsumer or PendingPopulation;
+    public static bool IsProvisioned(string phase) => phase is Succeeded or WaitForFirstConsumer or PendingPopulation;
 
     /// <summary>
     ///     The reason CDI gives for a <c>DataVolume</c> that is not progressing, from its
@@ -112,8 +120,11 @@ public static class Cdi {
     /// <param name="storageClass">The class, or empty for the cluster's default.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>storage</c> and not <c>pvc</c>, so that the volume mode comes from CDI's
-    ///         <c>StorageProfile</c> for the class</b> rather than from a guess written here — a
+    ///         ⚠
+    ///         <b>
+    ///             <c>storage</c> and not <c>pvc</c>, so that the volume mode comes from CDI's
+    ///             <c>StorageProfile</c> for the class
+    ///         </b> rather than from a guess written here — a
     ///         node-local hostpath class is <c>Filesystem</c> and a replicated block one may not be,
     ///         which are the two stages <c>charts/bundle/openebs-localpv/component.yaml</c> § which
     ///         stage is on describes. <c>storageClassName</c> is written only when the body names a
@@ -157,5 +168,6 @@ public static class Cdi {
 
     /// <summary>The class a <c>DataVolume</c> read back names, or empty.</summary>
     /// <param name="spec">The object's <c>spec</c>.</param>
-    public static string RequestedClass(JsonObject? spec) => ComputeBodies.TextOf(spec?["storage"]?["storageClassName"]);
+    public static string RequestedClass(JsonObject? spec) =>
+        ComputeBodies.TextOf(spec?["storage"]?["storageClassName"]);
 }

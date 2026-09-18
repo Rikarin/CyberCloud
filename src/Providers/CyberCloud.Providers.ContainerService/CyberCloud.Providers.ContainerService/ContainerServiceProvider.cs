@@ -145,7 +145,7 @@ public sealed class ContainerServiceProvider : IResourceProvider {
                 ManagedClusters.ListCredentialsAction,
                 ActionKind.Post,
                 ManagedClusters.ListCredentialsPermission,
-                secret: true,
+                true,
                 response: ManagedClusters.ListCredentialsResponse,
                 handler: typeof(ManagedClusterListCredentialsHandler)
             )
@@ -167,14 +167,14 @@ public sealed class ContainerServiceProvider : IResourceProvider {
             .Display(
                 "Managed Kubernetes cluster",
                 "Managed Kubernetes clusters",
-                shortName: ClusterShortName,
-                summary: "A Kubernetes cluster whose control plane runs as pods in the management "
+                ClusterShortName,
+                "A Kubernetes cluster whose control plane runs as pods in the management "
                 + "cluster and whose workers are isolated virtual machines. Node pools are a child "
                 + "resource."
             )
             .Chart(ManagedClusters.ChartName)
             .SupportsTags()
-            .RequiresCluster(ManagedClusters.ClusterIdPointer)
+            .RequiresCluster()
             // ── The child, docs/plan/13 § Managed Kubernetes' first sub-resource ────────────────
             //
             // ⚠ A CHILD THAT DRAWS REAL QUOTA, WHICH THE ONLY OTHER SHIPPING CHILD DOES NOT. A bucket
@@ -204,13 +204,13 @@ public sealed class ContainerServiceProvider : IResourceProvider {
             .Display(
                 "Node pool",
                 "Node pools",
-                shortName: PoolShortName,
-                summary: "A group of identically sized worker virtual machines in a managed Kubernetes "
+                PoolShortName,
+                "A group of identically sized worker virtual machines in a managed Kubernetes "
                 + "cluster, optionally under a cluster-autoscaler."
             )
             .Chart(AgentPools.ChartName)
             .SupportsTags()
-            .RequiresCluster(AgentPools.ClusterIdPointer)
+            .RequiresCluster()
             // ── The third type, #36: the cluster the tenant brought ─────────────────────────────
             //
             // ⚠ NO .Chart, NO .RequiresCluster, AND ONE METER — EACH ABSENCE IS THE TYPE.
@@ -238,15 +238,15 @@ public sealed class ContainerServiceProvider : IResourceProvider {
                 ConnectedClusters.ListInstallCommandAction,
                 ActionKind.Post,
                 ConnectedClusters.ListInstallCommandPermission,
-                secret: true,
+                true,
                 response: ConnectedClusters.ListInstallCommandResponse,
                 handler: typeof(ConnectedClusterInstallCommandHandler)
             )
             .Display(
                 "Connected Kubernetes cluster",
                 "Connected Kubernetes clusters",
-                shortName: ConnectedShortName,
-                summary: "A cluster you run yourself — on-prem, behind NAT, anywhere with outbound "
+                ConnectedShortName,
+                "A cluster you run yourself — on-prem, behind NAT, anywhere with outbound "
                 + "HTTPS — reached through an agent you install in it. Create it, run the install "
                 + "command it gives you, and place resources in it once it reports Succeeded."
             )
@@ -273,7 +273,7 @@ public sealed class ContainerServiceProvider : IResourceProvider {
         MeterDerivation.Of(
             "controlPlane.replicas × 3 containers × 500m, in cores",
             ["/properties/controlPlane/replicas"],
-            body => KubeQuantity.TryParse(ManagedClusters.ControlPlaneCpu, out var cores)
+            static body => KubeQuantity.TryParse(ManagedClusters.ControlPlaneCpu, out var cores)
                 ? Result<decimal>.Success(
                     ManagedClusters.ControlPlaneReplicas(body)
                     * ManagedClusters.ControlPlaneContainersPerReplica
@@ -287,7 +287,7 @@ public sealed class ContainerServiceProvider : IResourceProvider {
         MeterDerivation.Of(
             "controlPlane.replicas × 3 containers × 1Gi, in GiB",
             ["/properties/controlPlane/replicas"],
-            body => KubeQuantity.TryGibibytes(ManagedClusters.ControlPlaneMemory, out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(ManagedClusters.ControlPlaneMemory, out var gibibytes)
                 ? Result<decimal>.Success(
                     ManagedClusters.ControlPlaneReplicas(body)
                     * ManagedClusters.ControlPlaneContainersPerReplica
@@ -314,7 +314,7 @@ public sealed class ContainerServiceProvider : IResourceProvider {
                 "/properties/autoscale/enabled",
                 "/properties/autoscale/maxCount"
             ],
-            body => KubeQuantity.TryParse(AgentPools.Resources(body).Cpu, out var cores)
+            static body => KubeQuantity.TryParse(AgentPools.Resources(body).Cpu, out var cores)
                 ? Result<decimal>.Success(AgentPools.EffectiveCount(body) * cores)
                 : Unresolvable("cpu", "the size preset")
         );
@@ -329,7 +329,7 @@ public sealed class ContainerServiceProvider : IResourceProvider {
                 "/properties/autoscale/enabled",
                 "/properties/autoscale/maxCount"
             ],
-            body => KubeQuantity.TryGibibytes(AgentPools.Resources(body).Memory, out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(AgentPools.Resources(body).Memory, out var gibibytes)
                 ? Result<decimal>.Success(AgentPools.EffectiveCount(body) * gibibytes)
                 : Unresolvable("memory", "the size preset")
         );
@@ -355,7 +355,7 @@ public sealed class ContainerServiceProvider : IResourceProvider {
                 "/properties/autoscale/enabled",
                 "/properties/autoscale/maxCount"
             ],
-            body => KubeQuantity.TryGibibytes(AgentPools.OsDiskSize(body), out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(AgentPools.OsDiskSize(body), out var gibibytes)
                 ? Result<decimal>.Success(AgentPools.EffectiveCount(body) * gibibytes)
                 : Unresolvable("storage", "osDiskSize")
         );

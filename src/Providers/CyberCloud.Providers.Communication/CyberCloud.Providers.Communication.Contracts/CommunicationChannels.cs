@@ -10,9 +10,12 @@ namespace CyberCloud.Providers.Communication.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/17 § The channel abstraction: <i>"A tenant's service resource selects a channel
-///         and either uses the platform's account (marked-up, no setup) or their own credentials
-///         (BYO, cheaper) — and BYO is offered from day one."</i> Both are here. The platform's
+///         docs/plan/17 § The channel abstraction:
+///         <i>
+///             "A tenant's service resource selects a channel
+///             and either uses the platform's account (marked-up, no setup) or their own credentials
+///             (BYO, cheaper) — and BYO is offered from day one."
+///         </i> Both are here. The platform's
 ///         account is <c>account: platform</c> and needs nothing else; the tenant's is
 ///         <c>account: tenant</c> with two <c>SecretRef</c> handles, and the grain refuses the second
 ///         without the handles rather than falling back to the first — see
@@ -20,8 +23,11 @@ namespace CyberCloud.Providers.Communication.Contracts;
 ///         would produce.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The kind is a body property and the name is free, and one service holds one
-///         configuration per kind.</b> Two <c>channels</c> resources can therefore both say
+///         ⚠
+///         <b>
+///             The kind is a body property and the name is free, and one service holds one
+///             configuration per kind.
+///         </b> Two <c>channels</c> resources can therefore both say
 ///         <c>kind: email</c>. The reconciler refuses the second by name — the grain records
 ///         <see cref="ChannelConfiguration.OwnerResourceId" /> and a configuration owned by another
 ///         resource is a <c>Conflict</c>, not something to overwrite. The name could not have been
@@ -69,7 +75,7 @@ public static class CommunicationChannels {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the channel is billed in."
                 ) {
                     Format = SchemaFormat.Region,
@@ -81,7 +87,7 @@ public static class CommunicationChannels {
                 new(
                     "/properties/kind",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "Which channel this configures. One service holds one configuration per kind."
                 ) { AllowedValues = ChannelKinds.AllowedValues, Immutable = true, ExampleJson = "\"email\"" },
                 new(
@@ -108,20 +114,39 @@ public static class CommunicationChannels {
                     SchemaKind.Text,
                     Description: "For account: tenant — the vault handle of the account identifier (a Twilio "
                     + "account SID, a Meta business account id), as path#field."
-                ) { Pattern = OptionalSecretRefPattern, MaxLength = 512, Widget = WidgetHint.SecretRef, DefaultJson = "\"\"" },
+                ) {
+                    Pattern = OptionalSecretRefPattern,
+                    MaxLength = 512,
+                    Widget = WidgetHint.SecretRef,
+                    DefaultJson = "\"\""
+                },
                 new(
                     "/properties/authRef",
                     SchemaKind.Text,
                     Description: "For account: tenant — the vault handle of the authenticating value (an auth "
                     + "token, a bearer, an access secret), as path#field."
-                ) { Pattern = OptionalSecretRefPattern, MaxLength = 512, Widget = WidgetHint.SecretRef, DefaultJson = "\"\"" },
+                ) {
+                    Pattern = OptionalSecretRefPattern,
+                    MaxLength = 512,
+                    Widget = WidgetHint.SecretRef,
+                    DefaultJson = "\"\""
+                },
                 new(
                     "/properties/signingRef",
                     SchemaKind.Text,
                     Description: "The vault handle of the carrier's webhook-signing value, when it signs its "
                     + "callbacks. A receipt that cannot be verified is data from the internet."
-                ) { Pattern = OptionalSecretRefPattern, MaxLength = 512, Widget = WidgetHint.SecretRef, DefaultJson = "\"\"" },
-                new("/properties/limits", SchemaKind.Nested, Description: "What the channel may send and spend per UTC day."),
+                ) {
+                    Pattern = OptionalSecretRefPattern,
+                    MaxLength = 512,
+                    Widget = WidgetHint.SecretRef,
+                    DefaultJson = "\"\""
+                },
+                new(
+                    "/properties/limits",
+                    SchemaKind.Nested,
+                    Description: "What the channel may send and spend per UTC day."
+                ),
                 new(
                     "/properties/limits/maxMessagesPerDay",
                     SchemaKind.WholeNumber,
@@ -149,7 +174,8 @@ public static class CommunicationChannels {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     /// <summary>Builds a body that satisfies <see cref="Schema2026" />.</summary>
     /// <param name="kind">Which channel.</param>
@@ -190,7 +216,8 @@ public static class CommunicationChannels {
         }.ToJsonString();
 
     /// <summary>The kind a body configures.</summary>
-    public static ChannelKind KindOf(JsonElement desired) => ChannelKinds.Parse(Bodies.Text(Bodies.Property(desired, "kind"), string.Empty));
+    public static ChannelKind KindOf(JsonElement desired) =>
+        ChannelKinds.Parse(Bodies.Text(Bodies.Property(desired, "kind"), string.Empty));
 
     /// <summary>The <see cref="ChannelConfiguration" /> a desired body describes.</summary>
     /// <param name="id">The channel resource, whose GUID becomes the configuration's owner.</param>
@@ -216,17 +243,26 @@ public static class CommunicationChannels {
             _ => CredentialMode.PlatformAccount
         };
 
-        var account = ParseSecretRef(Bodies.Text(Bodies.Property(desired, "accountRef"), string.Empty), "/properties/accountRef");
+        var account = ParseSecretRef(
+            Bodies.Text(Bodies.Property(desired, "accountRef"), string.Empty),
+            "/properties/accountRef"
+        );
         if (account.TryGetError(out var badAccount)) {
             return Result<ChannelConfiguration>.Failure(badAccount);
         }
 
-        var auth = ParseSecretRef(Bodies.Text(Bodies.Property(desired, "authRef"), string.Empty), "/properties/authRef");
+        var auth = ParseSecretRef(
+            Bodies.Text(Bodies.Property(desired, "authRef"), string.Empty),
+            "/properties/authRef"
+        );
         if (auth.TryGetError(out var badAuth)) {
             return Result<ChannelConfiguration>.Failure(badAuth);
         }
 
-        var signing = ParseSecretRef(Bodies.Text(Bodies.Property(desired, "signingRef"), string.Empty), "/properties/signingRef");
+        var signing = ParseSecretRef(
+            Bodies.Text(Bodies.Property(desired, "signingRef"), string.Empty),
+            "/properties/signingRef"
+        );
         if (signing.TryGetError(out var badSigning)) {
             return Result<ChannelConfiguration>.Failure(badSigning);
         }
@@ -287,7 +323,9 @@ public static class CommunicationChannels {
 
         return Result<CarrierSecretRef>.Success(
             new() {
-                Path = spelled[..hash], Field = at < 0 ? rest : rest[..at], Version = at < 0 ? string.Empty : rest[(at + 1)..]
+                Path = spelled[..hash],
+                Field = at < 0 ? rest : rest[..at],
+                Version = at < 0 ? string.Empty : rest[(at + 1)..]
             }
         );
     }

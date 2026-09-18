@@ -47,7 +47,9 @@ public sealed class ReBacScopeAuthorizerTests(ResourceManagerCluster cluster) {
     public async Task ListReadableAsksWithinTheParent() {
         ResourceManagerCluster.ResetDoubles();
 
-        var subscriptions = Enumerable.Range(0, 3).Select(_ => ScopeId.Subscription(Tenant, Guid.NewGuid())).ToList();
+        var subscriptions = Enumerable.Range(0, 3)
+            .Select(static _ => ScopeId.Subscription(Tenant, Guid.NewGuid()))
+            .ToList();
 
         // Two of the three, and one id no candidate carries — which must not appear either.
         ScriptedListObjectsGrain.Objects.Add(N(subscriptions[0].SubscriptionId));
@@ -63,7 +65,7 @@ public sealed class ReBacScopeAuthorizerTests(ResourceManagerCluster cluster) {
         );
 
         visibility.IsAnswered.ShouldBeTrue();
-        visibility.Visible.ShouldBe([subscriptions[0], subscriptions[2]], ignoreOrder: true);
+        visibility.Visible.ShouldBe([subscriptions[0], subscriptions[2]], true);
 
         var asked = ScriptedListObjectsGrain.Requests.ShouldHaveSingleItem();
 
@@ -82,8 +84,11 @@ public sealed class ReBacScopeAuthorizerTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A resource-group page walks <c>resourceGroup</c> objects under the subscription,
-    ///     and matches on <c>{subscriptionId:N}-{name}</c>.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A resource-group page walks <c>resourceGroup</c> objects under the subscription,
+    ///         and matches on <c>{subscriptionId:N}-{name}</c>.
+    ///     </b>
     /// </summary>
     [Fact]
     public async Task ListReadableUnderASubscriptionAsksForResourceGroups() {
@@ -164,7 +169,10 @@ public sealed class ReBacScopeAuthorizerTests(ResourceManagerCluster cluster) {
     public void AResourceGroupParentIsRefusedByTheCollectionTypeBeforeAnyWalk() {
         ResourceManagerCluster.ResetDoubles();
 
-        Should.Throw<ArgumentException>(() => new ScopeCollectionId(ScopeId.Group(Tenant, Guid.NewGuid(), "prod")));
+        Should.Throw<ArgumentException>(static () => new ScopeCollectionId(
+                ScopeId.Group(Tenant, Guid.NewGuid(), "prod")
+            )
+        );
 
         ScriptedListObjectsGrain.Requests.ShouldBeEmpty();
     }
@@ -179,7 +187,7 @@ public sealed class ReBacScopeAuthorizerTests(ResourceManagerCluster cluster) {
         ResourceManagerCluster.ResetDoubles();
 
         var groups = ManagementGroupNames
-            .Select(x => ScopeId.ManagementGroupOf(Tenant, x))
+            .Select(static x => ScopeId.ManagementGroupOf(Tenant, x))
             .ToList();
 
         // Scripted to answer — a walk that ran would answer, and answering is the failure.

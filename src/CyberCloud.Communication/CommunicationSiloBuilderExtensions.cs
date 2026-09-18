@@ -42,8 +42,11 @@ public static class CommunicationSiloBuilderExtensions {
     ///         call.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A channel configuration that names <c>smtp</c> reaches this carrier, and one that
-    ///         names nothing reaches it too</b>, because with the carrier registered it is the
+    ///         ⚠
+    ///         <b>
+    ///             A channel configuration that names <c>smtp</c> reaches this carrier, and one that
+    ///             names nothing reaches it too
+    ///         </b>, because with the carrier registered it is the
     ///         channel's only real provider (<see cref="ChannelProviderRegistry" />). A tenant's
     ///         <c>channels</c> resource with <c>kind: email</c> and no <c>provider</c> therefore
     ///         sends through the platform's relay on a silo that has one.
@@ -73,7 +76,7 @@ public static class CommunicationSiloBuilderExtensions {
     public static ISiloBuilder AddCyberCloudCommunication(this ISiloBuilder silo) {
         ArgumentNullException.ThrowIfNull(silo);
 
-        return silo.ConfigureServices(services => {
+        return silo.ConfigureServices(static services => {
                 services.TryAddSingleton<IClock, SystemClock>();
 
                 // ⚠ One refusing seam per channel, and every one of them is registered. A channel
@@ -103,9 +106,12 @@ public static class CommunicationSiloBuilderExtensions {
     /// <exception cref="ArgumentNullException"><paramref name="services" /> is null.</exception>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The gateway calls this and the silo gets it through
-    ///         <see cref="AddCyberCloudCommunication" />, and the split is the whole reason it is a
-    ///         separate method.</b> Both seams are constructed over an <c>IGrainFactory</c> and take
+    ///         ⚠
+    ///         <b>
+    ///             The gateway calls this and the silo gets it through
+    ///             <see cref="AddCyberCloudCommunication" />, and the split is the whole reason it is a
+    ///             separate method.
+    ///         </b> Both seams are constructed over an <c>IGrainFactory</c> and take
     ///         grain <i>references</i>, so they work identically behind a cluster client and inside
     ///         a silo — but the gateway is a client and hosts no grain, so the silo overload's carrier
     ///         seams, registry and webhook router would be dead weight there.

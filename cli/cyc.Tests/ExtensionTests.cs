@@ -30,7 +30,7 @@ public sealed class ExtensionTests : IDisposable {
     /// <inheritdoc />
     public void Dispose() {
         try {
-            Directory.Delete(sources, recursive: true);
+            Directory.Delete(sources, true);
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException or DirectoryNotFoundException) {
             // A leftover temporary directory is not worth failing a passing test over.
         }
@@ -354,7 +354,7 @@ public sealed class ExtensionTests : IDisposable {
         // ⚠ docs/plan/21 § Decisions' six codes are a contract for cyc's own commands. There is no
         // mapping from an arbitrary program's codes onto that table that does not throw information
         // away, so an extension owns its exit codes the way a `git-` subcommand does.
-        using var host = TestHost.Create(launchExtension: (_, _) => Task.FromResult(42));
+        using var host = TestHost.Create(launchExtension: static (_, _) => Task.FromResult(42));
 
         await Install(host, "probe");
 
@@ -540,7 +540,7 @@ public sealed class ExtensionTests : IDisposable {
     ///     ⚠ The index is a file a user can edit, so every claim that rests on <c>add</c> having
     ///     refused something has to be re-tested against an index that did not go through it.
     /// </remarks>
-    void Smuggle(TestHost host, string name) {
+    static void Smuggle(TestHost host, string name) {
         var file = Script(Path.Combine(host.ExtensionsDirectory, ExtensionStore.FilePrefix + name));
 
         var index = $$"""

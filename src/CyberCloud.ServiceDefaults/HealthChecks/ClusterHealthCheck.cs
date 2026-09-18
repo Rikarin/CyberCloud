@@ -33,8 +33,8 @@ sealed class ClusterHealthCheck(IGrainFactory grains) : IHealthCheck {
             return HealthCheckResult.Degraded("Could not read the cluster membership table.", error);
         }
 
-        var active = hosts.Values.Count(x => x is SiloStatus.Active);
-        var leaving = hosts.Values.Count(x => x is SiloStatus.ShuttingDown or SiloStatus.Stopping);
+        var active = hosts.Values.Count(static x => x is SiloStatus.Active);
+        var leaving = hosts.Values.Count(static x => x is SiloStatus.ShuttingDown or SiloStatus.Stopping);
 
         if (active == 0) {
             // Degraded rather than Unhealthy even here: on a silo, "no active silos" cannot be true

@@ -1,6 +1,4 @@
-using CyberCloud.Authorization;
 using CyberCloud.Authorization.Contracts;
-using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Tests.Infrastructure;
 using System.Globalization;
 using System.Reflection;
@@ -31,10 +29,10 @@ public sealed class GroupMembershipTests(IdentityCluster cluster) {
         // group's state is the second source of truth docs/plan/11 § The object model forbids.
         var collections = typeof(GroupGrainState)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(x => x.PropertyType != typeof(string)
+            .Where(static x => x.PropertyType != typeof(string)
                 && typeof(System.Collections.IEnumerable).IsAssignableFrom(x.PropertyType)
             )
-            .Select(x => x.Name)
+            .Select(static x => x.Name)
             .ToList();
 
         collections.ShouldBeEmpty(

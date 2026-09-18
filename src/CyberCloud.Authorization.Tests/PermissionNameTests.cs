@@ -73,7 +73,7 @@ sealed class MisspelledService {
 public sealed class PermissionNameTests {
     [Fact]
     public void EveryRequiresPermissionAttributeNamesAPermissionTheSchemaDefines() {
-        var found = Scan(x => x != typeof(MisspelledService)).ToList();
+        var found = Scan(static x => x != typeof(MisspelledService)).ToList();
 
         found.ShouldNotBeEmpty(
             "the scanner found no [RequiresPermission] at all. That is a pass only if nothing in "
@@ -87,8 +87,8 @@ public sealed class PermissionNameTests {
         );
 
         var unknown = found
-            .Where(x => CyberCloudSchema.Instance.Member(x.ObjectType, x.Permission) is null)
-            .Select(x => x.Where)
+            .Where(static x => CyberCloudSchema.Instance.Member(x.ObjectType, x.Permission) is null)
+            .Select(static x => x.Where)
             .ToList();
 
         unknown.ShouldBeEmpty(
@@ -102,7 +102,7 @@ public sealed class PermissionNameTests {
     public void TheScannerActuallyRejectsATypo() {
         // ⚠ Without this, the test above could be green because the scanner finds nothing, or
         // because Member(...) never returns null. MisspelledService exists to be caught.
-        var typo = Scan(x => x == typeof(MisspelledService)).ToList();
+        var typo = Scan(static x => x == typeof(MisspelledService)).ToList();
 
         var found = typo.ShouldHaveSingleItem();
         CyberCloudSchema.Instance.Member(found.ObjectType, found.Permission).ShouldBeNull();
@@ -116,8 +116,8 @@ public sealed class PermissionNameTests {
         // deny everywhere.
         var constants = typeof(Permissions)
             .GetFields(BindingFlags.Public | BindingFlags.Static)
-            .Where(x => x.IsLiteral && x.FieldType == typeof(string))
-            .Select(x => (string)x.GetRawConstantValue()!)
+            .Where(static x => x.IsLiteral && x.FieldType == typeof(string))
+            .Select(static x => (string)x.GetRawConstantValue()!)
             .ToList();
 
         constants.ShouldNotBeEmpty();
@@ -133,8 +133,8 @@ public sealed class PermissionNameTests {
     public void EveryRelationConstantIsDeclaredOnAtLeastOneType() {
         var constants = typeof(Relations)
             .GetFields(BindingFlags.Public | BindingFlags.Static)
-            .Where(x => x.IsLiteral && x.FieldType == typeof(string))
-            .Select(x => (string)x.GetRawConstantValue()!)
+            .Where(static x => x.IsLiteral && x.FieldType == typeof(string))
+            .Select(static x => (string)x.GetRawConstantValue()!)
             .ToList();
 
         foreach (var relation in constants) {
@@ -148,8 +148,8 @@ public sealed class PermissionNameTests {
     public void EveryObjectTypeConstantIsInTheSchema() {
         var constants = typeof(ObjectTypes)
             .GetFields(BindingFlags.Public | BindingFlags.Static)
-            .Where(x => x.IsLiteral && x.FieldType == typeof(string))
-            .Select(x => (string)x.GetRawConstantValue()!)
+            .Where(static x => x.IsLiteral && x.FieldType == typeof(string))
+            .Select(static x => (string)x.GetRawConstantValue()!)
             .ToList();
 
         foreach (var type in constants) {
@@ -164,9 +164,9 @@ public sealed class PermissionNameTests {
         // because SchemaBuilder.Build() throws rather than returning a schema with an unresolvable
         // reference. CyberCloudSchema.Instance is built in a static initialiser, so a broken schema
         // fails the first time anything touches the engine.
-        Should.NotThrow(() => CyberCloudSchema.Instance.TypeNames.Length);
+        Should.NotThrow(static () => CyberCloudSchema.Instance.TypeNames.Length);
 
-        Should.Throw<SchemaDefinitionException>(() =>
+        Should.Throw<SchemaDefinitionException>(static () =>
             Schema.DefineType("doc")
                 .Relation("owner", Rewrite.This)
                 .Permission("act", Rewrite.Rel("ownr"))
@@ -178,10 +178,10 @@ public sealed class PermissionNameTests {
         Func<Type, bool> include
     ) =>
         AppDomain.CurrentDomain.GetAssemblies()
-            .Where(x => x.GetName().Name?.StartsWith("CyberCloud", StringComparison.Ordinal) == true)
+            .Where(static x => x.GetName().Name?.StartsWith("CyberCloud", StringComparison.Ordinal) == true)
             .SelectMany(SafeTypes)
             .Where(include)
-            .SelectMany(type => type
+            .SelectMany(static type => type
                     .GetMembers(
                         BindingFlags.Public
                         | BindingFlags.NonPublic
@@ -214,7 +214,7 @@ public sealed class PermissionNameTests {
         try {
             return assembly.GetTypes();
         } catch (ReflectionTypeLoadException loaded) {
-            return loaded.Types.Where(x => x is not null)!;
+            return loaded.Types.Where(static x => x is not null)!;
         }
     }
 }

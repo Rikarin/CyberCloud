@@ -1,6 +1,5 @@
 using Aspire.Hosting.ApplicationModel;
 using CyberCloud.Authorization.Contracts;
-using CyberCloud.Core.Contracts;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Host;
 using CyberCloud.Identity.Host.Api;
@@ -38,8 +37,11 @@ namespace CyberCloud.AppHost.Tests;
 ///         the code paths are.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The one-time code is read from the silo's console, and checked against Mailpit's
-///         inbox.</b> <c>DevelopmentOtpDelivery</c> logs the code on the silo whose grain minted it
+///         ⚠
+///         <b>
+///             The one-time code is read from the silo's console, and checked against Mailpit's
+///             inbox.
+///         </b> <c>DevelopmentOtpDelivery</c> logs the code on the silo whose grain minted it
 ///         and — the AppHost having a relay since #93 — mails it through the platform's own
 ///         communication service to Mailpit, where a person reads it at
 ///         <c>http://localhost:8025</c>. The test reads the console through
@@ -85,7 +87,9 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
     static readonly TimeSpan ConvergenceBudget = TimeSpan.FromMinutes(4);
 
     static readonly Uri IdentityHost = new(CyberCloudResources.IdentityIssuer);
-    static readonly Uri Gateway = new($"http://localhost:{CyberCloudResources.GatewayPort.ToString(CultureInfo.InvariantCulture)}");
+
+    static readonly Uri Gateway =
+        new($"http://localhost:{CyberCloudResources.GatewayPort.ToString(CultureInfo.InvariantCulture)}");
 
     const string PortalOrigin = "http://localhost:4200";
     const string Version = "?api-version=2026-08-01";
@@ -107,10 +111,18 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
     public async Task APersonSignsUpSignsInAndReadsTheirTenantThroughTheGateway() {
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        await topology.Application.ResourceNotifications.WaitForResourceHealthyAsync(CyberCloudResources.Identity, cancellationToken);
-        await topology.Application.ResourceNotifications.WaitForResourceHealthyAsync(CyberCloudResources.Gateway, cancellationToken);
+        await topology.Application.ResourceNotifications.WaitForResourceHealthyAsync(
+            CyberCloudResources.Identity,
+            cancellationToken
+        );
+        await topology.Application.ResourceNotifications.WaitForResourceHealthyAsync(
+            CyberCloudResources.Gateway,
+            cancellationToken
+        );
 
-        using var handler = new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false };
+        using var handler = new HttpClientHandler();
+        handler.AllowAutoRedirect = false;
+        handler.UseCookies = false;
         using var http = new HttpClient(handler);
 
         // The silo consoles, watched from before the sign-up begins so the code cannot be missed.
@@ -123,7 +135,13 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
         var logs = topology.Application.Services.GetRequiredService<ResourceLoggerService>();
         var model = topology.Application.Services.GetRequiredService<DistributedApplicationModel>();
         var watchers = new[] { CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo }
-            .Select(silo => model.Resources.Single(resource => string.Equals(resource.Name, silo, StringComparison.Ordinal)))
+            .Select(silo => model.Resources.Single(resource => string.Equals(
+                        resource.Name,
+                        silo,
+                        StringComparison.Ordinal
+                    )
+                )
+            )
             .Select(silo => Task.Run(() => WatchAsync(logs, silo, console, watching.Token), CancellationToken.None))
             .ToArray();
 
@@ -133,25 +151,41 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
         var state = Base64Url(RandomNumberGenerator.GetBytes(16));
 
         var authorize = IdentityHostOpenIddict.AuthorizationPath
-            + "?response_type=code&client_id=" + FirstPartyClients.Portal
-            + "&redirect_uri=" + Uri.EscapeDataString(FirstPartyClients.DevelopmentPortalRedirectUri)
-            + "&scope=" + Uri.EscapeDataString(string.Join(' ', FirstPartyClients.AllScopes))
-            + "&state=" + state
-            + "&code_challenge=" + challenge
+            + "?response_type=code&client_id="
+            + FirstPartyClients.Portal
+            + "&redirect_uri="
+            + Uri.EscapeDataString(FirstPartyClients.DevelopmentPortalRedirectUri)
+            + "&scope="
+            + Uri.EscapeDataString(string.Join(' ', FirstPartyClients.AllScopes))
+            + "&state="
+            + state
+            + "&code_challenge="
+            + challenge
             + "&code_challenge_method=S256&nonce=n-1";
 
-        var unauthenticated = await SendAsync(http, HttpMethod.Get, new Uri(IdentityHost, authorize), cookies: null, body: null, cancellationToken);
+        var unauthenticated = await SendAsync(
+            http,
+            HttpMethod.Get,
+            new Uri(IdentityHost, authorize),
+            null,
+            null,
+            cancellationToken
+        );
 
         unauthenticated.Status.ShouldBe(HttpStatusCode.Found, unauthenticated.Body);
 
-        var signIn = unauthenticated.Location.ShouldNotBeNull("an unauthenticated /authorize redirects to the sign-in page");
-        signIn.GetLeftPart(UriPartial.Path).ShouldBe(
-            $"http://localhost:{CyberCloudResources.IdentityAppPort.ToString(CultureInfo.InvariantCulture)}/signin",
-            "SignInPageBaseUri is the identity app's dev server on the AppHost"
+        var signIn = unauthenticated.Location.ShouldNotBeNull(
+            "an unauthenticated /authorize redirects to the sign-in page"
         );
+        signIn.GetLeftPart(UriPartial.Path)
+            .ShouldBe(
+                $"http://localhost:{CyberCloudResources.IdentityAppPort.ToString(CultureInfo.InvariantCulture)}/signin",
+                "SignInPageBaseUri is the identity app's dev server on the AppHost"
+            );
 
         var returnUrl = QueryValue(signIn, "returnUrl");
-        returnUrl.StartsWith(IdentityHostOpenIddict.AuthorizationPath + "?", StringComparison.Ordinal).ShouldBeTrue("the return URL is the same-origin path and query of the /authorize request: " + returnUrl);
+        returnUrl.StartsWith(IdentityHostOpenIddict.AuthorizationPath + "?", StringComparison.Ordinal)
+            .ShouldBeTrue("the return URL is the same-origin path and query of the /authorize request: " + returnUrl);
         returnUrl.ShouldContain("state=" + state);
 
         // ── Step 4: sign-up begins; the ticket cookie is issued. ────────────────────────────────
@@ -159,8 +193,8 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
             http,
             HttpMethod.Post,
             new Uri(IdentityHost, "/api/signup/begin"),
-            cookies: null,
-            body: JsonSerializer.Serialize(new { email = Email, returnUrl }),
+            null,
+            JsonSerializer.Serialize(new { email = Email, returnUrl }),
             cancellationToken
         );
 
@@ -185,7 +219,9 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
 
         // ── Step 6: a wrong code is refused, the right one is burnt. ────────────────────────────
         var wrong = await PostJsonAsync(http, "/api/signup/verify", ticket, new { code = "000000" }, cancellationToken);
-        Json(wrong.Body).GetProperty("verified").GetBoolean().ShouldBeFalse("a wrong code is answered verified: false, not an error");
+        Json(wrong.Body).GetProperty("verified")
+            .GetBoolean()
+            .ShouldBeFalse("a wrong code is answered verified: false, not an error");
 
         var verified = await PostJsonAsync(http, "/api/signup/verify", ticket, new { code }, cancellationToken);
         Json(verified.Body).GetProperty("verified").GetBoolean().ShouldBeTrue(verified.Body);
@@ -211,21 +247,35 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
 
         var tenantId = Guid.Parse(completion.GetProperty("tenantId").GetString()!, CultureInfo.InvariantCulture);
         var resumed = completion.GetProperty("returnUrl").GetString()!;
-        resumed.Contains(SignUpApi.TenantParameter + "=" + tenantId.ToString("D", CultureInfo.InvariantCulture), StringComparison.Ordinal).ShouldBeTrue("the resumed /authorize names the new tenant: " + resumed);
+        resumed.Contains(
+            SignUpApi.TenantParameter + "=" + tenantId.ToString("D", CultureInfo.InvariantCulture),
+            StringComparison.Ordinal
+        )
+            .ShouldBeTrue("the resumed /authorize names the new tenant: " + resumed);
 
         var session = completed.CookieSet(IdentityHostAuthentication.CookieName);
         session.ShouldNotBeNullOrEmpty("complete signs the person in");
         completed.CookieCleared(SignUpTicketCookie.CookieName).ShouldBeTrue("the ticket is taken by complete");
 
         // ── Step 8: the resumed /authorize mints a code for the same tenant. ────────────────────
-        var authorized = await SendAsync(http, HttpMethod.Get, new Uri(IdentityHost, resumed), Cookie(IdentityHostAuthentication.CookieName, session), body: null, cancellationToken);
+        var authorized = await SendAsync(
+            http,
+            HttpMethod.Get,
+            new Uri(IdentityHost, resumed),
+            Cookie(IdentityHostAuthentication.CookieName, session),
+            null,
+            cancellationToken
+        );
 
         authorized.Status.ShouldBe(HttpStatusCode.Found, authorized.Body);
 
         var callback = authorized.Location.ShouldNotBeNull();
         callback.GetLeftPart(UriPartial.Path).ShouldBe(FirstPartyClients.DevelopmentPortalRedirectUri);
         QueryValue(callback, "state").ShouldBe(state);
-        QueryValue(callback, "iss").ShouldBe(CyberCloudResources.IdentityIssuer + "/", "one issuer, whichever origin the request arrived on");
+        QueryValue(callback, "iss").ShouldBe(
+            CyberCloudResources.IdentityIssuer + "/",
+            "one issuer, whichever origin the request arrived on"
+        );
 
         var authorizationCode = QueryValue(callback, "code");
 
@@ -239,7 +289,7 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
                 ["code"] = authorizationCode,
                 ["code_verifier"] = verifier
             },
-            cookies: null,
+            null,
             cancellationToken
         );
 
@@ -248,13 +298,16 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
         exchanged.Headers.GetValues("Access-Control-Allow-Credentials").ShouldBe(["true"]);
 
         var tokens = Json(exchanged.Body);
-        tokens.TryGetProperty("refresh_token", out _).ShouldBeFalse("the browser client's refresh token is moved into the cookie");
+        tokens.TryGetProperty("refresh_token", out _)
+            .ShouldBeFalse("the browser client's refresh token is moved into the cookie");
         // ⚠ Within a second of the policy, not equal to it: OpenIddict answers the seconds LEFT at
         // the moment it writes the body, and a token minted late in one second reads 599.
-        tokens.GetProperty("expires_in").GetInt32().ShouldBeInRange(
-            (int)AccessTokenPolicy.AccessTokenLifetime.TotalSeconds - 1,
-            (int)AccessTokenPolicy.AccessTokenLifetime.TotalSeconds
-        );
+        tokens.GetProperty("expires_in")
+            .GetInt32()
+            .ShouldBeInRange(
+                (int)AccessTokenPolicy.AccessTokenLifetime.TotalSeconds - 1,
+                (int)AccessTokenPolicy.AccessTokenLifetime.TotalSeconds
+            );
 
         var refresh = exchanged.CookieSet(RefreshCookie.Name);
         refresh.ShouldNotBeNullOrEmpty("the refresh token lives in " + RefreshCookie.Name);
@@ -264,13 +317,18 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
 
         TestContext.Current.TestOutputHelper?.WriteLine("access token payload: " + payload.GetRawText());
 
-        payload.GetProperty(AccessTokenClaims.TenantId).GetString().ShouldBe(tenantId.ToString("N", CultureInfo.InvariantCulture));
+        payload.GetProperty(AccessTokenClaims.TenantId)
+            .GetString()
+            .ShouldBe(tenantId.ToString("N", CultureInfo.InvariantCulture));
         payload.GetProperty(AccessTokenClaims.SubjectType).GetString().ShouldBe(SubjectTypes.User);
         payload.GetProperty(AccessTokenClaims.Audience).GetString().ShouldBe(AccessTokenPolicy.Audience);
         payload.GetProperty(AccessTokenClaims.AuthorizedParty).GetString().ShouldBe(FirstPartyClients.Portal);
 
         foreach (var claim in payload.EnumerateObject()) {
-            AccessTokenClaims.Permitted.ShouldContain(claim.Name, $"the person's token carries '{claim.Name}', which is outside the closed set");
+            AccessTokenClaims.Permitted.ShouldContain(
+                claim.Name,
+                $"the person's token carries '{claim.Name}', which is outside the closed set"
+            );
         }
 
         Payload(tokens.GetProperty("id_token").GetString()!).GetProperty("email").GetString().ShouldBe(Email);
@@ -285,31 +343,37 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
         var subscriptions = await GetAsync(http, tenantPath + "/subscriptions", accessToken, cancellationToken);
         subscriptions.Status.ShouldBe(HttpStatusCode.OK, subscriptions.Body);
 
-        var subscription = Json(subscriptions.Body).GetProperty("value").EnumerateArray().ShouldHaveSingleItem("sign-up creates one subscription");
+        var subscription = Json(subscriptions.Body).GetProperty("value")
+            .EnumerateArray()
+            .ShouldHaveSingleItem("sign-up creates one subscription");
         subscription.GetProperty("name").GetString().ShouldBe("Default");
         subscription.GetProperty("type").GetString().ShouldBe("CyberCloud.Resources/subscriptions");
 
         var subscriptionPath = subscription.GetProperty("id").GetString()!;
-        subscriptionPath.StartsWith(tenantPath + "/subscriptions/", StringComparison.Ordinal).ShouldBeTrue(subscriptionPath);
+        subscriptionPath.StartsWith(tenantPath + "/subscriptions/", StringComparison.Ordinal)
+            .ShouldBeTrue(subscriptionPath);
 
         var groups = await GetAsync(http, subscriptionPath + "/resourceGroups", accessToken, cancellationToken);
         groups.Status.ShouldBe(HttpStatusCode.OK, groups.Body);
 
-        var group = Json(groups.Body).GetProperty("value").EnumerateArray().ShouldHaveSingleItem("sign-up creates one resource group");
+        var group = Json(groups.Body).GetProperty("value")
+            .EnumerateArray()
+            .ShouldHaveSingleItem("sign-up creates one resource group");
         group.GetProperty("name").GetString().ShouldBe("default");
         group.GetProperty("location").GetString().ShouldBe(CyberCloudResources.DefaultRegion);
 
         // ── Step 12: a resource, authored by the person's token, converges. ─────────────────────
-        var resourcePath = subscriptionPath + "/resourceGroups/default/providers/CyberCloud.Communication/services/first";
+        var resourcePath = subscriptionPath
+            + "/resourceGroups/default/providers/CyberCloud.Communication/services/first";
 
         var accepted = await SendAsync(
             http,
             HttpMethod.Put,
             new Uri(Gateway, resourcePath + Version),
-            cookies: null,
-            body: """{"location":"local","properties":{"defaultLocale":"en"}}""",
+            null,
+            """{"location":"local","properties":{"defaultLocale":"en"}}""",
             cancellationToken,
-            bearer: accessToken
+            accessToken
         );
 
         accepted.Status.ShouldBe(HttpStatusCode.Accepted, accepted.Body);
@@ -326,7 +390,9 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
         // ── Step 13: a refresh from the cookie rotates it; the retired cookie is refused. ───────
         var refreshed = await PostFormAsync(
             http,
-            new Dictionary<string, string>(StringComparer.Ordinal) { ["grant_type"] = "refresh_token", ["client_id"] = FirstPartyClients.Portal },
+            new Dictionary<string, string>(StringComparer.Ordinal) {
+                ["grant_type"] = "refresh_token", ["client_id"] = FirstPartyClients.Portal
+            },
             Cookie(RefreshCookie.Name, refresh),
             cancellationToken
         );
@@ -338,12 +404,24 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
         rotated.ShouldNotBe(refresh);
 
         var refreshedPayload = Payload(Json(refreshed.Body).GetProperty("access_token").GetString()!);
-        refreshedPayload.GetProperty(AccessTokenClaims.SessionId).GetString().ShouldBe(payload.GetProperty(AccessTokenClaims.SessionId).GetString(), "the token session is the same chain");
-        refreshedPayload.GetProperty(AccessTokenClaims.AuthenticationTime).GetInt64().ShouldBe(payload.GetProperty(AccessTokenClaims.AuthenticationTime).GetInt64(), "auth_time is carried across refreshes");
+        refreshedPayload.GetProperty(AccessTokenClaims.SessionId)
+            .GetString()
+            .ShouldBe(
+                payload.GetProperty(AccessTokenClaims.SessionId).GetString(),
+                "the token session is the same chain"
+            );
+        refreshedPayload.GetProperty(AccessTokenClaims.AuthenticationTime)
+            .GetInt64()
+            .ShouldBe(
+                payload.GetProperty(AccessTokenClaims.AuthenticationTime).GetInt64(),
+                "auth_time is carried across refreshes"
+            );
 
         var replayed = await PostFormAsync(
             http,
-            new Dictionary<string, string>(StringComparer.Ordinal) { ["grant_type"] = "refresh_token", ["client_id"] = FirstPartyClients.Portal },
+            new Dictionary<string, string>(StringComparer.Ordinal) {
+                ["grant_type"] = "refresh_token", ["client_id"] = FirstPartyClients.Portal
+            },
             Cookie(RefreshCookie.Name, refresh),
             cancellationToken
         );
@@ -354,43 +432,73 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
 
         var foreign = await PostFormAsync(
             http,
-            new Dictionary<string, string>(StringComparer.Ordinal) { ["grant_type"] = "refresh_token", ["client_id"] = FirstPartyClients.Portal },
+            new Dictionary<string, string>(StringComparer.Ordinal) {
+                ["grant_type"] = "refresh_token", ["client_id"] = FirstPartyClients.Portal
+            },
             Cookie(RefreshCookie.Name, rotated),
             cancellationToken,
-            origin: "http://evil.localhost:4200"
+            "http://evil.localhost:4200"
         );
 
         foreign.Status.ShouldBe(HttpStatusCode.BadRequest, foreign.Body);
-        Json(foreign.Body).GetProperty("error").GetString().ShouldBe("invalid_request", "a foreign Origin may not present the cookie");
+        Json(foreign.Body).GetProperty("error")
+            .GetString()
+            .ShouldBe("invalid_request", "a foreign Origin may not present the cookie");
 
         // ── Step 15: sign out ends the session; the next /authorize asks again. ─────────────────
         var signedOut = await SendAsync(
             http,
             HttpMethod.Get,
-            new Uri(IdentityHost, IdentityHostOpenIddict.EndSessionPath + "?client_id=" + FirstPartyClients.Portal + "&post_logout_redirect_uri=" + Uri.EscapeDataString(FirstPartyClients.DevelopmentPortalPostLogoutRedirectUri)),
+            new Uri(
+                IdentityHost,
+                IdentityHostOpenIddict.EndSessionPath
+                + "?client_id="
+                + FirstPartyClients.Portal
+                + "&post_logout_redirect_uri="
+                + Uri.EscapeDataString(FirstPartyClients.DevelopmentPortalPostLogoutRedirectUri)
+            ),
             Cookie(IdentityHostAuthentication.CookieName, session),
-            body: null,
+            null,
             cancellationToken
         );
 
         signedOut.Status.ShouldBe(HttpStatusCode.Found, signedOut.Body);
-        signedOut.Location.ShouldNotBeNull().ToString().ShouldBe(FirstPartyClients.DevelopmentPortalPostLogoutRedirectUri);
+        signedOut.Location.ShouldNotBeNull()
+            .ToString()
+            .ShouldBe(FirstPartyClients.DevelopmentPortalPostLogoutRedirectUri);
         signedOut.CookieCleared(IdentityHostAuthentication.CookieName).ShouldBeTrue();
         signedOut.CookieCleared(RefreshCookie.Name).ShouldBeTrue();
 
-        var again = await SendAsync(http, HttpMethod.Get, new Uri(IdentityHost, resumed), Cookie(IdentityHostAuthentication.CookieName, session), body: null, cancellationToken);
+        var again = await SendAsync(
+            http,
+            HttpMethod.Get,
+            new Uri(IdentityHost, resumed),
+            Cookie(IdentityHostAuthentication.CookieName, session),
+            null,
+            cancellationToken
+        );
         again.Status.ShouldBe(HttpStatusCode.Found);
         again.Location.ShouldNotBeNull().AbsolutePath.ShouldBe("/signin", "the revoked session mints nothing");
 
         await watching.CancelAsync();
-        await Task.WhenAll(watchers.Select(async watcher => {
-            try { await watcher; } catch (OperationCanceledException) { }
-        }));
+        await Task.WhenAll(
+            watchers.Select(static async watcher => {
+                    try {
+                        await watcher;
+                    } catch (OperationCanceledException) { }
+                }
+            )
+        );
     }
 
     // ── The silo console ─────────────────────────────────────────────────────────────────────────
 
-    static async Task WatchAsync(ResourceLoggerService logs, IResource resource, ConcurrentQueue<string> into, CancellationToken cancellationToken) {
+    static async Task WatchAsync(
+        ResourceLoggerService logs,
+        IResource resource,
+        ConcurrentQueue<string> into,
+        CancellationToken cancellationToken
+    ) {
         await foreach (var batch in logs.WatchAsync(resource).WithCancellation(cancellationToken)) {
             foreach (var line in batch) {
                 into.Enqueue(line.Content);
@@ -399,13 +507,16 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
     }
 
     /// <summary>The last code either silo delivered, once one has been.</summary>
-    static async Task<string> ReadDeliveredCodeAsync(ConcurrentQueue<string> console, CancellationToken cancellationToken) {
+    static async Task<string> ReadDeliveredCodeAsync(
+        ConcurrentQueue<string> console,
+        CancellationToken cancellationToken
+    ) {
         var clock = Stopwatch.StartNew();
 
         while (clock.Elapsed < CodeBudget) {
             var delivered = console
-                .Select(line => DeliveredCode.Match(line))
-                .LastOrDefault(match => match.Success);
+                .Select(static line => DeliveredCode.Match(line))
+                .LastOrDefault(static match => match.Success);
 
             if (delivered is not null) {
                 return delivered.Groups["code"].Value;
@@ -432,17 +543,24 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
     ///     six digits out of it.
     /// </remarks>
     static async Task<string> ReadMailedCodeAsync(HttpClient http, CancellationToken cancellationToken) {
-        var inbox = new Uri($"http://localhost:{CyberCloudResources.MailpitHttpPort.ToString(CultureInfo.InvariantCulture)}/");
+        var inbox = new Uri(
+            $"http://localhost:{CyberCloudResources.MailpitHttpPort.ToString(CultureInfo.InvariantCulture)}/"
+        );
         var clock = Stopwatch.StartNew();
 
         while (clock.Elapsed < TimeSpan.FromSeconds(30)) {
-            using var listing = await http.GetAsync(new Uri(inbox, "api/v1/search?query=to:" + Email), cancellationToken);
+            using var listing = await http.GetAsync(
+                new Uri(inbox, "api/v1/search?query=to:" + Email),
+                cancellationToken
+            );
             var messages = Json(await listing.Content.ReadAsStringAsync(cancellationToken)).GetProperty("messages");
 
             if (messages.GetArrayLength() > 0) {
                 var id = messages[0].GetProperty("ID").GetString()!;
                 using var message = await http.GetAsync(new Uri(inbox, "api/v1/message/" + id), cancellationToken);
-                var text = Json(await message.Content.ReadAsStringAsync(cancellationToken)).GetProperty("Text").GetString() ?? string.Empty;
+                var text = Json(await message.Content.ReadAsStringAsync(cancellationToken)).GetProperty("Text")
+                    .GetString()
+                    ?? string.Empty;
 
                 var digits = Regex.Match(text, @"\b(?<code>\d{6})\b", RegexOptions.CultureInvariant);
                 digits.Success.ShouldBeTrue("the mailed body carries the six-digit code: " + text);
@@ -472,14 +590,13 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
             SetCookies()
                 .Where(cookie => cookie.StartsWith(name + "=", StringComparison.Ordinal))
                 .Select(cookie => cookie[(name.Length + 1)..].Split(';')[0])
-                .FirstOrDefault(value => value.Length > 0);
+                .FirstOrDefault(static value => value.Length > 0);
 
         /// <summary>Whether a <c>Set-Cookie</c> emptied the named cookie.</summary>
         public bool CookieCleared(string name) =>
             SetCookies().Any(cookie => cookie.StartsWith(name + "=;", StringComparison.Ordinal));
 
-        IEnumerable<string> SetCookies() =>
-            Headers.TryGetValues("Set-Cookie", out var values) ? values : [];
+        IEnumerable<string> SetCookies() => Headers.TryGetValues("Set-Cookie", out var values) ? values : [];
     }
 
     static string Cookie(string name, string value) => name + "=" + value;
@@ -496,18 +613,42 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
     ) {
         using var request = new HttpRequestMessage(method, uri);
 
-        if (cookies is not null) request.Headers.Add("Cookie", cookies);
-        if (origin is not null) request.Headers.Add("Origin", origin);
-        if (bearer is not null) request.Headers.Authorization = new("Bearer", bearer);
-        if (body is not null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+        if (cookies is not null) {
+            request.Headers.Add("Cookie", cookies);
+        }
+
+        if (origin is not null) {
+            request.Headers.Add("Origin", origin);
+        }
+
+        if (bearer is not null) {
+            request.Headers.Authorization = new("Bearer", bearer);
+        }
+
+        if (body is not null) {
+            request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+        }
 
         using var response = await http.SendAsync(request, cancellationToken);
 
         return new(response.StatusCode, response.Headers, await response.Content.ReadAsStringAsync(cancellationToken));
     }
 
-    static Task<Answer> PostJsonAsync(HttpClient http, string path, string ticket, object body, CancellationToken cancellationToken) =>
-        SendAsync(http, HttpMethod.Post, new Uri(IdentityHost, path), Cookie(SignUpTicketCookie.CookieName, ticket), JsonSerializer.Serialize(body), cancellationToken);
+    static Task<Answer> PostJsonAsync(
+        HttpClient http,
+        string path,
+        string ticket,
+        object body,
+        CancellationToken cancellationToken
+    ) =>
+        SendAsync(
+            http,
+            HttpMethod.Post,
+            new Uri(IdentityHost, path),
+            Cookie(SignUpTicketCookie.CookieName, ticket),
+            JsonSerializer.Serialize(body),
+            cancellationToken
+        );
 
     static async Task<Answer> PostFormAsync(
         HttpClient http,
@@ -516,12 +657,16 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
         CancellationToken cancellationToken,
         string origin = PortalOrigin
     ) {
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(IdentityHost, IdentityHostOpenIddict.TokenPath)) {
-            Content = new FormUrlEncodedContent(form)
-        };
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            new Uri(IdentityHost, IdentityHostOpenIddict.TokenPath)
+        );
+        request.Content = new FormUrlEncodedContent(form);
 
         request.Headers.Add("Origin", origin);
-        if (cookies is not null) request.Headers.Add("Cookie", cookies);
+        if (cookies is not null) {
+            request.Headers.Add("Cookie", cookies);
+        }
 
         using var response = await http.SendAsync(request, cancellationToken);
 
@@ -529,14 +674,35 @@ public sealed class PersonOverHttpTests(LocalTopology topology) {
     }
 
     static Task<Answer> GetAsync(HttpClient http, string path, string bearer, CancellationToken cancellationToken) =>
-        SendAsync(http, HttpMethod.Get, new Uri(Gateway, path + Version), cookies: null, body: null, cancellationToken, bearer);
+        SendAsync(
+            http,
+            HttpMethod.Get,
+            new Uri(Gateway, path + Version),
+            null,
+            null,
+            cancellationToken,
+            bearer
+        );
 
-    static async Task<string> PollUntilTerminalAsync(HttpClient http, string operation, string bearer, CancellationToken cancellationToken) {
+    static async Task<string> PollUntilTerminalAsync(
+        HttpClient http,
+        string operation,
+        string bearer,
+        CancellationToken cancellationToken
+    ) {
         var clock = Stopwatch.StartNew();
         var last = "NotStarted";
 
         while (clock.Elapsed < ConvergenceBudget) {
-            var polled = await SendAsync(http, HttpMethod.Get, new Uri(operation), cookies: null, body: null, cancellationToken, bearer);
+            var polled = await SendAsync(
+                http,
+                HttpMethod.Get,
+                new Uri(operation),
+                null,
+                null,
+                cancellationToken,
+                bearer
+            );
             polled.Status.ShouldBe(HttpStatusCode.OK, polled.Body);
 
             last = Json(polled.Body).GetProperty("status").GetString()!;

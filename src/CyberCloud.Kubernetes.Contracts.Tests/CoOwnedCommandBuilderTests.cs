@@ -54,9 +54,8 @@ public sealed class CoOwnedCommandBuilderTests {
     );
 
     /// <summary>The second peering on the same Vpc.</summary>
-    static readonly ResourceId PeeringB = PeeringA with {
-        Name = "to-spoke-b", Id = Guid.Parse("bbbbbbbb-0000-4000-8000-00000000000b")
-    };
+    static readonly ResourceId PeeringB =
+        PeeringA with { Name = "to-spoke-b", Id = Guid.Parse("bbbbbbbb-0000-4000-8000-00000000000b") };
 
     // ── The field manager ───────────────────────────────────────────────────────────────────────
 
@@ -81,7 +80,10 @@ public sealed class CoOwnedCommandBuilderTests {
         var a = CoWrite(PeeringA, live).Build();
         var b = CoWrite(PeeringB, live).Build();
 
-        a.FieldManager.ShouldBe(b.FieldManager, "an atomic list has one set of owners, so co-writers share one manager");
+        a.FieldManager.ShouldBe(
+            b.FieldManager,
+            "an atomic list has one set of owners, so co-writers share one manager"
+        );
 
         // The owner applies under cybercloud/{provider}; the co-writers must not, or the owner's
         // next apply prunes their fields as fields its manager no longer applies.
@@ -109,7 +111,8 @@ public sealed class CoOwnedCommandBuilderTests {
         command.Labels.ShouldBeEmpty();
 
         using var document = JsonDocument.Parse(command.Body);
-        document.RootElement.GetProperty("metadata").TryGetProperty("labels", out _)
+        document.RootElement.GetProperty("metadata")
+            .TryGetProperty("labels", out _)
             .ShouldBeFalse("the apply body must not touch metadata.labels");
     }
 
@@ -199,16 +202,16 @@ public sealed class CoOwnedCommandBuilderTests {
     public void AHandWrittenFragmentAnnotationIsRefusedInEitherMode() {
         // ⚠ In the ordinary mode it would make the owner claim a co-writer's bookkeeping; in the
         // co-owned mode it would let one co-writer forge what another applied.
-        Should.Throw<ArgumentException>(() => Builder(PeeringA, LiveVpc())
+        Should.Throw<ArgumentException>(static () => Builder(PeeringA, LiveVpc())
                 .WithAnnotations((KubeLabels.FragmentAnnotation(PeeringB.Id), "{}"))
-            )
+        )
             .Message.ShouldContain("per-fragment annotation");
 
-        Should.Throw<ArgumentException>(() => KubeCommand.For(new NullConnection())
+        Should.Throw<ArgumentException>(static () => KubeCommand.For(new NullConnection())
                 .WithTenantId(Owner.TenantId)
                 .WithResourceId(Owner)
                 .WithAnnotations((KubeLabels.FragmentHashAnnotation(PeeringA.Id), "sha256:x"))
-            )
+        )
             .Message.ShouldContain("per-fragment annotation");
     }
 
@@ -218,7 +221,8 @@ public sealed class CoOwnedCommandBuilderTests {
     public void AnObjectWithoutTheSevenLabelsIsNotOursToCoWrite() {
         var unlabelled = new KubeObject {
             Ref = new() { Kind = Vpcs, Name = "somebody-elses" },
-            Json = """{ "apiVersion": "kubeovn.io/v1", "kind": "Vpc", "metadata": { "name": "somebody-elses", "resourceVersion": "7" } }""",
+            Json =
+                """{ "apiVersion": "kubeovn.io/v1", "kind": "Vpc", "metadata": { "name": "somebody-elses", "resourceVersion": "7" } }""",
             ResourceVersion = "7"
         };
 
@@ -282,7 +286,10 @@ public sealed class CoOwnedCommandBuilderTests {
 
         command.IsCoOwned.ShouldBeTrue();
         command.OwnerResourceId.ShouldBe(Owner.Id);
-        command.ResourceId.ShouldBe(PeeringA.Id, "the command is the co-writer's — its drift event names the co-writer");
+        command.ResourceId.ShouldBe(
+            PeeringA.Id,
+            "the command is the co-writer's — its drift event names the co-writer"
+        );
 
         // And the ordinary mode has no owner.
         KubeCommand.For(new NullConnection())
@@ -374,7 +381,9 @@ public sealed class CoOwnedCommandBuilderTests {
 
         // A different fragment hashes differently.
         Builder(PeeringA, LiveVpc())
-            .ObjectJson("""{ "spec": { "vpcPeerings": [ { "remoteVpc": "spoke-c-vpc", "localConnectIP": "10.0.0.9/30" } ] } }""")
+            .ObjectJson(
+                """{ "spec": { "vpcPeerings": [ { "remoteVpc": "spoke-c-vpc", "localConnectIP": "10.0.0.9/30" } ] } }"""
+            )
             .Build()
             .ReconcileHash.ShouldNotBe(alone.ReconcileHash);
     }
@@ -449,7 +458,7 @@ public sealed class CoOwnedCommandBuilderTests {
     [Fact]
     public void ObjectsMergeRecursivelyAndArraysConcatenate() {
         var live = LiveVpc(
-            annotations: new() {
+            new() {
                 [KubeLabels.FragmentAnnotation(PeeringB.Id)] =
                     """{"spec":{"staticRoutes":[{"cidr":"10.2.0.0/16","nextHopIP":"10.0.0.6"}],"vpcPeerings":[{"remoteVpc":"spoke-b-vpc"}],"policyRoutes":{"b":true}}}"""
             }
@@ -472,9 +481,7 @@ public sealed class CoOwnedCommandBuilderTests {
     [Fact]
     public void TwoFragmentsSettingOneScalarDifferentlyIsARefusalNamingThePathAndBothCoWriters() {
         var live = LiveVpc(
-            annotations: new() {
-                [KubeLabels.FragmentAnnotation(PeeringB.Id)] = """{"spec":{"enableExternal":false}}"""
-            }
+            new() { [KubeLabels.FragmentAnnotation(PeeringB.Id)] = """{"spec":{"enableExternal":false}}""" }
         );
 
         var refused = Builder(PeeringA, live).ObjectJson("""{ "spec": { "enableExternal": true } }""").TryBuild();
@@ -486,16 +493,15 @@ public sealed class CoOwnedCommandBuilderTests {
         refused.Error.Message.ShouldContain(KubeLabels.GuidValue(PeeringB.Id));
 
         // And agreeing is fine — a scalar two co-writers both want is one value.
-        Builder(PeeringA, live).ObjectJson("""{ "spec": { "enableExternal": false } }""").TryBuild()
+        Builder(PeeringA, live).ObjectJson("""{ "spec": { "enableExternal": false } }""")
+            .TryBuild()
             .IsSuccess.ShouldBeTrue();
     }
 
     [Fact]
     public void AFragmentAnnotationThatIsNotJsonIsRefusedRatherThanSkipped() {
         // Skipping it would apply a union WITHOUT that co-writer's fragment — the prune.
-        var live = LiveVpc(
-            annotations: new() { [KubeLabels.FragmentAnnotation(PeeringB.Id)] = "not json at all" }
-        );
+        var live = LiveVpc(new() { [KubeLabels.FragmentAnnotation(PeeringB.Id)] = "not json at all" });
 
         var refused = CoWrite(PeeringA, live).TryBuild();
 
@@ -551,7 +557,9 @@ public sealed class CoOwnedCommandBuilderTests {
         withdrawal.Annotations.Keys.ShouldContain(KubeLabels.FragmentAnnotation(PeeringB.Id));
         withdrawal.Annotations.Keys.ShouldContain(KubeLabels.FragmentHashAnnotation(PeeringB.Id));
 
-        JsonNode.Parse(withdrawal.Body)!["metadata"]!["resourceVersion"]!.GetValue<string>().ShouldBe(live.ResourceVersion);
+        JsonNode.Parse(withdrawal.Body)!["metadata"]!["resourceVersion"]!
+            .GetValue<string>()
+            .ShouldBe(live.ResourceVersion);
     }
 
     [Fact]
@@ -709,12 +717,18 @@ public sealed class CoOwnedCommandBuilderTests {
         var wire = JsonNode.Parse(KubeCommandJson.ToJson(command))!.AsObject();
 
         // The right shape of name, the wrong owner in it.
-        wire["fieldManager"] = KubeLabels.CoWriterFieldManager(KubeLabels.ResourceTypeValue(Owner.Type), KubeLabels.GuidValue(PeeringB.Id));
+        wire["fieldManager"] = KubeLabels.CoWriterFieldManager(
+            KubeLabels.ResourceTypeValue(Owner.Type),
+            KubeLabels.GuidValue(PeeringB.Id)
+        );
 
         var refused = KubeCommandJson.FromJson(wire.ToJsonString());
 
         refused.IsFailure.ShouldBeTrue();
-        refused.Error!.Message.ShouldContain(KubeLabels.GuidValue(Owner.Id), customMessage: "the message names the owner the manager should be derived from");
+        refused.Error!.Message.ShouldContain(
+            KubeLabels.GuidValue(Owner.Id),
+            customMessage: "the message names the owner the manager should be derived from"
+        );
     }
 
     [Fact]
@@ -757,7 +771,8 @@ public sealed class CoOwnedCommandBuilderTests {
         var wire = JsonNode.Parse(KubeCommandJson.ToJson(command))!.AsObject();
 
         var body = JsonNode.Parse(wire["body"]!.GetValue<string>())!.AsObject();
-        body["metadata"]!.AsObject()["labels"] = new JsonObject { [KubeLabels.ResourceId] = KubeLabels.GuidValue(PeeringA.Id) };
+        body["metadata"]!.AsObject()["labels"] =
+            new JsonObject { [KubeLabels.ResourceId] = KubeLabels.GuidValue(PeeringA.Id) };
         wire["body"] = body.ToJsonString();
 
         var refused = KubeCommandJson.FromJson(wire.ToJsonString());
@@ -878,7 +893,8 @@ public sealed class CoOwnedCommandBuilderTests {
         refused.Error.Message.ShouldContain("'prod-a'");
 
         command.CheckCoOwnedAgainst(LiveVpc(subscription: Guid.Parse("cccccccc-0000-4000-8000-000000000003")))
-            .Error!.Message.ShouldContain("across a subscription");
+            .Error!
+            .Message.ShouldContain("across a subscription");
     }
 
     [Fact]
@@ -919,15 +935,19 @@ public sealed class CoOwnedCommandBuilderTests {
             KubeLabels.CoWriterFieldManager("cybercloud.network_virtualnetworks", KubeLabels.GuidValue(Owner.Id)),
             out var type,
             out var id
-        ).ShouldBeTrue();
+        )
+            .ShouldBeTrue();
 
         type.ShouldBe("cybercloud.network_virtualnetworks");
         id.ShouldBe(Owner.Id);
 
-        KubeLabels.TryReadCoWriterFieldManager("cybercloud/cybercloud.network", out _, out _).ShouldBeFalse("the owner's own manager has one segment");
-        KubeLabels.TryReadCoWriterFieldManager("cybercloud/a/b/" + KubeLabels.GuidValue(Owner.Id), out _, out _).ShouldBeFalse("three segments is not the shape");
+        KubeLabels.TryReadCoWriterFieldManager("cybercloud/cybercloud.network", out _, out _)
+            .ShouldBeFalse("the owner's own manager has one segment");
+        KubeLabels.TryReadCoWriterFieldManager("cybercloud/a/b/" + KubeLabels.GuidValue(Owner.Id), out _, out _)
+            .ShouldBeFalse("three segments is not the shape");
         KubeLabels.TryReadCoWriterFieldManager("cybercloud/type/not-a-guid", out _, out _).ShouldBeFalse();
-        KubeLabels.TryReadCoWriterFieldManager("cybercloud/type/" + KubeLabels.GuidValue(Guid.Empty), out _, out _).ShouldBeFalse("an empty owner is no owner");
+        KubeLabels.TryReadCoWriterFieldManager("cybercloud/type/" + KubeLabels.GuidValue(Guid.Empty), out _, out _)
+            .ShouldBeFalse("an empty owner is no owner");
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────
@@ -984,17 +1004,14 @@ public sealed class CoOwnedCommandBuilderTests {
         };
 
         var annotationNode = new JsonObject {
-            [KubeLabels.ResourcePathAnnotation] = Owner.Path,
-            [KubeLabels.ReconcileHashAnnotation] = "sha256:owner"
+            [KubeLabels.ResourcePathAnnotation] = Owner.Path, [KubeLabels.ReconcileHashAnnotation] = "sha256:owner"
         };
 
         foreach (var (key, value) in annotations ?? []) {
             annotationNode[key] = value;
         }
 
-        var metadata = new JsonObject {
-            ["name"] = "hub-vpc", ["labels"] = labels, ["annotations"] = annotationNode
-        };
+        var metadata = new JsonObject { ["name"] = "hub-vpc", ["labels"] = labels, ["annotations"] = annotationNode };
 
         if (resourceVersion.Length > 0) {
             metadata["resourceVersion"] = resourceVersion;
@@ -1024,7 +1041,10 @@ public sealed class CoOwnedCommandBuilderTests {
 
         public Guid ClusterId => Guid.Parse("eeeeeeee-0000-4000-8000-000000000005");
 
-        public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) {
+        public Task<Result<ApplyOutcome>> ApplyAsync(
+            KubeCommand command,
+            CancellationToken cancellationToken = default
+        ) {
             Applied.Add(command);
 
             return Task.FromResult(
@@ -1034,7 +1054,11 @@ public sealed class CoOwnedCommandBuilderTests {
                         Target = command.Target,
                         ResourceVersion = "13",
                         Drift = Answer == ApplyResult.Conflict
-                            ? new() { ResourceId = command.ResourceId, Target = command.Target, FieldManager = command.FieldManager }
+                            ? new() {
+                                ResourceId = command.ResourceId,
+                                Target = command.Target,
+                                FieldManager = command.FieldManager
+                            }
                             : null
                     }
                 )

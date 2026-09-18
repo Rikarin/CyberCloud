@@ -26,8 +26,11 @@ namespace CyberCloud.Gateway.Host.Agent;
 ///         the gateway's log has the detail, keyed by the request id in the response.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The pipeline's nine stages ran before this — stages 1 and 5 for real, the rest as
-///         pass-through</b> — because <c>GatewayComposition.MapGateway</c> maps the endpoint behind
+///         ⚠
+///         <b>
+///             The pipeline's nine stages ran before this — stages 1 and 5 for real, the rest as
+///             pass-through
+///         </b> — because <c>GatewayComposition.MapGateway</c> maps the endpoint behind
 ///         the one middleware. A tunnel endpoint mapped anywhere else would be a listener with no
 ///         per-IP rate limit, which is the shape docs/plan/10 § Rate limiting exists to refuse.
 ///     </para>
@@ -38,7 +41,8 @@ static class AgentTunnelEndpoint {
     public static async Task HandleAsync(HttpContext http) {
         ArgumentNullException.ThrowIfNull(http);
 
-        var logger = http.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("CyberCloud.Gateway.Host.Agent");
+        var logger = http.RequestServices.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("CyberCloud.Gateway.Host.Agent");
         var relay = http.RequestServices.GetRequiredService<AgentTunnelRelay>();
         var requestId = http.Response.Headers[GatewayHeaders.RequestId].ToString();
 
@@ -95,7 +99,12 @@ static class AgentTunnelEndpoint {
 
         var reason = await session.RunAsync(transport, http.RequestAborted);
 
-        logger.LogInformation("Agent session {Session} for cluster {Cluster} ended: {Reason}", session.SessionId, clusterId, reason);
+        logger.LogInformation(
+            "Agent session {Session} for cluster {Cluster} ended: {Reason}",
+            session.SessionId,
+            clusterId,
+            reason
+        );
     }
 
     const string NotAdmitted =

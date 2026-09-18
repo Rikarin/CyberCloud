@@ -57,7 +57,7 @@ public sealed class SendLimitGrain(
         Expire(window, now);
 
         var messagesAfter = window.Messages + 1;
-        var committed = window.Settled + window.Pending.Sum(x => x.Amount);
+        var committed = window.Settled + window.Pending.Sum(static x => x.Amount);
         var spendAfter = committed + estimatedCost;
 
         // ⚠ THE LINE BETWEEN A BUG AND A FIVE-FIGURE INVOICE — docs/plan/17 § The parts that are
@@ -114,7 +114,7 @@ public sealed class SendLimitGrain(
     /// <inheritdoc />
     public async Task<Result> SettleAsync(Guid reservationId, decimal actualCost) {
         foreach (var window in state.State.Windows.Values) {
-            var held = window.Pending.FirstOrDefault(x => x.ReservationId == reservationId);
+            var held = window.Pending.Find(x => x.ReservationId == reservationId);
             if (held is null) {
                 continue;
             }
@@ -139,7 +139,7 @@ public sealed class SendLimitGrain(
     /// <inheritdoc />
     public async Task<Result> ReleaseAsync(Guid reservationId) {
         foreach (var window in state.State.Windows.Values) {
-            var held = window.Pending.FirstOrDefault(x => x.ReservationId == reservationId);
+            var held = window.Pending.Find(x => x.ReservationId == reservationId);
             if (held is null) {
                 continue;
             }
@@ -172,7 +172,7 @@ public sealed class SendLimitGrain(
                     Window = today,
                     Messages = window.Messages,
                     Settled = window.Settled,
-                    Reserved = window.Pending.Sum(x => x.Amount)
+                    Reserved = window.Pending.Sum(static x => x.Amount)
                 }
             )
         );

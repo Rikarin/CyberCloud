@@ -120,7 +120,7 @@ public sealed partial class ChartRegistryPairTests {
         // the preset silently does nothing rather than failing. _helpers.tpl has the same hazard and
         // says so; this is the check that neither list can grow without the other.
         foreach (var preset in PostgresServers.Schema2026.Properties
-                     .Single(x => x.JsonPointer == "/properties/sizing/preset")
+                     .Single(static x => x.JsonPointer == "/properties/sizing/preset")
                      .AllowedValues) {
             PostgresServers.Presets.ShouldContainKey(preset);
         }
@@ -148,7 +148,7 @@ public sealed partial class ChartRegistryPairTests {
 
         var block = Regex.Match(
             cluster,
-            "\\n    shared_preload_libraries:\\n((?:\\s*\\{\\{.*\\}\\}\\n|      - .*\\n)+)",
+            """\n    shared_preload_libraries:\n((?:\s*\{\{.*\}\}\n|      - .*\n)+)""",
             RegexOptions.None,
             TimeSpan.FromSeconds(5)
         );
@@ -174,7 +174,7 @@ public sealed partial class ChartRegistryPairTests {
 
         var parameters = Regex.Match(
             cluster,
-            "\\n    parameters:\\n((?:      \\S.*\\n)+)",
+            """\n    parameters:\n((?:      \S.*\n)+)""",
             RegexOptions.None,
             TimeSpan.FromSeconds(5)
         );
@@ -206,7 +206,7 @@ public sealed partial class ChartRegistryPairTests {
         var cluster = Embedded("postgres.cluster.yaml");
 
         // The KEY, at any indent — the template's own comment names the wrong spelling in prose.
-        Regex.IsMatch(cluster, "\\n\\s*postgresql_synchronous:", RegexOptions.None, TimeSpan.FromSeconds(5))
+        Regex.IsMatch(cluster, """\n\s*postgresql_synchronous:""", RegexOptions.None, TimeSpan.FromSeconds(5))
             .ShouldBeFalse(
                 "the chart writes `postgresql_synchronous` under spec, which CloudNativePG's definition "
                 + "does not declare. The apply patch refuses the object, so every server rendered with "
@@ -214,11 +214,11 @@ public sealed partial class ChartRegistryPairTests {
             );
 
         Regex.IsMatch(
-                cluster,
-                "\\n    synchronous:\\n      method: any\\n      number: 1\\n",
-                RegexOptions.None,
-                TimeSpan.FromSeconds(5)
-            )
+            cluster,
+            """\n    synchronous:\n      method: any\n      number: 1\n""",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(5)
+        )
             .ShouldBeTrue(
                 "the chart declares no `synchronous:` block two levels under spec — inside `postgresql`, "
                 + "where CloudNativePG's PostgresConfiguration.Synchronous sits — carrying `method: any` "

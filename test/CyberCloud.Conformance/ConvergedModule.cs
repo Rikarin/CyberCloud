@@ -9,8 +9,11 @@ namespace CyberCloud.Conformance;
 /// <remarks>
 ///     <para>
 ///         <b>Why this exists.</b> <c>ProviderConformanceCase.Objects</c> has said since the sample
-///         provider that it is <i>"empty for a clusterless provider, and the cluster-facing half of
-///         the suite skips itself for one"</i>, and for fourteen families that sentence was never
+///         provider that it is
+///         <i>
+///             "empty for a clusterless provider, and the cluster-facing half of
+///             the suite skips itself for one"
+///         </i>, and for fourteen families that sentence was never
 ///         exercised: every type declared <c>RequiresCluster</c>. <c>CyberCloud.Communication/services</c>
 ///         is the first that does not — docs/plan/08 § What the resource manager deliberately does not
 ///         do's <i>"a provider with no cluster at all"</i> — and it turned out the sentence was half
@@ -38,8 +41,11 @@ namespace CyberCloud.Conformance;
 ///         way <c>FakeKubeCluster.MutateBehindTheirBack</c> does.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What a clusterless run cannot say, said here so nobody reads a green run as saying
-///         it.</b> An admission refusal and a cluster that did not answer have no module analogue the
+///         ⚠
+///         <b>
+///             What a clusterless run cannot say, said here so nobody reads a green run as saying
+///             it.
+///         </b> An admission refusal and a cluster that did not answer have no module analogue the
 ///         harness can inject, so the two assertions about them assert the inverse for a clusterless
 ///         type: the operation converges as if the refusing cluster were healthy, and nothing reached
 ///         it. The seven labels are asserted absent rather than present — a clusterless type that
@@ -49,8 +55,11 @@ namespace CyberCloud.Conformance;
 ///         harness yet; that is owed, and <c>charts/bundle/bundle.yaml § owed</c> carries it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This is one of two clusterless registrations, and the suite reads both through
-///         <c>ClusterlessWorld</c>.</b> <c>ProviderConformanceCase.DataPlane</c> is the other — a
+///         ⚠
+///         <b>
+///             This is one of two clusterless registrations, and the suite reads both through
+///             <c>ClusterlessWorld</c>.
+///         </b> <c>ProviderConformanceCase.DataPlane</c> is the other — a
 ///         world on a platform host rather than in the silo, with one way to break and no hand edit.
 ///         A case registers exactly one; that type's remarks say why two exist.
 ///     </para>
@@ -84,8 +93,11 @@ public interface IConvergedModule {
     ///     ancestors, the way <c>FakeKubeCluster.Reset</c> empties the cluster between tests.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The suite never deletes what most of its tests create, and for a cluster that is
-    ///     free.</b> Every test starts with a reset that empties the fake cluster, so a resource a
+    ///     ⚠
+    ///     <b>
+    ///         The suite never deletes what most of its tests create, and for a cluster that is
+    ///         free.
+    ///     </b> Every test starts with a reset that empties the fake cluster, so a resource a
     ///     previous test left behind has no object for the next test to trip over. A module's grains
     ///     are not emptied by anything, and a type with a per-parent uniqueness rule — one
     ///     configuration per channel kind, owned by one resource — would refuse the second test's

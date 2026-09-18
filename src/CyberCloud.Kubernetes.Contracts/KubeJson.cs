@@ -139,7 +139,7 @@ public static class KubeJson {
                 // container's args or an ordered rule chain is a different program.
                 return actual is JsonArray actualArray
                     && actualArray.Count >= expectedArray.Count
-                    && expectedArray.Select((x, i) => Contains(actualArray[i], x)).All(x => x);
+                    && expectedArray.Select((x, i) => Contains(actualArray[i], x)).All(static x => x);
 
             default:
                 return actual is not null
@@ -187,7 +187,9 @@ public static class KubeJson {
         }
 
         foreach (var owner in owners.OfType<JsonObject>()) {
-            if (owner["controller"] is not JsonValue flag || !flag.TryGetValue<bool>(out var controller) || !controller) {
+            if (owner["controller"] is not JsonValue flag
+                || !flag.TryGetValue<bool>(out var controller)
+                || !controller) {
                 continue;
             }
 
@@ -221,7 +223,7 @@ public static class KubeJson {
     public static JsonObject OwnerReference(OwnerRef owner) {
         ArgumentNullException.ThrowIfNull(owner);
 
-        return new JsonObject {
+        return new() {
             ["apiVersion"] = owner.ApiVersion,
             ["kind"] = owner.Kind,
             ["name"] = owner.Name,

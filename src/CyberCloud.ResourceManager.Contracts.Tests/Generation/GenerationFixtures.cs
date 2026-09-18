@@ -65,11 +65,11 @@ static class Fixtures {
                     Actions = [
                         // Long-running and declaring nothing: `restart` does work, so it answers 202
                         // like every other write rather than a 200 the emitter used to assume.
-                        new("restart", ActionKind.Post, "write", Secret: false) { LongRunning = true },
+                        new("restart", ActionKind.Post, "write", false) { LongRunning = true },
                         // ⚠ The listKeys case ADR-012's action gap was named for: secrets of known
                         // shape. The response schema is what makes "which values leave the platform"
                         // a reviewable fact rather than a read of the handler.
-                        new("listKeys", ActionKind.Post, "listKeys", Secret: true) {
+                        new("listKeys", ActionKind.Post, "listKeys", true) {
                             Request = ResourceSchema.Of(
                                 [
                                     new("/keyName", SchemaKind.Text, Description: "Which key to read.") {
@@ -79,8 +79,8 @@ static class Fixtures {
                             ),
                             Response = ResourceSchema.Of(
                                 [
-                                    new("/primary", SchemaKind.Text, Required: true, Secret: true),
-                                    new("/secondary", SchemaKind.Text, Required: true, Secret: true)
+                                    new("/primary", SchemaKind.Text, true, Secret: true),
+                                    new("/secondary", SchemaKind.Text, true, Secret: true)
                                 ]
                             )
                         }
@@ -121,22 +121,22 @@ static class Fixtures {
     public static ResourceSchema ServerSchema() =>
         ResourceSchema.Of(
             [
-                new("/location", SchemaKind.Text, Required: true, Description: "Where the server runs.") {
+                new("/location", SchemaKind.Text, true, Description: "Where the server runs.") {
                     Format = SchemaFormat.Region, Widget = WidgetHint.Region, Immutable = true
                 },
-                new("/properties", SchemaKind.Nested, Required: true),
+                new("/properties", SchemaKind.Nested, true),
                 // ⚠ The property RequiresCluster names. ProviderBuilder refuses a type that declares the
                 // flag without it, so a fixture that claims RequiresCluster must carry it too.
-                new("/properties/clusterId", SchemaKind.Text, Required: true, Description: "The cluster.") {
+                new("/properties/clusterId", SchemaKind.Text, true, Description: "The cluster.") {
                     Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true
                 },
-                new("/properties/sku", SchemaKind.Nested, Required: true),
-                new("/properties/sku/name", SchemaKind.Text, Required: true, Description: "The sku.") {
+                new("/properties/sku", SchemaKind.Nested, true),
+                new("/properties/sku/name", SchemaKind.Text, true, Description: "The sku.") {
                     AllowedValues = ["s1.small", "s1.large", "c1.large", "m1.large"],
                     Widget = WidgetHint.Sku,
                     ExampleJson = "\"s1.large\""
                 },
-                new("/properties/sku/vcpu", SchemaKind.WholeNumber, Required: true, Description: "vCPUs.") {
+                new("/properties/sku/vcpu", SchemaKind.WholeNumber, true, Description: "vCPUs.") {
                     Minimum = 1, Maximum = 64
                 },
                 new("/properties/storageGb", SchemaKind.WholeNumber, Description: "Storage, in GB.") {
@@ -165,7 +165,7 @@ static class Fixtures {
     public static ResourceSchema DatabaseSchema() =>
         ResourceSchema.Of(
             [
-                new("/properties", SchemaKind.Nested, Required: true),
+                new("/properties", SchemaKind.Nested, true),
                 new("/properties/charset", SchemaKind.Text, Description: "The character set.")
             ]
         );
@@ -178,7 +178,7 @@ static class Fixtures {
                 new ResourceTypeRegistration {
                     Type = new(Namespace, "servers"),
                     ApiVersions = [new(ApiVersion.Parse(FirstVersion), ServerSchema())],
-                    Actions = [new("restart", ActionKind.Post, "write", Secret: false)],
+                    Actions = [new("restart", ActionKind.Post, "write", false)],
                     RetiredOn = new Dictionary<ApiVersion, DateOnly> {
                         [ApiVersion.Parse(FirstVersion)] = retiresOn
                     }.ToImmutableDictionary()

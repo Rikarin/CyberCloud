@@ -7,7 +7,6 @@ using CyberCloud.Providers.DBforPostgreSQL.Contracts;
 using CyberCloud.Providers.Network.Conformance;
 using CyberCloud.Providers.Network.Contracts;
 using CyberCloud.ResourceManager.Contracts;
-using CyberCloud.ResourceManager.Reconcile;
 using Shouldly;
 using System.Net;
 using System.Text;
@@ -63,7 +62,10 @@ public sealed class M1StoryClusterFixture : IAsyncLifetime {
     /// <summary>The base silo port. Clear of the lifecycle fixture's 22300 and the silo-kill pair's 22500 and 22600.</summary>
     public const int BaseSiloPort = 22700;
 
-    /// <summary>What the story needs on <c>PATH</c>: the installer's shell, its one tool, and the client the read-back goes through.</summary>
+    /// <summary>
+    ///     What the story needs on <c>PATH</c>: the installer's shell, its one tool, and the client the read-back goes
+    ///     through.
+    /// </summary>
     static readonly string[] Tools = ["bash", "helm", "kubectl"];
 
     ClusterContainers? containers;
@@ -92,13 +94,15 @@ public sealed class M1StoryClusterFixture : IAsyncLifetime {
 
     /// <inheritdoc />
     public async ValueTask InitializeAsync() {
-        var missing = Tools.Where(tool => !BundleInstaller.OnPath(tool)).ToList();
+        var missing = Tools.Where(static tool => !BundleInstaller.OnPath(tool)).ToList();
 
         if (missing.Count > 0) {
             failure = new InvalidOperationException(
                 "install.sh is a bash script whose three selected rows are each one `helm upgrade "
                 + "--install`, and the story reads the database back through `kubectl exec`; not on "
-                + "PATH: " + string.Join(", ", missing) + "."
+                + "PATH: "
+                + string.Join(", ", missing)
+                + "."
             );
 
             return;
@@ -137,9 +141,13 @@ public sealed class M1StoryClusterFixture : IAsyncLifetime {
     ///     ⚠ Called by the test AFTER <c>install.sh</c>, for the reason the class remarks give. The
     ///     harness is held here so that it is disposed with the containers whatever the test did.
     /// </remarks>
-    public async Task<ClusterConformanceHarness<PostgresCase>> StartResourceManagerAsync(CancellationToken cancellationToken) {
+    public async Task<ClusterConformanceHarness<PostgresCase>> StartResourceManagerAsync(
+        CancellationToken cancellationToken
+    ) {
         if (containers is null) {
-            throw new InvalidOperationException("the containers did not come up, so there is nothing to start a silo over.");
+            throw new InvalidOperationException(
+                "the containers did not come up, so there is nothing to start a silo over."
+            );
         }
 
         harness = await ClusterConformanceHarness<PostgresCase>.StartAsync(
@@ -149,7 +157,8 @@ public sealed class M1StoryClusterFixture : IAsyncLifetime {
             containers.Endpoints,
             cancellationToken,
             [VirtualNetworkCase.ProviderCase, NetworkSubnetCase.ProviderCase]
-        ).ConfigureAwait(false);
+        )
+            .ConfigureAwait(false);
 
         return harness;
     }
@@ -173,8 +182,11 @@ public sealed class M1StoryClusterFixture : IAsyncLifetime {
 }
 
 /// <summary>
-///     docs/plan/24 § Phase 2's exit story, steps 4 and 5 — <i>"create a VPC and a Postgres server in
-///     it → get the connection string from Vault"</i> — run end to end on a cluster this test
+///     docs/plan/24 § Phase 2's exit story, steps 4 and 5 —
+///     <i>
+///         "create a VPC and a Postgres server in
+///         it → get the connection string from Vault"
+///     </i> — run end to end on a cluster this test
 ///     installed itself, through the real resource manager.
 /// </summary>
 /// <remarks>
@@ -195,15 +207,22 @@ public sealed class M1StoryClusterFixture : IAsyncLifetime {
 ///         sequence and is asserted as one.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What "in it" means here, exactly, because the story says more than the platform
-///         does.</b> <c>PostgresServers.Schema2026</c> has no subnet or network property: nothing in
+///         ⚠
+///         <b>
+///             What "in it" means here, exactly, because the story says more than the platform
+///             does.
+///         </b> <c>PostgresServers.Schema2026</c> has no subnet or network property: nothing in
 ///         the catalogue places a database into a VPC, so the server is created in the same resource
 ///         group and lands in the same namespace, and that is the whole of the join. The VPC and its
-///         subnet are Kube-OVN <c>Vpc</c> and <c>Subnet</c> objects, and <b>this cluster has no
-///         Kube-OVN</b>: docs/plan/23 § The lane that needs a kubelet keeps kube-ovn on the VM lane
+///         subnet are Kube-OVN <c>Vpc</c> and <c>Subnet</c> objects, and
+///         <b>
+///             this cluster has no
+///             Kube-OVN
+///         </b>: docs/plan/23 § The lane that needs a kubelet keeps kube-ovn on the VM lane
 ///         (a CNI-less cluster, OVS kernel modules, a node label), so <c>ClusterConformanceHarness</c>
 ///         installs kube-ovn's committed definition for each kind (<c>charts/bundle/kube-ovn/crds/</c>)
-///         and the two objects are admitted, labelled and readable — and route nothing. What the network half of this test proves is
+///         and the two objects are admitted, labelled and readable — and route nothing. What the network half of this test
+///         proves is
 ///         that the resource manager writes a parent and a child of another family in the same silo
 ///         as the database, through the same write path, against the same API server. What it cannot
 ///         prove is any packet.
@@ -221,8 +240,11 @@ public sealed class M1StoryClusterFixture : IAsyncLifetime {
 ///         real API server.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Costs, measured on this 24-CPU host on 2026-09-17, warm image cache: 3 m 25 s for
-///         the whole story.</b> The three containers come up in about 20 s; <c>install.sh</c>
+///         ⚠
+///         <b>
+///             Costs, measured on this 24-CPU host on 2026-09-17, warm image cache: 3 m 25 s for
+///             the whole story.
+///         </b> The three containers come up in about 20 s; <c>install.sh</c>
 ///         installs cert-manager, openebs-localpv and cloudnative-pg in one run; the silo starts and
 ///         the two network objects converge in seconds; the database converges as soon as the Cluster
 ///         reads back, and the primary pod is running about a minute later, of which the
@@ -298,15 +320,22 @@ public sealed class M1StoryOnAFreshCluster(M1StoryClusterFixture cluster) : ICla
             + "below would be admitted by a definition this test did not install."
         );
 
-        (await IsServedAsync(raw, new() { Group = "cert-manager.io", Version = "v1", Kind = "Certificate", Plural = "certificates" }, token))
+        (await IsServedAsync(
+                raw,
+                new() { Group = "cert-manager.io", Version = "v1", Kind = "Certificate", Plural = "certificates" },
+                token
+            ))
             .ShouldBeFalse("cert-manager.io/v1 was already served before install.sh ran.");
 
         (await raw.StorageV1.ListStorageClassAsync(cancellationToken: token)).Items
-            .ShouldNotContain(x => x.Metadata.Name == StorageClass, $"{StorageClass} already existed before install.sh ran.");
+            .ShouldNotContain(
+                x => x.Metadata.Name == StorageClass,
+                $"{StorageClass} already existed before install.sh ran."
+            );
 
         // ── 2. One installer run, three components, three phases ───────────────────────────────
         var install = await BundleInstaller.RunAsync(
-            string.Join(' ', Components.Select(x => "--component " + x)),
+            string.Join(' ', Components.Select(static x => "--component " + x)),
             cluster.KubeconfigPath,
             token,
             BundleInstaller.BudgetFor(Components)
@@ -321,11 +350,15 @@ public sealed class M1StoryOnAFreshCluster(M1StoryClusterFixture cluster) : ICla
 
         // ⚠ The roster's order, not the command line's — the same assertion CloudNativePgOnAnEmptyCluster
         // makes for two rows, made for three.
-        var positions = Components.Select(x => install.Output.IndexOf("\n  " + x + "\n", StringComparison.Ordinal)).ToList();
+        var positions = Components.Select(x => install.Output.IndexOf("\n  " + x + "\n", StringComparison.Ordinal))
+            .ToList();
 
-        positions.ShouldAllBe(x => x >= 0, "install.sh did not print every selected component. Its output was:\n" + install.Output);
+        positions.ShouldAllBe(
+            x => x >= 0,
+            "install.sh did not print every selected component. Its output was:\n" + install.Output
+        );
         positions.ShouldBe(
-            [.. positions.OrderBy(x => x)],
+            [.. positions.OrderBy(static x => x)],
             "install.sh installed the three components in an order other than bundle.yaml's phases 15, 25, 50. Its output was:\n"
             + install.Output
         );
@@ -335,7 +368,10 @@ public sealed class M1StoryOnAFreshCluster(M1StoryClusterFixture cluster) : ICla
         );
 
         (await raw.StorageV1.ReadStorageClassAsync(StorageClass, cancellationToken: token)).Provisioner
-            .ShouldBe("openebs.io/local", "the storage class install.sh installed is not on openebs-localpv's provisioner.");
+            .ShouldBe(
+                "openebs.io/local",
+                "the storage class install.sh installed is not on openebs-localpv's provisioner."
+            );
 
         // ── 3. The resource manager, over the cluster the installer just filled ─────────────────
         var rm = await cluster.StartResourceManagerAsync(token);
@@ -375,9 +411,9 @@ public sealed class M1StoryOnAFreshCluster(M1StoryClusterFixture cluster) : ICla
                     cancellationToken: token
                 );
 
-                return pods.Items.FirstOrDefault(pod =>
+                return pods.Items.FirstOrDefault(static pod =>
                     pod.Status?.Phase == "Running"
-                    && pod.Status.ContainerStatuses?.All(container => container.Ready) == true
+                    && pod.Status.ContainerStatuses?.All(static container => container.Ready) == true
                 );
             },
             token
@@ -419,9 +455,15 @@ public sealed class M1StoryOnAFreshCluster(M1StoryClusterFixture cluster) : ICla
         var username = credential.GetProperty("username").GetString();
         var password = credential.GetProperty("password").GetString();
 
-        host.ShouldBe(ServerName + "-rw", "pooling is off in the story's body, so the advertised host is the read-write Service.");
+        host.ShouldBe(
+            ServerName + "-rw",
+            "pooling is off in the story's body, so the advertised host is the read-write Service."
+        );
         database.ShouldBe("app");
-        username.ShouldBe("app", "the username is read from the operator's Secret, and the body asked for the owner `app`.");
+        username.ShouldBe(
+            "app",
+            "the username is read from the operator's Secret, and the body asked for the owner `app`."
+        );
         password.ShouldNotBeNullOrWhiteSpace("listKeys answered with an empty password, which authenticates nothing.");
 
         // ── 7. And the credential opens a connection, from inside the cluster ───────────────────
@@ -440,7 +482,7 @@ public sealed class M1StoryOnAFreshCluster(M1StoryClusterFixture cluster) : ICla
                 $"host={host} port={PostgresServers.Port} dbname={database} user={username} password={password} sslmode=require",
                 "--tuples-only", "--no-align", "--command", "SELECT 1"
             ],
-            input: null,
+            null,
             cluster.KubeconfigPath,
             token
         );
@@ -454,7 +496,8 @@ public sealed class M1StoryOnAFreshCluster(M1StoryClusterFixture cluster) : ICla
         // ⚠ A line equal to "1", not the whole output — kubectl writes remarks of its own to stderr
         // ("Defaulted container …" cost the first green run of this story), and this harness
         // interleaves the two streams on purpose: BundleInstaller.CaptureAsync.
-        output.Split('\n').Select(x => x.Trim())
+        output.Split('\n')
+            .Select(static x => x.Trim())
             .ShouldContain("1", "SELECT 1 through the listKeys credential did not answer 1. psql said:\n" + output);
     }
 
@@ -471,7 +514,8 @@ public sealed class M1StoryOnAFreshCluster(M1StoryClusterFixture cluster) : ICla
     ///     <c>s1.nano</c> is schedulable on a single node inside a container.
     /// </remarks>
     static string ServerBody(Guid clusterId) {
-        var body = JsonNode.Parse(PostgresServers.Body(clusterId, replicas: 1, storageSize: "256Mi", pooling: false))!.AsObject();
+        var body = JsonNode.Parse(PostgresServers.Body(clusterId, 1, "256Mi", false))!
+            .AsObject();
         var properties = body["properties"]!.AsObject();
 
         properties["sizing"] = new JsonObject { ["preset"] = "s1.nano" };
@@ -513,7 +557,9 @@ public sealed class M1StoryOnAFreshCluster(M1StoryClusterFixture cluster) : ICla
             token
         );
 
-        accepted.IsSuccess.ShouldBeTrue($"PUT {address.Path} was refused: {accepted.Error?.Code} {accepted.Error?.Message}");
+        accepted.IsSuccess.ShouldBeTrue(
+            $"PUT {address.Path} was refused: {accepted.Error?.Code} {accepted.Error?.Message}"
+        );
 
         var operation = rm.Operation(ConformanceIds.Tenant, accepted.GetValueOrThrow().OperationId);
         var deadline = DateTimeOffset.UtcNow + ConvergeBudget;
@@ -536,14 +582,20 @@ public sealed class M1StoryOnAFreshCluster(M1StoryClusterFixture cluster) : ICla
             OperationState.Succeeded,
             $"the create of '{address.Path}' ended {last.State} after {ConvergeBudget.TotalMinutes:F0} minutes: "
             + $"{last.Error?.Code} {last.Error?.Message}. Last progress: "
-            + string.Join(" | ", last.Progress.TakeLast(3).Select(x => x.Step + ": " + x.Detail))
+            + string.Join(" | ", last.Progress.TakeLast(3).Select(static x => x.Step + ": " + x.Detail))
         );
     }
 
     /// <summary>Whether the API server answers a list for this kind.</summary>
     static async Task<bool> IsServedAsync(IKubernetes raw, GroupVersionKind kind, CancellationToken token) {
         try {
-            await raw.CustomObjects.ListClusterCustomObjectAsync(kind.Group, kind.Version, kind.Plural, limit: 1, cancellationToken: token);
+            await raw.CustomObjects.ListClusterCustomObjectAsync(
+                kind.Group,
+                kind.Version,
+                kind.Plural,
+                limit: 1,
+                cancellationToken: token
+            );
             return true;
         } catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound) {
             return false;
@@ -593,11 +645,17 @@ public sealed class M1StoryOnAFreshCluster(M1StoryClusterFixture cluster) : ICla
             );
 
             foreach (var item in JsonSerializer.SerializeToElement(clusters).GetProperty("items").EnumerateArray()) {
-                report.Append("Cluster ").Append(item.GetProperty("metadata").GetProperty("name").GetString()).Append(": status=");
-                report.Append(item.TryGetProperty("status", out var status) ? status.GetRawText() : "(none)").Append('\n');
+                report.Append("Cluster ")
+                    .Append(item.GetProperty("metadata").GetProperty("name").GetString())
+                    .Append(": status=");
+                report.Append(item.TryGetProperty("status", out var status) ? status.GetRawText() : "(none)")
+                    .Append('\n');
                 report.Append("  spec=").Append(item.GetProperty("spec").GetRawText()).Append('\n');
             }
-        } catch (Exception ex) when (ex is HttpOperationException or HttpRequestException or JsonException or KeyNotFoundException) {
+        } catch (Exception ex) when (ex is HttpOperationException
+                                         or HttpRequestException
+                                         or JsonException
+                                         or KeyNotFoundException) {
             report.Append("Clusters could not be read: ").Append(ex.Message).Append('\n');
         }
 
@@ -607,19 +665,39 @@ public sealed class M1StoryOnAFreshCluster(M1StoryClusterFixture cluster) : ICla
 
                 foreach (var container in pod.Status?.ContainerStatuses ?? []) {
                     report.Append("; ").Append(container.Name).Append(" ready=").Append(container.Ready);
-                    report.Append(" state=").Append(
-                        container.State?.Waiting is { } waiting ? "waiting(" + waiting.Reason + ": " + waiting.Message + ")"
-                        : container.State?.Terminated is { } terminated ? "terminated(" + terminated.Reason + " exit " + terminated.ExitCode + ")"
-                        : container.State?.Running is not null ? "running" : "unknown"
-                    );
+                    report.Append(" state=")
+                        .Append(
+                            container.State?.Waiting is { } waiting ? "waiting("
+                            + waiting.Reason
+                            + ": "
+                            + waiting.Message
+                            + ")"
+                            : container.State?.Terminated is { } terminated ? "terminated("
+                            + terminated.Reason
+                            + " exit "
+                            + terminated.ExitCode
+                            + ")"
+                            : container.State?.Running is not null ? "running" : "unknown"
+                        );
                 }
 
                 foreach (var container in pod.Status?.InitContainerStatuses ?? []) {
-                    report.Append("; init ").Append(container.Name).Append(" state=").Append(
-                        container.State?.Waiting is { } waiting ? "waiting(" + waiting.Reason + ": " + waiting.Message + ")"
-                        : container.State?.Terminated is { } terminated ? "terminated(" + terminated.Reason + " exit " + terminated.ExitCode + ")"
-                        : container.State?.Running is not null ? "running" : "unknown"
-                    );
+                    report.Append("; init ")
+                        .Append(container.Name)
+                        .Append(" state=")
+                        .Append(
+                            container.State?.Waiting is { } waiting ? "waiting("
+                            + waiting.Reason
+                            + ": "
+                            + waiting.Message
+                            + ")"
+                            : container.State?.Terminated is { } terminated ? "terminated("
+                            + terminated.Reason
+                            + " exit "
+                            + terminated.ExitCode
+                            + ")"
+                            : container.State?.Running is not null ? "running" : "unknown"
+                        );
                 }
 
                 report.Append('\n');
@@ -629,9 +707,17 @@ public sealed class M1StoryOnAFreshCluster(M1StoryClusterFixture cluster) : ICla
         }
 
         try {
-            foreach (var claim in (await raw.CoreV1.ListNamespacedPersistentVolumeClaimAsync(ns, cancellationToken: token)).Items) {
-                report.Append("PVC ").Append(claim.Metadata.Name).Append(": phase=").Append(claim.Status?.Phase)
-                    .Append(" class=").Append(claim.Spec?.StorageClassName).Append('\n');
+            foreach (var claim in (await raw.CoreV1.ListNamespacedPersistentVolumeClaimAsync(
+                             ns,
+                             cancellationToken: token
+                         )).Items) {
+                report.Append("PVC ")
+                    .Append(claim.Metadata.Name)
+                    .Append(": phase=")
+                    .Append(claim.Status?.Phase)
+                    .Append(" class=")
+                    .Append(claim.Spec?.StorageClassName)
+                    .Append('\n');
             }
         } catch (Exception ex) when (ex is HttpOperationException or HttpRequestException) {
             report.Append("Claims could not be read: ").Append(ex.Message).Append('\n');
@@ -639,13 +725,21 @@ public sealed class M1StoryOnAFreshCluster(M1StoryClusterFixture cluster) : ICla
 
         try {
             var events = (await raw.CoreV1.ListNamespacedEventAsync(ns, cancellationToken: token)).Items
-                .OrderByDescending(x => x.LastTimestamp ?? x.EventTime ?? x.Metadata.CreationTimestamp)
+                .OrderByDescending(static x => x.LastTimestamp ?? x.EventTime ?? x.Metadata.CreationTimestamp)
                 .Take(25);
 
             foreach (var e in events) {
-                report.Append("Event ").Append(e.Type).Append(' ').Append(e.Reason).Append(" on ")
-                    .Append(e.InvolvedObject?.Kind).Append('/').Append(e.InvolvedObject?.Name)
-                    .Append(": ").Append(e.Message).Append('\n');
+                report.Append("Event ")
+                    .Append(e.Type)
+                    .Append(' ')
+                    .Append(e.Reason)
+                    .Append(" on ")
+                    .Append(e.InvolvedObject?.Kind)
+                    .Append('/')
+                    .Append(e.InvolvedObject?.Name)
+                    .Append(": ")
+                    .Append(e.Message)
+                    .Append('\n');
             }
         } catch (Exception ex) when (ex is HttpOperationException or HttpRequestException) {
             report.Append("Events could not be read: ").Append(ex.Message).Append('\n');

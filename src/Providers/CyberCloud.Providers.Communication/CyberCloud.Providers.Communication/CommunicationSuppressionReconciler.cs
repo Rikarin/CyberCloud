@@ -10,8 +10,11 @@ namespace CyberCloud.Providers.Communication;
 /// <remarks>
 ///     <para>
 ///         The same four clauses <see cref="CommunicationServiceReconciler" /> lists, and the rule
-///         <see cref="CommunicationSuppressions" />'s remarks state: <b>a resource owns a manual block
-///         and never downgrades a stronger entry.</b> The pass reads before it writes. An address the
+///         <see cref="CommunicationSuppressions" />'s remarks state:
+///         <b>
+///             a resource owns a manual block
+///             and never downgrades a stronger entry.
+///         </b> The pass reads before it writes. An address the
 ///         list already holds for a complaint, an opt-out or a hard bounce is left alone and reported
 ///         converged — the body asked for the address to be suppressed, and it is, for a reason the
 ///         tenant may not overwrite. Only an address that is clear, or held as a manual block this
@@ -20,8 +23,11 @@ namespace CyberCloud.Providers.Communication;
 ///         adopted by the first pass that touches it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A manual block held by another resource fails the pass with
-///         <see cref="ErrorCode.Conflict" /> and writes nothing.</b> The alternative was measured:
+///         ⚠
+///         <b>
+///             A manual block held by another resource fails the pass with
+///             <see cref="ErrorCode.Conflict" /> and writes nothing.
+///         </b> The alternative was measured:
 ///         two resources over one entry both read it as theirs, and the delete of either released
 ///         it while the other still said the address was blocked — with no drift scan to notice,
 ///         because this family has no cluster for the per-cluster scan to walk. The same rule
@@ -29,8 +35,11 @@ namespace CyberCloud.Providers.Communication;
 ///         reason, and the refusal names the resource that holds the address.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The delete releases a manual block this resource owns, and nothing else, and
-///         succeeds either way.</b> A resource whose address has since complained is deleted cleanly
+///         ⚠
+///         <b>
+///             The delete releases a manual block this resource owns, and nothing else, and
+///             succeeds either way.
+///         </b> A resource whose address has since complained is deleted cleanly
 ///         and the complaint stands; a delete that tried to release it would be refused by the grain
 ///         with <see cref="ErrorCode.PolicyViolation" /> and the resource would sit in
 ///         <c>Deleting</c> forever — visible, undeletable, and protecting nothing the grain was not
@@ -41,7 +50,8 @@ namespace CyberCloud.Providers.Communication;
 /// </remarks>
 /// <param name="clock">Stamps <see cref="ObservedState.ObservedAt" />.</param>
 /// <param name="plane">The module.</param>
-public sealed class CommunicationSuppressionReconciler(IClock clock, ICommunicationControlPlane plane) : IResourceReconciler {
+public sealed class CommunicationSuppressionReconciler(IClock clock, ICommunicationControlPlane plane) :
+    IResourceReconciler {
     /// <summary>What the release records when a resource is deleted.</summary>
     public const string ReleaseReason = "The suppression resource that placed this manual block was deleted.";
 
@@ -98,7 +108,11 @@ public sealed class CommunicationSuppressionReconciler(IClock clock, ICommunicat
             }
 
             if (CommunicationSuppressions.Matches(existing, context.Id, context.Desired)) {
-                context.Log.Report("ready", $"{existing.Destination} is already blocked on {ChannelKinds.Spell(channel)} as desired", 100);
+                context.Log.Report(
+                    "ready",
+                    $"{existing.Destination} is already blocked on {ChannelKinds.Spell(channel)} as desired",
+                    100
+                );
                 return ReconcileOutcome.Converged;
             }
         }
@@ -128,7 +142,10 @@ public sealed class CommunicationSuppressionReconciler(IClock clock, ICommunicat
 
         if (read.GetValueOrThrow() is not { IsSuppressed: true, Entry: { } entry }
             || !CommunicationSuppressions.Matches(entry, context.Id, context.Desired)) {
-            return ReconcileOutcome.InProgress("the entry was written and does not read back as desired yet", TimeSpan.FromSeconds(5));
+            return ReconcileOutcome.InProgress(
+                "the entry was written and does not read back as desired yet",
+                TimeSpan.FromSeconds(5)
+            );
         }
 
         context.Log.Report("ready", $"{entry.Destination} reads back as blocked on {ChannelKinds.Spell(channel)}", 100);
@@ -184,7 +201,14 @@ public sealed class CommunicationSuppressionReconciler(IClock clock, ICommunicat
 
         context.Log.Report("releasing", $"releasing the manual block on {entry.Destination}");
 
-        var released = await plane.ReleaseSuppressionAsync(tenantId, serviceId, channel, destination, ReleaseReason, cancellationToken);
+        var released = await plane.ReleaseSuppressionAsync(
+            tenantId,
+            serviceId,
+            channel,
+            destination,
+            ReleaseReason,
+            cancellationToken
+        );
         if (released.TryGetError(out var releaseError) && releaseError.Code != ErrorCode.ResourceNotFound) {
             return ReconcileOutcome.FromFailure(releaseError);
         }
@@ -196,7 +220,10 @@ public sealed class CommunicationSuppressionReconciler(IClock clock, ICommunicat
 
         if (read.GetValueOrThrow() is { IsSuppressed: true, Entry: { Reason: SuppressionReason.ManualBlock } still }
             && CommunicationSuppressions.Owns(still, context.Id)) {
-            return ReconcileOutcome.InProgress($"{entry.Destination} still reads back as blocked", TimeSpan.FromSeconds(5));
+            return ReconcileOutcome.InProgress(
+                $"{entry.Destination} still reads back as blocked",
+                TimeSpan.FromSeconds(5)
+            );
         }
 
         context.Log.Report("released", $"the manual block on {entry.Destination} is gone", 100);
@@ -238,7 +265,11 @@ public sealed class CommunicationSuppressionReconciler(IClock clock, ICommunicat
             }.ToJsonString(),
             ObservedAt = clock.UtcNow,
             Summary = !ours ? "the address is blocked by another resource"
-                : CommunicationSuppressions.Matches(entry, context.Id, context.Desired) ? "the address is suppressed as desired"
+                : CommunicationSuppressions.Matches(
+                    entry,
+                    context.Id,
+                    context.Desired
+                ) ? "the address is suppressed as desired"
                 : "the entry has drifted from the body"
         };
     }

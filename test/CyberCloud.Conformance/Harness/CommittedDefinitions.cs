@@ -12,8 +12,11 @@ namespace CyberCloud.Conformance.Harness;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>These are the REAL definitions, taken from the release each component pins — issue
-///         #91.</b> <c>charts/bundle/crds.sh --refresh</c> fetches the pinned chart or manifest,
+///         ⚠
+///         <b>
+///             These are the REAL definitions, taken from the release each component pins — issue
+///             #91.
+///         </b> <c>charts/bundle/crds.sh --refresh</c> fetches the pinned chart or manifest,
 ///         keeps the definition of every kind a chart under <c>charts/managed/</c> renders, and
 ///         commits it byte for byte; the <c>Definitions</c> row of <c>./build.sh Architecture</c>
 ///         re-fetches and compares. So what <see cref="FakeKubeCluster" /> validates against here is
@@ -74,7 +77,10 @@ public static class CommittedDefinitions {
 
             return directory?.FullName
                 ?? throw new InvalidOperationException(
-                    "No CyberCloud.slnx above " + AppContext.BaseDirectory + ", so " + Directory
+                    "No CyberCloud.slnx above "
+                    + AppContext.BaseDirectory
+                    + ", so "
+                    + Directory
                     + "/*/crds/ cannot be found and no custom resource can be validated."
                 );
         }
@@ -90,10 +96,18 @@ public static class CommittedDefinitions {
 
         foreach (var file in System.IO.Directory
                      .EnumerateFiles(root, "*.yaml", SearchOption.AllDirectories)
-                     .Where(x => string.Equals(new DirectoryInfo(Path.GetDirectoryName(x)!).Name, "crds", StringComparison.Ordinal))
-                     .OrderBy(x => x, StringComparer.Ordinal)) {
+                     .Where(static x => string.Equals(
+                             new DirectoryInfo(Path.GetDirectoryName(x)!).Name,
+                             "crds",
+                             StringComparison.Ordinal
+                         )
+                     )
+                     .OrderBy(static x => x, StringComparer.Ordinal)) {
             // Forward slashes whatever the host, so a message names the file the way the tree does.
-            var definition = CustomResourceDefinition.Parse(File.ReadAllText(file), Path.GetRelativePath(RepositoryRoot, file).Replace('\\', '/'));
+            var definition = CustomResourceDefinition.Parse(
+                File.ReadAllText(file),
+                Path.GetRelativePath(RepositoryRoot, file).Replace('\\', '/')
+            );
             var key = definition.Group + "/" + definition.Kind;
 
             if (found.TryGetValue(key, out var other)) {
@@ -134,7 +148,7 @@ public sealed record CustomResourceDefinition(
     JsonObject Document
 ) {
     /// <summary>The one served version the API server stores objects at, or empty when the definition marks none.</summary>
-    public string StorageVersion => Versions.Values.FirstOrDefault(x => x.IsStorage)?.Name ?? string.Empty;
+    public string StorageVersion => Versions.Values.FirstOrDefault(static x => x.IsStorage)?.Name ?? string.Empty;
 
     /// <summary>Reads one definition from its YAML.</summary>
     /// <param name="yaml">The document, exactly as committed.</param>
@@ -243,7 +257,9 @@ public static class YamlToJson {
         foreach (var (key, value) in mapping.Children) {
             var name = key is YamlScalarNode scalar
                 ? scalar.Value ?? string.Empty
-                : throw new InvalidOperationException("A YAML mapping key is not a scalar, and JSON has no shape for that.");
+                : throw new InvalidOperationException(
+                    "A YAML mapping key is not a scalar, and JSON has no shape for that."
+                );
 
             result[name] = Convert(value);
         }

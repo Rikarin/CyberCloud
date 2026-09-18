@@ -116,7 +116,7 @@ static class CommandTree {
             root.Subcommands.Add(command);
         }
 
-        foreach (var group in tree.Groups.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+        foreach (var group in tree.Groups.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
             root.Subcommands.Add(Group(host, globals, tree, group.Key, group.Value));
         }
 
@@ -134,7 +134,7 @@ static class CommandTree {
 
         var command = new Command(name, group.Summary);
 
-        foreach (var child in group.Commands.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+        foreach (var child in group.Commands.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
             command.Subcommands.Add(Resource(host, globals, tree, child.Key, child.Value));
         }
 
@@ -157,7 +157,7 @@ static class CommandTree {
             command.Aliases.Add(alias);
         }
 
-        foreach (var verb in resource.Verbs.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+        foreach (var verb in resource.Verbs.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
             command.Subcommands.Add(Verb(host, globals, tree, verb.Value));
         }
 
@@ -218,7 +218,7 @@ static class CommandTree {
             return null;
         }
 
-        return new PageOptions(
+        return new(
             new Option<bool>(verb.PageFlags[0]) {
                 Description =
                     "Follow nextLink to the end and print every page as one list. ⚠ One request per "
@@ -251,6 +251,6 @@ static class CommandTree {
             Description = "Return as soon as the operation is accepted, printing its id."
         };
 
-        return new WaitOptions(wait, noWait);
+        return new(wait, noWait);
     }
 }

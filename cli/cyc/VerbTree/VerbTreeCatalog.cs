@@ -49,7 +49,7 @@ sealed class VerbTreeCatalog {
 
     VerbTreeCatalog(Dictionary<string, VerbTreeDocument> trees) {
         this.trees = trees;
-        ApiVersions = [.. trees.Keys.OrderBy(x => x, StringComparer.Ordinal)];
+        ApiVersions = [.. trees.Keys.OrderBy(static x => x, StringComparer.Ordinal)];
     }
 
     /// <summary>Every api-version this build knows, oldest first.</summary>
@@ -82,7 +82,7 @@ sealed class VerbTreeCatalog {
             trees[tree.ApiVersion] = tree;
         }
 
-        return new VerbTreeCatalog(trees);
+        return new(trees);
     }
 
     /// <summary>Reads one tree — the seam a test builds a synthetic catalog through.</summary>
@@ -90,7 +90,7 @@ sealed class VerbTreeCatalog {
     public static VerbTreeCatalog Of(params VerbTreeDocument[] documents) {
         ArgumentNullException.ThrowIfNull(documents);
 
-        return new VerbTreeCatalog(documents.ToDictionary(x => x.ApiVersion, StringComparer.Ordinal));
+        return new(documents.ToDictionary(static x => x.ApiVersion, StringComparer.Ordinal));
     }
 
     /// <summary>Parses a tree from JSON.</summary>

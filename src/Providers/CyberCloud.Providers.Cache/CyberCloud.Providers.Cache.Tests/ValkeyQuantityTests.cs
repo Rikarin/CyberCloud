@@ -263,7 +263,7 @@ public sealed class ValkeyQuantityTests {
         using var desired = JsonDocument.Parse(ValkeyCaches.Body(Guid.NewGuid()));
 
         var line = ValkeyCaches.CustomConfig(desired.RootElement)
-            .Single(x => x.StartsWith("maxmemory ", StringComparison.Ordinal));
+            .Single(static x => x.StartsWith("maxmemory ", StringComparison.Ordinal));
 
         var argument = line["maxmemory ".Length..];
 

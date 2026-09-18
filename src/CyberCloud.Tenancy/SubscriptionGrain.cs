@@ -104,9 +104,8 @@ public sealed class SubscriptionGrain(
             return Result<SubscriptionDescriptor>.Success(Snapshot(descriptor));
         }
 
-        state.State.Descriptor = descriptor with {
-            ManagementGroup = managementGroup, Version = descriptor.Version + 1
-        };
+        state.State.Descriptor =
+            descriptor with { ManagementGroup = managementGroup, Version = descriptor.Version + 1 };
 
         await state.WriteStateAsync();
         return Result<SubscriptionDescriptor>.Success(Snapshot(state.State.Descriptor));

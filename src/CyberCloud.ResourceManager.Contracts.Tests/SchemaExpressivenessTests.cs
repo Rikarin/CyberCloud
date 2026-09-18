@@ -101,7 +101,7 @@ public sealed class SchemaExpressivenessTests {
 
     [Fact]
     public void AnArrayWithNoElementKindIsRefusedAtDeclarationTime() =>
-        Should.Throw<ArgumentException>(() => Schema(new SchemaProperty("/ports", SchemaKind.Array)))
+        Should.Throw<ArgumentException>(static () => Schema(new SchemaProperty("/ports", SchemaKind.Array)))
             .Message.ShouldContain("ElementKind");
 
     [Fact]
@@ -156,7 +156,7 @@ public sealed class SchemaExpressivenessTests {
         // "Must be present" and "may be null" are different statements, and JSON Schema spells them
         // separately for that reason.
         Validate(
-            Schema(new SchemaProperty("/note", SchemaKind.Text, Required: true) { Nullable = true }),
+            Schema(new SchemaProperty("/note", SchemaKind.Text, true) { Nullable = true }),
             """{"note":null}"""
         ).IsSuccess.ShouldBeTrue();
 
@@ -441,7 +441,7 @@ public sealed class SchemaExpressivenessTests {
     public void ADefaultIsNotAppliedByTheValidator() {
         // ⚠ Deliberate: a substituted default would make the stored body differ from the body sent,
         // and the grain's desired state is what the reconciler and the drift hash read.
-        var schema = Schema(new SchemaProperty("/n", SchemaKind.WholeNumber, Required: true) { DefaultJson = "1" });
+        var schema = Schema(new SchemaProperty("/n", SchemaKind.WholeNumber, true) { DefaultJson = "1" });
 
         Validate(schema, "{}").IsFailure.ShouldBeTrue();
     }
@@ -452,7 +452,8 @@ public sealed class SchemaExpressivenessTests {
     public void AProviderMayNotDeclareTheTagBagItself() =>
         // Two descriptions of one property is the drift ADR-012 exists to remove. SupportsTags()
         // declares it and TagRules is the one shape.
-        Should.Throw<ArgumentException>(() => Schema(new SchemaProperty(TagRules.JsonPointer, SchemaKind.Nested)))
+        Should.Throw<ArgumentException>(static () => Schema(new SchemaProperty(TagRules.JsonPointer, SchemaKind.Nested))
+        )
             .Message.ShouldContain("SupportsTags");
 
     [Fact]

@@ -121,7 +121,8 @@ public sealed class TunnelAgent : IDisposable {
         await transport.CloseAsync(
             cancellationToken.IsCancellationRequested ? "the agent is shutting down" : reason,
             CancellationToken.None
-        ).ConfigureAwait(false);
+        )
+            .ConfigureAwait(false);
 
         return reason;
     }
@@ -158,12 +159,11 @@ public sealed class TunnelAgent : IDisposable {
 
                 return Task.CompletedTask;
 
-            case TunnelFrameKind.Heartbeat:
-            case TunnelFrameKind.Response:
-            case TunnelFrameKind.Goodbye:
-            case TunnelFrameKind.Unknown:
             default:
-                logger.LogWarning("The platform sent a {Kind} frame, which an agent does not serve. Dropped.", frame.Kind);
+                logger.LogWarning(
+                    "The platform sent a {Kind} frame, which an agent does not serve. Dropped.",
+                    frame.Kind
+                );
                 return Task.CompletedTask;
         }
     }
@@ -211,10 +211,15 @@ public sealed class TunnelAgent : IDisposable {
         }
 
         try {
-            await transport.SendAsync(TunnelFrame.Response(request.Id, request.Operation, payload), CancellationToken.None)
+            await transport.SendAsync(
+                TunnelFrame.Response(request.Id, request.Operation, payload),
+                CancellationToken.None
+            )
                 .ConfigureAwait(false);
-        } catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException
-                                     or System.Net.WebSockets.WebSocketException) {
+        } catch (Exception ex) when (ex is IOException
+                                         or ObjectDisposedException
+                                         or InvalidOperationException
+                                         or System.Net.WebSockets.WebSocketException) {
             logger.LogWarning(ex, "Response #{Id} could not be sent; the session is closing.", request.Id);
         }
     }
@@ -238,7 +243,9 @@ public sealed class TunnelAgent : IDisposable {
 
                 return target.TryGetError(out var error)
                     ? TunnelOperations.Seal(Result<KubeObject>.Failure(error))
-                    : TunnelOperations.Seal(await api.GetAsync(target.GetValueOrThrow(), cancellationToken).ConfigureAwait(false));
+                    : TunnelOperations.Seal(
+                        await api.GetAsync(target.GetValueOrThrow(), cancellationToken).ConfigureAwait(false)
+                    );
             }
 
             case TunnelOperations.Apply: {
@@ -246,7 +253,9 @@ public sealed class TunnelAgent : IDisposable {
 
                 return command.TryGetError(out var error)
                     ? TunnelOperations.Seal(Result<ApplyOutcome>.Failure(error))
-                    : TunnelOperations.Seal(await api.ApplyAsync(command.GetValueOrThrow(), cancellationToken).ConfigureAwait(false));
+                    : TunnelOperations.Seal(
+                        await api.ApplyAsync(command.GetValueOrThrow(), cancellationToken).ConfigureAwait(false)
+                    );
             }
 
             case TunnelOperations.Delete: {
@@ -257,7 +266,9 @@ public sealed class TunnelAgent : IDisposable {
                 }
 
                 var value = arguments.GetValueOrThrow();
-                return TunnelOperations.Seal(await api.DeleteAsync(value.Target, value.Policy, cancellationToken).ConfigureAwait(false));
+                return TunnelOperations.Seal(
+                    await api.DeleteAsync(value.Target, value.Policy, cancellationToken).ConfigureAwait(false)
+                );
             }
 
             case TunnelOperations.SetOwner: {
@@ -268,7 +279,9 @@ public sealed class TunnelAgent : IDisposable {
                 }
 
                 var value = arguments.GetValueOrThrow();
-                return TunnelOperations.Seal(await api.SetOwnerAsync(value.Target, value.Owner, cancellationToken).ConfigureAwait(false));
+                return TunnelOperations.Seal(
+                    await api.SetOwnerAsync(value.Target, value.Owner, cancellationToken).ConfigureAwait(false)
+                );
             }
 
             case TunnelOperations.Discover: {
@@ -277,7 +290,9 @@ public sealed class TunnelAgent : IDisposable {
                 return TunnelOperations.Seal(
                     kinds.TryGetError(out var error)
                         ? Result<TunnelOperations.DiscoverAnswer>.Failure(error)
-                        : Result<TunnelOperations.DiscoverAnswer>.Success(new() { Kinds = [.. kinds.GetValueOrThrow()] })
+                        : Result<TunnelOperations.DiscoverAnswer>.Success(
+                            new() { Kinds = [.. kinds.GetValueOrThrow()] }
+                        )
                 );
             }
 
@@ -298,7 +313,8 @@ public sealed class TunnelAgent : IDisposable {
                     value.ContinueToken,
                     value.Limit,
                     cancellationToken
-                ).ConfigureAwait(false);
+                )
+                    .ConfigureAwait(false);
 
                 return TunnelOperations.Seal(
                     page.TryGetError(out var listError)
@@ -349,15 +365,20 @@ public sealed class TunnelAgent : IDisposable {
                 await transport.SendAsync(
                     TunnelFrame.Heartbeat(
                         TunnelCodec.Serialize(
-                            new HeartbeatBody { AgentVersion = options.AgentVersion, KubernetesVersion = kubernetesVersion }
+                            new HeartbeatBody {
+                                AgentVersion = options.AgentVersion, KubernetesVersion = kubernetesVersion
+                            }
                         )
                     ),
                     cancellationToken
-                ).ConfigureAwait(false);
+                )
+                    .ConfigureAwait(false);
 
                 HeartbeatsSent++;
-            } catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException
-                                         or System.Net.WebSockets.WebSocketException) {
+            } catch (Exception ex) when (ex is IOException
+                                             or ObjectDisposedException
+                                             or InvalidOperationException
+                                             or System.Net.WebSockets.WebSocketException) {
                 logger.LogWarning(ex, "A heartbeat could not be sent; the session is closing.");
                 return;
             }

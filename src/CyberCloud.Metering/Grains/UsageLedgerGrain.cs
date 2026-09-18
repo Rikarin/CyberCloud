@@ -65,7 +65,7 @@ public sealed class UsageLedgerGrain(
         if (append.WindowEnd <= append.WindowStart) {
             return Result<UsageLedgerEntry>.Failure(
                 ErrorCode.InvalidRequestBody,
-                $"A ledger entry's window must be positive and half-open; "
+                "A ledger entry's window must be positive and half-open; "
                 + $"[{append.WindowStart:O}, {append.WindowEnd:O}) is not."
             );
         }
@@ -126,8 +126,8 @@ public sealed class UsageLedgerGrain(
         if (string.IsNullOrWhiteSpace(reason)) {
             return Result<UsageLedgerEntry>.Failure(
                 ErrorCode.InvalidRequestBody,
-                "A correction needs a reason. docs/plan/22 § The pipeline: \"Corrections are new "
-                + "entries with a reason and a link to the original, never edits.\" A correction "
+                """A correction needs a reason. docs/plan/22 § The pipeline: "Corrections are new """
+                + """entries with a reason and a link to the original, never edits." A correction """
                 + "with no reason is an edit wearing a hat — it changes the total and explains "
                 + "nothing, which is exactly the thing an auditable ledger exists to prevent."
             );
@@ -199,7 +199,9 @@ public sealed class UsageLedgerGrain(
 
     /// <inheritdoc />
     public Task<Result<decimal>> NetQuantityAsync(BillingMeter meter) =>
-        Task.FromResult(Result<decimal>.Success(state.State.Entries.Where(x => x.Meter == meter).Sum(x => x.Quantity)));
+        Task.FromResult(
+            Result<decimal>.Success(state.State.Entries.Where(x => x.Meter == meter).Sum(static x => x.Quantity))
+        );
 
     /// <inheritdoc />
     public Task<Result<long>> CountAsync() => Task.FromResult(Result<long>.Success(state.State.Entries.Count));

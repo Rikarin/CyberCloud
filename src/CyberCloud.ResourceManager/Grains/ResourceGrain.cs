@@ -403,8 +403,10 @@ public sealed class ResourceGrain(
                     ClusterId = state.State.ClusterId,
                     ProvisioningState = state.State.ProvisioningState,
                     OperationId = state.State.OperationId,
-                    PendingChanges = [.. state.State.PendingChanges.Select(x => x.Change)],
-                    ChangeSequence = state.State.PendingChanges.Count == 0 ? 0 : state.State.PendingChanges[^1].Sequence,
+                    PendingChanges = [.. state.State.PendingChanges.Select(static x => x.Change)],
+                    ChangeSequence = state.State.PendingChanges.Count == 0
+                        ? 0
+                        : state.State.PendingChanges[^1].Sequence,
                     ChangesDropped = state.State.ChangesDropped
                 }
             )

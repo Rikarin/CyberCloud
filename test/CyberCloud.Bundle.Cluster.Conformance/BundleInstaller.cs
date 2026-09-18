@@ -131,19 +131,28 @@ public static class BundleInstaller {
     ///     <c>waitFor:</c> blocks and adds up exactly the timeouts the script would spend. This
     ///     constant is what that arithmetic charges ONE helm row, and the three older call sites
     ///     still pay it once or twice.
-    ///     ⚠ <b>What the arithmetic charges a manifest row, so the next person does not discover it
-    ///     as a harness timeout.</b> The row <c>charts/bundle/README.md</c> names as next installs a
+    ///     ⚠
+    ///     <b>
+    ///         What the arithmetic charges a manifest row, so the next person does not discover it
+    ///         as a harness timeout.
+    ///     </b> The row <c>charts/bundle/README.md</c> names as next installs a
     ///     <c>manifest:</c> component: a <c>--phase 40</c> run is three manifest rows and one helm row,
     ///     so 3 × 5 m + 10 m = 25 m of establishment waits, and a full install is 30 m of them alone.
     ///     <c>charts/bundle/bundle.yaml</c> § owed, <c>the-manifest-path-waits-for-nothing</c>,
     ///     carries why that wait is cluster-wide and what it costs.
-    ///     ⚠ <b>And since 2026-09-15 a manifest row also waits for its <c>waitFor:</c> entries, 10 m
-    ///     each</b>, so the same <c>--phase 40</c> is bounded by 3 × 5 m + 5 × 10 m + 10 m. Even one
+    ///     ⚠
+    ///     <b>
+    ///         And since 2026-09-15 a manifest row also waits for its <c>waitFor:</c> entries, 10 m
+    ///         each
+    ///     </b>, so the same <c>--phase 40</c> is bounded by 3 × 5 m + 5 × 10 m + 10 m. Even one
     ///     manifest row alone — kubevirt, measured at 1 m 40 s to <c>Deployed</c> on a warm cache and
     ///     about seven minutes on a cold one — would not have fitted under twelve minutes with margin.
     ///     <see cref="BudgetFor" /> reads the <c>waitFor:</c> block so that it does now.
-    ///     ✅ <b>The first such test is written, and it did the arithmetic rather than moving this
-    ///     number.</b> <c>KubeVirtOnAnEmptyCluster</c> — in
+    ///     ✅
+    ///     <b>
+    ///         The first such test is written, and it did the arithmetic rather than moving this
+    ///         number.
+    ///     </b> <c>KubeVirtOnAnEmptyCluster</c> — in
     ///     <c>CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance</c>, the project #28's review
     ///     moved it to — installs openebs-localpv, CDI and KubeVirt in one run, one helm row and two
     ///     manifest rows, and passes <see cref="ManifestBudget" /> — <see cref="BudgetFor" />'s
@@ -500,7 +509,8 @@ public static class BundleInstaller {
         string? kubeconfig,
         CancellationToken cancellationToken,
         TimeSpan? budget = null
-    ) => RunAsync(Script, arguments, kubeconfig, cancellationToken, budget: budget);
+    ) =>
+        RunAsync(Script, arguments, kubeconfig, cancellationToken, budget: budget);
 
     /// <summary>
     ///     Runs an <c>install.sh</c> that is not the checked-in one — a copy of <c>charts/bundle/</c>
@@ -575,7 +585,8 @@ public static class BundleInstaller {
             start.Environment[name] = value;
         }
 
-        using var process = new Process { StartInfo = start };
+        using var process = new Process();
+        process.StartInfo = start;
         var output = new StringBuilder();
 
         process.OutputDataReceived += (_, e) => Append(output, e.Data);
@@ -656,7 +667,8 @@ public static class BundleInstaller {
             start.Environment["KUBECONFIG"] = kubeconfig;
         }
 
-        using var process = new Process { StartInfo = start };
+        using var process = new Process();
+        process.StartInfo = start;
         var output = new StringBuilder();
 
         process.OutputDataReceived += (_, e) => Append(output, e.Data);
@@ -678,7 +690,7 @@ public static class BundleInstaller {
 
     static void Kill(Process process) {
         try {
-            process.Kill(entireProcessTree: true);
+            process.Kill(true);
         } catch (InvalidOperationException) {
             // It exited between the timeout and the kill. Nothing to do and nothing to report.
         }
@@ -728,8 +740,11 @@ public static class BundleInstaller {
     /// <param name="script">The <c>charts/bundle/</c> script the calling test would have run.</param>
     /// <param name="wouldProve">What the calling test would have proved.</param>
     /// <remarks>
-    ///     ⚠ <b>These skips used to be thirteen hand-written strings with no
-    ///     <see cref="ClusterInfrastructure.PrerequisiteMarker" /> in them</b>, while
+    ///     ⚠
+    ///     <b>
+    ///         These skips used to be thirteen hand-written strings with no
+    ///         <see cref="ClusterInfrastructure.PrerequisiteMarker" /> in them
+    ///     </b>, while
     ///     <c>ClusterInfrastructure.SkipMessage</c>'s remarks and <c>build/Build.Test.cs</c>
     ///     § <c>PrerequisiteSkips</c> both said every skip naming a missing tool carried it — the
     ///     review of the commit that made the claim read the strings. A missing <c>bash</c> beside
@@ -757,7 +772,9 @@ public static class BundleInstaller {
     public static string? Bash {
         get {
             if (!OperatingSystem.IsWindows()) {
-                return PathDirectories.Any(directory => File.Exists(Path.Combine(directory, "bash"))) ? "bash" : null;
+                return PathDirectories.Any(static directory => File.Exists(Path.Combine(directory, "bash")))
+                    ? "bash"
+                    : null;
             }
 
             foreach (var directory in PathDirectories) {
@@ -784,5 +801,5 @@ public static class BundleInstaller {
 
     static string[] PathDirectories =>
         (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
-            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+        .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
 }

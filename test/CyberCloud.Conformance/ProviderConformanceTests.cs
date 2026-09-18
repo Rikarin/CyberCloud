@@ -1,5 +1,4 @@
 using CyberCloud.Conformance.Harness;
-using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
 using System.Collections.Immutable;
@@ -245,9 +244,16 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                     ns
                 )
             )
-            .Aggregate(Case.Objects(address, ns).AsEnumerable(), (all, next) => all.Concat(next))
-            .Where(x => !FakeKubeCluster.IsBuiltIn(x.Kind.Group))
-            .DistinctBy(x => x.Kind.ApiVersion + "|" + x.Kind.Kind + "|" + x.Kind.Plural + "|" + x.IsClusterScoped)
+            .Aggregate(Case.Objects(address, ns).AsEnumerable(), static (all, next) => all.Concat(next))
+            .Where(static x => !FakeKubeCluster.IsBuiltIn(x.Kind.Group))
+            .DistinctBy(static x => x.Kind.ApiVersion
+                + "|"
+                + x.Kind.Kind
+                + "|"
+                + x.Kind.Plural
+                + "|"
+                + x.IsClusterScoped
+            )
             .ToList();
 
         foreach (var target in rendered) {
@@ -261,11 +267,12 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                 + "`./charts/bundle/crds.sh --refresh` and commit what it writes."
             );
 
-            definition.Versions.ContainsKey(target.Kind.Version).ShouldBeTrue(
-                $"{Case.DisplayName} renders {target.Kind} and {definition.File} serves it only at "
-                + $"{string.Join(", ", definition.Versions.Keys.OrderBy(x => x, StringComparer.Ordinal))}. "
-                + "A real API server would answer 404 for the version the reconciler addresses."
-            );
+            definition.Versions.ContainsKey(target.Kind.Version)
+                .ShouldBeTrue(
+                    $"{Case.DisplayName} renders {target.Kind} and {definition.File} serves it only at "
+                    + $"{string.Join(", ", definition.Versions.Keys.OrderBy(static x => x, StringComparer.Ordinal))}. "
+                    + "A real API server would answer 404 for the version the reconciler addresses."
+                );
 
             definition.Plural.ShouldBe(
                 target.Kind.Plural,
@@ -311,11 +318,17 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         await ConvergeAsync(accepted);
 
         var declared = rendered
-            .Select(x => x.Kind.ApiVersion + "|" + x.Kind.Kind + "|" + x.Kind.Plural + "|" + x.IsClusterScoped)
+            .Select(static x => x.Kind.ApiVersion + "|" + x.Kind.Kind + "|" + x.Kind.Plural + "|" + x.IsClusterScoped)
             .ToHashSet(StringComparer.Ordinal);
 
-        foreach (var command in Cluster.World.Applied.Where(x => !FakeKubeCluster.IsBuiltIn(x.Target.Kind.Group))) {
-            var key = command.Target.Kind.ApiVersion + "|" + command.Target.Kind.Kind + "|" + command.Target.Kind.Plural + "|"
+        foreach (var command in Cluster.World.Applied.Where(static x => !FakeKubeCluster.IsBuiltIn(x.Target.Kind.Group)
+                 )) {
+            var key = command.Target.Kind.ApiVersion
+                + "|"
+                + command.Target.Kind.Kind
+                + "|"
+                + command.Target.Kind.Plural
+                + "|"
                 + command.Target.IsClusterScoped;
 
             declared.ShouldContain(
@@ -382,9 +395,14 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
         foreach (var (index, variant) in variants.Index()) {
             ProviderTestCluster<TSource>.Reset();
-            var address = ProviderTestCluster<TSource>.Address("variant-" + index.ToString(CultureInfo.InvariantCulture));
+            var address = ProviderTestCluster<TSource>.Address(
+                "variant-" + index.ToString(CultureInfo.InvariantCulture)
+            );
 
-            var accepted = await Cluster.Manager.WriteAsync(Request(address, variant.Body), TestContext.Current.CancellationToken);
+            var accepted = await Cluster.Manager.WriteAsync(
+                Request(address, variant.Body),
+                TestContext.Current.CancellationToken
+            );
 
             if (accepted.TryGetError(out var refusal)) {
                 // The type's own schema said no, at the API, before anything rendered. That is the
@@ -405,7 +423,9 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             foreach (var (target, message) in Cluster.World.Refused) {
                 findings.Add(
                     $"{variant.JsonPointer} = {variant.Value} → {target}: {message}"
-                    + (status.Error is { } error ? $" (the operation ended {status.State}: {error.Message})" : string.Empty)
+                    + (status.Error is { } error
+                            ? $" (the operation ended {status.State}: {error.Message})"
+                            : string.Empty)
                 );
             }
         }
@@ -606,8 +626,13 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                 // command whose shape or owner does not check out before anything lands.
                 command.Labels.ShouldBeEmpty($"'{command.Target}' is a co-writer's command and carries labels");
                 command.CheckCoOwnedShape().IsSuccess.ShouldBeTrue(command.CheckCoOwnedShape().Error?.Message);
-                command.OwnerResourceId.ShouldNotBe(accepted.Resource.Id, "a co-writer names another resource as the owner");
-                command.Annotations[KubeLabels.FragmentHashAnnotation(accepted.Resource.Id)].ShouldBe(command.ReconcileHash);
+                command.OwnerResourceId.ShouldNotBe(
+                    accepted.Resource.Id,
+                    "a co-writer names another resource as the owner"
+                );
+                command.Annotations[KubeLabels.FragmentHashAnnotation(accepted.Resource.Id)].ShouldBe(
+                    command.ReconcileHash
+                );
 
                 var landed = Cluster.World.Read(command.Target);
                 landed.ShouldNotBeNull($"'{command.Target}' was co-written and is not in the cluster");
@@ -678,7 +703,6 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             0,
             $"{Case.DisplayName} converged and applied nothing but the resource group's namespace"
         );
-
     }
 
     /// <summary>
@@ -854,7 +878,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         var body = WithTags(Body(), ("env", "prod"), ("owner", "platform"));
 
         var written = await Cluster.Manager.WriteAsync(
-            Request(address, body: body),
+            Request(address, body),
             TestContext.Current.CancellationToken
         );
 
@@ -905,7 +929,9 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         }
 
         if (!HasClusterDataPlane) {
-            (await ClusterlessWorldOf(AddressOf(accepted.Resource.Id, "locked")).HoldsAsync(TestContext.Current.CancellationToken))
+            (await ClusterlessWorldOf(AddressOf(accepted.Resource.Id, "locked")).HoldsAsync(
+                    TestContext.Current.CancellationToken
+                ))
                 .ShouldBeTrue("a lock that let the clusterless world's state go is not a lock");
         }
     }
@@ -920,7 +946,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         Cluster.Locks.Level = LockLevel.ReadOnly;
 
         var refused = await Cluster.Manager.WriteAsync(
-            Request(ProviderTestCluster<TSource>.Address("readonly-locked"), body: ChangedBody()),
+            Request(ProviderTestCluster<TSource>.Address("readonly-locked"), ChangedBody()),
             TestContext.Current.CancellationToken
         );
 
@@ -1073,8 +1099,11 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///         it and how the collector decides whether it lives.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A family that renders no <c>volumeClaimTemplate</c> and declares no
-    ///         operator-owned claim SKIPS, and the skip names the gap it leaves.</b> Most of the
+    ///         ⚠
+    ///         <b>
+    ///             A family that renders no <c>volumeClaimTemplate</c> and declares no
+    ///             operator-owned claim SKIPS, and the skip names the gap it leaves.
+    ///         </b> Most of the
     ///         catalogue owns no disk, and a test that iterated an empty collection and reported
     ///         success would be the vacuous green this suite's own vacuity guard exists to refuse.
     ///         But a skip is also how this case hid #69 for as long as it did: a family whose
@@ -1118,10 +1147,10 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         // planted claim with neither a volume nor a controller is a fixture that is wrong, and it
         // says so below.
         var planted = PlantOperatorObjects(accepted.Resource.Id, "keeps-disks")
-            .Where(x => x.Target.Kind == RetainedVolume.ClaimKind)
+            .Where(static x => x.Target.Kind == RetainedVolume.ClaimKind)
             .ToList();
 
-        var provisionerBound = planted.Where(x => VolumeNameOf(x.Json).Length > 0).ToList();
+        var provisionerBound = planted.Where(static x => VolumeNameOf(x.Json).Length > 0).ToList();
         var operatorOwned = planted.Except(provisionerBound).ToList();
 
         if (templated.Count == 0 && planted.Count == 0) {
@@ -1152,7 +1181,9 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             // would pass for a claim the collector was never going to take.
             var controller = Cluster.World.ControllerOf(target);
             controller.ShouldNotBeNull($"'{target}' was declared operator-owned and was planted with no controller");
-            Cluster.World.UidOf(new() { Kind = KindOf(controller), Namespace = target.Namespace, Name = controller.Name })
+            Cluster.World.UidOf(
+                new() { Kind = KindOf(controller), Namespace = target.Namespace, Name = controller.Name }
+            )
                 .ShouldBe(controller.Uid, $"'{target}' names an owner the reconciler did not apply");
         }
 
@@ -1186,12 +1217,12 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                     + $"{registration.SoftDeleteDays.ToString(CultureInfo.InvariantCulture)}-day window. "
                     + "The claims are the data a restore hands back; removing them makes the window an "
                     + "advertisement."
-                    + (operatorOwned.Any(x => x.Target == target)
-                        ? " This claim was owned by the object the teardown deleted, so the garbage "
-                          + "collector took it with its owner — the teardown has to detach the claim "
-                          + "BEFORE it deletes, which is what kubectl cnpg destroy --keep-pvc does by "
-                          + "hand. docs/plan/08 § Soft delete, issue #69."
-                        : string.Empty)
+                    + (operatorOwned.Exists(x => x.Target == target)
+                            ? " This claim was owned by the object the teardown deleted, so the garbage "
+                            + "collector took it with its owner — the teardown has to detach the claim "
+                            + "BEFORE it deletes, which is what kubectl cnpg destroy --keep-pvc does by "
+                            + "hand. docs/plan/08 § Soft delete, issue #69."
+                            : string.Empty)
                 );
         }
 
@@ -1214,7 +1245,9 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
             foreach (var (target, json) in operatorOwned) {
                 var declared = KubeJson.ControllerOf(JsonNode.Parse(json))!;
-                var owner = new ObjectRef { Kind = KindOf(declared), Namespace = target.Namespace, Name = declared.Name };
+                var owner = new ObjectRef {
+                    Kind = KindOf(declared), Namespace = target.Namespace, Name = declared.Name
+                };
                 var controller = Cluster.World.ControllerOf(target);
 
                 controller.ShouldNotBeNull(
@@ -1354,11 +1387,11 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
         if (storagePrefix is not null) {
             (await Cluster.Objects.PutAsync(
-                storagePrefix + "planted/by-the-suite.bin",
-                "planted"u8.ToArray(),
-                "application/octet-stream",
-                TestContext.Current.CancellationToken
-            )).IsSuccess.ShouldBeTrue();
+                    storagePrefix + "planted/by-the-suite.bin",
+                    "planted"u8.ToArray(),
+                    "application/octet-stream",
+                    TestContext.Current.CancellationToken
+                )).IsSuccess.ShouldBeTrue();
         }
 
         var deleted = await DeleteAsync("goodbye");
@@ -1414,7 +1447,9 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                 );
 
                 CarriesFragmentOf(accepted.Resource.Id, target)
-                    .ShouldBeFalse($"'{target}' still carries {accepted.Resource.Id:D}'s fragment after a converged teardown");
+                    .ShouldBeFalse(
+                        $"'{target}' still carries {accepted.Resource.Id:D}'s fragment after a converged teardown"
+                    );
 
                 Cluster.World.OwnerOf(target).ShouldNotBeNull($"'{target}' lost its owner's labels to the withdrawal");
                 continue;
@@ -1496,7 +1531,9 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                     // The co-writer's half of the same sentence: the object never went, so what has
                     // to come back is the fragment.
                     CarriesFragmentOf(accepted.Resource.Id, target)
-                        .ShouldBeTrue($"'{target}' does not carry {accepted.Resource.Id:D}'s fragment again after the restore");
+                        .ShouldBeTrue(
+                            $"'{target}' does not carry {accepted.Resource.Id:D}'s fragment again after the restore"
+                        );
                 }
             }
 
@@ -1615,7 +1652,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         var orphaned = ProviderTestCluster<TSource>.Address("orphan-child") with {
             ParentNames = string.Join(
                 '/',
-                Enumerable.Range(0, Case.Type.Depth - 1).Select(level => "no-such-parent-" + level)
+                Enumerable.Range(0, Case.Type.Depth - 1).Select(static level => "no-such-parent-" + level)
             )
         };
 
@@ -1750,7 +1787,10 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             // cluster. A clusterless type whose create FAILED here would be one that reached a
             // cluster after all.
             var converged = await ConvergeAsync(accepted);
-            converged.State.ShouldBe(OperationState.Succeeded, $"the operation ended {converged.State}: {converged.Error?.Message}");
+            converged.State.ShouldBe(
+                OperationState.Succeeded,
+                $"the operation ended {converged.State}: {converged.Error?.Message}"
+            );
             AssertNothingReachedTheCluster();
             Cluster.World.RefuseWith = null;
             return;
@@ -1798,7 +1838,10 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             // in-process silo has no connection the harness can drop, and a cluster that did not
             // answer is a cluster this type never asked.
             var converged = await ConvergeAsync(accepted);
-            converged.State.ShouldBe(OperationState.Succeeded, $"the operation ended {converged.State}: {converged.Error?.Message}");
+            converged.State.ShouldBe(
+                OperationState.Succeeded,
+                $"the operation ended {converged.State}: {converged.Error?.Message}"
+            );
             AssertNothingReachedTheCluster();
             Cluster.World.RefuseWith = null;
             return;
@@ -1851,7 +1894,9 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             var ct = TestContext.Current.CancellationToken;
 
             await world.BreakAsync(Body(), ct);
-            (await world.HoldsAsync(ct)).ShouldBeFalse($"{Case.DisplayName}'s world did not remove what it holds; the drift test would measure nothing");
+            (await world.HoldsAsync(ct)).ShouldBeFalse(
+                $"{Case.DisplayName}'s world did not remove what it holds; the drift test would measure nothing"
+            );
 
             var pass = await ReconcileOnceAsync(accepted.Resource.Id, "drifting");
 
@@ -1859,7 +1904,9 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                 pass.Kind.ShouldNotBe(ReconcileOutcomeKind.Failed, pass.ToString());
 
                 (await world.HoldsAsync(ct)).ShouldBeTrue($"'{Case.Type}' was not put back");
-                (await world.MatchesAsync(Body(), ct)).ShouldBeTrue("what was put back does not carry the desired body");
+                (await world.MatchesAsync(Body(), ct)).ShouldBeTrue(
+                    "what was put back does not carry the desired body"
+                );
             } else if (pass.IsConverged) {
                 (await world.MatchesAsync(Body(), ct))
                     .ShouldBeTrue("the pass reported Converged over a data plane that does not match the desired body");
@@ -1882,7 +1929,9 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
         foreach (var target in coOwned) {
             MatchesDesired(accepted.Resource.Id, "drifting", target, Cluster.World.Read(target)!, Body())
-                .ShouldBeFalse($"stripping {accepted.Resource.Id:D}'s fragment off '{target}' left it matching the desired body, so the break measured nothing");
+                .ShouldBeFalse(
+                    $"stripping {accepted.Resource.Id:D}'s fragment off '{target}' left it matching the desired body, so the break measured nothing"
+                );
         }
 
         // A fresh write with the same body is a no-op at the grain, so the drift is corrected by the
@@ -1954,7 +2003,9 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             }
 
             await corrupt(Body(), ct);
-            (await world.MatchesAsync(Body(), ct)).ShouldBeFalse("the world's hand edit changed nothing; the test would measure nothing");
+            (await world.MatchesAsync(Body(), ct)).ShouldBeFalse(
+                "the world's hand edit changed nothing; the test would measure nothing"
+            );
 
             var put = await ReconcileOnceAsync(accepted.Resource.Id, "hand-edited");
             put.Kind.ShouldNotBe(ReconcileOutcomeKind.Failed, put.ToString());
@@ -1977,7 +2028,9 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                     .ShouldBeTrue($"'{target}' carried no fragment of {accepted.Resource.Id:D}'s to edit");
 
                 MatchesDesired(accepted.Resource.Id, "hand-edited", target, Cluster.World.Read(target)!, Body())
-                    .ShouldBeFalse($"the hand edit of '{target}' changed nothing the case compares, so the test would measure nothing");
+                    .ShouldBeFalse(
+                        $"the hand edit of '{target}' changed nothing the case compares, so the test would measure nothing"
+                    );
 
                 continue;
             }
@@ -2045,7 +2098,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         // server; only the case knows its grain.
         var world = HasClusterDataPlane
             ? new ConformanceWorld(
-                BreakAsync: () => {
+                () => {
                     foreach (var target in objects) {
                         // ⚠ Decided when the break runs, not when the world is built: the run above
                         // converges the reconciler first, and an object is co-owned by what it carries
@@ -2055,7 +2108,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
                     return Task.CompletedTask;
                 },
-                MatchesDesiredAsync: () => Task.FromResult(
+                () => Task.FromResult(
                     objects.Length > 0
                     && objects.All(target => Cluster.World.Read(target) is { } json
                         && MatchesDesired(accepted.Resource.Id, "clauses", target, json, Body())
@@ -2108,7 +2161,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         await ConvergeAsync(first);
 
         var changed = await Cluster.Manager.WriteAsync(
-            Request(ProviderTestCluster<TSource>.Address("updated"), body: ChangedBody()),
+            Request(ProviderTestCluster<TSource>.Address("updated"), ChangedBody()),
             TestContext.Current.CancellationToken
         );
 
@@ -2127,7 +2180,10 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             // grain is an update the world never saw.
             AssertNothingReachedTheCluster();
 
-            (await ClusterlessWorldOf(AddressOf(first.Resource.Id, "updated")).MatchesAsync(ChangedBody(), TestContext.Current.CancellationToken))
+            (await ClusterlessWorldOf(AddressOf(first.Resource.Id, "updated")).MatchesAsync(
+                    ChangedBody(),
+                    TestContext.Current.CancellationToken
+                ))
                 .ShouldBeTrue("the clusterless world does not read back as the changed body after an update converged");
 
             return;
@@ -2325,7 +2381,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         var address = ProviderTestCluster<TSource>.Address("bad-body");
 
         var refused = await Cluster.Manager.WriteAsync(
-            Request(address, body: Case.InvalidBody(ProviderTestCluster<TSource>.ClusterId)),
+            Request(address, Case.InvalidBody(ProviderTestCluster<TSource>.ClusterId)),
             TestContext.Current.CancellationToken
         );
 
@@ -2348,7 +2404,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         var body = WithProperty(Body(), "thisIsNotAProperty", "surprise");
 
         var refused = await Cluster.Manager.WriteAsync(
-            Request(ProviderTestCluster<TSource>.Address("unknown-property"), body: body),
+            Request(ProviderTestCluster<TSource>.Address("unknown-property"), body),
             TestContext.Current.CancellationToken
         );
 
@@ -2366,7 +2422,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         var refusals = new List<Error>();
 
         var badBody = await Cluster.Manager.WriteAsync(
-            Request(ProviderTestCluster<TSource>.Address("no-trace"), body: "{ not json"),
+            Request(ProviderTestCluster<TSource>.Address("no-trace"), "{ not json"),
             TestContext.Current.CancellationToken
         );
 
@@ -2622,7 +2678,8 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         labels.ShouldNotBeNull($"'{target}' is co-written and carries no labels — its owner's have been lost");
 
         foreach (var label in KubeLabels.Mandatory) {
-            labels[label]?.GetValue<string>().ShouldNotBeNullOrEmpty($"'{target}' lost its owner's '{label}' to a co-writer's apply");
+            labels[label]?.GetValue<string>()
+                .ShouldNotBeNullOrEmpty($"'{target}' lost its owner's '{label}' to a co-writer's apply");
         }
 
         labels[KubeLabels.TenantId]!.GetValue<string>().ShouldBe(KubeLabels.GuidValue(ConformanceIds.Tenant));
@@ -2675,7 +2732,9 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     protected void BreakBehindTheirBack(Guid resourceId, ObjectRef target) {
         if (IsCoOwned(resourceId, target)) {
             Cluster.World.StripFragmentBehindTheirBack(target, resourceId)
-                .ShouldBeTrue($"'{target}' is co-owned and carried no fragment of {resourceId:D}'s to strip — the break would have changed nothing");
+                .ShouldBeTrue(
+                    $"'{target}' is co-owned and carried no fragment of {resourceId:D}'s to strip — the break would have changed nothing"
+                );
 
             return;
         }
@@ -2702,8 +2761,11 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     /// <param name="resourceId">The resource's GUID.</param>
     /// <param name="name">Its name.</param>
     /// <remarks>
-    ///     ⚠ <b>The resolution is the operator's <c>SetAsOwnedBy</c>, done here because the harness
-    ///     holds the object the operator would read.</b> A case cannot know a uid the fake has not
+    ///     ⚠
+    ///     <b>
+    ///         The resolution is the operator's <c>SetAsOwnedBy</c>, done here because the harness
+    ///         holds the object the operator would read.
+    ///     </b> A case cannot know a uid the fake has not
     ///     issued yet, so it names the owner by kind and name and leaves <c>uid</c> empty; an owner
     ///     the fake does not hold fails the placement by name rather than planting a reference to
     ///     nothing — which the collector would read as "owner gone" and act on.
@@ -2739,11 +2801,12 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                 Kind = owner["kind"]?.GetValue<string>() ?? string.Empty
             };
 
-            var candidate = Cluster.World.Applied.Select(x => x.Target)
+            var candidate = Cluster.World.Applied.Select(static x => x.Target)
                 .FirstOrDefault(x => x.Kind.Kind == kind.Kind
                     && x.Kind.Group == kind.Group
                     && x.Name == owner["name"]?.GetValue<string>()
-                    && x.Namespace == target.Namespace);
+                    && x.Namespace == target.Namespace
+                );
 
             var uid = candidate is null ? string.Empty : Cluster.World.UidOf(candidate);
 
@@ -2759,9 +2822,11 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         return root.ToJsonString();
     }
 
-    static string ApiGroup(string apiVersion) => apiVersion.Contains('/') ? apiVersion[..apiVersion.IndexOf('/')] : string.Empty;
+    static string ApiGroup(string apiVersion) =>
+        apiVersion.Contains('/') ? apiVersion[..apiVersion.IndexOf('/')] : string.Empty;
 
-    static string ApiVersionOf(string apiVersion) => apiVersion.Contains('/') ? apiVersion[(apiVersion.IndexOf('/') + 1)..] : apiVersion;
+    static string ApiVersionOf(string apiVersion) =>
+        apiVersion.Contains('/') ? apiVersion[(apiVersion.IndexOf('/') + 1)..] : apiVersion;
 
     /// <summary>The kind an owner reference names, with the plural the fake's store keys on.</summary>
     /// <remarks>
@@ -2770,7 +2835,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///     <see cref="GroupVersionKind" />.
     /// </remarks>
     GroupVersionKind KindOf(OwnerRef owner) =>
-        Cluster.World.Applied.Select(x => x.Target.Kind)
+        Cluster.World.Applied.Select(static x => x.Target.Kind)
             .FirstOrDefault(x => x.Kind == owner.Kind && x.ApiVersion == owner.ApiVersion)
         ?? new() { Group = ApiGroup(owner.ApiVersion), Version = ApiVersionOf(owner.ApiVersion), Kind = owner.Kind };
 
@@ -2796,16 +2861,16 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///     alone here for the same reason they are there: an ordered list is data, not a bag.
     /// </remarks>
     static string Canonical(string json) {
-        var node = System.Text.Json.Nodes.JsonNode.Parse(json);
+        var node = JsonNode.Parse(json);
         return Sort(node)?.ToJsonString() ?? "null";
 
-        static System.Text.Json.Nodes.JsonNode? Sort(System.Text.Json.Nodes.JsonNode? value) {
-            if (value is not System.Text.Json.Nodes.JsonObject map) {
+        static JsonNode? Sort(JsonNode? value) {
+            if (value is not JsonObject map) {
                 return value?.DeepClone();
             }
 
-            var sorted = new System.Text.Json.Nodes.JsonObject();
-            foreach (var member in map.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+            var sorted = new JsonObject();
+            foreach (var member in map.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
                 sorted[member.Key] = Sort(member.Value);
             }
 
@@ -2814,8 +2879,8 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     }
 
     static string WithTags(string body, params (string Key, string Value)[] tags) {
-        var node = System.Text.Json.Nodes.JsonNode.Parse(body)!.AsObject();
-        var map = new System.Text.Json.Nodes.JsonObject();
+        var node = JsonNode.Parse(body)!.AsObject();
+        var map = new JsonObject();
 
         foreach (var (key, value) in tags) {
             map[key] = value;
@@ -2826,7 +2891,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     }
 
     static string WithProperty(string body, string name, string value) {
-        var node = System.Text.Json.Nodes.JsonNode.Parse(body)!.AsObject();
+        var node = JsonNode.Parse(body)!.AsObject();
         node[name] = value;
         return node.ToJsonString();
     }

@@ -23,14 +23,14 @@ public sealed class VerbTreeTests {
     public void ReadsFlagsWithAndWithoutChoices() {
         var create = TestHost.Catalog().Select(null).Groups["sample"].Commands["widgets"].Verbs["create"];
 
-        var tier = create.Flags.Single(x => x.Name == "--tier");
+        var tier = create.Flags.Single(static x => x.Name == "--tier");
         tier.Choices.ShouldBe(["free", "basic", "standard", "premium"]);
 
         // ⚠ The flag with no `choices` member at all. An absent member must read as an empty list
         // rather than null — CliEmitter § ToJson omits every member that would say `false` or `[]`,
         // so "absent" is the common case and a reader that treated it as null would fail on the
         // first flag of the first verb.
-        var cidrs = create.Flags.Single(x => x.Name == "--allowed-cidrs");
+        var cidrs = create.Flags.Single(static x => x.Name == "--allowed-cidrs");
         cidrs.Choices.ShouldBeEmpty();
         cidrs.Repeated.ShouldBeTrue();
         cidrs.JsonPointer.ShouldBe("/properties/allowedCidrs");
@@ -69,7 +69,7 @@ public sealed class VerbTreeTests {
 
     [Fact]
     public void UnknownFormatIsRefusedRatherThanGuessed() {
-        var failure = Should.Throw<CycUsageException>(() => VerbTreeCatalog.Parse(
+        var failure = Should.Throw<CycUsageException>(static () => VerbTreeCatalog.Parse(
                 """{"format":"99","apiVersion":"2026-08-01"}"""
             )
         );

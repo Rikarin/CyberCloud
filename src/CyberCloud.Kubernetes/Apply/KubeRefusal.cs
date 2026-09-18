@@ -252,7 +252,7 @@ public static class KubeFailures {
         // ImmutableStatefulSetSpecPhrase, and src/Providers/README.md § Labelling a nested claim
         // template for what the labels changed.
         if (body.Message.Contains(ImmutableStatefulSetSpecPhrase, StringComparison.OrdinalIgnoreCase)) {
-            return new KubeRefusal {
+            return new() {
                 // ⚠ Terminal. ReconcileOutcome.IsRetryable lists this among the four refusals that
                 // are decided the same way every time they are asked — a live StatefulSet's spec is
                 // immutable now and in an hour, and rescheduling turns a migration an operator can

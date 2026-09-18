@@ -79,7 +79,8 @@ public sealed class OpenBaoFixture : IAsyncLifetime {
             // a container the first request fails against — which is the flake this suite would
             // otherwise contribute to the shared run.
             .WithWaitStrategy(
-                Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(x => x.ForPort(8200).ForPath("/v1/sys/health"))
+                Wait.ForUnixContainer()
+                    .UntilHttpRequestIsSucceeded(static x => x.ForPort(8200).ForPath("/v1/sys/health"))
             )
             .Build();
 
@@ -160,9 +161,8 @@ public sealed class OpenBaoFixture : IAsyncLifetime {
     ///     </para>
     /// </remarks>
     public async Task EnableKubernetesAuthAsync() {
-        using var request = new HttpRequestMessage(HttpMethod.Post, Address + "/v1/sys/auth/kubernetes") {
-            Content = JsonContent.Create(new { type = "kubernetes" })
-        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, Address + "/v1/sys/auth/kubernetes");
+        request.Content = JsonContent.Create(new { type = "kubernetes" });
 
         request.Headers.Add(VaultHeaders.Token, RootToken);
 
@@ -230,7 +230,8 @@ public sealed class OpenBaoFixture : IAsyncLifetime {
     }
 
     async Task<JsonDocument?> RootAsync(HttpMethod method, string path, object body) {
-        using var request = new HttpRequestMessage(method, Address + path) { Content = JsonContent.Create(body) };
+        using var request = new HttpRequestMessage(method, Address + path);
+        request.Content = JsonContent.Create(body);
 
         request.Headers.Add(VaultHeaders.Token, RootToken);
 

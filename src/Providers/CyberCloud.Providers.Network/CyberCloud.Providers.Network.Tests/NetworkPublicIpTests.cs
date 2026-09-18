@@ -50,9 +50,9 @@ public sealed class NetworkPublicIpTests {
         var alice = Address("edge", TenantOne, SubscriptionOne);
         var bob = Address("edge", TenantTwo, SubscriptionTwo);
 
-        using var aliceBody = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, addressV4: "10.100.0.7"));
+        using var aliceBody = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, "10.100.0.7"));
 
-        using var bobBody = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, addressV4: "10.100.0.9"));
+        using var bobBody = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, "10.100.0.9"));
 
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
         await Pass(reconciler, connection, bob, bobBody.RootElement);
@@ -111,9 +111,7 @@ public sealed class NetworkPublicIpTests {
 
     [Fact]
     public void ARequestedAddressIsSentVerbatim() {
-        using var body = JsonDocument.Parse(
-            PublicIpAddresses.Body(Cluster, addressV4: "10.100.0.7", addressV6: "fd00:ff::7")
-        );
+        using var body = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, "10.100.0.7", "fd00:ff::7"));
 
         var spec = Spec(PublicIpAddresses.OvnEipJson("ns", "edge", body.RootElement));
 
@@ -147,7 +145,7 @@ public sealed class NetworkPublicIpTests {
         // address that is not theirs — the fabric refused the static request and allocated something
         // else — and reporting that as converged would publish the wrong address through
         // showAllocation with the resource saying Succeeded.
-        using var body = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, addressV4: "10.100.0.7"));
+        using var body = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, "10.100.0.7"));
 
         PublicIpAddresses.Matches(AfterTheController("10.100.0.9"), body.RootElement).ShouldBeFalse();
         PublicIpAddresses.Matches(AfterTheController("10.100.0.7"), body.RootElement).ShouldBeTrue();
@@ -189,7 +187,7 @@ public sealed class NetworkPublicIpTests {
 
         // ⚠ The whole spec, enumerated. An assertion that only checked for the fields it knew about
         // would go green the day somebody added one that publishes.
-        spec.Select(x => x.Key).ShouldBe(["type"]);
+        spec.Select(static x => x.Key).ShouldBe(["type"]);
 
         foreach (var forbidden in new[] { "nat", "fip", "dnat", "snat", "externalSubnet" }) {
             spec.ContainsKey(forbidden)
@@ -215,7 +213,7 @@ public sealed class NetworkPublicIpTests {
         // other address property here is a CIDR. A public address is one host and the substrate wants
         // a bare address.
         var validated = PublicIpAddresses.Schema2026.Validate(
-            JsonDocument.Parse(PublicIpAddresses.Body(Cluster, addressV4: malformed)).RootElement
+            JsonDocument.Parse(PublicIpAddresses.Body(Cluster, malformed)).RootElement
         );
 
         validated.IsSuccess.ShouldBeFalse($"'{malformed}' was accepted by the schema");
@@ -275,7 +273,7 @@ public sealed class NetworkPublicIpTests {
         var reconciler = new PublicIpAddressReconciler(new FixedClock());
         var connection = new RecordingConnection();
 
-        using var body = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, addressV4: "fd00:ff::7"));
+        using var body = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, "fd00:ff::7"));
 
         var outcome = await Pass(
             reconciler,

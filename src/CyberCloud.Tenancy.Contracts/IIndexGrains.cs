@@ -372,8 +372,11 @@ public interface IEmailIndexGrain : IGrainWithStringKey {
 ///         <c>IApplicationGrain</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The same two-phase claim as <see cref="IEmailIndexGrain" />, and for the same
-///         reason.</b> A <c>client_id</c> is unique within a tenant, and uniqueness without a unique
+///         ⚠
+///         <b>
+///             The same two-phase claim as <see cref="IEmailIndexGrain" />, and for the same
+///             reason.
+///         </b> A <c>client_id</c> is unique within a tenant, and uniqueness without a unique
 ///         constraint is a single-threaded index activation that is the mutex (docs/plan/04 § Grain
 ///         taxonomy). <c>IApplicationGrain.CreateAsync</c> claims the id here before it writes its
 ///         own state, so two applications cannot take one <c>client_id</c>.

@@ -72,7 +72,7 @@ public sealed class GrainUsageEmitter(IGrainFactory grains) : IUsageEmitter {
         // matching receipt i to record i is the obvious reading and would otherwise be wrong.
         var byKey = new Dictionary<string, UsageIngestReceipt>(StringComparer.Ordinal);
 
-        foreach (var group in usage.GroupBy(x => (x.TenantId, x.SubscriptionId))) {
+        foreach (var group in usage.GroupBy(static x => (x.TenantId, x.SubscriptionId))) {
             if (group.Key.TenantId == Guid.Empty || group.Key.SubscriptionId == Guid.Empty) {
                 return Result<ImmutableArray<UsageIngestReceipt>>.Failure(
                     ErrorCode.InvalidRequestBody,

@@ -1,4 +1,3 @@
-using CyberCloud.Authorization.Contracts;
 using Shouldly;
 using System.Reflection;
 
@@ -69,7 +68,10 @@ public sealed class AuthorizationVocabularyTests {
         // it differs from the truth in exactly one bit. The same trap one type over, since #39.
         ObjectTypes.ResourceGroup.ShouldNotBe("resourcegroup");
         ObjectTypes.ManagementGroup.ShouldNotBe("managementgroup");
-        Literals(typeof(ObjectTypes)).Count.ShouldBe(8, "a new object type is a schema change — SchemaVersion 3 was #39's");
+        Literals(typeof(ObjectTypes)).Count.ShouldBe(
+            8,
+            "a new object type is a schema change — SchemaVersion 3 was #39's"
+        );
     }
 
     [Fact]
@@ -121,7 +123,7 @@ public sealed class AuthorizationVocabularyTests {
         SubjectTypes.ServicePrincipal.ShouldNotBe("serviceprincipal");
         SubjectTypes.ManagedIdentity.ShouldNotBe("managedidentity");
 
-        SubjectTypes.All.ShouldBe(["user", "servicePrincipal", "managedIdentity"], ignoreOrder: true);
+        SubjectTypes.All.ShouldBe(["user", "servicePrincipal", "managedIdentity"], true);
     }
 
     [Fact]
@@ -186,7 +188,7 @@ public sealed class AuthorizationVocabularyTests {
             type.IsSealed.ShouldBeTrue($"{type.Name} should be a static class");
 
             type.GetCustomAttributes()
-                .Select(x => x.GetType().Name)
+                .Select(static x => x.GetType().Name)
                 .ShouldNotContain(
                     "AliasAttribute",
                     $"{type.Name} carries a wire alias, so moving it between assemblies is a "
@@ -209,7 +211,7 @@ public sealed class AuthorizationVocabularyTests {
     /// <param name="type">The class.</param>
     static IReadOnlyList<string> Literals(Type type) => [
         .. type.GetFields(BindingFlags.Public | BindingFlags.Static)
-            .Where(x => x.IsLiteral && x.FieldType == typeof(string))
-            .Select(x => (string)x.GetRawConstantValue()!)
+            .Where(static x => x.IsLiteral && x.FieldType == typeof(string))
+            .Select(static x => (string)x.GetRawConstantValue()!)
     ];
 }

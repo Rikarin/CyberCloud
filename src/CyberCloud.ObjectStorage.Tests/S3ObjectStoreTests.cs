@@ -42,10 +42,16 @@ public sealed class S3ObjectStoreTests {
 
         var sent = wire.Requests.ShouldHaveSingleItem();
         sent.Method.ShouldBe(HttpMethod.Put);
-        sent.Uri.ShouldBe("https://s3.platform.internal:8333/cybercloud/tenant/feed/nuget/my%20package/1.0.0/my.package.1.0.0.nupkg");
+        sent.Uri.ShouldBe(
+            "https://s3.platform.internal:8333/cybercloud/tenant/feed/nuget/my%20package/1.0.0/my.package.1.0.0.nupkg"
+        );
         sent.Headers["x-amz-date"].ShouldBe("20260915T103000Z");
-        sent.Headers["x-amz-content-sha256"].ShouldBe("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
-        sent.Headers["Authorization"].ShouldStartWith("AWS4-HMAC-SHA256 Credential=AKIACYBERCLOUD/20260915/eu-central/s3/aws4_request, ");
+        sent.Headers["x-amz-content-sha256"].ShouldBe(
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
+        sent.Headers["Authorization"].ShouldStartWith(
+            "AWS4-HMAC-SHA256 Credential=AKIACYBERCLOUD/20260915/eu-central/s3/aws4_request, "
+        );
         sent.Headers["Authorization"].ShouldContain("SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=");
         sent.ContentType.ShouldBe("application/octet-stream");
         sent.Body.ShouldBe("hello");
@@ -104,7 +110,10 @@ public sealed class S3ObjectStoreTests {
         var read = await store.GetAsync("tenant/feed/missing", TestContext.Current.CancellationToken);
         read.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
 
-        (await store.DeleteAsync("tenant/feed/missing", TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+        (await store.DeleteAsync(
+                "tenant/feed/missing",
+                TestContext.Current.CancellationToken
+            )).IsSuccess.ShouldBeTrue();
     }
 
     [Fact]
@@ -135,7 +144,9 @@ public sealed class S3ObjectStoreTests {
         listed.GetValueOrThrow().ShouldBe(["t/f/a", "t/f/b", "t/f/c"]);
 
         wire.Requests.Count.ShouldBe(2);
-        wire.Requests[0].Uri.ShouldBe("https://s3.platform.internal:8333/cybercloud?list-type=2&prefix=t%2Ff%2F&max-keys=1000");
+        wire.Requests[0].Uri.ShouldBe(
+            "https://s3.platform.internal:8333/cybercloud?list-type=2&prefix=t%2Ff%2F&max-keys=1000"
+        );
         wire.Requests[1].Uri.ShouldContain("continuation-token=tok-2");
     }
 
@@ -205,17 +216,30 @@ public sealed class S3ObjectStoreTests {
         Should.Throw<ArgumentException>(() => S3ObjectStore.ValidatedEndpoint(new() { Endpoint = "not a url" }))
             .Message.ShouldContain("Endpoint");
 
-        Should.Throw<ArgumentException>(() => S3ObjectStore.ValidatedEndpoint(Options().With(x => x.Endpoint = "http://plain")))
+        Should.Throw<ArgumentException>(static () => S3ObjectStore.ValidatedEndpoint(
+                Options().With(static x => x.Endpoint = "http://plain")
+            )
+        )
             .Message.ShouldContain("AllowInsecureTransport");
 
-        Should.Throw<ArgumentException>(() => S3ObjectStore.ValidatedEndpoint(Options().With(x => x.Bucket = "")))
+        Should.Throw<ArgumentException>(static () => S3ObjectStore.ValidatedEndpoint(
+                Options().With(static x => x.Bucket = "")
+            )
+        )
             .Message.ShouldContain("Bucket");
 
-        S3ObjectStore.ValidatedEndpoint(Options().With(x => { x.Endpoint = "http://dev"; x.AllowInsecureTransport = true; }))
+        S3ObjectStore.ValidatedEndpoint(
+            Options().With(static x => { x.Endpoint = "http://dev"; x.AllowInsecureTransport = true; })
+        )
             .Host.ShouldBe("dev");
     }
 
-    sealed record Sent(HttpMethod Method, string Uri, Dictionary<string, string> Headers, string? ContentType, string Body);
+    sealed record Sent(
+        HttpMethod Method,
+        string Uri,
+        Dictionary<string, string> Headers,
+        string? ContentType,
+        string Body);
 
     sealed class RecordingHandler((HttpStatusCode Status, string Body)[] answers) : HttpMessageHandler {
         int served;
@@ -226,7 +250,11 @@ public sealed class S3ObjectStoreTests {
             HttpRequestMessage request,
             CancellationToken cancellationToken
         ) {
-            var headers = request.Headers.ToDictionary(x => x.Key, x => string.Join(",", x.Value), StringComparer.Ordinal);
+            var headers = request.Headers.ToDictionary(
+                static x => x.Key,
+                static x => string.Join(",", x.Value),
+                StringComparer.Ordinal
+            );
             var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
 
             Requests.Add(
@@ -242,14 +270,15 @@ public sealed class S3ObjectStoreTests {
 
             var (status, answer) = answers[Math.Min(served++, answers.Length - 1)];
 
-            return new(status) {
-                Content = new StringContent(answer, Encoding.UTF8, "application/x-test")
-            };
+            return new(status) { Content = new StringContent(answer, Encoding.UTF8, "application/x-test") };
         }
     }
 
     sealed class ThrowingHandler : HttpMessageHandler {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        ) =>
             throw new HttpRequestException("connection refused");
     }
 

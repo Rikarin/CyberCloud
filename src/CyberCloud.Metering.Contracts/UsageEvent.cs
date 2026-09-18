@@ -190,10 +190,10 @@ public sealed record UsageEvent {
         "CyberCloud.Security",
         "CC1005:A secret must not be a serialized member of grain state",
         Justification =
-        "Not a secret. This is sha256 of ResourceId, Meter, WindowStart, WindowEnd and EventId — "
-        + "every input is a sibling [Id] member of this same record, so the digest reveals nothing "
-        + "the state does not already carry. It is deliberately logged, traced and compared across "
-        + "silos, which is the opposite of a credential. The name is docs/plan/22 § The pipeline's."
+            "Not a secret. This is sha256 of ResourceId, Meter, WindowStart, WindowEnd and EventId — "
+            + "every input is a sibling [Id] member of this same record, so the digest reveals nothing "
+            + "the state does not already carry. It is deliberately logged, traced and compared across "
+            + "silos, which is the opposite of a credential. The name is docs/plan/22 § The pipeline's."
     )]
     public string IdempotencyKey { get; init; } = string.Empty;
 
@@ -354,8 +354,8 @@ public sealed record UsageEvent {
                 ErrorCode.InvalidRequestBody,
                 $"'{meter}' is not an event-based meter and is not emitted. docs/plan/22 § Two kinds "
                 + "of meter: a state-based meter comes from the sampler over the platform's own "
-                + "record of what exists, because event-based \"would miss a resource that exists but "
-                + "never changes\"."
+                + """record of what exists, because event-based "would miss a resource that exists but """
+                + """never changes"."""
             );
         }
 

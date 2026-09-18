@@ -43,7 +43,13 @@ public sealed class FeedGrainTests : IAsyncLifetime {
             .GetGrain<IFeedGrain>(GrainKeys.Resource(feed));
 
     static FeedEntry Entry(string path, string sha = "00") =>
-        new() { Path = path, StoredAt = path, Size = 3, Sha256 = sha, ContentType = "application/octet-stream" };
+        new() {
+            Path = path,
+            StoredAt = path,
+            Size = 3,
+            Sha256 = sha,
+            ContentType = "application/octet-stream"
+        };
 
     [Fact]
     public async Task OpenIsIdempotentForTheSameKindAndRefusedForAnother() {
@@ -65,23 +71,25 @@ public sealed class FeedGrainTests : IAsyncLifetime {
 
     [Fact]
     public async Task AnUnknownKindIsRefused() =>
-        (await Feed(Tenant, Guid.NewGuid()).OpenAsync(FeedKind.Unknown)).Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        (await Feed(Tenant, Guid.NewGuid()).OpenAsync(FeedKind.Unknown)).Error!.Code.ShouldBe(
+            ErrorCode.InvalidRequestBody
+        );
 
     [Fact]
     public async Task APublishedVersionIsImmutableUnlessTheCallerSaysReplace() {
         var feed = Feed(Tenant, Guid.NewGuid());
         await feed.OpenAsync(FeedKind.NuGet);
 
-        var stored = (await feed.PutAsync(Entry("nuget/pkg/1.0.0", "aa"), replace: false)).GetValueOrThrow();
+        var stored = (await feed.PutAsync(Entry("nuget/pkg/1.0.0", "aa"), false)).GetValueOrThrow();
         stored.PublishedAt.ShouldNotBe(default);
 
-        var again = await feed.PutAsync(Entry("nuget/pkg/1.0.0", "bb"), replace: false);
+        var again = await feed.PutAsync(Entry("nuget/pkg/1.0.0", "bb"), false);
         again.Error!.Code.ShouldBe(ErrorCode.ResourceAlreadyExists);
 
         (await feed.GetAsync("nuget/pkg/1.0.0")).GetValueOrThrow().Sha256.ShouldBe("aa");
 
         // Maven metadata and npm dist-tags are the callers that replace.
-        (await feed.PutAsync(Entry("nuget/pkg/1.0.0", "cc"), replace: true)).IsSuccess.ShouldBeTrue();
+        (await feed.PutAsync(Entry("nuget/pkg/1.0.0", "cc"), true)).IsSuccess.ShouldBeTrue();
         (await feed.GetAsync("nuget/pkg/1.0.0")).GetValueOrThrow().Sha256.ShouldBe("cc");
     }
 
@@ -95,13 +103,15 @@ public sealed class FeedGrainTests : IAsyncLifetime {
         await feed.PutAsync(Entry("npm/a/1.1.0"), false);
         await feed.PutAsync(Entry("npm/ab/1.0.0"), false);
 
-        (await feed.ListAsync("npm/a/")).GetValueOrThrow().Select(x => x.Path).ShouldBe(["npm/a/1.0.0", "npm/a/1.1.0"]);
+        (await feed.ListAsync("npm/a/")).GetValueOrThrow()
+            .Select(static x => x.Path)
+            .ShouldBe(["npm/a/1.0.0", "npm/a/1.1.0"]);
         (await feed.ListAsync("npm/")).GetValueOrThrow().Length.ShouldBe(4);
         (await feed.GetAsync("npm/zzz/1.0.0")).Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
 
         (await feed.RemoveAsync("npm/a/1.0.0")).IsSuccess.ShouldBeTrue();
         (await feed.RemoveAsync("npm/never")).IsSuccess.ShouldBeTrue();
-        (await feed.ListAsync("npm/a/")).GetValueOrThrow().Select(x => x.Path).ShouldBe(["npm/a/1.1.0"]);
+        (await feed.ListAsync("npm/a/")).GetValueOrThrow().Select(static x => x.Path).ShouldBe(["npm/a/1.1.0"]);
     }
 
     [Fact]
@@ -125,7 +135,9 @@ public sealed class FeedGrainTests : IAsyncLifetime {
 
     [Fact]
     public async Task APutOnAFeedThatWasNeverOpenedIsRefused() =>
-        (await Feed(Tenant, Guid.NewGuid()).PutAsync(Entry("nuget/x/1"), false)).Error!.Code.ShouldBe(ErrorCode.Conflict);
+        (await Feed(Tenant, Guid.NewGuid()).PutAsync(Entry("nuget/x/1"), false)).Error!.Code.ShouldBe(
+            ErrorCode.Conflict
+        );
 
     [Theory]
     [InlineData("")]
@@ -156,7 +168,7 @@ public sealed class FeedGrainTests : IAsyncLifetime {
     sealed class Configurator : ISiloConfigurator {
         public void Configure(ISiloBuilder silo) {
             silo.AddMemoryGrainStorage(StorageTiers.Durable);
-            silo.ConfigureServices(services => services.AddSingleton<IClock, SystemClock>());
+            silo.ConfigureServices(static services => services.AddSingleton<IClock, SystemClock>());
         }
     }
 }

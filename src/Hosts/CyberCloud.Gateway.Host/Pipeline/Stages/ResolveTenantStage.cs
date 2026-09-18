@@ -147,7 +147,7 @@ sealed class ResolveTenantStage(
         using var reader = new StreamReader(
             request.Body,
             System.Text.Encoding.UTF8,
-            detectEncodingFromByteOrderMarks: false,
+            false,
             leaveOpen: true
         );
 

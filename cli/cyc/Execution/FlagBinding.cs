@@ -60,9 +60,9 @@ sealed class FlagBinding {
         return flag.Type switch {
             "switch" => Switch(flag),
             "integer" when flag.Repeated => Repeated(flag, JsonValueKind.Number),
-            "integer" => Scalar<long>(flag, (writer, value) => writer.WriteNumberValue(value)),
+            "integer" => Scalar<long>(flag, static (writer, value) => writer.WriteNumberValue(value)),
             "number" when flag.Repeated => Repeated(flag, JsonValueKind.Number),
-            "number" => Scalar<double>(flag, (writer, value) => writer.WriteNumberValue(value)),
+            "number" => Scalar<double>(flag, static (writer, value) => writer.WriteNumberValue(value)),
             "keyValue" => KeyValue(flag),
             "string" when flag.Repeated => Repeated(flag, JsonValueKind.String),
             "string" => TextFlag(flag),
@@ -150,7 +150,12 @@ sealed class FlagBinding {
             option,
             parse => Given(parse, option),
             parse => parse.GetValue(option),
-            (parse, writer) => WriteNullable(writer, flag, parse.GetValue(option), (w, v) => w.WriteStringValue(v))
+            (parse, writer) => WriteNullable(
+                writer,
+                flag,
+                parse.GetValue(option),
+                static (w, v) => w.WriteStringValue(v)
+            )
         );
     }
 

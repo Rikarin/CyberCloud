@@ -172,7 +172,7 @@ public sealed class ListObjectsEvaluatorTests {
         // change ReBacResourceRelationWriter's remarks record. Listing the servers collection must
         // not walk every server for its databases.
         string[] tuples = [
-            .. TwoGroups, $"resource:db1#parent@resource:a1", $"{GroupA}#reader@user:alice"
+            .. TwoGroups, "resource:db1#parent@resource:a1", $"{GroupA}#reader@user:alice"
         ];
 
         var reverse = InMemoryReverseRelationReader.Parse(tuples);
@@ -204,7 +204,10 @@ public sealed class ListObjectsEvaluatorTests {
             }
         );
 
-        Ids(databases).ShouldBe(["a1", "db1"], "at or below the scope: the server itself at depth 0, its database at depth 1");
+        Ids(databases).ShouldBe(
+            ["a1", "db1"],
+            "at or below the scope: the server itself at depth 0, its database at depth 1"
+        );
 
         var everything = await Evaluate(
             InMemoryRelationReader.Parse(tuples),
@@ -228,7 +231,7 @@ public sealed class ListObjectsEvaluatorTests {
         // direct assignments are dropped. "The people who can see a deleted resource become the
         // people who hold subscription-scoped rights."
         string[] parked = [
-            .. TwoGroups.Where(x => !x.StartsWith("resource:a2#", StringComparison.Ordinal)),
+            .. TwoGroups.Where(static x => !x.StartsWith("resource:a2#", StringComparison.Ordinal)),
             $"resource:a2#parent@{Sub}",
             $"{GroupA}#reader@user:alice",
             $"{Sub}#reader@user:bob"
@@ -246,11 +249,22 @@ public sealed class ListObjectsEvaluatorTests {
             }
         );
 
-        Ids(groupReader).ShouldBe(["a1"], "the parked resource left the group, so the group's reader no longer reaches it");
+        Ids(groupReader).ShouldBe(
+            ["a1"],
+            "the parked resource left the group, so the group's reader no longer reaches it"
+        );
 
-        var subscriptionReader = await List(SubjectRef.Of(ObjectTypes.User, "bob"), ObjectTypes.Resource, Permissions.Read, parked);
+        var subscriptionReader = await List(
+            SubjectRef.Of(ObjectTypes.User, "bob"),
+            ObjectTypes.Resource,
+            Permissions.Read,
+            parked
+        );
 
-        Ids(subscriptionReader).ShouldBe(["a1", "a2", "b1", "b2"], "a subscription reader sees the parked resource as well");
+        Ids(subscriptionReader).ShouldBe(
+            ["a1", "a2", "b1", "b2"],
+            "a subscription reader sees the parked resource as well"
+        );
     }
 
     // ── Verification ──────────────────────────────────────────────────────────────────────────
@@ -321,7 +335,9 @@ public sealed class ListObjectsEvaluatorTests {
         );
 
         page.Outcome.ShouldBe(ListObjectsOutcome.ObjectCapExceeded);
-        page.Objects.ShouldBeEmpty("a capped walk hands back nothing rather than the part it found — ListObjectsOutcome");
+        page.Objects.ShouldBeEmpty(
+            "a capped walk hands back nothing rather than the part it found — ListObjectsOutcome"
+        );
         page.CapDetail.ShouldContain("more than 3 objects");
     }
 
@@ -338,7 +354,10 @@ public sealed class ListObjectsEvaluatorTests {
         page = await List(Alice, ObjectTypes.Resource, Permissions.Read, Chain(13));
         Ids(page).ShouldNotContain("leaf");
         page.Objects.Count.ShouldBe(13, "the twelve within the cap and the top, and not the leaf");
-        page.Outcome.ShouldBe(ListObjectsOutcome.Complete, "past the depth cap is a deny Check would also make, not a cap on the answer");
+        page.Outcome.ShouldBe(
+            ListObjectsOutcome.Complete,
+            "past the depth cap is a deny Check would also make, not a cap on the answer"
+        );
         page.DepthCapHit.ShouldBeTrue();
     }
 
@@ -364,14 +383,22 @@ public sealed class ListObjectsEvaluatorTests {
         var forward = InMemoryRelationReader.Parse([.. tuples]);
         var reverse = InMemoryReverseRelationReader.Parse([.. tuples]);
 
-        var page = await Evaluate(forward, reverse, Alice, new() { ObjectType = ObjectTypes.Resource, Permission = Permissions.Read }, limits);
+        var page = await Evaluate(
+            forward,
+            reverse,
+            Alice,
+            new() { ObjectType = ObjectTypes.Resource, Permission = Permissions.Read },
+            limits
+        );
 
         page.Outcome.ShouldBe(ListObjectsOutcome.Complete);
         page.BreadthCapHit.ShouldBeFalse();
         Ids(page).ShouldBe(["a1", "a2", "b1", "b2"]);
 
         foreach (var id in Ids(page)) {
-            (await Check(forward, reverse, ObjectRef.Of(ObjectTypes.Resource, id), limits)).Allowed.ShouldBeTrue($"Check allows {id} under the same cap");
+            (await Check(forward, reverse, ObjectRef.Of(ObjectTypes.Resource, id), limits)).Allowed.ShouldBeTrue(
+                $"Check allows {id} under the same cap"
+            );
         }
     }
 
@@ -397,7 +424,10 @@ public sealed class ListObjectsEvaluatorTests {
         var reverse = InMemoryReverseRelationReader.Parse([.. tuples]);
 
         var page = await Evaluate(forward, reverse, Alice, request, cut);
-        page.Outcome.ShouldBe(ListObjectsOutcome.Complete, "a derivation Check would cut is left out, not a cap on the answer — the reading DepthCapHit has");
+        page.Outcome.ShouldBe(
+            ListObjectsOutcome.Complete,
+            "a derivation Check would cut is left out, not a cap on the answer — the reading DepthCapHit has"
+        );
         Ids(page).ShouldBeEmpty();
         page.BreadthCapHit.ShouldBeTrue();
 
@@ -412,7 +442,9 @@ public sealed class ListObjectsEvaluatorTests {
         page = await Evaluate(forward, reverse, Alice, request, within);
         Ids(page).ShouldBe(["r"]);
         page.BreadthCapHit.ShouldBeFalse();
-        (await Check(forward, reverse, resource, within)).Allowed.ShouldBeTrue("exactly the cap is within it — the same reading as Check's");
+        (await Check(forward, reverse, resource, within)).Allowed.ShouldBeTrue(
+            "exactly the cap is within it — the same reading as Check's"
+        );
     }
 
     // ── The Leopard index ─────────────────────────────────────────────────────────────────────
@@ -437,7 +469,10 @@ public sealed class ListObjectsEvaluatorTests {
         );
 
         Ids(page).ShouldBe(["a1", "a2"]);
-        page.IndexReads.ShouldBe(1, "alice's closure names g1 through g5; none of them is read for its own closure, because a closure is transitive");
+        page.IndexReads.ShouldBe(
+            1,
+            "alice's closure names g1 through g5; none of them is read for its own closure, because a closure is transitive"
+        );
         page.DepthCapHit.ShouldBeFalse();
     }
 
@@ -496,7 +531,7 @@ public sealed class ListObjectsEvaluatorTests {
         reverse.Remove(leaving);
 
         var page = await Evaluate(
-            InMemoryRelationReader.Parse([.. tuples.Where(x => x != "group:g1#member@user:alice")]),
+            InMemoryRelationReader.Parse([.. tuples.Where(static x => x != "group:g1#member@user:alice")]),
             reverse,
             Alice,
             new() { ObjectType = ObjectTypes.Resource, Permission = Permissions.Read }
@@ -576,13 +611,23 @@ public sealed class ListObjectsEvaluatorTests {
     }
 
     /// <summary>The forward check the walk is held to, over the same readers and the same index.</summary>
-    static async Task<CheckEvaluation> Check(InMemoryRelationReader forward, InMemoryReverseRelationReader reverse, ObjectRef target, AuthorizationLimits limits) {
+    static async Task<CheckEvaluation> Check(
+        InMemoryRelationReader forward,
+        InMemoryReverseRelationReader reverse,
+        ObjectRef target,
+        AuthorizationLimits limits
+    ) {
         var checker = new CheckEvaluator(CyberCloudSchema.Instance, forward, limits, reverse.Index);
-        var result = await checker.EvaluateAsync(target, Permissions.Read, Alice, TestContext.Current.CancellationToken);
+        var result = await checker.EvaluateAsync(
+            target,
+            Permissions.Read,
+            Alice,
+            TestContext.Current.CancellationToken
+        );
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         return result.GetValueOrThrow();
     }
 
-    static string[] Ids(ListObjectsEvaluation page) => [.. page.Objects.Select(x => x.Id)];
+    static string[] Ids(ListObjectsEvaluation page) => [.. page.Objects.Select(static x => x.Id)];
 }

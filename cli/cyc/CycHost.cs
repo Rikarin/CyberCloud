@@ -92,7 +92,7 @@ sealed class CycHost {
     ///     <c>cyc login</c> would be the one command with no test at all.
     /// </remarks>
     public Func<CyberCloudCredentialOptions> CreateCredentialOptions { get; init; } =
-        () => new CyberCloudCredentialOptions();
+        static () => new CyberCloudCredentialOptions();
 
     /// <summary>The clock, so a test can decide that a day has passed without waiting one.</summary>
     public TimeProvider Time { get; init; } = TimeProvider.System;

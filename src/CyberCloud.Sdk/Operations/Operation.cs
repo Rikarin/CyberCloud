@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using System.Threading.Channels;
 
 namespace CyberCloud.Sdk;
 
@@ -43,12 +42,12 @@ public class Operation {
     /// <param name="initialResponse">The <c>202</c>, carrying <c>Azure-AsyncOperation</c> and <c>Retry-After</c>.</param>
     /// <param name="operationName"><c>{Type}.{Verb}</c> — <c>Widgets.Delete</c>.</param>
     public Operation(CyberCloudClientContext context, Uri requestUri, Response initialResponse, string operationName) {
-        poller = new OperationPoller(
+        poller = new(
             context,
             requestUri,
             initialResponse,
             operationName,
-            fetchResourceOnSuccess: false
+            false
         );
     }
 
@@ -158,7 +157,7 @@ public class Operation<T> : Operation {
         ArgumentNullException.ThrowIfNull(source);
 
         this.source = source;
-        poller = new OperationPoller(context, requestUri, initialResponse, operationName, fetchResourceOnSuccess: true);
+        poller = new(context, requestUri, initialResponse, operationName, true);
     }
 
     /// <summary>Constructor for mocking.</summary>
@@ -274,7 +273,7 @@ static class OperationProgressEnumerator {
         OperationPoller poller,
         [EnumeratorCancellation] CancellationToken cancellationToken
     ) {
-        Channel<OperationProgress> subscription = poller.Subscribe();
+        var subscription = poller.Subscribe();
 
         try {
             while (true) {

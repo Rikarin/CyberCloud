@@ -128,7 +128,10 @@ public static class FeedsComposition {
 
         // ── The bearer-token validator — docs/plan/11 § Protocol ───────────────────────────────
         if (options.Identity.IsConfigured) {
-            builder.Services.AddJwksBearerTokenValidation(options.Identity.ToBearerTokenOptions(), FeedsIdentityOptions.SectionName);
+            builder.Services.AddJwksBearerTokenValidation(
+                options.Identity.ToBearerTokenOptions(),
+                FeedsIdentityOptions.SectionName
+            );
         }
 
         // ⚠ LAST, so a deployment's registration wins over a TryAdd above and loses to nothing.
@@ -138,7 +141,7 @@ public static class FeedsComposition {
         // replaces the provider factory it belongs to. FeedAccess is resolved per request by the
         // endpoints, so a container missing the validator builds, starts, reports healthy and
         // throws on the first real request; #68 is the gateway's record of that shape.
-        if (builder.Services.All(x => x.ServiceType != typeof(IBearerTokenValidator))) {
+        if (builder.Services.All(static x => x.ServiceType != typeof(IBearerTokenValidator))) {
             throw new InvalidOperationException(
                 "The feeds host has no IBearerTokenValidator, so no request can be authenticated and "
                 + "every push and pull would fail — this refusal is instead of a host that starts, "
@@ -191,13 +194,29 @@ public static class FeedsComposition {
 
         nuget.MapDelete(
             "/v2/package/{id}/{version}",
-            (HttpContext http, Guid subscription, string group, string feed, string id, string version, NuGetProtocol protocol) =>
+            (
+                HttpContext http,
+                Guid subscription,
+                string group,
+                string feed,
+                string id,
+                string version,
+                NuGetProtocol protocol
+            ) =>
                 protocol.UnlistAsync(http, subscription, group, feed, id, version)
         );
 
         nuget.MapPost(
             "/v2/package/{id}/{version}",
-            (HttpContext http, Guid subscription, string group, string feed, string id, string version, NuGetProtocol protocol) =>
+            (
+                HttpContext http,
+                Guid subscription,
+                string group,
+                string feed,
+                string id,
+                string version,
+                NuGetProtocol protocol
+            ) =>
                 protocol.RelistAsync(http, subscription, group, feed, id, version)
         );
 
@@ -209,7 +228,16 @@ public static class FeedsComposition {
 
         nuget.MapGet(
             "/v3/flatcontainer/{id}/{version}/{file}",
-            (HttpContext http, Guid subscription, string group, string feed, string id, string version, string file, NuGetProtocol protocol) =>
+            (
+                HttpContext http,
+                Guid subscription,
+                string group,
+                string feed,
+                string id,
+                string version,
+                string file,
+                NuGetProtocol protocol
+            ) =>
                 protocol.DownloadAsync(http, subscription, group, feed, id, version, file)
         );
 
@@ -221,7 +249,15 @@ public static class FeedsComposition {
 
         nuget.MapGet(
             "/v3/registration/{id}/{version}.json",
-            (HttpContext http, Guid subscription, string group, string feed, string id, string version, NuGetProtocol protocol) =>
+            (
+                HttpContext http,
+                Guid subscription,
+                string group,
+                string feed,
+                string id,
+                string version,
+                NuGetProtocol protocol
+            ) =>
                 protocol.RegistrationLeafAsync(http, subscription, group, feed, id, version)
         );
 

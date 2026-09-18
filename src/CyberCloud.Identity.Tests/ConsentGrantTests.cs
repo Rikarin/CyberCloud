@@ -1,5 +1,3 @@
-using CyberCloud.Core;
-using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Tests.Infrastructure;
 
 namespace CyberCloud.Identity.Tests;
@@ -50,7 +48,11 @@ public sealed class ConsentGrantTests(IdentityCluster cluster) {
         var widened = await consent.GrantAsync(user, "crm", ["openid", "cyc.api"]);
 
         widened.GetValueOrThrow().Scopes.ShouldBe(["openid", "profile", "cyc.api"]);
-        widened.GetValueOrThrow().GrantedAt.ShouldBe((await consent.GetAsync()).GetValueOrThrow().GrantedAt, "the first grant's time is kept");
+        widened.GetValueOrThrow()
+            .GrantedAt.ShouldBe(
+                (await consent.GetAsync()).GetValueOrThrow().GrantedAt,
+                "the first grant's time is kept"
+            );
     }
 
     [Fact]
@@ -100,8 +102,14 @@ public sealed class ConsentGrantTests(IdentityCluster cluster) {
 
         (await cluster.Consent(user, "crm").GrantAsync(user, "crm", ["openid"])).IsSuccess.ShouldBeTrue();
 
-        (await cluster.Consent(user, "erp").GetAsync()).IsFailure.ShouldBeTrue("consent to one client answered for another");
-        (await cluster.Consent(Guid.NewGuid(), "crm").GetAsync()).IsFailure.ShouldBeTrue("one person's consent answered for another");
-        (await cluster.Consent(user, "crm", IdentityCluster.OtherTenant).GetAsync()).IsFailure.ShouldBeTrue("a consent crossed tenants");
+        (await cluster.Consent(user, "erp").GetAsync()).IsFailure.ShouldBeTrue(
+            "consent to one client answered for another"
+        );
+        (await cluster.Consent(Guid.NewGuid(), "crm").GetAsync()).IsFailure.ShouldBeTrue(
+            "one person's consent answered for another"
+        );
+        (await cluster.Consent(user, "crm", IdentityCluster.OtherTenant).GetAsync()).IsFailure.ShouldBeTrue(
+            "a consent crossed tenants"
+        );
     }
 }

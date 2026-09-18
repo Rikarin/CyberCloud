@@ -8,9 +8,9 @@ using CyberCloud.Gateway.Host.Pipeline.Stages;
 using CyberCloud.Gateway.Host.Principals;
 using CyberCloud.Gateway.Host.RateLimiting;
 using CyberCloud.Gateway.Host.Regions;
+using CyberCloud.Identity.Validation;
 using CyberCloud.Kubernetes.Contracts.Tunnel;
 using CyberCloud.Kubernetes.Tunnel;
-using CyberCloud.Identity.Validation;
 using CyberCloud.ResourceManager;
 using CyberCloud.ServiceDefaults.RateLimiting;
 using CyberCloud.Tenancy;
@@ -74,7 +74,7 @@ static class GatewayServiceCollectionExtensions {
 
         // ── Stage 5. Redis when configured, in-process otherwise; see InMemoryRateLimitCounters on
         //    exactly what the second one is and is not. ──
-        if (services.Any(x => x.ServiceType == typeof(IConnectionMultiplexer))) {
+        if (services.Any(static x => x.ServiceType == typeof(IConnectionMultiplexer))) {
             services.TryAddSingleton<IRateLimitCounters, RedisRateLimitCounters>();
         } else {
             services.TryAddSingleton<IRateLimitCounters, InMemoryRateLimitCounters>();
@@ -88,7 +88,7 @@ static class GatewayServiceCollectionExtensions {
         //    Redis when configured and in-process otherwise, by the rule stage 5's counters use and
         //    for the same reason: a ticket minted on one pod must be redeemable on the pod the
         //    upgrade lands on, and only a shared store makes that true. ──
-        if (services.Any(x => x.ServiceType == typeof(IConnectionMultiplexer))) {
+        if (services.Any(static x => x.ServiceType == typeof(IConnectionMultiplexer))) {
             services.TryAddSingleton<IHubTicketStore, RedisHubTicketStore>();
         } else {
             services.TryAddSingleton<IHubTicketStore, InMemoryHubTicketStore>();

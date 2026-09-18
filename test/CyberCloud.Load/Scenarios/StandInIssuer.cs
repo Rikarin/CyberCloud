@@ -21,8 +21,11 @@ namespace CyberCloud.Load.Scenarios;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Not the identity host, and the difference is stated so nobody mistakes the one for
-///         the other.</b> <c>CyberCloud.Identity.Host</c> mints tokens after a sign-in, a device
+///         ⚠
+///         <b>
+///             Not the identity host, and the difference is stated so nobody mistakes the one for
+///             the other.
+///         </b> <c>CyberCloud.Identity.Host</c> mints tokens after a sign-in, a device
 ///         flow or a client-credentials exchange, and its tests prove those. What the gateway's stage
 ///         2 needs from an issuer is a document, a key and a signature it can check, and that is all
 ///         this provides — so that the load numbers include the real
@@ -52,20 +55,27 @@ public sealed class StandInIssuer : IAsyncDisposable {
         builder.WebHost.UseUrls("http://127.0.0.1:0");
 
         app = builder.Build();
-        app.MapGet(AccessTokenPolicy.DiscoveryPath, () => Results.Json(new {
-                issuer = Issuer,
-                jwks_uri = Issuer + AccessTokenPolicy.JsonWebKeySetPath,
-                token_endpoint = Issuer + "/token",
-                response_types_supported = ResponseTypes,
-                subject_types_supported = SubjectTypesSupported,
-                id_token_signing_alg_values_supported = SigningAlgorithms
-            })
+        app.MapGet(
+            AccessTokenPolicy.DiscoveryPath,
+            () => Results.Json(
+                new {
+                    issuer = Issuer,
+                    jwks_uri = Issuer + AccessTokenPolicy.JsonWebKeySetPath,
+                    token_endpoint = Issuer + "/token",
+                    response_types_supported = ResponseTypes,
+                    subject_types_supported = SubjectTypesSupported,
+                    id_token_signing_alg_values_supported = SigningAlgorithms
+                }
+            )
         );
 
-        app.MapGet(AccessTokenPolicy.JsonWebKeySetPath, () => {
+        app.MapGet(
+            AccessTokenPolicy.JsonWebKeySetPath,
+            () => {
                 var parameters = key.ExportParameters(false);
 
-                return Results.Json(new {
+                return Results.Json(
+                    new {
                         keys = new[] {
                             new {
                                 kty = "EC",
@@ -84,7 +94,9 @@ public sealed class StandInIssuer : IAsyncDisposable {
 
         await app.StartAsync(cancellationToken);
 
-        var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First();
+        var address = app.Services.GetRequiredService<IServer>()
+            .Features.Get<IServerAddressesFeature>()!
+            .Addresses.First();
         Issuer = address.TrimEnd('/');
     }
 
@@ -110,7 +122,7 @@ public sealed class StandInIssuer : IAsyncDisposable {
                     new Claim(AccessTokenClaims.TokenId, Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture))
                 ]
             ),
-            SigningCredentials = new SigningCredentials(new ECDsaSecurityKey(key) { KeyId = keyId }, SecurityAlgorithms.EcdsaSha256)
+            SigningCredentials = new(new ECDsaSecurityKey(key) { KeyId = keyId }, SecurityAlgorithms.EcdsaSha256)
         };
 
         return handler.CreateToken(descriptor);

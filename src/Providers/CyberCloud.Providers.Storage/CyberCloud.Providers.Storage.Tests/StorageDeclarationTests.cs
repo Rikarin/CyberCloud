@@ -33,7 +33,7 @@ public sealed class StorageDeclarationTests {
         // export in the fully-consistent row by name, and on THIS type the exported pair is the only
         // access control the data plane has — docs/plan/15 keeps ReBAC off the object GET path
         // deliberately. Sharing `read` would make every viewer of an account an owner of its data.
-        registration.Actions.Single(x => x.Name == StorageAccounts.ListKeysAction)
+        registration.Actions.Single(static x => x.Name == StorageAccounts.ListKeysAction)
             .Permission.ShouldNotBe(registration.ReadPermission);
     }
 
@@ -50,7 +50,7 @@ public sealed class StorageDeclarationTests {
 
         // Every derived meter publishes its formula and its read set — the price MeterDerivation
         // charges for putting a delegate on the quota path, and what OpenApiEmitter publishes.
-        foreach (var meter in registration.Meters.Where(x => x.Derivation is not null)) {
+        foreach (var meter in registration.Meters.Where(static x => x.Derivation is not null)) {
             meter.Derivation!.Expression.ShouldNotBeNullOrWhiteSpace(meter.Meter.ToString());
             meter.Derivation.Reads.ShouldNotBeEmpty(meter.Meter.ToString());
 
@@ -96,7 +96,7 @@ public sealed class StorageDeclarationTests {
         registry.TryGetType(StorageAccounts.Type, out var registration).ShouldBeTrue();
 
         CliTokens.Collisions(
-            registry.Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+            registry.Types.Select(static x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
         )
             .ShouldBeEmpty();
 
@@ -114,7 +114,7 @@ public sealed class StorageDeclarationTests {
         // ⚠ SchemaProperty checks its own DefaultJson against its own constraints at construction, so
         // a default outside its @range cannot reach here. What THAT check cannot see is the whole
         // body: this walks each default back into an otherwise-valid body and validates the result.
-        foreach (var property in StorageAccounts.Schema2026.Properties.Where(x => x.DefaultJson.Length > 0)) {
+        foreach (var property in StorageAccounts.Schema2026.Properties.Where(static x => x.DefaultJson.Length > 0)) {
             using var body = JsonDocument.Parse(
                 Overridden(StorageAccounts.Body(ClusterId), property.JsonPointer, property.DefaultJson)
             );
@@ -152,7 +152,7 @@ public sealed class StorageDeclarationTests {
             + "says about masking it."
         );
 
-        StorageAccounts.ListKeysResponse.Properties.Count(x => x.Secret).ShouldBe(1);
+        StorageAccounts.ListKeysResponse.Properties.Count(static x => x.Secret).ShouldBe(1);
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public sealed class StorageDeclarationTests {
         // A preset the schema offers and the table does not is a body the API accepts and the meter
         // then refuses — a create that returns 500 for a value the schema advertised.
         StorageAccounts.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/sizing/preset")
+            .Single(static x => x.JsonPointer == "/properties/sizing/preset")
             .AllowedValues
             .Order(StringComparer.Ordinal)
             .ShouldBe(StorageAccounts.Presets.Keys.Order(StringComparer.Ordinal));
@@ -182,7 +182,7 @@ public sealed class StorageDeclarationTests {
     [Fact]
     public void TheReplicationEnumAndTheCodeTableAreTheSameSet() {
         StorageAccounts.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/replication")
+            .Single(static x => x.JsonPointer == "/properties/replication")
             .AllowedValues
             .Order(StringComparer.Ordinal)
             .ShouldBe(StorageAccounts.ReplicationCodes.Keys.Order(StringComparer.Ordinal));
@@ -249,7 +249,7 @@ public sealed class StorageDeclarationTests {
         //
         // ⚠ And persistence.enabled defaults to FALSE in the CRD, so an omitted block would put the
         // whole object namespace in the pod's writable layer — lost on the first restart.
-        using var body = JsonDocument.Parse(StorageAccounts.Body(ClusterId, volumeServers: 16));
+        using var body = JsonDocument.Parse(StorageAccounts.Body(ClusterId, 16));
 
         var filer = JsonNode.Parse(StorageAccounts.SeaweedJson("assets", body.RootElement))!["spec"]!
             ["filer"]!

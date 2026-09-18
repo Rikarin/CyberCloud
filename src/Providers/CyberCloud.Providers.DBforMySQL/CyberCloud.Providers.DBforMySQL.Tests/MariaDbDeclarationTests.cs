@@ -293,7 +293,7 @@ public sealed class MariaDbDeclarationTests {
         // Replication member would be a topology the API accepts and this provider renders nothing
         // for. conformance.yaml § owed, async-replication-topology, carries it.
         var topology = MariaDbServers.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/highAvailability");
+            .Single(static x => x.JsonPointer == "/properties/highAvailability");
 
         topology.AllowedValues.ShouldBe(["None", "Galera"]);
         topology.Immutable.ShouldBeTrue("the connection string moves with the topology");
@@ -312,7 +312,7 @@ public sealed class MariaDbDeclarationTests {
 
         // And the count the topology implies is still the one quota and the CR agree on.
         using var ha = JsonDocument.Parse(MariaDbServers.Body(Guid.NewGuid()));
-        using var single = JsonDocument.Parse(MariaDbServers.Body(Guid.NewGuid(), highAvailability: "None"));
+        using var single = JsonDocument.Parse(MariaDbServers.Body(Guid.NewGuid(), "None"));
 
         MariaDbServers.Replicas(ha.RootElement).ShouldBe(3);
         MariaDbServers.Replicas(single.RootElement).ShouldBe(1);

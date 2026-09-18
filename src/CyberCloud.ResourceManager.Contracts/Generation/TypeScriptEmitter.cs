@@ -333,8 +333,11 @@ public static class TypeScriptEmitter {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Until issue #85 the envelope was a literal in <see cref="AppendTypeModels" />:
-    ///         <c>id</c>, <c>name</c>, <c>type</c> and <c>properties</c>, and nothing else.</b> The
+    ///         ⚠
+    ///         <b>
+    ///             Until issue #85 the envelope was a literal in <see cref="AppendTypeModels" />:
+    ///             <c>id</c>, <c>name</c>, <c>type</c> and <c>properties</c>, and nothing else.
+    ///         </b> The
     ///         gateway served <c>location</c>, <c>provisioningState</c>, <c>etag</c> and
     ///         <c>tags</c> too, the portal typed those by hand in <c>resource-verbs.ts</c>, and the
     ///         document described none of it. The members below are the <c>Resource</c> component's
@@ -404,7 +407,9 @@ public static class TypeScriptEmitter {
 
         var states = DocumentReader.EnumOf(schemas[OpenApiEmitter.OperationStateSchema] as JsonObject ?? []);
 
-        built.Append("\n/** Azure's status vocabulary. ⚠ Terminal means Succeeded, Failed or Canceled; poll until then. */\n")
+        built.Append(
+            "\n/** Azure's status vocabulary. ⚠ Terminal means Succeeded, Failed or Canceled; poll until then. */\n"
+        )
             .Append("export type OperationState =\n");
 
         if (states.IsEmpty) {
@@ -452,7 +457,9 @@ public static class TypeScriptEmitter {
                     break;
 
                 case "progress":
-                    built.Append("  /** Oldest first. What makes a nine-minute cluster creation tolerable — docs/plan/10. */\n")
+                    built.Append(
+                        "  /** Oldest first. What makes a nine-minute cluster creation tolerable — docs/plan/10. */\n"
+                    )
                         .Append("  readonly progress")
                         .Append(served.Contains(leaf.Name) ? "" : "?")
                         .Append(": readonly OperationProgress[];\n");
@@ -568,7 +575,7 @@ public static class TypeScriptEmitter {
             .Append(model)
             .Append("Data {");
 
-        if (envelope.Any(x => string.Equals(x.Name, "type", StringComparison.Ordinal))) {
+        if (envelope.Any(static x => string.Equals(x.Name, "type", StringComparison.Ordinal))) {
             built.Append("\n  readonly type: ").Append(Quote(type.ResourceType)).Append(";\n");
         }
 
@@ -646,14 +653,14 @@ public static class TypeScriptEmitter {
                 .Append(leaf.JsonPointer)
                 // A read-only set is the server's vocabulary, not a caller's choice — the same
                 // wording SdkEmitter.AppendEnums uses.
-                .Append(
-                    DocumentReader.Flag(leaf.Schema["readOnly"])
-                        ? " carries. ⚠ Read-only: the server sets it, and a write that carries it is refused. */\n"
-                        : " accepts. ⚠ Closed: the write path refuses anything else. */\n"
-                )
-                .Append("export type ")
-                .Append(naming.NameOf(leaf))
-                .Append(" =\n");
+                    .Append(
+                        DocumentReader.Flag(leaf.Schema["readOnly"])
+                            ? " carries. ⚠ Read-only: the server sets it, and a write that carries it is refused. */\n"
+                            : " accepts. ⚠ Closed: the write path refuses anything else. */\n"
+                    )
+                    .Append("export type ")
+                    .Append(naming.NameOf(leaf))
+                    .Append(" =\n");
 
             for (var i = 0; i < values.Length; i++) {
                 built.Append("  | ").Append(Quote(values[i])).Append(i == values.Length - 1 ? ";\n" : "\n");
@@ -686,7 +693,7 @@ public static class TypeScriptEmitter {
                 counts[leaf.Name] = counts.GetValueOrDefault(leaf.Name) + 1;
             }
 
-            return new(model, [.. counts.Where(x => x.Value > 1).Select(x => x.Key)]);
+            return new(model, [.. counts.Where(static x => x.Value > 1).Select(static x => x.Key)]);
         }
 
         /// <summary>The union name one enum leaf takes.</summary>
@@ -755,7 +762,7 @@ public static class TypeScriptEmitter {
             ? names.Select(DocumentReader.Text).ToHashSet(StringComparer.Ordinal)
             : [];
 
-        foreach (var member in properties.ToList().OrderBy(x => x.Key, StringComparer.Ordinal)) {
+        foreach (var member in properties.ToList().OrderBy(static x => x.Key, StringComparer.Ordinal)) {
             if (member.Value is not JsonObject child) {
                 continue;
             }
@@ -868,7 +875,7 @@ public static class TypeScriptEmitter {
             imported.Add("OperationStatus");
         }
 
-        foreach (var scope in scopes.Where(x => x.Creatable)) {
+        foreach (var scope in scopes.Where(static x => x.Creatable)) {
             imported.Add(ScopeInterface(scope));
         }
 
@@ -973,9 +980,15 @@ public static class TypeScriptEmitter {
 
     static void AppendOperationMethod(StringBuilder built) =>
         built.Append("  /**\n")
-            .Append("   * Polls one long-running operation — the target of the Azure-AsyncOperation header a 202 returns.\n")
-            .Append("   * Poll until status is terminal, then GET the resource — docs/plan/10 § Long-running operations, over HTTP.\n")
-            .Append("   * ⚠ The header is an absolute URL; `operationId` is its last path segment, never the URL itself.\n")
+            .Append(
+                "   * Polls one long-running operation — the target of the Azure-AsyncOperation header a 202 returns.\n"
+            )
+            .Append(
+                "   * Poll until status is terminal, then GET the resource — docs/plan/10 § Long-running operations, over HTTP.\n"
+            )
+            .Append(
+                "   * ⚠ The header is an absolute URL; `operationId` is its last path segment, never the URL itself.\n"
+            )
             .Append("   */\n")
             .Append("  getOperation(operationId: string): Promise<ApiResponse<OperationStatus>> {\n")
             .Append("    return this.transport.send<OperationStatus>({ method: 'GET', path: ")
@@ -985,7 +998,7 @@ public static class TypeScriptEmitter {
     static void AppendScopeMethods(StringBuilder built, DocumentScope scope) {
         var name = Pascal(scope.Kind);
         var placeholders = DocumentReader.PlaceholdersOf(scope.Path);
-        var parameters = string.Join(", ", placeholders.Select(x => Camel(x) + ": string"));
+        var parameters = string.Join(", ", placeholders.Select(static x => Camel(x) + ": string"));
 
         built.Append("  /** Reads one ")
             .Append(Comment(scope.DisplayName.ToLowerInvariant()))
@@ -1010,7 +1023,7 @@ public static class TypeScriptEmitter {
                 .Append("  list")
                 .Append(name)
                 .Append("s(")
-                .Append(string.Join(", ", collectionPlaceholders.Select(x => Camel(x) + ": string")))
+                .Append(string.Join(", ", collectionPlaceholders.Select(static x => Camel(x) + ": string")))
                 .Append(collectionPlaceholders.IsEmpty ? string.Empty : ", ")
                 .Append("page: PageRequest = {}")
                 .Append("): Promise<ApiResponse<Page<ScopeResource>>> {\n")
@@ -1051,7 +1064,7 @@ public static class TypeScriptEmitter {
     static void AppendTypeMethods(StringBuilder built, DocumentType type) {
         var model = ModelOf(type);
         var placeholders = DocumentReader.PlaceholdersOf(type.Path);
-        var parameters = string.Join(", ", placeholders.Select(x => Camel(x) + ": string"));
+        var parameters = string.Join(", ", placeholders.Select(static x => Camel(x) + ": string"));
         var verb = Pascal(type.DisplayName is { Length: > 0 } ? type.DisplayName : type.TypePath);
 
         built.Append("  /** Reads one ")
@@ -1137,7 +1150,7 @@ public static class TypeScriptEmitter {
                 .Append("  list")
                 .Append(verb)
                 .Append('(')
-                .Append(string.Join(", ", collectionPlaceholders.Select(x => Camel(x) + ": string")))
+                .Append(string.Join(", ", collectionPlaceholders.Select(static x => Camel(x) + ": string")))
                 .Append(collectionPlaceholders.IsEmpty ? string.Empty : ", ")
                 .Append("page: PageRequest = {}")
                 .Append("): Promise<ApiResponse<Page<")
@@ -1259,11 +1272,11 @@ public static class TypeScriptEmitter {
         }
 
         var exported = models.Split('\n')
-            .Select(x => x.Trim())
-            .Where(x => x.StartsWith("export interface ", StringComparison.Ordinal)
+            .Select(static x => x.Trim())
+            .Where(static x => x.StartsWith("export interface ", StringComparison.Ordinal)
                 || x.StartsWith("export type ", StringComparison.Ordinal)
             )
-            .Select(x => x.Split(' ')[2].TrimEnd('{', ' ', '='))
+            .Select(static x => x.Split(' ')[2].TrimEnd('{', ' ', '='))
             .ToHashSet(StringComparer.Ordinal);
 
         foreach (var line in client.Split('\n')) {
@@ -1329,20 +1342,21 @@ public static class TypeScriptEmitter {
     ///     construction — the registry keys on it — so there is no collision to resolve and no
     ///     second-pass rule that could disagree with the first.
     /// </remarks>
-    internal static string ModelOf(DocumentType type) => Pascal(type.ProviderNamespace.Split('.')[^1]) + Pascal(type.TypePath);
+    internal static string ModelOf(DocumentType type) =>
+        Pascal(type.ProviderNamespace.Split('.')[^1]) + Pascal(type.TypePath);
 
     static string Member(string name) =>
         name.Length > 0
         && (char.IsAsciiLetter(name[0]) || name[0] is '_' or '$')
-        && name.All(x => char.IsAsciiLetterOrDigit(x) || x is '_' or '$')
+        && name.All(static x => char.IsAsciiLetterOrDigit(x) || x is '_' or '$')
             ? name
             : Quote(name);
 
     /// <summary>A TypeScript single-quoted string literal.</summary>
     static string Quote(string value) =>
         "'"
-        + value.Replace("\\", "\\\\", StringComparison.Ordinal)
-            .Replace("'", "\\'", StringComparison.Ordinal)
+        + value.Replace("""\""", """\\""", StringComparison.Ordinal)
+            .Replace("'", """\'""", StringComparison.Ordinal)
             .Replace("\r\n", " ", StringComparison.Ordinal)
             .Replace("\n", " ", StringComparison.Ordinal)
         + "'";

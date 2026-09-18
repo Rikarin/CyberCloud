@@ -114,7 +114,7 @@ public sealed class MailDkimTests {
         MailDomains.TryRequiredRecords("example.com", pem, "mx.cybercloud.io", out var records)
             .ShouldBeTrue();
 
-        var dkim = records.Single(x => x.Name.StartsWith(MailDomains.DkimSelector, StringComparison.Ordinal));
+        var dkim = records.Single(static x => x.Name.StartsWith(MailDomains.DkimSelector, StringComparison.Ordinal));
 
         dkim.Value.ShouldContain(
             "p=" + Convert.ToBase64String(key.ExportSubjectPublicKeyInfo()),
@@ -141,13 +141,13 @@ public sealed class MailDkimTests {
             .ShouldBeTrue();
 
         records.Length.ShouldBe(4);
-        records.Count(x => x.Kind == "MX").ShouldBe(1);
-        records.Count(x => x.Kind == "TXT").ShouldBe(3);
+        records.Count(static x => x.Kind == "MX").ShouldBe(1);
+        records.Count(static x => x.Kind == "TXT").ShouldBe(3);
 
         // ⚠ `-all` and not `~all`. A soft fail asks the receiver to accept a forgery and mark it,
         // which hands an attacker delivery as this domain — and makes the "will not send until the
         // records verify" gate protect nothing.
-        records.Single(x => x.Value.StartsWith("v=spf1", StringComparison.Ordinal))
+        records.Single(static x => x.Value.StartsWith("v=spf1", StringComparison.Ordinal))
             .Value.ShouldEndWith("-all");
     }
 
@@ -230,7 +230,7 @@ public sealed class MailDkimTests {
 
             value.ShouldNotBeNull($"'{field}' was not minted at all");
 
-            foreach (var command in connection.Applied.Where(x => x.Target.Kind.Kind != "Secret")) {
+            foreach (var command in connection.Applied.Where(static x => x.Target.Kind.Kind != "Secret")) {
                 command.Body.ShouldNotContain(
                     value,
                     Case.Sensitive,
@@ -251,7 +251,7 @@ public sealed class MailDkimTests {
 
     /// <summary>The body of the one <c>Secret</c> the pass applied.</summary>
     static string SecretBody(RecordingConnection connection) {
-        var applied = connection.Applied.LastOrDefault(x => x.Target.Kind.Kind == "Secret");
+        var applied = connection.Applied.LastOrDefault(static x => x.Target.Kind.Kind == "Secret");
 
         applied.ShouldNotBeNull("no Secret was applied at all");
 

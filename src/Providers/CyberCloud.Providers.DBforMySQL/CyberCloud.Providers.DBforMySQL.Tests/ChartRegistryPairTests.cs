@@ -72,9 +72,9 @@ public sealed partial class ChartRegistryPairTests {
         var shipped = ApiPointers(ChartSchema()).ToList();
 
         var registry = MariaDbServers.Schema2026.Properties
-            .Where(x => x.JsonPointer.StartsWith("/properties/", StringComparison.Ordinal))
-            .Where(x => x.JsonPointer != MariaDbServers.ClusterIdPointer)
-            .Select(x => x.JsonPointer)
+            .Where(static x => x.JsonPointer.StartsWith("/properties/", StringComparison.Ordinal))
+            .Where(static x => x.JsonPointer != MariaDbServers.ClusterIdPointer)
+            .Select(static x => x.JsonPointer)
             .ToList();
 
         foreach (var pointer in shipped) {
@@ -130,7 +130,7 @@ public sealed partial class ChartRegistryPairTests {
         // preset silently does nothing rather than failing — and the quota derivation, which reads the
         // same table, refuses the write. Two symptoms, one missing row.
         foreach (var preset in MariaDbServers.Schema2026.Properties
-                     .Single(x => x.JsonPointer == "/properties/sizing/preset")
+                     .Single(static x => x.JsonPointer == "/properties/sizing/preset")
                      .AllowedValues) {
             MariaDbServers.Presets.ShouldContainKey(preset);
         }
@@ -157,8 +157,8 @@ public sealed partial class ChartRegistryPairTests {
     /// </remarks>
     static IEnumerable<string> ApiPointers(JsonObject node) =>
         Members(node)
-            .Where(x => x["x-cybercloud-api"]?.GetValue<bool>() != false)
-            .Select(x => x["x-cybercloud-pointer"]!.GetValue<string>());
+            .Where(static x => x["x-cybercloud-api"]?.GetValue<bool>() != false)
+            .Select(static x => x["x-cybercloud-pointer"]!.GetValue<string>());
 
     static IEnumerable<JsonObject> Members(JsonObject node) {
         if (node["properties"] is not JsonObject members) {

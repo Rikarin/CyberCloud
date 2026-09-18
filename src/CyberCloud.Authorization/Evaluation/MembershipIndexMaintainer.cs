@@ -56,8 +56,11 @@ namespace CyberCloud.Authorization.Evaluation;
 ///         recomputation, and the second application changes nothing.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A slice that was never written, or was written under another schema version, is
-///         rebuilt from the tuples before anything is derived from it or added to it.</b> An
+///         ⚠
+///         <b>
+///             A slice that was never written, or was written under another schema version, is
+///             rebuilt from the tuples before anything is derived from it or added to it.
+///         </b> An
 ///         unwritten slice is not an empty closure: the tuples it should close over may predate
 ///         the index — every tuple in a tenant upgraded to it, or restored without it — and a union
 ///         computed over nothing and stamped with this schema version would be a closure that
@@ -242,7 +245,9 @@ public sealed class MembershipIndexMaintainer {
             return Result<MembershipIndexChange>.Failure(reverseError);
         }
 
-        foreach (var subjectRelation in entries.GetValueOrThrow().Select(x => x.SubjectRelation).Distinct(StringComparer.Ordinal)) {
+        foreach (var subjectRelation in entries.GetValueOrThrow()
+                     .Select(static x => x.SubjectRelation)
+                     .Distinct(StringComparer.Ordinal)) {
             var subject = subjectRelation.Length == 0
                 ? SubjectRef.Of(subjectObject.Type, subjectObject.Id)
                 : SubjectRef.Userset(subjectObject.Type, subjectObject.Id, subjectRelation);
@@ -302,7 +307,10 @@ public sealed class MembershipIndexMaintainer {
     ///     A slice as of this schema version — rebuilt from the tuples first if it was never
     ///     written or was written under another version. See the remarks on this type.
     /// </summary>
-    async ValueTask<Result<MembershipIndexSnapshot>> CurrentAsync(ObjectRef subjectObject, CancellationToken cancellationToken) {
+    async ValueTask<Result<MembershipIndexSnapshot>> CurrentAsync(
+        ObjectRef subjectObject,
+        CancellationToken cancellationToken
+    ) {
         var read = await store.ReadAsync(subjectObject, cancellationToken).ConfigureAwait(false);
         if (read.TryGetError(out var error)) {
             return Result<MembershipIndexSnapshot>.Failure(error);
@@ -321,7 +329,8 @@ public sealed class MembershipIndexMaintainer {
             return Result<MembershipIndexSnapshot>.Failure(rebuildError);
         }
 
-        var applied = await store.ApplyAsync(subjectObject, rebuilt.GetValueOrThrow(), cancellationToken).ConfigureAwait(false);
+        var applied = await store.ApplyAsync(subjectObject, rebuilt.GetValueOrThrow(), cancellationToken)
+            .ConfigureAwait(false);
         return applied.TryGetError(out var applyError)
             ? Result<MembershipIndexSnapshot>.Failure(applyError)
             : await store.ReadAsync(subjectObject, cancellationToken).ConfigureAwait(false);
@@ -333,8 +342,8 @@ public sealed class MembershipIndexMaintainer {
 
         foreach (var batch in slices.Chunk(Concurrency)) {
             var results = await Task.WhenAll(
-                    batch.Select(x => store.ApplyAsync(x.Object, x.Change, cancellationToken).AsTask())
-                )
+                batch.Select(x => store.ApplyAsync(x.Object, x.Change, cancellationToken).AsTask())
+            )
                 .ConfigureAwait(false);
 
             foreach (var result in results) {
@@ -404,7 +413,7 @@ public sealed class MembershipIndexMaintainer {
         static Dictionary<string, IReadOnlyList<SubjectRef>> Freeze(Dictionary<string, HashSet<SubjectRef>> sets) {
             Dictionary<string, IReadOnlyList<SubjectRef>> frozen = new(StringComparer.Ordinal);
             foreach (var (key, set) in sets) {
-                frozen[key] = [.. set.OrderBy(x => x.ToString(), StringComparer.Ordinal)];
+                frozen[key] = [.. set.OrderBy(static x => x.ToString(), StringComparer.Ordinal)];
             }
 
             return frozen;
@@ -427,7 +436,10 @@ public sealed class MembershipIndexMaintainer {
     ///     as they are would put the edge being removed straight back.
     /// </summary>
     sealed class ExcludingReader(IRelationReader inner, RelationTuple excluded) : IRelationReader {
-        public async ValueTask<Result<ObjectRelationsSnapshot>> ReadAsync(ObjectRef target, CancellationToken cancellationToken) {
+        public async ValueTask<Result<ObjectRelationsSnapshot>> ReadAsync(
+            ObjectRef target,
+            CancellationToken cancellationToken
+        ) {
             var read = await inner.ReadAsync(target, cancellationToken).ConfigureAwait(false);
             if (read.IsFailure || target != excluded.Object) {
                 return read;
@@ -461,7 +473,10 @@ public sealed class MembershipIndexMaintainer {
         readonly Dictionary<ObjectRef, IReadOnlyList<SubjectIndexEntry>> entries = [];
 
         /// <summary>Every subject the userset reaches: its members, closed.</summary>
-        public async ValueTask<Result<HashSet<SubjectRef>>> DownAsync(SubjectRef userset, CancellationToken cancellationToken) {
+        public async ValueTask<Result<HashSet<SubjectRef>>> DownAsync(
+            SubjectRef userset,
+            CancellationToken cancellationToken
+        ) {
             HashSet<SubjectRef> reached = [];
             Queue<SubjectRef> pending = new();
             pending.Enqueue(userset);
@@ -485,7 +500,10 @@ public sealed class MembershipIndexMaintainer {
         }
 
         /// <summary>Every userset that reaches the subject: the usersets it is in, closed.</summary>
-        public async ValueTask<Result<HashSet<SubjectRef>>> UpAsync(SubjectRef subject, CancellationToken cancellationToken) {
+        public async ValueTask<Result<HashSet<SubjectRef>>> UpAsync(
+            SubjectRef subject,
+            CancellationToken cancellationToken
+        ) {
             HashSet<SubjectRef> reached = [];
             Queue<SubjectRef> pending = new();
             pending.Enqueue(subject);
@@ -514,7 +532,10 @@ public sealed class MembershipIndexMaintainer {
             return Result<HashSet<SubjectRef>>.Success(reached);
         }
 
-        async ValueTask<Result<ObjectRelationsSnapshot>> SnapshotAsync(ObjectRef target, CancellationToken cancellationToken) {
+        async ValueTask<Result<ObjectRelationsSnapshot>> SnapshotAsync(
+            ObjectRef target,
+            CancellationToken cancellationToken
+        ) {
             if (snapshots.TryGetValue(target, out var cached)) {
                 return Result<ObjectRelationsSnapshot>.Success(cached);
             }
@@ -527,7 +548,10 @@ public sealed class MembershipIndexMaintainer {
             return read;
         }
 
-        async ValueTask<Result<IReadOnlyList<SubjectIndexEntry>>> EntriesAsync(ObjectRef target, CancellationToken cancellationToken) {
+        async ValueTask<Result<IReadOnlyList<SubjectIndexEntry>>> EntriesAsync(
+            ObjectRef target,
+            CancellationToken cancellationToken
+        ) {
             if (entries.TryGetValue(target, out var cached)) {
                 return Result<IReadOnlyList<SubjectIndexEntry>>.Success(cached);
             }

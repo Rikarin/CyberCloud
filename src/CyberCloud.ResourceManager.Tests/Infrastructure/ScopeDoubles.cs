@@ -9,8 +9,11 @@ namespace CyberCloud.ResourceManager.Tests.Infrastructure;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A double, so that what is under test is the listing's shape and not the engine's
-///         verdict.</b> Whether the real engine hides the right subscriptions is
+///         ⚠
+///         <b>
+///             A double, so that what is under test is the listing's shape and not the engine's
+///             verdict.
+///         </b> Whether the real engine hides the right subscriptions is
 ///         <c>ReBacScopeAuthorizer</c>'s question, asked against <c>CyberCloudSchema</c> in
 ///         <c>test/CyberCloud.Isolation</c> and against a scripted <c>ListObjects</c> in
 ///         <c>ReBacScopeAuthorizerTests</c>. What this reproduces exactly is the two-state answer
@@ -89,7 +92,7 @@ public sealed class SwitchableScopeAuthorizer : IScopeAuthorizer {
 
         return Task.FromResult(
             AnswersCollections
-                ? ScopeCollectionVisibility.Of(candidates.Where(x => !Hidden.ContainsKey(x)))
+                ? ScopeCollectionVisibility.Of(candidates.Where(static x => !Hidden.ContainsKey(x)))
                 : ScopeCollectionVisibility.Unanswered
         );
     }
@@ -120,7 +123,11 @@ public sealed class NoOpScopeRelationWriter : IScopeRelationWriter {
     }
 
     /// <inheritdoc />
-    public Task<Result> LinkToParentAsync(ScopeId scope, ScopeId parent, CancellationToken cancellationToken = default) {
+    public Task<Result> LinkToParentAsync(
+        ScopeId scope,
+        ScopeId parent,
+        CancellationToken cancellationToken = default
+    ) {
         Edges.Enqueue((scope, null, parent));
         return Task.FromResult(Result.Success);
     }
@@ -161,8 +168,11 @@ public sealed class NoOpScopeRelationWriter : IScopeRelationWriter {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A grain in the test assembly rather than the real <c>ListObjectsGrain</c>, because
-///         this harness hosts no authorization engine</b> — <c>CyberCloud.ResourceManager.Tests</c>
+///         ⚠
+///         <b>
+///             A grain in the test assembly rather than the real <c>ListObjectsGrain</c>, because
+///             this harness hosts no authorization engine
+///         </b> — <c>CyberCloud.ResourceManager.Tests</c>
 ///         references the contracts and not <c>CyberCloud.Authorization</c>, so the interface has
 ///         exactly one implementation in the silo and it is this one. What that buys is the one
 ///         case the real engine cannot be made to produce on demand: a walk that hit its cap, which
@@ -209,7 +219,7 @@ public sealed class ScriptedListObjectsGrain : Grain, IListObjectsGrain {
         // and the ones before it may depend on it — ListObjectsOutcome's own remarks.
         var objects = Outcome == ListObjectsOutcome.Complete
             ? Objects.Order(StringComparer.Ordinal)
-                .Select(id => CyberCloud.Authorization.Contracts.ObjectRef.Of(request.ObjectType, id))
+                .Select(id => ObjectRef.Of(request.ObjectType, id))
                 .ToList()
             : [];
 

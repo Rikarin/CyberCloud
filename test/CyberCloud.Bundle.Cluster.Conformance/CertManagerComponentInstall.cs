@@ -282,7 +282,7 @@ public sealed class CertManagerComponentInstaller {
 
         var run = await BundleInstaller.RunAsync(
             "--dry-run --phase 15",
-            kubeconfig: null,
+            null,
             TestContext.Current.CancellationToken
         );
 
@@ -432,7 +432,7 @@ public sealed class CertManagerOnAnEmptyCluster(EmptyClusterFixture cluster) : I
             $"a self-signed Certificate did not reach Ready within {ReadyBudget.TotalMinutes:0} "
             + "minute(s). cert-manager/component.yaml puts this component in phase 15 rather than 40 "
             + "so that its webhook is Ready before anything creates a Certificate, and says `helm "
-            + "install --wait` is \"the barrier that makes 'installed' mean 'serving'\". A Certificate "
+            + """install --wait` is "the barrier that makes 'installed' mean 'serving'". A Certificate """
             + "that stays un-Ready after that barrier returned is that sentence being wrong. "
             + "Installer output:\n"
             + run.Output
@@ -473,7 +473,7 @@ public sealed class CertManagerOnAnEmptyCluster(EmptyClusterFixture cluster) : I
 
     static async Task CreateProbeObjectsAsync(IKubernetes client, CancellationToken token) {
         await client.CoreV1.CreateNamespaceAsync(
-            new V1Namespace { Metadata = new V1ObjectMeta { Name = Probe } },
+            new V1Namespace { Metadata = new() { Name = Probe } },
             cancellationToken: token
         );
 
@@ -523,7 +523,7 @@ public sealed class CertManagerOnAnEmptyCluster(EmptyClusterFixture cluster) : I
                 Probe,
                 "certificates",
                 Probe,
-                cancellationToken: token
+                token
             );
 
             if (IsReady(JsonSerializer.SerializeToElement(certificate))) {
@@ -541,7 +541,7 @@ public sealed class CertManagerOnAnEmptyCluster(EmptyClusterFixture cluster) : I
         && status.TryGetProperty("conditions", out var conditions)
         && conditions.ValueKind == JsonValueKind.Array
         && conditions.EnumerateArray()
-            .Any(condition =>
+            .Any(static condition =>
                 condition.TryGetProperty("type", out var type)
                 && type.ValueKind == JsonValueKind.String
                 && type.GetString() == "Ready"

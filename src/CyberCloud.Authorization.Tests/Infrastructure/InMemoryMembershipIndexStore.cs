@@ -17,8 +17,11 @@ namespace CyberCloud.Authorization.Tests.Infrastructure;
 ///         are what shows the grain's own application agrees with this one.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An incremental change lands on an unwritten or stale slice only after a rebuild,
-///         here as in the grain.</b> <c>MembershipIndexGrain.ApplyAsync</c> recomputes such a
+///         ⚠
+///         <b>
+///             An incremental change lands on an unwritten or stale slice only after a rebuild,
+///             here as in the grain.
+///         </b> <c>MembershipIndexGrain.ApplyAsync</c> recomputes such a
 ///         slice from the two indexes before applying a union to it, because a union over nothing
 ///         stamped with the current version is a closure that omits every tuple older than the
 ///         index. A dictionary cannot reach the indexes, so whoever builds the maintainer hands
@@ -59,13 +62,20 @@ public sealed class InMemoryMembershipIndexStore : IMembershipIndexStore {
     public IEnumerable<ObjectRef> Objects => slices.Keys;
 
     /// <inheritdoc />
-    public ValueTask<Result<MembershipIndexSnapshot>> ReadAsync(ObjectRef subjectObject, CancellationToken cancellationToken) {
+    public ValueTask<Result<MembershipIndexSnapshot>> ReadAsync(
+        ObjectRef subjectObject,
+        CancellationToken cancellationToken
+    ) {
         Reads++;
         return ValueTask.FromResult(Result<MembershipIndexSnapshot>.Success(Snapshot(subjectObject)));
     }
 
     /// <inheritdoc />
-    public async ValueTask<Result> ApplyAsync(ObjectRef subjectObject, MembershipIndexChange change, CancellationToken cancellationToken) {
+    public async ValueTask<Result> ApplyAsync(
+        ObjectRef subjectObject,
+        MembershipIndexChange change,
+        CancellationToken cancellationToken
+    ) {
         Writes++;
 
         // A whole-slice replacement is a closure in itself; anything else needs one to land on.
@@ -86,7 +96,10 @@ public sealed class InMemoryMembershipIndexStore : IMembershipIndexStore {
         return Result.Success;
     }
 
-    async ValueTask<Result<MembershipIndexChange>> RebuildAsync(ObjectRef subjectObject, CancellationToken cancellationToken) {
+    async ValueTask<Result<MembershipIndexChange>> RebuildAsync(
+        ObjectRef subjectObject,
+        CancellationToken cancellationToken
+    ) {
         if (Rebuild is null) {
             throw new InvalidOperationException(
                 $"An incremental change reached {subjectObject}, whose slice is unwritten or stale, and this store "
@@ -120,7 +133,7 @@ public sealed class InMemoryMembershipIndexStore : IMembershipIndexStore {
 
         // An empty union creates no entry, as the grain's Add does not — a rebuild names every
         // subject relation it saw, closed or not.
-        foreach (var (relation, members) in change.AddMembers.Where(x => x.Value.Count > 0)) {
+        foreach (var (relation, members) in change.AddMembers.Where(static x => x.Value.Count > 0)) {
             if (!slice.Members.TryGetValue(relation, out var set)) {
                 set = [];
                 slice.Members[relation] = set;
@@ -129,7 +142,7 @@ public sealed class InMemoryMembershipIndexStore : IMembershipIndexStore {
             set.UnionWith(members);
         }
 
-        foreach (var (subjectRelation, usersets) in change.AddUsersets.Where(x => x.Value.Count > 0)) {
+        foreach (var (subjectRelation, usersets) in change.AddUsersets.Where(static x => x.Value.Count > 0)) {
             if (!slice.Usersets.TryGetValue(subjectRelation, out var set)) {
                 set = [];
                 slice.Usersets[subjectRelation] = set;
@@ -160,8 +173,16 @@ public sealed class InMemoryMembershipIndexStore : IMembershipIndexStore {
         return new() {
             Object = subjectObject,
             SchemaVersion = slice.SchemaVersion,
-            Members = slice.Members.ToDictionary(x => x.Key, x => (IReadOnlyList<SubjectRef>)[.. x.Value], StringComparer.Ordinal),
-            Usersets = slice.Usersets.ToDictionary(x => x.Key, x => (IReadOnlyList<SubjectRef>)[.. x.Value], StringComparer.Ordinal)
+            Members = slice.Members.ToDictionary(
+                static x => x.Key,
+                static x => (IReadOnlyList<SubjectRef>)[.. x.Value],
+                StringComparer.Ordinal
+            ),
+            Usersets = slice.Usersets.ToDictionary(
+                static x => x.Key,
+                static x => (IReadOnlyList<SubjectRef>)[.. x.Value],
+                StringComparer.Ordinal
+            )
         };
     }
 

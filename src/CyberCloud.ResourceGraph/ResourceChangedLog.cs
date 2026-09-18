@@ -11,9 +11,12 @@ namespace CyberCloud.ResourceGraph;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Declared by whoever touches it first, publisher or projector, with the same
-///         configuration — and <c>CreateOrUpdate</c> so the second arrival is a no-op rather than a
-///         conflict.</b> The gateway may start before any silo has consumed, and a silo may restart
+///         ⚠
+///         <b>
+///             Declared by whoever touches it first, publisher or projector, with the same
+///             configuration — and <c>CreateOrUpdate</c> so the second arrival is a no-op rather than a
+///             conflict.
+///         </b> The gateway may start before any silo has consumed, and a silo may restart
 ///         into a cluster whose gateway has been publishing for a week. Either order has to work,
 ///         and a declaration that lived on one side only would make the other side's start depend
 ///         on it. The alternative — a stream an operator declares by hand — is the ConfigMap the
@@ -117,18 +120,19 @@ public static class ResourceChangedLog {
 
         return string.Join(
             ',',
-            natsUrl.Split(',').Select(static part => {
-                    var trimmed = part.Trim();
+            natsUrl.Split(',')
+                .Select(static part => {
+                        var trimmed = part.Trim();
 
-                    if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) || uri.UserInfo.Length == 0) {
-                        return trimmed;
+                        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) || uri.UserInfo.Length == 0) {
+                            return trimmed;
+                        }
+
+                        return uri.IsDefaultPort
+                            ? $"{uri.Scheme}://{uri.Host}"
+                            : string.Create(CultureInfo.InvariantCulture, $"{uri.Scheme}://{uri.Host}:{uri.Port}");
                     }
-
-                    return uri.IsDefaultPort
-                        ? $"{uri.Scheme}://{uri.Host}"
-                        : string.Create(CultureInfo.InvariantCulture, $"{uri.Scheme}://{uri.Host}:{uri.Port}");
-                }
-            )
+                )
         );
     }
 

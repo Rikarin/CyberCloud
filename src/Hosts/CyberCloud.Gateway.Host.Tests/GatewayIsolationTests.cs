@@ -56,7 +56,7 @@ public sealed class GatewayIsolationTests {
     /// </summary>
     [Fact]
     public void TheGatewayBindsNoTypeFromTheAuthorizationAssemblies() {
-        var referenced = Gateway.GetReferencedAssemblies().Select(x => x.Name ?? "").ToList();
+        var referenced = Gateway.GetReferencedAssemblies().Select(static x => x.Name ?? "").ToList();
 
         referenced.ShouldNotContain("CyberCloud.Authorization.Contracts");
         referenced.ShouldNotContain("CyberCloud.Authorization");
@@ -71,7 +71,7 @@ public sealed class GatewayIsolationTests {
     /// </summary>
     [Fact]
     public void TheGatewayBindsNoDataAccessAssembly() {
-        var referenced = Gateway.GetReferencedAssemblies().Select(x => x.Name ?? "").ToList();
+        var referenced = Gateway.GetReferencedAssemblies().Select(static x => x.Name ?? "").ToList();
 
         foreach (var forbidden in new[] {
                      "Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Relational", "Npgsql",
@@ -88,7 +88,7 @@ public sealed class GatewayIsolationTests {
     [Fact]
     public void TheGatewayBindsNoSignalRBackplane() {
         Gateway.GetReferencedAssemblies()
-            .Select(x => x.Name ?? "")
+            .Select(static x => x.Name ?? "")
             .ShouldNotContain("Microsoft.AspNetCore.SignalR.StackExchangeRedis");
     }
 
@@ -205,9 +205,9 @@ public sealed class GatewayIsolationTests {
     [Fact]
     public void TheGatewayDeclaresNoGrainInterfaceAndNoGrainImplementation() {
         var offenders = Gateway.GetTypes()
-            .Where(type => typeof(IGrain).IsAssignableFrom(type) || typeof(Grain).IsAssignableFrom(type))
-            .Select(type => type.FullName ?? type.Name)
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Where(static type => typeof(IGrain).IsAssignableFrom(type) || typeof(Grain).IsAssignableFrom(type))
+            .Select(static type => type.FullName ?? type.Name)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
 
         offenders.ShouldBeEmpty(
@@ -237,7 +237,7 @@ public sealed class GatewayIsolationTests {
                 var before = code[..match.Index];
 
                 if (!before.EndsWith(
-                        "ForTenant(caller.TenantId.ToString(\"D\", CultureInfo.InvariantCulture))",
+                        """ForTenant(caller.TenantId.ToString("D", CultureInfo.InvariantCulture))""",
                         StringComparison.Ordinal
                     )
                     && !before.Contains("ForTenant(", StringComparison.Ordinal)) {

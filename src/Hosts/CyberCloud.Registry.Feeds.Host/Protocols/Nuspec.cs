@@ -69,15 +69,18 @@ public sealed record Nuspec(
         ZipArchive archive;
 
         try {
-            archive = new ZipArchive(new MemoryStream(nupkg, writable: false), ZipArchiveMode.Read);
+            archive = new(new MemoryStream(nupkg, false), ZipArchiveMode.Read);
         } catch (InvalidDataException) {
-            return Result<Nuspec>.Failure(ErrorCode.InvalidRequestBody, "The pushed file is not a zip, so it is not a .nupkg.");
+            return Result<Nuspec>.Failure(
+                ErrorCode.InvalidRequestBody,
+                "The pushed file is not a zip, so it is not a .nupkg."
+            );
         }
 
         using (archive) {
             var candidates = archive.Entries
-                .Where(x => !x.FullName.Contains('/', StringComparison.Ordinal))
-                .Where(x => x.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase))
+                .Where(static x => !x.FullName.Contains('/', StringComparison.Ordinal))
+                .Where(static x => x.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             if (candidates.Count != 1) {
@@ -89,10 +92,11 @@ public sealed record Nuspec(
 
             byte[] bytes;
 
-            using (var stream = candidates[0].Open())
-            using (var buffer = new MemoryStream()) {
-                stream.CopyTo(buffer);
-                bytes = buffer.ToArray();
+            using (var stream = candidates[0].Open()) {
+                using (var buffer = new MemoryStream()) {
+                    stream.CopyTo(buffer);
+                    bytes = buffer.ToArray();
+                }
             }
 
             return Parse(bytes);
@@ -107,12 +111,15 @@ public sealed record Nuspec(
         XDocument document;
 
         try {
-            document = XDocument.Load(new MemoryStream(bytes, writable: false));
+            document = XDocument.Load(new MemoryStream(bytes, false));
         } catch (System.Xml.XmlException exception) {
-            return Result<Nuspec>.Failure(ErrorCode.InvalidRequestBody, "The .nuspec is not well-formed XML: " + exception.Message);
+            return Result<Nuspec>.Failure(
+                ErrorCode.InvalidRequestBody,
+                "The .nuspec is not well-formed XML: " + exception.Message
+            );
         }
 
-        var metadata = document.Root?.Elements().FirstOrDefault(x => x.Name.LocalName == "metadata");
+        var metadata = document.Root?.Elements().FirstOrDefault(static x => x.Name.LocalName == "metadata");
 
         if (metadata is null) {
             return Result<Nuspec>.Failure(ErrorCode.InvalidRequestBody, "The .nuspec has no <metadata> element.");
@@ -120,8 +127,13 @@ public sealed record Nuspec(
 
         var id = Text(metadata, "id");
 
-        if (string.IsNullOrWhiteSpace(id) || id.Length > 100 || !id.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_')) {
-            return Result<Nuspec>.Failure(ErrorCode.InvalidRequestBody, "The .nuspec's <id> is missing or is not a package id.");
+        if (string.IsNullOrWhiteSpace(id)
+            || id.Length > 100
+            || !id.All(static c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_')) {
+            return Result<Nuspec>.Failure(
+                ErrorCode.InvalidRequestBody,
+                "The .nuspec's <id> is missing or is not a package id."
+            );
         }
 
         var version = NuGetVersion.Parse(Text(metadata, "version"));
@@ -131,20 +143,23 @@ public sealed record Nuspec(
         }
 
         var groups = new List<NuspecDependencyGroup>();
-        var dependencies = metadata.Elements().FirstOrDefault(x => x.Name.LocalName == "dependencies");
+        var dependencies = metadata.Elements().FirstOrDefault(static x => x.Name.LocalName == "dependencies");
 
         if (dependencies is not null) {
-            var direct = dependencies.Elements().Where(x => x.Name.LocalName == "dependency").Select(Dependency).ToList();
+            var direct = dependencies.Elements()
+                .Where(static x => x.Name.LocalName == "dependency")
+                .Select(Dependency)
+                .ToList();
 
             if (direct.Count > 0) {
                 groups.Add(new("", direct));
             }
 
-            foreach (var group in dependencies.Elements().Where(x => x.Name.LocalName == "group")) {
+            foreach (var group in dependencies.Elements().Where(static x => x.Name.LocalName == "group")) {
                 groups.Add(
                     new(
                         group.Attribute("targetFramework")?.Value ?? "",
-                        group.Elements().Where(x => x.Name.LocalName == "dependency").Select(Dependency).ToList()
+                        group.Elements().Where(static x => x.Name.LocalName == "dependency").Select(Dependency).ToList()
                     )
                 );
             }

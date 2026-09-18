@@ -26,7 +26,7 @@ public sealed class NoCredentialLeakTests {
     [Fact]
     public async Task VerboseNeverPrintsTheToken() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, _) =>
+            new ScriptedTransport(static (_, _) =>
                 Responses.Json(HttpStatusCode.OK, """{"name":"w1"}""")
             )
         );
@@ -57,7 +57,7 @@ public sealed class NoCredentialLeakTests {
     [Fact]
     public async Task VerboseNeverPrintsTheTokenWhenTheRequestFails() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, _) =>
+            new ScriptedTransport(static (_, _) =>
                 Responses.Error(HttpStatusCode.Unauthorized, "Unauthorized", "The token has expired.")
             )
         );
@@ -83,7 +83,7 @@ public sealed class NoCredentialLeakTests {
     [Fact]
     public async Task NoTokenCacheIsWrittenByTheCli() {
         using var host = TestHost.Create(
-            new ScriptedTransport((_, _) =>
+            new ScriptedTransport(static (_, _) =>
                 Responses.Json(HttpStatusCode.OK, """{"name":"w1"}""")
             )
         );
@@ -167,7 +167,9 @@ public sealed class NoCredentialLeakTests {
 
     [Fact]
     public async Task ARestCallCannotSetItsOwnAuthorizationHeader() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}")));
+        using var host = TestHost.Create(
+            new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, "{}"))
+        );
 
         var code = await host.RunAsync(
             "rest",
@@ -183,7 +185,9 @@ public sealed class NoCredentialLeakTests {
 
     [Fact]
     public async Task ARestCallWillNotSendTheTokenToAnotherHost() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}")));
+        using var host = TestHost.Create(
+            new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.OK, "{}"))
+        );
 
         var code = await host.RunAsync("rest", "--uri", "https://example.com/steal");
 

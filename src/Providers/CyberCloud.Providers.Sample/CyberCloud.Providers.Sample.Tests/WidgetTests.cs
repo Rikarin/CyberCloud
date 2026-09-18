@@ -101,8 +101,8 @@ public sealed class WidgetDeclarationTests {
         // ⚠ The trap this exists for: a JSON boolean in a ConfigMap's `data` is rejected by the API
         // server with a type error that names `data` rather than the field, which is a slow bug to
         // read. The in-memory harness would never catch it, so it is asserted here.
-        using var on = JsonDocument.Parse(SampleWidgets.Body(Guid.NewGuid(), "hi", enabled: true));
-        using var off = JsonDocument.Parse(SampleWidgets.Body(Guid.NewGuid(), "hi", enabled: false));
+        using var on = JsonDocument.Parse(SampleWidgets.Body(Guid.NewGuid(), "hi", true));
+        using var off = JsonDocument.Parse(SampleWidgets.Body(Guid.NewGuid(), "hi", false));
 
         SampleWidgets.DataFor(on.RootElement)["enabled"].ShouldBe("true");
         SampleWidgets.DataFor(off.RootElement)["enabled"].ShouldBe("false");
@@ -135,7 +135,7 @@ public sealed class WidgetDeclarationTests {
         // omitted the property, so the handler applies its own. Two defaults that disagree is a
         // document lying about one of them, and no compiler compares a JSON string literal in the
         // schema to a const in the handler.
-        var declared = SampleWidgets.PingRequest.Properties.Single(x => x.JsonPointer == "/echo");
+        var declared = SampleWidgets.PingRequest.Properties.Single(static x => x.JsonPointer == "/echo");
 
         declared.DefaultJson.ShouldBe(
             $"\"{WidgetPingHandler.DefaultEcho}\"",

@@ -32,10 +32,10 @@ public sealed class MariaDbQuotaTests {
     public void TheTypeDeclaresTheFourMetersARealServerDraws() {
         var meters = Registration().Meters;
 
-        meters.Select(x => x.Meter)
+        meters.Select(static x => x.Meter)
             .ShouldBe(
                 [QuotaMeter.Vcpu, QuotaMeter.MemoryGb, QuotaMeter.StorageGb, QuotaMeter.Resources],
-                ignoreOrder: true
+                true
             );
     }
 
@@ -60,7 +60,7 @@ public sealed class MariaDbQuotaTests {
         // amounts for a one-instance server and a three-instance one — over-reserving the cheap shape
         // by 3×, and under-reserving nothing, so nobody would ever complain and the platform would
         // refuse creates a subscription was entitled to.
-        var single = MariaDbServers.Body(Guid.NewGuid(), highAvailability: "None");
+        var single = MariaDbServers.Body(Guid.NewGuid(), "None");
 
         Draw(QuotaMeter.Vcpu, single).ShouldBe(0.5m);
         Draw(QuotaMeter.MemoryGb, single).ShouldBe(2m);
@@ -108,7 +108,7 @@ public sealed class MariaDbQuotaTests {
         // reservation of 0 outright, so the alternative to this refusal is not "reserved nothing" but a
         // create that fails somewhere less legible with no reason attached to the preset.
         var body = WithSizing(MariaDbServers.Body(Guid.NewGuid()), "s1.enormous");
-        var declared = Registration().Meters.Single(x => x.Meter == QuotaMeter.Vcpu);
+        var declared = Registration().Meters.Single(static x => x.Meter == QuotaMeter.Vcpu);
 
         using var document = JsonDocument.Parse(body);
         var amount = declared.Derivation!.Amount(document.RootElement);
@@ -122,7 +122,7 @@ public sealed class MariaDbQuotaTests {
         // ⚠ The reason a delegate is acceptable at all. IResourceTypeBuilder.Meter's remarks argue that
         // a delegate "cannot be GENERATED from"; a derivation that carries its own description can be,
         // and OpenApiEmitter writes both members for every meter.
-        foreach (var meter in Registration().Meters.Where(x => x.Derivation is not null)) {
+        foreach (var meter in Registration().Meters.Where(static x => x.Derivation is not null)) {
             meter.Expression.ShouldNotBeNullOrWhiteSpace();
             meter.Reads.ShouldNotBeEmpty();
 

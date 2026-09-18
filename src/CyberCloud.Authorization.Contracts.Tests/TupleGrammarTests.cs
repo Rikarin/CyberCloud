@@ -157,6 +157,6 @@ public sealed class TupleGrammarTests {
     }
 
     static string Printable(string value) =>
-        value.Replace("\n", "\\n", StringComparison.Ordinal)
-            .Replace("\0", "\\0", StringComparison.Ordinal);
+        value.Replace("\n", """\n""", StringComparison.Ordinal)
+            .Replace("\0", """\0""", StringComparison.Ordinal);
 }

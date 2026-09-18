@@ -5,8 +5,11 @@ namespace CyberCloud.Providers.Monitor.Alerting;
 ///     refused, by name, with what a real one would do.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>A refusal and not a stub that answers "no samples", for the reason every seam in this
-///     tree gives.</b> A seam that answered empty would report every rule <c>Ok</c> forever and the
+///     ⚠
+///     <b>
+///         A refusal and not a stub that answers "no samples", for the reason every seam in this
+///         tree gives.
+///     </b> A seam that answered empty would report every rule <c>Ok</c> forever and the
 ///     tenant would learn their alerting did not work from the incident it did not page about. This
 ///     way the rule's observed state carries the sentence below, and the roadmap row that says ✅
 ///     says beside it what ✅ does not mean.

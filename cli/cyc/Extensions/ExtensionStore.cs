@@ -149,7 +149,7 @@ sealed class ExtensionStore {
     /// <summary>One installed extension, or <c>null</c>.</summary>
     /// <param name="name">The verb, without the <see cref="FilePrefix" />.</param>
     public ExtensionRecord? Find(string name) =>
-        records.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+        records.Find(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Where an extension's executable is, installed or not.</summary>
     /// <param name="name">The verb.</param>
@@ -169,14 +169,14 @@ sealed class ExtensionStore {
             return [];
         }
 
-        var claimed = records.Select(x => FilePrefix + x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var claimed = records.Select(static x => FilePrefix + x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return [
             .. System.IO.Directory
                 .EnumerateFiles(Directory, FilePrefix + "*")
                 .Select(Path.GetFileName)
                 .Where(x => x is not null && x.Length > FilePrefix.Length && !claimed.Contains(x))
-                .Select(x => x![FilePrefix.Length..])
+                .Select(static x => x![FilePrefix.Length..])
                 .Order(StringComparer.Ordinal)
         ];
     }
@@ -242,7 +242,7 @@ sealed class ExtensionStore {
 
         var destination = PathFor(name);
 
-        File.Copy(source, destination, overwrite: true);
+        File.Copy(source, destination, true);
 
         if (!OperatingSystem.IsWindows()) {
             File.SetUnixFileMode(

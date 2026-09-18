@@ -76,8 +76,8 @@ public sealed class ReconcileScheduleTests {
 
     [Fact]
     public void ASampleOutsideTheUnitIntervalIsRefusedRatherThanClamped() {
-        Should.Throw<ArgumentOutOfRangeException>(() => ReconcileSchedule.DelayFor(0, -0.1));
-        Should.Throw<ArgumentOutOfRangeException>(() => ReconcileSchedule.DelayFor(0, 1.1));
+        Should.Throw<ArgumentOutOfRangeException>(static () => ReconcileSchedule.DelayFor(0, -0.1));
+        Should.Throw<ArgumentOutOfRangeException>(static () => ReconcileSchedule.DelayFor(0, 1.1));
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public sealed class ReconcileScheduleTests {
         // actionable." A timeout that said only "timed out" moves the diagnosis to a log search.
         var operationId = Guid.Parse("2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3");
         var last = new OperationProgress {
-            At = new DateTimeOffset(2026, 8, 11, 12, 41, 0, TimeSpan.Zero),
+            At = new(2026, 8, 11, 12, 41, 0, TimeSpan.Zero),
             Step = "waiting-for-ready",
             Detail = "2 of 3 replicas ready"
         };

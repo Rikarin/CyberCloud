@@ -36,8 +36,11 @@ namespace CyberCloud.Providers.Compute.Contracts;
 ///         <c>charts/managed/virtual-machine/conformance.yaml § owed</c>, <c>power-state-can-lose-a-race</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE ROOT DISK IS A CLONE OF AN IMAGE IN THE SAME RESOURCE GROUP, AND THE IMAGE IS NAMED
-///         BY ITS RESOURCE NAME.</b> <c>dataVolumeTemplates[0].spec.source.pvc</c> names the claim
+///         ⚠
+///         <b>
+///             THE ROOT DISK IS A CLONE OF AN IMAGE IN THE SAME RESOURCE GROUP, AND THE IMAGE IS NAMED
+///             BY ITS RESOURCE NAME.
+///         </b> <c>dataVolumeTemplates[0].spec.source.pvc</c> names the claim
 ///         <see cref="Images.ObjectNameOf" /> produces, in the VM's own namespace — a CDI clone across
 ///         namespaces is authorised against the <i>creator</i> of the <c>DataVolume</c>, which for a
 ///         template inside a VM is KubeVirt's own controller, and that is a permission story this row
@@ -45,8 +48,11 @@ namespace CyberCloud.Providers.Compute.Contracts;
 ///         <c>conformance.yaml § owed</c>, <c>images-are-per-resource-group</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>CPU AND MEMORY ARE QUANTITIES, NOT AN INSTANCETYPE NAME, AND THAT IS THE OPPOSITE OF
-///         WHAT THE NODE POOL DOES.</b> <c>AgentPools.InstancetypeName</c> renders a
+///         ⚠
+///         <b>
+///             CPU AND MEMORY ARE QUANTITIES, NOT AN INSTANCETYPE NAME, AND THAT IS THE OPPOSITE OF
+///             WHAT THE NODE POOL DOES.
+///         </b> <c>AgentPools.InstancetypeName</c> renders a
 ///         <c>VirtualMachineClusterInstancetype</c> the bundle does not install, and its own manifest
 ///         records that the sizing table is therefore a belief — <c>instancetypes-are-the-bundles</c>.
 ///         This type renders <c>domain.cpu.cores</c> and <c>domain.memory.guest</c> from
@@ -132,20 +138,23 @@ public static class VirtualMachines {
     public static ResourceSchema PowerResponse { get; } =
         ResourceSchema.Of(
             [
-                new("/action", SchemaKind.Text, Required: true, Description: "start, stop or restart — which one ran.") {
-                    AllowedValues = [StartAction, StopAction, RestartAction]
-                },
+                new(
+                    "/action",
+                    SchemaKind.Text,
+                    true,
+                    Description: "start, stop or restart — which one ran."
+                ) { AllowedValues = [StartAction, StopAction, RestartAction] },
                 new(
                     "/runStrategyBefore",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The machine's KubeVirt run strategy before the action: Always for a "
                     + "machine that should be on, Halted for one that should be off."
                 ) { AllowedValues = [RunAlways, RunHalted] },
                 new(
                     "/runStrategy",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The run strategy after the action. A restart leaves it as it was."
                 ) { AllowedValues = [RunAlways, RunHalted] }
             ]
@@ -165,7 +174,9 @@ public static class VirtualMachines {
 
     /// <summary>The <c>VirtualMachineInstance</c> — the running one, which KubeVirt creates and this platform only reads.</summary>
     public static GroupVersionKind InstanceKind { get; } =
-        new() { Group = "kubevirt.io", Version = "v1", Kind = "VirtualMachineInstance", Plural = "virtualmachineinstances" };
+        new() {
+            Group = "kubevirt.io", Version = "v1", Kind = "VirtualMachineInstance", Plural = "virtualmachineinstances"
+        };
 
     /// <summary>The object name — the resource's own, which KubeVirt also gives the instance.</summary>
     /// <param name="name">The resource's own name.</param>
@@ -228,8 +239,11 @@ public static class VirtualMachines {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The <c>s1</c> rungs of docs/plan/12 § Sizing vocabulary that are whole cores, and
-    ///         nothing under a core.</b> KubeVirt's <c>domain.cpu.cores</c> is an integer, so the
+    ///         ⚠
+    ///         <b>
+    ///             The <c>s1</c> rungs of docs/plan/12 § Sizing vocabulary that are whole cores, and
+    ///             nothing under a core.
+    ///         </b> KubeVirt's <c>domain.cpu.cores</c> is an integer, so the
     ///         <c>nano</c> and <c>micro</c> presets other families offer as <c>250m</c> and <c>500m</c>
     ///         requests have no guest to map onto here without a request/limit split this row does not
     ///         make. Four rungs, 1:4, from one core to eight.
@@ -261,8 +275,11 @@ public static class VirtualMachines {
     /// </summary>
     /// <remarks>
     ///     The same spelling <c>SecretRef.ToString</c> produces and <c>CommunicationChannels</c> accepts.
-    ///     ⚠ A handle and never a value: docs/plan/13 § Virtual Machines, <i>"SSH keys and passwords are
-    ///     SecretRefs resolved at render and never stored in grain state or in the CR's plaintext"</i>.
+    ///     ⚠ A handle and never a value: docs/plan/13 § Virtual Machines,
+    ///     <i>
+    ///         "SSH keys and passwords are
+    ///         SecretRefs resolved at render and never stored in grain state or in the CR's plaintext"
+    ///     </i>.
     ///     The value is resolved once per pass, written into a Secret in the tenant's namespace, and
     ///     the <c>VirtualMachine</c> object names the Secret.
     /// </remarks>
@@ -279,8 +296,11 @@ public static class VirtualMachines {
     ///         that document does offer.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The network is two names in the same resource group and the join is an annotation
-    ///         the fabric reads</b>, so on a cluster with no Kube-OVN the annotation is inert and the
+    ///         ⚠
+    ///         <b>
+    ///             The network is two names in the same resource group and the join is an annotation
+    ///             the fabric reads
+    ///         </b>, so on a cluster with no Kube-OVN the annotation is inert and the
     ///         machine sits on the pod network. Nothing here checks that the subnet exists — that is
     ///         another resource's body — and a name that is not a subnet is a pod that never schedules,
     ///         which is <c>LoadBalancers</c>' behaviour too.
@@ -292,16 +312,19 @@ public static class VirtualMachines {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the machine is billed in."
                 ) {
-                    Format = SchemaFormat.Region, Widget = WidgetHint.Region, Immutable = true, ExampleJson = "\"eu-central\""
+                    Format = SchemaFormat.Region,
+                    Widget = WidgetHint.Region,
+                    Immutable = true,
+                    ExampleJson = "\"eu-central\""
                 },
                 new("/properties", SchemaKind.Nested, Description: "The machine's own settings."),
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster the machine runs in. Must be the one its image and its "
                     + "disks are in — nothing checks that, and a machine placed elsewhere clones a "
                     + "claim that is not there."
@@ -309,7 +332,7 @@ public static class VirtualMachines {
                 new(
                     "/properties/size",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The machine's size, from the platform's sizing catalogue: s1.small is 1 "
                     + "vCPU and 4 GiB, and each rung doubles both. Changing it takes effect the next "
                     + "time the machine starts — KubeVirt reports RestartRequired until then."
@@ -319,7 +342,7 @@ public static class VirtualMachines {
                 new(
                     "/properties/image",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The CyberCloud.Compute/images resource the root disk is cloned from, "
                     + "by name, in this resource group. ⚠ The image must have finished importing: "
                     + "the machine waits for it and says so."
@@ -333,12 +356,15 @@ public static class VirtualMachines {
                 new(
                     "/properties/osDiskSize",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The root disk, in Kubernetes quantity form. At least the image's own "
                     + "size; a clone into a smaller claim is refused by CDI, not by this API. "
                     + "⚠ Immutable, for the reason a managed disk's size is."
                 ) {
-                    Pattern = KubeQuantity.Pattern, Immutable = true, DefaultJson = "\"" + DefaultOsDiskSize + "\"", ExampleJson = "\"20Gi\""
+                    Pattern = KubeQuantity.Pattern,
+                    Immutable = true,
+                    DefaultJson = "\"" + DefaultOsDiskSize + "\"",
+                    ExampleJson = "\"20Gi\""
                 },
                 new(
                     "/properties/dataDisks",
@@ -355,7 +381,7 @@ public static class VirtualMachines {
                     // records as `cidr-shape-is-unenforced`. So each element is checked by
                     // DataDiskProblem on the first reconcile pass instead, before a claim name is
                     // rendered; conformance.yaml § owed, `data-disk-names-are-checked-at-reconcile`.
-                    ElementKind = SchemaKind.Text, DefaultJson = "[]", ExampleJson = "[\"data\"]"
+                    ElementKind = SchemaKind.Text, DefaultJson = "[]", ExampleJson = """["data"]"""
                 },
                 new(
                     "/properties/network",
@@ -368,7 +394,12 @@ public static class VirtualMachines {
                     SchemaKind.Text,
                     Description: "The CyberCloud.Network/virtualNetworks resource in this resource group, "
                     + "by name, or empty."
-                ) { Pattern = OptionalNamePattern, MaxLength = ResourceNaming.MaxLength, Immutable = true, DefaultJson = "\"\"" },
+                ) {
+                    Pattern = OptionalNamePattern,
+                    MaxLength = ResourceNaming.MaxLength,
+                    Immutable = true,
+                    DefaultJson = "\"\""
+                },
                 new(
                     "/properties/network/subnet",
                     SchemaKind.Text,
@@ -376,7 +407,11 @@ public static class VirtualMachines {
                     + "name, or empty. ⚠ A name that is not a subnet of the network is refused by the "
                     + "fabric rather than by this API, and the machine never starts."
                 ) {
-                    Pattern = OptionalNamePattern, MaxLength = ResourceNaming.MaxLength, Widget = WidgetHint.Subnet, Immutable = true, DefaultJson = "\"\""
+                    Pattern = OptionalNamePattern,
+                    MaxLength = ResourceNaming.MaxLength,
+                    Widget = WidgetHint.Subnet,
+                    Immutable = true,
+                    DefaultJson = "\"\""
                 },
                 new(
                     "/properties/cloudInit",
@@ -392,7 +427,12 @@ public static class VirtualMachines {
                     + "mounts; the value never enters this body. ⚠ The path must be under your own "
                     + "tenant's vault prefix, tenants/<tenantId>/; any other path is refused. Empty "
                     + "means no cloud-init at all."
-                ) { Pattern = OptionalSecretRefPattern, MaxLength = 512, Widget = WidgetHint.SecretRef, DefaultJson = "\"\"" }
+                ) {
+                    Pattern = OptionalSecretRefPattern,
+                    MaxLength = 512,
+                    Widget = WidgetHint.SecretRef,
+                    DefaultJson = "\"\""
+                }
             ]
         );
 
@@ -400,13 +440,15 @@ public static class VirtualMachines {
     const string OptionalNamePattern = "(" + ResourceNaming.Pattern + ")?";
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
     /// <summary>The size a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string Size(JsonElement desired) => ComputeBodies.Text(ComputeBodies.Property(desired, "size"), DefaultSize);
+    public static string Size(JsonElement desired) =>
+        ComputeBodies.Text(ComputeBodies.Property(desired, "size"), DefaultSize);
 
     /// <summary>What one machine's CPU and memory are — declared, not believed.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -415,7 +457,8 @@ public static class VirtualMachines {
 
     /// <summary>The image resource the root disk is cloned from.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string Image(JsonElement desired) => ComputeBodies.Text(ComputeBodies.Property(desired, "image"), string.Empty);
+    public static string Image(JsonElement desired) =>
+        ComputeBodies.Text(ComputeBodies.Property(desired, "image"), string.Empty);
 
     /// <summary>The root disk size a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -487,8 +530,11 @@ public static class VirtualMachines {
     /// <param name="tenantId">The tenant whose resource carries the handle.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE ONLY PLACE IN THE TREE WHERE A TENANT-SPELLED VAULT PATH IS RESOLVED, SO THE
-    ///         ONLY PLACE THAT HAS TO SAY WHOSE PATHS A TENANT MAY SPELL.</b> Every other consumer of
+    ///         ⚠
+    ///         <b>
+    ///             THE ONLY PLACE IN THE TREE WHERE A TENANT-SPELLED VAULT PATH IS RESOLVED, SO THE
+    ///             ONLY PLACE THAT HAS TO SAY WHOSE PATHS A TENANT MAY SPELL.
+    ///         </b> Every other consumer of
     ///         <c>ISecretResolver</c> resolves a path the platform built itself —
     ///         <c>ContainerRegistries.SecretPath</c> and its four siblings all spell
     ///         <c>tenants/{tenantId}/{provider}/{type}/{id}</c> — or keeps the value server-side. A
@@ -528,8 +574,11 @@ public static class VirtualMachines {
     ///         and the tenancy check <see cref="TenantVaultPrefix" /> explains.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Refused with <see cref="ErrorCode.AuthorizationFailed" /> on the first reconcile
-    ///         pass and not at PUT</b>, because the write path validates a body against its schema and
+    ///         ⚠
+    ///         <b>
+    ///             Refused with <see cref="ErrorCode.AuthorizationFailed" /> on the first reconcile
+    ///             pass and not at PUT
+    ///         </b>, because the write path validates a body against its schema and
     ///         nothing else — <c>IProviderBuilder</c> has no per-type validator — and a schema pattern
     ///         cannot carry the caller's tenant id. The refusal names the tenant's own prefix and the
     ///         path as spelled, never whether that path exists, so a probe learns nothing about what
@@ -581,8 +630,11 @@ public static class VirtualMachines {
     /// <param name="ns">The resource's namespace.</param>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b><c>{namespace}-{network}-{subnet}</c>, which is <c>NetworkSubnets.ObjectNameOf</c>'s
-    ///     rule spelled a second time</b> — rule 2 of docs/plan/03 § Assembly graph rules forbids the
+    ///     ⚠
+    ///     <b>
+    ///         <c>{namespace}-{network}-{subnet}</c>, which is <c>NetworkSubnets.ObjectNameOf</c>'s
+    ///         rule spelled a second time
+    ///     </b> — rule 2 of docs/plan/03 § Assembly graph rules forbids the
     ///     reference that would spell it once, and <c>charts/managed/kube-ovn-vpc/conformance.yaml</c>'s
     ///     <c>nothing-can-join-a-network-yet</c> predicted exactly this consumer. A test project is
     ///     outside the rule, and <c>ComputeNetworkJoinTests</c> holds the two spellings together.
@@ -613,8 +665,11 @@ public static class VirtualMachines {
     ///         specified"), so it cannot be left out and owned by somebody else.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>bridge</c> binding on the pod network, as the node pool renders and as Kube-OVN's
-    ///         own KubeVirt guide does</b>: with a logical-switch annotation the guest gets the fabric's
+    ///         ⚠
+    ///         <b>
+    ///             <c>bridge</c> binding on the pod network, as the node pool renders and as Kube-OVN's
+    ///             own KubeVirt guide does
+    ///         </b>: with a logical-switch annotation the guest gets the fabric's
     ///         address on its own interface, and without one it gets the pod's. <c>masquerade</c> would
     ///         work on a plain cluster and break the tenant network.
     ///     </para>
@@ -629,11 +684,15 @@ public static class VirtualMachines {
         var objectName = ObjectNameOf(name);
 
         var disks = new JsonArray(
-            new JsonObject { ["name"] = RootVolume, ["disk"] = new JsonObject { ["bus"] = "virtio" }, ["bootOrder"] = 1 }
+            new JsonObject {
+                ["name"] = RootVolume, ["disk"] = new JsonObject { ["bus"] = "virtio" }, ["bootOrder"] = 1
+            }
         );
 
         var volumes = new JsonArray(
-            new JsonObject { ["name"] = RootVolume, ["dataVolume"] = new JsonObject { ["name"] = RootDataVolumeName(objectName) } }
+            new JsonObject {
+                ["name"] = RootVolume, ["dataVolume"] = new JsonObject { ["name"] = RootDataVolumeName(objectName) }
+            }
         );
 
         foreach (var disk in DataDisks(desired)) {
@@ -691,7 +750,9 @@ public static class VirtualMachines {
                                 )
                             }
                         },
-                        ["networks"] = new JsonArray(new JsonObject { ["name"] = "default", ["pod"] = new JsonObject() }),
+                        ["networks"] = new JsonArray(
+                            new JsonObject { ["name"] = "default", ["pod"] = new JsonObject() }
+                        ),
                         ["volumes"] = volumes,
                         // ⚠ Long enough for a guest to flush on ACPI power-off, short enough that a
                         // hung guest does not hold a stop for minutes. KubeVirt's own default is 30.
@@ -735,8 +796,11 @@ public static class VirtualMachines {
     ///         naming the machine by kind and name and an empty uid the harness fills in.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Declaring it is what makes the k3s lane serve the kind, and the need arrived with
-    ///         #91.</b> The cluster-backed harness installs a definition for every kind the case's
+    ///         ⚠
+    ///         <b>
+    ///             Declaring it is what makes the k3s lane serve the kind, and the need arrived with
+    ///             #91.
+    ///         </b> The cluster-backed harness installs a definition for every kind the case's
     ///         objects and operator-written objects name and nothing else. The machine's objects name
     ///         <c>VirtualMachine</c> alone, so a k3s with no CDI served no <c>DataVolume</c> path — and
     ///         the image read, which used to come back <c>NotFound</c> and let the reconciler proceed
@@ -758,7 +822,12 @@ public static class VirtualMachines {
                 ["namespace"] = ns,
                 ["ownerReferences"] = new JsonArray(
                     KubeJson.OwnerReference(
-                        new() { ApiVersion = VirtualMachineKind.ApiVersion, Kind = VirtualMachineKind.Kind, Name = objectName, Uid = string.Empty }
+                        new() {
+                            ApiVersion = VirtualMachineKind.ApiVersion,
+                            Kind = VirtualMachineKind.Kind,
+                            Name = objectName,
+                            Uid = string.Empty
+                        }
                     )
                 )
             },
@@ -793,13 +862,17 @@ public static class VirtualMachines {
     /// </summary>
     /// <param name="objectJson">The object's JSON, exactly as the API server returned it.</param>
     /// <remarks>
-    ///     ⚠ <b>This is where the power state lives, and the reconciler reads it before every
-    ///     render.</b> <c>Always</c> or <c>Halted</c> is what a power action last wrote, or what an
+    ///     ⚠
+    ///     <b>
+    ///         This is where the power state lives, and the reconciler reads it before every
+    ///         render.
+    ///     </b> <c>Always</c> or <c>Halted</c> is what a power action last wrote, or what an
     ///     operator's <c>virtctl</c> wrote — and the reconciler preserves either, because a pass that
     ///     turned a machine back on while correcting an unrelated field would be the drift correction
     ///     tenants complain about.
     /// </remarks>
-    public static string RunStrategyOf(string objectJson) => ComputeBodies.TextOf(ComputeBodies.Spec(objectJson)?["runStrategy"]);
+    public static string RunStrategyOf(string objectJson) =>
+        ComputeBodies.TextOf(ComputeBodies.Spec(objectJson)?["runStrategy"]);
 
     /// <summary>
     ///     Whether a <c>VirtualMachine</c> read back carries what the desired body asks for, whatever
@@ -823,7 +896,8 @@ public static class VirtualMachines {
     ///     </para>
     /// </remarks>
     public static bool Matches(string objectJson, string ns, JsonElement desired) {
-        if (ComputeBodies.Kind(objectJson) != VirtualMachineKind.Kind || ComputeBodies.Spec(objectJson) is not { } spec) {
+        if (ComputeBodies.Kind(objectJson) != VirtualMachineKind.Kind
+            || ComputeBodies.Spec(objectJson) is not { } spec) {
             return false;
         }
 
@@ -831,7 +905,8 @@ public static class VirtualMachines {
         var template = spec["template"]?["spec"] as JsonObject;
         var domain = template?["domain"] as JsonObject;
 
-        if (ComputeBodies.WholeOf(domain?["cpu"]?["cores"]) != cores || ComputeBodies.TextOf(domain?["memory"]?["guest"]) != memory) {
+        if (ComputeBodies.WholeOf(domain?["cpu"]?["cores"]) != cores
+            || ComputeBodies.TextOf(domain?["memory"]?["guest"]) != memory) {
             return false;
         }
 
@@ -846,8 +921,8 @@ public static class VirtualMachines {
         var volumes = (template?["volumes"] as JsonArray)?.OfType<JsonObject>().ToList() ?? [];
 
         var claims = volumes
-            .Select(x => ComputeBodies.TextOf(x["persistentVolumeClaim"]?["claimName"]))
-            .Where(x => x.Length > 0)
+            .Select(static x => ComputeBodies.TextOf(x["persistentVolumeClaim"]?["claimName"]))
+            .Where(static x => x.Length > 0)
             .ToHashSet(StringComparer.Ordinal);
 
         var wanted = DataDisks(desired).Select(Disks.ObjectNameOf).ToHashSet(StringComparer.Ordinal);
@@ -856,7 +931,7 @@ public static class VirtualMachines {
             return false;
         }
 
-        var hasCloudInit = volumes.Any(x => x["cloudInitNoCloud"] is JsonObject);
+        var hasCloudInit = volumes.Exists(static x => x["cloudInitNoCloud"] is JsonObject);
 
         if (hasCloudInit != HasCloudInit(desired)) {
             return false;
@@ -865,7 +940,8 @@ public static class VirtualMachines {
         var logicalSwitch = LogicalSwitchOf(ns, desired);
 
         return logicalSwitch.Length == 0
-            || ComputeBodies.TextOf(spec["template"]?["metadata"]?["annotations"]?[LogicalSwitchAnnotation]) == logicalSwitch;
+            || ComputeBodies.TextOf(spec["template"]?["metadata"]?["annotations"]?[LogicalSwitchAnnotation])
+            == logicalSwitch;
     }
 
     /// <summary>What KubeVirt says about a machine, read off its <c>status</c>.</summary>
@@ -882,8 +958,11 @@ public static class VirtualMachines {
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The scheduler's sentence is the one a tenant on a node without KVM needs.</b>
-    ///         <c>ErrorUnschedulable</c> alone says a machine is stuck; <i>"Insufficient
-    ///         devices.kubevirt.io/kvm"</i> says the node has no KVM device to give — the state a
+    ///         <c>ErrorUnschedulable</c> alone says a machine is stuck;
+    ///         <i>
+    ///             "Insufficient
+    ///             devices.kubevirt.io/kvm"
+    ///         </i> says the node has no KVM device to give — the state a
     ///         real node without nested virtualization leaves a machine in, and the one
     ///         <c>charts/bundle/bundle.yaml § owed</c>, <c>virtual-machines-need-a-node-with-kvm</c>,
     ///         predicted for the k3s-in-Docker lane before the lane was measured. KubeVirt mirrors the
@@ -924,11 +1003,13 @@ public static class VirtualMachines {
 
     /// <summary>The <c>status.phase</c> of a <c>VirtualMachineInstance</c>, or empty.</summary>
     /// <param name="instanceJson">The instance's JSON, exactly as the API server returned it.</param>
-    public static string InstancePhase(string instanceJson) => ComputeBodies.TextOf(ComputeBodies.Status(instanceJson)?["phase"]);
+    public static string InstancePhase(string instanceJson) =>
+        ComputeBodies.TextOf(ComputeBodies.Status(instanceJson)?["phase"]);
 
     /// <summary>The <c>status.printableStatus</c> of a <c>VirtualMachine</c>, or empty.</summary>
     /// <param name="objectJson">The object's JSON, exactly as the API server returned it.</param>
-    public static string PrintableStatus(string objectJson) => ComputeBodies.TextOf(ComputeBodies.Status(objectJson)?["printableStatus"]);
+    public static string PrintableStatus(string objectJson) =>
+        ComputeBodies.TextOf(ComputeBodies.Status(objectJson)?["printableStatus"]);
 
     /// <summary>KubeVirt's verdict on a machine, reduced to the three answers a reconciler acts on.</summary>
     /// <param name="Kind">Which of the three.</param>
@@ -978,7 +1059,7 @@ public static class VirtualMachines {
                 ["size"] = size,
                 ["image"] = image,
                 ["osDiskSize"] = osDiskSize,
-                ["dataDisks"] = new JsonArray([.. (dataDisks ?? []).Select(x => (JsonNode)JsonValue.Create(x))]),
+                ["dataDisks"] = new JsonArray([.. (dataDisks ?? []).Select(static x => (JsonNode)JsonValue.Create(x))]),
                 ["network"] = new JsonObject { ["virtualNetwork"] = virtualNetwork, ["subnet"] = subnet },
                 ["cloudInit"] = new JsonObject { ["userData"] = cloudInit }
             }

@@ -129,123 +129,123 @@ public static class CyberCloudSchema {
             // G's own parent edge — one hop longer, which is what IManagementGroupGrain.MaxDepth
             // budgets for. ReBacScopeRelationWriter.RelinkParentAsync is the one place the swap is
             // made, and it deletes the old edge before writing the new one.
-            .DefineType(ObjectTypes.ManagementGroup)
-            .Relation(Relations.Parent)
-            .Role(Relations.Owner, This | From(Relations.Parent, Relations.Owner))
-            .Role(
-                Relations.Contributor,
-                This | From(Relations.Parent, Relations.Contributor) | Rel(Relations.Owner)
-            )
-            .Role(
-                Relations.Reader,
-                This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
-            )
-            .Relation(Relations.Suspended)
-            .Permission(Permissions.Read, Rel(Relations.Reader))
-            .Permission(Permissions.Write, Rel(Relations.Contributor))
-            .Permission(Permissions.Delete, Rel(Relations.Owner))
-            .Permission(
-                Permissions.AssignRole,
-                Rel(Relations.Owner) & !Rel(Relations.Suspended)
-            )
-            .DefineType(ObjectTypes.Subscription)
-            .Relation(Relations.Parent)
-            .Role(Relations.Owner, This | From(Relations.Parent, Relations.Owner))
-            .Role(
-                Relations.Contributor,
-                This | From(Relations.Parent, Relations.Contributor) | Rel(Relations.Owner)
-            )
-            .Role(
-                Relations.Reader,
-                This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
-            )
-            .Relation(Relations.Suspended)
-            .Permission(Permissions.Read, Rel(Relations.Reader))
-            .Permission(Permissions.Write, Rel(Relations.Contributor))
-            .Permission(Permissions.Delete, Rel(Relations.Owner))
-            .Permission(
-                Permissions.AssignRole,
-                Rel(Relations.Owner) & !Rel(Relations.Suspended)
-            )
-            .DefineType(ObjectTypes.ResourceGroup)
-            .Relation(Relations.Parent)
-            .Role(Relations.Owner, This | From(Relations.Parent, Relations.Owner))
-            .Role(
-                Relations.Contributor,
-                This | From(Relations.Parent, Relations.Contributor) | Rel(Relations.Owner)
-            )
-            .Role(
-                Relations.Reader,
-                This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
-            )
-            .Relation(Relations.Suspended)
-            .Permission(Permissions.Read, Rel(Relations.Reader))
-            .Permission(Permissions.Write, Rel(Relations.Contributor))
-            .Permission(Permissions.Delete, Rel(Relations.Owner))
-            .Permission(
-                Permissions.AssignRole,
-                Rel(Relations.Owner) & !Rel(Relations.Suspended)
-            )
-            .DefineType(ObjectTypes.Resource)
-            .Relation(Relations.Parent)
-            .Role(Relations.Owner, This | From(Relations.Parent, Relations.Owner))
-            .Role(
-                Relations.Contributor,
-                This | From(Relations.Parent, Relations.Contributor) | Rel(Relations.Owner)
-            )
-            .Role(
-                Relations.Reader,
-                This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
-            )
-            .Relation(Relations.Suspended)
-            .Permission(Permissions.Read, Rel(Relations.Reader))
-            .Permission(Permissions.Write, Rel(Relations.Contributor))
-            .Permission(Permissions.Delete, Rel(Relations.Owner))
-            .Permission(
-                Permissions.AssignRole,
-                Rel(Relations.Owner) & !Rel(Relations.Suspended)
-            )
-            // ⚠ THE PERMISSION THE RESOURCE MANAGER HAS BEEN CHECKING SINCE SOFT DELETE SHIPPED, AND
-            // THAT NOTHING DEFINED UNTIL NOW.
-            //
-            // SoftDeletePolicy.DefaultPurgePermission is "purge" and ResourceManagerService.PurgeAsync
-            // checks it through the real authorizer. A permission this schema does not declare can only
-            // ever evaluate false, and the enforcement seam turns a false into the canonical 404 — so
-            // on a real silo every purge answered "does not exist", by anybody, forever: the name stayed
-            // held and the committed quota was never returned. Every purge test in the repository runs
-            // against a doubled authorizer, which answers whatever its author believed, so the gap was
-            // invisible until test/CyberCloud.Isolation drove one through this schema.
-            //
-            // ⚠ ON `resource` AND ON NOTHING ELSE, because nothing else is ever parked. A tenant, a
-            // subscription and a resource group are deleted or they are not.
-            //
-            // ⚠ Rel(owner), WHICH IS WHAT MAKES IT REACHABLE BY THE RIGHT PARTY RATHER THAN BY THE
-            // OBVIOUS ONE. docs/plan/08 § Soft delete re-parents a parked resource to its SUBSCRIPTION
-            // and drops its direct role assignments, so `owner` here resolves through
-            // From(parent, owner) to a subscription owner — "the people who can see a deleted resource
-            // become the people who hold subscription-scoped rights, which is exactly who Azure gives
-            // deletedVaults/read and purge/action to". The resource-group owner whose DELETE parked it
-            // is no longer in that set, which is the separation that actually bites.
-            //
-            // ⚠ AND THE NEGATION IS THE ONLY SEPARATION FROM `delete` THIS SCHEMA CAN EXPRESS TODAY —
-            // SAID PLAINLY BECAUSE IT IS LESS THAN docs/plan/08 DESCRIBES. That section wants "a role
-            // can hold the first without the second", copying `deletedVaults/purge/action` sitting in
-            // Key Vault Contributor's notActions. Here `delete` is already Rel(owner), so any purge
-            // defined in terms of owner is held by everyone who can delete. What this does deliver is
-            // a deny assignment that removes purge while leaving delete, which is `notActions` with
-            // one row in it — RoleAssignmentViewTests.ADenyAssignmentRemovesPurgeAndLeavesDeleteAndNoGrantSeparatesThem,
-            // which runs THIS schema and which nothing did until it was written.
-            //
-            // ⚠ A GRANTABLE `purger` RELATION WOULD NOT FIX IT, AND THE REASON IS CONCRETE. Role
-            // tuples ARE writable now — IRoleAssignmentManager over ITupleStoreGrain, issue #70 — so
-            // the older half of this argument ("a relation nobody can be given") is gone. What
-            // remains is the deeper one: the separation Azure achieves lives BETWEEN TWO ROLES, and
-            // here there is no role beneath owner that can delete — `delete` is Rel(owner) while
-            // Azure's Contributor deletes. The question underneath was whether `delete` should be
-            // Rel(contributor), and docs/plan/07 § Azure RBAC decides it: NO, deliberately, because
-            // owner-only delete is what keeps `purge` unreachable to a contributor.
-            // RoleAssignmentTests.AContributorCanWriteButNotDeleteByDecision pins it through a real
-            // Contributor grant, and its message names that paragraph as the one to change first.
+                .DefineType(ObjectTypes.ManagementGroup)
+                .Relation(Relations.Parent)
+                .Role(Relations.Owner, This | From(Relations.Parent, Relations.Owner))
+                .Role(
+                    Relations.Contributor,
+                    This | From(Relations.Parent, Relations.Contributor) | Rel(Relations.Owner)
+                )
+                .Role(
+                    Relations.Reader,
+                    This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
+                )
+                .Relation(Relations.Suspended)
+                .Permission(Permissions.Read, Rel(Relations.Reader))
+                .Permission(Permissions.Write, Rel(Relations.Contributor))
+                .Permission(Permissions.Delete, Rel(Relations.Owner))
+                .Permission(
+                    Permissions.AssignRole,
+                    Rel(Relations.Owner) & !Rel(Relations.Suspended)
+                )
+                .DefineType(ObjectTypes.Subscription)
+                .Relation(Relations.Parent)
+                .Role(Relations.Owner, This | From(Relations.Parent, Relations.Owner))
+                .Role(
+                    Relations.Contributor,
+                    This | From(Relations.Parent, Relations.Contributor) | Rel(Relations.Owner)
+                )
+                .Role(
+                    Relations.Reader,
+                    This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
+                )
+                .Relation(Relations.Suspended)
+                .Permission(Permissions.Read, Rel(Relations.Reader))
+                .Permission(Permissions.Write, Rel(Relations.Contributor))
+                .Permission(Permissions.Delete, Rel(Relations.Owner))
+                .Permission(
+                    Permissions.AssignRole,
+                    Rel(Relations.Owner) & !Rel(Relations.Suspended)
+                )
+                .DefineType(ObjectTypes.ResourceGroup)
+                .Relation(Relations.Parent)
+                .Role(Relations.Owner, This | From(Relations.Parent, Relations.Owner))
+                .Role(
+                    Relations.Contributor,
+                    This | From(Relations.Parent, Relations.Contributor) | Rel(Relations.Owner)
+                )
+                .Role(
+                    Relations.Reader,
+                    This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
+                )
+                .Relation(Relations.Suspended)
+                .Permission(Permissions.Read, Rel(Relations.Reader))
+                .Permission(Permissions.Write, Rel(Relations.Contributor))
+                .Permission(Permissions.Delete, Rel(Relations.Owner))
+                .Permission(
+                    Permissions.AssignRole,
+                    Rel(Relations.Owner) & !Rel(Relations.Suspended)
+                )
+                .DefineType(ObjectTypes.Resource)
+                .Relation(Relations.Parent)
+                .Role(Relations.Owner, This | From(Relations.Parent, Relations.Owner))
+                .Role(
+                    Relations.Contributor,
+                    This | From(Relations.Parent, Relations.Contributor) | Rel(Relations.Owner)
+                )
+                .Role(
+                    Relations.Reader,
+                    This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
+                )
+                .Relation(Relations.Suspended)
+                .Permission(Permissions.Read, Rel(Relations.Reader))
+                .Permission(Permissions.Write, Rel(Relations.Contributor))
+                .Permission(Permissions.Delete, Rel(Relations.Owner))
+                .Permission(
+                    Permissions.AssignRole,
+                    Rel(Relations.Owner) & !Rel(Relations.Suspended)
+                )
+                // ⚠ THE PERMISSION THE RESOURCE MANAGER HAS BEEN CHECKING SINCE SOFT DELETE SHIPPED, AND
+                // THAT NOTHING DEFINED UNTIL NOW.
+                //
+                // SoftDeletePolicy.DefaultPurgePermission is "purge" and ResourceManagerService.PurgeAsync
+                // checks it through the real authorizer. A permission this schema does not declare can only
+                // ever evaluate false, and the enforcement seam turns a false into the canonical 404 — so
+                // on a real silo every purge answered "does not exist", by anybody, forever: the name stayed
+                // held and the committed quota was never returned. Every purge test in the repository runs
+                // against a doubled authorizer, which answers whatever its author believed, so the gap was
+                // invisible until test/CyberCloud.Isolation drove one through this schema.
+                //
+                // ⚠ ON `resource` AND ON NOTHING ELSE, because nothing else is ever parked. A tenant, a
+                // subscription and a resource group are deleted or they are not.
+                //
+                // ⚠ Rel(owner), WHICH IS WHAT MAKES IT REACHABLE BY THE RIGHT PARTY RATHER THAN BY THE
+                // OBVIOUS ONE. docs/plan/08 § Soft delete re-parents a parked resource to its SUBSCRIPTION
+                // and drops its direct role assignments, so `owner` here resolves through
+                // From(parent, owner) to a subscription owner — "the people who can see a deleted resource
+                // become the people who hold subscription-scoped rights, which is exactly who Azure gives
+                // deletedVaults/read and purge/action to". The resource-group owner whose DELETE parked it
+                // is no longer in that set, which is the separation that actually bites.
+                //
+                // ⚠ AND THE NEGATION IS THE ONLY SEPARATION FROM `delete` THIS SCHEMA CAN EXPRESS TODAY —
+                // SAID PLAINLY BECAUSE IT IS LESS THAN docs/plan/08 DESCRIBES. That section wants "a role
+                // can hold the first without the second", copying `deletedVaults/purge/action` sitting in
+                // Key Vault Contributor's notActions. Here `delete` is already Rel(owner), so any purge
+                // defined in terms of owner is held by everyone who can delete. What this does deliver is
+                // a deny assignment that removes purge while leaving delete, which is `notActions` with
+                // one row in it — RoleAssignmentViewTests.ADenyAssignmentRemovesPurgeAndLeavesDeleteAndNoGrantSeparatesThem,
+                // which runs THIS schema and which nothing did until it was written.
+                //
+                // ⚠ A GRANTABLE `purger` RELATION WOULD NOT FIX IT, AND THE REASON IS CONCRETE. Role
+                // tuples ARE writable now — IRoleAssignmentManager over ITupleStoreGrain, issue #70 — so
+                // the older half of this argument ("a relation nobody can be given") is gone. What
+                // remains is the deeper one: the separation Azure achieves lives BETWEEN TWO ROLES, and
+                // here there is no role beneath owner that can delete — `delete` is Rel(owner) while
+                // Azure's Contributor deletes. The question underneath was whether `delete` should be
+                // Rel(contributor), and docs/plan/07 § Azure RBAC decides it: NO, deliberately, because
+                // owner-only delete is what keeps `purge` unreachable to a contributor.
+                // RoleAssignmentTests.AContributorCanWriteButNotDeleteByDecision pins it through a real
+                // Contributor grant, and its message names that paragraph as the one to change first.
                 .Permission(
                     Permissions.Purge,
                     Rel(Relations.Owner) & !Rel(Relations.Suspended)

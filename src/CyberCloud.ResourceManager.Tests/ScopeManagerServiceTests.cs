@@ -10,8 +10,11 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Every case here creates its scopes through <see cref="IScopeManager.CreateAsync" />,
-///         for the reason <see cref="CollectionListingTests" /> gives.</b> The enumeration source is
+///         ⚠
+///         <b>
+///             Every case here creates its scopes through <see cref="IScopeManager.CreateAsync" />,
+///             for the reason <see cref="CollectionListingTests" /> gives.
+///         </b> The enumeration source is
 ///         the parent grain's own listing — <c>ITenantGrain.ListSubscriptionsAsync</c>, which
 ///         <c>ScopeManagerService.CreateSubscriptionAsync</c> appends to, and
 ///         <c>ISubscriptionGrain.ListResourceGroupsAsync</c>, which the subscription grain's own
@@ -37,7 +40,7 @@ public sealed class ScopeManagerServiceTests {
     public ScopeManagerServiceTests(ResourceManagerCluster cluster) {
         this.cluster = cluster;
 
-        scopes = new ScopeManagerService(
+        scopes = new(
             new SwitchableScopeAuthorizer(),
             new NoOpScopeRelationWriter(),
             cluster.Grains,
@@ -69,7 +72,7 @@ public sealed class ScopeManagerServiceTests {
 
         var page = await ListAsync(ScopeId.Tenant(tenant));
 
-        page.Items.Select(x => x.Path).ShouldBe([created[0].Path, created[2].Path]);
+        page.Items.Select(static x => x.Path).ShouldBe([created[0].Path, created[2].Path]);
         page.Continuation.ShouldBe("", "three members is not a full page, so there is nothing to resume");
     }
 
@@ -97,7 +100,7 @@ public sealed class ScopeManagerServiceTests {
 
         var page = await ListAsync(ScopeId.Tenant(tenant));
 
-        page.Items.Select(x => x.Path).ShouldBe(created.Select(x => x.Path));
+        page.Items.Select(static x => x.Path).ShouldBe(created.Select(static x => x.Path));
 
         SwitchableScopeAuthorizer.Asked.ShouldNotContain(
             ScopeId.Tenant(tenant),
@@ -188,15 +191,17 @@ public sealed class ScopeManagerServiceTests {
         var pages = 0;
 
         do {
-            var page = await ListAsync(ScopeId.Tenant(tenant), top: 2, continuation: continuation);
+            var page = await ListAsync(ScopeId.Tenant(tenant), 2, continuation);
 
             pages++;
-            seen.AddRange(page.Items.Select(x => x.Path));
+            seen.AddRange(page.Items.Select(static x => x.Path));
 
             if (page.HasMore) {
                 // ⚠ The last member EXAMINED, in the form the next request resumes after.
                 page.Continuation.ShouldBe(
-                    ScopeId.ParsePath(page.Items[^1].Path).GetValueOrThrow().SubscriptionId.ToString("N", CultureInfo.InvariantCulture)
+                    ScopeId.ParsePath(page.Items[^1].Path)
+                        .GetValueOrThrow()
+                        .SubscriptionId.ToString("N", CultureInfo.InvariantCulture)
                 );
             }
 
@@ -204,7 +209,7 @@ public sealed class ScopeManagerServiceTests {
         } while (continuation.Length > 0);
 
         pages.ShouldBe(3, "five members at two per page is three pages");
-        seen.ShouldBe(created.Select(x => x.Path), "the pages are the ordinal walk, each member once");
+        seen.ShouldBe(created.Select(static x => x.Path), "the pages are the ordinal walk, each member once");
         seen.Distinct(StringComparer.Ordinal).Count().ShouldBe(5);
     }
 
@@ -224,14 +229,14 @@ public sealed class ScopeManagerServiceTests {
         SwitchableScopeAuthorizer.Hidden[created[0]] = true;
         SwitchableScopeAuthorizer.Hidden[created[1]] = true;
 
-        var first = await ListAsync(ScopeId.Tenant(tenant), top: 2);
+        var first = await ListAsync(ScopeId.Tenant(tenant), 2);
 
         first.Items.ShouldBeEmpty();
         first.HasMore.ShouldBeTrue("an empty page with more behind it must still carry a continuation");
 
-        var second = await ListAsync(ScopeId.Tenant(tenant), top: 2, continuation: first.Continuation);
+        var second = await ListAsync(ScopeId.Tenant(tenant), 2, first.Continuation);
 
-        second.Items.Select(x => x.Path).ShouldBe([created[2].Path]);
+        second.Items.Select(static x => x.Path).ShouldBe([created[2].Path]);
         second.HasMore.ShouldBeFalse();
     }
 
@@ -251,9 +256,9 @@ public sealed class ScopeManagerServiceTests {
         var tenant = await NewTenantAsync();
         var created = await CreateSubscriptionsAsync(tenant, 3);
 
-        var page = await ListAsync(ScopeId.Tenant(tenant), top: ScopeListRequest.MaxPageSize + 500);
+        var page = await ListAsync(ScopeId.Tenant(tenant), ScopeListRequest.MaxPageSize + 500);
 
-        page.Items.Select(x => x.Path).ShouldBe(created.Select(x => x.Path));
+        page.Items.Select(static x => x.Path).ShouldBe(created.Select(static x => x.Path));
         page.HasMore.ShouldBeFalse();
         SwitchableScopeAuthorizer.CollectionsAsked.ShouldBe([(ScopeId.Tenant(tenant), 3)]);
     }
@@ -281,9 +286,10 @@ public sealed class ScopeManagerServiceTests {
 
         var fallback = await ListAsync(ScopeId.Tenant(tenant));
 
-        fallback.Items.Select(x => x.Path).ShouldBe([created[0].Path, created[1].Path]);
+        fallback.Items.Select(static x => x.Path).ShouldBe([created[0].Path, created[1].Path]);
         SwitchableScopeAuthorizer.CollectionsAsked.ShouldBe([(ScopeId.Tenant(tenant), 3)]);
-        SwitchableScopeAuthorizer.Asked.ToList().ShouldBe(created, "the fallback asks about every candidate, once, in order");
+        SwitchableScopeAuthorizer.Asked.ToList()
+            .ShouldBe(created, "the fallback asks about every candidate, once, in order");
 
         // Answered: one collection question and no member asked about at all.
         SwitchableScopeAuthorizer.CollectionsAsked.Clear();
@@ -292,9 +298,11 @@ public sealed class ScopeManagerServiceTests {
 
         var batched = await ListAsync(ScopeId.Tenant(tenant));
 
-        batched.Items.Select(x => x.Path).ShouldBe([created[0].Path, created[1].Path]);
+        batched.Items.Select(static x => x.Path).ShouldBe([created[0].Path, created[1].Path]);
         SwitchableScopeAuthorizer.CollectionsAsked.ShouldBe([(ScopeId.Tenant(tenant), 3)]);
-        SwitchableScopeAuthorizer.Asked.ShouldBeEmpty("the engine answered, so no member should have been checked on its own");
+        SwitchableScopeAuthorizer.Asked.ShouldBeEmpty(
+            "the engine answered, so no member should have been checked on its own"
+        );
     }
 
     /// <summary>
@@ -314,7 +322,7 @@ public sealed class ScopeManagerServiceTests {
 
         var page = await ListAsync(subscription);
 
-        page.Items.Select(x => x.Name).ShouldBe(["dev", "staging"]);
+        page.Items.Select(static x => x.Name).ShouldBe(["dev", "staging"]);
         page.Items.ShouldAllBe(x => x.Type == ScopeTypeNames.ResourceGroup && x.Location == "eu-west-1");
         SwitchableScopeAuthorizer.CollectionsAsked.ShouldBe([(subscription, 3)]);
     }
@@ -394,7 +402,12 @@ public sealed class ScopeManagerServiceTests {
             made.Add(scope);
         }
 
-        return [.. made.OrderBy(x => x.SubscriptionId.ToString("N", CultureInfo.InvariantCulture), StringComparer.Ordinal)];
+        return [
+            .. made.OrderBy(
+                static x => x.SubscriptionId.ToString("N", CultureInfo.InvariantCulture),
+                StringComparer.Ordinal
+            )
+        ];
     }
 
     Task<Result<ScopeSnapshot>> CreateGroupAsync(ScopeId subscription, string name) =>

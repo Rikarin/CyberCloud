@@ -63,7 +63,11 @@ public sealed class BearerTokenWiringTests {
         // hand it; an empty string is refused first, so a context with no services at all is enough.
         var validator = new JwksBearerTokenValidator(new SystemClock(), NullLogger<JwksBearerTokenValidator>.Instance);
 
-        var refused = await validator.ValidateAsync("", new DefaultHttpContext(), TestContext.Current.CancellationToken);
+        var refused = await validator.ValidateAsync(
+            "",
+            new DefaultHttpContext(),
+            TestContext.Current.CancellationToken
+        );
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);

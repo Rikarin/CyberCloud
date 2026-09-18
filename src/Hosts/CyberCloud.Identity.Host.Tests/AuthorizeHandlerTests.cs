@@ -38,27 +38,38 @@ namespace CyberCloud.Identity.Host.Tests;
 public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
     static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    const string Path = "/authorize?response_type=code&client_id=cyc-portal&state=s&code_challenge=c&code_challenge_method=S256";
+    const string Path =
+        "/authorize?response_type=code&client_id=cyc-portal&state=s&code_challenge=c&code_challenge_method=S256";
 
     [Fact]
     public async Task AFullyAuthenticatedCookieYieldsACodeForAFirstPartyClient() {
         var (cookie, session) = await SignedInAsync();
 
-        var decision = await Api.DecideAsync(Request(), IdentityHostFixture.Tenant, Portal, cookie, Path, cancellationToken: Ct);
+        var decision = await Api.DecideAsync(
+            Request(),
+            IdentityHostFixture.Tenant,
+            Portal,
+            cookie,
+            Path,
+            cancellationToken: Ct
+        );
 
         var code = decision.ShouldBeOfType<AuthorizeDecision.IssueCode>();
 
         code.Principal.GetClaim(AccessTokenClaims.Subject).ShouldBe(fixture.UserId.ToString("N"));
         code.Principal.GetClaim(AccessTokenClaims.TenantId).ShouldBe(IdentityHostFixture.Tenant.ToString("N"));
-        code.Principal.GetClaim(AccessTokenClaims.SessionId).ShouldBe(session.ToString("N"), "the code names the interactive session");
+        code.Principal.GetClaim(AccessTokenClaims.SessionId)
+            .ShouldBe(session.ToString("N"), "the code names the interactive session");
         code.Principal.GetClaim(AccessTokenClaims.SubjectType).ShouldBe(SubjectTypes.User);
         code.Principal.GetPresenters().ShouldBe([FirstPartyClients.Portal]);
         code.Principal.GetAudiences().ShouldBe([AccessTokenPolicy.Audience]);
-        code.Principal.GetScopes().ShouldBe(["openid", "profile", "offline_access", "cyc.api"], ignoreOrder: true);
+        code.Principal.GetScopes().ShouldBe(["openid", "profile", "offline_access", "cyc.api"], true);
 
         // The profile, for the id_token only.
         code.Principal.FindFirst(OpenIddictConstants.Claims.Email)!.Value.ShouldBe(IdentityHostFixture.Email);
-        code.Principal.FindFirst(OpenIddictConstants.Claims.Email)!.GetDestinations().ShouldBe([OpenIddictConstants.Destinations.IdentityToken]);
+        code.Principal.FindFirst(OpenIddictConstants.Claims.Email)!
+            .GetDestinations()
+            .ShouldBe([OpenIddictConstants.Destinations.IdentityToken]);
         code.Principal.FindFirst(OpenIddictConstants.Claims.Name)!.Value.ShouldBe(IdentityHostFixture.DisplayName);
     }
 
@@ -66,9 +77,18 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
     public async Task TheCodePrincipalCarriesTheInteractiveAuthTime() {
         var (cookie, session) = await SignedInAsync();
 
-        var described = (await fixture.For(IdentityHostFixture.Tenant).GetGrain<ISessionGrain>(GrainKeys.Session(session)).GetAsync()).GetValueOrThrow();
+        var described = (await fixture.For(IdentityHostFixture.Tenant)
+                .GetGrain<ISessionGrain>(GrainKeys.Session(session))
+                .GetAsync()).GetValueOrThrow();
 
-        var code = (await Api.DecideAsync(Request(), IdentityHostFixture.Tenant, Portal, cookie, Path, cancellationToken: Ct))
+        var code = (await Api.DecideAsync(
+                Request(),
+                IdentityHostFixture.Tenant,
+                Portal,
+                cookie,
+                Path,
+                cancellationToken: Ct
+            ))
             .ShouldBeOfType<AuthorizeDecision.IssueCode>();
 
         // ⚠ The grain's AuthenticatedAt, typed as an integer — OpenIddict refuses the sign-in
@@ -80,7 +100,9 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
         authTime.ValueType.ShouldBe(ClaimValueTypes.Integer64);
 
         // And both factors, not only the one the grain recorded — AuthorizeApi.WithCookieMethods.
-        code.Principal.FindAll(AccessTokenClaims.AuthenticationMethods).Select(x => x.Value).ShouldBe(["pwd", "otp"]);
+        code.Principal.FindAll(AccessTokenClaims.AuthenticationMethods)
+            .Select(static x => x.Value)
+            .ShouldBe(["pwd", "otp"]);
     }
 
     [Fact]
@@ -89,14 +111,23 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
 
         var pending = IdentitySessionPrincipal.Build(
             IdentityHostFixture.Tenant,
-            SignInOutcome.Success(fixture.UserId, session, AuthenticationMethod.Password, secondFactorRequired: true)
+            SignInOutcome.Success(fixture.UserId, session, AuthenticationMethod.Password, true)
         );
 
-        var decision = await Api.DecideAsync(Request(), IdentityHostFixture.Tenant, Portal, pending, Path, cancellationToken: Ct);
+        var decision = await Api.DecideAsync(
+            Request(),
+            IdentityHostFixture.Tenant,
+            Portal,
+            pending,
+            Path,
+            cancellationToken: Ct
+        );
 
         var signIn = decision.ShouldBeOfType<AuthorizeDecision.SignIn>();
 
-        signIn.Location.ShouldStartWith(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.SignInPagePath + "?returnUrl=");
+        signIn.Location.ShouldStartWith(
+            IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.SignInPagePath + "?returnUrl="
+        );
         Uri.UnescapeDataString(signIn.Location.Split("returnUrl=")[1]).ShouldBe(Path);
     }
 
@@ -106,7 +137,14 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
 
         // The same person, the same live session — asked to authorize a request that resolved to a
         // tenant the cookie was not issued for.
-        var decision = await Api.DecideAsync(Request(), IdentityHostFixture.OtherTenant, Portal, cookie, Path, cancellationToken: Ct);
+        var decision = await Api.DecideAsync(
+            Request(),
+            IdentityHostFixture.OtherTenant,
+            Portal,
+            cookie,
+            Path,
+            cancellationToken: Ct
+        );
 
         decision.ShouldBeOfType<AuthorizeDecision.SignIn>();
     }
@@ -116,10 +154,19 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
         var (cookie, session) = await SignedInAsync();
 
         // A cookie outlives its session by up to eight hours; only the grain knows.
-        (await fixture.For(IdentityHostFixture.Tenant).GetGrain<ISessionGrain>(GrainKeys.Session(session)).RevokeAsync(RevocationReason.AdminAction))
+        (await fixture.For(IdentityHostFixture.Tenant)
+                .GetGrain<ISessionGrain>(GrainKeys.Session(session))
+                .RevokeAsync(RevocationReason.AdminAction))
             .IsSuccess.ShouldBeTrue();
 
-        var decision = await Api.DecideAsync(Request(), IdentityHostFixture.Tenant, Portal, cookie, Path, cancellationToken: Ct);
+        var decision = await Api.DecideAsync(
+            Request(),
+            IdentityHostFixture.Tenant,
+            Portal,
+            cookie,
+            Path,
+            cancellationToken: Ct
+        );
 
         decision.ShouldBeOfType<AuthorizeDecision.SignIn>();
     }
@@ -128,7 +175,14 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
     public async Task PromptNoneWithoutASessionIsLoginRequired() {
         var anonymous = new ClaimsPrincipal(new ClaimsIdentity());
 
-        var decision = await Api.DecideAsync(Request(prompt: "none"), IdentityHostFixture.Tenant, Portal, anonymous, Path + "&prompt=none", cancellationToken: Ct);
+        var decision = await Api.DecideAsync(
+            Request(prompt: "none"),
+            IdentityHostFixture.Tenant,
+            Portal,
+            anonymous,
+            Path + "&prompt=none",
+            cancellationToken: Ct
+        );
 
         var refused = decision.ShouldBeOfType<AuthorizeDecision.Refuse>();
 
@@ -139,7 +193,14 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
     public async Task PromptLoginSendsEvenASignedInPersonToSignIn() {
         var (cookie, _) = await SignedInAsync();
 
-        var decision = await Api.DecideAsync(Request(prompt: "login"), IdentityHostFixture.Tenant, Portal, cookie, Path + "&prompt=login", cancellationToken: Ct);
+        var decision = await Api.DecideAsync(
+            Request(prompt: "login"),
+            IdentityHostFixture.Tenant,
+            Portal,
+            cookie,
+            Path + "&prompt=login",
+            cancellationToken: Ct
+        );
 
         var signIn = decision.ShouldBeOfType<AuthorizeDecision.SignIn>();
 
@@ -182,22 +243,34 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
 
         var context = await ValidateAsync(request);
 
-        context.IsRejected.ShouldBeFalse("a first-party client with an unknown tenant hint has a page to go to, and the validator must let the passthrough send it there");
+        context.IsRejected.ShouldBeFalse(
+            "a first-party client with an unknown tenant hint has a page to go to, and the validator must let the passthrough send it there"
+        );
         context.Transaction.Properties.ShouldContainKey(DegradedModeHandlers.UnknownTenantProperty);
         context.Transaction.Properties[DegradedModeHandlers.ClientProperty].ShouldBeOfType<ApplicationRegistration>()
-            .ClientId.ShouldBe(FirstPartyClients.Portal, "the redirect_uri is still validated, against the static registration");
+            .ClientId.ShouldBe(
+                FirstPartyClients.Portal,
+                "the redirect_uri is still validated, against the static registration"
+            );
 
-        var location = Api.SignInLocationWithoutTenant("/authorize?client_id=cyc-portal&tenant=gone-tenant&state=s&prompt=login", "gone-tenant", FirstPartyClients.Portal);
+        var location = Api.SignInLocationWithoutTenant(
+            "/authorize?client_id=cyc-portal&tenant=gone-tenant&state=s&prompt=login",
+            "gone-tenant",
+            FirstPartyClients.Portal
+        );
 
         Uri.UnescapeDataString(location.Split("returnUrl=")[1])
-            .ShouldBe("/authorize?client_id=cyc-portal&state=s", "the hint comes off so the sign-in page asks for the organisation, and prompt=login comes off as it always does");
+            .ShouldBe(
+                "/authorize?client_id=cyc-portal&state=s",
+                "the hint comes off so the sign-in page asks for the organisation, and prompt=login comes off as it always does"
+            );
     }
 
     [Fact]
     public async Task AHintNamingNoTenantIsStillAnErrorForATenantClientAndForNoHintAtAll() {
         // A tenant's own client is registered IN a tenant: with no tenant there is no registration
         // to validate the redirect_uri against, so the error page is the only honest answer.
-        var request = Request(clientId: "some-tenant-app");
+        var request = Request("some-tenant-app");
         request[TenantHint.ParameterName] = Guid.NewGuid().ToString("D");
 
         var context = await ValidateAsync(request);
@@ -222,37 +295,73 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
             IsPublicClient = true
         };
 
-        var request = Request(clientId: clientId);
+        var request = Request(clientId);
         var path = Path.Replace("client_id=cyc-portal", "client_id=" + clientId, StringComparison.Ordinal);
 
         // ── 1. Nothing on record: the consent page, with this request as the return URL. ───────
-        var asked = await Api.DecideAsync(request, IdentityHostFixture.Tenant, thirdParty, cookie, path, cancellationToken: Ct);
+        var asked = await Api.DecideAsync(
+            request,
+            IdentityHostFixture.Tenant,
+            thirdParty,
+            cookie,
+            path,
+            cancellationToken: Ct
+        );
 
         var consent = asked.ShouldBeOfType<AuthorizeDecision.Consent>();
 
-        consent.Location.ShouldStartWith(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath + "?returnUrl=");
+        consent.Location.ShouldStartWith(
+            IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath + "?returnUrl="
+        );
         Uri.UnescapeDataString(consent.Location.Split("returnUrl=")[1]).ShouldBe(path);
 
         // ⚠ A consent=allow that arrived any way but the page's POST is no answer — the endpoint
         // passes null for a GET, and null is what this call passes. prompt=none with nothing on
         // record is consent_required, because that is what the client asked to be told.
-        (await Api.DecideAsync(Request(clientId: clientId, prompt: "none"), IdentityHostFixture.Tenant, thirdParty, cookie, path, cancellationToken: Ct))
+        (await Api.DecideAsync(
+                Request(clientId, "none"),
+                IdentityHostFixture.Tenant,
+                thirdParty,
+                cookie,
+                path,
+                cancellationToken: Ct
+            ))
             .ShouldBeOfType<AuthorizeDecision.Refuse>()
             .Error.ShouldBe(OpenIddictConstants.Errors.ConsentRequired);
 
         // ── 2. Deny: access_denied to the client, nothing recorded. ────────────────────────────
-        var denied = await Api.DecideAsync(request, IdentityHostFixture.Tenant, thirdParty, cookie, path, ConsentDecision.Deny, Ct);
+        var denied = await Api.DecideAsync(
+            request,
+            IdentityHostFixture.Tenant,
+            thirdParty,
+            cookie,
+            path,
+            ConsentDecision.Deny,
+            Ct
+        );
 
         denied.ShouldBeOfType<AuthorizeDecision.Refuse>().Error.ShouldBe(OpenIddictConstants.Errors.AccessDenied);
-        (await fixture.For(IdentityHostFixture.Tenant).GetGrain<IConsentGrain>(GrainKeys.ConsentGrant(IdentityHostFixture.Tenant, fixture.UserId, clientId)).GetAsync())
+        (await fixture.For(IdentityHostFixture.Tenant)
+                .GetGrain<IConsentGrain>(GrainKeys.ConsentGrant(IdentityHostFixture.Tenant, fixture.UserId, clientId))
+                .GetAsync())
             .IsFailure.ShouldBeTrue("a denial was recorded as a grant");
 
         // ── 3. Allow: the grant is recorded first and the code minted second. ──────────────────
-        var allowed = await Api.DecideAsync(request, IdentityHostFixture.Tenant, thirdParty, cookie, path, ConsentDecision.Allow, Ct);
+        var allowed = await Api.DecideAsync(
+            request,
+            IdentityHostFixture.Tenant,
+            thirdParty,
+            cookie,
+            path,
+            ConsentDecision.Allow,
+            Ct
+        );
 
         allowed.ShouldBeOfType<AuthorizeDecision.IssueCode>().Principal.GetPresenters().ShouldBe([clientId]);
 
-        var recorded = await fixture.For(IdentityHostFixture.Tenant).GetGrain<IConsentGrain>(GrainKeys.ConsentGrant(IdentityHostFixture.Tenant, fixture.UserId, clientId)).GetAsync();
+        var recorded = await fixture.For(IdentityHostFixture.Tenant)
+            .GetGrain<IConsentGrain>(GrainKeys.ConsentGrant(IdentityHostFixture.Tenant, fixture.UserId, clientId))
+            .GetAsync();
 
         recorded.GetValueOrThrow().Scopes.ShouldBe(["openid", "profile", "offline_access", "cyc.api"]);
 
@@ -260,10 +369,19 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
         (await Api.DecideAsync(request, IdentityHostFixture.Tenant, thirdParty, cookie, path, cancellationToken: Ct))
             .ShouldBeOfType<AuthorizeDecision.IssueCode>();
 
-        (await Api.DecideAsync(Request(clientId: clientId, prompt: "consent"), IdentityHostFixture.Tenant, thirdParty, cookie, path, cancellationToken: Ct))
+        (await Api.DecideAsync(
+                Request(clientId, "consent"),
+                IdentityHostFixture.Tenant,
+                thirdParty,
+                cookie,
+                path,
+                cancellationToken: Ct
+            ))
             .ShouldBeOfType<AuthorizeDecision.Consent>();
 
-        (await fixture.For(IdentityHostFixture.Tenant).GetGrain<IConsentGrain>(GrainKeys.ConsentGrant(IdentityHostFixture.Tenant, fixture.UserId, clientId)).RevokeAsync())
+        (await fixture.For(IdentityHostFixture.Tenant)
+                .GetGrain<IConsentGrain>(GrainKeys.ConsentGrant(IdentityHostFixture.Tenant, fixture.UserId, clientId))
+                .RevokeAsync())
             .IsSuccess.ShouldBeTrue();
 
         (await Api.DecideAsync(request, IdentityHostFixture.Tenant, thirdParty, cookie, path, cancellationToken: Ct))
@@ -278,15 +396,17 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
 
     [Fact]
     public async Task AnUnregisteredRedirectUriIsRefusedWithoutARedirect() {
-        var context = await ValidateAsync(new OpenIddictRequest {
-            ClientId = FirstPartyClients.Portal,
-            RedirectUri = "https://evil.example/callback",
-            ResponseType = "code",
-            CodeChallenge = "c",
-            CodeChallengeMethod = "S256",
-            Scope = "openid",
-            [TenantHint.ParameterName] = IdentityHostFixture.Slug
-        });
+        var context = await ValidateAsync(
+            new OpenIddictRequest {
+                ClientId = FirstPartyClients.Portal,
+                RedirectUri = "https://evil.example/callback",
+                ResponseType = "code",
+                CodeChallenge = "c",
+                CodeChallengeMethod = "S256",
+                Scope = "openid",
+                [TenantHint.ParameterName] = IdentityHostFixture.Slug
+            }
+        );
 
         context.IsRejected.ShouldBeTrue();
         context.Error.ShouldBe(OpenIddictConstants.Errors.InvalidRequest);
@@ -319,21 +439,24 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
 
         registered.IsSuccess.ShouldBeTrue(registered.Error?.Message);
 
-        var resolved = await fixture.Services.GetRequiredService<IClientResolver>().ResolveAsync(IdentityHostFixture.Tenant, FirstPartyClients.Portal, Ct);
+        var resolved = await fixture.Services.GetRequiredService<IClientResolver>()
+            .ResolveAsync(IdentityHostFixture.Tenant, FirstPartyClients.Portal, Ct);
 
         resolved.ShouldNotBeNull();
         resolved.TenantId.ShouldBe(Guid.Empty, "the first-party registration, not the tenant's");
         resolved.RedirectUris.ShouldBe([FirstPartyClients.DevelopmentPortalRedirectUri]);
 
         // And the validator agrees: the tenant's redirect URI is not registered for cyc-portal.
-        var context = await ValidateAsync(new OpenIddictRequest {
-            ClientId = FirstPartyClients.Portal,
-            RedirectUri = "https://evil.example/callback",
-            ResponseType = "code",
-            CodeChallenge = "c",
-            CodeChallengeMethod = "S256",
-            [TenantHint.ParameterName] = IdentityHostFixture.Slug
-        });
+        var context = await ValidateAsync(
+            new OpenIddictRequest {
+                ClientId = FirstPartyClients.Portal,
+                RedirectUri = "https://evil.example/callback",
+                ResponseType = "code",
+                CodeChallenge = "c",
+                CodeChallengeMethod = "S256",
+                [TenantHint.ParameterName] = IdentityHostFixture.Slug
+            }
+        );
 
         context.IsRejected.ShouldBeTrue();
         context.Error.ShouldBe(OpenIddictConstants.Errors.InvalidRequest);
@@ -358,55 +481,66 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
 
         registered.IsSuccess.ShouldBeTrue(registered.Error?.Message);
 
-        var context = await ValidateAsync(new OpenIddictRequest {
-            ClientId = "contoso-app",
-            RedirectUri = "https://app.contoso.example/cb",
-            ResponseType = "code",
-            CodeChallenge = "c",
-            CodeChallengeMethod = "S256",
-            Scope = "openid",
-            [TenantHint.ParameterName] = IdentityHostFixture.Slug
-        });
+        var context = await ValidateAsync(
+            new OpenIddictRequest {
+                ClientId = "contoso-app",
+                RedirectUri = "https://app.contoso.example/cb",
+                ResponseType = "code",
+                CodeChallenge = "c",
+                CodeChallengeMethod = "S256",
+                Scope = "openid",
+                [TenantHint.ParameterName] = IdentityHostFixture.Slug
+            }
+        );
 
         context.IsRejected.ShouldBeFalse(context.ErrorDescription);
         context.Transaction.Properties[DegradedModeHandlers.TenantProperty].ShouldBe(IdentityHostFixture.Tenant);
-        ((ApplicationRegistration)context.Transaction.Properties[DegradedModeHandlers.ClientProperty]!).ApplicationId.ShouldBe(applicationId);
+        ((ApplicationRegistration)context.Transaction.Properties[DegradedModeHandlers.ClientProperty]!).ApplicationId.ShouldBe(
+            applicationId
+        );
 
         // A scope outside the registration, and a missing PKCE challenge, are each refused.
-        (await ValidateAsync(new OpenIddictRequest {
-            ClientId = "contoso-app",
-            RedirectUri = "https://app.contoso.example/cb",
-            ResponseType = "code",
-            CodeChallenge = "c",
-            CodeChallengeMethod = "S256",
-            Scope = "openid cyc.api",
-            [TenantHint.ParameterName] = IdentityHostFixture.Slug
-        })).Error.ShouldBe(OpenIddictConstants.Errors.InvalidScope);
+        (await ValidateAsync(
+                new OpenIddictRequest {
+                    ClientId = "contoso-app",
+                    RedirectUri = "https://app.contoso.example/cb",
+                    ResponseType = "code",
+                    CodeChallenge = "c",
+                    CodeChallengeMethod = "S256",
+                    Scope = "openid cyc.api",
+                    [TenantHint.ParameterName] = IdentityHostFixture.Slug
+                }
+            )).Error.ShouldBe(OpenIddictConstants.Errors.InvalidScope);
 
-        (await ValidateAsync(new OpenIddictRequest {
-            ClientId = "contoso-app",
-            RedirectUri = "https://app.contoso.example/cb",
-            ResponseType = "code",
-            Scope = "openid",
-            [TenantHint.ParameterName] = IdentityHostFixture.Slug
-        })).ErrorDescription!.ShouldContain("code_challenge");
+        (await ValidateAsync(
+                new OpenIddictRequest {
+                    ClientId = "contoso-app",
+                    RedirectUri = "https://app.contoso.example/cb",
+                    ResponseType = "code",
+                    Scope = "openid",
+                    [TenantHint.ParameterName] = IdentityHostFixture.Slug
+                }
+            )).ErrorDescription!.ShouldContain("code_challenge");
 
         // The same id in the other tenant is nobody.
-        (await ValidateAsync(new OpenIddictRequest {
-            ClientId = "contoso-app",
-            RedirectUri = "https://app.contoso.example/cb",
-            ResponseType = "code",
-            CodeChallenge = "c",
-            CodeChallengeMethod = "S256",
-            [TenantHint.ParameterName] = IdentityHostFixture.OtherSlug
-        })).Error.ShouldBe(OpenIddictConstants.Errors.InvalidClient);
+        (await ValidateAsync(
+                new OpenIddictRequest {
+                    ClientId = "contoso-app",
+                    RedirectUri = "https://app.contoso.example/cb",
+                    ResponseType = "code",
+                    CodeChallenge = "c",
+                    CodeChallengeMethod = "S256",
+                    [TenantHint.ParameterName] = IdentityHostFixture.OtherSlug
+                }
+            )).Error.ShouldBe(OpenIddictConstants.Errors.InvalidClient);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
     AuthorizeApi Api => fixture.Services.GetRequiredService<AuthorizeApi>();
 
-    ApplicationRegistration Portal => fixture.Services.GetRequiredService<FirstPartyClients>().Find(FirstPartyClients.Portal)!;
+    ApplicationRegistration Portal =>
+        fixture.Services.GetRequiredService<FirstPartyClients>().Find(FirstPartyClients.Portal)!;
 
     static OpenIddictRequest Request(string clientId = FirstPartyClients.Portal, string? prompt = null) =>
         new() {
@@ -430,7 +564,8 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
             }
         );
 
-        await fixture.Services.GetRequiredService<DegradedModeHandlers.ValidateAuthorizationRequest>().HandleAsync(context);
+        await fixture.Services.GetRequiredService<DegradedModeHandlers.ValidateAuthorizationRequest>()
+            .HandleAsync(context);
 
         return context;
     }

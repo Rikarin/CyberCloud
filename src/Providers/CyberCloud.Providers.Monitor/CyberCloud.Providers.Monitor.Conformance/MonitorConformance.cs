@@ -1,5 +1,4 @@
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 // ⚠ For ResourceId, which HarnessAddress needs. Every other provider's conformance project gets away
 // without it because ProviderConformanceCase's own members carry the address; this one needs to build
 // one, for the reason MonitorCase.HarnessAddress records.
@@ -77,12 +76,12 @@ public sealed class MonitorCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Monitor/workspaces",
-            CreateProvider = () => new MonitorProvider(),
+            CreateProvider = static () => new MonitorProvider(),
             ReconcilerType = typeof(MonitorWorkspaceReconciler),
-            CreateReconciler = clock => new MonitorWorkspaceReconciler(clock),
+            CreateReconciler = static clock => new MonitorWorkspaceReconciler(clock),
             Type = MonitorWorkspaces.Type,
             ApiVersion = MonitorWorkspaces.V2026,
-            Body = cluster => MonitorWorkspaces.Body(cluster),
+            Body = static cluster => MonitorWorkspaces.Body(cluster),
             // ⚠ IT LENGTHENS THE LOGS RETENTION AND RAISES THE ALLOWANCE, AND BOTH HALVES ARE
             // DELIBERATE. The update test asserts the change reached the cluster, so it has to move
             // something the reconciler applies — `standard` changes the row's retentionLogsDays from
@@ -91,7 +90,7 @@ public sealed class MonitorCase : IProviderCaseSource {
             // that lowered a tier would fail the shared update assertion for the one reason that is
             // not a defect. That is a constraint the suite cannot express and every future editor of
             // this line has to know, which is why it is written here rather than assumed.
-            ChangedBody = cluster => MonitorWorkspaces.Body(cluster, logsTier: "standard", logsGbPerDay: 25),
+            ChangedBody = static cluster => MonitorWorkspaces.Body(cluster, logsTier: "standard", logsGbPerDay: 25),
             // Sets `overQuotaSampleRate` to zero, which the schema's Minimum refuses.
             // ⚠ Built from a valid body with one property overwritten rather than hand-written: a
             // hand-written invalid body drifts out of date the day the schema gains a property and
@@ -102,13 +101,13 @@ public sealed class MonitorCase : IProviderCaseSource {
             // the only part of that promise the API can keep on its own today. A conformance case
             // that broke `location` instead would have proved the write path refuses bodies, which
             // eleven other cases already prove.
-            InvalidBody = cluster => WithZeroSampleRate(MonitorWorkspaces.Body(cluster)),
+            InvalidBody = static cluster => WithZeroSampleRate(MonitorWorkspaces.Body(cluster)),
             InvalidBodyTarget = "/properties/quota/overQuotaSampleRate",
             ActionName = MonitorWorkspaces.ListKeysAction,
             // ⚠ IN APPLY ORDER, MATCHING THE RECONCILER. The suite does not require an order and the
             // reconciler's reason for having one is in its remarks; listing them differently here
             // would be a second, quieter opinion about which object comes first.
-            Objects = (id, ns) => [
+            Objects = static (id, ns) => [
                 MonitorWorkspaces.KeySecretRef(ns, id.Name),
                 MonitorWorkspaces.VmUserRef(ns, id.Name),
                 MonitorWorkspaces.RowRef(ns, id.Name)
@@ -126,7 +125,7 @@ public sealed class MonitorCase : IProviderCaseSource {
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return MonitorWorkspaces.MatchesShape(match.ObjectJson, desired.RootElement);
             }
@@ -134,8 +133,11 @@ public sealed class MonitorCase : IProviderCaseSource {
 
     /// <inheritdoc />
     /// <remarks>
-    ///     ⚠ <b>The seam a SIBLING type's handler holds, and the reason
-    ///     <c>IProviderCaseSource.ConfigureSilo</c> exists.</b> The harness registers every handler of
+    ///     ⚠
+    ///     <b>
+    ///         The seam a SIBLING type's handler holds, and the reason
+    ///         <c>IProviderCaseSource.ConfigureSilo</c> exists.
+    ///     </b> The harness registers every handler of
     ///     this provider into the silo container by type, and the silo's host validates the container
     ///     on build; <c>MonitorAlertRuleListInstancesHandler</c> takes <c>IAlertControlPlane</c>, so
     ///     without this line the workspace suite — which never invokes that handler — failed at
@@ -143,7 +145,7 @@ public sealed class MonitorCase : IProviderCaseSource {
     ///     <c>MonitorApplicationModule</c> makes in both hosts.
     /// </remarks>
     public static void ConfigureSilo(ISiloBuilder silo) =>
-        silo.ConfigureServices(services => services.AddCyberCloudMonitorAlerting());
+        silo.ConfigureServices(static services => services.AddCyberCloudMonitorAlerting());
 
     /// <summary>A valid body whose over-quota sample rate is zero.</summary>
     /// <param name="body">A valid body.</param>

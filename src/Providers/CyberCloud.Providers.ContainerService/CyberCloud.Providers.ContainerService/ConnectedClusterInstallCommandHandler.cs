@@ -28,8 +28,11 @@ namespace CyberCloud.Providers.ContainerService;
 ///         touched: re-issuing an install command is not a revocation.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The owning tenant is <c>context.Id.TenantId</c> — a manager fact, never a body
-///         field.</b> It is what the grain records on the first arm and checks on every later
+///         ⚠
+///         <b>
+///             The owning tenant is <c>context.Id.TenantId</c> — a manager fact, never a body
+///             field.
+///         </b> It is what the grain records on the first arm and checks on every later
 ///         one, so it has to come from the address the pipeline already established rather than
 ///         from anything the caller sent.
 ///     </para>

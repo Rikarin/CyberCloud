@@ -85,7 +85,7 @@ public sealed class ReBacResourceRelationWriter(IGrainFactory grains, ILogger<Re
         Guid parentId,
         CancellationToken cancellationToken = default
     ) =>
-        ApplyAsync(id, parentId, link: true);
+        ApplyAsync(id, parentId, true);
 
     /// <inheritdoc />
     public Task<Result> UnlinkFromParentAsync(
@@ -93,7 +93,7 @@ public sealed class ReBacResourceRelationWriter(IGrainFactory grains, ILogger<Re
         Guid parentId,
         CancellationToken cancellationToken = default
     ) =>
-        ApplyAsync(id, parentId, link: false);
+        ApplyAsync(id, parentId, false);
 
     /// <inheritdoc />
     public Task<Result> ReparentToSubscriptionAsync(
@@ -101,7 +101,7 @@ public sealed class ReBacResourceRelationWriter(IGrainFactory grains, ILogger<Re
         Guid parentId,
         CancellationToken cancellationToken = default
     ) =>
-        MoveAsync(id, parentId, toSubscription: true);
+        MoveAsync(id, parentId, true);
 
     /// <inheritdoc />
     public Task<Result> ReparentFromSubscriptionAsync(
@@ -109,7 +109,7 @@ public sealed class ReBacResourceRelationWriter(IGrainFactory grains, ILogger<Re
         Guid parentId,
         CancellationToken cancellationToken = default
     ) =>
-        MoveAsync(id, parentId, toSubscription: false);
+        MoveAsync(id, parentId, false);
 
     /// <inheritdoc />
     public Task<Result> UnlinkFromSubscriptionAsync(ResourceId id, CancellationToken cancellationToken = default) =>
@@ -119,7 +119,7 @@ public sealed class ReBacResourceRelationWriter(IGrainFactory grains, ILogger<Re
                 ReBacResourceAuthorizer.SubscriptionObjectType,
                 ReBacResourceAuthorizer.SubscriptionObjectId(id)
             ),
-            link: false
+            false
         );
 
     /// <inheritdoc />
@@ -248,12 +248,12 @@ public sealed class ReBacResourceRelationWriter(IGrainFactory grains, ILogger<Re
             ReBacResourceAuthorizer.SubscriptionObjectId(id)
         );
 
-        var written = await ApplyTupleAsync(id, toSubscription ? parked : ordinary, link: true);
+        var written = await ApplyTupleAsync(id, toSubscription ? parked : ordinary, true);
         if (written.TryGetError(out var writeError)) {
             return Result.Failure(writeError);
         }
 
-        return await ApplyTupleAsync(id, toSubscription ? ordinary : parked, link: false);
+        return await ApplyTupleAsync(id, toSubscription ? ordinary : parked, false);
     }
 
     /// <summary>The parent this resource has when it is not soft-deleted: its group, or its parent resource.</summary>

@@ -70,25 +70,53 @@ public sealed class GrafanaReconciler(IClock clock) : IResourceReconciler {
 
         context.Log.Report("applying-credential", $"applying the admin credential of '{name}'", 15);
 
-        if (await Apply(context, cluster, Grafanas.SecretKind, Grafanas.AdminSecretJson(name, password.GetValueOrThrow()), cancellationToken) is { } secretProblem) {
+        if (await Apply(
+                context,
+                cluster,
+                Grafanas.SecretKind,
+                Grafanas.AdminSecretJson(name, password.GetValueOrThrow()),
+                cancellationToken
+            ) is { } secretProblem) {
             return secretProblem;
         }
 
-        context.Log.Report("applying-datasources", $"provisioning '{name}' with workspace '{workspaceName}' as its two datasources", 35);
+        context.Log.Report(
+            "applying-datasources",
+            $"provisioning '{name}' with workspace '{workspaceName}' as its two datasources",
+            35
+        );
 
-        if (await Apply(context, cluster, Grafanas.ConfigMapKind, Grafanas.ConfigMapJson(name, workspaceName), cancellationToken) is { } configProblem) {
+        if (await Apply(
+                context,
+                cluster,
+                Grafanas.ConfigMapKind,
+                Grafanas.ConfigMapJson(name, workspaceName),
+                cancellationToken
+            ) is { } configProblem) {
             return configProblem;
         }
 
         context.Log.Report("applying-grafana", $"applying '{name}' at {Grafanas.Image}", 60);
 
-        if (await Apply(context, cluster, Grafanas.DeploymentKind, Grafanas.DeploymentJson(name, workspaceName, context.Desired), cancellationToken) is { } deploymentProblem) {
+        if (await Apply(
+                context,
+                cluster,
+                Grafanas.DeploymentKind,
+                Grafanas.DeploymentJson(name, workspaceName, context.Desired),
+                cancellationToken
+            ) is { } deploymentProblem) {
             return deploymentProblem;
         }
 
         context.Log.Report("applying-service", $"applying the address of '{name}'", 80);
 
-        if (await Apply(context, cluster, Grafanas.ServiceKind, Grafanas.ServiceJson(name), cancellationToken) is { } serviceProblem) {
+        if (await Apply(
+                context,
+                cluster,
+                Grafanas.ServiceKind,
+                Grafanas.ServiceJson(name),
+                cancellationToken
+            ) is { } serviceProblem) {
             return serviceProblem;
         }
 
@@ -98,12 +126,18 @@ public sealed class GrafanaReconciler(IClock clock) : IResourceReconciler {
 
             if (read.TryGetError(out var readError)) {
                 return readError.Code == ErrorCode.ResourceNotFound
-                    ? ReconcileOutcome.InProgress($"'{target}' was applied and is not readable back yet", TimeSpan.FromSeconds(5))
+                    ? ReconcileOutcome.InProgress(
+                        $"'{target}' was applied and is not readable back yet",
+                        TimeSpan.FromSeconds(5)
+                    )
                     : ReconcileOutcome.FromFailure(readError);
             }
 
             if (!Grafanas.Matches(read.GetValueOrThrow().Json, workspaceName, context.Desired)) {
-                return ReconcileOutcome.InProgress($"'{target}' is readable and does not yet carry the desired instance", TimeSpan.FromSeconds(5));
+                return ReconcileOutcome.InProgress(
+                    $"'{target}' is readable and does not yet carry the desired instance",
+                    TimeSpan.FromSeconds(5)
+                );
             }
         }
 
@@ -121,7 +155,10 @@ public sealed class GrafanaReconciler(IClock clock) : IResourceReconciler {
     ///     Puts an admin password in the vault if there is not one there, and reads back whichever is
     ///     now authoritative.
     /// </summary>
-    static async Task<Result<string>> EnsureAdminPasswordAsync(ReconcileContext context, CancellationToken cancellationToken) {
+    static async Task<Result<string>> EnsureAdminPasswordAsync(
+        ReconcileContext context,
+        CancellationToken cancellationToken
+    ) {
         var minted = await context.SecretWriter.MintAsync(
             Grafanas.SecretPath(context.Id),
             new Dictionary<string, string>(StringComparer.Ordinal) {
@@ -198,7 +235,10 @@ public sealed class GrafanaReconciler(IClock clock) : IResourceReconciler {
         return ReconcileOutcome.Converged;
     }
 
-    /// <summary>A non-empty stand-in for the password on the delete path — <c>MonitorWorkspaceReconciler.Placeholder</c>'s reason.</summary>
+    /// <summary>
+    ///     A non-empty stand-in for the password on the delete path — <c>MonitorWorkspaceReconciler.Placeholder</c>'s
+    ///     reason.
+    /// </summary>
     const string Placeholder = "deleting";
 
     /// <inheritdoc />
@@ -210,14 +250,19 @@ public sealed class GrafanaReconciler(IClock clock) : IResourceReconciler {
             return ObservedState.Absent;
         }
 
-        var deployment = await cluster.GetAsync(Grafanas.DeploymentRef(context.Namespace, context.Id.Name), cancellationToken);
+        var deployment = await cluster.GetAsync(
+            Grafanas.DeploymentRef(context.Namespace, context.Id.Name),
+            cancellationToken
+        );
 
         if (deployment.TryGetError(out _)) {
             return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the Grafana Deployment is absent" };
         }
 
         var found = deployment.GetValueOrThrow();
-        var workspaceName = Grafanas.WorkspaceOf(context.Id, context.Desired).TryGetValue(out var workspace) ? workspace.Name : string.Empty;
+        var workspaceName = Grafanas.WorkspaceOf(context.Id, context.Desired).TryGetValue(out var workspace)
+            ? workspace.Name
+            : string.Empty;
         var matches = workspaceName.Length > 0 && Grafanas.Matches(found.Json, workspaceName, context.Desired);
 
         return new() {

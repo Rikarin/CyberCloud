@@ -67,14 +67,16 @@ public sealed class CiSecretsReconciliationTests {
             + "than deleting it."
         );
 
-        referenced.Except(listed, StringComparer.Ordinal).Order(StringComparer.Ordinal)
+        referenced.Except(listed, StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
             .ShouldBeEmpty(
                 "a workflow under .github/workflows/ reads a secret that docs/plan/23 § CI secrets "
                 + "does not list. Every `skipped: … — docs/plan/23 § CI secrets` step sends its reader "
                 + "to that table; add a row saying what the secret unlocks and who sets it."
             );
 
-        listed.Except(referenced, StringComparer.Ordinal).Order(StringComparer.Ordinal)
+        listed.Except(referenced, StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
             .ShouldBeEmpty(
                 "docs/plan/23 § CI secrets lists a secret no workflow reads. Somebody following that "
                 + "row would create a credential nothing consumes; delete the row or the job it "
@@ -117,7 +119,7 @@ public sealed class CiSecretsReconciliationTests {
             var name = Path.GetFileName(file);
 
             foreach (var (job, text) in Jobs(File.ReadAllText(file))) {
-                var gates = GateCall.Matches(text).Select(x => x.Groups["label"].Value).ToArray();
+                var gates = GateCall.Matches(text).Select(static x => x.Groups["label"].Value).ToArray();
                 var skips = SkippedStep.Count(text);
 
                 gated.AddRange(gates.Select(x => $"{name} / {job} ({x})"));
@@ -158,7 +160,10 @@ public sealed class CiSecretsReconciliationTests {
         var body = workflow[start..];
         var headers = JobHeader.Matches(body);
 
-        headers.Count.ShouldBeGreaterThan(0, "a workflow file has a `jobs:` key and no two-space-indented job under it.");
+        headers.Count.ShouldBeGreaterThan(
+            0,
+            "a workflow file has a `jobs:` key and no two-space-indented job under it."
+        );
 
         for (var i = 0; i < headers.Count; i++) {
             var from = headers[i].Index;
@@ -171,8 +176,10 @@ public sealed class CiSecretsReconciliationTests {
     /// <summary>Every distinct <c>NAME</c> in a <c>secrets.NAME</c> expression across the workflows.</summary>
     static HashSet<string> ReferencedSecrets(string root) =>
         WorkflowFiles(root)
-            .SelectMany(file => SecretReference.Matches(File.ReadAllText(file)).Select(x => x.Groups["name"].Value))
-            .Where(x => x != "GITHUB_TOKEN")
+            .SelectMany(static file => SecretReference.Matches(File.ReadAllText(file))
+                    .Select(static x => x.Groups["name"].Value)
+            )
+            .Where(static x => x != "GITHUB_TOKEN")
             .ToHashSet(StringComparer.Ordinal);
 
     /// <summary>Every backticked upper-case name in the first column of the § CI secrets table.</summary>
@@ -184,18 +191,21 @@ public sealed class CiSecretsReconciliationTests {
     static HashSet<string> ListedSecrets(string root) {
         var lines = File.ReadAllLines(Path.Combine(root, "docs", "plan", "23-build-ci-and-testing.md"));
 
-        var start = Array.FindIndex(lines, x => x.StartsWith(SecretsHeading, StringComparison.Ordinal));
+        var start = Array.FindIndex(lines, static x => x.StartsWith(SecretsHeading, StringComparison.Ordinal));
         start.ShouldBeGreaterThanOrEqualTo(0, $"docs/plan/23 no longer has a '{SecretsHeading}' heading.");
 
-        var end = Array.FindIndex(lines, start + 1, x => x.StartsWith(NextHeading, StringComparison.Ordinal));
-        end.ShouldBeGreaterThan(start, $"docs/plan/23 no longer has a '{NextHeading}' heading after '{SecretsHeading}'.");
+        var end = Array.FindIndex(lines, start + 1, static x => x.StartsWith(NextHeading, StringComparison.Ordinal));
+        end.ShouldBeGreaterThan(
+            start,
+            $"docs/plan/23 no longer has a '{NextHeading}' heading after '{SecretsHeading}'."
+        );
 
         return lines
             .Skip(start)
             .Take(end - start)
-            .Where(x => x.StartsWith('|'))
-            .Select(x => x.Split('|')[1])
-            .SelectMany(cell => SecretName.Matches(cell).Select(x => x.Groups["name"].Value))
+            .Where(static x => x.StartsWith('|'))
+            .Select(static x => x.Split('|')[1])
+            .SelectMany(static cell => SecretName.Matches(cell).Select(static x => x.Groups["name"].Value))
             .ToHashSet(StringComparer.Ordinal);
     }
 
@@ -214,7 +224,7 @@ public sealed class CiSecretsReconciliationTests {
 
     /// <summary>A backticked upper-case name — the shape of a secret in the table's first column.</summary>
     static readonly Regex SecretName = new(
-        @"`(?<name>[A-Z][A-Z0-9_]*)`",
+        "`(?<name>[A-Z][A-Z0-9_]*)`",
         RegexOptions.None,
         TimeSpan.FromSeconds(5)
     );
@@ -259,7 +269,9 @@ public sealed class CiSecretsReconciliationTests {
     ///     body rather than a static initialiser — #82.
     /// </remarks>
     static string RepositoryRoot() {
-        var directory = new DirectoryInfo(Path.GetDirectoryName(typeof(CiSecretsReconciliationTests).Assembly.Location)!);
+        var directory = new DirectoryInfo(
+            Path.GetDirectoryName(typeof(CiSecretsReconciliationTests).Assembly.Location)!
+        );
 
         while (directory is not null) {
             if (File.Exists(Path.Combine(directory.FullName, "CyberCloud.slnx"))) {

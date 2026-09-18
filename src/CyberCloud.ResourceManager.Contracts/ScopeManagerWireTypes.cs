@@ -273,8 +273,11 @@ public static class ScopeTypeNames {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Not a <see cref="ListRequest" />, for the reason <see cref="ScopeRequest" /> is not
-///         a <see cref="WriteRequest" />.</b> A <see cref="ListRequest" /> carries an api-version
+///         ⚠
+///         <b>
+///             Not a <see cref="ListRequest" />, for the reason <see cref="ScopeRequest" /> is not
+///             a <see cref="WriteRequest" />.
+///         </b> A <see cref="ListRequest" /> carries an api-version
 ///         that selects a projection and a path <c>ResourceCollectionId.ParsePath</c> reads; a
 ///         scope has no projection and its collection path fails that parser by design. Reusing it
 ///         would be a request whose own field names a parser that refuses it.
@@ -366,8 +369,11 @@ public sealed record ScopeListRequest {
 ///     One page of a scope collection <c>GET</c>.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>A page holds only what the caller may read, and a filtered-out member leaves no
-///     trace</b> — no count, no gap, no marker — for the reason <see cref="ResourceListPage" />
+///     ⚠
+///     <b>
+///         A page holds only what the caller may read, and a filtered-out member leaves no
+///         trace
+///     </b> — no count, no gap, no marker — for the reason <see cref="ResourceListPage" />
 ///     gives: any of the three is the enumeration oracle docs/plan/07 § The enforcement seam closes
 ///     by answering <c>404</c> rather than <c>403</c>, and a subscription id leaks more than a
 ///     resource name because it is the billing boundary. So a page can be short, or empty, and
@@ -400,8 +406,11 @@ public sealed record ScopeListPage {
 ///     that the question was not answered and has to be asked per member.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>A sibling of <see cref="CollectionVisibility" /> rather than a reuse of it, because a
-///     resource group has no GUID.</b> That type's <c>Visible</c> is a set of resource GUIDs; a
+///     ⚠
+///     <b>
+///         A sibling of <see cref="CollectionVisibility" /> rather than a reuse of it, because a
+///         resource group has no GUID.
+///     </b> That type's <c>Visible</c> is a set of resource GUIDs; a
 ///     subscription has one, a resource group is addressed by <c>{subscriptionId:N}-{name}</c> and
 ///     never by a GUID, so the only value both scope collections can be keyed on is the
 ///     <see cref="ScopeId" /> itself. The two-state shape is kept exactly — "answered, and nothing

@@ -22,8 +22,11 @@ public readonly record struct IdentityRateLimitBucket(string Name, int Limit, Ti
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Per IP and nothing finer, on purpose, and that is what keeps the uniform-failure
-///         property.</b> docs/plan/11 § Credentials makes sign-in and sign-up "return the same
+///         ⚠
+///         <b>
+///             Per IP and nothing finer, on purpose, and that is what keeps the uniform-failure
+///             property.
+///         </b> docs/plan/11 § Credentials makes sign-in and sign-up "return the same
 ///         response and take the same time whether or not the account exists". A limit keyed by the
 ///         address in the body would be a second answer for an address somebody is hammering — and
 ///         which addresses get hammered is exactly what a probe wants to learn. A limit keyed by the
@@ -101,7 +104,10 @@ public static class IdentityRateLimits {
     }
 
     sealed class RateLimitFilter(IdentityRateLimitBucket bucket) : IEndpointFilter {
-        public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next) {
+        public async ValueTask<object?> InvokeAsync(
+            EndpointFilterInvocationContext context,
+            EndpointFilterDelegate next
+        ) {
             var limiter = context.HttpContext.RequestServices.GetRequiredService<IdentityRateLimiter>();
             var decision = await limiter.EvaluateAsync(bucket, context.HttpContext, context.HttpContext.RequestAborted);
 
@@ -109,7 +115,8 @@ public static class IdentityRateLimits {
                 return await next(context);
             }
 
-            context.HttpContext.Response.Headers.RetryAfter = decision.RetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+            context.HttpContext.Response.Headers.RetryAfter =
+                decision.RetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
 
             return Results.Json(
                 new RateLimitedResponse(RefusedMessage, decision.RetryAfterSeconds),

@@ -67,8 +67,11 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
     ///     member. Off by default.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Off by default so that every listing test written against the per-member filter
-    ///     still exercises it</b> — that path is the fallback the real seam takes past its cap, and
+    ///     ⚠
+    ///     <b>
+    ///         Off by default so that every listing test written against the per-member filter
+    ///         still exercises it
+    ///     </b> — that path is the fallback the real seam takes past its cap, and
     ///     a suite that only ever ran the batch path would have the fallback rotting untested. The
     ///     cases that turn this on are the ones about the batch path itself.
     /// </remarks>
@@ -153,7 +156,7 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
 
         return Task.FromResult(
             AnswersCollections
-                ? CollectionVisibility.Of(candidates.Where(x => !Hidden.ContainsKey(x)))
+                ? CollectionVisibility.Of(candidates.Where(static x => !Hidden.ContainsKey(x)))
                 : CollectionVisibility.Unanswered
         );
     }
@@ -849,7 +852,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     // ExpirySweeperBackfill against this cluster's client factory and calls
                     // RunAsync, which is the same method AddCyberCloudResourceManager's hosted
                     // service calls.
-                    services.Configure<ExpirySweeperBackfillOptions>(backfill => backfill.RunOnStart = false);
+                    services.Configure<ExpirySweeperBackfillOptions>(static backfill => backfill.RunOnStart = false);
 
                     services.AddSingleton<ConformingReconciler>();
 
@@ -861,7 +864,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     // here.
                     services.AddSingleton<SoftDeletableReconciler>();
                     services.AddSingleton<IResourceProvider, TestingProvider>();
-                    services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
+                    services.TryAddSingleton<ILoggerFactory>(static _ => NullLoggerFactory.Instance);
                 }
             );
 

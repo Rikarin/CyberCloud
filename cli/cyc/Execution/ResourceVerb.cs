@@ -95,7 +95,7 @@ static class ResourceVerb {
             BindingFor(bindings, TenantPlaceholder),
             parse,
             TenantPlaceholder,
-            required: false
+            false
         );
 
         var path = ResolvePath(invocation, verb, bindings, parse);
@@ -211,7 +211,7 @@ static class ResourceVerb {
                 );
 
                 if (response.IsError) {
-                    throw CycRequestException.From(response, flag: null);
+                    throw CycRequestException.From(response, null);
                 }
 
                 // ⚠ Held rather than disposed per page: a Payload is a view over its document's
@@ -225,7 +225,7 @@ static class ResourceVerb {
                     break;
                 }
 
-                next = new Uri(link, UriKind.Absolute);
+                next = new(link, UriKind.Absolute);
             }
 
             invocation.Trace($"paged: {count} request(s), {values.Count} resource(s)");
@@ -382,7 +382,7 @@ static class ResourceVerb {
                 continue;
             }
 
-            var value = Address(invocation, binding, parse, placeholder, required: true)!;
+            var value = Address(invocation, binding, parse, placeholder, true)!;
             path = path.Replace(token, Uri.EscapeDataString(value), StringComparison.Ordinal);
         }
 

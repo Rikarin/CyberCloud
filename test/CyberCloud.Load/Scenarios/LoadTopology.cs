@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using System.Globalization;
-using System.Net.Http.Headers;
 
 namespace CyberCloud.Load.Scenarios;
 
@@ -86,27 +85,32 @@ public sealed class LoadTopology : IAsyncLifetime {
             }
 
             return Path.Combine(
-                directory?.FullName ?? throw new InvalidOperationException("No CyberCloud.slnx above " + AppContext.BaseDirectory + ", so the gateway host's appsettings.json cannot be found."),
-                "src", "Hosts", "CyberCloud.Gateway.Host"
+                directory?.FullName
+                ?? throw new InvalidOperationException(
+                    "No CyberCloud.slnx above "
+                    + AppContext.BaseDirectory
+                    + ", so the gateway host's appsettings.json cannot be found."
+                ),
+                "src",
+                "Hosts",
+                "CyberCloud.Gateway.Host"
             );
         }
     }
 
     /// <summary>Facts about what the numbers were measured against.</summary>
-    public IReadOnlyDictionary<string, string> Facts {
-        get {
-            var facts = new Dictionary<string, string>(Platform.Facts, StringComparer.Ordinal) {
-                ["tenants"] = Tenants.ToString(CultureInfo.InvariantCulture),
-                ["subscriptions"] = (Tenants * SubscriptionsPerTenant).ToString(CultureInfo.InvariantCulture),
-                ["callers"] = (Tenants * CallersPerTenant).ToString(CultureInfo.InvariantCulture),
-                ["seededWidgets"] = (Tenants * SubscriptionsPerTenant * WidgetsPerSubscription).ToString(CultureInfo.InvariantCulture),
-                ["gateway"] = "CyberCloud.Gateway.Host over HTTP/1.1 on loopback, JWKS validation against a stand-in issuer",
-                ["scale"] = LoadReport.Scale.ToString(CultureInfo.InvariantCulture)
-            };
-
-            return facts;
-        }
-    }
+    public IReadOnlyDictionary<string, string> Facts =>
+        new Dictionary<string, string>(Platform.Facts, StringComparer.Ordinal) {
+            ["tenants"] = Tenants.ToString(CultureInfo.InvariantCulture),
+            ["subscriptions"] = (Tenants * SubscriptionsPerTenant).ToString(CultureInfo.InvariantCulture),
+            ["callers"] = (Tenants * CallersPerTenant).ToString(CultureInfo.InvariantCulture),
+            ["seededWidgets"] = (Tenants * SubscriptionsPerTenant * WidgetsPerSubscription).ToString(
+                CultureInfo.InvariantCulture
+            ),
+            ["gateway"] =
+                "CyberCloud.Gateway.Host over HTTP/1.1 on loopback, JWKS validation against a stand-in issuer",
+            ["scale"] = LoadReport.Scale.ToString(CultureInfo.InvariantCulture)
+        };
 
     /// <inheritdoc />
     public async ValueTask InitializeAsync() {
@@ -131,7 +135,8 @@ public sealed class LoadTopology : IAsyncLifetime {
                 "--environment", "Development",
                 "--contentRoot", GatewayHostDirectory,
                 "--urls", "http://127.0.0.1:0",
-                "--CyberCloud:Cluster:LocalhostGatewayPort=" + Platform.GatewayPort.ToString(CultureInfo.InvariantCulture),
+                "--CyberCloud:Cluster:LocalhostGatewayPort="
+                + Platform.GatewayPort.ToString(CultureInfo.InvariantCulture),
                 "--CyberCloud:Gateway:Identity:Issuer=" + issuer.Issuer
             ]
         );
@@ -139,10 +144,14 @@ public sealed class LoadTopology : IAsyncLifetime {
         gateway.MapGateway();
         await gateway.StartAsync(token);
 
-        var address = gateway.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First();
-        Http = new HttpClient(new SocketsHttpHandler { MaxConnectionsPerServer = 256, PooledConnectionLifetime = TimeSpan.FromMinutes(10) }) {
-            BaseAddress = new Uri(address), Timeout = TimeSpan.FromSeconds(60)
-        };
+        var address = gateway.Services.GetRequiredService<IServer>()
+            .Features.Get<IServerAddressesFeature>()!
+            .Addresses.First();
+        Http = new(
+            new SocketsHttpHandler {
+                MaxConnectionsPerServer = 256, PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+            }
+        ) { BaseAddress = new(address), Timeout = TimeSpan.FromSeconds(60) };
 
         await PopulateAsync(token);
     }
@@ -181,7 +190,7 @@ public sealed class LoadTopology : IAsyncLifetime {
     public HttpRequestMessage Get(Caller caller, TenantWorld world, string name) {
         ArgumentNullException.ThrowIfNull(caller);
         var request = new HttpRequestMessage(HttpMethod.Get, WidgetPath(world, name));
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", caller.Token);
+        request.Headers.Authorization = new("Bearer", caller.Token);
         return request;
     }
 
@@ -195,10 +204,14 @@ public sealed class LoadTopology : IAsyncLifetime {
         ArgumentNullException.ThrowIfNull(world);
 
         var request = new HttpRequestMessage(HttpMethod.Put, WidgetPath(world, name)) {
-            Content = new StringContent(SampleWidgets.Body(world.Cluster, message), System.Text.Encoding.UTF8, "application/json")
+            Content = new StringContent(
+                SampleWidgets.Body(world.Cluster, message),
+                System.Text.Encoding.UTF8,
+                "application/json"
+            )
         };
 
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", caller.Token);
+        request.Headers.Authorization = new("Bearer", caller.Token);
         return request;
     }
 
@@ -235,7 +248,7 @@ public sealed class LoadTopology : IAsyncLifetime {
         // The widgets the read scenario reads, converged through the write path and the client-side
         // drive, sixteen at a time.
         var widgets = new Dictionary<Guid, IReadOnlyList<string>>();
-        var names = Enumerable.Range(0, WidgetsPerSubscription).Select(i => $"w{i}").ToList();
+        var names = Enumerable.Range(0, WidgetsPerSubscription).Select(static i => $"w{i}").ToList();
 
         foreach (var world in subscriptions) {
             widgets[world.Subscription] = names;
@@ -249,11 +262,23 @@ public sealed class LoadTopology : IAsyncLifetime {
                         await gate.WaitAsync(cancellationToken);
 
                         try {
-                            var accepted = (await Platform.PutWidgetAsync(x.world, x.name, "seed", cancellationToken)).GetValueOrThrow();
-                            var (last, _) = await Platform.DriveUntilTerminalAsync(x.world.Tenant, accepted.OperationId, TimeSpan.FromMinutes(3), cancellationToken);
+                            var accepted = (await Platform.PutWidgetAsync(
+                                    x.world,
+                                    x.name,
+                                    "seed",
+                                    cancellationToken
+                                )).GetValueOrThrow();
+                            var (last, _) = await Platform.DriveUntilTerminalAsync(
+                                x.world.Tenant,
+                                accepted.OperationId,
+                                TimeSpan.FromMinutes(3),
+                                cancellationToken
+                            );
 
                             if (last?.State != OperationState.Succeeded) {
-                                throw new InvalidOperationException($"seeding {x.world.Group}/{x.name} ended {last?.State}: {last?.Error?.Message}");
+                                throw new InvalidOperationException(
+                                    $"seeding {x.world.Group}/{x.name} ended {last?.State}: {last?.Error?.Message}"
+                                );
                             }
                         } finally {
                             gate.Release();

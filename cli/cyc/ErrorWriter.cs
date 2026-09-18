@@ -62,7 +62,7 @@ static class ErrorWriter {
                 ]
             );
 
-            console.Error.WriteLine(payload.ToJson(indented: true));
+            console.Error.WriteLine(payload.ToJson(true));
         } else {
             console.Error.WriteLine(message);
         }
@@ -87,13 +87,13 @@ static class ErrorWriter {
         ArgumentNullException.ThrowIfNull(console);
         ArgumentNullException.ThrowIfNull(errors);
 
-        var message = string.Join(Environment.NewLine, errors.Select(x => x.Message));
+        var message = string.Join(Environment.NewLine, errors.Select(static x => x.Message));
 
         return Report(
             console,
             format,
             new CycUsageException(message.Length > 0 ? message : "The command line could not be parsed."),
-            verbose: false
+            false
         );
     }
 
@@ -141,7 +141,7 @@ static class ErrorWriter {
             401 or 403 => ExitCode.Auth,
             408 or 504 => ExitCode.Timeout,
             >= 500 => ExitCode.ServerError,
-            >= 400 => ExitCode.ClientError,
+
             _ => ExitCode.ClientError,
         };
 

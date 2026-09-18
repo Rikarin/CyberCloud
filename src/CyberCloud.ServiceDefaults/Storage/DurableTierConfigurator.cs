@@ -131,7 +131,7 @@ public sealed class DurableTierConfigurator {
         ArgumentNullException.ThrowIfNull(options);
 
         Interlocked.Increment(ref invocations);
-        invocationsPerTenant.AddOrUpdate(tenantId, 1, (_, previous) => previous + 1);
+        invocationsPerTenant.AddOrUpdate(tenantId, 1, static (_, previous) => previous + 1);
 
         var shard = shardMap.DurableShardFor(tenantId);
         ShardPerTenant[tenantId] = shard;

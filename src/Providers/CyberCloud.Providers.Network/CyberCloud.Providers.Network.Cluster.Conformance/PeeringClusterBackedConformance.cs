@@ -1,7 +1,6 @@
 using CyberCloud.Cluster.Conformance;
 using CyberCloud.Cluster.Conformance.Infrastructure;
 using CyberCloud.Conformance;
-using CyberCloud.Core.Resources;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.Network.Conformance;
 using CyberCloud.Providers.Network.Contracts;
@@ -22,8 +21,11 @@ namespace CyberCloud.Providers.Network.ClusterConformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>NOT A <c>ClusterConformanceTests</c> DERIVATION, AND THAT IS A GAP RECORDED RATHER
-///         THAN HIDDEN.</b> Every other class in this assembly is one line: the shared cluster suite
+///         ⚠
+///         <b>
+///             NOT A <c>ClusterConformanceTests</c> DERIVATION, AND THAT IS A GAP RECORDED RATHER
+///             THAN HIDDEN.
+///         </b> Every other class in this assembly is one line: the shared cluster suite
 ///         over the type's case. That suite presumes the type <i>owns</i> what it applies — it
 ///         asserts <c>cybercloud.io/resource-id</c> equals the resource's on every object, takes the
 ///         tenant-id label with a rival manager to provoke a conflict, and <c>kubectl delete</c>s the
@@ -66,25 +68,30 @@ public sealed class VirtualNetworkPeeringClusterBackedConformance(
         const string name = "real-peering";
 
         var accepted = (await harness.Manager.WriteAsync(
-            new() {
-                Path = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Address(name).Path,
-                ApiVersion = Case.ApiVersion,
-                Verb = WriteVerb.Put,
-                Body = Case.Body(ClusterConformanceHarness<VirtualNetworkPeeringCase>.ClusterId),
-                Caller = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Caller()
-            },
-            token
-        )).GetValueOrThrow();
+                new() {
+                    Path = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Address(name).Path,
+                    ApiVersion = Case.ApiVersion,
+                    Verb = WriteVerb.Put,
+                    Body = Case.Body(ClusterConformanceHarness<VirtualNetworkPeeringCase>.ClusterId),
+                    Caller = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Caller()
+                },
+                token
+            )).GetValueOrThrow();
 
         var status = await ConvergeAsync(harness, accepted.OperationId);
-        status.State.ShouldBe(OperationState.Succeeded, $"the peering ended {status.State} against a real API server: {status.Error?.Message}");
+        status.State.ShouldBe(
+            OperationState.Succeeded,
+            $"the peering ended {status.State} against a real API server: {status.Error?.Message}"
+        );
 
         var address = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Address(name).WithId(accepted.Resource.Id);
         var ns = ReconcileDriver.NamespaceFor(address);
         var objects = Case.Objects(address, ns);
         objects.Length.ShouldBe(2);
 
-        using var desired = JsonDocument.Parse(Case.Body(ClusterConformanceHarness<VirtualNetworkPeeringCase>.ClusterId));
+        using var desired = JsonDocument.Parse(
+            Case.Body(ClusterConformanceHarness<VirtualNetworkPeeringCase>.ClusterId)
+        );
 
         foreach (var target in objects) {
             // ⚠ READ AROUND EVERY LINE OF OUR OWN CODE, with the raw client.
@@ -101,41 +108,62 @@ public sealed class VirtualNetworkPeeringClusterBackedConformance(
                 labels[label].ShouldNotBeNull($"'{target}' lost its owner's '{label}' to the co-owned apply");
             }
 
-            labels[KubeLabels.ResourceId]!.GetValue<string>().ShouldNotBe(KubeLabels.GuidValue(accepted.Resource.Id), "a co-writer writes no labels");
-            labels[KubeLabels.ResourceType]!.GetValue<string>().ShouldBe(KubeLabels.ResourceTypeValue(VirtualNetworks.Type));
+            labels[KubeLabels.ResourceId]!.GetValue<string>()
+                .ShouldNotBe(KubeLabels.GuidValue(accepted.Resource.Id), "a co-writer writes no labels");
+            labels[KubeLabels.ResourceType]!.GetValue<string>()
+                .ShouldBe(KubeLabels.ResourceTypeValue(VirtualNetworks.Type));
 
             // The fragment bookkeeping, stored by the API server.
-            annotations[KubeLabels.FragmentAnnotation(accepted.Resource.Id)].ShouldNotBeNull($"'{target}' carries no fragment of the peering's");
-            annotations[KubeLabels.FragmentHashAnnotation(accepted.Resource.Id)]!.GetValue<string>().ShouldStartWith("sha256:");
-            annotations[KubeLabels.ReconcileHashAnnotation].ShouldNotBeNull("the owner's own annotation stays beside the fragment's");
+            annotations[KubeLabels.FragmentAnnotation(accepted.Resource.Id)].ShouldNotBeNull(
+                $"'{target}' carries no fragment of the peering's"
+            );
+            annotations[KubeLabels.FragmentHashAnnotation(accepted.Resource.Id)]!.GetValue<string>()
+                .ShouldStartWith("sha256:");
+            annotations[KubeLabels.ReconcileHashAnnotation].ShouldNotBeNull(
+                "the owner's own annotation stays beside the fragment's"
+            );
 
             // ⚠ THE MANAGER, as the API SERVER recorded it: one entry named for the OWNER, operation
             // Apply — the property CoOwnedApplyTests measured a manager-per-peering to lack.
             var ownerId = labels[KubeLabels.ResourceId]!.GetValue<string>();
             var manager = KubeLabels.CoWriterFieldManager(labels[KubeLabels.ResourceType]!.GetValue<string>(), ownerId);
 
-            var managed = metadata["managedFields"]!.AsArray().Select(x => x!.AsObject()).ToList();
+            var managed = metadata["managedFields"]!.AsArray().Select(static x => x!.AsObject()).ToList();
 
             managed.ShouldContain(
                 x => x["manager"]!.GetValue<string>() == manager && x["operation"]!.GetValue<string>() == "Apply",
                 $"the API server recorded no Apply entry for '{manager}' on '{target}'. managedFields holds: "
-                + string.Join(", ", managed.Select(x => x["manager"]?.GetValue<string>()))
+                + string.Join(", ", managed.Select(static x => x["manager"]?.GetValue<string>()))
             );
 
             // And the slice is what the case says it should be, on the right side.
             Case.ObjectMatchesDesired(
-                new() { ObjectJson = json, DesiredJson = desired.RootElement.GetRawText(), Id = address, Target = target, Namespace = ns }
-            ).ShouldBeTrue($"'{target}' does not carry the peering's entries: {json}");
+                new() {
+                    ObjectJson = json,
+                    DesiredJson = desired.RootElement.GetRawText(),
+                    Id = address,
+                    Target = target,
+                    Namespace = ns
+                }
+            )
+                .ShouldBeTrue($"'{target}' does not carry the peering's entries: {json}");
 
             // ⚠ AND NOTHING CONNECTED THEM, which is the honest reading of a cluster with no Kube-OVN.
-            VirtualNetworkPeerings.ConnectedPeers(json).ShouldBeEmpty("there is no controller in this k3s to build a peer port");
+            VirtualNetworkPeerings.ConnectedPeers(json)
+                .ShouldBeEmpty("there is no controller in this k3s to build a peer port");
         }
 
         // ── The drift scan joins a co-writer on its fragment, off a real LIST ──────────────────
         var inventory = new ListBackedClusterObjectInventory(harness.Api, [VirtualNetworks.VpcKind], string.Empty);
-        var seen = (await inventory.ListManagedAsync(ClusterConformanceHarness<VirtualNetworkPeeringCase>.ClusterId, token)).GetValueOrThrow();
+        var seen = (await inventory.ListManagedAsync(
+                ClusterConformanceHarness<VirtualNetworkPeeringCase>.ClusterId,
+                token
+            )).GetValueOrThrow();
 
-        seen.ShouldContain(x => x.Fragments.Any(f => f.Writer == accepted.Resource.Id), "the real LIST did not surface the peering's fragment annotations");
+        seen.ShouldContain(
+            x => x.Fragments.Any(f => f.Writer == accepted.Resource.Id),
+            "the real LIST did not surface the peering's fragment annotations"
+        );
 
         // ⚠ ONE HASH PER OBJECT, off the last co-owned apply onto each. The two fragments are mirror
         // images and hash differently; this test once took the LAST apply's hash for both and
@@ -143,23 +171,36 @@ public sealed class VirtualNetworkPeeringClusterBackedConformance(
         // every scan" went unseen until the #31 review. The assertion is now the whole report.
         var fragments = harness.Connection.Applied
             .Where(x => x.IsCoOwned && x.ResourceId == accepted.Resource.Id)
-            .GroupBy(x => x.Target)
-            .Select(x => new ExpectedFragment(x.Key, x.Last().ReconcileHash))
+            .GroupBy(static x => x.Target)
+            .Select(static x => new ExpectedFragment(x.Key, x.Last().ReconcileHash))
             .ToImmutableArray();
 
         fragments.Length.ShouldBe(2, "a peering co-writes exactly two objects");
-        fragments.Select(x => x.Hash).Distinct().Count().ShouldBe(2, "the two fragments are mirror images and cannot hash the same");
+        fragments.Select(static x => x.Hash)
+            .Distinct()
+            .Count()
+            .ShouldBe(2, "the two fragments are mirror images and cannot hash the same");
 
         var report = new DriftScanner(harness.Clock).Scan(
             ClusterConformanceHarness<VirtualNetworkPeeringCase>.ClusterId,
             seen,
-            [new ExpectedResource(accepted.Resource.Id, address.Path, "sha256:not-what-a-fragment-is-judged-by", ProvisioningState.Succeeded, fragments)]
+            [
+                new ExpectedResource(
+                    accepted.Resource.Id,
+                    address.Path,
+                    "sha256:not-what-a-fragment-is-judged-by",
+                    ProvisioningState.Succeeded,
+                    fragments
+                )
+            ]
         );
 
-        report.Findings.Where(x => x.ResourceId == accepted.Resource.Id).ShouldBeEmpty(
-            "a converged peering owns no labelled object, its grain exists, and each Vpc carries the fragment expected on it — "
-            + "so it is neither a stray, nor an orphan, nor diverged: " + string.Join(" | ", report.Findings)
-        );
+        report.Findings.Where(x => x.ResourceId == accepted.Resource.Id)
+            .ShouldBeEmpty(
+                "a converged peering owns no labelled object, its grain exists, and each Vpc carries the fragment expected on it — "
+                + "so it is neither a stray, nor an orphan, nor diverged: "
+                + string.Join(" | ", report.Findings)
+            );
 
         // ── delete → withdrawn, and both networks stand ──────────────────────────────────────
         var deleted = await harness.Manager.DeleteAsync(
@@ -174,18 +215,28 @@ public sealed class VirtualNetworkPeeringClusterBackedConformance(
         deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
 
         var teardown = await ConvergeAsync(harness, deleted.GetValueOrThrow().OperationId);
-        teardown.State.ShouldBe(OperationState.Succeeded, $"the withdrawal ended {teardown.State}: {teardown.Error?.Message}");
+        teardown.State.ShouldBe(
+            OperationState.Succeeded,
+            $"the withdrawal ended {teardown.State}: {teardown.Error?.Message}"
+        );
 
         foreach (var target in objects) {
             var remaining = await ReadAsync(harness, target, token);
-            remaining.ShouldNotBeNull($"'{target}' is gone after a peering's teardown — a co-writer never deletes the owner's object");
+            remaining.ShouldNotBeNull(
+                $"'{target}' is gone after a peering's teardown — a co-writer never deletes the owner's object"
+            );
 
             var root = JsonNode.Parse(remaining)!.AsObject();
             var annotations = root["metadata"]!["annotations"]!.AsObject();
 
-            annotations.ContainsKey(KubeLabels.FragmentAnnotation(accepted.Resource.Id)).ShouldBeFalse($"'{target}' still carries the peering's fragment");
-            annotations[KubeLabels.ReconcileHashAnnotation].ShouldNotBeNull("the owner's own annotation survives the withdrawal");
-            root["metadata"]!["labels"]![KubeLabels.ResourceId].ShouldNotBeNull("the owner's labels survive the withdrawal");
+            annotations.ContainsKey(KubeLabels.FragmentAnnotation(accepted.Resource.Id))
+                .ShouldBeFalse($"'{target}' still carries the peering's fragment");
+            annotations[KubeLabels.ReconcileHashAnnotation].ShouldNotBeNull(
+                "the owner's own annotation survives the withdrawal"
+            );
+            root["metadata"]!["labels"]![KubeLabels.ResourceId].ShouldNotBeNull(
+                "the owner's labels survive the withdrawal"
+            );
             root["spec"]!["enableExternal"].ShouldNotBeNull("the owner's own field survives the withdrawal");
 
             // ⚠ The API server drops what the shared manager stopped applying: the two lists are gone
@@ -195,8 +246,14 @@ public sealed class VirtualNetworkPeeringClusterBackedConformance(
         }
 
         // The scan after the withdrawal sees no fragment of the peering's anywhere.
-        var after = (await inventory.ListManagedAsync(ClusterConformanceHarness<VirtualNetworkPeeringCase>.ClusterId, token)).GetValueOrThrow();
-        after.ShouldNotContain(x => x.Fragments.Any(f => f.Writer == accepted.Resource.Id), "a withdrawn fragment is still on a real object");
+        var after = (await inventory.ListManagedAsync(
+                ClusterConformanceHarness<VirtualNetworkPeeringCase>.ClusterId,
+                token
+            )).GetValueOrThrow();
+        after.ShouldNotContain(
+            x => x.Fragments.Any(f => f.Writer == accepted.Resource.Id),
+            "a withdrawn fragment is still on a real object"
+        );
     }
 
     [Fact]
@@ -216,7 +273,8 @@ public sealed class VirtualNetworkPeeringClusterBackedConformance(
         var first = await CreateAsync(harness, "real-peering-a", "10.255.255.0/30", token);
         var second = await CreateAsync(harness, "real-peering-b", "10.255.255.4/30", token);
 
-        var address = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Address("real-peering-a").WithId(first.Resource.Id);
+        var address = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Address("real-peering-a")
+            .WithId(first.Resource.Id);
         var local = VirtualNetworkPeerings.LocalVpcRef(ReconcileDriver.NamespaceFor(address), address);
 
         var both = JsonNode.Parse((await ReadAsync(harness, local, token))!)!.AsObject();
@@ -225,12 +283,16 @@ public sealed class VirtualNetworkPeeringClusterBackedConformance(
         both["spec"]!["staticRoutes"]!.AsArray().Count.ShouldBe(2);
 
         var managers = both["metadata"]!["managedFields"]!.AsArray()
-            .Select(x => x!["manager"]!.GetValue<string>())
-            .Where(x => KubeLabels.TryReadCoWriterFieldManager(x, out _, out _))
+            .Select(static x => x!["manager"]!.GetValue<string>())
+            .Where(static x => KubeLabels.TryReadCoWriterFieldManager(x, out _, out _))
             .Distinct()
             .ToList();
 
-        managers.Count.ShouldBe(1, "every co-writer of one object applies under ONE manager named for the owner; found: " + string.Join(", ", managers));
+        managers.Count.ShouldBe(
+            1,
+            "every co-writer of one object applies under ONE manager named for the owner; found: "
+            + string.Join(", ", managers)
+        );
 
         var annotations = both["metadata"]!["annotations"]!.AsObject();
         annotations.ContainsKey(KubeLabels.FragmentAnnotation(first.Resource.Id)).ShouldBeTrue();
@@ -238,32 +300,37 @@ public sealed class VirtualNetworkPeeringClusterBackedConformance(
 
         // Withdraw the first; the second's entry and bookkeeping stay.
         var deleted = (await harness.Manager.DeleteAsync(
-            new() {
-                Path = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Address("real-peering-a").Path,
-                ApiVersion = Case.ApiVersion,
-                Caller = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Caller()
-            },
-            token
-        )).GetValueOrThrow();
+                new() {
+                    Path = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Address("real-peering-a").Path,
+                    ApiVersion = Case.ApiVersion,
+                    Caller = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Caller()
+                },
+                token
+            )).GetValueOrThrow();
 
         (await ConvergeAsync(harness, deleted.OperationId)).State.ShouldBe(OperationState.Succeeded);
 
         var one = JsonNode.Parse((await ReadAsync(harness, local, token))!)!.AsObject();
 
-        one["spec"]!["vpcPeerings"]!.AsArray().Count.ShouldBe(1, "the first peering's entry went and the second's stayed");
+        one["spec"]!["vpcPeerings"]!.AsArray()
+            .Count.ShouldBe(1, "the first peering's entry went and the second's stayed");
         one["spec"]!["vpcPeerings"]![0]!["localConnectIP"]!.GetValue<string>().ShouldBe("10.255.255.5/30");
-        one["metadata"]!["annotations"]!.AsObject().ContainsKey(KubeLabels.FragmentAnnotation(first.Resource.Id)).ShouldBeFalse();
-        one["metadata"]!["annotations"]!.AsObject().ContainsKey(KubeLabels.FragmentAnnotation(second.Resource.Id)).ShouldBeTrue();
+        one["metadata"]!["annotations"]!.AsObject()
+            .ContainsKey(KubeLabels.FragmentAnnotation(first.Resource.Id))
+            .ShouldBeFalse();
+        one["metadata"]!["annotations"]!.AsObject()
+            .ContainsKey(KubeLabels.FragmentAnnotation(second.Resource.Id))
+            .ShouldBeTrue();
 
         // Not this test's subject: leave the fixture as it was found.
         var second2 = (await harness.Manager.DeleteAsync(
-            new() {
-                Path = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Address("real-peering-b").Path,
-                ApiVersion = Case.ApiVersion,
-                Caller = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Caller()
-            },
-            token
-        )).GetValueOrThrow();
+                new() {
+                    Path = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Address("real-peering-b").Path,
+                    ApiVersion = Case.ApiVersion,
+                    Caller = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Caller()
+                },
+                token
+            )).GetValueOrThrow();
 
         (await ConvergeAsync(harness, second2.OperationId)).State.ShouldBe(OperationState.Succeeded);
     }
@@ -277,19 +344,19 @@ public sealed class VirtualNetworkPeeringClusterBackedConformance(
         CancellationToken token
     ) {
         var accepted = (await harness.Manager.WriteAsync(
-            new() {
-                Path = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Address(name).Path,
-                ApiVersion = Case.ApiVersion,
-                Verb = WriteVerb.Put,
-                Body = VirtualNetworkPeerings.Body(
-                    ClusterConformanceHarness<VirtualNetworkPeeringCase>.ClusterId,
-                    remoteNetwork: VirtualNetworkPeeringCase.RemoteNetworkName,
-                    linkV4: link
-                ),
-                Caller = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Caller()
-            },
-            token
-        )).GetValueOrThrow();
+                new() {
+                    Path = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Address(name).Path,
+                    ApiVersion = Case.ApiVersion,
+                    Verb = WriteVerb.Put,
+                    Body = VirtualNetworkPeerings.Body(
+                        ClusterConformanceHarness<VirtualNetworkPeeringCase>.ClusterId,
+                        VirtualNetworkPeeringCase.RemoteNetworkName,
+                        linkV4: link
+                    ),
+                    Caller = ClusterConformanceHarness<VirtualNetworkPeeringCase>.Caller()
+                },
+                token
+            )).GetValueOrThrow();
 
         var status = await ConvergeAsync(harness, accepted.OperationId);
         status.State.ShouldBe(OperationState.Succeeded, $"'{name}' ended {status.State}: {status.Error?.Message}");
@@ -297,7 +364,10 @@ public sealed class VirtualNetworkPeeringClusterBackedConformance(
         return accepted;
     }
 
-    static async Task<OperationStatus> ConvergeAsync(ClusterConformanceHarness<VirtualNetworkPeeringCase> harness, Guid operationId) {
+    static async Task<OperationStatus> ConvergeAsync(
+        ClusterConformanceHarness<VirtualNetworkPeeringCase> harness,
+        Guid operationId
+    ) {
         var operation = harness.Operation(ConformanceIds.Tenant, operationId);
         OperationStatus? last = null;
 
@@ -331,7 +401,8 @@ public sealed class VirtualNetworkPeeringClusterBackedConformance(
             );
 
             return ((JsonElement)response.Body!).GetRawText();
-        } catch (k8s.Autorest.HttpOperationException ex) when (ex.Response?.StatusCode == System.Net.HttpStatusCode.NotFound) {
+        } catch (k8s.Autorest.HttpOperationException ex) when (ex.Response?.StatusCode
+                                                               == System.Net.HttpStatusCode.NotFound) {
             return null;
         }
     }

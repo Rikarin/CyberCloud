@@ -106,7 +106,7 @@ public sealed class LoadReport {
         metrics[metric] = value;
 
         if (distribution is not null) {
-            detail[metric] = new JsonObject {
+            detail[metric] = new() {
                 ["p50"] = distribution.P50,
                 ["p95"] = distribution.P95,
                 ["p99"] = distribution.P99,
@@ -119,7 +119,10 @@ public sealed class LoadReport {
             };
         }
 
-        Console.WriteLine($"[CyberCloud.Load] {metric} = {value.ToString("0.###", CultureInfo.InvariantCulture)}" + (distribution is null ? "" : $" — {distribution}"));
+        Console.WriteLine(
+            $"[CyberCloud.Load] {metric} = {value.ToString("0.###", CultureInfo.InvariantCulture)}"
+            + (distribution is null ? "" : $" — {distribution}")
+        );
     }
 
     /// <summary>Records a number that is not gated but belongs in the dated table.</summary>
@@ -127,7 +130,7 @@ public sealed class LoadReport {
     /// <param name="name">The number's name.</param>
     /// <param name="value">The number.</param>
     public void Aside(string metric, string name, double value) {
-        var block = detail.GetOrAdd(metric, _ => new JsonObject());
+        var block = detail.GetOrAdd(metric, static _ => new JsonObject());
         block[name] = value;
     }
 
@@ -136,7 +139,7 @@ public sealed class LoadReport {
     /// <param name="name">The fact's name.</param>
     /// <param name="text">The fact.</param>
     public void Aside(string metric, string name, string text) {
-        var block = detail.GetOrAdd(metric, _ => new JsonObject());
+        var block = detail.GetOrAdd(metric, static _ => new JsonObject());
         block[name] = text;
     }
 
@@ -174,24 +177,26 @@ public sealed class LoadReport {
             ["detail"] = new JsonObject()
         };
 
-        foreach (var (name, value) in metrics.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+        foreach (var (name, value) in metrics.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
             root["metrics"]![name] = value;
         }
 
-        foreach (var (name, block) in detail.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+        foreach (var (name, block) in detail.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
             root["detail"]![name] = block;
         }
 
         var path = ResultsPath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-        Console.WriteLine($"[CyberCloud.Load] {metrics.Count} metric(s) and {vacuous.Count} vacuous row(s) written to {path}");
+        Console.WriteLine(
+            $"[CyberCloud.Load] {metrics.Count} metric(s) and {vacuous.Count} vacuous row(s) written to {path}"
+        );
     }
 
     static JsonObject Sorted(IReadOnlyDictionary<string, string> values) {
         var block = new JsonObject();
 
-        foreach (var (name, value) in values.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+        foreach (var (name, value) in values.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
             block[name] = value;
         }
 

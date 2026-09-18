@@ -8,8 +8,11 @@ namespace CyberCloud.Providers.Compute;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>IT READS THE OBJECT BEFORE IT RENDERS, AND THAT IS THE MOST IMPORTANT LINE IN THIS
-///         FILE.</b> The power state lives on the object as <c>spec.runStrategy</c>, written by the
+///         ⚠
+///         <b>
+///             IT READS THE OBJECT BEFORE IT RENDERS, AND THAT IS THE MOST IMPORTANT LINE IN THIS
+///             FILE.
+///         </b> The power state lives on the object as <c>spec.runStrategy</c>, written by the
 ///         power handler and never by a body — <see cref="VirtualMachines" />' class remarks carry the
 ///         whole argument. So every pass begins with a <c>GetAsync</c> of the <c>VirtualMachine</c>:
 ///         found, the render carries the run strategy it found; absent, the render says
@@ -18,8 +21,11 @@ namespace CyberCloud.Providers.Compute;
 ///         back on the first time its tenant changed a tag.
 ///     </para>
 ///     <para>
-///         ⚠ <b>IT WAITS FOR AN IMAGE THAT IS STILL IMPORTING, AND THIS IS THE ONE CROSS-RESOURCE READ
-///         IN THE FAMILY.</b> The root disk is a CDI clone of the image's claim. A clone of a claim
+///         ⚠
+///         <b>
+///             IT WAITS FOR AN IMAGE THAT IS STILL IMPORTING, AND THIS IS THE ONE CROSS-RESOURCE READ
+///             IN THE FAMILY.
+///         </b> The root disk is a CDI clone of the image's claim. A clone of a claim
 ///         that is mid-import is admitted and sits <c>Provisioning</c> with its reason on a third
 ///         object nobody shows the tenant, so the pass reads the image's <c>DataVolume</c> in the same
 ///         namespace — a cluster read and not an engine call, docs/plan/07 § The enforcement seam is
@@ -98,7 +104,9 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
         // server the bad name; a derived stub admits both; this refuses either before any of them is
         // asked, terminally, because a PUT is what changes it. VirtualMachines.DataDiskProblem.
         if (VirtualMachines.DataDiskProblem(context.Desired) is { Length: > 0 } diskProblem) {
-            return ReconcileOutcome.Failed(new Error(ErrorCode.InvalidRequestBody, diskProblem, "/properties/dataDisks"));
+            return ReconcileOutcome.Failed(
+                new Error(ErrorCode.InvalidRequestBody, diskProblem, "/properties/dataDisks")
+            );
         }
 
         // ── An image that is still importing is waited for; one that is absent is KubeVirt's ──
@@ -112,7 +120,10 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
         // here is what turns that into a message naming the image and its phase. It is also what
         // keeps the conformance suites honest rather than what they need: a harness with no image
         // object takes the absent branch and lands where every other type does.
-        var image = await cluster.GetAsync(Images.DataVolumeRef(ns, VirtualMachines.Image(context.Desired)), cancellationToken);
+        var image = await cluster.GetAsync(
+            Images.DataVolumeRef(ns, VirtualMachines.Image(context.Desired)),
+            cancellationToken
+        );
 
         if (image.TryGetError(out var imageError) && imageError.Code != ErrorCode.ResourceNotFound) {
             return ReconcileOutcome.FromFailure(imageError);
@@ -134,7 +145,11 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
                 );
             }
 
-            context.Log.Report("waiting-for-image", $"the image '{VirtualMachines.Image(context.Desired)}' is {Phase(imagePhase)}", 15);
+            context.Log.Report(
+                "waiting-for-image",
+                $"the image '{VirtualMachines.Image(context.Desired)}' is {Phase(imagePhase)}",
+                15
+            );
 
             return ReconcileOutcome.InProgress(
                 $"the image '{VirtualMachines.Image(context.Desired)}' is {Phase(imagePhase)} and the root "
@@ -150,7 +165,9 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
             return ReconcileOutcome.FromFailure(existingError);
         }
 
-        var runStrategy = existing.IsSuccess ? VirtualMachines.RunStrategyOf(existing.GetValueOrThrow().Json) : string.Empty;
+        var runStrategy = existing.IsSuccess
+            ? VirtualMachines.RunStrategyOf(existing.GetValueOrThrow().Json)
+            : string.Empty;
 
         if (runStrategy.Length == 0) {
             runStrategy = VirtualMachines.RunAlways;
@@ -167,7 +184,10 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
         string? userData = null;
 
         if (VirtualMachines.HasCloudInit(context.Desired)) {
-            var handle = VirtualMachines.ParseCloudInitRef(VirtualMachines.CloudInitRef(context.Desired), context.Id.TenantId);
+            var handle = VirtualMachines.ParseCloudInitRef(
+                VirtualMachines.CloudInitRef(context.Desired),
+                context.Id.TenantId
+            );
 
             if (handle.TryGetError(out var handleError)) {
                 return ReconcileOutcome.FromFailure(handleError);
@@ -181,9 +201,19 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
 
             userData = resolved.GetValueOrThrow();
 
-            context.Log.Report("applying-cloud-init", $"writing the cloud-init user data of '{name}' into its Secret", 30);
+            context.Log.Report(
+                "applying-cloud-init",
+                $"writing the cloud-init user data of '{name}' into its Secret",
+                30
+            );
 
-            if (await Apply(context, cluster, KubeSecret.Kind, VirtualMachines.CloudInitSecretJson(name, userData), cancellationToken) is { } secretProblem) {
+            if (await Apply(
+                    context,
+                    cluster,
+                    KubeSecret.Kind,
+                    VirtualMachines.CloudInitSecretJson(name, userData),
+                    cancellationToken
+                ) is { } secretProblem) {
                 return secretProblem;
             }
         }
@@ -200,7 +230,7 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
                 VirtualMachines.VirtualMachineKind,
                 VirtualMachines.VirtualMachineJson(ns, name, context.Desired, runStrategy),
                 cancellationToken,
-                templates: true
+                true
             ) is { } problem) {
             return problem;
         }
@@ -211,7 +241,10 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
 
             if (secret.TryGetError(out var secretReadError)) {
                 return secretReadError.Code == ErrorCode.ResourceNotFound
-                    ? ReconcileOutcome.InProgress("the cloud-init Secret was applied and is not readable back yet", TimeSpan.FromSeconds(5))
+                    ? ReconcileOutcome.InProgress(
+                        "the cloud-init Secret was applied and is not readable back yet",
+                        TimeSpan.FromSeconds(5)
+                    )
                     : ReconcileOutcome.FromFailure(secretReadError);
             }
 
@@ -229,7 +262,10 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
 
         if (read.TryGetError(out var readError)) {
             return readError.Code == ErrorCode.ResourceNotFound
-                ? ReconcileOutcome.InProgress("the VirtualMachine was applied and is not readable back yet", TimeSpan.FromSeconds(5))
+                ? ReconcileOutcome.InProgress(
+                    "the VirtualMachine was applied and is not readable back yet",
+                    TimeSpan.FromSeconds(5)
+                )
                 : ReconcileOutcome.FromFailure(readError);
         }
 
@@ -287,7 +323,8 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
         // outlives the machine by definition, and deleting a machine that leaves its data behind is the
         // point of the word "managed".
         foreach (var (kind, json) in new[] {
-                     (VirtualMachines.VirtualMachineKind, VirtualMachines.VirtualMachineJson(ns, name, context.Desired, VirtualMachines.RunHalted)),
+                     (VirtualMachines.VirtualMachineKind,
+                         VirtualMachines.VirtualMachineJson(ns, name, context.Desired, VirtualMachines.RunHalted)),
                      (KubeSecret.Kind, VirtualMachines.CloudInitSecretJson(name, string.Empty))
                  }) {
             var deleted = await KubeCommand.For(cluster)
@@ -304,7 +341,9 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
             }
         }
 
-        foreach (var target in new[] { VirtualMachines.VirtualMachineRef(ns, name), VirtualMachines.CloudInitSecretRef(ns, name) }) {
+        foreach (var target in new[] {
+                     VirtualMachines.VirtualMachineRef(ns, name), VirtualMachines.CloudInitSecretRef(ns, name)
+                 }) {
             var read = await cluster.GetAsync(target, cancellationToken);
 
             if (read.IsSuccess) {
@@ -335,7 +374,10 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
             return ObservedState.Absent;
         }
 
-        var read = await cluster.GetAsync(VirtualMachines.VirtualMachineRef(context.Namespace, context.Id.Name), cancellationToken);
+        var read = await cluster.GetAsync(
+            VirtualMachines.VirtualMachineRef(context.Namespace, context.Id.Name),
+            cancellationToken
+        );
 
         if (read.TryGetError(out _)) {
             return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the virtual machine is absent" };
@@ -345,7 +387,10 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
         var matches = VirtualMachines.Matches(found.Json, context.Namespace, context.Desired);
         var runStrategy = VirtualMachines.RunStrategyOf(found.Json);
 
-        var instance = await cluster.GetAsync(VirtualMachines.InstanceRef(context.Namespace, context.Id.Name), cancellationToken);
+        var instance = await cluster.GetAsync(
+            VirtualMachines.InstanceRef(context.Namespace, context.Id.Name),
+            cancellationToken
+        );
 
         var phase = instance.IsSuccess
             ? VirtualMachines.InstancePhase(instance.GetValueOrThrow().Json)

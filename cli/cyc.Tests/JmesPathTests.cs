@@ -65,7 +65,7 @@ public sealed class JmesPathTests {
         using var document = JsonDocument.Parse(Document);
 
         JmesPath.Evaluate(expression, Payload.Of(document.RootElement))
-            .ToJson(indented: false)
+            .ToJson(false)
             .ShouldBe(expected);
     }
 
@@ -74,7 +74,7 @@ public sealed class JmesPathTests {
         using var document = JsonDocument.Parse(Document);
 
         JmesPath.Evaluate("value[*].{n: name, t: properties.tier}", Payload.Of(document.RootElement))
-            .ToJson(indented: false)
+            .ToJson(false)
             .ShouldBe("""[{"n":"w1","t":"free"},{"n":"w2","t":"premium"},{"n":"w3","t":"premium"}]""");
     }
 
@@ -85,7 +85,7 @@ public sealed class JmesPathTests {
         // ⚠ The spec's rule, and it is the one that makes a filter safe over a page where one
         // resource is missing the field.
         JmesPath.Evaluate("value[?name > `2`].name", Payload.Of(document.RootElement))
-            .ToJson(indented: false)
+            .ToJson(false)
             .ShouldBe("[]");
     }
 

@@ -45,7 +45,7 @@ public sealed class TemplateAndSenderTests(CommunicationCluster cluster) {
 
         TestProviders.Sms.Calls.ShouldBe(
             0,
-            "the carrier would have sent \"Your code is {code}\" to a customer — a wasted message, a "
+            """the carrier would have sent "Your code is {code}" to a customer — a wasted message, a """
             + "support ticket, and a complaint"
         );
     }
@@ -264,7 +264,7 @@ public sealed class TemplateAndSenderTests(CommunicationCluster cluster) {
         (await cluster.SenderIdentity(senderId).GetAsync())
             .GetValueOrThrow()
             .Countries
-            .ShouldBe(["CZ", "SK"], ignoreOrder: true);
+            .ShouldBe(["CZ", "SK"], true);
     }
 
     [Fact]
@@ -289,7 +289,10 @@ public sealed class TemplateAndSenderTests(CommunicationCluster cluster) {
         // And a channel with no registered sender hands the carrier nothing, so the carrier's own
         // default applies and nothing is invented.
         var plain = await cluster.NewServiceAsync();
-        (await cluster.SendAsync(CommunicationCluster.Tenant, CommunicationCluster.Request(plain, "otp-2"))).IsSuccess.ShouldBeTrue();
+        (await cluster.SendAsync(
+                CommunicationCluster.Tenant,
+                CommunicationCluster.Request(plain, "otp-2")
+            )).IsSuccess.ShouldBeTrue();
         TestProviders.Sms.Sent.Last().Sender.ShouldBeEmpty();
     }
 
@@ -558,7 +561,7 @@ public sealed class ChannelConfigurationTests(CommunicationCluster cluster) {
             ]
         );
 
-        foreach (var channel in Enum.GetValues<ChannelKind>().Where(x => x != ChannelKind.Unknown)) {
+        foreach (var channel in Enum.GetValues<ChannelKind>().Where(static x => x != ChannelKind.Unknown)) {
             registry.Resolve(channel, "unavailable")
                 .IsSuccess
                     .ShouldBeTrue(
@@ -596,7 +599,11 @@ public sealed class ChannelConfigurationTests(CommunicationCluster cluster) {
                 + "wrote lines in a wiring method"
             );
 
-        refused.Error.Message.ShouldContain("2 registered carriers (in-memory, smtp)", Case.Sensitive, "and the seam is not counted among them");
+        refused.Error.Message.ShouldContain(
+            "2 registered carriers (in-memory, smtp)",
+            Case.Sensitive,
+            "and the seam is not counted among them"
+        );
     }
 
     [Fact]
@@ -624,6 +631,8 @@ public sealed class ChannelConfigurationTests(CommunicationCluster cluster) {
             ]
         );
 
-        seamOnly.Resolve(ChannelKind.Email, string.Empty).GetValueOrThrow().ShouldBeAssignableTo<IRefusingChannelProvider>();
+        seamOnly.Resolve(ChannelKind.Email, string.Empty)
+            .GetValueOrThrow()
+            .ShouldBeAssignableTo<IRefusingChannelProvider>();
     }
 }

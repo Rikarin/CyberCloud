@@ -21,8 +21,11 @@ namespace CyberCloud.Tenancy.Separation;
 ///         that clause and the silo's own management grains start failing authorization at startup.
 ///     </para>
 ///     <para>
-///         ⚠ <b>One thing else is excluded, and it is named, counted and logged so it cannot be
-///         invisible.</b> The tempting exclusion is "let anyone call the tenant directory and the
+///         ⚠
+///         <b>
+///             One thing else is excluded, and it is named, counted and logged so it cannot be
+///             invisible.
+///         </b> The tempting exclusion is "let anyone call the tenant directory and the
 ///         shard map", and it is not needed: those are null-tenant grains and
 ///         <see cref="PlatformCrossTenantAuthorizer" /> already allows the edge <i>into</i> the null
 ///         tenant, with a log line. Doing it here instead would remove the log line and make the
@@ -33,8 +36,10 @@ namespace CyberCloud.Tenancy.Separation;
 ///     </para>
 ///     <para>
 ///         <b>The platform-service edge.</b> docs/plan/17 opens with
-///         <i>"the platform itself is CyberCloud.Communication's first customer — every OTP, alert,
-///         invitation and invoice goes through it"</i>, and <c>CommunicationOtpDelivery</c>'s design
+///         <i>
+///             "the platform itself is CyberCloud.Communication's first customer — every OTP, alert,
+///             invitation and invoice goes through it"
+///         </i>, and <c>CommunicationOtpDelivery</c>'s design
 ///         is that a sign-in code is <i>the platform</i> notifying a person, sent through the
 ///         platform tenant's own communication service so that a tenant which has never configured a
 ///         carrier can still receive codes. The code is minted by <c>UserGrain</c> in the user's
@@ -74,7 +79,8 @@ namespace CyberCloud.Tenancy.Separation;
 ///         holds it narrow.
 ///     </para>
 /// </remarks>
-public sealed class CyberCloudGrainCallTenantSeparator(ILogger<CyberCloudGrainCallTenantSeparator> logger) : IGrainCallTenantSeparator {
+public sealed class CyberCloudGrainCallTenantSeparator(ILogger<CyberCloudGrainCallTenantSeparator> logger) :
+    IGrainCallTenantSeparator {
     /// <summary>
     ///     The one interface any tenant's grain may reach in the platform tenant —
     ///     <c>CyberCloud.Communication.Contracts.IMessageGrain</c>, as Orleans names it.
@@ -122,5 +128,9 @@ public sealed class CyberCloudGrainCallTenantSeparator(ILogger<CyberCloudGrainCa
     /// <param name="targetTenantId">The target grain's tenant, or <see langword="null" /> for a null-tenant grain.</param>
     public static bool IsPlatformServiceEdge(string interfaceName, string? targetTenantId) =>
         string.Equals(interfaceName, PlatformMessageGrainInterface, StringComparison.Ordinal)
-        && string.Equals(targetTenantId, PlatformCrossTenantAuthorizer.PlatformTenantId, StringComparison.OrdinalIgnoreCase);
+        && string.Equals(
+            targetTenantId,
+            PlatformCrossTenantAuthorizer.PlatformTenantId,
+            StringComparison.OrdinalIgnoreCase
+        );
 }

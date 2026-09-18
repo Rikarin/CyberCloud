@@ -32,12 +32,12 @@ public sealed class OwnedFieldSnapshotTests {
         // written by the k3s deployment controller inside the window between our read and our write:
         // the whole of .status, the revision annotation, metadata.generation, and resourceVersion.
         // None of it is ours, so the snapshots must be equal and the apply must report Unchanged.
-        Capture(Deployment(replicas: 1, settled: false)).ShouldBe(Capture(Deployment(replicas: 1, settled: true)));
+        Capture(Deployment(1, false)).ShouldBe(Capture(Deployment(1, true)));
     }
 
     [Fact]
     public void ChangingAValueWeOwnDoesCount() {
-        Capture(Deployment(replicas: 1)).ShouldNotBe(Capture(Deployment(replicas: 3)));
+        Capture(Deployment(1)).ShouldNotBe(Capture(Deployment(3)));
     }
 
     [Fact]
@@ -45,8 +45,8 @@ public sealed class OwnedFieldSnapshotTests {
         // ⚠ The trap in the cheapest alternative fix. metadata.generation ignores status writes,
         // which is the half that looks right — but it does not move for a metadata-only change
         // either, so a relabel we genuinely made would report Unchanged.
-        var before = Deployment(replicas: 1);
-        var after = Deployment(replicas: 1).Replace(@"""app"": ""web""", @"""app"": ""api""", StringComparison.Ordinal);
+        var before = Deployment(1);
+        var after = Deployment(1).Replace(@"""app"": ""web""", @"""app"": ""api""", StringComparison.Ordinal);
 
         Capture(before).ShouldNotBe(Capture(after));
     }
@@ -57,8 +57,8 @@ public sealed class OwnedFieldSnapshotTests {
         // deployment controller also writes deployment.kubernetes.io/revision, which lives under
         // metadata, so that diff still reports a phantom update. We own two annotations by name;
         // this is not one of them.
-        var before = Deployment(replicas: 1);
-        var after = Deployment(replicas: 1).Replace(
+        var before = Deployment(1);
+        var after = Deployment(1).Replace(
             @"""deployment.kubernetes.io/revision"": ""1""",
             @"""deployment.kubernetes.io/revision"": ""2""",
             StringComparison.Ordinal
@@ -74,10 +74,10 @@ public sealed class OwnedFieldSnapshotTests {
         // An object we have never applied to. TryCapture succeeds — field management is readable —
         // and reports an empty projection, which differs from any projection with fields in it. So
         // the first apply against someone else's object is an Updated, correctly.
-        OwnedFieldSnapshot.TryCapture(Deployment(replicas: 1), "nobody-by-that-name", out var none)
+        OwnedFieldSnapshot.TryCapture(Deployment(1), "nobody-by-that-name", out var none)
             .ShouldBeTrue();
 
-        none.ShouldNotBe(Capture(Deployment(replicas: 1)));
+        none.ShouldNotBe(Capture(Deployment(1)));
     }
 
     [Fact]
@@ -85,21 +85,21 @@ public sealed class OwnedFieldSnapshotTests {
         // Our manager name, our fields — but written to .status, which is never what an apply of the
         // main resource compares. Rewriting the controller's entry to carry our name must change
         // nothing.
-        var mine = Deployment(replicas: 1).Replace(
+        var mine = Deployment(1).Replace(
             @"""manager"": ""k3s""",
             $@"""manager"": ""{Ours}""",
             StringComparison.Ordinal
         );
 
-        Capture(mine).ShouldBe(Capture(Deployment(replicas: 1)));
+        Capture(mine).ShouldBe(Capture(Deployment(1)));
     }
 
     [Fact]
     public void AContainerFieldWeOwnIsComparedThroughItsListMapKey() {
         // f:containers is keyed by k:{"name":"c"}, so resolving it means matching the element by its
         // key fields rather than by position.
-        var before = Deployment(replicas: 1);
-        var after = Deployment(replicas: 1).Replace("pause:3.10", "pause:3.9", StringComparison.Ordinal);
+        var before = Deployment(1);
+        var after = Deployment(1).Replace("pause:3.10", "pause:3.9", StringComparison.Ordinal);
 
         Capture(before).ShouldNotBe(Capture(after));
     }
@@ -108,13 +108,13 @@ public sealed class OwnedFieldSnapshotTests {
     public void ADefaultedFieldInsideAContainerWeOwnDoesNotCount() {
         // We own the container element and, by name, its image and name. The API server defaults
         // imagePullPolicy and terminationMessagePath into the same element; those are not ours.
-        var defaulted = Deployment(replicas: 1).Replace(
+        var defaulted = Deployment(1).Replace(
             @"""imagePullPolicy"": ""IfNotPresent""",
             @"""imagePullPolicy"": ""Always""",
             StringComparison.Ordinal
         );
 
-        Capture(defaulted).ShouldBe(Capture(Deployment(replicas: 1)));
+        Capture(defaulted).ShouldBe(Capture(Deployment(1)));
     }
 
     [Fact]

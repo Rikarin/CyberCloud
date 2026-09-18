@@ -142,13 +142,13 @@ public static class SiloBuilderStorageExtensions {
             DurableTierConfigurator.ProviderParameters
         );
 
-        silo.ConfigureServices(services => {
+        silo.ConfigureServices(static services => {
                 // StorageTiers.Hot → the default provider. AddKeyedSingleton, not TryAdd: registration
                 // order decides, and last-one-wins is the only rule here that does not depend on which
                 // extension method ran first.
-                services.AddKeyedSingleton<IGrainStorage>(
+                services.AddKeyedSingleton(
                     StorageTiers.Hot,
-                    (sp, _) => sp.GetRequiredKeyedService<IGrainStorage>(DefaultProviderName)
+                    static (sp, _) => sp.GetRequiredKeyedService<IGrainStorage>(DefaultProviderName)
                 );
 
                 // ⚠ And the unkeyed one, for the same reason in the other direction.
@@ -158,7 +158,7 @@ public static class SiloBuilderStorageExtensions {
                 // one that writes outside every tenant's hash tag. Nothing on the grain path reads the
                 // unkeyed registration (Orleans resolves storage by key), but leaving a loaded gun in the
                 // container for the next person to resolve is not a saving.
-                services.AddSingleton(sp => sp.GetRequiredKeyedService<IGrainStorage>(DefaultProviderName));
+                services.AddSingleton(static sp => sp.GetRequiredKeyedService<IGrainStorage>(DefaultProviderName));
             }
         );
 

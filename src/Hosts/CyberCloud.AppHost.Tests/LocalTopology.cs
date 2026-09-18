@@ -191,8 +191,8 @@ public sealed class LocalTopology : IAsyncLifetime {
         string.Join(
             Environment.NewLine,
             resourceStates
-                .OrderBy(x => x.Key, StringComparer.Ordinal)
-                .Select(x => $"  {x.Key}: {x.Value}")
+                .OrderBy(static x => x.Key, StringComparer.Ordinal)
+                .Select(static x => $"  {x.Key}: {x.Value}")
         );
 
     /// <summary>The Npgsql connection string for one durable shard, as the silos received it.</summary>
@@ -232,7 +232,7 @@ public sealed class LocalTopology : IAsyncLifetime {
                     // ⚠ Said out loud, because the alternative is a suite that looks hung. Another
                     // checkout's `./build.sh Test` holds this for the length of its bring-up.
                     Console.WriteLine(
-                        $"[CyberCloud.AppHost] waiting for another AppHost bring-up on this machine "
+                        "[CyberCloud.AppHost] waiting for another AppHost bring-up on this machine "
                         + $"to finish (lock: {MachineLockPath})."
                     );
 
@@ -258,10 +258,10 @@ public sealed class LocalTopology : IAsyncLifetime {
                 throw new InvalidOperationException(
                     $"Host port {CyberCloudResources.K3sApiPort} is still in use after "
                     + $"{PortReleaseBudget.TotalSeconds:F0} s, and CyberCloud.AppHost publishes k3s "
-                    + $"on it unproxied, so this bring-up would leave k3s unable to start and only "
-                    + $"TheK3sApiServerAnswersKubernetes would notice. Something outside this test "
-                    + $"run holds it — a manual `dotnet run` of CyberCloud.AppHost, or a k3s "
-                    + $"container left behind by an earlier run "
+                    + "on it unproxied, so this bring-up would leave k3s unable to start and only "
+                    + "TheK3sApiServerAnswersKubernetes would notice. Something outside this test "
+                    + "run holds it — a manual `dotnet run` of CyberCloud.AppHost, or a k3s "
+                    + "container left behind by an earlier run "
                     + $"(`docker ps --filter publish={CyberCloudResources.K3sApiPort}`)."
                 );
             }
@@ -274,7 +274,7 @@ public sealed class LocalTopology : IAsyncLifetime {
     static bool IsApiPortTaken() =>
         IPGlobalProperties.GetIPGlobalProperties()
             .GetActiveTcpListeners()
-            .Any(x => x.Port == CyberCloudResources.K3sApiPort);
+            .Any(static x => x.Port == CyberCloudResources.K3sApiPort);
 
     async Task RecordResourceStatesAsync(CancellationToken cancellationToken) {
         try {

@@ -16,8 +16,11 @@ namespace CyberCloud.Kubernetes.Tunnel;
 ///         all run exactly as they do for a kubeconfig, above this seam.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A tunnel failure and an API server failure are told apart by the error code, and the
-///         health tracker depends on it.</b> An answer the agent relayed — a <c>404</c>, a
+///         ⚠
+///         <b>
+///             A tunnel failure and an API server failure are told apart by the error code, and the
+///             health tracker depends on it.
+///         </b> An answer the agent relayed — a <c>404</c>, a
 ///         <c>409</c>, an admission refusal — comes back as the code the agent's own
 ///         <see cref="KubeApiClient" /> produced, and <c>KubeFailures.MeansTheClusterAnswered</c>
 ///         says the cluster is up. A request that never got an answer comes back as
@@ -55,7 +58,11 @@ public sealed class TunnelKubeApiClient(Guid clusterId, ITunnelRoute route) : IK
     }
 
     /// <inheritdoc />
-    public Task<Result> DeleteAsync(ObjectRef target, CascadePolicy policy, CancellationToken cancellationToken = default) {
+    public Task<Result> DeleteAsync(
+        ObjectRef target,
+        CascadePolicy policy,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(target);
 
         return CallAsync(
@@ -66,7 +73,11 @@ public sealed class TunnelKubeApiClient(Guid clusterId, ITunnelRoute route) : IK
     }
 
     /// <inheritdoc />
-    public Task<Result> SetOwnerAsync(ObjectRef target, OwnerRef? owner, CancellationToken cancellationToken = default) {
+    public Task<Result> SetOwnerAsync(
+        ObjectRef target,
+        OwnerRef? owner,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(target);
 
         return CallAsync(
@@ -80,8 +91,12 @@ public sealed class TunnelKubeApiClient(Guid clusterId, ITunnelRoute route) : IK
     public async Task<Result<IReadOnlyList<GroupVersionKind>>> DiscoverNamespacedKindsAsync(
         CancellationToken cancellationToken = default
     ) {
-        var answer = await CallAsync<TunnelOperations.DiscoverAnswer>(TunnelOperations.Discover, "{}", cancellationToken)
-            .ConfigureAwait(false);
+        var answer = await CallAsync<TunnelOperations.DiscoverAnswer>(
+            TunnelOperations.Discover,
+            "{}",
+            cancellationToken
+        )
+                .ConfigureAwait(false);
 
         return answer.TryGetError(out var error)
             ? Result<IReadOnlyList<GroupVersionKind>>.Failure(error)
@@ -132,8 +147,11 @@ public sealed class TunnelKubeApiClient(Guid clusterId, ITunnelRoute route) : IK
     ///         <c>charts/agent/conformance.yaml § owed</c>, <c>informers-do-not-cross-the-tunnel</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Nothing in production reaches this throw, and the refusal that matters is the
-    ///         connection grain's.</b> Establishing an informer is a <i>list</i> —
+    ///         ⚠
+    ///         <b>
+    ///             Nothing in production reaches this throw, and the refusal that matters is the
+    ///             connection grain's.
+    ///         </b> Establishing an informer is a <i>list</i> —
     ///         <c>SharedInformer.EstablishAsync</c> lists and holds the cursor; the watch is
     ///         <c>SharedInformer.PumpAsync</c>, which only its own tests call — and a list crosses
     ///         the tunnel like any other request. So <c>ClusterConnectionGrain.WatchAsync</c> refuses

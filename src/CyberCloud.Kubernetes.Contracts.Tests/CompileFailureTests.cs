@@ -68,7 +68,7 @@ public sealed class CompileFailureTests {
 
         errors.ShouldBeEmpty(
             "the legal chain must compile, or the negative cases below prove nothing. "
-            + string.Join("; ", errors.Select(x => x.ToString()))
+            + string.Join("; ", errors.Select(static x => x.ToString()))
         );
     }
 
@@ -100,7 +100,7 @@ public sealed class CompileFailureTests {
             x => x.Id == "CS1061",
             "the failure must be 'IKubeCommandNeedsTenant does not contain a definition for Build' "
             + "— a member-resolution error — and not some incidental error. Got: "
-            + string.Join("; ", errors.Select(x => x.Id))
+            + string.Join("; ", errors.Select(static x => x.Id))
         );
 
         errors[0].GetMessage().ShouldContain("IKubeCommandNeedsTenant");
@@ -330,7 +330,7 @@ public sealed class CompileFailureTests {
         );
 
         return compilation.GetDiagnostics()
-            .Where(x => x.Severity == DiagnosticSeverity.Error)
+            .Where(static x => x.Severity == DiagnosticSeverity.Error)
             .ToImmutableArray();
     }
 

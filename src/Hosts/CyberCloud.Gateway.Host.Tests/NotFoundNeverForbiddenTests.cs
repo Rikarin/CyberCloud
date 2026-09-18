@@ -19,7 +19,7 @@ namespace CyberCloud.Gateway.Host.Tests;
 public sealed class NotFoundNeverForbiddenTests {
     [Fact]
     public async Task TheAbsentAndTheUnauthorized404sAreByteIdentical() {
-        var absent = await Answer(request => Result<ResourceSnapshot>.Failure(
+        var absent = await Answer(static request => Result<ResourceSnapshot>.Failure(
                 ErrorCode.ResourceNotFound,
                 $"'{request.Path}' does not exist."
             )
@@ -27,7 +27,7 @@ public sealed class NotFoundNeverForbiddenTests {
 
         // What a seam that had NOT been forced through one renderer would plausibly write. It is a
         // different sentence, it names the caller, and it is a complete oracle on its own.
-        var unauthorized = await Answer(request => Result<ResourceSnapshot>.Failure(
+        var unauthorized = await Answer(static request => Result<ResourceSnapshot>.Failure(
                 ErrorCode.ResourceNotFound,
                 $"The caller is not permitted to read '{request.Path}' and the resource exists."
             )
@@ -43,7 +43,7 @@ public sealed class NotFoundNeverForbiddenTests {
 
     [Fact]
     public async Task ASubscriptionThatDoesNotExistGetsTheSameBodyAsAResourceThatDoesNot() {
-        var resource = await Answer(request => Result<ResourceSnapshot>.Failure(
+        var resource = await Answer(static request => Result<ResourceSnapshot>.Failure(
                 ErrorCode.ResourceNotFound,
                 $"'{request.Path}' does not exist."
             )
@@ -51,7 +51,7 @@ public sealed class NotFoundNeverForbiddenTests {
 
         // ⚠ A distinct "no such subscription" body would let a prober enumerate subscription ids
         // inside a tenant, which is a smaller leak than cross-tenant and still a real one.
-        var subscription = await Answer(_ => Result<ResourceSnapshot>.Failure(
+        var subscription = await Answer(static _ => Result<ResourceSnapshot>.Failure(
                 ErrorCode.SubscriptionNotFound,
                 "That subscription does not exist in this tenant."
             )
@@ -65,7 +65,7 @@ public sealed class NotFoundNeverForbiddenTests {
     public async Task A403IsReturnedOnlyWhenTheSeamSaysTheCallerCanReadButNotAct() {
         var gateway = new GatewayHarness();
 
-        gateway.Manager.OnWrite = _ => Result<WriteAccepted>.Failure(
+        gateway.Manager.OnWrite = static _ => Result<WriteAccepted>.Failure(
             ErrorCode.AuthorizationFailed,
             "The caller may read this server but not write it."
         );
@@ -74,7 +74,7 @@ public sealed class NotFoundNeverForbiddenTests {
             "PUT",
             GatewayHarness.ResourcePath(GatewayHarness.TenantA),
             gateway.Token(GatewayHarness.TenantA),
-            body: "{\"properties\":{}}"
+            body: """{"properties":{}}"""
         );
 
         response.Status.ShouldBe(StatusCodes.Status403Forbidden);
@@ -93,7 +93,7 @@ public sealed class NotFoundNeverForbiddenTests {
     public async Task ANonNotFoundFailureKeepsItsOwnMessage() {
         var gateway = new GatewayHarness();
 
-        gateway.Manager.OnWrite = _ => Result<WriteAccepted>.Failure(
+        gateway.Manager.OnWrite = static _ => Result<WriteAccepted>.Failure(
             ErrorCode.QuotaExceeded,
             "Subscription quota for 'vcpu' in region 'eu-central' would be exceeded (requested 8, available 2)."
         );
@@ -102,7 +102,7 @@ public sealed class NotFoundNeverForbiddenTests {
             "PUT",
             GatewayHarness.ResourcePath(GatewayHarness.TenantA),
             gateway.Token(GatewayHarness.TenantA),
-            body: "{\"properties\":{}}"
+            body: """{"properties":{}}"""
         );
 
         response.Status.ShouldBe(StatusCodes.Status429TooManyRequests);

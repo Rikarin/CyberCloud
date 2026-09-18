@@ -124,7 +124,8 @@ sealed class Payload {
             }
 
             if (kind == PayloadKind.Element && element.ValueKind == JsonValueKind.Object) {
-                return element.EnumerateObject().Select(x => new KeyValuePair<string, Payload>(x.Name, Of(x.Value)));
+                return element.EnumerateObject()
+                    .Select(static x => new KeyValuePair<string, Payload>(x.Name, Of(x.Value)));
             }
 
             return [];
@@ -226,7 +227,7 @@ sealed class Payload {
             JsonValueKind.String => string.Equals(AsString(), other.AsString(), StringComparison.Ordinal),
             JsonValueKind.Number => AsNumber() == other.AsNumber(),
             JsonValueKind.True or JsonValueKind.False or JsonValueKind.Null or JsonValueKind.Undefined => true,
-            _ => string.Equals(ToJson(indented: false), other.ToJson(indented: false), StringComparison.Ordinal),
+            _ => string.Equals(ToJson(false), other.ToJson(false), StringComparison.Ordinal),
         };
     }
 
@@ -275,12 +276,12 @@ sealed class Payload {
                 break;
 
             case PayloadKind.True:
-                writer.WriteBooleanValue(value: true);
+                writer.WriteBooleanValue(true);
 
                 break;
 
             case PayloadKind.False:
-                writer.WriteBooleanValue(value: false);
+                writer.WriteBooleanValue(false);
 
                 break;
 
@@ -335,7 +336,7 @@ sealed class Payload {
             JsonValueKind.True => "true",
             JsonValueKind.False => "false",
             JsonValueKind.Number => AsNumber()?.ToString("R", CultureInfo.InvariantCulture) ?? string.Empty,
-            _ => ToJson(indented: false),
+            _ => ToJson(false),
         };
 
     enum PayloadKind {

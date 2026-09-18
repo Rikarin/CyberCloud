@@ -11,8 +11,11 @@ namespace CyberCloud.Cli.Commands;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Hand-written, like <c>cyc rest</c>, and for the reason docs/plan/10 § Shape gives
-///         under "#63's question".</b> The address lives under a reserved namespace no provider
+///         ⚠
+///         <b>
+///             Hand-written, like <c>cyc rest</c>, and for the reason docs/plan/10 § Shape gives
+///             under "#63's question".
+///         </b> The address lives under a reserved namespace no provider
 ///         declares, so the generated document does not carry it and no generated group can. Until
 ///         the emitter learns a third non-registry source — the same shape #63 gave the scope
 ///         paths — this command is the CLI's whole knowledge of the endpoint: the address, the body's
@@ -39,18 +42,16 @@ static class GraphCommands {
     public static Command Build(CycHost host, GlobalOptions globals, VerbTreeDocument tree) {
         ArgumentNullException.ThrowIfNull(host);
 
-        var command = new Command(GroupName, "Query the resource graph: every resource you may read, in a KQL subset.") {
+        return new(GroupName, "Query the resource graph: every resource you may read, in a KQL subset.") {
             Query(host, globals, tree)
         };
-
-        return command;
     }
 
     static Command Query(CycHost host, GlobalOptions globals, VerbTreeDocument tree) {
         var query = new Argument<string>("query") {
             Description =
-                "The KQL. Starts with the table: \"resources | where type =~ 'cybercloud.dbforpostgresql/servers' "
-                + "| project name, location\". Operators: where, project, extend, summarize, order by, take, "
+                """The KQL. Starts with the table: "resources | where type =~ 'cybercloud.dbforpostgresql/servers' """
+                + """| project name, location". Operators: where, project, extend, summarize, order by, take, """
                 + "distinct, count. Anything else is refused with the supported list."
         };
 
@@ -73,7 +74,11 @@ static class GraphCommands {
         };
 
         var command = new Command("query", "Run a KQL query over the resource graph and print the rows.") {
-            query, tenant, top, skipToken, all
+            query,
+            tenant,
+            top,
+            skipToken,
+            all
         };
 
         command.SetAction(async (parse, cancellationToken) => {
@@ -82,15 +87,33 @@ static class GraphCommands {
 
                 using var client = invocation.CreateClient(tenantId);
                 var context = client.Context;
-                var address = new Uri(context.Endpoint, $"/tenants/{tenantId}/providers/CyberCloud.ResourceGraph/resources");
+                var address = new Uri(
+                    context.Endpoint,
+                    $"/tenants/{tenantId}/providers/CyberCloud.ResourceGraph/resources"
+                );
                 var text = parse.GetRequiredValue(query);
 
                 if (parse.GetValue(all)) {
-                    return await AllPagesAsync(invocation, context, address, text, parse.GetValue(top), cancellationToken).ConfigureAwait(false);
+                    return await AllPagesAsync(
+                        invocation,
+                        context,
+                        address,
+                        text,
+                        parse.GetValue(top),
+                        cancellationToken
+                    ).ConfigureAwait(false);
                 }
 
-                using var page = await PageAsync(invocation, context, address, text, parse.GetValue(top), parse.GetValue(skipToken), cancellationToken)
-                    .ConfigureAwait(false);
+                using var page = await PageAsync(
+                    invocation,
+                    context,
+                    address,
+                    text,
+                    parse.GetValue(top),
+                    parse.GetValue(skipToken),
+                    cancellationToken
+                )
+                        .ConfigureAwait(false);
 
                 // Said out loud, as the generated list verbs say it: nextLink is not in --output table.
                 if (page.Value.Member("nextLink").AsString() is { Length: > 0 }) {
@@ -149,12 +172,14 @@ static class GraphCommands {
 
         var response = await context.Pipeline.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        invocation.Trace($"{response.Status} {response.ReasonPhrase} (request id {response.ServiceRequestId ?? "none"})");
+        invocation.Trace(
+            $"{response.Status} {response.ReasonPhrase} (request id {response.ServiceRequestId ?? "none"})"
+        );
 
         if (response.IsError) {
             // The gateway's refusal names the operator and the supported list; the flag is the
             // argument, which is what the message is about.
-            throw CycRequestException.From(response, flag: "query");
+            throw CycRequestException.From(response, "query");
         }
 
         return ResponseBody.Parse(response);
@@ -179,14 +204,22 @@ static class GraphCommands {
     ) {
         var pages = new List<ResponseBody>();
         var values = new List<Payload>();
-        Payload columns = Payload.Array([]);
+        var columns = Payload.Array([]);
 
         try {
             string? skipToken = null;
             var count = 0;
 
             while (true) {
-                var page = await PageAsync(invocation, context, address, query, top, skipToken, cancellationToken).ConfigureAwait(false);
+                var page = await PageAsync(
+                    invocation,
+                    context,
+                    address,
+                    query,
+                    top,
+                    skipToken,
+                    cancellationToken
+                ).ConfigureAwait(false);
                 pages.Add(page);
                 values.AddRange(page.Value.Member("value").Items);
                 count++;
@@ -227,7 +260,8 @@ static class GraphCommands {
         foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)) {
             var separator = pair.IndexOf('=', StringComparison.Ordinal);
 
-            if (separator > 0 && string.Equals(Uri.UnescapeDataString(pair[..separator]), "$skipToken", StringComparison.Ordinal)) {
+            if (separator > 0
+                && string.Equals(Uri.UnescapeDataString(pair[..separator]), "$skipToken", StringComparison.Ordinal)) {
                 return Uri.UnescapeDataString(pair[(separator + 1)..]);
             }
         }

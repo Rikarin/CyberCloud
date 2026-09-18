@@ -194,7 +194,10 @@ public static class CyberCloudResources {
     /// </remarks>
     public const string Mailpit = "mailpit";
 
-    /// <summary>The image, pinned. ⚠ The same tag <c>SmtpChannelProviderTests</c> runs the carrier against, and <c>AppHostTopologyTests</c> holds the two together.</summary>
+    /// <summary>
+    ///     The image, pinned. ⚠ The same tag <c>SmtpChannelProviderTests</c> runs the carrier against, and
+    ///     <c>AppHostTopologyTests</c> holds the two together.
+    /// </summary>
     public const string MailpitImage = "axllent/mailpit";
 
     /// <inheritdoc cref="MailpitImage" />

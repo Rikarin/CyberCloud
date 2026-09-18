@@ -523,6 +523,6 @@ public static class NetworkAddressing {
     public static ImmutableArray<string> ConflictsWith(Cidr prefix, string region) => [
         .. ReservedRanges
             .Where(x => x.AppliesIn(region) && prefix.Overlaps(x.Cidr))
-            .Select(x => x.Id)
+            .Select(static x => x.Id)
     ];
 }

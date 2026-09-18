@@ -39,7 +39,7 @@ public static class ServiceDefaultsExtensions {
         builder.ConfigureOpenTelemetry();
         builder.AddDefaultHealthChecks();
 
-        builder.Services.Configure<ForwardedHeadersOptions>(options => {
+        builder.Services.Configure<ForwardedHeadersOptions>(static options => {
                 options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
 
                 // ⚠ Cleared on purpose. The default only trusts loopback, which in a cluster means the
@@ -95,7 +95,7 @@ public static class ServiceDefaultsExtensions {
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Services.AddOpenTelemetry()
-            .ConfigureResource(resource => resource.AddAttributes(
+            .ConfigureResource(static resource => resource.AddAttributes(
                     new Dictionary<string, object>(StringComparer.Ordinal) {
                         ["service.instance.id"] = Environment.GetEnvironmentVariable("POD_NAME")
                             ?? Guid.NewGuid().ToString("N"),
@@ -104,14 +104,14 @@ public static class ServiceDefaultsExtensions {
                     }
                 )
             )
-            .WithMetrics(metrics => metrics
+            .WithMetrics(static metrics => metrics
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation()
                     .AddMeter("Microsoft.Orleans")
                     .AddMeter($"{TelemetrySourcePrefix}.*")
             )
-            .WithTracing(tracing => tracing
+            .WithTracing(static tracing => tracing
                     .AddSource("Microsoft.Orleans.Runtime")
                     .AddSource("Microsoft.Orleans.Application")
                     .AddSource($"{TelemetrySourcePrefix}.*")
@@ -137,17 +137,17 @@ public static class ServiceDefaultsExtensions {
     public static IHostApplicationBuilder AddDefaultHealthChecks(this IHostApplicationBuilder builder) {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.Services.AddRequestTimeouts(timeouts =>
+        builder.Services.AddRequestTimeouts(static timeouts =>
             timeouts.AddPolicy(HealthCheckPolicy, TimeSpan.FromSeconds(5))
         );
 
-        builder.Services.AddOutputCache(caching =>
-            caching.AddPolicy(HealthCheckPolicy, policy => policy.Expire(TimeSpan.FromSeconds(10)))
+        builder.Services.AddOutputCache(static caching =>
+            caching.AddPolicy(HealthCheckPolicy, static policy => policy.Expire(TimeSpan.FromSeconds(10)))
         );
 
         builder.Services
             .AddHealthChecks()
-            .AddCheck("self", () => HealthCheckResult.Healthy(), [HealthCheckTags.Live]);
+            .AddCheck("self", static () => HealthCheckResult.Healthy(), [HealthCheckTags.Live]);
 
         return builder;
     }
@@ -237,7 +237,7 @@ public static class ServiceDefaultsExtensions {
         "Design",
         "CA1062:Validate arguments of public methods",
         Justification = "app is dereferenced immediately; a null there is a null-reference at the "
-        + "call site, which is the same diagnostic one line earlier."
+            + "call site, which is the same diagnostic one line earlier."
     )]
     public static IEndpointRouteBuilder MapDefaultEndpoints(this IEndpointRouteBuilder app) {
         ArgumentNullException.ThrowIfNull(app);

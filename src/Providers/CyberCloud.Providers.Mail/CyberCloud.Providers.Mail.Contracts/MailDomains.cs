@@ -491,7 +491,7 @@ public static class MailDomains {
     ///     </para>
     /// </remarks>
     public const string HostnamePattern =
-        "^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}$";
+        """^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$""";
 
     /// <summary>The longest a fully-qualified domain name may be, from RFC 1035.</summary>
     public const int HostnameMaxLength = 253;
@@ -751,9 +751,9 @@ public static class MailDomains {
 
         return [
             .. hosts.EnumerateArray()
-                .Where(x => x.ValueKind is JsonValueKind.String)
-                .Select(x => x.GetString() ?? string.Empty)
-                .Where(x => x.Length > 0)
+                .Where(static x => x.ValueKind is JsonValueKind.String)
+                .Select(static x => x.GetString() ?? string.Empty)
+                .Where(static x => x.Length > 0)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Order(StringComparer.Ordinal)
         ];
@@ -1206,7 +1206,7 @@ public static class MailDomains {
         if (relays.Length > 1) {
             builder.Append(
                 CultureInfo.InvariantCulture,
-                $"smtp_fallback_relay = {string.Join(", ", relays.Skip(1).Select(x => "[" + x + "]"))}\n"
+                $"smtp_fallback_relay = {string.Join(", ", relays.Skip(1).Select(static x => "[" + x + "]"))}\n"
             );
         }
 

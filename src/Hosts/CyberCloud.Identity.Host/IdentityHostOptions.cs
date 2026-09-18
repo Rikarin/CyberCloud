@@ -6,8 +6,11 @@ namespace CyberCloud.Identity.Host;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The tenant is a request parameter now, and <see cref="TenantId" /> is only the
-///         fallback.</b> docs/plan/11 § Sign-up and tenant creation refuses a global email index, so
+///         ⚠
+///         <b>
+///             The tenant is a request parameter now, and <see cref="TenantId" /> is only the
+///             fallback.
+///         </b> docs/plan/11 § Sign-up and tenant creation refuses a global email index, so
 ///         an address alone resolves to nothing and something has to name the tenant. This type used
 ///         to answer that with "one host signs into one tenant, named in configuration", and listed
 ///         the two reasons a caller-chosen tenant was worse: it needs a per-tenant client index
@@ -36,8 +39,11 @@ public sealed class IdentityHostOptions {
     ///     <para>
     ///         Nullable so "explicitly configured" and "unset" can be told apart, which the rule
     ///         needs: unset means the platform tenant (<see cref="Guid.Empty" />,
-    ///         <c>PlatformCrossTenantAuthorizer.PlatformTenantId</c>) <b>only when the environment is
-    ///         Development</b>, and "no tenant" — <c>invalid_request</c> on <c>/authorize</c>, the
+    ///         <c>PlatformCrossTenantAuthorizer.PlatformTenantId</c>)
+    ///         <b>
+    ///             only when the environment is
+    ///             Development
+    ///         </b>, and "no tenant" — <c>invalid_request</c> on <c>/authorize</c>, the
     ///         uniform failure on <c>/api/signin/*</c> — everywhere else.
     ///     </para>
     ///     <para>
@@ -56,8 +62,11 @@ public sealed class IdentityHostOptions {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Set it in production, and set the gateway's <c>CyberCloud:Gateway:Identity:Issuer</c>
-    ///         to the same string.</b> The gateway pins the issuer it validates against and refuses
+    ///         ⚠
+    ///         <b>
+    ///             Set it in production, and set the gateway's <c>CyberCloud:Gateway:Identity:Issuer</c>
+    ///             to the same string.
+    ///         </b> The gateway pins the issuer it validates against and refuses
     ///         a discovery document whose <c>issuer</c> differs from the one it was configured with —
     ///         so a host that inferred its issuer from the request would mint <c>iss</c> from
     ///         whatever <c>Host</c> header Envoy passed through, and a token minted behind one

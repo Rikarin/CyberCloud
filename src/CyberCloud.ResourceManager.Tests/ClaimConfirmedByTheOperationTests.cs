@@ -1,5 +1,3 @@
-using CyberCloud.ResourceManager.Tests.Infrastructure;
-
 namespace CyberCloud.ResourceManager.Tests;
 
 /// <summary>
@@ -8,8 +6,11 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The state under test is the one a silo death leaves, built by hand because nothing
-///         else can build it.</b> <c>ResourceManagerService.WriteAsync</c> starts the operation at
+///         ⚠
+///         <b>
+///             The state under test is the one a silo death leaves, built by hand because nothing
+///             else can build it.
+///         </b> <c>ResourceManagerService.WriteAsync</c> starts the operation at
 ///         step 10 and confirms the claim right after, in one method on one thread; the only way that
 ///         method exits between the two is the process dying, which a test cannot ask for. So the
 ///         first test claims a name and starts an operation for it without confirming, exactly as the
@@ -38,23 +39,24 @@ public sealed class ClaimConfirmedByTheOperationTests(ResourceManagerCluster clu
         // Steps 7 and 10 of the create saga, with 3 never reached.
         (await index.TryClaimAsync(address.WithId(resourceId), resourceId)).IsSuccess.ShouldBeTrue();
 
-        (await index.GetAsync()).GetValueOrThrow().State.ShouldBe(IndexEntryState.Claimed, "the claim is a lease, not a binding.");
+        (await index.GetAsync()).GetValueOrThrow()
+            .State.ShouldBe(IndexEntryState.Claimed, "the claim is a lease, not a binding.");
 
         var operation = cluster.Operation(ResourceManagerCluster.Tenant, operationId);
 
         (await operation.StartAsync(
-            new() {
-                OperationId = operationId,
-                Kind = OperationKind.Create,
-                ResourcePath = address.Path,
-                ResourceId = resourceId,
-                TenantId = ResourceManagerCluster.Tenant,
-                SubscriptionId = ResourceManagerCluster.Subscription,
-                ApiVersion = TestingProvider.V2026,
-                Desired = TestingProvider.Body(),
-                IndexClaimed = true
-            }
-        )).IsSuccess.ShouldBeTrue();
+                new() {
+                    OperationId = operationId,
+                    Kind = OperationKind.Create,
+                    ResourcePath = address.Path,
+                    ResourceId = resourceId,
+                    TenantId = ResourceManagerCluster.Tenant,
+                    SubscriptionId = ResourceManagerCluster.Subscription,
+                    ApiVersion = TestingProvider.V2026,
+                    Desired = TestingProvider.Body(),
+                    IndexClaimed = true
+                }
+            )).IsSuccess.ShouldBeTrue();
 
         // The reminder's first tick, as a test drives it.
         _ = await operation.DriveAsync();
@@ -103,18 +105,18 @@ public sealed class ClaimConfirmedByTheOperationTests(ResourceManagerCluster clu
         var lateOperation = cluster.Operation(ResourceManagerCluster.Tenant, late);
 
         (await lateOperation.StartAsync(
-            new() {
-                OperationId = late,
-                Kind = OperationKind.Create,
-                ResourcePath = address.Path,
-                ResourceId = accepted.Resource.Id,
-                TenantId = ResourceManagerCluster.Tenant,
-                SubscriptionId = ResourceManagerCluster.Subscription,
-                ApiVersion = TestingProvider.V2026,
-                Desired = TestingProvider.Body(),
-                IndexClaimed = true
-            }
-        )).IsSuccess.ShouldBeTrue();
+                new() {
+                    OperationId = late,
+                    Kind = OperationKind.Create,
+                    ResourcePath = address.Path,
+                    ResourceId = accepted.Resource.Id,
+                    TenantId = ResourceManagerCluster.Tenant,
+                    SubscriptionId = ResourceManagerCluster.Subscription,
+                    ApiVersion = TestingProvider.V2026,
+                    Desired = TestingProvider.Body(),
+                    IndexClaimed = true
+                }
+            )).IsSuccess.ShouldBeTrue();
 
         FakeWorld.StayInProgress.TryRemove(accepted.Resource.Id, out _);
 
@@ -136,9 +138,10 @@ public sealed class ClaimConfirmedByTheOperationTests(ResourceManagerCluster clu
         (await cluster.Index(address).GetAsync()).GetValueOrThrow()
             .BoundTo.ShouldBe(rival, "the cancelling operation touched a binding that was not its own.");
 
-        (await cluster.Resource(ResourceManagerCluster.Tenant, accepted.Resource.Id).GetAsync(TestingProvider.V2026, []))
+        (await cluster.Resource(ResourceManagerCluster.Tenant, accepted.Resource.Id)
+                .GetAsync(TestingProvider.V2026, []))
             .GetValueOrThrow()
-                .ProvisioningState.ShouldBe(ProvisioningState.Canceled, "the resource did not follow its operation.");
+            .ProvisioningState.ShouldBe(ProvisioningState.Canceled, "the resource did not follow its operation.");
     }
 
     Task<Result<WriteAccepted>> Create(ResourceId address) =>

@@ -52,8 +52,11 @@ enum RouteKind {
     ///     a write on the collection path is a <c>400</c> that names the item address a scope is
     ///     created at. <c>ScopeCollectionRoutingTests</c> pins both halves.
     ///     <para>
-    ///         ⚠ <b>Separate from <see cref="Scope" /> for the reason <see cref="Collection" /> is
-    ///         separate from <see cref="Resource" />:</b> the two are different addresses, decided
+    ///         ⚠
+    ///         <b>
+    ///             Separate from <see cref="Scope" /> for the reason <see cref="Collection" /> is
+    ///             separate from <see cref="Resource" />:
+    ///         </b> the two are different addresses, decided
     ///         by the path and never by the method. Both go to <c>IScopeManager</c>; this one to
     ///         its <c>ListAsync</c>, which filters by what the caller may read and pages.
     ///     </para>
@@ -75,8 +78,11 @@ enum RouteKind {
     ///     claims it. <c>RoleAssignmentRoutingTests</c> pins the precedence and the shapes that
     ///     still answer <c>400</c>.
     ///     <para>
-    ///         ⚠ <b>Separate from <see cref="Scope" /> for the reason that one is separate from
-    ///         <see cref="Resource" />: the dispatch target differs.</b> An assignment goes to
+    ///         ⚠
+    ///         <b>
+    ///             Separate from <see cref="Scope" /> for the reason that one is separate from
+    ///             <see cref="Resource" />: the dispatch target differs.
+    ///         </b> An assignment goes to
     ///         <c>IRoleAssignmentManager</c>, which owns the <c>assignRole</c> check and the tuple.
     ///     </para>
     /// </remarks>
@@ -96,8 +102,11 @@ enum RouteKind {
     ///     ends on <c>RoleAssignmentId.CollectionSuffix</c>, the other on a name after it — so the
     ///     order changes only which message a malformed path gets.
     ///     <para>
-    ///         ⚠ <b>Separate from <see cref="RoleAssignment" /> for the reason
-    ///         <see cref="Collection" /> is separate from <see cref="Resource" />:</b> the two are
+    ///         ⚠
+    ///         <b>
+    ///             Separate from <see cref="RoleAssignment" /> for the reason
+    ///             <see cref="Collection" /> is separate from <see cref="Resource" />:
+    ///         </b> the two are
     ///         different addresses, and which one a path is, is decided by the path and never by
     ///         the method. Both go to <c>IRoleAssignmentManager</c>; this one to its
     ///         <c>ListAsync</c>, which pages.
@@ -118,8 +127,11 @@ enum RouteKind {
     ///     of every path that reaches the resource manager. <c>ResourceGraphQueryRoutingTests</c>
     ///     pins the shape, the verb and the <c>400</c>s under the namespace.
     ///     <para>
-    ///         ⚠ <b>Separate from <see cref="Action" /> for the reason every other kind is separate:
-    ///         the dispatch target differs.</b> A query goes to <c>IResourceGraphQuery</c>, a
+    ///         ⚠
+    ///         <b>
+    ///             Separate from <see cref="Action" /> for the reason every other kind is separate:
+    ///             the dispatch target differs.
+    ///         </b> A query goes to <c>IResourceGraphQuery</c>, a
     ///         service that reads the projection and no grain.
     ///     </para>
     /// </remarks>
@@ -150,8 +162,11 @@ enum RouteKind {
     ///     WebSocket with. docs/plan/10 § SignalR, <c>HubTickets</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Routed apart from <see cref="Hub" /> so that it is <i>counted</i> and <i>dispatched</i>
-    ///     where a hub request is neither.</b> A hub handshake is exempt from the request-count buckets
+    ///     ⚠
+    ///     <b>
+    ///         Routed apart from <see cref="Hub" /> so that it is <i>counted</i> and <i>dispatched</i>
+    ///         where a hub request is neither.
+    ///     </b> A hub handshake is exempt from the request-count buckets
     ///     and leaves the pipeline for SignalR; a ticket mint is an ordinary authenticated write that
     ///     stage 8 answers itself, and exempting it would make "mint tickets in a loop" the one
     ///     uncounted request on the host. It carries no <c>api-version</c>, for the reason the hub it
@@ -166,8 +181,11 @@ enum RouteKind {
     ///     The RFC 9116 <c>security.txt</c> — <c>GET</c> on exactly <c>/.well-known/security.txt</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>One of two routes with no <c>api-version</c> — <see cref="Hub" /> is the other — and
-    ///     it is not an exception to docs/plan/10 § API versioning.</b> That section versions
+    ///     ⚠
+    ///     <b>
+    ///         One of two routes with no <c>api-version</c> — <see cref="Hub" /> is the other — and
+    ///         it is not an exception to docs/plan/10 § API versioning.
+    ///     </b> That section versions
     ///     <i>this platform's</i> API surface. The file is RFC 9116's: its shape is the RFC's, a
     ///     scanner fetches it with no query string, and a <c>400</c> naming a date would be answered
     ///     to every one of them. Stage 6 skips the parameter for this kind for the reason it does for
@@ -182,8 +200,11 @@ enum RouteKind {
     ///     upgraded to a WebSocket. docs/plan/09 § Cluster connections, the <c>AgentInitiated</c> row.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The third route with no <c>api-version</c> and no token, and the only one that
-    ///     authenticates by something other than a JWT.</b> Stage 2 lets <c>/agent/</c> through
+    ///     ⚠
+    ///     <b>
+    ///         The third route with no <c>api-version</c> and no token, and the only one that
+    ///         authenticates by something other than a JWT.
+    ///     </b> Stage 2 lets <c>/agent/</c> through
     ///     without a bearer token the identity host minted, because the agent holds a per-cluster
     ///     credential the tunnel grain checks — <c>AgentTunnelRelay</c>, at the endpoint, after the
     ///     pipeline. Stage 3 leaves the caller empty; stage 5 counts the upgrade against the
@@ -427,7 +448,9 @@ static class GatewayRouter {
                         ErrorCode.InvalidResourceId,
                         $"'{path}' is the role assignment collection, which is read with GET only. A "
                         + "grant is a PUT and a revoke a DELETE on one assignment — "
-                        + "'{scope}" + RoleAssignmentId.Suffix + "{role}-{principalType}-{principalId}' "
+                        + "'{scope}"
+                        + RoleAssignmentId.Suffix
+                        + "{role}-{principalType}-{principalId}' "
                         + "— and the name is derived from those three parts rather than chosen "
                         + "(docs/plan/07 § Azure RBAC, expressed in it)."
                     );

@@ -21,8 +21,8 @@ public sealed class ResourceChangedJsonTests {
             Location = "eu-central",
             ClusterId = Guid.Parse("44444444-4444-4444-8444-444444444444"),
             Tags = ImmutableDictionary<string, string>.Empty.Add("env", "prod").Add("owner", "alice"),
-            CreatedAt = new DateTimeOffset(2026, 9, 17, 10, 0, 0, 123, TimeSpan.Zero),
-            ModifiedAt = new DateTimeOffset(2026, 9, 17, 11, 30, 0, 456, TimeSpan.FromHours(2)),
+            CreatedAt = new(2026, 9, 17, 10, 0, 0, 123, TimeSpan.Zero),
+            ModifiedAt = new(2026, 9, 17, 11, 30, 0, 456, TimeSpan.FromHours(2)),
             DesiredHash = "sha256:abc",
             Version = 42
         };
@@ -36,7 +36,11 @@ public sealed class ResourceChangedJsonTests {
         // renumbering is a visible break rather than a silent one.
         text.ShouldContain("\"change\":\"Updated\"");
         text.ShouldContain("\"provisioningState\":\"Succeeded\"");
-        text.ShouldNotContain("subject", Case.Insensitive, "the subject is recomputed from the fields, never trusted from the body");
+        text.ShouldNotContain(
+            "subject",
+            Case.Insensitive,
+            "the subject is recomputed from the fields, never trusted from the body"
+        );
         text.ShouldNotContain("streamNamespace");
 
         var decoded = ResourceChangedJson.Decode(bytes).GetValueOrThrow();
@@ -54,7 +58,10 @@ public sealed class ResourceChangedJsonTests {
         // Result, not an exception it would have to catch by type.
         ResourceChangedJson.Decode("not json"u8.ToArray()).IsFailure.ShouldBeTrue();
         ResourceChangedJson.Decode("null"u8.ToArray()).IsFailure.ShouldBeTrue();
-        ResourceChangedJson.Decode("{}"u8.ToArray()).IsSuccess.ShouldBeTrue("an empty object is an event with defaults; the projector refuses it for its empty ids, not here");
+        ResourceChangedJson.Decode("{}"u8.ToArray())
+            .IsSuccess.ShouldBeTrue(
+                "an empty object is an event with defaults; the projector refuses it for its empty ids, not here"
+            );
     }
 
     [Fact]
@@ -77,13 +84,16 @@ public sealed class ResourceChangedJsonTests {
         row.Access.ShouldBe(["user:alice", "group:eng#member"]);
         row.Tags["env"].ShouldBe("prod");
 
-        ResourceGraphJson.DecodeNumber("{\"version\":\"42\"}\n", "version").ShouldBe(42, "a quoted 64-bit integer is still the number");
+        ResourceGraphJson.DecodeNumber("{\"version\":\"42\"}\n", "version")
+            .ShouldBe(42, "a quoted 64-bit integer is still the number");
         ResourceGraphJson.DecodeNumber("{\"version\":42}\n", "version").ShouldBe(42);
         ResourceGraphJson.DecodeNumber("", "version").ShouldBeNull("no rows is no number");
 
         // And what goes in is ISO 8601 in UTC, with the offset applied, so best_effort parsing has
         // nothing ambiguous to read.
-        var encoded = ResourceGraphJson.EncodeRow(row with { ModifiedAt = new DateTimeOffset(2026, 9, 17, 11, 30, 0, 456, TimeSpan.FromHours(2)) });
+        var encoded = ResourceGraphJson.EncodeRow(
+            row with { ModifiedAt = new(2026, 9, 17, 11, 30, 0, 456, TimeSpan.FromHours(2)) }
+        );
         encoded.ShouldContain("\"modified_at\":\"2026-09-17T09:30:00.456Z\"");
         encoded.ShouldContain("\"is_deleted\":0");
         JsonDocument.Parse(encoded).RootElement.GetProperty("access").GetArrayLength().ShouldBe(2);
@@ -98,7 +108,10 @@ public sealed class ResourceChangedJsonTests {
         var written = JsonDocument.Parse(ResourceGraphJson.EncodeRow(new ResourceGraphRow())).RootElement;
 
         foreach (var column in written.EnumerateObject()) {
-            ddl.ShouldContain("\n    " + column.Name + " ", customMessage: $"the table has no column for the row's '{column.Name}'");
+            ddl.ShouldContain(
+                "\n    " + column.Name + " ",
+                customMessage: $"the table has no column for the row's '{column.Name}'"
+            );
         }
 
         ResourceGraphTable.Database(tenant).ShouldBe("tenant_11111111111141118111111111111111");

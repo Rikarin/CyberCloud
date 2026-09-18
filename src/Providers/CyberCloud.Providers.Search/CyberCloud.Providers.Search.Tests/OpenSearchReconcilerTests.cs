@@ -74,7 +74,7 @@ public sealed class OpenSearchReconcilerTests {
         var connection = new RecordingConnection();
 
         using var aliceBody =
-            JsonDocument.Parse(OpenSearchServices.Body(ClusterId, dataNodes: 3, storageSize: "100Gi"));
+            JsonDocument.Parse(OpenSearchServices.Body(ClusterId, 3, "100Gi"));
 
         // ⚠ Bob's body has a DIFFERENT NUMBER OF POOLS, which is the shape only this type has. A cache
         // keyed on anything but the full address would give Alice a coordinating pool she never asked
@@ -82,8 +82,8 @@ public sealed class OpenSearchReconcilerTests {
         using var bobBody = JsonDocument.Parse(
             OpenSearchServices.Body(
                 ClusterId,
-                dataNodes: 6,
-                storageSize: "500Gi",
+                6,
+                "500Gi",
                 coordinatingNodes: 2
             )
         );
@@ -149,7 +149,7 @@ public sealed class OpenSearchReconcilerTests {
 
         (await Reconcile(connection, body.RootElement)).ShouldBe(ReconcileOutcome.Converged);
 
-        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target))
+        var applied = connection.Applied.Select(static x => RecordingConnection.Key(x.Target))
             .ToHashSet(StringComparer.Ordinal);
 
         var read = connection.Read.Select(RecordingConnection.Key).ToHashSet(StringComparer.Ordinal);
@@ -176,10 +176,10 @@ public sealed class OpenSearchReconcilerTests {
         using var body = JsonDocument.Parse(OpenSearchServices.Body(ClusterId, coordinatingNodes: 2));
 
         await Reconcile(connection, body.RootElement);
-        var first = connection.Applied.Select(x => x.Body).ToArray();
+        var first = connection.Applied.Select(static x => x.Body).ToArray();
 
         await Reconcile(connection, body.RootElement);
-        var second = connection.Applied.Skip(first.Length).Select(x => x.Body).ToArray();
+        var second = connection.Applied.Skip(first.Length).Select(static x => x.Body).ToArray();
 
         second.ShouldBe(first);
     }
@@ -305,7 +305,7 @@ public sealed class OpenSearchReconcilerTests {
     static JsonArray Pools(string objectJson) => JsonNode.Parse(objectJson)!["spec"]!["nodePools"]!.AsArray();
 
     static JsonObject DataPool(string objectJson) =>
-        Pools(objectJson).Single(x => x!["component"]!.GetValue<string>() == "data")!.AsObject();
+        Pools(objectJson).Single(static x => x!["component"]!.GetValue<string>() == "data")!.AsObject();
 }
 
 /// <summary>

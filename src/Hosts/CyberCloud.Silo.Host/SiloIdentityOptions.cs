@@ -145,7 +145,11 @@ public static class SiloIdentityComposition {
     ///         pins it.
     ///     </para>
     /// </remarks>
-    public static ISiloBuilder AddSiloIdentity(this ISiloBuilder silo, IHostEnvironment environment, bool hasRelay = false) {
+    public static ISiloBuilder AddSiloIdentity(
+        this ISiloBuilder silo,
+        IHostEnvironment environment,
+        bool hasRelay = false
+    ) {
         ArgumentNullException.ThrowIfNull(silo);
         ArgumentNullException.ThrowIfNull(environment);
 

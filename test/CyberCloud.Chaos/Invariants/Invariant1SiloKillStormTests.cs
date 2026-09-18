@@ -1,6 +1,5 @@
 using CyberCloud.Chaos.Topology;
 using CyberCloud.Providers.Sample.Contracts;
-using CyberCloud.ResourceManager.Grains;
 using CyberCloud.Tenancy;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -9,14 +8,20 @@ using System.Globalization;
 namespace CyberCloud.Chaos.Invariants;
 
 /// <summary>
-///     docs/plan/23 § The chaos invariants, 1: <i>kill a random silo every 90 s during a provisioning
-///     storm → zero resources stuck in a transitional state after settling; every operation reaches
-///     Succeeded or Failed.</i>
+///     docs/plan/23 § The chaos invariants, 1:
+///     <i>
+///         kill a random silo every 90 s during a provisioning
+///         storm → zero resources stuck in a transitional state after settling; every operation reaches
+///         Succeeded or Failed.
+///     </i>
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The 90 s is compressed to the length of a wave, and the compression is the only
-///         liberty taken.</b> The invariant is about what a kill does to the writes in flight when it
+///         ⚠
+///         <b>
+///             The 90 s is compressed to the length of a wave, and the compression is the only
+///             liberty taken.
+///         </b> The invariant is about what a kill does to the writes in flight when it
 ///         lands, not about how often it lands. So the kills land <i>during</i> the writes: a wave of
 ///         creates is issued a few tens of milliseconds apart and a secondary silo is killed while
 ///         the later ones are still on the wire and the write path is mid-saga on them. Whether the
@@ -94,7 +99,8 @@ public sealed class Invariant1SiloKillStormTests(ChaosTopology topology) {
         var claimWaits = new ConcurrentBag<(string Name, TimeSpan AnsweredAfter, bool NoOp)>();
         var operationWaits = new ConcurrentBag<(string Name, TimeSpan AnsweredAfter, bool NoOp)>();
         var writeFaults = 0;
-        var kills = new List<(SiloAddress Silo, TimeSpan At, TimeSpan Noticed, int ActivationsLost, int InFlightWrites)>();
+        var kills =
+            new List<(SiloAddress Silo, TimeSpan At, TimeSpan Noticed, int ActivationsLost, int InFlightWrites)>();
         var storm = Stopwatch.StartNew();
         var restored = 0;
 
@@ -107,7 +113,9 @@ public sealed class Invariant1SiloKillStormTests(ChaosTopology topology) {
                 // and index entries that landed on it — read before the writes so the kill itself is
                 // not delayed by a management call.
                 var victim = wave > 0 ? topology.Cluster.SecondarySilos[0].SiloAddress : null;
-                var holding = victim is null ? 0 : (await topology.Management.GetRuntimeStatistics([victim]))[0].ActivationCount;
+                var holding = victim is null
+                    ? 0
+                    : (await topology.Management.GetRuntimeStatistics([victim]))[0].ActivationCount;
 
                 var writes = new List<Task>();
                 var issued = 0;
@@ -123,7 +131,7 @@ public sealed class Invariant1SiloKillStormTests(ChaosTopology topology) {
                     // ones are on the wire when this lands. How many were in flight is the number that
                     // says whether the kill was a fault at all.
                     await Task.Delay(Stagger * (issued / 2), token);
-                    var inFlight = writes.Count(x => !x.IsCompleted);
+                    var inFlight = writes.Count(static x => !x.IsCompleted);
                     var killed = await KillAndNoticeAsync(holding, inFlight);
                     kills.Add(killed);
 
@@ -151,20 +159,26 @@ public sealed class Invariant1SiloKillStormTests(ChaosTopology topology) {
 
         // ── Settle: the reminders take every accepted operation to a terminal state, or the budget says so. ──
         var watched = await Task.WhenAll(
-            accepted.Where(x => x.OperationId != Guid.Empty)
+            accepted.Where(static x => x.OperationId != Guid.Empty)
                 .Select(async x => {
-                        var (state, attempts, activations, terminalAt) = await topology.ObserveUntilTerminalAsync(x.World.Tenant, x.OperationId, SettleBudget, token);
-                        return (x.World, x.Name, State: state, Attempts: attempts, Activations: activations, TerminalAt: terminalAt);
+                        var (state, attempts, activations, terminalAt) = await topology.ObserveUntilTerminalAsync(
+                            x.World.Tenant,
+                            x.OperationId,
+                            SettleBudget,
+                            token
+                        );
+                        return (x.World, x.Name, State: state, Attempts: attempts, Activations: activations,
+                            TerminalAt: terminalAt);
                     }
                 )
         );
 
         var settled = storm.Elapsed;
-        var notTerminal = watched.Where(x => x.TerminalAt is null).ToList();
-        var succeeded = watched.Count(x => x.State == OperationState.Succeeded);
-        var failed = watched.Count(x => x.State == OperationState.Failed);
-        var reminderPasses = watched.Sum(x => x.Attempts);
-        var acceptedIds = accepted.Select(x => x.ResourceId).ToHashSet();
+        var notTerminal = watched.Where(static x => x.TerminalAt is null).ToList();
+        var succeeded = watched.Count(static x => x.State == OperationState.Succeeded);
+        var failed = watched.Count(static x => x.State == OperationState.Failed);
+        var reminderPasses = watched.Sum(static x => x.Attempts);
+        var acceptedIds = accepted.Select(static x => x.ResourceId).ToHashSet();
 
         // ── The sweep: every member of both groups, through the real read path. ───────────────
         var stuck = new List<string>();
@@ -178,7 +192,12 @@ public sealed class Invariant1SiloKillStormTests(ChaosTopology topology) {
 
         foreach (var world in new[] { a, b }) {
             var page = await topology.Manager.ListAsync(
-                new() { Path = world.Widgets.Path, ApiVersion = SampleWidgets.V2026, Caller = world.Caller, Top = ListRequest.MaxPageSize },
+                new() {
+                    Path = world.Widgets.Path,
+                    ApiVersion = SampleWidgets.V2026,
+                    Caller = world.Caller,
+                    Top = ListRequest.MaxPageSize
+                },
                 token
             );
 
@@ -188,7 +207,7 @@ public sealed class Invariant1SiloKillStormTests(ChaosTopology topology) {
                 .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(world.Subscription, world.Group));
 
             var visibleToReaper = (await group.ListOrphansAsync(TimeSpan.Zero)).GetValueOrThrow()
-                .Select(x => x.ResourceId)
+                .Select(static x => x.ResourceId)
                 .ToHashSet();
 
             var members = page.GetValueOrThrow().Resources;
@@ -198,8 +217,8 @@ public sealed class Invariant1SiloKillStormTests(ChaosTopology topology) {
             // reminder, and a second create under the same name once the lease expired. Neither is
             // transitional, so a sweep that only looked at states would call it clean.
             duplicateNames.AddRange(
-                members.GroupBy(x => x.Name, StringComparer.Ordinal)
-                    .Where(x => x.Count() > 1)
+                members.GroupBy(static x => x.Name, StringComparer.Ordinal)
+                    .Where(static x => x.Count() > 1)
                     .Select(x => $"{world.Group}/{x.Key} × {x.Count()}")
             );
 
@@ -242,29 +261,42 @@ public sealed class Invariant1SiloKillStormTests(ChaosTopology topology) {
             }
         }
 
-        var noOps = claimWaits.Count(x => x.NoOp);
-        var killsThatLanded = kills.Count(k => k.InFlightWrites > 0);
+        var noOps = claimWaits.Count(static x => x.NoOp);
+        var killsThatLanded = kills.Count(static k => k.InFlightWrites > 0);
 
         var numbers = new Dictionary<string, double>(StringComparer.Ordinal) {
             ["creates"] = accepted.Count,
             ["kills"] = kills.Count,
             ["killsWithWritesInFlight"] = killsThatLanded,
-            ["writesInFlightAtKillMin"] = kills.Count == 0 ? 0 : kills.Min(k => k.InFlightWrites),
-            ["activationsOnKilledSilos"] = kills.Sum(k => k.ActivationsLost),
-            ["deathNoticedSecondsMax"] = Math.Round(kills.Count == 0 ? 0 : kills.Max(k => k.Noticed.TotalSeconds), 1),
+            ["writesInFlightAtKillMin"] = kills.Count == 0 ? 0 : kills.Min(static k => k.InFlightWrites),
+            ["activationsOnKilledSilos"] = kills.Sum(static k => k.ActivationsLost),
+            ["deathNoticedSecondsMax"] =
+                Math.Round(kills.Count == 0 ? 0 : kills.Max(static k => k.Noticed.TotalSeconds), 1),
             ["silosAfter"] = topology.Silos.Count,
             ["silosStartedToRestore"] = restored,
             ["writeFaults"] = writeFaults,
             ["claimsLeftByADeadWrite"] = claimWaits.Count,
             ["claimsFinishedByTheirOperation"] = noOps,
-            ["claimAnsweredAfterSecondsMax"] = Math.Round(claimWaits.IsEmpty ? 0 : claimWaits.Max(x => x.AnsweredAfter.TotalSeconds), 1),
+            ["claimAnsweredAfterSecondsMax"] = Math.Round(
+                claimWaits.IsEmpty ? 0 : claimWaits.Max(static x => x.AnsweredAfter.TotalSeconds),
+                1
+            ),
             ["namesHeldByALiveOperation"] = operationWaits.Count,
-            ["liveOperationAnsweredAfterSecondsMax"] = Math.Round(operationWaits.IsEmpty ? 0 : operationWaits.Max(x => x.AnsweredAfter.TotalSeconds), 1),
+            ["liveOperationAnsweredAfterSecondsMax"] = Math.Round(
+                operationWaits.IsEmpty ? 0 : operationWaits.Max(static x => x.AnsweredAfter.TotalSeconds),
+                1
+            ),
             ["operationsWatched"] = watched.Length,
             ["reminderPasses"] = reminderPasses,
-            ["reminderPassesPerOperationMax"] = watched.Length == 0 ? 0 : watched.Max(x => x.Attempts),
-            ["activationsPerOperationMax"] = watched.Length == 0 ? 0 : watched.Max(x => x.Activations),
-            ["terminalAfterSecondsMax"] = Math.Round(watched.Where(x => x.TerminalAt is not null).Select(x => x.TerminalAt!.Value.TotalSeconds).DefaultIfEmpty(0).Max(), 1),
+            ["reminderPassesPerOperationMax"] = watched.Length == 0 ? 0 : watched.Max(static x => x.Attempts),
+            ["activationsPerOperationMax"] = watched.Length == 0 ? 0 : watched.Max(static x => x.Activations),
+            ["terminalAfterSecondsMax"] = Math.Round(
+                watched.Where(static x => x.TerminalAt is not null)
+                    .Select(static x => x.TerminalAt!.Value.TotalSeconds)
+                    .DefaultIfEmpty(0)
+                    .Max(),
+                1
+            ),
             ["succeeded"] = succeeded,
             ["failed"] = failed,
             ["notTerminal"] = notTerminal.Count,
@@ -281,16 +313,16 @@ public sealed class Invariant1SiloKillStormTests(ChaosTopology topology) {
 
         var detail =
             $"{accepted.Count} creates across 2 tenants/2 shards, {kills.Count} silos killed mid-write "
-            + $"(at {string.Join(", ", kills.Select(k => k.At.TotalSeconds.ToString("F1", CultureInfo.InvariantCulture) + " s"))}, "
-            + $"with {string.Join("/", kills.Select(k => k.InFlightWrites.ToString(CultureInfo.InvariantCulture)))} writes in flight, "
-            + $"holding {kills.Sum(k => k.ActivationsLost)} activations, noticed within "
-            + $"{string.Join("/", kills.Select(k => k.Noticed.TotalSeconds.ToString("F1", CultureInfo.InvariantCulture)))} s); "
+            + $"(at {string.Join(", ", kills.Select(static k => k.At.TotalSeconds.ToString("F1", CultureInfo.InvariantCulture) + " s"))}, "
+            + $"with {string.Join("/", kills.Select(static k => k.InFlightWrites.ToString(CultureInfo.InvariantCulture)))} writes in flight, "
+            + $"holding {kills.Sum(static k => k.ActivationsLost)} activations, noticed within "
+            + $"{string.Join("/", kills.Select(static k => k.Noticed.TotalSeconds.ToString("F1", CultureInfo.InvariantCulture)))} s); "
             + $"{writeFaults} write calls threw; {claimWaits.Count} names were left claimed by a dead write, {noOps} of them finished "
-            + $"by their own operation so the retried PUT was a no-op, all answered within "
-            + $"{(claimWaits.IsEmpty ? 0 : claimWaits.Max(x => x.AnsweredAfter.TotalSeconds)):F0} s; {operationWaits.Count} names were held by a "
-            + $"dead write's live operation, answered within {(operationWaits.IsEmpty ? 0 : operationWaits.Max(x => x.AnsweredAfter.TotalSeconds)):F0} s; "
+            + "by their own operation so the retried PUT was a no-op, all answered within "
+            + $"{(claimWaits.IsEmpty ? 0 : claimWaits.Max(static x => x.AnsweredAfter.TotalSeconds)):F0} s; {operationWaits.Count} names were held by a "
+            + $"dead write's live operation, answered within {(operationWaits.IsEmpty ? 0 : operationWaits.Max(static x => x.AnsweredAfter.TotalSeconds)):F0} s; "
             + $"the reminders alone drove {watched.Length} operations in {reminderPasses} passes, the last terminal "
-            + $"{watched.Where(x => x.TerminalAt is not null).Select(x => x.TerminalAt!.Value.TotalSeconds).DefaultIfEmpty(0).Max():F0} s after acceptance; "
+            + $"{watched.Where(static x => x.TerminalAt is not null).Select(static x => x.TerminalAt!.Value.TotalSeconds).DefaultIfEmpty(0).Max():F0} s after acceptance; "
             + $"settled in {settled.TotalSeconds:F0} s with {succeeded} Succeeded, {failed} Failed, {notTerminal.Count} still running; "
             + $"sweep of {swept} members found {stuck.Count} stuck, {duplicateNames.Count} duplicated names and "
             + $"{orphans.Count} orphans awaiting the {ResourceGroupGrain.OrphanSweepPeriod.TotalMinutes:F0}-minute reaper "
@@ -308,14 +340,22 @@ public sealed class Invariant1SiloKillStormTests(ChaosTopology topology) {
         } else if (killsThatLanded < kills.Count) {
             // ⚠ Nothing was stuck, and nothing was killed mid-write either. A ✔ here would say the
             // platform survived a fault it never met.
-            topology.Report.Vacuous(1, $"a kill landed after every write of its wave had returned, so it was not a kill mid-write — {detail}", numbers);
+            topology.Report.Vacuous(
+                1,
+                $"a kill landed after every write of its wave had returned, so it was not a kill mid-write — {detail}",
+                numbers
+            );
         } else {
             topology.Report.Held(1, detail, numbers);
         }
 
         notTerminal.ShouldBeEmpty(
             $"{notTerminal.Count} operation(s) were not taken to a terminal state by their reminders within {SettleBudget}: "
-            + string.Join("; ", notTerminal.Select(x => $"{x.Name} → {x.State} after {x.Attempts} reminder passes and {x.Activations} activations"))
+            + string.Join(
+                "; ",
+                notTerminal.Select(static x => $"{x.Name} → {x.State} after {x.Attempts} reminder passes and {x.Activations} activations"
+                )
+            )
         );
 
         stuck.ShouldBeEmpty(
@@ -325,7 +365,8 @@ public sealed class Invariant1SiloKillStormTests(ChaosTopology topology) {
 
         orphansUnseenByReaper.ShouldBeEmpty(
             "a member left in Creating by a killed write is not in the group's ListOrphansAsync, so the reaper "
-            + "docs/plan/06 § Two-phase create relies on would never remove it: " + string.Join(", ", orphansUnseenByReaper)
+            + "docs/plan/06 § Two-phase create relies on would never remove it: "
+            + string.Join(", ", orphansUnseenByReaper)
         );
 
         reaperRemindersMissing.ShouldBeEmpty(
@@ -336,10 +377,14 @@ public sealed class Invariant1SiloKillStormTests(ChaosTopology topology) {
         duplicateNames.ShouldBeEmpty(
             "two resources share one name in a group: a create whose write path died before confirming its claim "
             + "converged anyway and a second create took the name when the lease expired. OperationGrain.ConfirmClaimAsync "
-            + "exists to make this impossible — " + string.Join(", ", duplicateNames)
+            + "exists to make this impossible — "
+            + string.Join(", ", duplicateNames)
         );
 
-        configMaps.ShouldBe(succeededMembers, "a widget the platform reports Succeeded has no ConfigMap in the cluster.");
+        configMaps.ShouldBe(
+            succeededMembers,
+            "a widget the platform reports Succeeded has no ConfigMap in the cluster."
+        );
 
         killsThatLanded.ShouldBe(
             kills.Count,
@@ -350,7 +395,11 @@ public sealed class Invariant1SiloKillStormTests(ChaosTopology topology) {
         // Kills one secondary and measures how long the cluster took to notice (see the class
         // remarks on why that is instant here). What it held and what was in flight are the
         // caller's numbers, taken at the moment of the kill.
-        async Task<(SiloAddress Silo, TimeSpan At, TimeSpan Noticed, int ActivationsLost, int InFlightWrites)> KillAndNoticeAsync(int holding, int inFlight) {
+        async Task<
+            (SiloAddress Silo, TimeSpan At, TimeSpan Noticed, int ActivationsLost, int InFlightWrites)> KillAndNoticeAsync(
+            int holding,
+            int inFlight
+        ) {
             var at = storm.Elapsed;
             var dead = await topology.KillASecondarySiloAsync();
             var noticing = Stopwatch.StartNew();
@@ -406,7 +455,9 @@ public sealed class Invariant1SiloKillStormTests(ChaosTopology topology) {
                             continue;
                         }
 
-                        throw new InvalidOperationException($"the storm's PUT of '{name}' was refused: {error.Code} — {error.Message}");
+                        throw new InvalidOperationException(
+                            $"the storm's PUT of '{name}' was refused: {error.Code} — {error.Message}"
+                        );
                     }
 
                     var value = write.GetValueOrThrow();
@@ -439,8 +490,12 @@ public sealed class Invariant1SiloKillStormTests(ChaosTopology topology) {
 
             throw new InvalidOperationException(
                 $"the storm's PUT of '{name}' was not accepted within {SettleBudget}"
-                + (firstClaimConflict is null ? "" : $"; its name has been claimed by a dead attempt since {firstClaimConflict.Value.TotalSeconds:F0} s")
-                + (firstOperationInProgress is null ? "." : $"; its name has been held by a running operation since {firstOperationInProgress.Value.TotalSeconds:F0} s.")
+                + (firstClaimConflict is null
+                        ? ""
+                        : $"; its name has been claimed by a dead attempt since {firstClaimConflict.Value.TotalSeconds:F0} s")
+                + (firstOperationInProgress is null
+                        ? "."
+                        : $"; its name has been held by a running operation since {firstOperationInProgress.Value.TotalSeconds:F0} s.")
             );
         }
     }

@@ -9,8 +9,11 @@ namespace CyberCloud.ResourceGraph;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b><c>ReplacingMergeTree(version)</c>, ordered by <c>resource_id</c> — the engine is the
-///         idempotency.</b> Every event becomes an <c>INSERT</c>; two rows for one resource collapse
+///         ⚠
+///         <b>
+///             <c>ReplacingMergeTree(version)</c>, ordered by <c>resource_id</c> — the engine is the
+///             idempotency.
+///         </b> Every event becomes an <c>INSERT</c>; two rows for one resource collapse
 ///         at merge time to the one with the highest <c>version</c>, and a reader that says
 ///         <c>FINAL</c> sees that collapse before the merge happens. The projector also refuses to
 ///         insert a version at or below the one it can already read, which keeps a replay from
@@ -161,8 +164,11 @@ public sealed record ResourceGraphRow {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Grantees, not members — the usersets are stored as usersets, and the reader
-    ///         expands the caller instead.</b> The column holds every principal
+    ///         ⚠
+    ///         <b>
+    ///             Grantees, not members — the usersets are stored as usersets, and the reader
+    ///             expands the caller instead.
+    ///         </b> The column holds every principal
     ///         <c>ICheckGrain.ListRoleAssignmentsAsync(includeInherited: true)</c> reports at the
     ///         resource: a role written on the resource, its group, its subscription or its tenant,
     ///         since every role on <c>CyberCloudSchema</c> implies <c>reader</c> and <c>read</c> is
@@ -175,8 +181,11 @@ public sealed record ResourceGraphRow {
     ///         <c>ListObjectsEvaluator</c> uses, on a column instead of a walk.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Recomputed on every resource-changed event and on nothing else, which is less
-    ///         than docs/plan/07 promises.</b> That section wants the column "recomputed from
+    ///         ⚠
+    ///         <b>
+    ///             Recomputed on every resource-changed event and on nothing else, which is less
+    ///             than docs/plan/07 promises.
+    ///         </b> That section wants the column "recomputed from
     ///         <c>ListObjects</c> on relation changes"; a role assigned on a resource group after its
     ///         resources were projected reaches the column when each resource next changes, not when
     ///         the role is written. docs/plan/08 § The resource-graph projection records that as owed,

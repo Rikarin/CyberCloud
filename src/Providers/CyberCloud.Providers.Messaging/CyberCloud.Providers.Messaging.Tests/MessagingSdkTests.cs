@@ -72,7 +72,7 @@ public sealed class MessagingSdkTests {
         // so two types that kebabbed to one command name would leave the tree with one entry, no
         // error, and a verb silently missing from `cyc`.
         var commands = cli["groups"]!["messaging"]!["commands"]!.AsObject()
-            .Select(x => x.Key)
+            .Select(static x => x.Key)
             .ToArray();
 
         // ⚠ Count first, then membership. A test that only asserted membership would pass on a tree

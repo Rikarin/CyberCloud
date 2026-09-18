@@ -286,20 +286,20 @@ public static class SdkEmitter {
                 .Append(Escape(leaf.JsonPointer))
                 // A read-only set is the server's vocabulary, not a caller's choice, so "accepts"
                 // would describe a write that is refused.
-                .Append(
-                    DocumentReader.Flag(leaf.Schema["readOnly"])
-                        ? " carries. ⚠ Read-only: the server sets it, and a write that carries it is refused.</summary>\n"
-                        : " accepts. ⚠ Closed: the write path refuses anything else.</summary>\n"
-                )
-                .Append(indent)
-                .Append("public enum ")
-                .Append(naming.NameOf(leaf))
-                .Append(" {\n")
-                .Append(indent)
-                .Append("    /// <summary>Never assigned. Not a value the API accepts.</summary>\n")
-                .Append(indent)
-                .Append("    Unknown = 0")
-                .Append(values.IsEmpty ? "\n" : ",\n");
+                    .Append(
+                        DocumentReader.Flag(leaf.Schema["readOnly"])
+                            ? " carries. ⚠ Read-only: the server sets it, and a write that carries it is refused.</summary>\n"
+                            : " accepts. ⚠ Closed: the write path refuses anything else.</summary>\n"
+                    )
+                    .Append(indent)
+                    .Append("public enum ")
+                    .Append(naming.NameOf(leaf))
+                    .Append(" {\n")
+                    .Append(indent)
+                    .Append("    /// <summary>Never assigned. Not a value the API accepts.</summary>\n")
+                    .Append(indent)
+                    .Append("    Unknown = 0")
+                    .Append(values.IsEmpty ? "\n" : ",\n");
 
             for (var i = 0; i < values.Length; i++) {
                 built.Append('\n')
@@ -366,7 +366,7 @@ public static class SdkEmitter {
                 counts[leaf.Name] = counts.GetValueOrDefault(leaf.Name) + 1;
             }
 
-            return new(model, [.. counts.Where(x => x.Value > 1).Select(x => x.Key)]);
+            return new(model, [.. counts.Where(static x => x.Value > 1).Select(static x => x.Key)]);
         }
 
         /// <summary>The C# name one enum leaf takes.</summary>
@@ -432,8 +432,11 @@ public static class SdkEmitter {
     ///         </item>
     ///     </list>
     ///     <para>
-    ///         ⚠ <b>The class suffix is <c>Data</c>, which is <c>{Type}Data</c>'s suffix one level
-    ///         down.</b> It cannot be the container's bare name: the property that holds the
+    ///         ⚠
+    ///         <b>
+    ///             The class suffix is <c>Data</c>, which is <c>{Type}Data</c>'s suffix one level
+    ///             down.
+    ///         </b> It cannot be the container's bare name: the property that holds the
     ///         container already has it, and a nested type and a property with one name in one class
     ///         is <c>CS0102</c>. <c>ValkeyCacheData.PropertiesData.PersistenceData</c> reads as what
     ///         it is at the one place a caller writes it, and target-typed <c>new()</c> means the
@@ -513,7 +516,7 @@ public static class SdkEmitter {
         static string EnclosingOf(string owner, string scope) =>
             string.Concat(
                 scope.Split('/', StringSplitOptions.RemoveEmptyEntries)
-                    .Select(segment => "." + Pascal(segment) + ClassSuffix)
+                    .Select(static segment => "." + Pascal(segment) + ClassSuffix)
                     .Prepend(owner)
             );
     }
@@ -564,7 +567,14 @@ public static class SdkEmitter {
             .Append(model)
             .Append("Data {\n");
 
-        AppendObject(built, EnumNaming.For(model, leaves), MemberNaming.For(model + "Data", leaves), leaves, "", "    ");
+        AppendObject(
+            built,
+            EnumNaming.For(model, leaves),
+            MemberNaming.For(model + "Data", leaves),
+            leaves,
+            "",
+            "    "
+        );
 
         // ⚠ No special case for tags, and that is the tag fix paying off on this surface. The bag is
         // a property of the emitted body schema now, so it arrives as a leaf like everything else. A
@@ -614,8 +624,11 @@ public static class SdkEmitter {
     ///         container in place too — docs/plan/21 § Generation.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A container is <c>required</c> when the document says so and nullable when it
-    ///         does not</b>, exactly like a scalar, and never initialised: an optional container whose
+    ///         ⚠
+    ///         <b>
+    ///             A container is <c>required</c> when the document says so and nullable when it
+    ///             does not
+    ///         </b>, exactly like a scalar, and never initialised: an optional container whose
     ///         members are <c>required</c> cannot be <c>new()</c>-ed (<c>CS9035</c>, the shape
     ///         issue #73 found 110 of), and an omitted container is what a merge patch means by "not
     ///         changed". A bag — an <c>object</c> with no declared properties, the tag map — stays an
@@ -670,8 +683,11 @@ public static class SdkEmitter {
     /// <param name="indent">The property's indentation.</param>
     /// <param name="annotate">Whether the write-path notes go in — <see cref="AppendObject" />.</param>
     /// <remarks>
-    ///     ⚠ <b>The <c>[JsonPropertyName]</c> is the leaf's own name, and since issue #79 that is
-    ///     the right wire name for every leaf</b>, because the property is declared inside the class
+    ///     ⚠
+    ///     <b>
+    ///         The <c>[JsonPropertyName]</c> is the leaf's own name, and since issue #79 that is
+    ///         the right wire name for every leaf
+    ///     </b>, because the property is declared inside the class
     ///     its parent declares — <see cref="AppendObject" />. It was the wrong name for a nested leaf
     ///     for as long as the body was flat, and <c>build/GeneratedSdkSurface.cs</c> now reads every
     ///     one of these attributes off the checked-in file and refuses a name declared twice by one
@@ -687,7 +703,11 @@ public static class SdkEmitter {
     ) {
         var schema = leaf.Schema;
 
-        built.Append('\n').Append(indent).Append("/// <summary>").Append(Escape(Description(leaf))).Append("</summary>\n");
+        built.Append('\n')
+            .Append(indent)
+            .Append("/// <summary>")
+            .Append(Escape(Description(leaf)))
+            .Append("</summary>\n");
 
         var notes = new List<string>();
 
@@ -725,13 +745,13 @@ public static class SdkEmitter {
             // set is a body the API refuses, and C#'s own `required` makes that a compile error at the
             // object initialiser rather than a 400 at run time — which is the whole reason the SDK is
             // generated from the same schema the validator reads.
-            .Append(Required(leaf) ? "required " : string.Empty)
-            .Append(ClrType(naming, members, leaf))
-            .Append(' ')
-            .Append(members.NameOf(leaf))
-            .Append(" { get; set; }")
-            .Append(Initialiser(naming, leaf))
-            .Append('\n');
+                .Append(Required(leaf) ? "required " : string.Empty)
+                .Append(ClrType(naming, members, leaf))
+                .Append(' ')
+                .Append(members.NameOf(leaf))
+                .Append(" { get; set; }")
+                .Append(Initialiser(naming, leaf))
+                .Append('\n');
     }
 
     /// <summary>
@@ -831,8 +851,11 @@ public static class SdkEmitter {
     ///     operations.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The envelope members come from the document, not from a list in this method —
-    ///     issue #85.</b> Until that issue this class declared <c>Id</c> and nothing else, from a
+    ///     ⚠
+    ///     <b>
+    ///         The envelope members come from the document, not from a list in this method —
+    ///         issue #85.
+    ///     </b> Until that issue this class declared <c>Id</c> and nothing else, from a
     ///     string literal here, while the gateway served <c>id</c>, <c>name</c>, <c>type</c>,
     ///     <c>provisioningState</c> and <c>etag</c> and the document described none of them. Every
     ///     member below is a leaf of <see cref="DocumentType.Envelope" />, typed by the same
@@ -842,8 +865,11 @@ public static class SdkEmitter {
     ///     fact, and initialised because CS8618 is a warning the <c>Generated SDK compiles</c> gate
     ///     does not see.
     ///     <para>
-    ///         ⚠ <b>Declaring the five is half of the promise, and the 2026-09-15 review found the
-    ///         other half missing.</b> The <c>[JsonPropertyName]</c> emitted on each member reaches
+    ///         ⚠
+    ///         <b>
+    ///             Declaring the five is half of the promise, and the 2026-09-15 review found the
+    ///             other half missing.
+    ///         </b> The <c>[JsonPropertyName]</c> emitted on each member reaches
     ///         no serializer — this emitter writes no <c>JsonSerializerContext</c> — so the members
     ///         are populated only if the hand-written half reads the envelope off the response and
     ///         assigns them. It does so through <c>ResourceEnvelope&lt;TProvisioningState&gt;</c> in
@@ -885,8 +911,8 @@ public static class SdkEmitter {
                 // A non-nullable string with no initialiser is CS8618 in the consuming project; an
                 // enum's default is its Unknown member, which is the honest value before a response
                 // has been read.
-                .Append(clr == "string" ? " = string.Empty;" : string.Empty)
-                .Append('\n');
+                    .Append(clr == "string" ? " = string.Empty;" : string.Empty)
+                    .Append('\n');
 
             if (leaf.JsonPointer != envelope[^1].JsonPointer) {
                 built.Append('\n');
@@ -1041,7 +1067,7 @@ public static class SdkEmitter {
             .Append(name)
             .Append(" {\n");
 
-        AppendObject(built, naming, members, leaves, "", "        ", annotate: false);
+        AppendObject(built, naming, members, leaves, "", "        ", false);
 
         built.Append("    }\n");
     }
@@ -1094,7 +1120,7 @@ public static class SdkEmitter {
             }
         }
 
-        return [.. placeholders.Select(x => "string " + Camel(x))];
+        return [.. placeholders.Select(static x => "string " + Camel(x))];
     }
 
     /// <summary>An identifier as <c>camelCase</c>, invariantly.</summary>
@@ -1263,7 +1289,7 @@ public static class SdkEmitter {
         // GeneratedSdkSurface says so), and CS8618 is a warning. So the first person to find out
         // would still be the first person to use the SDK, and AppendMember's `required` is what
         // stops there being anything to find.
-        AppendObject(built, scopeNaming, scopeMembers, leaves, "", "    ", annotate: false);
+        AppendObject(built, scopeNaming, scopeMembers, leaves, "", "    ", false);
 
         built.Append("}\n");
 
@@ -1289,7 +1315,7 @@ public static class SdkEmitter {
         foreach (var scope in scopes) {
             var name = ScopeName(scope);
             var parameters = DocumentReader.PlaceholdersOf(scope.Path)
-                .Select(x => "string " + Camel(x))
+                .Select(static x => "string " + Camel(x))
                 .ToList();
 
             built.Append("\n    /// <summary>The URL template ")
@@ -1327,7 +1353,7 @@ public static class SdkEmitter {
                 // collection: the hand-written half pages what the document says, never a path it
                 // reassembled.
                 var collectionParameters = DocumentReader.PlaceholdersOf(scope.CollectionPath)
-                    .Select(x => "string " + Camel(x))
+                    .Select(static x => "string " + Camel(x))
                     .ToList();
 
                 built.Append("\n    /// <summary>The collection URL template List")

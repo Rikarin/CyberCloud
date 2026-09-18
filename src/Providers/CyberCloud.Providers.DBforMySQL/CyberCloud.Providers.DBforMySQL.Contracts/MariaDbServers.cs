@@ -404,7 +404,7 @@ public static class MariaDbServers {
                 new(
                     "/location",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The region the server is billed in."
                 ) {
                     Format = SchemaFormat.Region,
@@ -416,7 +416,7 @@ public static class MariaDbServers {
                 new(
                     ClusterIdPointer,
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The cluster whose namespace holds the MariaDB objects."
                 ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
@@ -424,7 +424,7 @@ public static class MariaDbServers {
                 new(
                     "/properties/version",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "Major MariaDB version, by LTS series. Minor upgrades are applied "
                     + "automatically in the maintenance window."
                 ) { AllowedValues = ["10.11", "11.4", "11.8"], DefaultJson = "\"11.4\"" },
@@ -478,7 +478,7 @@ public static class MariaDbServers {
                 new(
                     "/properties/storage/size",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "Data volume size in Kubernetes quantity form. Grows online; never "
                     + "shrinks."
                 ) { Pattern = QuantityPattern, DefaultJson = "\"20Gi\"", ExampleJson = "\"20Gi\"" },
@@ -561,20 +561,20 @@ public static class MariaDbServers {
                 new(
                     "/host",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The in-cluster DNS name to connect to. ⚠ The primary Service's when "
                     + "high availability is on, so the topology is part of the connection string "
                     + "rather than hidden behind it."
                 ),
-                new("/port", SchemaKind.WholeNumber, Required: true, Description: "The TCP port.") {
+                new("/port", SchemaKind.WholeNumber, true, Description: "The TCP port.") {
                     Minimum = 1, Maximum = 65535
                 },
-                new("/database", SchemaKind.Text, Required: true, Description: "The application database."),
-                new("/username", SchemaKind.Text, Required: true, Description: "The application account."),
+                new("/database", SchemaKind.Text, true, Description: "The application database."),
+                new("/username", SchemaKind.Text, true, Description: "The application account."),
                 new(
                     "/password",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Secret: true,
                     Description: "The application account's password, read from the tenant's Vault for "
                     + "this call only."
@@ -582,7 +582,7 @@ public static class MariaDbServers {
                 new(
                     "/authenticationPlugin",
                     SchemaKind.Text,
-                    Required: true,
+                    true,
                     Description: "The authentication plugin a client must be configured for. ⚠ Not "
                     + "MySQL 8's caching_sha2_password default — see the supported-subset table. "
                     + "Returned rather than documented because a wrong default here is a connection "
@@ -636,7 +636,8 @@ public static class MariaDbServers {
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── Addressing ────────────────────────────────────────────────────────────────────────────
 

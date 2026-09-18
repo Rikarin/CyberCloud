@@ -653,5 +653,5 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
     ///     repoint the child test at a provider whose type has no children.
     /// </summary>
     static IsolationTarget Probes =>
-        IsolationCatalog.Targets.Single(target => target.Type == Conformance.Reference.Probes.Type);
+        IsolationCatalog.Targets.Single(static target => target.Type == Conformance.Reference.Probes.Type);
 }

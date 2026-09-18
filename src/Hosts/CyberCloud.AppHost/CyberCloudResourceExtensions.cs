@@ -229,7 +229,10 @@ public static class CyberCloudResourceExtensions {
             )
             .WithEnvironment("CyberCloud__ObjectStorage__Bucket", CyberCloudResources.ObjectStoreBucket)
             .WithEnvironment("CyberCloud__ObjectStorage__AccessKeyId", CyberCloudResources.ObjectStoreAccessKeyId)
-            .WithEnvironment("CyberCloud__ObjectStorage__SecretAccessKey", CyberCloudResources.ObjectStoreSecretAccessKey)
+            .WithEnvironment(
+                "CyberCloud__ObjectStorage__SecretAccessKey",
+                CyberCloudResources.ObjectStoreSecretAccessKey
+            )
             .WithEnvironment("CyberCloud__ObjectStorage__AllowInsecureTransport", "true");
     }
 
@@ -261,11 +264,17 @@ public static class CyberCloudResourceExtensions {
 
         return builder
             .WithEnvironment("CyberCloud__Communication__Smtp__Host", "localhost")
-            .WithEnvironment("CyberCloud__Communication__Smtp__Port", CyberCloudResources.MailpitSmtpPort.ToString(CultureInfo.InvariantCulture))
+            .WithEnvironment(
+                "CyberCloud__Communication__Smtp__Port",
+                CyberCloudResources.MailpitSmtpPort.ToString(CultureInfo.InvariantCulture)
+            )
             .WithEnvironment("CyberCloud__Communication__Smtp__Security", "None")
             .WithEnvironment("CyberCloud__Communication__Smtp__From", CyberCloudResources.PlatformSender)
             .WithEnvironment("CyberCloud__Communication__Smtp__FromName", CyberCloudResources.PlatformSenderName)
-            .WithEnvironment("CyberCloud__Communication__Smtp__UnsubscribeMailbox", CyberCloudResources.PlatformUnsubscribeMailbox);
+            .WithEnvironment(
+                "CyberCloud__Communication__Smtp__UnsubscribeMailbox",
+                CyberCloudResources.PlatformUnsubscribeMailbox
+            );
     }
 
     /// <summary>

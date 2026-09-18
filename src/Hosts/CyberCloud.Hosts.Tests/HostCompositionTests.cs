@@ -1,10 +1,9 @@
-using CyberCloud.Core;
 using CyberCloud.Core.Resources;
 using CyberCloud.Gateway.Host;
 using CyberCloud.Gateway.Host.Principals;
-using CyberCloud.Registry.Feeds.Host;
 using CyberCloud.Kubernetes.Connections;
 using CyberCloud.Kubernetes.Contracts;
+using CyberCloud.Registry.Feeds.Host;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ResourceManager.Contracts.Registry;
@@ -106,13 +105,12 @@ public sealed class HostCompositionTests {
         var registry = silo.Services.GetRequiredService<IProviderRegistry>();
 
         registry.Namespaces
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToArray()
             .ShouldBe(
                 EveryProviderNamespace,
-                customMessage:
-                "docs/plan/04 § Silo composition: \"Every silo loads every provider module. There are "
-                + "no specialised silo roles.\" A namespace missing here is a provider whose resource "
+                """docs/plan/04 § Silo composition: "Every silo loads every provider module. There are """
+                + """no specialised silo roles." A namespace missing here is a provider whose resource """
                 + "types nothing in production reconciles."
             );
     }
@@ -139,7 +137,9 @@ public sealed class HostCompositionTests {
             host.GetService<CyberCloud.Communication.Contracts.IMessageSender>()
                 .ShouldNotBeNull("a host with no IMessageSender cannot serve `send` or `status`");
             host.GetService<CyberCloud.Communication.Contracts.ICommunicationControlPlane>()
-                .ShouldNotBeNull("a host with no ICommunicationControlPlane cannot serve `checkSuppression` or `listSuppressions`");
+                .ShouldNotBeNull(
+                    "a host with no ICommunicationControlPlane cannot serve `checkSuppression` or `listSuppressions`"
+                );
         }
     }
 
@@ -163,7 +163,9 @@ public sealed class HostCompositionTests {
 
         foreach (var host in new[] { gateway.Services, silo.Services }) {
             host.GetService<CyberCloud.Providers.Monitor.Contracts.IAlertControlPlane>()
-                .ShouldNotBeNull("a host with no IAlertControlPlane cannot converge an alert rule or serve `listInstances`");
+                .ShouldNotBeNull(
+                    "a host with no IAlertControlPlane cannot converge an alert rule or serve `listInstances`"
+                );
             host.GetService<CyberCloud.Providers.Monitor.Contracts.IAlertQuerySeam>()
                 .ShouldBeOfType<CyberCloud.Providers.Monitor.Alerting.UnavailableAlertQuerySeam>(
                     "a host registered a query seam this tree does not ship; if it is real, charts/managed/monitor-workspace/conformance.yaml § owed's alert-rules-query-seam-is-refusing closes"
@@ -186,11 +188,10 @@ public sealed class HostCompositionTests {
         var registry = gateway.Services.GetRequiredService<IProviderRegistry>();
 
         registry.Namespaces
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToArray()
             .ShouldBe(
                 EveryProviderNamespace,
-                customMessage:
                 "Stage 6 resolves a request path against this registry. A namespace missing here is "
                 + "every path under it answering the canonical 404, which is the same answer a caller "
                 + "gets for a type that does not exist."
@@ -247,7 +248,6 @@ public sealed class HostCompositionTests {
 
         Types(silo).ShouldBe(
             Types(gateway),
-            customMessage:
             "CyberCloud.Silo.Host and CyberCloud.Gateway.Host built different provider registries. "
             + "The gateway routes from ITS registry and the silo reconciles from ITS container, so a "
             + "type in one and not the other either cannot be reached or never converges. The two "
@@ -260,8 +260,8 @@ public sealed class HostCompositionTests {
             .. host.Services
                 .GetRequiredService<IProviderRegistry>()
                 .Types
-                .Select(x => x.Type.ToString())
-                .OrderBy(x => x, StringComparer.Ordinal)
+                .Select(static x => x.Type.ToString())
+                .OrderBy(static x => x, StringComparer.Ordinal)
         ];
     }
 
@@ -324,10 +324,10 @@ public sealed class HostCompositionTests {
         var registry = silo.Services.GetRequiredService<IProviderRegistry>();
 
         var missing = registry.Types
-            .Where(x => x.ReconcilerType is not null)
+            .Where(static x => x.ReconcilerType is not null)
             .Where(x => silo.Services.GetService(x.ReconcilerType!) is null)
-            .Select(x => $"{x.Type} declares {x.ReconcilerType!.Name}")
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Select(static x => $"{x.Type} declares {x.ReconcilerType!.Name}")
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ToList();
 
         missing.ShouldBeEmpty();
@@ -638,7 +638,7 @@ public sealed class HostCompositionTests {
             refused!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
             refused.Message.ShouldContain(root.FullName);
         } finally {
-            root.Delete(recursive: true);
+            root.Delete(true);
         }
     }
 
@@ -704,7 +704,7 @@ public sealed class HostCompositionTests {
     /// </remarks>
     [Fact]
     public async Task TheGatewayRefusesToComposeWithoutAnIdentityIssuer() {
-        var thrown = await Should.ThrowAsync<InvalidOperationException>(() =>
+        var thrown = await Should.ThrowAsync<InvalidOperationException>(static () =>
             GatewayComposition.BuildAsync(
                 [
                     "--environment", "Development",
@@ -744,7 +744,7 @@ public sealed class HostCompositionTests {
         await using var gateway = await BuildGatewayAsync();
 
         var seam = typeof(GatewayComposition).Assembly
-            .GetType("CyberCloud.Gateway.Host.Authentication.ICallerContextResolver", throwOnError: true)!;
+            .GetType("CyberCloud.Gateway.Host.Authentication.ICallerContextResolver", true)!;
 
         gateway.Services
             .GetRequiredService(seam)
@@ -775,10 +775,10 @@ public sealed class HostCompositionTests {
         await using var gateway = await BuildGatewayAsync();
         var assembly = typeof(GatewayComposition).Assembly;
 
-        var pipeline = assembly.GetType("CyberCloud.Gateway.Host.Pipeline.GatewayPipeline", throwOnError: true)!;
+        var pipeline = assembly.GetType("CyberCloud.Gateway.Host.Pipeline.GatewayPipeline", true)!;
         gateway.Services.GetRequiredService(pipeline).ShouldNotBeNull();
 
-        var store = assembly.GetType("CyberCloud.Gateway.Host.Hubs.IHubTicketStore", throwOnError: true)!;
+        var store = assembly.GetType("CyberCloud.Gateway.Host.Hubs.IHubTicketStore", true)!;
         gateway.Services
             .GetRequiredService(store)
             .GetType()
@@ -875,8 +875,8 @@ public sealed class HostCompositionTests {
         registry.Namespaces.ShouldBe(["CyberCloud.ContainerRegistry"]);
 
         registry.Types
-            .Select(x => x.Type.ToString())
-            .OrderBy(x => x, StringComparer.Ordinal)
+            .Select(static x => x.Type.ToString())
+            .OrderBy(static x => x, StringComparer.Ordinal)
             .ShouldBe(["CyberCloud.ContainerRegistry/feeds", "CyberCloud.ContainerRegistry/registries"]);
     }
 
@@ -902,7 +902,7 @@ public sealed class HostCompositionTests {
         atFeeds.RequiresCluster.ShouldBe(atSilo.RequiresCluster);
         atFeeds.ReadPermission.ShouldBe(atSilo.ReadPermission);
         atFeeds.WritePermission.ShouldBe(atSilo.WritePermission);
-        atFeeds.ApiVersions.Select(x => x.Version).ShouldBe(atSilo.ApiVersions.Select(x => x.Version));
+        atFeeds.ApiVersions.Select(static x => x.Version).ShouldBe(atSilo.ApiVersions.Select(static x => x.Version));
     }
 
     /// <summary>
@@ -911,7 +911,7 @@ public sealed class HostCompositionTests {
     /// </summary>
     [Fact]
     public async Task TheFeedsHostRefusesToComposeWithoutAnIdentityIssuer() {
-        var thrown = await Should.ThrowAsync<InvalidOperationException>(() =>
+        var thrown = await Should.ThrowAsync<InvalidOperationException>(static () =>
             FeedsComposition.BuildAsync(
                 [
                     "--environment", "Development",
@@ -943,8 +943,8 @@ public sealed class HostCompositionTests {
         var seam = typeof(FeedsComposition).Assembly
             .GetReferencedAssemblies()
             .Select(Assembly.Load)
-            .Select(x => x.GetType("CyberCloud.Identity.Validation.IBearerTokenValidator"))
-            .First(x => x is not null)!;
+            .Select(static x => x.GetType("CyberCloud.Identity.Validation.IBearerTokenValidator"))
+            .First(static x => x is not null)!;
 
         feeds.Services.GetRequiredService(seam).GetType().Name.ShouldBe("JwksBearerTokenValidator");
         gateway.Services.GetRequiredService(seam).GetType().Name.ShouldBe("JwksBearerTokenValidator");
@@ -1030,7 +1030,7 @@ public sealed class HostCompositionTests {
         await using var bare = await BuildSiloAsync();
 
         bare.Services.GetServices<CyberCloud.Communication.Contracts.IChannelProvider>()
-            .Select(x => x.Name)
+            .Select(static x => x.Name)
             .ShouldNotContain("smtp", "no relay, no carrier — UnavailableEmailProvider's refusal names the section");
 
         bare.Services.GetRequiredService<CyberCloud.Identity.Contracts.IOtpDeliverySeam>()
@@ -1048,7 +1048,7 @@ public sealed class HostCompositionTests {
         );
 
         withRelay.Services.GetServices<CyberCloud.Communication.Contracts.IChannelProvider>()
-            .Count(x => x.Name == "smtp" && x.Kind == CyberCloud.Communication.Contracts.ChannelKind.Email)
+            .Count(static x => x.Name == "smtp" && x.Kind == CyberCloud.Communication.Contracts.ChannelKind.Email)
             .ShouldBe(1, "the carrier joins the collection beside the refusing seam");
 
         withRelay.Services.GetRequiredService<CyberCloud.Identity.Contracts.IOtpDeliverySeam>()
@@ -1066,10 +1066,15 @@ public sealed class HostCompositionTests {
         );
 
         staging.Services.GetServices<CyberCloud.Communication.Contracts.IChannelProvider>()
-            .ShouldContain(x => x.Name == "smtp", "a tenant's email channel sends through the relay in any environment");
+            .ShouldContain(
+                x => x.Name == "smtp",
+                "a tenant's email channel sends through the relay in any environment"
+            );
 
         staging.Services.GetRequiredService<CyberCloud.Identity.Contracts.IOtpDeliverySeam>()
-            .ShouldBeOfType<CyberCloud.Identity.Seams.UnavailableOtpDelivery>("a relay is not a route — CyberCloud:Identity:OtpDelivery is the operator's to set");
+            .ShouldBeOfType<CyberCloud.Identity.Seams.UnavailableOtpDelivery>(
+                "a relay is not a route — CyberCloud:Identity:OtpDelivery is the operator's to set"
+            );
     }
 
     /// <summary>
@@ -1082,6 +1087,7 @@ public sealed class HostCompositionTests {
         "--CyberCloud:Communication:Smtp:Security=None",
         "--CyberCloud:Communication:Smtp:From=no-reply@cybercloud.local"
     ];
+
     /// <summary>
     ///     ⚠ The resource-changed stream has two ends and the two hosts hold different ones. The
     ///     gateway publishes — step 11 runs in its process — so a NATS URL gives it the NATS sink and
@@ -1111,7 +1117,8 @@ public sealed class HostCompositionTests {
 
         bareGateway.Services.GetRequiredService<IResourceChangedSink>().ShouldBeOfType<LoggingResourceChangedSink>();
         bareSilo.Services.GetRequiredService<IResourceChangedSink>().ShouldBeOfType<LoggingResourceChangedSink>();
-        bareSilo.Services.GetService<CyberCloud.ResourceGraph.ResourceGraphProjector>().ShouldBeNull("a silo with no stream has nothing to project");
+        bareSilo.Services.GetService<CyberCloud.ResourceGraph.ResourceGraphProjector>()
+            .ShouldBeNull("a silo with no stream has nothing to project");
 
         await using var gateway = await GatewayComposition.BuildAsync(
             [
@@ -1135,15 +1142,23 @@ public sealed class HostCompositionTests {
             ]
         );
 
-        gateway.Services.GetRequiredService<IResourceChangedSink>().ShouldBeOfType<CyberCloud.ResourceGraph.NatsResourceChangedSink>();
-        gateway.Services.GetService<CyberCloud.ResourceGraph.ResourceGraphProjector>().ShouldBeNull("the gateway publishes and does not project");
+        gateway.Services.GetRequiredService<IResourceChangedSink>()
+            .ShouldBeOfType<CyberCloud.ResourceGraph.NatsResourceChangedSink>();
+        gateway.Services.GetService<CyberCloud.ResourceGraph.ResourceGraphProjector>()
+            .ShouldBeNull("the gateway publishes and does not project");
 
-        silo.Services.GetRequiredService<IResourceChangedSink>().ShouldBeOfType<CyberCloud.ResourceGraph.NatsResourceChangedSink>();
+        silo.Services.GetRequiredService<IResourceChangedSink>()
+            .ShouldBeOfType<CyberCloud.ResourceGraph.NatsResourceChangedSink>();
         silo.Services.GetRequiredService<CyberCloud.ResourceGraph.ResourceGraphProjector>();
         silo.Services.GetServices<Microsoft.Extensions.Hosting.IHostedService>()
-            .ShouldContain(x => x is CyberCloud.ResourceGraph.ResourceGraphProjector, "the projector is a hosted service, or it never consumes");
+            .ShouldContain(
+                x => x is CyberCloud.ResourceGraph.ResourceGraphProjector,
+                "the projector is a hosted service, or it never consumes"
+            );
         silo.Services.GetRequiredService<CyberCloud.ResourceGraph.IResourceAccessResolver>()
-            .ShouldBeOfType<CyberCloud.ResourceGraph.ReBacResourceAccessResolver>("the access column is filled by the engine and not a double");
+            .ShouldBeOfType<CyberCloud.ResourceGraph.ReBacResourceAccessResolver>(
+                "the access column is filled by the engine and not a double"
+            );
     }
 
     /// <summary>
@@ -1162,7 +1177,9 @@ public sealed class HostCompositionTests {
         await using var bareGateway = await BuildGatewayAsync();
 
         bareGateway.Services.GetRequiredService<IResourceGraphQuery>()
-            .ShouldBeOfType<UnavailableResourceGraphQuery>("no endpoint, no projection to query — and the refusal names the section");
+            .ShouldBeOfType<UnavailableResourceGraphQuery>(
+                "no endpoint, no projection to query — and the refusal names the section"
+            );
 
         await using var gateway = await GatewayComposition.BuildAsync(
             [
@@ -1178,11 +1195,17 @@ public sealed class HostCompositionTests {
         );
 
         gateway.Services.GetRequiredService<IResourceGraphQuery>()
-            .ShouldBeOfType<CyberCloud.ResourceGraph.Query.ResourceGraphQueryService>("the endpoint is set, so the ClickHouse-backed service replaces the refusal");
-        gateway.Services.GetRequiredService<IResourceChangedSink>().ShouldBeOfType<LoggingResourceChangedSink>("no NATS URL keeps the logging sink");
-        gateway.Services.GetService<CyberCloud.ResourceGraph.ResourceGraphProjector>().ShouldBeNull("the gateway queries and does not project");
+            .ShouldBeOfType<CyberCloud.ResourceGraph.Query.ResourceGraphQueryService>(
+                "the endpoint is set, so the ClickHouse-backed service replaces the refusal"
+            );
+        gateway.Services.GetRequiredService<IResourceChangedSink>()
+            .ShouldBeOfType<LoggingResourceChangedSink>("no NATS URL keeps the logging sink");
+        gateway.Services.GetService<CyberCloud.ResourceGraph.ResourceGraphProjector>()
+            .ShouldBeNull("the gateway queries and does not project");
         gateway.Services.GetRequiredService<CyberCloud.ResourceGraph.Query.ICallerAccessResolver>()
-            .ShouldBeOfType<CyberCloud.ResourceGraph.Query.MembershipIndexCallerAccessResolver>("the caller's usersets come from the Leopard index and not a double");
+            .ShouldBeOfType<CyberCloud.ResourceGraph.Query.MembershipIndexCallerAccessResolver>(
+                "the caller's usersets come from the Leopard index and not a double"
+            );
 
         await using var silo = await SiloComposition.BuildAsync(
             [
@@ -1252,7 +1275,10 @@ public sealed class HostCompositionTests {
         await silo.StopAsync(TestContext.Current.CancellationToken);
     }
 
-    /// <summary>The identity host the feeds host is told to trust — the feeds section's spelling of <see cref="IssuerArgument" />.</summary>
+    /// <summary>
+    ///     The identity host the feeds host is told to trust — the feeds section's spelling of
+    ///     <see cref="IssuerArgument" />.
+    /// </summary>
     const string FeedsIssuerArgument = "--CyberCloud:Feeds:Identity:Issuer=http://127.0.0.1:1";
 
     /// <summary>Builds the real feeds host.</summary>

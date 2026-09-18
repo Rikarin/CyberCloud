@@ -87,7 +87,7 @@ static class TelemetryConsent {
 
         try {
             if (!interactive) {
-                Record(host, settings, enabled: false);
+                Record(host, settings, false);
 
                 return;
             }

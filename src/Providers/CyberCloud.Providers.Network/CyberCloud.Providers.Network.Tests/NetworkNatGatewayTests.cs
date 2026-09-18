@@ -35,10 +35,10 @@ public sealed class NetworkNatGatewayTests {
         // get vpc subnet" / "failed to get eip" forever and the gateway never becomes ready. Comparing
         // against the sibling types' functions rather than against literals is what keeps this true
         // the day either naming changes.
-        var gateway = Address("egress", TenantOne, SubscriptionOne, network: "prod");
+        var gateway = Address("egress", TenantOne, SubscriptionOne, "prod");
         var ns = ReconcileDriver.NamespaceFor(gateway);
 
-        using var body = JsonDocument.Parse(NatGateways.Body(Cluster, subnet: "db", publicIpAddress: "edge"));
+        using var body = JsonDocument.Parse(NatGateways.Body(Cluster, "db", "edge"));
 
         var spec = Spec(NatGateways.OvnSnatRuleJson(ns, gateway, body.RootElement));
 
@@ -59,7 +59,7 @@ public sealed class NetworkNatGatewayTests {
         // ⚠ The whole spec, enumerated. The three fields NOT sent — v4IpCidr, v6IpCidr, ipName — are
         // each a way of translating a range this resource's address does not vouch for, and an
         // assertion that only checked the fields it knew about would go green the day one was added.
-        spec.Select(x => x.Key).Order(StringComparer.Ordinal).ShouldBe(["ovnEip", "vpc", "vpcSubnet"]);
+        spec.Select(static x => x.Key).Order(StringComparer.Ordinal).ShouldBe(["ovnEip", "vpc", "vpcSubnet"]);
     }
 
     [Fact]
@@ -67,8 +67,8 @@ public sealed class NetworkNatGatewayTests {
         // ⚠ THE WORST FAILURE AVAILABLE ON THIS TYPE, MADE INEXPRESSIBLE. Two networks in one resource
         // group each hold a subnet called `web`; a gateway under `prod` must translate prod's `web`
         // and never staging's, whatever the body says — the body carries only the subnet's own name.
-        var underProd = Address("egress", TenantOne, SubscriptionOne, network: "prod");
-        var underStaging = Address("egress", TenantOne, SubscriptionOne, network: "staging");
+        var underProd = Address("egress", TenantOne, SubscriptionOne, "prod");
+        var underStaging = Address("egress", TenantOne, SubscriptionOne, "staging");
         var ns = ReconcileDriver.NamespaceFor(underProd);
 
         using var body = JsonDocument.Parse(NatGateways.Body(Cluster));
@@ -210,7 +210,7 @@ public sealed class NetworkNatGatewayTests {
     [InlineData("web.db", "/properties/subnet")]
     public void AMalformedSubnetNameIsRefusedAtTheApiWithItsOwnPointer(string malformed, string target) {
         var validated = NatGateways.Schema2026.Validate(
-            JsonDocument.Parse(NatGateways.Body(Cluster, subnet: malformed)).RootElement
+            JsonDocument.Parse(NatGateways.Body(Cluster, malformed)).RootElement
         );
 
         validated.IsSuccess.ShouldBeFalse($"'{malformed}' was accepted by the schema");
@@ -265,7 +265,12 @@ public sealed class NetworkNatGatewayTests {
 
         using var body = JsonDocument.Parse(NatGateways.Body(Cluster));
 
-        var outcome = await Pass(reconciler, connection, Address("egress", TenantOne, SubscriptionOne), body.RootElement);
+        var outcome = await Pass(
+            reconciler,
+            connection,
+            Address("egress", TenantOne, SubscriptionOne),
+            body.RootElement
+        );
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.Converged);
         connection.Applied.Single().Target.Kind.Plural.ShouldBe("ovn-snat-rules");
@@ -279,7 +284,12 @@ public sealed class NetworkNatGatewayTests {
 
         using var body = JsonDocument.Parse(NatGateways.Body(Cluster));
 
-        var outcome = await Pass(reconciler, connection, Address("egress", TenantOne, SubscriptionOne), body.RootElement);
+        var outcome = await Pass(
+            reconciler,
+            connection,
+            Address("egress", TenantOne, SubscriptionOne),
+            body.RootElement
+        );
 
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.InProgress);
         connection.Applied.Single().Force.ShouldBeFalse();
@@ -297,7 +307,10 @@ public sealed class NetworkNatGatewayTests {
 
         await Pass(reconciler, connection, gateway, body.RootElement);
 
-        var deleted = await reconciler.DeleteAsync(Context(gateway, body.RootElement, connection), TestContext.Current.CancellationToken);
+        var deleted = await reconciler.DeleteAsync(
+            Context(gateway, body.RootElement, connection),
+            TestContext.Current.CancellationToken
+        );
 
         deleted.Kind.ShouldBe(ReconcileOutcomeKind.Converged);
         connection.Deleted.Single().Kind.Kind.ShouldBe("OvnSnatRule");
@@ -361,7 +374,8 @@ public sealed class NetworkNatGatewayTests {
         var applied = JsonNode.Parse(NatGateways.OvnSnatRuleJson(ns, gateway, desired))!.AsObject();
 
         applied["metadata"]!["labels"] = new JsonObject { ["ovn.kubernetes.io/eip_v4_ip"] = "192.0.2.7" };
-        applied["metadata"]!["annotations"] = new JsonObject { ["ovn.kubernetes.io/vpc_eip"] = NatGateways.OvnEipOf(ns, desired) };
+        applied["metadata"]!["annotations"] =
+            new JsonObject { ["ovn.kubernetes.io/vpc_eip"] = NatGateways.OvnEipOf(ns, desired) };
         applied["metadata"]!["finalizers"] = new JsonArray("kubeovn.io/kube-ovn-controller");
 
         applied["status"] = new JsonObject {

@@ -1,5 +1,4 @@
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.Providers.Messaging.Contracts;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -52,12 +51,12 @@ public sealed class NatsCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Messaging/natsClusters",
-            CreateProvider = () => new MessagingProvider(),
+            CreateProvider = static () => new MessagingProvider(),
             ReconcilerType = typeof(NatsClusterReconciler),
-            CreateReconciler = clock => new NatsClusterReconciler(clock),
+            CreateReconciler = static clock => new NatsClusterReconciler(clock),
             Type = NatsClusters.Type,
             ApiVersion = NatsClusters.V2026,
-            Body = cluster => NatsClusters.Body(cluster),
+            Body = static cluster => NatsClusters.Body(cluster),
             // ⚠ Changes `servers`, which reaches THREE of the five objects — the StatefulSet's
             // replica count, the ConfigMap's route list, and neither Service. A body that differed
             // only where the reconciler ignores it would pass the update test while proving the
@@ -66,12 +65,12 @@ public sealed class NatsCase : IProviderCaseSource {
             // ⚠ AND IT CHANGES AN OBJECT THAT IS NOT THE FIRST ONE APPLIED. The ConfigMap is applied
             // first and the StatefulSet third; a changed body that moved only a ConfigMap field would
             // leave the later applies unexercised by the update path.
-            ChangedBody = cluster => NatsClusters.Body(cluster, servers: 5),
+            ChangedBody = static cluster => NatsClusters.Body(cluster, 5),
             // Drops the required `/properties/storage/size`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written:
             // a hand-written invalid body drifts out of date the day the schema gains a property and
             // then tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => WithoutStorageSize(NatsClusters.Body(cluster)),
+            InvalidBody = static cluster => WithoutStorageSize(NatsClusters.Body(cluster)),
             InvalidBodyTarget = "/properties/storage/size",
             ActionName = NatsClusters.ListKeysAction,
             // ⚠ FIVE, AND THE FIFTH IS UNCONDITIONAL HERE BECAUSE `Body` ABOVE TURNS MONITORING ON
@@ -79,7 +78,7 @@ public sealed class NatsCase : IProviderCaseSource {
             // case cannot branch on a setting; the honest way to have a conditional object under
             // conformance is for the case's own body to pin the condition. NatsReconcilerTests covers
             // the other branch, where the PodMonitor is neither rendered nor read back.
-            Objects = (id, ns) => [
+            Objects = static (id, ns) => [
                 NatsClusters.ConfigMapRef(ns, id.Name),
                 NatsClusters.HeadlessServiceRef(ns, id.Name),
                 NatsClusters.StatefulSetRef(ns, id.Name),
@@ -93,7 +92,7 @@ public sealed class NatsCase : IProviderCaseSource {
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return NatsClusters.Matches(match.ObjectJson, desired.RootElement);
             }

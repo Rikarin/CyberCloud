@@ -173,7 +173,7 @@ public sealed class ManagedClusterMatchesTests {
         using var body = JsonDocument.Parse(ManagedClusters.Body(ClusterId));
 
         var kinds = Rendered(body.RootElement)
-            .Select(x => JsonNode.Parse(x)!["kind"]!.GetValue<string>())
+            .Select(static x => JsonNode.Parse(x)!["kind"]!.GetValue<string>())
             .ToList();
 
         kinds.ShouldBe(["KubevirtCluster", "KamajiControlPlane", "Cluster"]);
@@ -253,7 +253,7 @@ public sealed class ManagedClusterMatchesTests {
             ["status"] = new JsonObject {
                 ["conditions"] = new JsonArray(
                     [
-                        .. conditions.Select(x => (JsonNode)new JsonObject {
+                        .. conditions.Select(static x => (JsonNode)new JsonObject {
                                 ["type"] = x.Type, ["status"] = x.Status, ["message"] = x.Message
                             }
                         )

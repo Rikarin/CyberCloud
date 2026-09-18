@@ -94,8 +94,10 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
         var managers = await ManagersOf(name);
 
         managers.ShouldContain(OwnerManager);
-        managers.ShouldContain(KubeLabels.CoWriterFieldManager(KubeLabels.ResourceTypeValue(owner.Type), KubeLabels.GuidValue(owner.Id)));
-        managers.Count(x => x.StartsWith("cybercloud/", StringComparison.Ordinal)).ShouldBe(2);
+        managers.ShouldContain(
+            KubeLabels.CoWriterFieldManager(KubeLabels.ResourceTypeValue(owner.Type), KubeLabels.GuidValue(owner.Id))
+        );
+        managers.Count(static x => x.StartsWith("cybercloud/", StringComparison.Ordinal)).ShouldBe(2);
 
         // 5. A withdraws. Only A's slice goes.
         (await coWriter.WithdrawFragmentAsync(a, target, token)).GetValueOrThrow().Result.ShouldBe(ApplyResult.Updated);
@@ -163,7 +165,7 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
         await k3s.Api.ApplyAsync(OwnerCommand(owner, name, ("base", "owner")), token);
 
         var outcome = (await new KubeCoWriter(Connection())
-            .ApplyFragmentAsync(a, target, """{ "data": { "base": "mine-now" } }""", token)).GetValueOrThrow();
+                .ApplyFragmentAsync(a, target, """{ "data": { "base": "mine-now" } }""", token)).GetValueOrThrow();
 
         outcome.Result.ShouldBe(ApplyResult.Conflict);
         outcome.Drift.ShouldNotBeNull();
@@ -207,7 +209,8 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
 
         // And the loop that reads again gets it in.
         (await new KubeCoWriter(Connection()).ApplyFragmentAsync(a, target, """{ "data": { "a": "from-a" } }""", token))
-            .GetValueOrThrow().Result.ShouldBe(ApplyResult.Updated);
+            .GetValueOrThrow()
+            .Result.ShouldBe(ApplyResult.Updated);
 
         (await Data(name, "a")).ShouldBe("from-a");
     }
@@ -223,21 +226,21 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
         await k3s.Api.ApplyAsync(OwnerCommand(owner, name, ("base", "owner")), token);
 
         var thrown = await Should.ThrowAsync<HttpOperationException>(() => k3s.Raw.CustomObjects
-            .PatchNamespacedCustomObjectWithHttpMessagesAsync(
-                new V1Patch(
-                    JsonSerializer.Deserialize<JsonElement>(
-                        $$"""{ "apiVersion": "v1", "kind": "ConfigMap", "metadata": { "name": "{{name}}", "resourceVersion": "1" }, "data": { "z": "z" } }"""
+                .PatchNamespacedCustomObjectWithHttpMessagesAsync(
+                    new V1Patch(
+                        JsonSerializer.Deserialize<JsonElement>(
+                            $$"""{ "apiVersion": "v1", "kind": "ConfigMap", "metadata": { "name": "{{name}}", "resourceVersion": "1" }, "data": { "z": "z" } }"""
+                        ),
+                        V1Patch.PatchType.ApplyPatch
                     ),
-                    V1Patch.PatchType.ApplyPatch
-                ),
-                "",
-                "v1",
-                K3sFixture.Namespace,
-                "configmaps",
-                name,
-                fieldManager: "probe",
-                cancellationToken: token
-            )
+                    "",
+                    "v1",
+                    K3sFixture.Namespace,
+                    "configmaps",
+                    name,
+                    fieldManager: "probe",
+                    cancellationToken: token
+                )
         );
 
         thrown.Response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
@@ -269,7 +272,10 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
         refused.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
         refused.Error.Message.ShouldContain("never creates");
 
-        (await k3s.Api.GetAsync(target, token)).Error!.Code.ShouldBe(ErrorCode.ResourceNotFound, "the object was not resurrected");
+        (await k3s.Api.GetAsync(target, token)).Error!.Code.ShouldBe(
+            ErrorCode.ResourceNotFound,
+            "the object was not resurrected"
+        );
 
         // And the seam's withdrawal on a gone object is converged, not an error.
         (await new KubeCoWriter(Connection()).WithdrawFragmentAsync(a, target, token)).GetValueOrThrow()
@@ -379,17 +385,20 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
         var coWriter = new KubeCoWriter(Connection());
 
         (await coWriter.ApplyFragmentAsync(a, target, """{ "spec": { "peerings": [ { "remote": "a" } ] } }""", token))
-            .GetValueOrThrow().Result.ShouldBe(ApplyResult.Updated);
+            .GetValueOrThrow()
+            .Result.ShouldBe(ApplyResult.Updated);
 
         (await coWriter.ApplyFragmentAsync(b, target, """{ "spec": { "peerings": [ { "remote": "b" } ] } }""", token))
-            .GetValueOrThrow().Result.ShouldBe(ApplyResult.Updated);
+            .GetValueOrThrow()
+            .Result.ShouldBe(ApplyResult.Updated);
 
         var peerings = JsonNode.Parse(
             (await k3s.ReadFieldAsync("widgets", name, Widgets.Group, Widgets.Version, "spec", "peerings"))!
-        )!.AsArray();
+        )!
+            .AsArray();
 
         peerings.Count.ShouldBe(2, "both co-writers' entries are on the one atomic list");
-        peerings.Select(x => x!["remote"]!.GetValue<string>()).ShouldBe(["a", "b"]);
+        peerings.Select(static x => x!["remote"]!.GetValue<string>()).ShouldBe(["a", "b"]);
 
         (await k3s.ReadFieldAsync("widgets", name, Widgets.Group, Widgets.Version, "spec", "namespaces"))
             .ShouldNotBeNull("the owner's own list is untouched");
@@ -399,7 +408,8 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
 
         var remaining = JsonNode.Parse(
             (await k3s.ReadFieldAsync("widgets", name, Widgets.Group, Widgets.Version, "spec", "peerings"))!
-        )!.AsArray();
+        )!
+            .AsArray();
 
         remaining.Count.ShouldBe(1);
         remaining[0]!["remote"]!.GetValue<string>().ShouldBe("b");
@@ -425,22 +435,22 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
         );
 
         var thrown = await Should.ThrowAsync<HttpOperationException>(() => k3s.Raw.CustomObjects
-            .PatchNamespacedCustomObjectWithHttpMessagesAsync(
-                new V1Patch(
-                    JsonSerializer.Deserialize<JsonElement>(
-                        $$"""{ "apiVersion": "coowned.cybercloud.test/v1", "kind": "Widget", "metadata": { "name": "{{name}}" }, "spec": { "peerings": [ { "remote": "a" }, { "remote": "b" } ] } }"""
+                .PatchNamespacedCustomObjectWithHttpMessagesAsync(
+                    new V1Patch(
+                        JsonSerializer.Deserialize<JsonElement>(
+                            $$"""{ "apiVersion": "coowned.cybercloud.test/v1", "kind": "Widget", "metadata": { "name": "{{name}}" }, "spec": { "peerings": [ { "remote": "a" }, { "remote": "b" } ] } }"""
+                        ),
+                        V1Patch.PatchType.ApplyPatch
                     ),
-                    V1Patch.PatchType.ApplyPatch
-                ),
-                Widgets.Group,
-                Widgets.Version,
-                K3sFixture.Namespace,
-                Widgets.Plural,
-                name,
-                fieldManager: "peer-b",
-                force: false,
-                cancellationToken: token
-            )
+                    Widgets.Group,
+                    Widgets.Version,
+                    K3sFixture.Namespace,
+                    Widgets.Plural,
+                    name,
+                    fieldManager: "peer-b",
+                    force: false,
+                    cancellationToken: token
+                )
         );
 
         thrown.Response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
@@ -462,7 +472,9 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
             name,
             // One owner GUID per test, derived from the name, so two tests' objects never share a
             // co-writer manager.
-            new Guid(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(name)).AsSpan(0, 16))
+            new Guid(
+                System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(name)).AsSpan(0, 16)
+            )
         );
 
     static ResourceId Peering(ResourceId owner, string name, string id) =>
@@ -476,7 +488,7 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
             owner.Name
         );
 
-    KubeCommand OwnerCommand(ResourceId owner, string name, params (string Key, string Value)[] data) {
+    static KubeCommand OwnerCommand(ResourceId owner, string name, params (string Key, string Value)[] data) {
         var map = new JsonObject();
         foreach (var (key, value) in data) {
             map[key] = value;
@@ -488,7 +500,9 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
             .WithKind(ConfigMaps)
             .InNamespace(K3sFixture.Namespace)
             .WithFieldManager(OwnerManager)
-            .ObjectJson(new JsonObject { ["metadata"] = new JsonObject { ["name"] = name }, ["data"] = map }.ToJsonString())
+            .ObjectJson(
+                new JsonObject { ["metadata"] = new JsonObject { ["name"] = name }, ["data"] = map }.ToJsonString()
+            )
             .Build();
     }
 
@@ -513,8 +527,9 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
         var managed = await k3s.ReadFieldAsync("configmaps", name, "", "v1", "metadata", "managedFields");
         managed.ShouldNotBeNull();
 
-        return JsonNode.Parse(managed)!.AsArray()
-            .Select(x => x!["manager"]!.GetValue<string>())
+        return JsonNode.Parse(managed)!
+            .AsArray()
+            .Select(static x => x!["manager"]!.GetValue<string>())
             .ToList();
     }
 
@@ -531,7 +546,9 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
                     Spec = new() {
                         Group = Widgets.Group,
                         Scope = "Namespaced",
-                        Names = new() { Kind = Widgets.Kind, ListKind = "WidgetList", Plural = Widgets.Plural, Singular = "widget" },
+                        Names = new() {
+                            Kind = Widgets.Kind, ListKind = "WidgetList", Plural = Widgets.Plural, Singular = "widget"
+                        },
                         Versions = [
                             new() {
                                 Name = Widgets.Version,
@@ -551,9 +568,12 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
         }
 
         for (var attempt = 0; attempt < 60; attempt++) {
-            var definition = await k3s.Raw.ApiextensionsV1.ReadCustomResourceDefinitionAsync(crdName, cancellationToken: token);
+            var definition = await k3s.Raw.ApiextensionsV1.ReadCustomResourceDefinitionAsync(
+                crdName,
+                cancellationToken: token
+            );
 
-            if (definition.Status?.Conditions?.Any(x => x.Type == "Established" && x.Status == "True") == true) {
+            if (definition.Status?.Conditions?.Any(static x => x.Type == "Established" && x.Status == "True") == true) {
                 return;
             }
 
@@ -570,7 +590,10 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
     sealed class ApiConnection(IKubeApiClient api) : IKubeClusterConnection {
         public Guid ClusterId => K3sFixture.ClusterId;
 
-        public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) =>
+        public Task<Result<ApplyOutcome>> ApplyAsync(
+            KubeCommand command,
+            CancellationToken cancellationToken = default
+        ) =>
             api.ApplyAsync(command, cancellationToken);
 
         public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) =>

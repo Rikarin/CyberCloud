@@ -36,8 +36,10 @@ public sealed class CorsPolicyTests {
 
         policy.Origins.ShouldBe(["http://localhost:4200"]);
         policy.SupportsCredentials.ShouldBeTrue("the refresh cookie rides on a credentialed fetch");
-        policy.AllowAnyOrigin.ShouldBeFalse("credentials and a wildcard origin are refused by every browser, and by this host");
-        policy.Methods.ShouldBe(["POST", "GET"], ignoreOrder: true);
+        policy.AllowAnyOrigin.ShouldBeFalse(
+            "credentials and a wildcard origin are refused by every browser, and by this host"
+        );
+        policy.Methods.ShouldBe(["POST", "GET"], true);
         policy.Headers.ShouldBe(["Content-Type"]);
 
         // Evaluated as the middleware would: the portal's origin is echoed, with credentials.
@@ -53,7 +55,9 @@ public sealed class CorsPolicyTests {
         var services = Build(TestEnvironment.Development);
         var policy = await Policy(services);
 
-        foreach (var origin in new[] { "http://localhost:5100", "http://localhost:4201", "https://portal.cybercloud.io", "null" }) {
+        foreach (var origin in new[] {
+                     "http://localhost:5100", "http://localhost:4201", "https://portal.cybercloud.io", "null"
+                 }) {
             var result = Evaluate(services, policy, origin);
 
             // ⚠ IsOriginAllowed, not AllowedOrigin: CorsService echoes the origin into the result either
@@ -68,7 +72,7 @@ public sealed class CorsPolicyTests {
         // follows — without a localhost fallback, because the environment is not Development.
         var services = Build(
             TestEnvironment.Production,
-            options => options.Clients.Portal.RedirectUris.Add("https://portal.cybercloud.io/auth/callback")
+            static options => options.Clients.Portal.RedirectUris.Add("https://portal.cybercloud.io/auth/callback")
         );
 
         var policy = await Policy(services);
@@ -107,7 +111,10 @@ public sealed class CorsPolicyTests {
         context.Request.Method = "POST";
         context.Request.Headers.Origin = origin;
 
-        return new CorsService(Options.Create(services.GetRequiredService<IOptions<CorsOptions>>().Value), NullLoggerFactory.Instance)
+        return new CorsService(
+            Options.Create(services.GetRequiredService<IOptions<CorsOptions>>().Value),
+            NullLoggerFactory.Instance
+        )
             .EvaluatePolicy(context, policy);
     }
 }

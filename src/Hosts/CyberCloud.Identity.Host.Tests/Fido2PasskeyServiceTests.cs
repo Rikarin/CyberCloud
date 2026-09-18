@@ -109,7 +109,7 @@ public sealed class Fido2PasskeyServiceTests {
                     UserId = Guid.NewGuid(),
                     Email = "a@example.com",
                     DisplayName = "A",
-                    Existing = [Enrolled("AQIDBA"), Enrolled("BQYHCA")]
+                    Existing = [Enrolled(), Enrolled("BQYHCA")]
                 }
             )).GetValueOrThrow();
 
@@ -153,7 +153,7 @@ public sealed class Fido2PasskeyServiceTests {
             "not json at all",
             "[1,2,3]",
             "\"a string\"",
-            "{\"id\":"
+            """{"id":"""
         };
 
     [Theory]

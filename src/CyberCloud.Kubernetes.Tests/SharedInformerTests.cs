@@ -282,7 +282,7 @@ public sealed class SharedInformerTests {
         api.WatchEvents.Add(new(KubeWatchEventKind.Error, "{}", string.Empty));
 
         var informer = Informer(api);
-        var outcome = await informer.PumpAsync(_ => Task.CompletedTask, TestContext.Current.CancellationToken);
+        var outcome = await informer.PumpAsync(static _ => Task.CompletedTask, TestContext.Current.CancellationToken);
 
         outcome.IsFailure.ShouldBeTrue();
         outcome.Error!.Code.ShouldBe(ErrorCode.PreconditionFailed);

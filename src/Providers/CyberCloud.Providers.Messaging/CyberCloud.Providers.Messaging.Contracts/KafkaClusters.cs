@@ -441,7 +441,7 @@ public static class KafkaClusters {
                     // `loadBalancerSourceRanges`, where the API server refuses the Service, and the
                     // resource fails to converge AFTER the caller was told 202 — the exact failure
                     // class every other pattern on this type exists to prevent.
-                    ElementKind = SchemaKind.Text, DefaultJson = "[]", ExampleJson = "[\"203.0.113.0/24\"]"
+                    ElementKind = SchemaKind.Text, DefaultJson = "[]", ExampleJson = """["203.0.113.0/24"]"""
                 },
                 new(
                     "/properties/cruiseControl",
@@ -540,7 +540,8 @@ public static class KafkaClusters {
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── Addressing ────────────────────────────────────────────────────────────────────────────
 

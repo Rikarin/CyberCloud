@@ -9,8 +9,11 @@ namespace CyberCloud.Providers.Storage;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE DRIVER IS SHARED AND THIS RECONCILER STILL APPLIES IT ON EVERY PASS — AND THAT
-///         APPLY IS NOT THE NO-OP IT LOOKS LIKE.</b> A <c>SeaweedCSIDriver</c> is one per filer, so
+///         ⚠
+///         <b>
+///             THE DRIVER IS SHARED AND THIS RECONCILER STILL APPLIES IT ON EVERY PASS — AND THAT
+///             APPLY IS NOT THE NO-OP IT LOOKS LIKE.
+///         </b> A <c>SeaweedCSIDriver</c> is one per filer, so
 ///         every share of an account renders the same document —
 ///         <see cref="StorageFileShares.DriverJson" /> is a pure function of the account and the
 ///         namespace — but the builder injects the <i>applying</i> share's resource-id label, so two
@@ -21,8 +24,11 @@ namespace CyberCloud.Providers.Storage;
 ///         <c>the-driver-carries-one-shares-labels</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Reading first and applying only on drift was tried, and the real API server refused
-///         it.</b> <c>StorageFileShareLifecycleConformance</c> — the k3s-backed suite — failed two
+///         ⚠
+///         <b>
+///             Reading first and applying only on drift was tried, and the real API server refused
+///             it.
+///         </b> <c>StorageFileShareLifecycleConformance</c> — the k3s-backed suite — failed two
 ///         ways: the lifecycle asserts that every object of a converged resource carries <i>that</i>
 ///         resource's id, and the conflict case plants a rival field manager on the driver's
 ///         <c>tenant-id</c> label and expects the next pass to <i>conflict</i>. A reconciler that
@@ -31,8 +37,11 @@ namespace CyberCloud.Providers.Storage;
 ///         ADR-013's whole point. The churn is the price of that re-assertion, and it is paid.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The driver goes first and the claim second, because a claim against a class that does
-///         not exist stays <c>Pending</c> with no event naming the cause.</b> The external-provisioner
+///         ⚠
+///         <b>
+///             The driver goes first and the claim second, because a claim against a class that does
+///             not exist stays <c>Pending</c> with no event naming the cause.
+///         </b> The external-provisioner
 ///         only watches claims whose class it serves, so a claim applied before its driver is not
 ///         refused, not retried, and not reported — it waits. The order here makes that window one
 ///         pass long at most.
@@ -93,8 +102,13 @@ public sealed class StorageFileShareReconciler(IClock clock) : IResourceReconcil
 
         context.Log.Report("applying", $"ensuring the CSI driver of account '{account}' is applied", 20);
 
-        var driver = await Apply(context, cluster, StorageFileShares.CsiDriverKind, StorageFileShares.DriverJson(context.Namespace, context.Id))
-            .ApplyAsync(cancellationToken);
+        var driver = await Apply(
+            context,
+            cluster,
+            StorageFileShares.CsiDriverKind,
+            StorageFileShares.DriverJson(context.Namespace, context.Id)
+        )
+                .ApplyAsync(cancellationToken);
 
         if (driver.TryGetError(out var driverError)) {
             return ReconcileOutcome.FromFailure(driverError);
@@ -106,8 +120,13 @@ public sealed class StorageFileShareReconciler(IClock clock) : IResourceReconcil
 
         context.Log.Report("applying", $"applying the claim of '{context.Id.Name}' in account '{account}'", 50);
 
-        var claim = await Apply(context, cluster, StorageFileShares.ClaimKind, StorageFileShares.ClaimJson(context.Namespace, context.Id, context.Desired))
-            .ApplyAsync(cancellationToken);
+        var claim = await Apply(
+            context,
+            cluster,
+            StorageFileShares.ClaimKind,
+            StorageFileShares.ClaimJson(context.Namespace, context.Id, context.Desired)
+        )
+                .ApplyAsync(cancellationToken);
 
         if (claim.TryGetError(out var claimError)) {
             return ReconcileOutcome.FromFailure(claimError);
@@ -130,7 +149,12 @@ public sealed class StorageFileShareReconciler(IClock clock) : IResourceReconcil
                     : ReconcileOutcome.FromFailure(readError);
             }
 
-            if (!StorageFileShares.Matches(read.GetValueOrThrow().Json, context.Id, context.Namespace, context.Desired)) {
+            if (!StorageFileShares.Matches(
+                    read.GetValueOrThrow().Json,
+                    context.Id,
+                    context.Namespace,
+                    context.Desired
+                )) {
                 return ReconcileOutcome.InProgress(
                     $"'{target}' is readable and does not yet carry the desired spec",
                     TimeSpan.FromSeconds(5)
@@ -171,8 +195,11 @@ public sealed class StorageFileShareReconciler(IClock clock) : IResourceReconcil
     ///         That is the tenant's pod and the tenant's decision, and the reminder keeps asking.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>AND THE VOLUME, WHICH OUTLIVES THE CLAIM AND IS RECLAIMED BY THE DRIVER THIS IS
-    ///         ABOUT TO REMOVE.</b> A claim's <c>NotFound</c> is not the end of its data: the
+    ///         ⚠
+    ///         <b>
+    ///             AND THE VOLUME, WHICH OUTLIVES THE CLAIM AND IS RECLAIMED BY THE DRIVER THIS IS
+    ///             ABOUT TO REMOVE.
+    ///         </b> A claim's <c>NotFound</c> is not the end of its data: the
     ///         <c>PersistentVolume</c> goes <c>Released</c>, and the CSI external-provisioner — a
     ///         container in the driver's controller Deployment — is what then calls
     ///         <c>DeleteVolume</c> and removes it. Removing the driver first cascades that Deployment
@@ -212,7 +239,8 @@ public sealed class StorageFileShareReconciler(IClock clock) : IResourceReconcil
             return ReconcileOutcome.FromFailure(boundError);
         }
 
-        if (bound.IsSuccess && StorageFileShares.VolumeNameOf(bound.GetValueOrThrow().Json) is { Length: > 0 } volumeName) {
+        if (bound.IsSuccess
+            && StorageFileShares.VolumeNameOf(bound.GetValueOrThrow().Json) is { Length: > 0 } volumeName) {
             var volumeRef = StorageFileShares.VolumeRef(volumeName);
             var volume = await cluster.GetAsync(volumeRef, cancellationToken);
 
@@ -225,8 +253,14 @@ public sealed class StorageFileShareReconciler(IClock clock) : IResourceReconcil
 
                 // ⚠ Metadata only. The provisioner owns the spec, and a server-side apply that named
                 // any of it would conflict; labels under this manager's keys merge beside theirs.
-                var labelled = await Apply(context, cluster, StorageFileShares.VolumeKind, Placeholder(volumeName), string.Empty)
-                    .ApplyAsync(cancellationToken);
+                var labelled = await Apply(
+                    context,
+                    cluster,
+                    StorageFileShares.VolumeKind,
+                    Placeholder(volumeName),
+                    string.Empty
+                )
+                        .ApplyAsync(cancellationToken);
 
                 if (labelled.TryGetError(out var labelError)) {
                     return ReconcileOutcome.FromFailure(labelError);
@@ -261,8 +295,13 @@ public sealed class StorageFileShareReconciler(IClock clock) : IResourceReconcil
         var siblings = await cluster.ListAsync(
             StorageFileShares.ClaimKind,
             context.Namespace,
-            KubeLabels.ResourceType + "=" + KubeLabels.ResourceTypeValue(StorageFileShares.Type)
-            + "," + StorageFileShares.AccountLabel + "=" + account,
+            KubeLabels.ResourceType
+            + "="
+            + KubeLabels.ResourceTypeValue(StorageFileShares.Type)
+            + ","
+            + StorageFileShares.AccountLabel
+            + "="
+            + account,
             cancellationToken
         );
 
@@ -287,10 +326,21 @@ public sealed class StorageFileShareReconciler(IClock clock) : IResourceReconcil
         var volumes = await cluster.ListAsync(
             StorageFileShares.VolumeKind,
             string.Empty,
-            KubeLabels.ResourceType + "=" + KubeLabels.ResourceTypeValue(StorageFileShares.Type)
-            + "," + KubeLabels.SubscriptionId + "=" + KubeLabels.GuidValue(context.Id.SubscriptionId)
-            + "," + KubeLabels.ResourceGroup + "=" + context.Id.ResourceGroup
-            + "," + StorageFileShares.AccountLabel + "=" + account,
+            KubeLabels.ResourceType
+            + "="
+            + KubeLabels.ResourceTypeValue(StorageFileShares.Type)
+            + ","
+            + KubeLabels.SubscriptionId
+            + "="
+            + KubeLabels.GuidValue(context.Id.SubscriptionId)
+            + ","
+            + KubeLabels.ResourceGroup
+            + "="
+            + context.Id.ResourceGroup
+            + ","
+            + StorageFileShares.AccountLabel
+            + "="
+            + account,
             cancellationToken
         );
 

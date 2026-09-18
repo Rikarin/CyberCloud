@@ -16,13 +16,20 @@ namespace CyberCloud.Providers.RecoveryServices.Tests;
 ///     alike. A test that wants "not granted" scripts nothing, exactly as the seam would have it.
 /// </remarks>
 sealed class ScriptedView : IResourceView {
-    readonly Dictionary<string, (ResourceSnapshot Snapshot, ImmutableArray<ObjectRef> Objects)> visible = new(StringComparer.Ordinal);
+    readonly Dictionary<string, (ResourceSnapshot Snapshot, ImmutableArray<ObjectRef> Objects)> visible =
+        new(StringComparer.Ordinal);
 
     /// <summary>Every path asked of <see cref="ReadAsync" /> or <see cref="RenderedObjectsAsync" />, in order.</summary>
     public List<string> Asked { get; } = [];
 
     /// <summary>Makes an address readable, with the given body and rendered objects.</summary>
-    public ScriptedView Showing(ResourceId target, string body, Guid clusterId, ProvisioningState state, params ObjectRef[] rendered) {
+    public ScriptedView Showing(
+        ResourceId target,
+        string body,
+        Guid clusterId,
+        ProvisioningState state,
+        params ObjectRef[] rendered
+    ) {
         visible[target.CanonicalPath] = (
             new ResourceSnapshot {
                 Id = target.Id == Guid.Empty ? Guid.NewGuid() : target.Id,
@@ -50,13 +57,19 @@ sealed class ScriptedView : IResourceView {
         );
     }
 
-    public Task<Result<ImmutableArray<ObjectRef>>> RenderedObjectsAsync(ResourceId target, CancellationToken cancellationToken = default) {
+    public Task<Result<ImmutableArray<ObjectRef>>> RenderedObjectsAsync(
+        ResourceId target,
+        CancellationToken cancellationToken = default
+    ) {
         Asked.Add(target.Path);
 
         return Task.FromResult(
             visible.TryGetValue(target.CanonicalPath, out var seen)
                 ? Result<ImmutableArray<ObjectRef>>.Success(seen.Objects)
-                : Result<ImmutableArray<ObjectRef>>.Failure(ErrorCode.ResourceNotFound, $"'{target.Path}' does not exist.")
+                : Result<ImmutableArray<ObjectRef>>.Failure(
+                    ErrorCode.ResourceNotFound,
+                    $"'{target.Path}' does not exist."
+                )
         );
     }
 }
@@ -70,7 +83,8 @@ sealed class RecordingWatch : IResourceWatch {
         return Task.FromResult(Result.Success);
     }
 
-    public Task<Result> UnsubscribeAsync(ResourceTypeName type, CancellationToken cancellationToken = default) => Task.FromResult(Result.Success);
+    public Task<Result> UnsubscribeAsync(ResourceTypeName type, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result.Success);
 }
 
 /// <summary>
@@ -97,7 +111,11 @@ sealed class RecordingConnection : IKubeClusterConnection {
         if (Suspend) {
             return Task.FromResult(
                 Result<ApplyOutcome>.Success(
-                    new() { Result = ApplyResult.Suspended, Target = command.Target, Message = "We cannot reach your cluster; this will resume automatically." }
+                    new() {
+                        Result = ApplyResult.Suspended,
+                        Target = command.Target,
+                        Message = "We cannot reach your cluster; this will resume automatically."
+                    }
                 )
             );
         }
@@ -106,7 +124,9 @@ sealed class RecordingConnection : IKubeClusterConnection {
         // the body alone carries none, exactly as a rendered object carries none until applied.
         var root = JsonNode.Parse(command.Body)!.AsObject();
         var metadata = root["metadata"] as JsonObject ?? [];
-        metadata["labels"] = new JsonObject(command.Labels.Select(x => KeyValuePair.Create(x.Key, (JsonNode?)x.Value)));
+        metadata["labels"] = new JsonObject(
+            command.Labels.Select(static x => KeyValuePair.Create(x.Key, (JsonNode?)x.Value))
+        );
         metadata["namespace"] = command.Target.Namespace;
         root["metadata"] = metadata;
         root["kind"] = command.Target.Kind.Kind;
@@ -116,7 +136,9 @@ sealed class RecordingConnection : IKubeClusterConnection {
         Objects[Key(command.Target)] = root.ToJsonString();
 
         return Task.FromResult(
-            Result<ApplyOutcome>.Success(new() { Result = existed ? ApplyResult.Updated : ApplyResult.Created, Target = command.Target })
+            Result<ApplyOutcome>.Success(
+                new() { Result = existed ? ApplyResult.Updated : ApplyResult.Created, Target = command.Target }
+            )
         );
     }
 
@@ -130,7 +152,11 @@ sealed class RecordingConnection : IKubeClusterConnection {
         );
     }
 
-    public Task<Result> DeleteAsync(KubeCommand command, CascadePolicy policy = CascadePolicy.Background, CancellationToken cancellationToken = default) {
+    public Task<Result> DeleteAsync(
+        KubeCommand command,
+        CascadePolicy policy = CascadePolicy.Background,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(command);
 
         var removed = Objects.TryRemove(Key(command.Target), out _);
@@ -138,19 +164,31 @@ sealed class RecordingConnection : IKubeClusterConnection {
             Deleted.Add(command.Target);
         }
 
-        return Task.FromResult(removed ? Result.Success : Result.Failure(ErrorCode.ResourceNotFound, $"'{command.Target}' is not here."));
+        return Task.FromResult(
+            removed ? Result.Success : Result.Failure(ErrorCode.ResourceNotFound, $"'{command.Target}' is not here.")
+        );
     }
 
-    public Task<Result<IReadOnlyList<KubeObjectSummary>>> ListAsync(GroupVersionKind kind, string ns, string labelSelector, CancellationToken cancellationToken = default) {
+    public Task<Result<IReadOnlyList<KubeObjectSummary>>> ListAsync(
+        GroupVersionKind kind,
+        string ns,
+        string labelSelector,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(kind);
 
         if (RefuseListing) {
-            return Task.FromResult(Result<IReadOnlyList<KubeObjectSummary>>.Failure(ErrorCode.InternalError, "this connection cannot list."));
+            return Task.FromResult(
+                Result<IReadOnlyList<KubeObjectSummary>>.Failure(
+                    ErrorCode.InternalError,
+                    "this connection cannot list."
+                )
+            );
         }
 
         var wanted = labelSelector.Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(pair => pair.Split('=', 2))
-            .ToDictionary(x => x[0], x => x.Length > 1 ? x[1] : string.Empty, StringComparer.Ordinal);
+            .Select(static pair => pair.Split('=', 2))
+            .ToDictionary(static x => x[0], static x => x.Length > 1 ? x[1] : string.Empty, StringComparer.Ordinal);
 
         var found = new List<KubeObjectSummary>();
 
@@ -161,7 +199,9 @@ sealed class RecordingConnection : IKubeClusterConnection {
 
             var held = LabelsOf(json);
             if (wanted.All(pair => held.TryGetValue(pair.Key, out var value) && value == pair.Value)) {
-                found.Add(new() { Kind = kind, Namespace = ns, Name = key[(key.LastIndexOf('/') + 1)..], Labels = held });
+                found.Add(
+                    new() { Kind = kind, Namespace = ns, Name = key[(key.LastIndexOf('/') + 1)..], Labels = held }
+                );
             }
         }
 
@@ -179,7 +219,11 @@ sealed class RecordingConnection : IKubeClusterConnection {
 
     static Dictionary<string, string> LabelsOf(string json) {
         var labels = ((JsonNode.Parse(json) as JsonObject)?["metadata"] as JsonObject)?["labels"] as JsonObject;
-        return labels?.ToDictionary(x => x.Key, x => x.Value?.GetValue<string>() ?? string.Empty, StringComparer.Ordinal)
+        return labels?.ToDictionary(
+            static x => x.Key,
+            static x => x.Value?.GetValue<string>() ?? string.Empty,
+            StringComparer.Ordinal
+        )
             ?? new Dictionary<string, string>(StringComparer.Ordinal);
     }
 }
@@ -213,11 +257,35 @@ static class Ids {
     static readonly ConcurrentDictionary<string, Guid> VaultIds = new(StringComparer.Ordinal);
 
     /// <summary>A vault's address, with one GUID per name so two passes over one vault agree on it.</summary>
-    public static ResourceId Vault(string name, Guid? tenant = null, Guid? subscription = null, string group = "prod") =>
-        new(tenant ?? TenantA, subscription ?? SubscriptionA, group, RecoveryVaults.Type, name, VaultIds.GetOrAdd(name, _ => Guid.NewGuid()));
+    public static ResourceId Vault(
+        string name,
+        Guid? tenant = null,
+        Guid? subscription = null,
+        string group = "prod"
+    ) =>
+        new(
+            tenant ?? TenantA,
+            subscription ?? SubscriptionA,
+            group,
+            RecoveryVaults.Type,
+            name,
+            VaultIds.GetOrAdd(name, static _ => Guid.NewGuid())
+        );
 
-    public static ResourceId Server(string name, Guid? tenant = null, Guid? subscription = null, string group = "prod") =>
-        new(tenant ?? TenantA, subscription ?? SubscriptionA, group, RecoveryVaults.PostgresServerType, name, Guid.Empty);
+    public static ResourceId Server(
+        string name,
+        Guid? tenant = null,
+        Guid? subscription = null,
+        string group = "prod"
+    ) =>
+        new(
+            tenant ?? TenantA,
+            subscription ?? SubscriptionA,
+            group,
+            RecoveryVaults.PostgresServerType,
+            name,
+            Guid.Empty
+        );
 
     public static string Namespace(ResourceId id) => ReconcileDriver.NamespaceFor(id);
 
@@ -249,8 +317,14 @@ static class Ids {
         IResourceWatch? watch = null,
         IReconcileLog? log = null
     ) =>
-        new(vault, RecoveryVaults.V2026, desired, null, Namespace(vault), connection, new UnavailableSecretResolver(), log ?? new RecordingLog()) {
-            View = view ?? new ScriptedView(),
-            Watch = watch ?? new RecordingWatch()
-        };
+        new(
+            vault,
+            RecoveryVaults.V2026,
+            desired,
+            null,
+            Namespace(vault),
+            connection,
+            new UnavailableSecretResolver(),
+            log ?? new RecordingLog()
+        ) { View = view ?? new ScriptedView(), Watch = watch ?? new RecordingWatch() };
 }

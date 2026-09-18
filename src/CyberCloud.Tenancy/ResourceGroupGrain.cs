@@ -263,7 +263,7 @@ public sealed class ResourceGroupGrain(
     public Task<Result<IReadOnlyList<ResourceGroupMember>>> ListAsync() =>
         Task.FromResult(
             Result<IReadOnlyList<ResourceGroupMember>>.Success(
-                [.. state.State.Members.Values.OrderBy(x => x.CanonicalPath, StringComparer.Ordinal)]
+                [.. state.State.Members.Values.OrderBy(static x => x.CanonicalPath, StringComparer.Ordinal)]
             )
         );
 
@@ -274,9 +274,9 @@ public sealed class ResourceGroupGrain(
         var orphans = state.State.CreatingSince
             .Where(x => x.Value <= cutoff)
             .Select(x => state.State.Members.TryGetValue(x.Key, out var member) ? member : null)
-            .Where(x => x is { State: ProvisioningState.Creating })
-            .Select(x => x!)
-            .OrderBy(x => x.CanonicalPath, StringComparer.Ordinal)
+            .Where(static x => x is { State: ProvisioningState.Creating })
+            .Select(static x => x!)
+            .OrderBy(static x => x.CanonicalPath, StringComparer.Ordinal)
             .ToList();
 
         return Task.FromResult(Result<IReadOnlyList<ResourceGroupMember>>.Success(orphans));
@@ -324,7 +324,7 @@ public sealed class ResourceGroupGrain(
         // would have left exactly the window this method exists to shut, because BeginCreateAsync
         // could run between the two.
         if (state.State.Members.Count > 0) {
-            var deleting = state.State.Members.Values.Count(x => x.State == ProvisioningState.Deleting);
+            var deleting = state.State.Members.Values.Count(static x => x.State == ProvisioningState.Deleting);
 
             return Result.Failure(
                 ErrorCode.Conflict,
@@ -336,7 +336,7 @@ public sealed class ResourceGroupGrain(
                 + string.Join(
                     ", ",
                     state.State.Members.Values
-                        .Select(x => x.CanonicalPath)
+                        .Select(static x => x.CanonicalPath)
                         .Order(StringComparer.Ordinal)
                         .Take(5)
                 )
@@ -497,7 +497,7 @@ public sealed class ResourceGroupGrain(
             reaped.Count,
             name,
             subscriptionId,
-            string.Join(", ", reaped.Select(x => x.CanonicalPath))
+            string.Join(", ", reaped.Select(static x => x.CanonicalPath))
         );
 
         return Result<IReadOnlyList<ResourceGroupMember>>.Success(reaped);

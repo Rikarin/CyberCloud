@@ -9,8 +9,11 @@ namespace CyberCloud.Providers.Monitor.Alerting;
 ///     the <c>listInstances</c> handler hold.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Every <c>GetGrain</c> here is qualified with <c>ForTenant</c>, and this class exists so
-///     that is written once — CC1006.</b> The same arrangement
+///     ⚠
+///     <b>
+///         Every <c>GetGrain</c> here is qualified with <c>ForTenant</c>, and this class exists so
+///         that is written once — CC1006.
+///     </b> The same arrangement
 ///     <c>GrainCommunicationControlPlane</c> has, for the same reason: a reconciler and a handler are
 ///     plain singletons, not grains, so the call filter never sees them. No caching and no retry;
 ///     each method is one grain call, and the grain is where the state lives.
@@ -28,23 +31,45 @@ public sealed class GrainAlertControlPlane(IGrainFactory grains) : IAlertControl
     }
 
     /// <inheritdoc />
-    public Task<Result> RemoveRuleAsync(Guid tenantId, Guid evaluatorId, Guid ruleId, CancellationToken cancellationToken = default) =>
+    public Task<Result> RemoveRuleAsync(
+        Guid tenantId,
+        Guid evaluatorId,
+        Guid ruleId,
+        CancellationToken cancellationToken = default
+    ) =>
         Evaluator(tenantId, evaluatorId).RemoveRuleAsync(ruleId);
 
     /// <inheritdoc />
-    public Task<Result<AlertRuleSnapshot>> GetRuleAsync(Guid tenantId, Guid evaluatorId, Guid ruleId, CancellationToken cancellationToken = default) =>
+    public Task<Result<AlertRuleSnapshot>> GetRuleAsync(
+        Guid tenantId,
+        Guid evaluatorId,
+        Guid ruleId,
+        CancellationToken cancellationToken = default
+    ) =>
         Evaluator(tenantId, evaluatorId).GetRuleAsync(ruleId);
 
     /// <inheritdoc />
-    public Task<Result<ImmutableArray<AlertRuleSnapshot>>> ListRulesAsync(Guid tenantId, Guid evaluatorId, CancellationToken cancellationToken = default) =>
+    public Task<Result<ImmutableArray<AlertRuleSnapshot>>> ListRulesAsync(
+        Guid tenantId,
+        Guid evaluatorId,
+        CancellationToken cancellationToken = default
+    ) =>
         Evaluator(tenantId, evaluatorId).ListRulesAsync();
 
     /// <inheritdoc />
-    public Task<Result<AlertEvaluationReport>> EvaluateAsync(Guid tenantId, Guid evaluatorId, CancellationToken cancellationToken = default) =>
+    public Task<Result<AlertEvaluationReport>> EvaluateAsync(
+        Guid tenantId,
+        Guid evaluatorId,
+        CancellationToken cancellationToken = default
+    ) =>
         Evaluator(tenantId, evaluatorId).EvaluateAsync();
 
     /// <inheritdoc />
-    public Task<Result<bool>> IsArmedAsync(Guid tenantId, Guid evaluatorId, CancellationToken cancellationToken = default) =>
+    public Task<Result<bool>> IsArmedAsync(
+        Guid tenantId,
+        Guid evaluatorId,
+        CancellationToken cancellationToken = default
+    ) =>
         Evaluator(tenantId, evaluatorId).IsArmedAsync();
 
     IAlertEvaluatorGrain Evaluator(Guid tenantId, Guid evaluatorId) =>

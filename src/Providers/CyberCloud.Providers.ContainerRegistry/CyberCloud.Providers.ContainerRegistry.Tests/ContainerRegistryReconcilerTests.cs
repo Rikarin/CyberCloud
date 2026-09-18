@@ -1,9 +1,7 @@
 using CyberCloud.Core.Time;
-using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
 using System.Collections.Concurrent;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -71,9 +69,9 @@ public sealed class ContainerRegistryReconcilerTests {
         var connection = new RecordingConnection();
 
         using var aliceBody =
-            JsonDocument.Parse(ContainerRegistries.Body(ClusterId, replicas: 2, storageSize: "100Gi"));
+            JsonDocument.Parse(ContainerRegistries.Body(ClusterId, 2, "100Gi"));
 
-        using var bobBody = JsonDocument.Parse(ContainerRegistries.Body(ClusterId, replicas: 5, storageSize: "500Gi"));
+        using var bobBody = JsonDocument.Parse(ContainerRegistries.Body(ClusterId, 5, "500Gi"));
 
         // Interleaved, so a cache written on the first pass is read on the third.
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
@@ -85,7 +83,7 @@ public sealed class ContainerRegistryReconcilerTests {
         // into the raw list would land on a Service most of the time. Core is the one that carries the
         // replica count, which is what a cross-tenant leak would move.
         var cores = connection.Applied
-            .Where(x => x.Target.Name.EndsWith("-core", StringComparison.Ordinal))
+            .Where(static x => x.Target.Name.EndsWith("-core", StringComparison.Ordinal))
             .ToList();
 
         cores.Count.ShouldBe(4);
@@ -106,8 +104,8 @@ public sealed class ContainerRegistryReconcilerTests {
         // ⚠ AND THE IMAGE VOLUME, which is the other half of a cross-tenant mix and the one that would
         // matter most: a registry sized for 500 GiB of images provisioned at 100.
         var registries = connection.Applied
-            .Where(x => x.Target.Name.EndsWith("-registry", StringComparison.Ordinal))
-            .Where(x => x.Target.Kind.Kind == "StatefulSet")
+            .Where(static x => x.Target.Name.EndsWith("-registry", StringComparison.Ordinal))
+            .Where(static x => x.Target.Kind.Kind == "StatefulSet")
             .ToList();
 
         ClaimSize(registries[3].Body).ShouldBe("500Gi", "tenant B's image volume came back as tenant A's");
@@ -140,7 +138,7 @@ public sealed class ContainerRegistryReconcilerTests {
 
         (await Reconcile(connection, body.RootElement)).ShouldBe(ReconcileOutcome.Converged);
 
-        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target))
+        var applied = connection.Applied.Select(static x => RecordingConnection.Key(x.Target))
             .ToHashSet(StringComparer.Ordinal);
 
         var read = connection.Read.Select(RecordingConnection.Key).ToHashSet(StringComparer.Ordinal);
@@ -193,7 +191,7 @@ public sealed class ContainerRegistryReconcilerTests {
 
         // ⚠ And core stops LISTENING as well as stops being scraped. A metrics port left open on a pod
         // nothing scrapes is a surface with no observer, which is worse than either half alone.
-        var core = connection.Applied.Single(x => x.Target.Name.EndsWith("-core", StringComparison.Ordinal));
+        var core = connection.Applied.Single(static x => x.Target.Name.EndsWith("-core", StringComparison.Ordinal));
 
         core.Body.ShouldContain("\"METRIC_ENABLE\"");
         Container(core.Body)["ports"]!.AsArray().Count.ShouldBe(1);
@@ -218,10 +216,10 @@ public sealed class ContainerRegistryReconcilerTests {
         using var body = JsonDocument.Parse(ContainerRegistries.Body(ClusterId));
 
         await Reconcile(connection, body.RootElement, vault);
-        var first = connection.Applied.Select(x => x.Body).ToArray();
+        var first = connection.Applied.Select(static x => x.Body).ToArray();
 
         await Reconcile(connection, body.RootElement, vault);
-        var second = connection.Applied.Skip(first.Length).Select(x => x.Body).ToArray();
+        var second = connection.Applied.Skip(first.Length).Select(static x => x.Body).ToArray();
 
         second.ShouldBe(first);
 
@@ -465,14 +463,14 @@ public sealed class ContainerRegistryReconcilerTests {
         // Every Service's selector is one of the six component label sets, and every component has a
         // workload carrying exactly that set.
         var workloadLabels = connection.Applied
-            .Select(x => JsonNode.Parse(x.Body)!.AsObject())
-            .Where(x => (x["spec"] as JsonObject)?["template"] is not null)
-            .Select(x => x["spec"]!["template"]!["metadata"]!["labels"]!.ToJsonString())
+            .Select(static x => JsonNode.Parse(x.Body)!.AsObject())
+            .Where(static x => (x["spec"] as JsonObject)?["template"] is not null)
+            .Select(static x => x["spec"]!["template"]!["metadata"]!["labels"]!.ToJsonString())
             .ToHashSet(StringComparer.Ordinal);
 
         var serviceSelectors = connection.Applied
-            .Where(x => x.Target.Kind.Kind == "Service")
-            .Select(x => JsonNode.Parse(x.Body)!["spec"]!["selector"]!.ToJsonString())
+            .Where(static x => x.Target.Kind.Kind == "Service")
+            .Select(static x => JsonNode.Parse(x.Body)!["spec"]!["selector"]!.ToJsonString())
             .ToList();
 
         serviceSelectors.Count.ShouldBe(6);

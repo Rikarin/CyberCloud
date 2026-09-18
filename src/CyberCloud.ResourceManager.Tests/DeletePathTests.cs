@@ -1,5 +1,3 @@
-using CyberCloud.ResourceManager.Tests.Infrastructure;
-
 namespace CyberCloud.ResourceManager.Tests;
 
 /// <summary>
@@ -185,7 +183,7 @@ public sealed class DeletePathTests(ResourceManagerCluster cluster) {
         SwitchableLockResolver.Reset();
         (await cluster.Index(address).GetAsync()).GetValueOrThrow()
             .State
-                .ShouldBe(IndexEntryState.Confirmed, "a refused delete must not have released the name");
+            .ShouldBe(IndexEntryState.Confirmed, "a refused delete must not have released the name");
     }
 
     [Fact]

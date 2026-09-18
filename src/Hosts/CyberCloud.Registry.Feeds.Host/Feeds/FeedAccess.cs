@@ -153,7 +153,14 @@ public sealed class FeedAccess(
             return Result<FeedContext>.Failure(ErrorCode.ResourceNotFound, badFeed.Message);
         }
 
-        var address = new ResourceId(claims.TenantId, subscription, resourceGroup, ArtifactFeeds.Type, feed, Guid.Empty);
+        var address = new ResourceId(
+            claims.TenantId,
+            subscription,
+            resourceGroup,
+            ArtifactFeeds.Type,
+            feed,
+            Guid.Empty
+        );
 
         var read = await manager.ReadAsync(
             new() { Path = address.Path, ApiVersion = ArtifactFeeds.V2026, Caller = caller },
@@ -194,7 +201,7 @@ public sealed class FeedAccess(
                 registration.WritePermission,
                 registration.ReadPermission,
                 caller,
-                fullyConsistent: false,
+                false,
                 cancellationToken
             );
 

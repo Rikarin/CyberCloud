@@ -21,7 +21,8 @@ namespace CyberCloud.Registry.Feeds.Host.Feeds;
 public static class FeedUrls {
     /// <summary>The route prefix for one protocol, as ASP.NET Core's routing reads it.</summary>
     /// <param name="kind">The protocol.</param>
-    public static string RoutePrefix(FeedKind kind) => "/" + ArtifactFeeds.NameOf(kind) + "/{subscription:guid}/{group}/{feed}";
+    public static string RoutePrefix(FeedKind kind) =>
+        "/" + ArtifactFeeds.NameOf(kind) + "/{subscription:guid}/{group}/{feed}";
 
     /// <summary>The absolute base of one feed, with no trailing slash.</summary>
     /// <param name="http">The request, for its origin when none is configured.</param>
@@ -30,7 +31,14 @@ public static class FeedUrls {
     /// <param name="subscription">The subscription segment.</param>
     /// <param name="group">The resource-group segment.</param>
     /// <param name="feed">The feed's name.</param>
-    public static string BaseOf(HttpContext http, FeedsOptions options, FeedKind kind, Guid subscription, string group, string feed) {
+    public static string BaseOf(
+        HttpContext http,
+        FeedsOptions options,
+        FeedKind kind,
+        Guid subscription,
+        string group,
+        string feed
+    ) {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(options);
 

@@ -839,8 +839,8 @@ public static class DocumentDbAccounts {
                     Description: "Whether both halves of this service are scraped: CloudNativePG is "
                     + "asked for a PodMonitor over the PostgreSQL pods, and the platform writes one "
                     + "over the FerretDB pods because FerretDB has no operator to ask. On by default "
-                    + "— docs/plan/12: \"a managed service the tenant cannot see the health of is a "
-                    + "black box they will not trust with production\"."
+                    + """— docs/plan/12: "a managed service the tenant cannot see the health of is a """
+                    + """black box they will not trust with production"."""
                 ) { DefaultJson = "true" }
             ]
         );
@@ -900,7 +900,8 @@ public static class DocumentDbAccounts {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } =
+        [.. Schema2026.Properties.Select(static x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -1385,18 +1386,18 @@ public static class DocumentDbAccounts {
     static bool MatchesDeployment(JsonObject spec, JsonElement desired) =>
         spec["replicas"]?.GetValue<int>() == GatewayReplicas(desired)
         && (((spec["template"] as JsonObject)?["spec"] as JsonObject)?["containers"] as JsonArray)
-            ?.OfType<JsonObject>()
-            .Any(x => x["image"]?.GetValue<string>() == GatewayImage(desired))
+        ?.OfType<JsonObject>()
+        .Any(x => x["image"]?.GetValue<string>() == GatewayImage(desired))
         == true;
 
     static bool MatchesService(JsonObject spec) =>
-        (spec["ports"] as JsonArray)?.OfType<JsonObject>().Any(x => x["port"]?.GetValue<int>() == MongoPort)
+        (spec["ports"] as JsonArray)?.OfType<JsonObject>().Any(static x => x["port"]?.GetValue<int>() == MongoPort)
         == true;
 
     static bool MatchesPodMonitor(JsonObject spec) =>
         (spec["podMetricsEndpoints"] as JsonArray)
-            ?.OfType<JsonObject>()
-            .Any(x => x["path"]?.GetValue<string>() == MetricsPath)
+        ?.OfType<JsonObject>()
+        .Any(static x => x["path"]?.GetValue<string>() == MetricsPath)
         == true;
 
     // ── A body, for tests, fixtures and the conformance case ──────────────────────────────────

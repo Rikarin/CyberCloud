@@ -3,7 +3,6 @@ using CyberCloud.Communication.Providers;
 using CyberCloud.Communication.Webhooks;
 using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager.Conformance;
-using CyberCloud.ResourceManager.Reconcile;
 using Microsoft.Extensions.DependencyInjection;
 using Orleans.TestingHost;
 using System.Globalization;
@@ -111,8 +110,6 @@ public sealed class CommunicationTestCluster : IAsyncLifetime {
             await cluster.StopAllSilosAsync();
             await cluster.DisposeAsync();
         }
-
-        GC.SuppressFinalize(this);
     }
 
     // ── Addresses ──────────────────────────────────────────────────────────────────────────────
@@ -148,7 +145,10 @@ public sealed class CommunicationTestCluster : IAsyncLifetime {
     /// <param name="body">Its desired body, as JSON text.</param>
     public async Task<ObservedState> ObserveAsync(ResourceId id, string body) {
         using var desired = JsonDocument.Parse(body);
-        return await ReconcilerFor(id.Type).ObserveAsync(new(id, CommunicationServices.V2026, desired.RootElement, string.Empty, null), Ct);
+        return await ReconcilerFor(id.Type).ObserveAsync(
+            new(id, CommunicationServices.V2026, desired.RootElement, string.Empty, null),
+            Ct
+        );
     }
 
     /// <summary>Converges a service and returns its address, so a test can hang children off it.</summary>
@@ -165,7 +165,10 @@ public sealed class CommunicationTestCluster : IAsyncLifetime {
     /// <param name="maxMessagesPerDay">The limit.</param>
     public async Task<ResourceId> ConvergedEmailChannelAsync(string service, long maxMessagesPerDay = 100) {
         var id = Child(CommunicationChannels.Type, service, "email");
-        var outcome = await ReconcileAsync(id, CommunicationChannels.Body(kind: "email", provider: "in-memory", maxMessagesPerDay: maxMessagesPerDay));
+        var outcome = await ReconcileAsync(
+            id,
+            CommunicationChannels.Body("email", provider: "in-memory", maxMessagesPerDay: maxMessagesPerDay)
+        );
         outcome.IsConverged.ShouldBeTrue(outcome.ToString());
         return id;
     }
@@ -180,14 +183,28 @@ public sealed class CommunicationTestCluster : IAsyncLifetime {
         };
 
     static ReconcileContext Context(ResourceId id, JsonElement desired) =>
-        new(id, CommunicationServices.V2026, desired, null, string.Empty, null, new InMemorySecretVault(), new RecordingLog());
+        new(
+            id,
+            CommunicationServices.V2026,
+            desired,
+            null,
+            string.Empty,
+            null,
+            new InMemorySecretVault(),
+            new RecordingLog()
+        );
 
     /// <summary>A send request through a service, as identity would build one.</summary>
     /// <param name="service">The service's address.</param>
     /// <param name="to">The recipient.</param>
     /// <param name="key">The idempotency key.</param>
     /// <param name="channel">The channel.</param>
-    public static SendRequest Send(ResourceId service, string to, string key, ChannelKind channel = ChannelKind.Email) =>
+    public static SendRequest Send(
+        ResourceId service,
+        string to,
+        string key,
+        ChannelKind channel = ChannelKind.Email
+    ) =>
         new() {
             ServiceId = CommunicationServices.ServiceIdOf(service),
             Channel = channel,
@@ -202,7 +219,7 @@ public sealed class CommunicationTestCluster : IAsyncLifetime {
             silo.AddMemoryGrainStorage(StorageTiers.Hot);
             silo.UseInMemoryReminderService();
 
-            silo.ConfigureServices(services => {
+            silo.ConfigureServices(static services => {
                     services.AddSingleton<IClock>(Clock);
                     // Beside the refusing seams, not instead of them — the registry resolves by
                     // name, and every channel body in these tests says `provider: in-memory`.

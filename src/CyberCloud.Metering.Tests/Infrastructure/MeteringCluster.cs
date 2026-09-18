@@ -241,7 +241,7 @@ public sealed class MeteringCluster : IAsyncLifetime {
             // .csproj on what that does and does not prove.
             silo.UseInMemoryReminderService();
 
-            silo.ConfigureServices(services => {
+            silo.ConfigureServices(static services => {
                     // The doubles go in FIRST so the production wiring's TryAdd keeps them.
                     services.AddSingleton<IClock>(TestClock.Instance);
                     services.AddSingleton<IUsageSink>(TestSink.Instance);

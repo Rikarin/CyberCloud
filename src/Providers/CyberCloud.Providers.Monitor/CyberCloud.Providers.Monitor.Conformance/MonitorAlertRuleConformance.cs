@@ -1,5 +1,4 @@
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.Core.Resources;
 using CyberCloud.Providers.Monitor.Contracts;
 using System.Collections.Immutable;
@@ -48,19 +47,25 @@ public sealed class MonitorAlertRuleCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Monitor/workspaces/alertRules",
-            CreateProvider = () => new MonitorProvider(),
+            CreateProvider = static () => new MonitorProvider(),
             ReconcilerType = typeof(MonitorAlertRuleReconciler),
             // ⚠ The module's seam, read when the factory RUNS — after the harness attached a cluster
             // — and not when this case was constructed. MonitorAlertingModule.Plane refuses by name
             // if that order is ever wrong.
-            CreateReconciler = clock => new MonitorAlertRuleReconciler(clock, MonitorAlertingModule.Instance.Plane),
+            CreateReconciler = static clock => new MonitorAlertRuleReconciler(
+                clock,
+                MonitorAlertingModule.Instance.Plane
+            ),
             Type = MonitorAlertRules.Type,
             ApiVersion = MonitorWorkspaces.V2026,
-            Body = _ => MonitorAlertRules.Body(HarnessService, ["oncall@example.com"], threshold: 5),
+            Body = static _ => MonitorAlertRules.Body(HarnessService, ["oncall@example.com"], 5),
             // Changes the threshold, which the evaluator holds and every evaluation compares against.
-            ChangedBody = _ => MonitorAlertRules.Body(HarnessService, ["oncall@example.com"], threshold: 7),
+            ChangedBody = static _ => MonitorAlertRules.Body(HarnessService, ["oncall@example.com"], 7),
             // A service that is not a resource id path — refused by the schema's format, at the pointer.
-            InvalidBody = _ => WithService(MonitorAlertRules.Body(HarnessService, ["oncall@example.com"]), "not-a-path"),
+            InvalidBody = static _ => WithService(
+                MonitorAlertRules.Body(HarnessService, ["oncall@example.com"]),
+                "not-a-path"
+            ),
             InvalidBodyTarget = "/properties/actionGroup/service",
             ActionName = MonitorAlertRules.ListInstancesAction,
             Objects = static (_, _) => [],

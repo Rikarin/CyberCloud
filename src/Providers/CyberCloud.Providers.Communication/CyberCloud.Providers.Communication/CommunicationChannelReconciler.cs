@@ -26,7 +26,8 @@ namespace CyberCloud.Providers.Communication;
 /// </remarks>
 /// <param name="clock">Stamps <see cref="ObservedState.ObservedAt" />.</param>
 /// <param name="plane">The module.</param>
-public sealed class CommunicationChannelReconciler(IClock clock, ICommunicationControlPlane plane) : IResourceReconciler {
+public sealed class CommunicationChannelReconciler(IClock clock, ICommunicationControlPlane plane) :
+    IResourceReconciler {
     /// <inheritdoc />
     public ResourceTypeName Type => CommunicationChannels.Type;
 
@@ -58,7 +59,11 @@ public sealed class CommunicationChannelReconciler(IClock clock, ICommunicationC
             }
 
             if (existing == configuration) {
-                context.Log.Report("ready", $"the {ChannelKinds.Spell(configuration.Channel)} channel already carries the desired configuration", 100);
+                context.Log.Report(
+                    "ready",
+                    $"the {ChannelKinds.Spell(configuration.Channel)} channel already carries the desired configuration",
+                    100
+                );
                 return ReconcileOutcome.Converged;
             }
         } else if (held.Error!.Code != ErrorCode.ResourceNotFound) {
@@ -81,15 +86,25 @@ public sealed class CommunicationChannelReconciler(IClock clock, ICommunicationC
         var read = await plane.GetChannelAsync(tenantId, serviceId, configuration.Channel, cancellationToken);
         if (read.TryGetError(out var readError)) {
             return readError.Code == ErrorCode.ResourceNotFound
-                ? ReconcileOutcome.InProgress("the channel was configured and does not read back yet", TimeSpan.FromSeconds(5))
+                ? ReconcileOutcome.InProgress(
+                    "the channel was configured and does not read back yet",
+                    TimeSpan.FromSeconds(5)
+                )
                 : ReconcileOutcome.FromFailure(readError);
         }
 
         if (read.GetValueOrThrow() != configuration) {
-            return ReconcileOutcome.InProgress("the channel reads back and does not yet carry the desired configuration", TimeSpan.FromSeconds(5));
+            return ReconcileOutcome.InProgress(
+                "the channel reads back and does not yet carry the desired configuration",
+                TimeSpan.FromSeconds(5)
+            );
         }
 
-        context.Log.Report("ready", $"the {ChannelKinds.Spell(configuration.Channel)} channel reads back as desired", 100);
+        context.Log.Report(
+            "ready",
+            $"the {ChannelKinds.Spell(configuration.Channel)} channel reads back as desired",
+            100
+        );
         return ReconcileOutcome.Converged;
     }
 
@@ -118,7 +133,8 @@ public sealed class CommunicationChannelReconciler(IClock clock, ICommunicationC
         // ⚠ Not ours, not touched. The configuration another resource owns survives this one's
         // delete — the same rule ICommunicationServiceGrain.UnregisterTemplateAsync applies to a
         // template name.
-        if (held.GetValueOrThrow().OwnerResourceId != Guid.Empty && held.GetValueOrThrow().OwnerResourceId != context.Id.Id) {
+        if (held.GetValueOrThrow().OwnerResourceId != Guid.Empty
+            && held.GetValueOrThrow().OwnerResourceId != context.Id.Id) {
             context.Log.Report(
                 "left-alone",
                 $"the {ChannelKinds.Spell(kind)} channel belongs to resource {held.GetValueOrThrow().OwnerResourceId:D} and was left as it is",
@@ -137,7 +153,10 @@ public sealed class CommunicationChannelReconciler(IClock clock, ICommunicationC
 
         var read = await plane.GetChannelAsync(tenantId, serviceId, kind, cancellationToken);
         if (read.IsSuccess) {
-            return ReconcileOutcome.InProgress($"the {ChannelKinds.Spell(kind)} channel still reads back", TimeSpan.FromSeconds(5));
+            return ReconcileOutcome.InProgress(
+                $"the {ChannelKinds.Spell(kind)} channel still reads back",
+                TimeSpan.FromSeconds(5)
+            );
         }
 
         if (read.Error!.Code != ErrorCode.ResourceNotFound) {
@@ -157,7 +176,12 @@ public sealed class CommunicationChannelReconciler(IClock clock, ICommunicationC
 
         var read = kind == ChannelKind.Unknown
             ? Result<ChannelConfiguration>.Failure(ErrorCode.InvalidRequestBody, "the body names no channel kind")
-            : await plane.GetChannelAsync(context.Id.TenantId, CommunicationServices.ServiceIdOf(context.Id), kind, cancellationToken);
+            : await plane.GetChannelAsync(
+                context.Id.TenantId,
+                CommunicationServices.ServiceIdOf(context.Id),
+                kind,
+                cancellationToken
+            );
 
         if (read.TryGetError(out _)) {
             return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the channel is not configured" };

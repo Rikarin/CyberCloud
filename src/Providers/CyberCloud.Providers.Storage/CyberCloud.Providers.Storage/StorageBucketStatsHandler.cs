@@ -12,8 +12,11 @@ namespace CyberCloud.Providers.Storage;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE FIRST HANDLER THAT CAME OFF <c>actions-without-handlers.txt</c> BY READING THE
-///         OPERATOR RATHER THAN BY BUILDING A PIPELINE.</b> The row said the figures had no source —
+///         ⚠
+///         <b>
+///             THE FIRST HANDLER THAT CAME OFF <c>actions-without-handlers.txt</c> BY READING THE
+///             OPERATOR RATHER THAN BY BUILDING A PIPELINE.
+///         </b> The row said the figures had no source —
 ///         no S3 admin client, nothing scraping the metrics port — and that was true of this tree and
 ///         false of the operator it depends on: <c>bucket_usage.go</c> asks the master for
 ///         <c>collection.list</c> every five minutes and writes the per-bucket answer into
@@ -75,9 +78,7 @@ public sealed class StorageBucketStatsHandler : IResourceActionHandler {
         // dispatcher checks that rather than trusting it.
         return Result<string>.Success(
             new JsonObject {
-                ["objectCount"] = usage.ObjectCount,
-                ["sizeBytes"] = usage.SizeBytes,
-                ["sampledAt"] = usage.SampledAt
+                ["objectCount"] = usage.ObjectCount, ["sizeBytes"] = usage.SizeBytes, ["sampledAt"] = usage.SampledAt
             }.ToJsonString()
         );
     }

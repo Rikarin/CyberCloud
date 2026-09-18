@@ -174,8 +174,11 @@ namespace CyberCloud.Providers.Monitor;
 ///             AND <c>workspaces/collectors</c> IS DECLARED (#32, the second noun), WHICH MAKES THIS
 ///             THE FIRST FAMILY WITH A CLUSTER-BACKED PARENT, A CLUSTERLESS CHILD AND A CHILD THAT
 ///             RUNS A POD.
-///         </b> This paragraph used to say <i>"No <c>collectors</c>: M2 in docs/plan/16 and the half
-///         of issue #32 this branch did not take."</i> A collector is a Deployment of upstream's
+///         </b> This paragraph used to say
+///         <i>
+///             "No <c>collectors</c>: M2 in docs/plan/16 and the half
+///             of issue #32 this branch did not take."
+///         </i> A collector is a Deployment of upstream's
 ///         collector image under the workspace, exporting into the workspace's stores exactly as the
 ///         workspace's <c>listKeys</c> addresses them — and it learns the workspace's coordinates
 ///         from the workspace's own row through the kubelet rather than from this pass, which is the
@@ -249,7 +252,7 @@ public sealed class MonitorProvider : IResourceProvider {
                 MonitorWorkspaces.ListKeysAction,
                 ActionKind.Post,
                 MonitorWorkspaces.ListKeysPermission,
-                secret: true,
+                true,
                 response: MonitorWorkspaces.ListKeysResponse,
                 handler: typeof(MonitorWorkspaceListKeysHandler)
             )
@@ -271,8 +274,8 @@ public sealed class MonitorProvider : IResourceProvider {
             .Display(
                 "Monitor workspace",
                 "Monitor workspaces",
-                shortName: "workspace",
-                summary: "A tenancy in the platform's metrics, logs and traces stores, with its own "
+                "workspace",
+                "A tenancy in the platform's metrics, logs and traces stores, with its own "
                 + "retention, quota, ingest key and read-only datasource endpoints."
             )
             .Chart(MonitorWorkspaces.ChartName)
@@ -291,7 +294,7 @@ public sealed class MonitorProvider : IResourceProvider {
             // objects and the tenancy is back with its retention and its accountID unchanged.
             .SupportsSoftDelete(SoftDeleteDays, purgeProtectionPointer: MonitorWorkspaces.PurgeProtectionPointer)
             .SupportsTags()
-            .RequiresCluster(MonitorWorkspaces.ClusterIdPointer)
+            .RequiresCluster()
             // ── workspaces/alertRules — #32 ─────────────────────────────────────────────────────
             //
             // ⚠ NO RequiresCluster AND NO Chart ON A CHILD WHOSE PARENT HAS BOTH, AND BOTH ABSENCES
@@ -332,8 +335,8 @@ public sealed class MonitorProvider : IResourceProvider {
             .Display(
                 "Alert rule",
                 "Alert rules",
-                shortName: "alert",
-                summary: "A condition over the workspace's metrics or logs, evaluated on a schedule; when it "
+                "alert",
+                "A condition over the workspace's metrics or logs, evaluated on a schedule; when it "
                 + "holds for long enough the action group is told through a Communication service, and "
                 + "again when it stops."
             )
@@ -373,19 +376,22 @@ public sealed class MonitorProvider : IResourceProvider {
             .Display(
                 "OpenTelemetry collector",
                 "OpenTelemetry collectors",
-                shortName: "collector",
-                summary: "A managed OpenTelemetry collector in your cluster that your workloads send OTLP "
+                "collector",
+                "A managed OpenTelemetry collector in your cluster that your workloads send OTLP "
                 + "to, carrying metrics, logs and traces into this workspace."
             )
             .Chart(MonitorCollectors.ChartName)
             .SupportsTags()
-            .RequiresCluster(MonitorCollectors.ClusterIdPointer);
+            .RequiresCluster();
     }
 
     /// <summary>vCPU: the sizing preset's cpu, in cores, times the replica count.</summary>
     /// <remarks>
-    ///     ⚠ <b>A product, like <c>natsClusters</c>', and the second factor is the one an obvious
-    ///     derivation forgets.</b> Three replicas of <c>c1.small</c> are three pods requesting
+    ///     ⚠
+    ///     <b>
+    ///         A product, like <c>natsClusters</c>', and the second factor is the one an obvious
+    ///         derivation forgets.
+    ///     </b> Three replicas of <c>c1.small</c> are three pods requesting
     ///     <c>250m</c> each; a reservation of <c>250m</c> would let a subscription at its vCPU limit
     ///     schedule two more pods than it paid for.
     /// </remarks>
@@ -393,7 +399,7 @@ public sealed class MonitorProvider : IResourceProvider {
         MeterDerivation.Of(
             "sizing.preset's cpu, in cores, times replicas",
             ["/properties/sizing/preset", "/properties/replicas"],
-            body => KubeQuantity.TryParse(MonitorCollectors.Resources(body).Cpu, out var cores)
+            static body => KubeQuantity.TryParse(MonitorCollectors.Resources(body).Cpu, out var cores)
                 ? Result<decimal>.Success(cores * MonitorCollectors.Replicas(body))
                 : Result<decimal>.Failure(
                     ErrorCode.InternalError,
@@ -407,7 +413,7 @@ public sealed class MonitorProvider : IResourceProvider {
         MeterDerivation.Of(
             "sizing.preset's memory, in GiB, times replicas",
             ["/properties/sizing/preset", "/properties/replicas"],
-            body => KubeQuantity.TryGibibytes(MonitorCollectors.Resources(body).Memory, out var gibibytes)
+            static body => KubeQuantity.TryGibibytes(MonitorCollectors.Resources(body).Memory, out var gibibytes)
                 ? Result<decimal>.Success(gibibytes * MonitorCollectors.Replicas(body))
                 : Result<decimal>.Failure(
                     ErrorCode.InternalError,
@@ -490,7 +496,7 @@ public sealed class MonitorProvider : IResourceProvider {
                 "/properties/quota/logsGbPerDay",
                 "/properties/quota/tracesGbPerDay"
             ],
-            body => MonitorWorkspaces.StorageCeilingGb(body) is > 0 and var ceiling
+            static body => MonitorWorkspaces.StorageCeilingGb(body) is > 0 and var ceiling
                 ? Result<decimal>.Success(ceiling)
                 : Result<decimal>.Failure(
                     ErrorCode.InternalError,

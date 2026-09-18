@@ -111,9 +111,6 @@ public sealed class WidgetReconciler(IClock clock) : IResourceReconciler {
                     ?? "another field manager owns part of this ConfigMap and it was not overwritten",
                     TimeSpan.FromSeconds(30)
                 );
-
-            default:
-                break;
         }
 
         // ── Clause 4. Everything above this line is a claim; this is the reading. ───────────────

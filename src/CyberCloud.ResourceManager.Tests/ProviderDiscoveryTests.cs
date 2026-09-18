@@ -30,7 +30,7 @@ public sealed class ProviderDiscoveryTests {
     public void AProviderWithNoParameterlessConstructorFailsRatherThanBeingSkipped() {
         // A provider silently missing from the generated document has the same symptom as a provider
         // nobody wrote, and only one of the two has anybody looking for it.
-        var failure = Should.Throw<InvalidOperationException>(() => ProviderDiscovery.FromTypes(
+        var failure = Should.Throw<InvalidOperationException>(static () => ProviderDiscovery.FromTypes(
                 [typeof(UnconstructableProvider)]
             )
         );

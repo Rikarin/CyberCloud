@@ -46,7 +46,12 @@ partial class Build {
     ///     set measured over a tenth of the grains says nothing about the ceiling for all of them, so
     ///     such a metric is ○ at any scale below 1 rather than ✔ — see <see cref="Gate" />.
     /// </param>
-    sealed record LoadMetric(string Scenario, string Metric, double Budget, string Unit, bool ScalesWithPopulation = false);
+    sealed record LoadMetric(
+        string Scenario,
+        string Metric,
+        double Budget,
+        string Unit,
+        bool ScalesWithPopulation = false);
 
     /// <summary>
     ///     The six scenarios of docs/plan/23 § The load scenarios, as the numbers they assert.
@@ -129,9 +134,19 @@ partial class Build {
     /// <summary>What a results file says: the numbers, the rows that could not be measured, and the scale.</summary>
     /// <param name="Numbers">Metric name to what was measured.</param>
     /// <param name="Vacuous">Metric name to why it was not measured here.</param>
-    /// <param name="Scale">The fraction of docs/plan/23's rates the numbers were driven at; 1 for a baseline with no <c>scale</c>.</param>
-    /// <param name="Release">The release tag a baseline was stamped with, or <see langword="null" /> for a provisional one — see <see cref="LoadBaselineFile" />.</param>
-    sealed record LoadNumbers(Dictionary<string, double> Numbers, Dictionary<string, string> Vacuous, double Scale, string? Release);
+    /// <param name="Scale">
+    ///     The fraction of docs/plan/23's rates the numbers were driven at; 1 for a baseline with no
+    ///     <c>scale</c>.
+    /// </param>
+    /// <param name="Release">
+    ///     The release tag a baseline was stamped with, or <see langword="null" /> for a provisional one —
+    ///     see <see cref="LoadBaselineFile" />.
+    /// </param>
+    sealed record LoadNumbers(
+        Dictionary<string, double> Numbers,
+        Dictionary<string, string> Vacuous,
+        double Scale,
+        string? Release);
 
     /// <summary>
     ///     ⚠ The deployment is an input rather than a dependency — see the note beside the target
@@ -233,7 +248,12 @@ partial class Build {
     void Gate(LoadNumbers results) {
         var baseline = LoadBaselineFile.FileExists()
             ? ReadLoadNumbers(LoadBaselineFile, $"the previous release, from {LoadBaselineFile.Name}")
-            : new LoadNumbers(new Dictionary<string, double>(StringComparer.Ordinal), new Dictionary<string, string>(StringComparer.Ordinal), 1, null);
+            : new LoadNumbers(
+                new Dictionary<string, double>(StringComparer.Ordinal),
+                new Dictionary<string, string>(StringComparer.Ordinal),
+                1,
+                null
+            );
 
         if (results.Scale < 1) {
             Log.Warning(
@@ -465,8 +485,12 @@ partial class Build {
             }
         }
 
-        var scale = root["scale"] is { } s && s.GetValueKind() == System.Text.Json.JsonValueKind.Number ? s.GetValue<double>() : 1;
-        var release = root["release"] is { } r && r.GetValueKind() == System.Text.Json.JsonValueKind.String ? r.GetValue<string>() : null;
+        var scale = root["scale"] is { } s && s.GetValueKind() == System.Text.Json.JsonValueKind.Number
+            ? s.GetValue<double>()
+            : 1;
+        var release = root["release"] is { } r && r.GetValueKind() == System.Text.Json.JsonValueKind.String
+            ? r.GetValue<string>()
+            : null;
 
         Log.Information(
             "Load: read {Count} number(s) and {Vacuous} vacuous row(s) at scale {Scale}, release {Release} — {What}",

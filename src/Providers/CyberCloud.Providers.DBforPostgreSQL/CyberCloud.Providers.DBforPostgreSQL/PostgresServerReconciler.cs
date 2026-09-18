@@ -284,7 +284,7 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
         // ⚠ Converged once the objects are GONE, read back — not once the deletes were issued. Same
         // clause, other direction: believing a delete is how a resource stops being billed while its
         // pods are still running.
-        foreach (var target in Targets(context.Namespace, name, pooling: true)) {
+        foreach (var target in Targets(context.Namespace, name, true)) {
             var read = await cluster.GetAsync(target, cancellationToken);
 
             if (read.IsSuccess) {
@@ -396,8 +396,11 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
     ///         delete whose window is empty.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The pause is courtesy and the detach is correctness, so a conflict on the pause
-    ///         is logged and not obeyed.</b> Between the detach and the delete, an operator pass
+    ///         ⚠
+    ///         <b>
+    ///             The pause is courtesy and the detach is correctness, so a conflict on the pause
+    ///             is logged and not obeyed.
+    ///         </b> Between the detach and the delete, an operator pass
     ///         would see a cluster whose claims it cannot find and register it unrecoverable — a
     ///         status line on an object that is gone a moment later. The pause spares the tenant's
     ///         event stream that line. But the pause is a server-side apply of the whole
@@ -427,14 +430,17 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
         }
 
         if (!PostgresServers.IsPaused(existing.GetValueOrThrow().Json)) {
-            context.Log.Report("pausing", $"asking CloudNativePG to leave '{name}' alone while its claims change hands");
+            context.Log.Report(
+                "pausing",
+                $"asking CloudNativePG to leave '{name}' alone while its claims change hands"
+            );
 
             var (problem, result) = await ApplyAsync(
                 context,
                 cluster,
                 PostgresServers.ClusterKind,
                 PostgresServers.ClusterJson(name, context.Desired),
-                paused: true,
+                true,
                 cancellationToken
             );
 
@@ -484,8 +490,11 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
     ///         <c>{name}-1</c>, reads <c>AlreadyExists</c> as success, and starts an <c>initdb</c>
     ///         job over the retained volume — whose <c>EnsureTargetDirectoriesDoNotExist</c> renames
     ///         the tenant's data directory aside and initialises beside it. The database is not
-    ///         lost, and it is not the database the tenant gets back. <c>cnpg.io/reconciliationLoop:
-    ///         disabled</c> is checked first thing in the operator's <c>reconcile</c>, so a
+    ///         lost, and it is not the database the tenant gets back.
+    ///         <c>
+    /// cnpg.io/reconciliationLoop:
+    ///         disabled
+    ///         </c> is checked first thing in the operator's <c>reconcile</c>, so a
     ///         <c>Cluster</c> that is created carrying it is a <c>Cluster</c> the operator has not
     ///         acted on when the adoption runs.
     ///     </para>
@@ -539,7 +548,7 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
             cluster,
             PostgresServers.ClusterKind,
             PostgresServers.ClusterJson(name, context.Desired),
-            paused: true,
+            true,
             cancellationToken
         );
 
@@ -551,7 +560,10 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
 
         if (created.TryGetError(out var createdError)) {
             return createdError.Code == ErrorCode.ResourceNotFound
-                ? ReconcileOutcome.InProgress($"'{target}' was applied paused and is not readable back yet", TimeSpan.FromSeconds(5))
+                ? ReconcileOutcome.InProgress(
+                    $"'{target}' was applied paused and is not readable back yet",
+                    TimeSpan.FromSeconds(5)
+                )
                 : ReconcileOutcome.FromFailure(createdError);
         }
 
@@ -637,7 +649,7 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
         string json,
         CancellationToken cancellationToken
     ) =>
-        (await ApplyAsync(context, cluster, kind, json, paused: false, cancellationToken)).Problem;
+        (await ApplyAsync(context, cluster, kind, json, false, cancellationToken)).Problem;
 
     /// <summary>
     ///     <see cref="Apply" /> with the outcome's cause beside it, for the one caller that treats a

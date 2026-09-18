@@ -83,11 +83,11 @@ public sealed class SampleProvider : IResourceProvider {
             )
             // What a person sees. docs/plan/21 § Grammar's alias table is generated from this rather
             // than hand-maintained in the CLI, and a portal breadcrumb has a word to draw.
-            .Display("Widget", "Widgets", shortName: "widget", summary: "A ConfigMap with two fields in it.")
+            .Display("Widget", "Widgets", "widget", "A ConfigMap with two fields in it.")
             .SupportsTags()
             // The pointer is the default and is stated anyway: it is the fact ProviderBuilder checks
             // the schema against, and reading it here is how the next provider learns the flag has a
             // second half.
-            .RequiresCluster(ClusterPlacement.DefaultPointer);
+            .RequiresCluster();
     }
 }

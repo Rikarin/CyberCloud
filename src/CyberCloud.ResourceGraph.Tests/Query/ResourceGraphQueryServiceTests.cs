@@ -15,8 +15,11 @@ namespace CyberCloud.ResourceGraph.Tests.Query;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This is where the translator's SQL meets ClickHouse 25.3 for the first time, and
-///         every shape the golden files pin is run here at least once.</b> The golden suite proves
+///         ⚠
+///         <b>
+///             This is where the translator's SQL meets ClickHouse 25.3 for the first time, and
+///             every shape the golden files pin is run here at least once.
+///         </b> The golden suite proves
 ///         the translator says what it means; this proves ClickHouse accepts it — the alias that
 ///         shadows a column (<c>extend name = toupper(name)</c>), the sort key over a map, the
 ///         <c>Array(String)</c> parameter, a <c>DateTime64</c> parameter, <c>FINAL</c> under
@@ -33,9 +36,16 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
     static string N(Guid id) => id.ToString("N", CultureInfo.InvariantCulture);
 
     ResourceGraphQueryService Service() =>
-        new(fixture.ClickHouse, fixture.Reader, new MembershipIndexCallerAccessResolver(fixture.Grains), fixture.Options, NullLogger<ResourceGraphQueryService>.Instance);
+        new(
+            fixture.ClickHouse,
+            fixture.Reader,
+            new MembershipIndexCallerAccessResolver(fixture.Grains),
+            fixture.Options,
+            NullLogger<ResourceGraphQueryService>.Instance
+        );
 
-    static CallerContext Caller(string user) => new() { TenantId = ProjectionFixture.Tenant, SubjectType = "user", SubjectId = user };
+    static CallerContext Caller(string user) =>
+        new() { TenantId = ProjectionFixture.Tenant, SubjectType = "user", SubjectId = user };
 
     /// <summary>
     ///     Three resources under one prefix: one Alice owns through the group, one the engineering
@@ -56,9 +66,12 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
         await fixture.GrantAsync(ProjectionFixture.Tenant, $"group:{engineering}#member@user:bob-{prefix}");
 
         var events = new[] {
-            ProjectionFixture.Created(owned, prefix + "-owned") with { Location = "eu-central", Tags = Tags(("env", "prod"), ("tier", "db")) },
-            ProjectionFixture.Created(shared, prefix + "-shared") with { Location = "eu-west", Tags = Tags(("env", "test")) },
-            ProjectionFixture.Created(orphan, prefix + "-orphan") with { Location = "eu-west" }
+            ProjectionFixture.Created(owned, prefix + "-owned") with {
+                Location = "eu-central", Tags = Tags(("env", "prod"), ("tier", "db"))
+            },
+            ProjectionFixture.Created(shared, prefix + "-shared") with {
+                Location = "eu-west", Tags = Tags(("env", "test"))
+            }, ProjectionFixture.Created(orphan, prefix + "-orphan") with { Location = "eu-west" }
         };
 
         foreach (var change in events) {
@@ -73,7 +86,7 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
     }
 
     static ImmutableDictionary<string, string> Tags(params (string Key, string Value)[] pairs) =>
-        pairs.ToImmutableDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
+        pairs.ToImmutableDictionary(static x => x.Key, static x => x.Value, StringComparer.Ordinal);
 
     [Fact]
     public async Task ACallerSeesWhatTheyMayReadAndNothingElseAndAUsersetReachesItsMembers() {
@@ -86,7 +99,7 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
         var alice = await service.QueryAsync(new() { Query = query, Caller = Caller("alice-" + prefix) }, token);
         alice.IsSuccess.ShouldBeTrue(alice.Error?.Message);
         Names(alice.GetValueOrThrow()).ShouldBe([prefix + "-owned"]);
-        alice.GetValueOrThrow().Columns.Select(x => x.Name).ShouldBe(["name", "resourceId"]);
+        alice.GetValueOrThrow().Columns.Select(static x => x.Name).ShouldBe(["name", "resourceId"]);
         Column(alice.GetValueOrThrow(), 0, "resourceId").ShouldBe(owned.ToString("D"));
 
         // ⚠ Bob was granted nothing on any resource. He reads the shared one because the row's
@@ -104,7 +117,12 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
         carol.GetValueOrThrow().HasMore.ShouldBeFalse();
 
         // And the orphan — a resource nobody was granted — is in nobody's result, count included.
-        var count = await service.QueryAsync(new() { Query = $"resources | where name startswith '{prefix}-' | count", Caller = Caller("alice-" + prefix) }, token);
+        var count = await service.QueryAsync(
+            new() {
+                Query = $"resources | where name startswith '{prefix}-' | count", Caller = Caller("alice-" + prefix)
+            },
+            token
+        );
         count.IsSuccess.ShouldBeTrue(count.Error?.Message);
         Column(count.GetValueOrThrow(), 0, "Count").ShouldBe("1");
         _ = orphan;
@@ -120,14 +138,22 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
         await fixture.GrantAsync(ProjectionFixture.Tenant, $"group:eng-{prefix}#member@user:alice-{prefix}");
 
         var query = $"resources | where name startswith '{prefix}-' | project name | order by name asc";
-        var first = await service.QueryAsync(new() { Query = query, Caller = Caller("alice-" + prefix), Top = 1 }, token);
+        var first = await service.QueryAsync(
+            new() { Query = query, Caller = Caller("alice-" + prefix), Top = 1 },
+            token
+        );
 
         first.IsSuccess.ShouldBeTrue(first.Error?.Message);
         Names(first.GetValueOrThrow()).ShouldBe([prefix + "-owned"]);
         first.GetValueOrThrow().HasMore.ShouldBeTrue("two rows and a page of one");
 
         var second = await service.QueryAsync(
-            new() { Query = query, Caller = Caller("alice-" + prefix), Top = 1, Continuation = first.GetValueOrThrow().Continuation },
+            new() {
+                Query = query,
+                Caller = Caller("alice-" + prefix),
+                Top = 1,
+                Continuation = first.GetValueOrThrow().Continuation
+            },
             token
         );
 
@@ -137,7 +163,12 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
 
         // ⚠ The token belongs to the query that handed it out.
         var other = await service.QueryAsync(
-            new() { Query = query + " | take 10", Caller = Caller("alice-" + prefix), Top = 1, Continuation = first.GetValueOrThrow().Continuation },
+            new() {
+                Query = query + " | take 10",
+                Caller = Caller("alice-" + prefix),
+                Top = 1,
+                Continuation = first.GetValueOrThrow().Continuation
+            },
             token
         );
 
@@ -156,18 +187,27 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
         // The alias that shadows a column, and the map's sort key — the two shapes that fail without
         // prefer_column_name_to_alias and toJSONString respectively.
         var shadow = await service.QueryAsync(
-            new() { Query = $"resources | where name startswith '{prefix}-' | extend name = toupper(name), tolower(provider) | project name, tags, Column1", Caller = caller },
+            new() {
+                Query =
+                    $"resources | where name startswith '{prefix}-' | extend name = toupper(name), tolower(provider) | project name, tags, Column1",
+                Caller = caller
+            },
             token
         );
         shadow.IsSuccess.ShouldBeTrue(shadow.Error?.Message);
         Column(shadow.GetValueOrThrow(), 0, "name").ShouldBe((prefix + "-owned").ToUpperInvariant());
         Column(shadow.GetValueOrThrow(), 0, "Column1").ShouldBe("cybercloud.testing");
-        JsonDocument.Parse(shadow.GetValueOrThrow().Rows[0]).RootElement.GetProperty("tags").GetProperty("tier").GetString().ShouldBe("db");
+        JsonDocument.Parse(shadow.GetValueOrThrow().Rows[0])
+            .RootElement.GetProperty("tags")
+            .GetProperty("tier")
+            .GetString()
+            .ShouldBe("db");
 
         // A summarize with every aggregate, a datetime parameter, `has`, `in`, split and strcat.
         var summary = await service.QueryAsync(
             new() {
-                Query = $"resources | where name startswith '{prefix}-' and createdAt >= datetime(2026-09-17T09:00:00Z) and tags.env in ('prod', 'test') and name has 'owned' "
+                Query =
+                    $"resources | where name startswith '{prefix}-' and createdAt >= datetime(2026-09-17T09:00:00Z) and tags.env in ('prod', 'test') and name has 'owned' "
                     + "| summarize n = count(), names = dcount(name), min(version), max(version), sum(version), avg(version) by type, region = tolower(location)",
                 Caller = caller
             },
@@ -182,7 +222,8 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
 
         var strings = await service.QueryAsync(
             new() {
-                Query = $"resources | where resourceId == '{owned:D}' | project family = split(name, '-', 0), parts = split(name, '-'), label = strcat(name, '#', version, ' ', isnotempty(tags.env)), empty = isempty(tags['absent'])",
+                Query =
+                    $"resources | where resourceId == '{owned:D}' | project family = split(name, '-', 0), parts = split(name, '-'), label = strcat(name, '#', version, ' ', isnotempty(tags.env)), empty = isempty(tags['absent'])",
                 Caller = caller
             },
             token
@@ -194,7 +235,12 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
 
         // A take, then a where, then paging — three SELECTs deep, each re-stating the order.
         var deep = await service.QueryAsync(
-            new() { Query = $"resources | where name startswith '{prefix}-' | order by name asc | take 5 | where location == 'eu-central' | distinct name", Caller = caller, Top = 2 },
+            new() {
+                Query =
+                    $"resources | where name startswith '{prefix}-' | order by name asc | take 5 | where location == 'eu-central' | distinct name",
+                Caller = caller,
+                Top = 2
+            },
             token
         );
         deep.IsSuccess.ShouldBeTrue(deep.Error?.Message);
@@ -204,7 +250,10 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
         // cut emitted that ClickHouse refused ("Illegal type Map(String, String) of argument of
         // function match"), found by the #54 review. It matches the map's JSON text.
         var tagged = await service.QueryAsync(
-            new() { Query = $"resources | where name startswith '{prefix}-' and tags has 'prod' | project name", Caller = caller },
+            new() {
+                Query = $"resources | where name startswith '{prefix}-' and tags has 'prod' | project name",
+                Caller = caller
+            },
             token
         );
         tagged.IsSuccess.ShouldBeTrue(tagged.Error?.Message);
@@ -228,7 +277,8 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
         // holds them; parsed in Europe/Prague, the same digits name 08:00:00Z and the window is empty.
         var window = await service.QueryAsync(
             new() {
-                Query = $"resources | where name startswith '{prefix}-' and createdAt >= datetime(2026-09-17T10:00:00Z) and createdAt < datetime(2026-09-17T10:00:01Z) | project name",
+                Query =
+                    $"resources | where name startswith '{prefix}-' and createdAt >= datetime(2026-09-17T10:00:00Z) and createdAt < datetime(2026-09-17T10:00:01Z) | project name",
                 Caller = Caller("alice-" + prefix)
             },
             token
@@ -252,9 +302,18 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
             AllowInsecureTransport = fixture.Options.AllowInsecureTransport,
             QueryMaxRowsToRead = 1
         };
-        var service = new ResourceGraphQueryService(fixture.ClickHouse, fixture.Reader, new MembershipIndexCallerAccessResolver(fixture.Grains), starved, NullLogger<ResourceGraphQueryService>.Instance);
+        var service = new ResourceGraphQueryService(
+            fixture.ClickHouse,
+            fixture.Reader,
+            new MembershipIndexCallerAccessResolver(fixture.Grains),
+            starved,
+            NullLogger<ResourceGraphQueryService>.Instance
+        );
 
-        var refused = await service.QueryAsync(new() { Query = "resources | project name", Caller = Caller("alice-" + prefix) }, token);
+        var refused = await service.QueryAsync(
+            new() { Query = "resources | project name", Caller = Caller("alice-" + prefix) },
+            token
+        );
 
         refused.IsFailure.ShouldBeTrue("a table of many rows was read under a budget of one");
         refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
@@ -276,7 +335,10 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
         var token = TestContext.Current.CancellationToken;
         var service = Service();
 
-        var refused = await service.QueryAsync(new() { Query = "resources | mv-expand tags", Caller = Caller("alice") }, token);
+        var refused = await service.QueryAsync(
+            new() { Query = "resources | mv-expand tags", Caller = Caller("alice") },
+            token
+        );
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
         refused.Error.Message.ShouldContain("'mv-expand'");
@@ -285,7 +347,10 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
         // answer is "nothing here" and not ClickHouse's UNKNOWN_DATABASE as a 500.
         var fresh = Guid.NewGuid();
         var empty = await service.QueryAsync(
-            new() { Query = "resources | project name", Caller = new() { TenantId = fresh, SubjectType = "user", SubjectId = "nobody" } },
+            new() {
+                Query = "resources | project name",
+                Caller = new() { TenantId = fresh, SubjectType = "user", SubjectId = "nobody" }
+            },
             token
         );
         empty.IsSuccess.ShouldBeTrue(empty.Error?.Message);
@@ -293,7 +358,7 @@ public sealed class ResourceGraphQueryServiceTests(ProjectionFixture fixture) {
     }
 
     static List<string> Names(ResourceGraphQueryPage page) =>
-        page.Rows.Select(row => JsonDocument.Parse(row).RootElement.GetProperty("name").GetString()!).ToList();
+        page.Rows.Select(static row => JsonDocument.Parse(row).RootElement.GetProperty("name").GetString()!).ToList();
 
     static string Column(ResourceGraphQueryPage page, int row, string column) {
         var value = JsonDocument.Parse(page.Rows[row]).RootElement.GetProperty(column);

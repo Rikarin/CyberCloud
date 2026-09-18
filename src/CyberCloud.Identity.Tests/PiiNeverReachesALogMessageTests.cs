@@ -25,7 +25,8 @@ public sealed class CapturingLogger<T> : ILogger<T> {
 
     /// <inheritdoc />
     public IDisposable? BeginScope<TState>(TState state)
-        where TState : notnull => null;
+        where TState : notnull =>
+        null;
 
     /// <inheritdoc />
     public bool IsEnabled(LogLevel logLevel) => true;
@@ -141,7 +142,7 @@ public sealed class PiiNeverReachesALogMessageTests(IdentityCluster cluster) {
         // that is one-way and per tenant.
         logger.Messages.ShouldContain(x => x.Contains(expected, StringComparison.Ordinal));
 
-        expected.ShouldNotContain(LocalPart, Case.Insensitive);
+        expected.ShouldNotContain(LocalPart);
     }
 
     [Fact]
@@ -161,8 +162,8 @@ public sealed class PiiNeverReachesALogMessageTests(IdentityCluster cluster) {
         await service.SignInWithPasswordAsync(IdentityCluster.Tenant, email, "a-password-value", new(), Ct);
 
         foreach (var message in logger.Messages) {
-            message.ShouldNotContain("Featherstonehaugh", Case.Insensitive);
-            message.ShouldNotContain("Wilhelmina", Case.Insensitive);
+            message.ShouldNotContain("Featherstonehaugh");
+            message.ShouldNotContain("Wilhelmina");
         }
     }
 
@@ -188,7 +189,7 @@ public sealed class PiiNeverReachesALogMessageTests(IdentityCluster cluster) {
         outcome.IsSuccess.ShouldBeTrue(outcome.Error?.Message);
 
         foreach (var message in logger.Messages) {
-            message.ShouldNotContain(ip, Case.Insensitive);
+            message.ShouldNotContain(ip);
         }
 
         // ⚠ And it is not in the durable or hot tier either. The session keeps a truncated digest,
@@ -197,7 +198,7 @@ public sealed class PiiNeverReachesALogMessageTests(IdentityCluster cluster) {
         var session = (await cluster.Session(outcome.GetValueOrThrow().SessionId).GetAsync()).GetValueOrThrow();
 
         session.ClientAddressDigest.ShouldNotBeEmpty();
-        session.ClientAddressDigest.ShouldNotContain(ip, Case.Insensitive);
+        session.ClientAddressDigest.ShouldNotContain(ip);
         session.ClientAddressDigest.Length.ShouldBe(16);
     }
 }

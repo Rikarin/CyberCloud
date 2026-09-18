@@ -180,9 +180,8 @@ public sealed class OpenBaoSecretWriter(
         HttpResponseMessage response;
 
         try {
-            using var request = new HttpRequestMessage(HttpMethod.Post, Url(path)) {
-                Content = new StringContent(Payload(fields), Encoding.UTF8, "application/json")
-            };
+            using var request = new HttpRequestMessage(HttpMethod.Post, Url(path));
+            request.Content = new StringContent(Payload(fields), Encoding.UTF8, "application/json");
 
             request.Headers.Add(VaultHeaders.Token, token.Value);
 

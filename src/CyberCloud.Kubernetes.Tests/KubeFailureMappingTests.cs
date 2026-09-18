@@ -70,7 +70,7 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
         var token = TestContext.Current.CancellationToken;
 
         // The client under test, with somewhere for the operator's half of a refusal to go.
-        api = new KubeApiClient(k3s.Raw, K3sFixture.ClusterId, new TestClock(), false, log);
+        api = new(k3s.Raw, K3sFixture.ClusterId, new TestClock(), false, log);
 
         await EnsureRestrictedNamespaceAsync(token);
 
@@ -93,8 +93,8 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
         config.ClientKeyFilePath = null;
         config.AccessToken = minted.Status.Token;
 
-        unprivilegedClient = new k8s.Kubernetes(config);
-        unprivileged = new KubeApiClient(unprivilegedClient, K3sFixture.ClusterId, new TestClock(), false, log);
+        unprivilegedClient = new(config);
+        unprivileged = new(unprivilegedClient, K3sFixture.ClusterId, new TestClock(), false, log);
     }
 
     /// <inheritdoc />
@@ -313,7 +313,7 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
                      "system:serviceaccount", "cc-nobody", "serviceaccount", "User \"", "cannot get", "cannot patch",
                      "RBAC", "clusterrole", "rolebinding"
                  }) {
-            outcome.Error.Message.ShouldNotContain(leak, Case.Insensitive);
+            outcome.Error.Message.ShouldNotContain(leak);
         }
 
         // It still tells the tenant enough to raise a ticket about the right thing.
@@ -353,7 +353,7 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
 
         // Our serializer's complaint is an implementation detail; the operator gets it, not the
         // tenant.
-        outcome.Error.Message.ShouldNotContain("typed patch", Case.Insensitive);
+        outcome.Error.Message.ShouldNotContain("typed patch");
         log.OnlyLine().ShouldContain(KubeFailures.TypedPatchFailurePrefix);
     }
 
@@ -720,7 +720,8 @@ public sealed class CapturingLogger : ILogger {
 
     /// <inheritdoc />
     public IDisposable? BeginScope<TState>(TState state)
-        where TState : notnull => null;
+        where TState : notnull =>
+        null;
 
     /// <inheritdoc />
     public bool IsEnabled(LogLevel logLevel) => true;

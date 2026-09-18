@@ -73,7 +73,7 @@ public static class FormsEmitter {
             scopes[scope.Kind] = ScopeForm(scope, version);
         }
 
-        return new JsonObject {
+        return new() {
             ["format"] = FormatVersion,
             ["apiVersion"] = version,
             ["generatedFrom"] = OpenApiArtifacts.DirectoryName + "/" + version + ".json",
@@ -115,7 +115,7 @@ public static class FormsEmitter {
             address.Add(placeholder);
         }
 
-        return new JsonObject {
+        return new() {
             ["scope"] = scope.Kind,
             ["scopeType"] = scope.TypeName,
             ["apiVersion"] = version,
@@ -175,7 +175,7 @@ public static class FormsEmitter {
             actions.Add(Action(action));
         }
 
-        return new JsonObject {
+        return new() {
             ["resourceType"] = type.ResourceType,
             ["apiVersion"] = version,
             ["title"] = type.DisplayName,

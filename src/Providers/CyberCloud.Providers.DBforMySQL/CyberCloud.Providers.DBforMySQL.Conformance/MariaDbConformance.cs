@@ -23,12 +23,12 @@ public sealed class MariaDbCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.DBforMySQL/servers",
-            CreateProvider = () => new MariaDbProvider(),
+            CreateProvider = static () => new MariaDbProvider(),
             ReconcilerType = typeof(MariaDbServerReconciler),
-            CreateReconciler = clock => new MariaDbServerReconciler(clock),
+            CreateReconciler = static clock => new MariaDbServerReconciler(clock),
             Type = MariaDbServers.Type,
             ApiVersion = MariaDbServers.V2026,
-            Body = cluster => MariaDbServers.Body(cluster),
+            Body = static cluster => MariaDbServers.Body(cluster),
             // ⚠ Changes `bootstrap.database`, which the reconciler renders into `spec.database` and
             // MariaDbServers.Matches reads back. A body that differed only where the reconciler
             // ignores it would pass the update test while proving the update never left the grain.
@@ -36,19 +36,19 @@ public sealed class MariaDbCase : IProviderCaseSource {
             // ⚠ NOT `highAvailability`, which is the obvious axis and is Immutable — an update test
             // driving an immutable property would be testing the write path's refusal rather than the
             // reconciler's convergence, and would fail for the case's reason.
-            ChangedBody = cluster => MariaDbServers.Body(cluster, database: "orders"),
+            ChangedBody = static cluster => MariaDbServers.Body(cluster, database: "orders"),
             // Drops the required `/properties/version`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written: a
             // hand-written invalid body drifts out of date the day the schema gains a property and then
             // tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => WithoutVersion(MariaDbServers.Body(cluster)),
+            InvalidBody = static cluster => WithoutVersion(MariaDbServers.Body(cluster)),
             InvalidBodyTarget = "/properties/version",
             ActionName = MariaDbServers.ListKeysAction,
             // ⚠ ONE OBJECT. A MariaDB expands into a StatefulSet, four Services and ConfigMaps; none
             // of them is applied by this provider, so none of them belongs here. A case listing an
             // object the provider does not apply fails every world-facing assertion for the case's
             // reason rather than the provider's.
-            Objects = (id, ns) => [MariaDbServers.ServerRef(ns, id.Name)],
+            Objects = static (id, ns) => [MariaDbServers.ServerRef(ns, id.Name)],
             // ⚠ mariadb-operator's. ServerJson renders `passwordSecretKeyRef` with `generate: true`,
             // so the operator creates this object and puts the value in the database at bootstrap.
             // The root Secret it also generates is deliberately absent: listKeys does not read it, and
@@ -56,7 +56,7 @@ public sealed class MariaDbCase : IProviderCaseSource {
             // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
             DataPlane = null,
             StoragePrefix = null,
-            OperatorWritten = (id, ns) => [
+            OperatorWritten = static (id, ns) => [
                 (KubeSecret.Ref(ns, MariaDbServers.PasswordSecretName(id.Name)),
                     OperatorSecret.Json(
                         KubeSecret.Ref(ns, MariaDbServers.PasswordSecretName(id.Name)),
@@ -65,7 +65,7 @@ public sealed class MariaDbCase : IProviderCaseSource {
                         ]
                     ))
             ],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return MariaDbServers.Matches(match.ObjectJson, desired.RootElement);
             }

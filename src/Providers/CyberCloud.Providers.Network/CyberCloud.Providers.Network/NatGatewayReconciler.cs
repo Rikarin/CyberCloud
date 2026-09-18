@@ -11,11 +11,17 @@ namespace CyberCloud.Providers.Network;
 ///         Both joins are object names derived from this resource's own namespace, its address and
 ///         its body — <see cref="NatGateways.VpcSubnetOf" /> and <see cref="NatGateways.OvnEipOf" />
 ///         — and whether the named objects exist is the fabric's question:
-///         <c>handleAddOvnSnatRule</c> fails with <i>"failed to get eip"</i> or <i>"failed to get vpc
-///         subnet"</i> and retries. A reconciler that read both first would answer the same question
+///         <c>handleAddOvnSnatRule</c> fails with <i>"failed to get eip"</i> or
+///         <i>
+///             "failed to get vpc
+///             subnet"
+///         </i> and retries. A reconciler that read both first would answer the same question
 ///         one pass earlier, with two more reads on every pass for the life of the resource, and
-///         docs/plan/08 § Deleting a parent resource that has children says the platform <i>"must not
-///         re-check the parent on every write to a child"</i>. So this reconciler applies and reads
+///         docs/plan/08 § Deleting a parent resource that has children says the platform
+///         <i>
+///             "must not
+///             re-check the parent on every write to a child"
+///         </i>. So this reconciler applies and reads
 ///         back, and the readiness a tenant actually wants is on <c>POST …/showEgress</c>.
 ///     </para>
 ///     <para>

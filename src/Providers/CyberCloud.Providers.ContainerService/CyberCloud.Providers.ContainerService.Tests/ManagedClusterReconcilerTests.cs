@@ -66,13 +66,9 @@ public sealed class ManagedClusterReconcilerTests {
 
         var connection = new RecordingConnection();
 
-        using var aliceBody = JsonDocument.Parse(
-            ManagedClusters.Body(ClusterId, version: "1.32", controlPlaneReplicas: 1)
-        );
+        using var aliceBody = JsonDocument.Parse(ManagedClusters.Body(ClusterId, "1.32", 1));
 
-        using var bobBody = JsonDocument.Parse(
-            ManagedClusters.Body(ClusterId, version: "1.33", controlPlaneReplicas: 5)
-        );
+        using var bobBody = JsonDocument.Parse(ManagedClusters.Body(ClusterId, "1.33", 5));
 
         // Interleaved, so a cache written on the first pass is read on the third.
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
@@ -81,7 +77,7 @@ public sealed class ManagedClusterReconcilerTests {
         await Pass(reconciler, connection, bob, bobBody.RootElement);
 
         var controlPlanes = connection.Applied
-            .Where(x => x.Target.Kind.Kind == "KamajiControlPlane")
+            .Where(static x => x.Target.Kind.Kind == "KamajiControlPlane")
             .ToList();
 
         controlPlanes.Count.ShouldBe(4);
@@ -132,12 +128,12 @@ public sealed class ManagedClusterReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
-        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target))
+        var applied = connection.Applied.Select(static x => RecordingConnection.Key(x.Target))
             .ToHashSet(StringComparer.Ordinal);
         var read = connection.Read.Select(RecordingConnection.Key).ToHashSet(StringComparer.Ordinal);
 
         applied.Count.ShouldBe(3);
-        read.ShouldBe(applied, ignoreOrder: true);
+        read.ShouldBe(applied, true);
     }
 
     [Fact]
@@ -150,7 +146,7 @@ public sealed class ManagedClusterReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
-        connection.Applied.Select(x => x.Target.Kind.Kind)
+        connection.Applied.Select(static x => x.Target.Kind.Kind)
             .ShouldBe(["KubevirtCluster", "KamajiControlPlane", "Cluster"]);
     }
 
@@ -161,7 +157,7 @@ public sealed class ManagedClusterReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
-        connection.Applied.Select(x => x.Target.Kind.Group)
+        connection.Applied.Select(static x => x.Target.Kind.Group)
             .Distinct(StringComparer.Ordinal)
             .Count()
             .ShouldBe(3);
@@ -173,10 +169,10 @@ public sealed class ManagedClusterReconcilerTests {
         using var body = JsonDocument.Parse(ManagedClusters.Body(ClusterId));
 
         await Reconcile(connection, body.RootElement);
-        var first = connection.Applied.Select(x => x.Body).ToList();
+        var first = connection.Applied.Select(static x => x.Body).ToList();
 
         await Reconcile(connection, body.RootElement);
-        var second = connection.Applied.Skip(3).Select(x => x.Body).ToList();
+        var second = connection.Applied.Skip(3).Select(static x => x.Body).ToList();
 
         second.ShouldBe(first);
     }
@@ -200,7 +196,7 @@ public sealed class ManagedClusterReconcilerTests {
 
         connection.Objects[RecordingConnection.Key(target)] = WithReadyCondition(
             connection.Objects[RecordingConnection.Key(target)],
-            ready: false,
+            false,
             "Waiting for the first worker to join"
         );
 
@@ -228,7 +224,7 @@ public sealed class ManagedClusterReconcilerTests {
         connection.Objects[RecordingConnection.Key(target)] = WithControlPlaneEndpoint(
             WithReadyCondition(
                 connection.Objects[RecordingConnection.Key(target)],
-                ready: true,
+                true,
                 "Cluster is ready"
             ),
             "10.0.0.7",
@@ -272,7 +268,7 @@ public sealed class ManagedClusterReconcilerTests {
 
         connection.Objects[RecordingConnection.Key(target)] = WithReadyCondition(
             connection.Objects[RecordingConnection.Key(target)],
-            ready: true,
+            true,
             "Cluster is ready"
         );
 
@@ -298,7 +294,7 @@ public sealed class ManagedClusterReconcilerTests {
         connection.Objects[RecordingConnection.Key(target)] = WithControlPlaneEndpoint(
             WithReadyCondition(
                 connection.Objects[RecordingConnection.Key(target)],
-                ready: false,
+                false,
                 "Waiting for the first worker to join"
             ),
             "10.0.0.7",
@@ -394,7 +390,7 @@ public sealed class ManagedClusterReconcilerTests {
         // ⚠ THE Cluster FIRST, which is the reverse of the apply order and is not cosmetic: Cluster API
         // owns the teardown of everything it created from it, and deleting the pieces out from under it
         // leaves the controller reconciling references to objects that are gone.
-        connection.Deleted.Select(x => x.Kind.Kind)
+        connection.Deleted.Select(static x => x.Kind.Kind)
             .ShouldBe(["Cluster", "KamajiControlPlane", "KubevirtCluster"]);
     }
 
@@ -738,11 +734,11 @@ sealed class RecordingConnection : IKubeClusterConnection {
             return body;
         }
 
-        if (System.Text.Json.Nodes.JsonNode.Parse(existing) is not JsonObject previous) {
+        if (JsonNode.Parse(existing) is not JsonObject previous) {
             return body;
         }
 
-        var applied = System.Text.Json.Nodes.JsonNode.Parse(body)!.AsObject();
+        var applied = JsonNode.Parse(body)!.AsObject();
 
         if (previous["status"] is { } status) {
             applied["status"] = status.DeepClone();

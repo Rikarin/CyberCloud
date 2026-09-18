@@ -1,5 +1,4 @@
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.Providers.Terminal.Contracts;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -39,12 +38,12 @@ public sealed class CloudConsoleCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Terminal/consoles",
-            CreateProvider = () => new TerminalProvider(),
+            CreateProvider = static () => new TerminalProvider(),
             ReconcilerType = typeof(CloudConsoleReconciler),
-            CreateReconciler = clock => new CloudConsoleReconciler(clock),
+            CreateReconciler = static clock => new CloudConsoleReconciler(clock),
             Type = CloudConsoles.Type,
             ApiVersion = CloudConsoles.V2026,
-            Body = cluster => CloudConsoles.Body(cluster),
+            Body = static cluster => CloudConsoles.Body(cluster),
             // ⚠ Changes the EGRESS POSTURE, which the reconciler renders into the network policy's
             // rule list and CloudConsoles.Matches reads back as a count. Two other candidates were
             // wrong for two different reasons, and both are worth recording because both look right:
@@ -57,12 +56,12 @@ public sealed class CloudConsoleCase : IProviderCaseSource {
             //     it — so the API server refuses the resize outright. The schema's "it grows and never
             //     shrinks" is the API's promise; whether the cluster can keep it is the storage
             //     class's. conformance.yaml § owed, `growing-the-home-volume-needs-an-expandable-class`.
-            ChangedBody = cluster => CloudConsoles.Body(cluster, egress: "TenantOnly"),
+            ChangedBody = static cluster => CloudConsoles.Body(cluster, egress: "TenantOnly"),
             // Drops the required `/properties/home/size`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written: a
             // hand-written invalid body drifts out of date the day the schema gains a property and
             // then tests "invalid for the wrong reason" while still going green.
-            InvalidBody = cluster => WithoutHomeSize(CloudConsoles.Body(cluster)),
+            InvalidBody = static cluster => WithoutHomeSize(CloudConsoles.Body(cluster)),
             InvalidBodyTarget = "/properties/home/size",
             // ⚠ THE SUITE'S ACTION ASSERTION IS ABOUT THE VERB GRAMMAR — that a POST to a declared
             // action on an existing resource is routed and that one to a name that does not exist is
@@ -75,7 +74,7 @@ public sealed class CloudConsoleCase : IProviderCaseSource {
             // reason rather than the provider's; and a console with no pod is the correct converged
             // state of this type, so listing it would make the suite demand the very thing the design
             // exists to avoid.
-            Objects = (id, ns) => CloudConsoles.Objects(ns, id.Name),
+            Objects = static (id, ns) => CloudConsoles.Objects(ns, id.Name),
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
@@ -83,7 +82,7 @@ public sealed class CloudConsoleCase : IProviderCaseSource {
             DataPlane = null,
             StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = match => {
+            ObjectMatchesDesired = static match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return CloudConsoles.Matches(match.ObjectJson, desired.RootElement);
             }

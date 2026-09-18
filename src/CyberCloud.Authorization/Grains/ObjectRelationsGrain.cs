@@ -103,8 +103,8 @@ public sealed class ObjectRelationsGrain(
         return Task.FromResult(
             Result<IReadOnlyList<RoleAssignment>>.Success(
                 [
-                    .. assignments.OrderBy(x => x.RoleName, StringComparer.Ordinal)
-                        .ThenBy(x => x.Principal.ToString(), StringComparer.Ordinal)
+                    .. assignments.OrderBy(static x => x.RoleName, StringComparer.Ordinal)
+                        .ThenBy(static x => x.Principal.ToString(), StringComparer.Ordinal)
                 ]
             )
         );

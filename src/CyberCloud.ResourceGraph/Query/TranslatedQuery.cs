@@ -9,7 +9,10 @@ namespace CyberCloud.ResourceGraph.Query;
 ///     value ClickHouse binds to it, as its HTTP interface takes them.
 /// </summary>
 /// <param name="Name">The placeholder's name, <c>p0</c>, <c>p1</c>, … or <c>access</c>.</param>
-/// <param name="ClickHouseType">The type the placeholder declares — <c>String</c>, <c>Int64</c>, <c>Float64</c>, <c>Bool</c>, <see cref="DateTimeType" />, <c>Array(String)</c>.</param>
+/// <param name="ClickHouseType">
+///     The type the placeholder declares — <c>String</c>, <c>Int64</c>, <c>Float64</c>,
+///     <c>Bool</c>, <see cref="DateTimeType" />, <c>Array(String)</c>.
+/// </param>
 /// <param name="Value">The value in ClickHouse's parameter spelling, before URL encoding.</param>
 /// <remarks>
 ///     ⚠ <b>A literal from the query text never reaches the SQL; it reaches this record.</b> That is
@@ -50,7 +53,12 @@ public sealed record SqlParameter(string Name, string ClickHouseType, string Val
             }
 
             first = false;
-            built.Append('\'').Append(value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("'", "\\'", StringComparison.Ordinal)).Append('\'');
+            built.Append('\'')
+                .Append(
+                    value.Replace("""\""", """\\""", StringComparison.Ordinal)
+                        .Replace("'", """\'""", StringComparison.Ordinal)
+                )
+                .Append('\'');
         }
 
         return built.Append(']').ToString();
@@ -75,8 +83,11 @@ public sealed record SqlParameter(string Name, string ClickHouseType, string Val
 ///         pages of one query are two slices of one order.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The access filter is in <see cref="Sql" /> and its subjects are in
-///         <see cref="Parameters" />, and neither came from the query text.</b> The translator puts
+///         ⚠
+///         <b>
+///             The access filter is in <see cref="Sql" /> and its subjects are in
+///             <see cref="Parameters" />, and neither came from the query text.
+///         </b> The translator puts
 ///         <c>hasAny(access, {access:Array(String)})</c> on the base <c>SELECT</c> before the first
 ///         operator sees a row, and the caller's KQL cannot name <c>access</c> at all — the binder
 ///         does not know the column. What the caller may read is therefore decided before their
@@ -101,5 +112,5 @@ public sealed record TranslatedQuery {
 
     /// <summary>The parameters as the <see cref="ClickHouseClient" /> takes them.</summary>
     public IReadOnlyDictionary<string, string> ParameterValues =>
-        Parameters.ToDictionary(x => x.Name, x => x.Value, StringComparer.Ordinal);
+        Parameters.ToDictionary(static x => x.Name, static x => x.Value, StringComparer.Ordinal);
 }

@@ -73,7 +73,7 @@ public sealed class MonitorDeclarationTests {
         MonitorWorkspaces.Schema2026.Declares(MonitorWorkspaces.PurgeProtectionPointer).ShouldBeTrue();
 
         MonitorWorkspaces.Schema2026.Properties
-            .Single(x => x.JsonPointer == MonitorWorkspaces.PurgeProtectionPointer)
+            .Single(static x => x.JsonPointer == MonitorWorkspaces.PurgeProtectionPointer)
             .Kind.ShouldBe(SchemaKind.Boolean);
 
         // ⚠ AND THE PURGE PERMISSION IS NOT THE DELETE PERMISSION, which is the separation the window
@@ -97,7 +97,7 @@ public sealed class MonitorDeclarationTests {
         var registry = ProviderRegistry.Build([new MonitorProvider()]);
         registry.TryGetType(MonitorWorkspaces.Type, out var registration).ShouldBeTrue();
 
-        var action = registration.Actions.Single(x => x.Name == MonitorWorkspaces.ListKeysAction);
+        var action = registration.Actions.Single(static x => x.Name == MonitorWorkspaces.ListKeysAction);
 
         action.Secret.ShouldBeTrue();
         action.LongRunning.ShouldBeFalse();
@@ -139,7 +139,7 @@ public sealed class MonitorDeclarationTests {
         // CliEmitter.Emit at generation, and GeneratedSurfaceTests over the embedded verb tree.
         CliTokens.Collisions(
             ProviderRegistry.Build([new MonitorProvider()])
-                .Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+                .Types.Select(static x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
         )
             .ShouldBeEmpty();
 
@@ -147,10 +147,10 @@ public sealed class MonitorDeclarationTests {
         // says the short name reaches this type; it does not say the short name is the word a person
         // would reach for, and only a literal can say that.
         var types = ProviderRegistry.Build([new MonitorProvider()]).Types;
-        types.Single(x => x.Type == MonitorWorkspaces.Type).Display.Alias.ShouldBe("workspace");
+        types.Single(static x => x.Type == MonitorWorkspaces.Type).Display.Alias.ShouldBe("workspace");
         // ⚠ `alert` and not `alertrule`, because `cyc monitor alert` is what a person types, and not
         // `rule`, because a family whose second noun is `rule` is a family whose third will want it too.
-        types.Single(x => x.Type == MonitorAlertRules.Type).Display.Alias.ShouldBe("alert");
+        types.Single(static x => x.Type == MonitorAlertRules.Type).Display.Alias.ShouldBe("alert");
     }
 
     // ── The schema ─────────────────────────────────────────────────────────────────────────────
@@ -176,7 +176,7 @@ public sealed class MonitorDeclarationTests {
         // and zero is a drop spelled as a rate. This Minimum is the one part of that promise the API
         // can keep on its own, with nothing downstream built.
         var property = MonitorWorkspaces.Schema2026.Properties
-            .Single(x => x.JsonPointer == "/properties/quota/overQuotaSampleRate");
+            .Single(static x => x.JsonPointer == "/properties/quota/overQuotaSampleRate");
 
         property.Minimum.ShouldBe(
             MonitorWorkspaces.MinimumOverQuotaSampleRate,
@@ -213,7 +213,7 @@ public sealed class MonitorDeclarationTests {
         // the seven fields are addresses a tenant may paste into a Grafana datasource; one is a live
         // credential. Marking all seven secret would make the whole response uncacheable and
         // unloggable for no reason; marking none would put a credential in a body nothing audits.
-        var secrets = MonitorWorkspaces.ListKeysResponse.Properties.Where(x => x.Secret).ToList();
+        var secrets = MonitorWorkspaces.ListKeysResponse.Properties.Where(static x => x.Secret).ToList();
 
         secrets.Count.ShouldBe(1);
         secrets[0].JsonPointer.ShouldBe("/ingestKey");

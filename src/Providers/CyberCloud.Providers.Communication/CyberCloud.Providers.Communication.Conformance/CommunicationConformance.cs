@@ -1,5 +1,4 @@
 using CyberCloud.Conformance;
-using CyberCloud.Conformance.Harness;
 using CyberCloud.Providers.Communication.Contracts;
 using System.Collections.Immutable;
 using System.Text.Json.Nodes;
@@ -46,19 +45,19 @@ public sealed class CommunicationServiceCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Communication/services",
-            CreateProvider = () => new CommunicationProvider(),
+            CreateProvider = static () => new CommunicationProvider(),
             ReconcilerType = typeof(CommunicationServiceReconciler),
             // ⚠ The module's seam, read when the factory RUNS — after the harness attached a cluster
             // — and not when this case was constructed. CommunicationModule.Plane refuses by name if
             // that order is ever wrong.
-            CreateReconciler = clock => new CommunicationServiceReconciler(clock, Modules.Service.Plane),
+            CreateReconciler = static clock => new CommunicationServiceReconciler(clock, Modules.Service.Plane),
             Type = CommunicationServices.Type,
             ApiVersion = CommunicationServices.V2026,
-            Body = _ => CommunicationServices.Body("en"),
+            Body = static _ => CommunicationServices.Body("en"),
             // Changes the one property the grain holds beyond the name, and the send path reads it.
-            ChangedBody = _ => CommunicationServices.Body("cs-CZ"),
+            ChangedBody = static _ => CommunicationServices.Body("cs-CZ"),
             // Drops the required `/location` — the one required property this type has.
-            InvalidBody = _ => WithoutLocation(CommunicationServices.Body("en")),
+            InvalidBody = static _ => WithoutLocation(CommunicationServices.Body("en")),
             InvalidBodyTarget = "/location",
             // ⚠ Of the four, the one that takes no required argument: `send` needs a channel, a
             // recipient and a key, and the suite posts an EMPTY body. What the POST half of the verb
@@ -99,8 +98,11 @@ public sealed class CommunicationServiceCase : IProviderCaseSource {
 ///     <c>CyberCloud.Communication/services/channels</c>, registered into the shared provider suite.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The suite's reset removes every channel kind on the shared ancestor before each test,
-///     and this case is why <c>IConvergedModule.Reset</c> exists.</b> One service holds one
+///     ⚠
+///     <b>
+///         The suite's reset removes every channel kind on the shared ancestor before each test,
+///         and this case is why <c>IConvergedModule.Reset</c> exists.
+///     </b> One service holds one
 ///     configuration per kind, owned by one resource; every test here creates a fresh resource
 ///     saying <c>kind: email</c> under the same ancestor and never deletes it, so without the reset
 ///     the second test would be refused by the first test's leftover — correctly, and uselessly.
@@ -110,15 +112,15 @@ public sealed class CommunicationChannelCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Communication/services/channels",
-            CreateProvider = () => new CommunicationProvider(),
+            CreateProvider = static () => new CommunicationProvider(),
             ReconcilerType = typeof(CommunicationChannelReconciler),
-            CreateReconciler = clock => new CommunicationChannelReconciler(clock, Modules.Channel.Plane),
+            CreateReconciler = static clock => new CommunicationChannelReconciler(clock, Modules.Channel.Plane),
             Type = CommunicationChannels.Type,
             ApiVersion = CommunicationServices.V2026,
-            Body = _ => CommunicationChannels.Body(kind: "email", maxMessagesPerDay: 100),
+            Body = static _ => CommunicationChannels.Body("email", 100),
             // Changes the limit, which the grain holds and the send path reserves against.
-            ChangedBody = _ => CommunicationChannels.Body(kind: "email", maxMessagesPerDay: 250),
-            InvalidBody = _ => CommunicationServiceCase.WithoutProperty(CommunicationChannels.Body(), "kind"),
+            ChangedBody = static _ => CommunicationChannels.Body("email", 250),
+            InvalidBody = static _ => CommunicationServiceCase.WithoutProperty(CommunicationChannels.Body(), "kind"),
             InvalidBodyTarget = "/properties/kind",
             // ⚠ EXPLICITLY EMPTY — a channel is configuration and declares no action. Written out
             // rather than defaulted, for the reason ProviderConformanceCase.ActionName gives.
@@ -154,15 +156,23 @@ public sealed class CommunicationTemplateCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Communication/services/templates",
-            CreateProvider = () => new CommunicationProvider(),
+            CreateProvider = static () => new CommunicationProvider(),
             ReconcilerType = typeof(CommunicationTemplateReconciler),
-            CreateReconciler = clock => new CommunicationTemplateReconciler(clock, Modules.Template.Plane),
+            CreateReconciler = static clock => new CommunicationTemplateReconciler(clock, Modules.Template.Plane),
             Type = CommunicationTemplates.Type,
             ApiVersion = CommunicationServices.V2026,
-            Body = _ => CommunicationTemplates.Body(body: "Your code is {code}.", variables: [], optionalVariables: ["code"]),
+            Body = static _ => CommunicationTemplates.Body(
+                body: "Your code is {code}.",
+                variables: [],
+                optionalVariables: ["code"]
+            ),
             // Changes the text, which appends a version the send path would use.
-            ChangedBody = _ => CommunicationTemplates.Body(body: "Your one-time code is {code}.", variables: [], optionalVariables: ["code"]),
-            InvalidBody = _ => CommunicationServiceCase.WithoutProperty(CommunicationTemplates.Body(), "body"),
+            ChangedBody = static _ => CommunicationTemplates.Body(
+                body: "Your one-time code is {code}.",
+                variables: [],
+                optionalVariables: ["code"]
+            ),
+            InvalidBody = static _ => CommunicationServiceCase.WithoutProperty(CommunicationTemplates.Body(), "body"),
             InvalidBodyTarget = "/properties/body",
             ActionName = CommunicationTemplates.RenderAction,
             Objects = static (_, _) => [],
@@ -200,15 +210,18 @@ public sealed class CommunicationSuppressionCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.Communication/services/suppressions",
-            CreateProvider = () => new CommunicationProvider(),
+            CreateProvider = static () => new CommunicationProvider(),
             ReconcilerType = typeof(CommunicationSuppressionReconciler),
-            CreateReconciler = clock => new CommunicationSuppressionReconciler(clock, Modules.Suppression.Plane),
+            CreateReconciler = static clock => new CommunicationSuppressionReconciler(clock, Modules.Suppression.Plane),
             Type = CommunicationSuppressions.Type,
             ApiVersion = CommunicationServices.V2026,
-            Body = _ => CommunicationSuppressions.Body(note: "Asked us to stop."),
+            Body = static _ => CommunicationSuppressions.Body(note: "Asked us to stop."),
             // Changes the note, which the entry carries and a support case reads.
-            ChangedBody = _ => CommunicationSuppressions.Body(note: "Asked us to stop, twice."),
-            InvalidBody = _ => CommunicationServiceCase.WithoutProperty(CommunicationSuppressions.Body(), "destination"),
+            ChangedBody = static _ => CommunicationSuppressions.Body(note: "Asked us to stop, twice."),
+            InvalidBody = static _ => CommunicationServiceCase.WithoutProperty(
+                CommunicationSuppressions.Body(),
+                "destination"
+            ),
             InvalidBodyTarget = "/properties/destination",
             ActionName = string.Empty,
             Objects = static (_, _) => [],
@@ -231,31 +244,38 @@ public sealed class CommunicationSuppressionCase : IProviderCaseSource {
 /// <summary>The shared suite, run against the service type.</summary>
 /// <param name="cluster">The harness.</param>
 public sealed class CommunicationServiceConformance(ProviderTestCluster<CommunicationServiceCase> cluster)
-    : ProviderConformanceTests<CommunicationServiceCase>(cluster), IClassFixture<ProviderTestCluster<CommunicationServiceCase>>;
+    : ProviderConformanceTests<CommunicationServiceCase>(cluster),
+    IClassFixture<ProviderTestCluster<CommunicationServiceCase>>;
 
 /// <summary>The shared suite, run against the channel type.</summary>
 /// <param name="cluster">The harness.</param>
 public sealed class CommunicationChannelConformance(ProviderTestCluster<CommunicationChannelCase> cluster)
-    : ProviderConformanceTests<CommunicationChannelCase>(cluster), IClassFixture<ProviderTestCluster<CommunicationChannelCase>>;
+    : ProviderConformanceTests<CommunicationChannelCase>(cluster),
+    IClassFixture<ProviderTestCluster<CommunicationChannelCase>>;
 
 /// <summary>The shared suite, run against the template type.</summary>
 /// <param name="cluster">The harness.</param>
 public sealed class CommunicationTemplateConformance(ProviderTestCluster<CommunicationTemplateCase> cluster)
-    : ProviderConformanceTests<CommunicationTemplateCase>(cluster), IClassFixture<ProviderTestCluster<CommunicationTemplateCase>>;
+    : ProviderConformanceTests<CommunicationTemplateCase>(cluster),
+    IClassFixture<ProviderTestCluster<CommunicationTemplateCase>>;
 
 /// <summary>The shared suite, run against the suppression type.</summary>
 /// <param name="cluster">The harness.</param>
 public sealed class CommunicationSuppressionConformance(ProviderTestCluster<CommunicationSuppressionCase> cluster)
-    : ProviderConformanceTests<CommunicationSuppressionCase>(cluster), IClassFixture<ProviderTestCluster<CommunicationSuppressionCase>>;
+    : ProviderConformanceTests<CommunicationSuppressionCase>(cluster),
+    IClassFixture<ProviderTestCluster<CommunicationSuppressionCase>>;
 
 /// <summary>
 ///     The cluster-backed half, which this family does not have — said here, by name, rather than
 ///     left to be noticed.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Not derived from <c>ClusterBackedConformanceTests</c>, because that class's skip
-///     promises a <c>*.Cluster.Conformance</c> project that does not exist for this family and
-///     cannot yet.</b> <c>test/CyberCloud.Cluster.Conformance</c> refuses a case with no objects
+///     ⚠
+///     <b>
+///         Not derived from <c>ClusterBackedConformanceTests</c>, because that class's skip
+///         promises a <c>*.Cluster.Conformance</c> project that does not exist for this family and
+///         cannot yet.
+///     </b> <c>test/CyberCloud.Cluster.Conformance</c> refuses a case with no objects
 ///     (<c>ClusterConformanceTests.TheCaseOwnsClusterObjectsOrThisWholeSuiteWouldBeVacuous</c>),
 ///     so a clusterless family has no harness for the one criterion in that half that would mean
 ///     something here: killing the silo mid-create and finding the grains converged from real

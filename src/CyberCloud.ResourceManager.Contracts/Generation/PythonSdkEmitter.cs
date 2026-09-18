@@ -30,8 +30,11 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 ///         shape, the operation poller, and the <c>$skipToken</c> pager.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Dataclasses and explicit <c>to_wire</c>/<c>from_wire</c>, not reflection over
-///         type hints.</b> The wire name of a member and its Python name differ
+///         ⚠
+///         <b>
+///             Dataclasses and explicit <c>to_wire</c>/<c>from_wire</c>, not reflection over
+///             type hints.
+///         </b> The wire name of a member and its Python name differ
 ///         (<c>clusterId</c>, <c>cluster_id</c>), a leaf named <c>class</c> exists in the Cache
 ///         provider's document and cannot be a bare identifier, and a read-only member must be
 ///         read and never written. Each of those is a rule a generated method states in one line
@@ -50,8 +53,11 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 ///     <para>
 ///         ⚠ <b>What this cannot check, said plainly.</b> Nothing in the .NET build runs Python.
 ///         <see cref="Problems" /> is the cheap self-check — every model the client names is one
-///         the models declare, every file carries its banner — and the <c>Generated Python SDK
-///         compiles</c> gate in <c>build/Build.Architecture.cs</c> hands the checked-in package to
+///         the models declare, every file carries its banner — and the
+///         <c>
+/// Generated Python SDK
+///         compiles
+///         </c> gate in <c>build/Build.Architecture.cs</c> hands the checked-in package to
 ///         <c>python -m compileall</c>, and to <c>mypy</c> when it is installed, reporting ○ with
 ///         the reason when the toolchain is absent rather than ✔.
 ///     </para>
@@ -95,7 +101,7 @@ public static class PythonSdkEmitter {
     public static ImmutableSortedDictionary<string, string> Root(IEnumerable<string> apiVersions) {
         ArgumentNullException.ThrowIfNull(apiVersions);
 
-        var versions = apiVersions.OrderBy(x => x, StringComparer.Ordinal).ToList();
+        var versions = apiVersions.OrderBy(static x => x, StringComparer.Ordinal).ToList();
         var root = new StringBuilder(Banner);
 
         root.Append("\n# ./build.sh Generate overwrites this file and ./build.sh Architecture fails on a difference.\n")
@@ -103,15 +109,17 @@ public static class PythonSdkEmitter {
             .Append("One subpackage per api-version; import the one your platform serves:\n\n");
 
         foreach (var version in versions) {
-            root.Append("    from cybercloud.").Append(ModuleOf(version)).Append(" import CyberCloudClient, HttpTransport\n");
+            root.Append("    from cybercloud.")
+                .Append(ModuleOf(version))
+                .Append(" import CyberCloudClient, HttpTransport\n");
         }
 
         root.Append("\n⚠ Every file under this package is generated. docs/plan/21 § Generation.\n\"\"\"\n\n")
             .Append("API_VERSIONS = (")
             .Append(string.Join(", ", versions.Select(Quote)))
             // A one-element tuple needs its trailing comma, or it is a parenthesised string.
-            .Append(versions.Count == 1 ? ",)" : ")")
-            .Append("\n\"\"\"Every api-version this package carries a client for, oldest first.\"\"\"\n");
+                .Append(versions.Count == 1 ? ",)" : ")")
+                .Append("\n\"\"\"Every api-version this package carries a client for, oldest first.\"\"\"\n");
 
         var manifest = Banner
             + "\n# ./build.sh Generate overwrites this file and ./build.sh Architecture fails on a difference.\n"
@@ -188,8 +196,11 @@ public static class PythonSdkEmitter {
     /// <param name="version">The api-version the subpackage is for.</param>
     /// <param name="models">Every name <c>models.py</c> declares, in its own <c>__all__</c> order.</param>
     /// <remarks>
-    ///     ⚠ <b>The subpackage's <c>__all__</c> lists every model by name, not only the runtime
-    ///     ten.</b> <c>from .models import *</c> binds the models on the subpackage, and a named
+    ///     ⚠
+    ///     <b>
+    ///         The subpackage's <c>__all__</c> lists every model by name, not only the runtime
+    ///         ten.
+    ///     </b> <c>from .models import *</c> binds the models on the subpackage, and a named
     ///     import of one works with or without this — but <c>from cybercloud.v2026_08_01 import *</c>
     ///     exports exactly what the subpackage's own <c>__all__</c> lists, and the first cut listed
     ///     ten names beside a comment calling the models "the public surface", so that import bound
@@ -199,7 +210,9 @@ public static class PythonSdkEmitter {
     static string Index(string version, IEnumerable<string> models) {
         var built = new StringBuilder(Head(version));
 
-        built.Append("\"\"\"The CyberCloud API at api-version ").Append(version).Append(", typed.\"\"\"\n\n")
+        built.Append("\"\"\"The CyberCloud API at api-version ")
+            .Append(version)
+            .Append(", typed.\"\"\"\n\n")
             .Append("from ._runtime import (\n")
             .Append("    API_VERSION,\n")
             .Append("    HttpTransport,\n")
@@ -212,10 +225,12 @@ public static class PythonSdkEmitter {
             .Append("    Transport,\n")
             .Append(")\n")
             .Append("from .client import CyberCloudClient\n")
-            .Append("from .models import *  # noqa: F401,F403 — the models are the public surface, and __all__ below names each\n\n")
+            .Append(
+                "from .models import *  # noqa: F401,F403 — the models are the public surface, and __all__ below names each\n\n"
+            )
             .Append("__all__ = [\n");
 
-        foreach (var name in RuntimeExports.Concat(models).OrderBy(x => x, StringComparer.Ordinal)) {
+        foreach (var name in RuntimeExports.Concat(models).OrderBy(static x => x, StringComparer.Ordinal)) {
             built.Append("    ").Append(Quote(name)).Append(",\n");
         }
 
@@ -279,7 +294,9 @@ public static class PythonSdkEmitter {
         foreach (var line in models.Split('\n')) {
             if (line.StartsWith("class ", StringComparison.Ordinal)) {
                 declared.Add(line[6..].TrimEnd(':', ' '));
-            } else if (line.Length > 0 && char.IsAsciiLetterUpper(line[0]) && line.Contains(" = ", StringComparison.Ordinal)) {
+            } else if (line.Length > 0
+                       && char.IsAsciiLetterUpper(line[0])
+                       && line.Contains(" = ", StringComparison.Ordinal)) {
                 declared.Add(line[..line.IndexOf(' ', StringComparison.Ordinal)]);
             }
         }
@@ -336,7 +353,9 @@ public static class PythonSdkEmitter {
 
         built.Append("\n\nOperationState = ");
         AppendLiteral(built, states);
-        built.Append("\n\"\"\"Azure's status vocabulary. ⚠ Terminal means Succeeded, Failed or Canceled; poll until then.\"\"\"\n");
+        built.Append(
+            "\n\"\"\"Azure's status vocabulary. ⚠ Terminal means Succeeded, Failed or Canceled; poll until then.\"\"\"\n"
+        );
 
         if (schemas[OpenApiEmitter.OperationProgressSchema] is JsonObject progress) {
             AppendPlainClass(
@@ -345,7 +364,7 @@ public static class PythonSdkEmitter {
                 DocumentReader.Text(progress["description"]),
                 DocumentReader.LeavesOf(progress),
                 default,
-                writable: false
+                false
             );
         }
 
@@ -358,7 +377,17 @@ public static class PythonSdkEmitter {
         foreach (var leaf in DocumentReader.LeavesOf(status)) {
             switch (leaf.Name) {
                 case "error":
-                    members.Add(new(leaf.Name, "error", "CyberCloudError", false, false, "_opt(wire, \"error\", CyberCloudError.from_wire)", "Present once the status is Failed, and the reason."));
+                    members.Add(
+                        new(
+                            leaf.Name,
+                            "error",
+                            "CyberCloudError",
+                            false,
+                            false,
+                            """_opt(wire, "error", CyberCloudError.from_wire)""",
+                            "Present once the status is Failed, and the reason."
+                        )
+                    );
                     break;
 
                 case "progress":
@@ -369,23 +398,38 @@ public static class PythonSdkEmitter {
                             "List[OperationProgress]",
                             served.Contains(leaf.Name),
                             false,
-                            "[OperationProgress.from_wire(x) for x in wire.get(\"progress\") or []]",
+                            """[OperationProgress.from_wire(x) for x in wire.get("progress") or []]""",
                             "Oldest first. What makes a nine-minute cluster creation tolerable — docs/plan/10."
                         )
                     );
                     break;
 
                 case "status":
-                    members.Add(new(leaf.Name, "status", "OperationState", true, false, "wire[\"status\"]", string.Empty));
+                    members.Add(
+                        new(leaf.Name, "status", "OperationState", true, false, """wire["status"]""", string.Empty)
+                    );
                     break;
 
                 default:
-                    members.Add(Member(leaf with { Required = leaf.Required || served.Contains(leaf.Name) }, default, string.Empty));
+                    members.Add(
+                        Member(
+                            leaf with { Required = leaf.Required || served.Contains(leaf.Name) },
+                            default,
+                            string.Empty
+                        )
+                    );
                     break;
             }
         }
 
-        AppendClassFrom(built, string.Empty, "OperationStatus", DocumentReader.Text(status["description"]), members, writable: false);
+        AppendClassFrom(
+            built,
+            string.Empty,
+            "OperationStatus",
+            DocumentReader.Text(status["description"]),
+            members,
+            false
+        );
     }
 
     static void AppendScopeModels(StringBuilder built, JsonObject document, ImmutableArray<DocumentScope> scopes) {
@@ -403,10 +447,10 @@ public static class PythonSdkEmitter {
             "A tenant, a subscription or a resource group, as the API renders it. ⚠ There is no provisioningState: a scope converges before the call returns.",
             leaves,
             EnumNaming.For("Scope", leaves),
-            writable: false
+            false
         );
 
-        foreach (var scope in scopes.Where(x => x.Creatable)) {
+        foreach (var scope in scopes.Where(static x => x.Creatable)) {
             var name = ScopeContent(scope);
             var body = DocumentReader.LeavesOf(scope.Body);
 
@@ -417,7 +461,7 @@ public static class PythonSdkEmitter {
                 "The body of a PUT that creates a " + scope.DisplayName.ToLowerInvariant() + ".",
                 body,
                 EnumNaming.For(name, body),
-                writable: true
+                true
             );
         }
     }
@@ -445,7 +489,10 @@ public static class PythonSdkEmitter {
             string.Empty,
             model + "Data",
             model + "Data",
-            type.DisplayName + ". " + (type.Summary.Length > 0 ? type.Summary + " " : string.Empty) + "The body a caller writes.",
+            type.DisplayName
+            + ". "
+            + (type.Summary.Length > 0 ? type.Summary + " " : string.Empty)
+            + "The body a caller writes.",
             type.Body,
             string.Empty,
             naming
@@ -457,7 +504,15 @@ public static class PythonSdkEmitter {
         var envelope = DocumentReader.LeavesOf(type.Envelope);
         var served = DocumentReader.ReadRequiredOf(type.Envelope);
         var members = new List<PyMember> {
-            new("", "data", model + "Data", true, false, model + "Data.from_wire(wire)", "The body, as the caller wrote it and the manager holds it.")
+            new(
+                "",
+                "data",
+                model + "Data",
+                true,
+                false,
+                model + "Data.from_wire(wire)",
+                "The body, as the caller wrote it and the manager holds it."
+            )
         };
 
         foreach (var leaf in envelope) {
@@ -465,7 +520,13 @@ public static class PythonSdkEmitter {
                 continue;
             }
 
-            members.Add(Member(leaf with { Required = served.Contains(leaf.Name) }, EnumNaming.For(string.Empty, envelope), string.Empty));
+            members.Add(
+                Member(
+                    leaf with { Required = served.Contains(leaf.Name) },
+                    EnumNaming.For(string.Empty, envelope),
+                    string.Empty
+                )
+            );
         }
 
         AppendClassFrom(
@@ -474,7 +535,7 @@ public static class PythonSdkEmitter {
             model + "Resource",
             "One " + type.DisplayName + ", as the API returns it: the Resource envelope, then the body, then tags.",
             members,
-            writable: false
+            false
         );
 
         foreach (var action in type.Actions) {
@@ -483,7 +544,16 @@ public static class PythonSdkEmitter {
                 var requestLeaves = DocumentReader.LeavesOf(request);
 
                 AppendLiterals(built, name, requestLeaves);
-                AppendObjectClass(built, string.Empty, name, name, "The parameters of " + action.Name + ".", request, string.Empty, EnumNaming.For(name, requestLeaves));
+                AppendObjectClass(
+                    built,
+                    string.Empty,
+                    name,
+                    name,
+                    "The parameters of " + action.Name + ".",
+                    request,
+                    string.Empty,
+                    EnumNaming.For(name, requestLeaves)
+                );
             }
 
             if (action.Response is { } response) {
@@ -496,7 +566,10 @@ public static class PythonSdkEmitter {
                     string.Empty,
                     name,
                     name,
-                    "What " + action.Name + " returns." + (action.Secret ? " ⚠ Secret material — never log or persist this." : string.Empty),
+                    "What "
+                    + action.Name
+                    + " returns."
+                    + (action.Secret ? " ⚠ Secret material — never log or persist this." : string.Empty),
                     response,
                     string.Empty,
                     EnumNaming.For(name, responseLeaves)
@@ -551,7 +624,14 @@ public static class PythonSdkEmitter {
     /// <param name="ReadOnly">Whether <c>to_wire</c> leaves it out.</param>
     /// <param name="Read">The expression <c>from_wire</c> evaluates over <c>wire</c>.</param>
     /// <param name="Doc">A comment above the member, or empty.</param>
-    readonly record struct PyMember(string WireName, string Name, string Type, bool Required, bool ReadOnly, string Read, string Doc);
+    readonly record struct PyMember(
+        string WireName,
+        string Name,
+        string Type,
+        bool Required,
+        bool ReadOnly,
+        string Read,
+        string Doc);
 
     /// <summary>A scalar leaf as a member; a container is built by <see cref="AppendObjectClass" />.</summary>
     static PyMember Member(SchemaLeaf leaf, EnumNaming naming, string owner) {
@@ -621,13 +701,19 @@ public static class PythonSdkEmitter {
                 ? names.Select(DocumentReader.Text).ToHashSet(StringComparer.Ordinal)
                 : [];
 
-            foreach (var member in properties.ToList().OrderBy(x => x.Key, StringComparer.Ordinal)) {
+            foreach (var member in properties.ToList().OrderBy(static x => x.Key, StringComparer.Ordinal)) {
                 if (member.Value is not JsonObject child) {
                     continue;
                 }
 
                 var isObject = DocumentReader.TypeOf(child) == "object" && child["properties"] is JsonObject;
-                var leaf = new SchemaLeaf(pointer + "/" + member.Key, member.Key, child, required.Contains(member.Key), isObject);
+                var leaf = new SchemaLeaf(
+                    pointer + "/" + member.Key,
+                    member.Key,
+                    child,
+                    required.Contains(member.Key),
+                    isObject
+                );
                 var identifier = Identifier(member.Key);
 
                 Claim(taken, identifier, leaf.JsonPointer, qualified);
@@ -659,10 +745,18 @@ public static class PythonSdkEmitter {
             }
         }
 
-        built.Append('\n').Append(indent.Length == 0 ? "\n" : string.Empty)
-            .Append(indent).Append("@dataclass\n")
-            .Append(indent).Append("class ").Append(name).Append(":\n")
-            .Append(indent).Append("    \"\"\"").Append(Docstring(doc)).Append("\"\"\"\n");
+        built.Append('\n')
+            .Append(indent.Length == 0 ? "\n" : string.Empty)
+            .Append(indent)
+            .Append("@dataclass\n")
+            .Append(indent)
+            .Append("class ")
+            .Append(name)
+            .Append(":\n")
+            .Append(indent)
+            .Append("    \"\"\"")
+            .Append(Docstring(doc))
+            .Append("\"\"\"\n");
 
         foreach (var (childName, childQualified, leaf) in nested) {
             AppendObjectClass(
@@ -670,7 +764,9 @@ public static class PythonSdkEmitter {
                 indent + "    ",
                 childName,
                 childQualified,
-                DocumentReader.Text(leaf.Schema["description"]) is { Length: > 0 } text ? text : "The " + leaf.Name + " object.",
+                DocumentReader.Text(leaf.Schema["description"]) is { Length: > 0 } text
+                    ? text
+                    : "The " + leaf.Name + " object.",
                 leaf.Schema,
                 leaf.JsonPointer,
                 naming
@@ -680,14 +776,35 @@ public static class PythonSdkEmitter {
         // ⚠ The qualified name in from_wire's return annotation, never the bare one: a method's
         // annotations are resolved from the module, not from the class bodies around it, so a
         // nested class naming itself would name nothing.
-        AppendMembers(built, indent + "    ", qualified, members, writable: true, nestedContainers: nested.Select(x => x.Leaf.Name).ToHashSet(StringComparer.Ordinal));
+        AppendMembers(
+            built,
+            indent + "    ",
+            qualified,
+            members,
+            true,
+            nested.Select(static x => x.Leaf.Name).ToHashSet(StringComparer.Ordinal)
+        );
     }
 
-    static void AppendClassFrom(StringBuilder built, string indent, string name, string doc, List<PyMember> members, bool writable) {
+    static void AppendClassFrom(
+        StringBuilder built,
+        string indent,
+        string name,
+        string doc,
+        List<PyMember> members,
+        bool writable
+    ) {
         built.Append("\n\n")
-            .Append(indent).Append("@dataclass\n")
-            .Append(indent).Append("class ").Append(name).Append(":\n")
-            .Append(indent).Append("    \"\"\"").Append(Docstring(doc)).Append("\"\"\"\n");
+            .Append(indent)
+            .Append("@dataclass\n")
+            .Append(indent)
+            .Append("class ")
+            .Append(name)
+            .Append(":\n")
+            .Append(indent)
+            .Append("    \"\"\"")
+            .Append(Docstring(doc))
+            .Append("\"\"\"\n");
 
         AppendMembers(built, indent + "    ", name, members, writable, []);
     }
@@ -708,8 +825,9 @@ public static class PythonSdkEmitter {
         bool writable,
         HashSet<string> nestedContainers
     ) {
-        var ordered = members.Where(x => x.Required).OrderBy(x => x.Name, StringComparer.Ordinal)
-            .Concat(members.Where(x => !x.Required).OrderBy(x => x.Name, StringComparer.Ordinal))
+        var ordered = members.Where(static x => x.Required)
+            .OrderBy(static x => x.Name, StringComparer.Ordinal)
+            .Concat(members.Where(static x => !x.Required).OrderBy(static x => x.Name, StringComparer.Ordinal))
             .ToList();
 
         built.Append('\n');
@@ -739,10 +857,16 @@ public static class PythonSdkEmitter {
         }
 
         built.Append('\n')
-            .Append(indent).Append("@classmethod\n")
-            .Append(indent).Append("def from_wire(cls, wire: Wire) -> ").Append(name).Append(":\n")
-            .Append(indent).Append("    \"\"\"Reads one off the wire. Unknown members are ignored.\"\"\"\n")
-            .Append(indent).Append("    return cls(\n");
+            .Append(indent)
+            .Append("@classmethod\n")
+            .Append(indent)
+            .Append("def from_wire(cls, wire: Wire) -> ")
+            .Append(name)
+            .Append(":\n")
+            .Append(indent)
+            .Append("    \"\"\"Reads one off the wire. Unknown members are ignored.\"\"\"\n")
+            .Append(indent)
+            .Append("    return cls(\n");
 
         foreach (var member in ordered) {
             built.Append(indent).Append("        ").Append(member.Name).Append('=').Append(member.Read).Append(",\n");
@@ -755,9 +879,14 @@ public static class PythonSdkEmitter {
         }
 
         built.Append('\n')
-            .Append(indent).Append("def to_wire(self) -> Wire:\n")
-            .Append(indent).Append("    \"\"\"Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it.\"\"\"\n")
-            .Append(indent).Append("    wire: Wire = {}\n");
+            .Append(indent)
+            .Append("def to_wire(self) -> Wire:\n")
+            .Append(indent)
+            .Append(
+                "    \"\"\"Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it.\"\"\"\n"
+            )
+            .Append(indent)
+            .Append("    wire: Wire = {}\n");
 
         foreach (var member in ordered) {
             if (member.ReadOnly || member.WireName.Length == 0) {
@@ -769,10 +898,23 @@ public static class PythonSdkEmitter {
                 : "self." + member.Name;
 
             if (member.Required) {
-                built.Append(indent).Append("    wire[").Append(Quote(member.WireName)).Append("] = ").Append(value).Append('\n');
+                built.Append(indent)
+                    .Append("    wire[")
+                    .Append(Quote(member.WireName))
+                    .Append("] = ")
+                    .Append(value)
+                    .Append('\n');
             } else {
-                built.Append(indent).Append("    if self.").Append(member.Name).Append(" is not None:\n")
-                    .Append(indent).Append("        wire[").Append(Quote(member.WireName)).Append("] = ").Append(value).Append('\n');
+                built.Append(indent)
+                    .Append("    if self.")
+                    .Append(member.Name)
+                    .Append(" is not None:\n")
+                    .Append(indent)
+                    .Append("        wire[")
+                    .Append(Quote(member.WireName))
+                    .Append("] = ")
+                    .Append(value)
+                    .Append('\n');
             }
         }
 
@@ -816,7 +958,9 @@ public static class PythonSdkEmitter {
     }
 
     static string Scalar(JsonObject schema, EnumNaming naming, SchemaLeaf leaf, string? declared = null) {
-        if (!DocumentReader.EnumOf(schema).IsEmpty && naming.Model is not null && DocumentReader.TypeOf(leaf.Schema) == "array") {
+        if (!DocumentReader.EnumOf(schema).IsEmpty
+            && naming.Model is not null
+            && DocumentReader.TypeOf(leaf.Schema) == "array") {
             return naming.NameOf(leaf);
         }
 
@@ -845,7 +989,7 @@ public static class PythonSdkEmitter {
                 counts[leaf.Name] = counts.GetValueOrDefault(leaf.Name) + 1;
             }
 
-            return new(model, [.. counts.Where(x => x.Value > 1).Select(x => x.Key)]);
+            return new(model, [.. counts.Where(static x => x.Value > 1).Select(static x => x.Key)]);
         }
 
         public string NameOf(SchemaLeaf leaf) =>
@@ -893,7 +1037,7 @@ public static class PythonSdkEmitter {
             imported.Add("ScopeResource");
         }
 
-        foreach (var scope in scopes.Where(x => x.Creatable)) {
+        foreach (var scope in scopes.Where(static x => x.Creatable)) {
             imported.Add(ScopeContent(scope));
         }
 
@@ -918,10 +1062,16 @@ public static class PythonSdkEmitter {
         }
 
         built.Append(")\n\n")
-            .Append("GENERATED_API_VERSION = ").Append(Quote(version)).Append('\n')
-            .Append("\"\"\"The api-version this client was generated at. The transport sends it on every request.\"\"\"\n\n\n")
+            .Append("GENERATED_API_VERSION = ")
+            .Append(Quote(version))
+            .Append('\n')
+            .Append(
+                "\"\"\"The api-version this client was generated at. The transport sends it on every request.\"\"\"\n\n\n"
+            )
             .Append("def _segment(value: str) -> str:\n")
-            .Append("    \"\"\"Percent-encodes one path segment. ⚠ A name is caller data and a '/' in one would forge a path.\"\"\"\n")
+            .Append(
+                "    \"\"\"Percent-encodes one path segment. ⚠ A name is caller data and a '/' in one would forge a path.\"\"\"\n"
+            )
             .Append("    return quote(value, safe=\"\")\n\n\n")
             .Append("def _nothing(wire: object) -> None:\n")
             .Append("    \"\"\"What a delete resolves to: the resource is gone, so there is nothing to read.\"\"\"\n")
@@ -935,8 +1085,8 @@ public static class PythonSdkEmitter {
             AppendScopeClient(built, scope);
         }
 
-        var groups = types.GroupBy(x => x.ProviderNamespace, StringComparer.Ordinal)
-            .OrderBy(x => x.Key, StringComparer.Ordinal)
+        var groups = types.GroupBy(static x => x.ProviderNamespace, StringComparer.Ordinal)
+            .OrderBy(static x => x.Key, StringComparer.Ordinal)
             .ToList();
 
         foreach (var group in groups) {
@@ -961,7 +1111,9 @@ public static class PythonSdkEmitter {
             .Append("    def __init__(self, transport: Transport) -> None:\n")
             .Append("        self._transport = transport\n\n")
             .Append("    def get(self, operation_id: str) -> OperationStatus:\n")
-            .Append("        \"\"\"Polls one operation. ⚠ The Azure-AsyncOperation header is an absolute URL; the id is its last segment.\"\"\"\n")
+            .Append(
+                "        \"\"\"Polls one operation. ⚠ The Azure-AsyncOperation header is an absolute URL; the id is its last segment.\"\"\"\n"
+            )
             .Append("        response = self._transport.send(Request(\"GET\", ")
             .Append(PathExpression(OperationPath))
             .Append("))\n")
@@ -971,19 +1123,29 @@ public static class PythonSdkEmitter {
     static void AppendScopeClient(StringBuilder built, DocumentScope scope) {
         var name = SdkEmitter.Pascal(scope.Kind) + "sClient";
         var placeholders = DocumentReader.PlaceholdersOf(scope.Path);
-        var parameters = string.Join(", ", placeholders.Select(x => Snake(x) + ": str"));
+        var parameters = string.Join(", ", placeholders.Select(static x => Snake(x) + ": str"));
 
         if (scope.Kind == "resourceGroup") {
             name = "ResourceGroupsClient";
         }
 
-        built.Append("\n\nclass ").Append(name).Append(":\n")
-            .Append("    \"\"\"").Append(Docstring(scope.DisplayPlural + ". " + scope.Summary)).Append("\"\"\"\n\n")
+        built.Append("\n\nclass ")
+            .Append(name)
+            .Append(":\n")
+            .Append("    \"\"\"")
+            .Append(Docstring(scope.DisplayPlural + ". " + scope.Summary))
+            .Append("\"\"\"\n\n")
             .Append("    def __init__(self, transport: Transport) -> None:\n")
             .Append("        self._transport = transport\n\n")
-            .Append("    def get(self, ").Append(parameters).Append(") -> ScopeResource:\n")
-            .Append("        \"\"\"Reads one ").Append(Docstring(scope.DisplayName.ToLowerInvariant())).Append(".\"\"\"\n")
-            .Append("        response = self._transport.send(Request(\"GET\", ").Append(PathExpression(scope.Path)).Append("))\n")
+            .Append("    def get(self, ")
+            .Append(parameters)
+            .Append(") -> ScopeResource:\n")
+            .Append("        \"\"\"Reads one ")
+            .Append(Docstring(scope.DisplayName.ToLowerInvariant()))
+            .Append(".\"\"\"\n")
+            .Append("        response = self._transport.send(Request(\"GET\", ")
+            .Append(PathExpression(scope.Path))
+            .Append("))\n")
             .Append("        raise_for_status(response)\n")
             .Append("        return ScopeResource.from_wire(wire_of(response))\n");
 
@@ -991,99 +1153,197 @@ public static class PythonSdkEmitter {
             // Emitted only when the document declares the collection, as a resource type's `list`
             // is — the tenant has none. The same Pager a resource listing walks, over ScopeResource.
             var collectionPlaceholders = DocumentReader.PlaceholdersOf(scope.CollectionPath);
-            var collectionParameters = string.Join(", ", collectionPlaceholders.Select(x => Snake(x) + ": str"));
+            var collectionParameters = string.Join(", ", collectionPlaceholders.Select(static x => Snake(x) + ": str"));
 
-            built.Append("\n    def list(self, ").Append(collectionParameters).Append(collectionPlaceholders.IsEmpty ? string.Empty : ", ")
+            built.Append("\n    def list(self, ")
+                .Append(collectionParameters)
+                .Append(collectionPlaceholders.IsEmpty ? string.Empty : ", ")
                 .Append("*, top: Optional[int] = None) -> Pager[ScopeResource]:\n")
-                .Append("        \"\"\"Lists the ").Append(Docstring(scope.DisplayPlural.ToLowerInvariant()))
-                .Append(" the caller may read, page by page. ⚠ A short page never means \"that is all there is\".\"\"\"\n")
-                .Append("        return Pager(self._transport, ").Append(PathExpression(scope.CollectionPath)).Append(", top, ScopeResource.from_wire)\n");
+                .Append("        \"\"\"Lists the ")
+                .Append(Docstring(scope.DisplayPlural.ToLowerInvariant()))
+                .Append(
+                    " the caller may read, page by page. ⚠ A short page never means \"that is all there is\".\"\"\"\n"
+                )
+                .Append("        return Pager(self._transport, ")
+                .Append(PathExpression(scope.CollectionPath))
+                .Append(", top, ScopeResource.from_wire)\n");
         }
 
         if (!scope.Creatable) {
             built.Append("\n    # ⚠ There is no create, and the absence is the contract: a request's tenant is\n")
-                .Append("    # resolved from its token, so a call creating another tenant is refused before routing.\n");
+                .Append(
+                    "    # resolved from its token, so a call creating another tenant is refused before routing.\n"
+                );
 
             return;
         }
 
-        built.Append("\n    def create(self, ").Append(parameters).Append(", content: ").Append(ScopeContent(scope)).Append(") -> ScopeResource:\n")
-            .Append("        \"\"\"Creates one ").Append(Docstring(scope.DisplayName.ToLowerInvariant()))
-            .Append(", or returns the existing one unchanged. ⚠ 201 the first time and 200 on a repeat, and no operation to poll.\"\"\"\n")
-            .Append("        response = self._transport.send(Request(\"PUT\", ").Append(PathExpression(scope.Path)).Append(", body=content.to_wire()))\n")
+        built.Append("\n    def create(self, ")
+            .Append(parameters)
+            .Append(", content: ")
+            .Append(ScopeContent(scope))
+            .Append(") -> ScopeResource:\n")
+            .Append("        \"\"\"Creates one ")
+            .Append(Docstring(scope.DisplayName.ToLowerInvariant()))
+            .Append(
+                ", or returns the existing one unchanged. ⚠ 201 the first time and 200 on a repeat, and no operation to poll.\"\"\"\n"
+            )
+            .Append("        response = self._transport.send(Request(\"PUT\", ")
+            .Append(PathExpression(scope.Path))
+            .Append(", body=content.to_wire()))\n")
             .Append("        raise_for_status(response)\n")
             .Append("        return ScopeResource.from_wire(wire_of(response))\n");
     }
 
     static void AppendTypeClient(StringBuilder built, DocumentType type, string model) {
         var placeholders = DocumentReader.PlaceholdersOf(type.Path);
-        var parameters = string.Join(", ", placeholders.Select(x => Snake(x) + ": str"));
+        var parameters = string.Join(", ", placeholders.Select(static x => Snake(x) + ": str"));
         var path = PathExpression(type.Path);
 
-        built.Append("\n\nclass ").Append(model).Append("Client:\n")
-            .Append("    \"\"\"").Append(Docstring(type.DisplayPlural + " — " + type.ResourceType + "." + (type.Summary.Length > 0 ? " " + type.Summary : string.Empty))).Append("\"\"\"\n\n")
+        built.Append("\n\nclass ")
+            .Append(model)
+            .Append("Client:\n")
+            .Append("    \"\"\"")
+            .Append(
+                Docstring(
+                    type.DisplayPlural
+                    + " — "
+                    + type.ResourceType
+                    + "."
+                    + (type.Summary.Length > 0 ? " " + type.Summary : string.Empty)
+                )
+            )
+            .Append("\"\"\"\n\n")
             .Append("    def __init__(self, transport: Transport) -> None:\n")
             .Append("        self._transport = transport\n\n");
 
-        built.Append("    def get(self, ").Append(parameters).Append(") -> ").Append(model).Append("Resource:\n")
-            .Append("        \"\"\"Reads one ").Append(Docstring(type.DisplayName)).Append(".\"\"\"\n")
-            .Append("        response = self._transport.send(Request(\"GET\", ").Append(path).Append("))\n")
+        built.Append("    def get(self, ")
+            .Append(parameters)
+            .Append(") -> ")
+            .Append(model)
+            .Append("Resource:\n")
+            .Append("        \"\"\"Reads one ")
+            .Append(Docstring(type.DisplayName))
+            .Append(".\"\"\"\n")
+            .Append("        response = self._transport.send(Request(\"GET\", ")
+            .Append(path)
+            .Append("))\n")
             .Append("        raise_for_status(response)\n")
-            .Append("        return ").Append(model).Append("Resource.from_wire(wire_of(response))\n\n");
+            .Append("        return ")
+            .Append(model)
+            .Append("Resource.from_wire(wire_of(response))\n\n");
 
-        built.Append("    def begin_create_or_update(self, ").Append(parameters).Append(", data: ").Append(model).Append("Data) -> Operation[").Append(model).Append("Resource]:\n")
-            .Append("        \"\"\"Creates or replaces one ").Append(Docstring(type.DisplayName)).Append(". ⚠ Long-running: wait() on the result.\"\"\"\n")
-            .Append("        path = ").Append(path).Append('\n')
+        built.Append("    def begin_create_or_update(self, ")
+            .Append(parameters)
+            .Append(", data: ")
+            .Append(model)
+            .Append("Data) -> Operation[")
+            .Append(model)
+            .Append("Resource]:\n")
+            .Append("        \"\"\"Creates or replaces one ")
+            .Append(Docstring(type.DisplayName))
+            .Append(". ⚠ Long-running: wait() on the result.\"\"\"\n")
+            .Append("        path = ")
+            .Append(path)
+            .Append('\n')
             .Append("        response = self._transport.send(Request(\"PUT\", path, body=data.to_wire()))\n")
             .Append("        raise_for_status(response)\n")
-            .Append("        return Operation(self._transport, response, ").Append(model).Append("Resource.from_wire, path)\n\n");
+            .Append("        return Operation(self._transport, response, ")
+            .Append(model)
+            .Append("Resource.from_wire, path)\n\n");
 
-        built.Append("    def begin_update(self, ").Append(parameters).Append(", data: ").Append(model).Append("Data) -> Operation[").Append(model).Append("Resource]:\n")
-            .Append("        \"\"\"Amends one ").Append(Docstring(type.DisplayName)).Append(". A merge patch: what is not set is not changed.\"\"\"\n")
-            .Append("        path = ").Append(path).Append('\n')
+        built.Append("    def begin_update(self, ")
+            .Append(parameters)
+            .Append(", data: ")
+            .Append(model)
+            .Append("Data) -> Operation[")
+            .Append(model)
+            .Append("Resource]:\n")
+            .Append("        \"\"\"Amends one ")
+            .Append(Docstring(type.DisplayName))
+            .Append(". A merge patch: what is not set is not changed.\"\"\"\n")
+            .Append("        path = ")
+            .Append(path)
+            .Append('\n')
             .Append("        response = self._transport.send(Request(\"PATCH\", path, body=data.to_wire()))\n")
             .Append("        raise_for_status(response)\n")
-            .Append("        return Operation(self._transport, response, ").Append(model).Append("Resource.from_wire, path)\n\n");
+            .Append("        return Operation(self._transport, response, ")
+            .Append(model)
+            .Append("Resource.from_wire, path)\n\n");
 
-        built.Append("    def begin_delete(self, ").Append(parameters).Append(") -> Operation[None]:\n")
-            .Append("        \"\"\"Deletes one ").Append(Docstring(type.DisplayName)).Append('.')
+        built.Append("    def begin_delete(self, ")
+            .Append(parameters)
+            .Append(") -> Operation[None]:\n")
+            .Append("        \"\"\"Deletes one ")
+            .Append(Docstring(type.DisplayName))
+            .Append('.')
             .Append(
                 type.SoftDeleteDays > 0
                     ? " ⚠ Recoverable for " + DocumentReader.Count(type.SoftDeleteDays) + " day(s)."
                     : " ⚠ Permanent: this type declares no soft-delete window."
             )
             .Append("\"\"\"\n")
-            .Append("        response = self._transport.send(Request(\"DELETE\", ").Append(path).Append("))\n")
+            .Append("        response = self._transport.send(Request(\"DELETE\", ")
+            .Append(path)
+            .Append("))\n")
             .Append("        raise_for_status(response)\n")
             .Append("        return Operation(self._transport, response, _nothing, None)\n");
 
         if (type.CollectionPath.Length > 0) {
             var collectionPlaceholders = DocumentReader.PlaceholdersOf(type.CollectionPath);
-            var collectionParameters = string.Join(", ", collectionPlaceholders.Select(x => Snake(x) + ": str"));
+            var collectionParameters = string.Join(", ", collectionPlaceholders.Select(static x => Snake(x) + ": str"));
 
-            built.Append("\n    def list(self, ").Append(collectionParameters).Append(collectionPlaceholders.IsEmpty ? string.Empty : ", ")
-                .Append("*, top: Optional[int] = None) -> Pager[").Append(model).Append("Resource]:\n")
-                .Append("        \"\"\"Lists the ").Append(Docstring(type.DisplayPlural))
-                .Append(" in a resource group, page by page. ⚠ A short page never means \"that is all there is\".\"\"\"\n")
-                .Append("        return Pager(self._transport, ").Append(PathExpression(type.CollectionPath)).Append(", top, ").Append(model).Append("Resource.from_wire)\n");
+            built.Append("\n    def list(self, ")
+                .Append(collectionParameters)
+                .Append(collectionPlaceholders.IsEmpty ? string.Empty : ", ")
+                .Append("*, top: Optional[int] = None) -> Pager[")
+                .Append(model)
+                .Append("Resource]:\n")
+                .Append("        \"\"\"Lists the ")
+                .Append(Docstring(type.DisplayPlural))
+                .Append(
+                    " in a resource group, page by page. ⚠ A short page never means \"that is all there is\".\"\"\"\n"
+                )
+                .Append("        return Pager(self._transport, ")
+                .Append(PathExpression(type.CollectionPath))
+                .Append(", top, ")
+                .Append(model)
+                .Append("Resource.from_wire)\n");
         }
 
         foreach (var action in type.Actions) {
             var method = Snake(action.Name);
-            var content = action.Request is null ? string.Empty : ", content: " + model + SdkEmitter.Pascal(action.Name) + "Content";
+            var content = action.Request is null
+                ? string.Empty
+                : ", content: " + model + SdkEmitter.Pascal(action.Name) + "Content";
             var body = action.Request is null ? string.Empty : ", body=content.to_wire()";
             var actionPath = PathExpression(type.Path + "/" + action.Name);
-            var doc = Docstring(action.Name) + " — permission '" + Docstring(action.Permission) + "'."
+            var doc = Docstring(action.Name)
+                + " — permission '"
+                + Docstring(action.Permission)
+                + "'."
                 + (action.Secret ? " ⚠ The response carries secret material." : string.Empty);
 
             // ⚠ A purge ends the resource, so its Operation is a delete's: wait() resolves to None
             // and reads nothing, because the GET the resource-returning shape would send afterwards
             // is a 404 for a purge that worked. Read off the document (DocumentAction.RemovesResource),
             // never off the name here.
-            if (action.LongRunning && action.RemovesResource) {
-                built.Append("\n    def begin_").Append(method).Append("(self, ").Append(parameters).Append(content).Append(") -> Operation[None]:\n")
-                    .Append("        \"\"\"").Append(doc).Append(" ⚠ Long-running, and it removes the resource: wait() resolves to None, because there is nothing left to read.\"\"\"\n")
-                    .Append("        response = self._transport.send(Request(\"POST\", ").Append(actionPath).Append(body).Append("))\n")
+            if (action is { LongRunning: true, RemovesResource: true }) {
+                built.Append("\n    def begin_")
+                    .Append(method)
+                    .Append("(self, ")
+                    .Append(parameters)
+                    .Append(content)
+                    .Append(") -> Operation[None]:\n")
+                    .Append("        \"\"\"")
+                    .Append(doc)
+                    .Append(
+                        " ⚠ Long-running, and it removes the resource: wait() resolves to None, because there is nothing left to read.\"\"\"\n"
+                    )
+                    .Append("        response = self._transport.send(Request(\"POST\", ")
+                    .Append(actionPath)
+                    .Append(body)
+                    .Append("))\n")
                     .Append("        raise_for_status(response)\n")
                     .Append("        return Operation(self._transport, response, _nothing, None)\n");
 
@@ -1091,35 +1351,76 @@ public static class PythonSdkEmitter {
             }
 
             if (action.LongRunning) {
-                built.Append("\n    def begin_").Append(method).Append("(self, ").Append(parameters).Append(content).Append(") -> Operation[").Append(model).Append("Resource]:\n")
-                    .Append("        \"\"\"").Append(doc).Append(" ⚠ Long-running: wait() resolves to the resource afterwards.\"\"\"\n")
-                    .Append("        response = self._transport.send(Request(\"POST\", ").Append(actionPath).Append(body).Append("))\n")
+                built.Append("\n    def begin_")
+                    .Append(method)
+                    .Append("(self, ")
+                    .Append(parameters)
+                    .Append(content)
+                    .Append(") -> Operation[")
+                    .Append(model)
+                    .Append("Resource]:\n")
+                    .Append("        \"\"\"")
+                    .Append(doc)
+                    .Append(" ⚠ Long-running: wait() resolves to the resource afterwards.\"\"\"\n")
+                    .Append("        response = self._transport.send(Request(\"POST\", ")
+                    .Append(actionPath)
+                    .Append(body)
+                    .Append("))\n")
                     .Append("        raise_for_status(response)\n")
-                    .Append("        return Operation(self._transport, response, ").Append(model).Append("Resource.from_wire, ").Append(path).Append(")\n");
+                    .Append("        return Operation(self._transport, response, ")
+                    .Append(model)
+                    .Append("Resource.from_wire, ")
+                    .Append(path)
+                    .Append(")\n");
 
                 continue;
             }
 
             var result = action.Response is null ? "None" : model + SdkEmitter.Pascal(action.Name) + "Result";
 
-            built.Append("\n    def ").Append(method).Append("(self, ").Append(parameters).Append(content).Append(") -> ").Append(result).Append(":\n")
-                .Append("        \"\"\"").Append(doc).Append("\"\"\"\n")
-                .Append("        response = self._transport.send(Request(\"POST\", ").Append(actionPath).Append(body).Append("))\n")
+            built.Append("\n    def ")
+                .Append(method)
+                .Append("(self, ")
+                .Append(parameters)
+                .Append(content)
+                .Append(") -> ")
+                .Append(result)
+                .Append(":\n")
+                .Append("        \"\"\"")
+                .Append(doc)
+                .Append("\"\"\"\n")
+                .Append("        response = self._transport.send(Request(\"POST\", ")
+                .Append(actionPath)
+                .Append(body)
+                .Append("))\n")
                 .Append("        raise_for_status(response)\n")
-                .Append(action.Response is null ? "        return None\n" : "        return " + result + ".from_wire(wire_of(response))\n");
+                .Append(
+                    action.Response is null
+                        ? "        return None\n"
+                        : "        return " + result + ".from_wire(wire_of(response))\n"
+                );
         }
     }
 
-    static void AppendProviderGroup(StringBuilder built, string providerNamespace, List<DocumentType> types, ImmutableDictionary<string, string> names) {
+    static void AppendProviderGroup(
+        StringBuilder built,
+        string providerNamespace,
+        List<DocumentType> types,
+        ImmutableDictionary<string, string> names
+    ) {
         var segment = providerNamespace.Split('.')[^1];
 
-        built.Append("\n\nclass ").Append(SdkEmitter.Pascal(segment)).Append("Provider:\n")
-            .Append("    \"\"\"The resource types of ").Append(Docstring(providerNamespace)).Append(".\"\"\"\n\n")
+        built.Append("\n\nclass ")
+            .Append(SdkEmitter.Pascal(segment))
+            .Append("Provider:\n")
+            .Append("    \"\"\"The resource types of ")
+            .Append(Docstring(providerNamespace))
+            .Append(".\"\"\"\n\n")
             .Append("    def __init__(self, transport: Transport) -> None:\n");
 
         var taken = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var type in types.OrderBy(x => x.TypePath, StringComparer.Ordinal)) {
+        foreach (var type in types.OrderBy(static x => x.TypePath, StringComparer.Ordinal)) {
             var attribute = TypeAttribute(type.TypePath);
 
             if (taken.TryGetValue(attribute, out var other)) {
@@ -1132,7 +1433,11 @@ public static class PythonSdkEmitter {
 
             taken[attribute] = type.ResourceType;
 
-            built.Append("        self.").Append(attribute).Append(" = ").Append(names[type.ResourceType]).Append("Client(transport)\n");
+            built.Append("        self.")
+                .Append(attribute)
+                .Append(" = ")
+                .Append(names[type.ResourceType])
+                .Append("Client(transport)\n");
         }
     }
 
@@ -1144,7 +1449,9 @@ public static class PythonSdkEmitter {
         List<IGrouping<string, DocumentType>> groups
     ) {
         built.Append("\n\nclass CyberCloudClient:\n")
-            .Append("    \"\"\"The public REST API at api-version ").Append(version).Append(".\n\n")
+            .Append("    \"\"\"The public REST API at api-version ")
+            .Append(version)
+            .Append(".\n\n")
             .Append("    ⚠ Every method builds a path and hands it to the transport. Authentication, the api-version\n")
             .Append("    query parameter and correlation are the transport's; HttpTransport in _runtime is the\n")
             .Append("    standard-library one, and anything implementing Transport can replace it.\n")
@@ -1158,7 +1465,9 @@ public static class PythonSdkEmitter {
 
         foreach (var scope in scopes) {
             var attribute = scope.Kind == "resourceGroup" ? "resource_groups" : scope.Kind + "s";
-            var client = scope.Kind == "resourceGroup" ? "ResourceGroupsClient" : SdkEmitter.Pascal(scope.Kind) + "sClient";
+            var client = scope.Kind == "resourceGroup"
+                ? "ResourceGroupsClient"
+                : SdkEmitter.Pascal(scope.Kind) + "sClient";
 
             built.Append("        self.").Append(attribute).Append(" = ").Append(client).Append("(transport)\n");
         }
@@ -1174,7 +1483,11 @@ public static class PythonSdkEmitter {
                 );
             }
 
-            built.Append("        self.").Append(attribute).Append(" = ").Append(SdkEmitter.Pascal(segment)).Append("Provider(transport)\n");
+            built.Append("        self.")
+                .Append(attribute)
+                .Append(" = ")
+                .Append(SdkEmitter.Pascal(segment))
+                .Append("Provider(transport)\n");
         }
     }
 
@@ -1219,8 +1532,11 @@ public static class PythonSdkEmitter {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Generated even though it varies with almost nothing, because everything under
-    ///         <c>generated/</c> is generated.</b> <c>generated/README.md</c>'s rule; a hand-written
+    ///         ⚠
+    ///         <b>
+    ///             Generated even though it varies with almost nothing, because everything under
+    ///             <c>generated/</c> is generated.
+    ///         </b> <c>generated/README.md</c>'s rule; a hand-written
     ///         file here would be the one file a regeneration does not overwrite.
     ///     </para>
     ///     <para>
@@ -1255,7 +1571,9 @@ public static class PythonSdkEmitter {
         + "\n"
         + "from .models import CyberCloudError, OperationProgress, OperationStatus, Wire\n"
         + "\n"
-        + "API_VERSION = " + Quote(version) + "\n"
+        + "API_VERSION = "
+        + Quote(version)
+        + "\n"
         + "\"\"\"The api-version every request this package makes is sent at.\"\"\"\n"
         + "\n"
         + "T = TypeVar(\"T\")\n"
@@ -1525,18 +1843,23 @@ public static class PythonSdkEmitter {
         ArgumentNullException.ThrowIfNull(files);
 
         var problems = new List<string>();
-        var models = files.FirstOrDefault(x => x.Key.EndsWith("/models.py", StringComparison.Ordinal)).Value;
-        var client = files.FirstOrDefault(x => x.Key.EndsWith("/client.py", StringComparison.Ordinal)).Value;
+        var models = files.FirstOrDefault(static x => x.Key.EndsWith("/models.py", StringComparison.Ordinal)).Value;
+        var client = files.FirstOrDefault(static x => x.Key.EndsWith("/client.py", StringComparison.Ordinal)).Value;
 
         if (models is null || client is null) {
-            problems.Add("the subpackage is missing models.py or client.py, so the emitter produced something nobody can import.");
+            problems.Add(
+                "the subpackage is missing models.py or client.py, so the emitter produced something nobody can import."
+            );
             return [.. problems];
         }
 
         var declared = Declared(models);
 
-        foreach (var duplicate in declared.GroupBy(x => x, StringComparer.Ordinal).Where(x => x.Count() > 1)) {
-            problems.Add($"models.py declares '{duplicate.Key}' {duplicate.Count()} times; the last one silently wins at import.");
+        foreach (var duplicate in declared.GroupBy(static x => x, StringComparer.Ordinal)
+                     .Where(static x => x.Count() > 1)) {
+            problems.Add(
+                $"models.py declares '{duplicate.Key}' {duplicate.Count()} times; the last one silently wins at import."
+            );
         }
 
         var exported = declared.ToHashSet(StringComparer.Ordinal);
@@ -1559,13 +1882,17 @@ public static class PythonSdkEmitter {
             var name = line.Trim().TrimEnd(',');
 
             if (name.Length > 0 && !exported.Contains(name)) {
-                problems.Add($"client.py imports '{name}' from .models and models.py does not declare it; the package fails at import.");
+                problems.Add(
+                    $"client.py imports '{name}' from .models and models.py does not declare it; the package fails at import."
+                );
             }
         }
 
         foreach (var file in files) {
             if (!file.Value.Contains("@generated", StringComparison.Ordinal)) {
-                problems.Add($"'{file.Key}' carries no generator banner; a reader who opens an unmarked file is a reader who edits it.");
+                problems.Add(
+                    $"'{file.Key}' carries no generator banner; a reader who opens an unmarked file is a reader who edits it."
+                );
             }
         }
 
@@ -1626,7 +1953,9 @@ public static class PythonSdkEmitter {
 
                 // A boundary before an upper that follows a lower or digit (storageGb → storage_gb),
                 // and before the last upper of a run when a lower follows it (SQLServer → sql_server).
-                if (char.IsLower(previous) || char.IsDigit(previous) || (char.IsUpper(previous) && char.IsLower(next))) {
+                if (char.IsLower(previous)
+                    || char.IsDigit(previous)
+                    || (char.IsUpper(previous) && char.IsLower(next))) {
                     built.Append('_');
                 }
             }

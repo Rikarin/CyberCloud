@@ -1,13 +1,15 @@
 using CyberCloud.Authorization.Contracts;
-using CyberCloud.ResourceManager;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace CyberCloud.Isolation;
 
 /// <summary>
-///     The management group's one promise — <i>a role assigned at a group is inherited by its
-///     subscriptions</i> (docs/plan/06 § The hierarchy, issue #39) — driven through the real
+///     The management group's one promise —
+///     <i>
+///         a role assigned at a group is inherited by its
+///         subscriptions
+///     </i> (docs/plan/06 § The hierarchy, issue #39) — driven through the real
 ///     <c>ScopeManagerService</c>, the real <c>RoleAssignmentService</c>, the real
 ///     <c>ReBacScopeRelationWriter</c> and the real <c>CyberCloudSchema</c>.
 /// </summary>
@@ -61,7 +63,11 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
             "a tenant owner could not assign a subscription to a group they created: " + assigned.Error?.Message
         );
 
-        (await Put(ScopeId.Subscription(Tree, outside).Path, """{"displayName":"Outside"}""", owner)).IsSuccess.ShouldBeTrue();
+        (await Put(
+                ScopeId.Subscription(Tree, outside).Path,
+                """{"displayName":"Outside"}""",
+                owner
+            )).IsSuccess.ShouldBeTrue();
 
         // ── The grant: owner on the GROUP, through #70's assignment path at the new scope ────────
         var gwen = await UserAsync("gwen");
@@ -88,14 +94,19 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
         );
 
         listed.IsSuccess.ShouldBeTrue(listed.Error?.Message);
-        listed.GetValueOrThrow().Assignments.ShouldContain(x => x.PrincipalId == gwen && x.RoleDefinitionId == Relations.Owner);
+        listed.GetValueOrThrow()
+            .Assignments.ShouldContain(x => x.PrincipalId == gwen && x.RoleDefinitionId == Relations.Owner);
 
         // ── THE PROMISE. gwen holds one tuple, on the group, and creates a resource group inside ──
         //
         // `write` on the group's parent is checked on subscription:{inside}, whose only path to
         // user:gwen is subscription --parent--> managementGroup:platform-a --owner--> gwen. Two hops
         // the scope path wrote; delete either and this is a 404.
-        var madeInside = await Put(ScopeId.Group(Tree, inside, "gwen-rg").Path, """{"location":"eu-west-1"}""", Gwen(gwen));
+        var madeInside = await Put(
+            ScopeId.Group(Tree, inside, "gwen-rg").Path,
+            """{"location":"eu-west-1"}""",
+            Gwen(gwen)
+        );
 
         madeInside.IsSuccess.ShouldBeTrue(
             "an owner at a management group could not create a resource group in a subscription "
@@ -104,7 +115,11 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
         );
 
         // ── And nothing in the subscription that is NOT in the group — the canonical 404 ─────────
-        var refusedOutside = await Put(ScopeId.Group(Tree, outside, "gwen-rg").Path, """{"location":"eu-west-1"}""", Gwen(gwen));
+        var refusedOutside = await Put(
+            ScopeId.Group(Tree, outside, "gwen-rg").Path,
+            """{"location":"eu-west-1"}""",
+            Gwen(gwen)
+        );
 
         refusedOutside.IsFailure.ShouldBeTrue("a group grant reached a subscription outside the group");
         refusedOutside.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound, "404, never 403");
@@ -116,15 +131,24 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
         // rather than replaced one, this would still pass; ParentsOfAsync below is what pins the
         // replacement.
         var ownerInside = await Put(ScopeId.Group(Tree, inside, "theo-rg").Path, """{"location":"eu-west-1"}""", owner);
-        ownerInside.IsSuccess.ShouldBeTrue("the tenant owner lost a subscription by assigning it to a group: " + ownerInside.Error?.Message);
+        ownerInside.IsSuccess.ShouldBeTrue(
+            "the tenant owner lost a subscription by assigning it to a group: " + ownerInside.Error?.Message
+        );
 
-        var parents = await ParentsOfAsync(ObjectTypes.Subscription, inside.ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var parents = await ParentsOfAsync(
+            ObjectTypes.Subscription,
+            inside.ToString("N", System.Globalization.CultureInfo.InvariantCulture)
+        );
         parents.ShouldHaveSingleItem("the chain is not a chain: a subscription in a group carries two parent tuples");
         parents[0].Object.Type.ShouldBe(ObjectTypes.ManagementGroup);
         parents[0].Object.Id.ShouldBe("platform-a");
 
         // ── Nobody is nobody, at every level ─────────────────────────────────────────────────────
-        var nobody = await Put(ScopeId.Group(Tree, inside, "nemo-rg").Path, """{"location":"eu-west-1"}""", IsolationCluster.Caller(Tree, Nobody));
+        var nobody = await Put(
+            ScopeId.Group(Tree, inside, "nemo-rg").Path,
+            """{"location":"eu-west-1"}""",
+            IsolationCluster.Caller(Tree, Nobody)
+        );
         nobody.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
     }
 
@@ -142,7 +166,11 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
 
         (await Put(from.Path, "{}", owner)).IsSuccess.ShouldBeTrue();
         (await Put(to.Path, "{}", owner)).IsSuccess.ShouldBeTrue();
-        (await Put(ScopeId.Subscription(Tree, subscription).Path, """{"displayName":"Mover","managementGroup":"move-from"}""", owner))
+        (await Put(
+                ScopeId.Subscription(Tree, subscription).Path,
+                """{"displayName":"Mover","managementGroup":"move-from"}""",
+                owner
+            ))
             .IsSuccess.ShouldBeTrue();
 
         var fran = await UserAsync("fran");
@@ -160,7 +188,11 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
             .IsSuccess.ShouldBeTrue("the fixture's grant did not reach");
 
         // ── The move, by the tenant owner: one PUT naming the other group ────────────────────────
-        var moved = await Put(ScopeId.Subscription(Tree, subscription).Path, """{"displayName":"Mover","managementGroup":"move-to"}""", owner);
+        var moved = await Put(
+            ScopeId.Subscription(Tree, subscription).Path,
+            """{"displayName":"Mover","managementGroup":"move-to"}""",
+            owner
+        );
         moved.IsSuccess.ShouldBeTrue(moved.Error?.Message);
         moved.GetValueOrThrow().ManagementGroup.ShouldBe("move-to");
 
@@ -168,20 +200,36 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
         // check, because docs/plan/07 § Consistency makes a revocation the half that is never late,
         // and this assertion is about the tuple store rather than the cache.
         var check = await cluster.For(Tree)
-            .GetGrain<ICheckGrain>(GrainKeys.CheckCache(ObjectTypes.Subscription, subscription.ToString("N", System.Globalization.CultureInfo.InvariantCulture)))
+            .GetGrain<ICheckGrain>(
+                GrainKeys.CheckCache(
+                    ObjectTypes.Subscription,
+                    subscription.ToString("N", System.Globalization.CultureInfo.InvariantCulture)
+                )
+            )
             .CheckAsync(Permissions.Write, SubjectRef.Of(ObjectTypes.User, fran), Consistency.FullyConsistent);
 
-        check.GetValueOrThrow().Allowed.ShouldBeFalse("a grant on the old group still reaches a subscription moved out of it");
+        check.GetValueOrThrow()
+            .Allowed.ShouldBeFalse("a grant on the old group still reaches a subscription moved out of it");
 
-        var refused = await Put(ScopeId.Group(Tree, subscription, "after").Path, """{"location":"eu-west-1"}""", Gwen(fran));
-        refused.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound, "404 after the move, never 403: " + refused.Error.Message);
+        var refused = await Put(
+            ScopeId.Group(Tree, subscription, "after").Path,
+            """{"location":"eu-west-1"}""",
+            Gwen(fran)
+        );
+        refused.Error!.Code.ShouldBe(
+            ErrorCode.ResourceNotFound,
+            "404 after the move, never 403: " + refused.Error.Message
+        );
 
         // The tenant owner is unbroken across the move.
         (await Put(ScopeId.Group(Tree, subscription, "still-mine").Path, """{"location":"eu-west-1"}""", owner))
             .IsSuccess.ShouldBeTrue();
 
         // And the chain is still a chain.
-        var parents = await ParentsOfAsync(ObjectTypes.Subscription, subscription.ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var parents = await ParentsOfAsync(
+            ObjectTypes.Subscription,
+            subscription.ToString("N", System.Globalization.CultureInfo.InvariantCulture)
+        );
         parents.ShouldHaveSingleItem();
         parents[0].Object.Id.ShouldBe("move-to");
     }
@@ -197,17 +245,28 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
         var subscription = Guid.Parse("99999999-0000-4000-8000-0000000000c1");
 
         (await Put(ScopeId.ManagementGroupOf(Tree, "nest-1").Path, "{}", owner)).IsSuccess.ShouldBeTrue();
-        (await Put(ScopeId.ManagementGroupOf(Tree, "nest-2").Path, """{"managementGroup":"nest-1"}""", owner)).IsSuccess.ShouldBeTrue();
+        (await Put(
+                ScopeId.ManagementGroupOf(Tree, "nest-2").Path,
+                """{"managementGroup":"nest-1"}""",
+                owner
+            )).IsSuccess.ShouldBeTrue();
 
         // ⚠ The nested group's parent is nest-1, so `write` for its create was checked on nest-1,
         // which theo reaches only through nest-1 --parent--> tenant.
-        (await Put(ScopeId.Subscription(Tree, subscription).Path, """{"displayName":"Deep","managementGroup":"nest-2"}""", owner))
+        (await Put(
+                ScopeId.Subscription(Tree, subscription).Path,
+                """{"displayName":"Deep","managementGroup":"nest-2"}""",
+                owner
+            ))
             .IsSuccess.ShouldBeTrue();
 
         var hal = await UserAsync("hal");
         (await cluster.Roles.AssignAsync(
                 new() {
-                    Path = RoleAssignmentId.OnScope(ScopeId.ManagementGroupOf(Tree, "nest-1"), new(Relations.Contributor, SubjectTypes.User, hal)).Path,
+                    Path = RoleAssignmentId.OnScope(
+                        ScopeId.ManagementGroupOf(Tree, "nest-1"),
+                        new(Relations.Contributor, SubjectTypes.User, hal)
+                    ).Path,
                     Body = "{}",
                     Caller = owner
                 },
@@ -216,14 +275,23 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
 
         // hal is a contributor at the TOP group and creates a resource group two levels down:
         // resourceGroup → subscription → nest-2 → nest-1 → hal.
-        var made = await Put(ScopeId.Group(Tree, subscription, "hal-rg").Path, """{"location":"eu-west-1"}""", Gwen(hal));
-        made.IsSuccess.ShouldBeTrue("a contributor at a top-level group could not reach a subscription two groups down: " + made.Error?.Message);
+        var made = await Put(
+            ScopeId.Group(Tree, subscription, "hal-rg").Path,
+            """{"location":"eu-west-1"}""",
+            Gwen(hal)
+        );
+        made.IsSuccess.ShouldBeTrue(
+            "a contributor at a top-level group could not reach a subscription two groups down: " + made.Error?.Message
+        );
 
         // And a contributor cannot grant — `assignRole` is owner-only — which is the same rule the
         // other scopes have and proves the group type carries the whole permission set, not a copy.
         var refused = await cluster.Roles.AssignAsync(
             new() {
-                Path = RoleAssignmentId.OnScope(ScopeId.ManagementGroupOf(Tree, "nest-2"), new(Relations.Reader, SubjectTypes.User, hal)).Path,
+                Path = RoleAssignmentId.OnScope(
+                    ScopeId.ManagementGroupOf(Tree, "nest-2"),
+                    new(Relations.Reader, SubjectTypes.User, hal)
+                ).Path,
                 Body = "{}",
                 Caller = Gwen(hal)
             },
@@ -260,7 +328,9 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
                 TestContext.Current.CancellationToken
             )).IsSuccess.ShouldBeTrue();
 
-        (await CheckAsync(ObjectTypes.ManagementGroup, "phoenix", ivy)).ShouldBeTrue("the fixture's grant did not reach");
+        (await CheckAsync(ObjectTypes.ManagementGroup, "phoenix", ivy)).ShouldBeTrue(
+            "the fixture's grant did not reach"
+        );
 
         // ── The delete, by the tenant owner, of an empty group ───────────────────────────────────
         var deleted = await cluster.Scopes.DeleteAsync(
@@ -277,7 +347,11 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
 
         // ── Re-created under the same name by the tenant owner, with a subscription placed in it ─
         (await Put(group.Path, """{"displayName":"Phoenix, again"}""", owner)).IsSuccess.ShouldBeTrue();
-        (await Put(ScopeId.Subscription(Tree, subscription).Path, """{"displayName":"Reborn","managementGroup":"phoenix"}""", owner))
+        (await Put(
+                ScopeId.Subscription(Tree, subscription).Path,
+                """{"displayName":"Reborn","managementGroup":"phoenix"}""",
+                owner
+            ))
             .IsSuccess.ShouldBeTrue();
 
         // ivy holds nothing on the new group and reaches nothing under it — a fully consistent check
@@ -285,8 +359,14 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
         (await CheckAsync(ObjectTypes.ManagementGroup, "phoenix", ivy))
             .ShouldBeFalse("a grant on a deleted group revived on the group that took its name");
 
-        var refused = await Put(ScopeId.Group(Tree, subscription, "ivy-rg").Path, """{"location":"eu-west-1"}""", Gwen(ivy));
-        refused.IsFailure.ShouldBeTrue("a deleted group's owner created a resource group under the group that took its name");
+        var refused = await Put(
+            ScopeId.Group(Tree, subscription, "ivy-rg").Path,
+            """{"location":"eu-west-1"}""",
+            Gwen(ivy)
+        );
+        refused.IsFailure.ShouldBeTrue(
+            "a deleted group's owner created a resource group under the group that took its name"
+        );
         refused.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound, "404, never 403: " + refused.Error.Message);
 
         // The new group is a whole group: its edge is to the tenant and the tenant owner reaches it.
@@ -294,7 +374,11 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
         parents.ShouldHaveSingleItem();
         parents[0].Object.Type.ShouldBe(ObjectTypes.Tenant);
         (await RelationsOnAsync(ObjectTypes.ManagementGroup, "phoenix")).ShouldBe([Relations.Parent]);
-        (await Put(ScopeId.Group(Tree, subscription, "theo-rg").Path, """{"location":"eu-west-1"}""", owner)).IsSuccess.ShouldBeTrue();
+        (await Put(
+                ScopeId.Group(Tree, subscription, "theo-rg").Path,
+                """{"location":"eu-west-1"}""",
+                owner
+            )).IsSuccess.ShouldBeTrue();
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
@@ -316,16 +400,20 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
             .ReadDurableAsync();
 
         return snapshot.IsSuccess
-            ? snapshot.GetValueOrThrow().ByRelation
-                .Where(x => x.Value.Count > 0)
-                .Select(x => x.Key)
-                .Order(StringComparer.Ordinal)
-                .ToList()
+            ? snapshot.GetValueOrThrow()
+                .ByRelation
+                    .Where(static x => x.Value.Count > 0)
+                    .Select(static x => x.Key)
+                    .Order(StringComparer.Ordinal)
+                    .ToList()
             : [];
     }
 
     Task<Result<ScopeSnapshot>> Put(string path, string body, CallerContext caller) =>
-        cluster.Scopes.CreateAsync(new() { Path = path, Body = body, Caller = caller }, TestContext.Current.CancellationToken);
+        cluster.Scopes.CreateAsync(
+            new() { Path = path, Body = body, Caller = caller },
+            TestContext.Current.CancellationToken
+        );
 
     async Task SeedTenantAsync() {
         await Seeding.WaitAsync(TestContext.Current.CancellationToken);

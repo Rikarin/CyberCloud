@@ -1,6 +1,5 @@
 using CyberCloud.ResourceGraph.Tests.Infrastructure;
 using NATS.Client.JetStream;
-using NATS.Client.JetStream.Models;
 using System.Globalization;
 
 namespace CyberCloud.ResourceGraph.Tests;
@@ -53,7 +52,10 @@ public sealed class ProjectionRoundTripTests(ProjectionFixture fixture) {
         // parent edge and has no tuple on the resource; the group's grant is direct and stays a
         // userset. Bob, who was granted nothing, is not in it — and that absence is the assertion a
         // list filter depends on.
-        row.Access.ShouldBe(["group:eng#member", "user:alice"], "sorted, so two projections of one state compare equal");
+        row.Access.ShouldBe(
+            ["group:eng#member", "user:alice"],
+            "sorted, so two projections of one state compare equal"
+        );
     }
 
     [Fact]
@@ -61,7 +63,9 @@ public sealed class ProjectionRoundTripTests(ProjectionFixture fixture) {
         var token = TestContext.Current.CancellationToken;
         var resourceId = Guid.NewGuid();
         var v1 = ProjectionFixture.Created(resourceId, "replayed");
-        var v2 = v1 with { Change = ResourceChangeKind.StateChanged, ProvisioningState = ProvisioningState.Succeeded, Version = 2 };
+        var v2 = v1 with {
+            Change = ResourceChangeKind.StateChanged, ProvisioningState = ProvisioningState.Succeeded, Version = 2
+        };
 
         (await fixture.Sink.PublishAsync(v1, token)).IsSuccess.ShouldBeTrue();
         (await fixture.Sink.PublishAsync(v2, token)).IsSuccess.ShouldBeTrue();
@@ -87,7 +91,8 @@ public sealed class ProjectionRoundTripTests(ProjectionFixture fixture) {
         // Wait for the consumer to have drained them: pending goes to zero on the durable.
         await WaitUntilDrainedAsync(token);
 
-        var after = (await fixture.Reader.ReadAsync(ProjectionFixture.Tenant, resourceId, token)).GetValueOrThrow().Row.ShouldNotBeNull();
+        var after = (await fixture.Reader.ReadAsync(ProjectionFixture.Tenant, resourceId, token)).GetValueOrThrow()
+            .Row.ShouldNotBeNull();
         after.Version.ShouldBe(2, "a lower version does not overwrite a higher one");
         after.ProvisioningState.ShouldBe("Succeeded");
 
@@ -96,9 +101,12 @@ public sealed class ProjectionRoundTripTests(ProjectionFixture fixture) {
         // back is version 2 whether or not anything was written — a physical row count was tried
         // as the assertion and a background merge made it pass with the check disabled. What the
         // stream cannot show is WHY nothing was written; the projector, driven directly, can.
-        (await fixture.SiloProjector.ProjectAsync(v1, token)).GetValueOrThrow().ShouldBe(ProjectionOutcome.Dropped, "a replayed version is dropped before the insert");
-        (await fixture.SiloProjector.ProjectAsync(v2, token)).GetValueOrThrow().ShouldBe(ProjectionOutcome.Dropped, "the current version is dropped too");
-        (await fixture.SiloProjector.ProjectAsync(v2 with { Version = 3 }, token)).GetValueOrThrow().ShouldBe(ProjectionOutcome.Applied);
+        (await fixture.SiloProjector.ProjectAsync(v1, token)).GetValueOrThrow()
+            .ShouldBe(ProjectionOutcome.Dropped, "a replayed version is dropped before the insert");
+        (await fixture.SiloProjector.ProjectAsync(v2, token)).GetValueOrThrow()
+            .ShouldBe(ProjectionOutcome.Dropped, "the current version is dropped too");
+        (await fixture.SiloProjector.ProjectAsync(v2 with { Version = 3 }, token)).GetValueOrThrow()
+            .ShouldBe(ProjectionOutcome.Applied);
     }
 
     [Fact]
@@ -112,10 +120,15 @@ public sealed class ProjectionRoundTripTests(ProjectionFixture fixture) {
 
         // The gateway publishing once, and once more because it did not see the first ack.
         (await fixture.Sink.PublishAsync(change, token)).IsSuccess.ShouldBeTrue();
-        (await fixture.Sink.PublishAsync(change, token)).IsSuccess.ShouldBeTrue("a duplicate is a success — the event is on the stream");
+        (await fixture.Sink.PublishAsync(change, token)).IsSuccess.ShouldBeTrue(
+            "a duplicate is a success — the event is on the stream"
+        );
 
         await stream.RefreshAsync(token);
-        stream.Info.State.Messages.ShouldBe(before + 1, "JetStream's duplicate window folded the second publish into the first");
+        stream.Info.State.Messages.ShouldBe(
+            before + 1,
+            "JetStream's duplicate window folded the second publish into the first"
+        );
 
         await fixture.WaitForVersionAsync(ProjectionFixture.Tenant, resourceId, 1);
     }
@@ -133,7 +146,9 @@ public sealed class ProjectionRoundTripTests(ProjectionFixture fixture) {
         (await fixture.Sink.PublishAsync(created, token)).IsSuccess.ShouldBeTrue();
         (await fixture.WaitForVersionAsync(ProjectionFixture.Tenant, resourceId, 1)).Access.ShouldBe(["user:carol"]);
 
-        var deleted = created with { Change = ResourceChangeKind.Deleted, ProvisioningState = ProvisioningState.Deleting, Version = 5 };
+        var deleted = created with {
+            Change = ResourceChangeKind.Deleted, ProvisioningState = ProvisioningState.Deleting, Version = 5
+        };
         (await fixture.Sink.PublishAsync(deleted, token)).IsSuccess.ShouldBeTrue();
 
         var tombstone = await fixture.WaitForVersionAsync(ProjectionFixture.Tenant, resourceId, 5);
@@ -157,23 +172,36 @@ public sealed class ProjectionRoundTripTests(ProjectionFixture fixture) {
         // What a create leaves: the resource under its group, the group under its subscription,
         // Erin reading the group, Frank owning the subscription, and Grace granted on the resource.
         await fixture.GrantAsync(ProjectionFixture.Tenant, $"resource:{N(resourceId)}#parent@resourceGroup:{N(group)}");
-        await fixture.GrantAsync(ProjectionFixture.Tenant, $"resourceGroup:{N(group)}#parent@subscription:{N(subscription)}");
+        await fixture.GrantAsync(
+            ProjectionFixture.Tenant,
+            $"resourceGroup:{N(group)}#parent@subscription:{N(subscription)}"
+        );
         await fixture.GrantAsync(ProjectionFixture.Tenant, $"resourceGroup:{N(group)}#reader@user:erin");
         await fixture.GrantAsync(ProjectionFixture.Tenant, $"subscription:{N(subscription)}#owner@user:frank");
         await fixture.GrantAsync(ProjectionFixture.Tenant, $"resource:{N(resourceId)}#reader@user:grace");
 
         var created = ProjectionFixture.Created(resourceId, "parked");
         (await fixture.Sink.PublishAsync(created, token)).IsSuccess.ShouldBeTrue();
-        (await fixture.WaitForVersionAsync(ProjectionFixture.Tenant, resourceId, 1)).Access.ShouldBe(["user:erin", "user:frank", "user:grace"]);
+        (await fixture.WaitForVersionAsync(ProjectionFixture.Tenant, resourceId, 1)).Access.ShouldBe(
+            ["user:erin", "user:frank", "user:grace"]
+        );
 
         // The park, as OperationGrain.ParkAsync leaves the tuples: the edge moves to the
         // subscription and the direct grant is dropped. Then the event it emits at the version the
         // grain counted for it.
-        await fixture.RevokeAsync(ProjectionFixture.Tenant, $"resource:{N(resourceId)}#parent@resourceGroup:{N(group)}");
-        await fixture.GrantAsync(ProjectionFixture.Tenant, $"resource:{N(resourceId)}#parent@subscription:{N(subscription)}");
+        await fixture.RevokeAsync(
+            ProjectionFixture.Tenant,
+            $"resource:{N(resourceId)}#parent@resourceGroup:{N(group)}"
+        );
+        await fixture.GrantAsync(
+            ProjectionFixture.Tenant,
+            $"resource:{N(resourceId)}#parent@subscription:{N(subscription)}"
+        );
         await fixture.RevokeAsync(ProjectionFixture.Tenant, $"resource:{N(resourceId)}#reader@user:grace");
 
-        var parked = created with { Change = ResourceChangeKind.SoftDeleted, ProvisioningState = ProvisioningState.Deleting, Version = 4 };
+        var parked = created with {
+            Change = ResourceChangeKind.SoftDeleted, ProvisioningState = ProvisioningState.Deleting, Version = 4
+        };
         (await fixture.Sink.PublishAsync(parked, token)).IsSuccess.ShouldBeTrue();
 
         var row = await fixture.WaitForVersionAsync(ProjectionFixture.Tenant, resourceId, 4);
@@ -181,19 +209,30 @@ public sealed class ProjectionRoundTripTests(ProjectionFixture fixture) {
         row.IsDeleted.ShouldBe((byte)1, "a parked resource is in no listing");
         row.Change.ShouldBe("SoftDeleted", "and the change column is what tells it from a purged one");
         row.ProvisioningState.ShouldBe("Deleting");
-        row.Access.ShouldBe(["user:frank"], "the subscription's holders through the moved edge; not the group's reader, not the dropped grant");
+        row.Access.ShouldBe(
+            ["user:frank"],
+            "the subscription's holders through the moved edge; not the group's reader, not the dropped grant"
+        );
 
         // And a restore is the gateway's Updated at the next version, after the edge came back.
-        await fixture.RevokeAsync(ProjectionFixture.Tenant, $"resource:{N(resourceId)}#parent@subscription:{N(subscription)}");
+        await fixture.RevokeAsync(
+            ProjectionFixture.Tenant,
+            $"resource:{N(resourceId)}#parent@subscription:{N(subscription)}"
+        );
         await fixture.GrantAsync(ProjectionFixture.Tenant, $"resource:{N(resourceId)}#parent@resourceGroup:{N(group)}");
 
-        var restored = created with { Change = ResourceChangeKind.Updated, ProvisioningState = ProvisioningState.Updating, Version = 5 };
+        var restored = created with {
+            Change = ResourceChangeKind.Updated, ProvisioningState = ProvisioningState.Updating, Version = 5
+        };
         (await fixture.Sink.PublishAsync(restored, token)).IsSuccess.ShouldBeTrue();
 
         var back = await fixture.WaitForVersionAsync(ProjectionFixture.Tenant, resourceId, 5);
 
         back.IsDeleted.ShouldBe((byte)0, "the restore puts it back in the list");
-        back.Access.ShouldBe(["user:erin", "user:frank"], "the group's reader is back and the dropped grant is not — docs/plan/08 § Soft delete");
+        back.Access.ShouldBe(
+            ["user:erin", "user:frank"],
+            "the group's reader is back and the dropped grant is not — docs/plan/08 § Soft delete"
+        );
     }
 
     [Fact]
@@ -207,13 +246,19 @@ public sealed class ProjectionRoundTripTests(ProjectionFixture fixture) {
         var forged = ProjectionFixture.Created(resourceId, "forged") with { TenantId = otherTenant };
         var subjectOfTenant = ProjectionFixture.Created(resourceId, "forged").Subject;
 
-        var acknowledged = await fixture.JetStream.PublishAsync(subjectOfTenant, ResourceChangedJson.Encode(forged), cancellationToken: token);
+        var acknowledged = await fixture.JetStream.PublishAsync(
+            subjectOfTenant,
+            ResourceChangedJson.Encode(forged),
+            cancellationToken: token
+        );
         acknowledged.EnsureSuccess();
 
         await WaitUntilDrainedAsync(token);
 
-        (await fixture.Reader.ReadAsync(otherTenant, resourceId, token)).GetValueOrThrow().Found.ShouldBeFalse("the body's tenant got no row");
-        (await fixture.Reader.ReadAsync(ProjectionFixture.Tenant, resourceId, token)).GetValueOrThrow().Found.ShouldBeFalse("and neither did the subject's");
+        (await fixture.Reader.ReadAsync(otherTenant, resourceId, token)).GetValueOrThrow()
+            .Found.ShouldBeFalse("the body's tenant got no row");
+        (await fixture.Reader.ReadAsync(ProjectionFixture.Tenant, resourceId, token)).GetValueOrThrow()
+            .Found.ShouldBeFalse("and neither did the subject's");
     }
 
     [Fact]
@@ -234,10 +279,21 @@ public sealed class ProjectionRoundTripTests(ProjectionFixture fixture) {
         var token = TestContext.Current.CancellationToken;
         var unkeyed = ProjectionFixture.Created(Guid.Empty, "nobody");
 
-        var messagesBefore = (await fixture.JetStream.GetStreamAsync(fixture.Options.Stream, cancellationToken: token)).Info.State.Messages;
-        var redeliveredBefore = (await fixture.JetStream.GetConsumerAsync(fixture.Options.Stream, fixture.Options.Consumer, token)).Info.NumRedelivered;
+        var messagesBefore = (await fixture.JetStream.GetStreamAsync(
+                fixture.Options.Stream,
+                cancellationToken: token
+            )).Info.State.Messages;
+        var redeliveredBefore = (await fixture.JetStream.GetConsumerAsync(
+                fixture.Options.Stream,
+                fixture.Options.Consumer,
+                token
+            )).Info.NumRedelivered;
 
-        var acknowledged = await fixture.JetStream.PublishAsync(unkeyed.Subject, ResourceChangedJson.Encode(unkeyed), cancellationToken: token);
+        var acknowledged = await fixture.JetStream.PublishAsync(
+            unkeyed.Subject,
+            ResourceChangedJson.Encode(unkeyed),
+            cancellationToken: token
+        );
         acknowledged.EnsureSuccess();
 
         await WaitUntilDrainedAsync(token);
@@ -246,10 +302,20 @@ public sealed class ProjectionRoundTripTests(ProjectionFixture fixture) {
         // nothing by itself; the redelivery would arrive RetryDelay later, and this waits past it.
         await Task.Delay(ResourceGraphProjector.RetryDelay + TimeSpan.FromSeconds(1), token);
 
-        var consumer = await fixture.JetStream.GetConsumerAsync(fixture.Options.Stream, fixture.Options.Consumer, token);
+        var consumer = await fixture.JetStream.GetConsumerAsync(
+            fixture.Options.Stream,
+            fixture.Options.Consumer,
+            token
+        );
         consumer.Info.NumRedelivered.ShouldBe(redeliveredBefore, "terminated, not NAKed: nothing came back");
         consumer.Info.NumAckPending.ShouldBe(0);
-        (await fixture.JetStream.GetStreamAsync(fixture.Options.Stream, cancellationToken: token)).Info.State.Messages.ShouldBe(messagesBefore + 1, "the message stays on the stream for whoever wants to find the publisher");
+        (await fixture.JetStream.GetStreamAsync(
+                fixture.Options.Stream,
+                cancellationToken: token
+            )).Info.State.Messages.ShouldBe(
+            messagesBefore + 1,
+            "the message stays on the stream for whoever wants to find the publisher"
+        );
     }
 
     [Fact]
@@ -258,22 +324,34 @@ public sealed class ProjectionRoundTripTests(ProjectionFixture fixture) {
         // disconnected — right for the event, wrong for the PUT waiting on it. The sink's ceiling is
         // what turns a NATS outage into a warning on the write path instead of a hung request.
         var token = TestContext.Current.CancellationToken;
-        var nowhere = new ResourceGraphOptions { NatsUrl = "nats://127.0.0.1:1", PublishTimeout = TimeSpan.FromSeconds(2) };
-        await using var sink = new NatsResourceChangedSink(nowhere, Microsoft.Extensions.Logging.Abstractions.NullLogger<NatsResourceChangedSink>.Instance);
+        var nowhere = new ResourceGraphOptions {
+            NatsUrl = "nats://127.0.0.1:1", PublishTimeout = TimeSpan.FromSeconds(2)
+        };
+        await using var sink = new NatsResourceChangedSink(
+            nowhere,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<NatsResourceChangedSink>.Instance
+        );
 
         var started = DateTimeOffset.UtcNow;
         var published = await sink.PublishAsync(ProjectionFixture.Created(Guid.NewGuid(), "unreachable"), token);
 
         published.IsFailure.ShouldBeTrue("a Result, not a throw — the write path logs it and stands");
         published.Error!.Message.ShouldContain("127.0.0.1:1");
-        (DateTimeOffset.UtcNow - started).ShouldBeLessThan(TimeSpan.FromSeconds(15), "bounded by the ceiling, not by the client's retry");
+        (DateTimeOffset.UtcNow - started).ShouldBeLessThan(
+            TimeSpan.FromSeconds(15),
+            "bounded by the ceiling, not by the client's retry"
+        );
     }
 
     async Task WaitUntilDrainedAsync(CancellationToken token) {
         var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
 
         while (DateTimeOffset.UtcNow < deadline) {
-            var consumer = await fixture.JetStream.GetConsumerAsync(fixture.Options.Stream, fixture.Options.Consumer, token);
+            var consumer = await fixture.JetStream.GetConsumerAsync(
+                fixture.Options.Stream,
+                fixture.Options.Consumer,
+                token
+            );
 
             if (consumer.Info.NumPending == 0 && consumer.Info.NumAckPending == 0) {
                 // One more beat, so the ack the consumer sent after its last write has landed.

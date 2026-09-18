@@ -278,7 +278,7 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
             // new field set is the other co-writers' union, and the API server removes what the
             // manager owned and no longer applies. A reconciler that reaches for DeleteAsync out of
             // habit on teardown therefore withdraws rather than deleting both networks' VPCs.
-            var withdrawal = BuildCoOwned(withdraw: true);
+            var withdrawal = BuildCoOwned(true);
             if (withdrawal.TryGetError(out var withdrawError)) {
                 return Result.Failure(withdrawError);
             }
@@ -310,7 +310,9 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
                 ),
                 ApplyResult.Suspended => Result.Failure(
                     ErrorCode.OperationInProgress,
-                    outcome.Message.Length > 0 ? outcome.Message : "the cluster is unreachable; the withdrawal has not happened yet"
+                    outcome.Message.Length > 0
+                        ? outcome.Message
+                        : "the cluster is unreachable; the withdrawal has not happened yet"
                 ),
                 _ => Result.Success
             };
@@ -325,7 +327,7 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
 
     Result<KubeCommand> BuildCore() {
         if (coWriting is not null) {
-            return BuildCoOwned(withdraw: false);
+            return BuildCoOwned(false);
         }
 
         if (!resourceSet) {
@@ -581,7 +583,11 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
             }
         }
 
-        if (!string.Equals(liveLabels![KubeLabels.ManagedBy]!.GetValue<string>(), KubeLabels.ManagedByValue, StringComparison.Ordinal)) {
+        if (!string.Equals(
+                liveLabels![KubeLabels.ManagedBy]!.GetValue<string>(),
+                KubeLabels.ManagedByValue,
+                StringComparison.Ordinal
+            )) {
             return Invalid(
                 $"the live object '{live.Ref}' is managed by "
                 + $"'{liveLabels[KubeLabels.ManagedBy]!.GetValue<string>()}', not by this platform."
@@ -608,7 +614,11 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
         // halves admit hyphens, so `prod`'s network `a-b` and `prod-a`'s network `b` are one object
         // name, and a peering in `prod` naming `a-b` read `prod-a`'s router here and wrote onto it.
         var ownerSubscription = liveLabels[KubeLabels.SubscriptionId]!.GetValue<string>();
-        if (!string.Equals(ownerSubscription, KubeLabels.GuidValue(resource.SubscriptionId), StringComparison.Ordinal)) {
+        if (!string.Equals(
+                ownerSubscription,
+                KubeLabels.GuidValue(resource.SubscriptionId),
+                StringComparison.Ordinal
+            )) {
             return Invalid(
                 $"the live object '{live.Ref}' belongs to subscription {ownerSubscription} and the co-writer "
                 + $"is in subscription {KubeLabels.GuidValue(resource.SubscriptionId)}. A co-writer never "
@@ -686,7 +696,7 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
                     return Invalid(
                         $"the live object '{live.Ref}' carries '{key}', which should hold a co-writer's "
                         + "fragment as JSON and does not. Applying without it would prune that co-writer's "
-                        + $"slice of the object. Restore or remove the annotation; the co-writer is resource "
+                        + "slice of the object. Restore or remove the annotation; the co-writer is resource "
                         + $"{writer:D}."
                     );
                 }
@@ -697,7 +707,9 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
                 // manager owns them and an apply that left one out would remove it.
                 annotations[key] = stored!;
 
-                foreach (var companion in new[] { KubeLabels.FragmentHashAnnotation(writer), KubeLabels.FragmentPathAnnotation(writer) }) {
+                foreach (var companion in new[] {
+                             KubeLabels.FragmentHashAnnotation(writer), KubeLabels.FragmentPathAnnotation(writer)
+                         }) {
                     if (liveAnnotations[companion]?.GetValue<string>() is { } companionValue) {
                         annotations[companion] = companionValue;
                     }
@@ -719,7 +731,9 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
             }
         } else {
             if (string.IsNullOrEmpty(body)) {
-                return Invalid("no fragment was set. Call Object(...) or ObjectJson(...) with the slice this resource contributes.");
+                return Invalid(
+                    "no fragment was set. Call Object(...) or ObjectJson(...) with the slice this resource contributes."
+                );
             }
 
             JsonObject supplied;
@@ -1101,7 +1115,7 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
 
             case JsonObject obj:
                 writer.WriteStartObject();
-                foreach (var (key, value) in obj.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+                foreach (var (key, value) in obj.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
                     writer.WritePropertyName(key);
                     WriteCanonical(value, writer);
                 }

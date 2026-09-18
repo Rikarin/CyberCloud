@@ -49,7 +49,7 @@ public sealed class PlatformBootstrapTaskTests(BootstrapCluster cluster) {
 
     [Fact]
     public async Task ConfiguresTheShardMapFromTheDurableShardsMinusThePlatformShard() {
-        await cluster.Task(selfServe: false).ExecuteAsync(Ct);
+        await cluster.Task(false).ExecuteAsync(Ct);
 
         var snapshot = (await cluster.ShardMap.GetSnapshotAsync(0)).GetValueOrThrow();
 
@@ -64,7 +64,7 @@ public sealed class PlatformBootstrapTaskTests(BootstrapCluster cluster) {
 
     [Fact]
     public async Task ASecondRunChangesNothing() {
-        await cluster.Task(selfServe: true).ExecuteAsync(Ct);
+        await cluster.Task(true).ExecuteAsync(Ct);
         var first = (await cluster.ShardMap.GetSnapshotAsync(0)).GetValueOrThrow();
 
         // ⚠ Both silos run the task, and a restart runs it again. The second run must find the
@@ -73,7 +73,7 @@ public sealed class PlatformBootstrapTaskTests(BootstrapCluster cluster) {
         // relation still names the sign-up operator exactly once — IObjectRelationsGrain.WriteAsync
         // is idempotent, so re-writing the tuple adds nothing. (The tuple store's own version does
         // move on the re-write; that is a cache invalidation, not a change to who may do what.)
-        await cluster.Task(selfServe: true).ExecuteAsync(Ct);
+        await cluster.Task(true).ExecuteAsync(Ct);
 
         var second = (await cluster.ShardMap.GetSnapshotAsync(0)).GetValueOrThrow();
         second.Version.ShouldBe(first.Version);
@@ -87,11 +87,11 @@ public sealed class PlatformBootstrapTaskTests(BootstrapCluster cluster) {
 
         if (!operatorGrant) {
             // A silo with sign-up closed has no reason to hold a standing operator grant for it.
-            await cluster.Task(selfServe: false).ExecuteAsync(Ct);
+            await cluster.Task(false).ExecuteAsync(Ct);
             (await cluster.HoldsOperatorGrantAsync()).ShouldBeFalse("sign-up is closed, so no grant");
         }
 
-        await cluster.Task(selfServe: true).ExecuteAsync(Ct);
+        await cluster.Task(true).ExecuteAsync(Ct);
 
         (await cluster.HoldsOperatorGrantAsync())
             .ShouldBeTrue("platform:root#operator@servicePrincipal:{SignUpOperator} is what CreateTenantAsync checks");
@@ -106,13 +106,15 @@ public sealed class PlatformBootstrapTaskTests(BootstrapCluster cluster) {
         // The second half below is what every other test in the collection may have already done,
         // and is asserted on the state rather than on this call having been the first.
         if ((await cluster.PlatformService.DescribeAsync()).IsFailure) {
-            await cluster.Task(selfServe: true, relay: false).ExecuteAsync(Ct);
+            await cluster.Task(true, false).ExecuteAsync(Ct);
 
             (await cluster.PlatformService.DescribeAsync()).IsFailure
-                .ShouldBeTrue("with no relay there is no carrier, and a service whose every send refuses is one more grain to be confused by");
+                .ShouldBeTrue(
+                    "with no relay there is no carrier, and a service whose every send refuses is one more grain to be confused by"
+                );
         }
 
-        await cluster.Task(selfServe: true, relay: true, maxEmailsPerDay: 250).ExecuteAsync(Ct);
+        await cluster.Task(true, true, 250).ExecuteAsync(Ct);
 
         var service = (await cluster.PlatformService.DescribeAsync()).GetValueOrThrow();
         service.TenantId.ShouldBe(Guid.Empty, "the platform tenant");
@@ -123,24 +125,32 @@ public sealed class PlatformBootstrapTaskTests(BootstrapCluster cluster) {
         email.Enabled.ShouldBeTrue();
         email.Credentials.Mode.ShouldBe(CredentialMode.PlatformAccount);
         email.Limits.MaxMessagesPerWindow.ShouldBe(250, "CyberCloud:Communication:PlatformService:MaxEmailsPerDay");
-        email.OwnerResourceId.ShouldBe(Guid.Empty, "no resource owns it, so a services/platform resource created later adopts it");
+        email.OwnerResourceId.ShouldBe(
+            Guid.Empty,
+            "no resource owns it, so a services/platform resource created later adopts it"
+        );
 
         // And the id is the one the tenant-facing provider would derive for the same address, which
         // is what makes "a resource created later adopts it" true rather than hoped.
-        PlatformCommunicationService.ServiceId.ShouldBe(CommunicationServices.ServiceIdOf(PlatformCommunicationService.Address));
+        PlatformCommunicationService.ServiceId.ShouldBe(
+            CommunicationServices.ServiceIdOf(PlatformCommunicationService.Address)
+        );
         PlatformCommunicationService.OtpRoute.ServiceId.ShouldBe(PlatformCommunicationService.ServiceId);
         PlatformCommunicationService.OtpRoute.TenantId.ShouldBe(Guid.Empty);
     }
 
     [Fact]
     public async Task ASecondRunReassertsTheChannelAndChangesNothingElse() {
-        await cluster.Task(selfServe: true, relay: true).ExecuteAsync(Ct);
+        await cluster.Task(true, true).ExecuteAsync(Ct);
         var first = (await cluster.PlatformService.DescribeAsync()).GetValueOrThrow();
 
-        await cluster.Task(selfServe: true, relay: true).ExecuteAsync(Ct);
+        await cluster.Task(true, true).ExecuteAsync(Ct);
         var second = (await cluster.PlatformService.DescribeAsync()).GetValueOrThrow();
 
-        second.CreatedAt.ShouldBe(first.CreatedAt, "CreateAsync on a created service answers the snapshot and writes nothing");
+        second.CreatedAt.ShouldBe(
+            first.CreatedAt,
+            "CreateAsync on a created service answers the snapshot and writes nothing"
+        );
         second.Channels.Length.ShouldBe(1, "one email channel, re-asserted rather than duplicated");
     }
 
@@ -200,14 +210,20 @@ public sealed class BootstrapCluster : IAsyncLifetime {
     public IShardMapGrain ShardMap => cluster.GrainFactory.GetGrain<IShardMapGrain>(GrainKeys.ShardMap());
 
     /// <summary>The platform's own communication service grain, as <c>PlatformCommunicationService</c> addresses it.</summary>
-    public ICommunicationServiceGrain PlatformService => cluster.GrainFactory
-        .ForTenant(Guid.Empty.ToString("D", CultureInfo.InvariantCulture))
-        .GetGrain<ICommunicationServiceGrain>(CommunicationGrainKeys.Service(PlatformCommunicationService.ServiceId));
+    public ICommunicationServiceGrain PlatformService =>
+        cluster.GrainFactory
+            .ForTenant(Guid.Empty.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<ICommunicationServiceGrain>(
+                CommunicationGrainKeys.Service(PlatformCommunicationService.ServiceId)
+            );
 
     /// <summary>The task, over the configuration the AppHost would give a silo.</summary>
     /// <param name="selfServe">Whether <c>CyberCloud:Identity:SelfServeSignUp</c> is on.</param>
     /// <param name="relay">Whether <c>CyberCloud:Communication:Smtp</c> names a relay — the AppHost's Mailpit shape.</param>
-    /// <param name="maxEmailsPerDay"><c>CyberCloud:Communication:PlatformService:MaxEmailsPerDay</c>, or the default when null.</param>
+    /// <param name="maxEmailsPerDay">
+    ///     <c>CyberCloud:Communication:PlatformService:MaxEmailsPerDay</c>, or the default when
+    ///     null.
+    /// </param>
     public PlatformBootstrapTask Task(bool selfServe, bool relay = false, long? maxEmailsPerDay = null) {
         var settings = new Dictionary<string, string?>(StringComparer.Ordinal) {
             [$"{CyberCloudStorageOptions.SectionName}:Durable:Shards:{ShardA}"] = "Host=a",
@@ -226,7 +242,8 @@ public sealed class BootstrapCluster : IAsyncLifetime {
         }
 
         if (maxEmailsPerDay is { } cap) {
-            settings[$"{PlatformCommunicationServiceOptions.SectionName}:MaxEmailsPerDay"] = cap.ToString(CultureInfo.InvariantCulture);
+            settings[$"{PlatformCommunicationServiceOptions.SectionName}:MaxEmailsPerDay"] =
+                cap.ToString(CultureInfo.InvariantCulture);
         }
 
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
@@ -244,7 +261,8 @@ public sealed class BootstrapCluster : IAsyncLifetime {
             .GetGrain<IObjectRelationsGrain>(GrainKeys.ObjectRelations(ObjectTypes.Platform, "root"));
 
         var snapshot = await relations.ReadDurableAsync();
-        if (snapshot.IsFailure || !snapshot.GetValueOrThrow().ByRelation.TryGetValue(Relations.Operator, out var operators)) {
+        if (snapshot.IsFailure
+            || !snapshot.GetValueOrThrow().ByRelation.TryGetValue(Relations.Operator, out var operators)) {
             return 0;
         }
 
@@ -277,7 +295,7 @@ public sealed class BootstrapCluster : IAsyncLifetime {
             silo.AddMemoryGrainStorage(StorageTiers.Hot);
             silo.UseInMemoryReminderService();
 
-            silo.ConfigureServices(services => services.AddSingleton<IClock, SystemClock>());
+            silo.ConfigureServices(static services => services.AddSingleton<IClock, SystemClock>());
 
             // The schema CheckGrain and TupleStoreGrain evaluate against — the same line
             // SiloComposition writes.
@@ -296,22 +314,37 @@ public sealed class BootstrapCluster : IAsyncLifetime {
 /// </remarks>
 sealed class RefusingGrainFactory : IGrainFactory {
     static InvalidOperationException Refuse() =>
-        new("A silo with no durable shard configured has no grain storage, and the bootstrap task must not touch a grain on it.");
+        new(
+            "A silo with no durable shard configured has no grain storage, and the bootstrap task must not touch a grain on it."
+        );
 
     public TGrainInterface GetGrain<TGrainInterface>(Guid primaryKey, string? grainClassNamePrefix = null)
-        where TGrainInterface : IGrainWithGuidKey => throw Refuse();
+        where TGrainInterface : IGrainWithGuidKey =>
+        throw Refuse();
 
     public TGrainInterface GetGrain<TGrainInterface>(long primaryKey, string? grainClassNamePrefix = null)
-        where TGrainInterface : IGrainWithIntegerKey => throw Refuse();
+        where TGrainInterface : IGrainWithIntegerKey =>
+        throw Refuse();
 
     public TGrainInterface GetGrain<TGrainInterface>(string primaryKey, string? grainClassNamePrefix = null)
-        where TGrainInterface : IGrainWithStringKey => throw Refuse();
+        where TGrainInterface : IGrainWithStringKey =>
+        throw Refuse();
 
-    public TGrainInterface GetGrain<TGrainInterface>(Guid primaryKey, string keyExtension, string? grainClassNamePrefix = null)
-        where TGrainInterface : IGrainWithGuidCompoundKey => throw Refuse();
+    public TGrainInterface GetGrain<TGrainInterface>(
+        Guid primaryKey,
+        string keyExtension,
+        string? grainClassNamePrefix = null
+    )
+        where TGrainInterface : IGrainWithGuidCompoundKey =>
+        throw Refuse();
 
-    public TGrainInterface GetGrain<TGrainInterface>(long primaryKey, string keyExtension, string? grainClassNamePrefix = null)
-        where TGrainInterface : IGrainWithIntegerCompoundKey => throw Refuse();
+    public TGrainInterface GetGrain<TGrainInterface>(
+        long primaryKey,
+        string keyExtension,
+        string? grainClassNamePrefix = null
+    )
+        where TGrainInterface : IGrainWithIntegerCompoundKey =>
+        throw Refuse();
 
     public IGrain GetGrain(Type grainInterfaceType, Guid grainPrimaryKey) => throw Refuse();
 
@@ -324,7 +357,8 @@ sealed class RefusingGrainFactory : IGrainFactory {
     public IGrain GetGrain(Type grainInterfaceType, long grainPrimaryKey, string keyExtension) => throw Refuse();
 
     public TGrainInterface GetGrain<TGrainInterface>(GrainId grainId)
-        where TGrainInterface : IAddressable => throw Refuse();
+        where TGrainInterface : IAddressable =>
+        throw Refuse();
 
     public IAddressable GetGrain(GrainId grainId) => throw Refuse();
 
@@ -335,8 +369,10 @@ sealed class RefusingGrainFactory : IGrainFactory {
     public IAddressable GetGrain(GrainId grainId, GrainInterfaceType interfaceType) => throw Refuse();
 
     public TGrainObserverInterface CreateObjectReference<TGrainObserverInterface>(IGrainObserver obj)
-        where TGrainObserverInterface : IGrainObserver => throw Refuse();
+        where TGrainObserverInterface : IGrainObserver =>
+        throw Refuse();
 
     public void DeleteObjectReference<TGrainObserverInterface>(IGrainObserver obj)
-        where TGrainObserverInterface : IGrainObserver => throw Refuse();
+        where TGrainObserverInterface : IGrainObserver =>
+        throw Refuse();
 }

@@ -73,7 +73,7 @@ public sealed class AccessTokenContractTests {
                 "sub", "tid", "aud", "iss", "scp", "azp", "auth_time", "amr", "sid", "iat", "exp",
                 "jti", "sub_typ", "act_sub"
             ],
-            ignoreOrder: true
+            true
         );
     }
 
@@ -160,7 +160,7 @@ public sealed class AccessTokenContractTests {
         // ⚠ These are ReBAC object types and the tuple store is case-sensitive, so a token carrying
         // `serviceprincipal` names a subject no tuple mentions — every Check denies, and it presents
         // as a permissions bug rather than as a spelling bug.
-        SubjectTypes.All.ShouldBe(["user", "servicePrincipal", "managedIdentity"], ignoreOrder: true);
+        SubjectTypes.All.ShouldBe(["user", "servicePrincipal", "managedIdentity"], true);
 
         SubjectTypes.Ensure("user").IsSuccess.ShouldBeTrue();
         SubjectTypes.Ensure("servicePrincipal").IsSuccess.ShouldBeTrue();
@@ -245,7 +245,7 @@ public sealed class AccessTokenContractTests {
 
         names.ShouldBe(
             ["AuthorizationCode", "DeviceAuthorization", "ClientCredentials", "RefreshToken", "TokenExchange"],
-            ignoreOrder: true
+            true
         );
     }
 
@@ -269,10 +269,10 @@ public sealed class AccessTokenContractTests {
         // string: /api/signup/begin answers `{ sent: true }` for every address — SignUpApi — and the
         // property is the shape rather than a sentence.)
         foreach (var message in new[] { UniformFailures.SignIn, UniformFailures.PasswordReset }) {
-            message.ShouldNotContain("no such", Case.Insensitive);
-            message.ShouldNotContain("not found", Case.Insensitive);
-            message.ShouldNotContain("does not exist", Case.Insensitive);
-            message.ShouldNotContain("unknown user", Case.Insensitive);
+            message.ShouldNotContain("no such");
+            message.ShouldNotContain("not found");
+            message.ShouldNotContain("does not exist");
+            message.ShouldNotContain("unknown user");
         }
 
         UniformFailures.RejectSignIn().Error!.Message.ShouldBe(UniformFailures.SignIn);

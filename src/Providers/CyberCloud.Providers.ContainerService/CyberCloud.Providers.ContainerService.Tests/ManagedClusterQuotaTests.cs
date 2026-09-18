@@ -28,15 +28,15 @@ public sealed class ManagedClusterQuotaTests {
     [Fact]
     public void TheClusterReservesOneClusterAndOneResourceAndNoStorage() {
         var flat = Registration(ManagedClusters.Type).Meters
-            .Where(x => x.Derivation is null)
-            .Select(x => x.Meter)
+            .Where(static x => x.Derivation is null)
+            .Select(static x => x.Meter)
             .ToList();
 
         flat.ShouldContain(QuotaMeter.Clusters);
         flat.ShouldContain(QuotaMeter.Resources);
 
         Registration(ManagedClusters.Type).Meters
-            .Select(x => x.Meter)
+            .Select(static x => x.Meter)
             .ShouldNotContain(QuotaMeter.StorageGb);
     }
 
@@ -45,9 +45,9 @@ public sealed class ManagedClusterQuotaTests {
     [Fact]
     public void APoolReservesEveryMachineAtItsPresetsSize() {
         // s1.small is (1, 4Gi); three machines with a 60Gi root volume each.
-        PoolVcpu(AgentPools.Body(ClusterId, count: 3)).ShouldBe(3m);
-        PoolMemory(AgentPools.Body(ClusterId, count: 3)).ShouldBe(12m);
-        PoolStorage(AgentPools.Body(ClusterId, count: 3)).ShouldBe(180m);
+        PoolVcpu(AgentPools.Body(ClusterId, 3)).ShouldBe(3m);
+        PoolMemory(AgentPools.Body(ClusterId, 3)).ShouldBe(12m);
+        PoolStorage(AgentPools.Body(ClusterId, 3)).ShouldBe(180m);
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public sealed class ManagedClusterQuotaTests {
         // sized once. A pool with an autoscaler is the first resource whose real consumption is moved
         // by something the platform does not observe, so "reserve what the body says" would reserve
         // three machines for a resource that may run twenty.
-        var withAutoscaler = AgentPools.Body(ClusterId, count: 3, autoscale: true, minCount: 1, maxCount: 20);
+        var withAutoscaler = AgentPools.Body(ClusterId, 3, autoscale: true, minCount: 1, maxCount: 20);
 
         PoolVcpu(withAutoscaler).ShouldBe(20m, "the pool reserved its current count and not its ceiling");
         PoolMemory(withAutoscaler).ShouldBe(80m);
@@ -66,7 +66,7 @@ public sealed class ManagedClusterQuotaTests {
 
         // ⚠ And with the switch OFF the ceiling is ignored entirely, which is what stops a tenant who
         // set bounds and then turned autoscaling off from paying for them.
-        var withoutAutoscaler = AgentPools.Body(ClusterId, count: 3, autoscale: false, maxCount: 20);
+        var withoutAutoscaler = AgentPools.Body(ClusterId, 3, autoscale: false, maxCount: 20);
 
         PoolVcpu(withoutAutoscaler).ShouldBe(3m);
     }
@@ -77,7 +77,7 @@ public sealed class ManagedClusterQuotaTests {
         // body and ResourceSchema checks each property against constants. So the derivation takes the
         // larger of the two rather than trusting the tenant's arithmetic; the alternative is a pool
         // running five machines against a reservation for one.
-        PoolVcpu(AgentPools.Body(ClusterId, count: 5, autoscale: true, maxCount: 1)).ShouldBe(5m);
+        PoolVcpu(AgentPools.Body(ClusterId, 5, autoscale: true, maxCount: 1)).ShouldBe(5m);
     }
 
     // ── The rules every derivation in the platform obeys ────────────────────────────────────────
@@ -88,7 +88,7 @@ public sealed class ManagedClusterQuotaTests {
         // body through the same step the create reserved with, so a derivation that read a clock or
         // configuration would make a delete return a different number than the create committed — and
         // quota would drift upward on every create/delete cycle.
-        var body = AgentPools.Body(ClusterId, count: 4);
+        var body = AgentPools.Body(ClusterId, 4);
 
         PoolVcpu(body).ShouldBe(PoolVcpu(body));
         PoolStorage(body).ShouldBe(PoolStorage(body));
@@ -106,9 +106,9 @@ public sealed class ManagedClusterQuotaTests {
         foreach (var amount in new[] {
                      Vcpu(ManagedClusters.Body(ClusterId, controlPlaneReplicas: 1)),
                      Memory(ManagedClusters.Body(ClusterId, controlPlaneReplicas: 1)),
-                     PoolVcpu(AgentPools.Body(ClusterId, count: 1, size: "s1.nano", osDiskSize: "1Gi")),
-                     PoolMemory(AgentPools.Body(ClusterId, count: 1, size: "s1.nano", osDiskSize: "1Gi")),
-                     PoolStorage(AgentPools.Body(ClusterId, count: 1, size: "s1.nano", osDiskSize: "1Gi"))
+                     PoolVcpu(AgentPools.Body(ClusterId, 1, "s1.nano", osDiskSize: "1Gi")),
+                     PoolMemory(AgentPools.Body(ClusterId, 1, "s1.nano", osDiskSize: "1Gi")),
+                     PoolStorage(AgentPools.Body(ClusterId, 1, "s1.nano", osDiskSize: "1Gi"))
                  }) {
             amount.ShouldBeGreaterThan(0m);
         }
@@ -120,7 +120,7 @@ public sealed class ManagedClusterQuotaTests {
         // is exactly the drift worth failing on when somebody adds a preset to the enum and forgets the
         // table. Reserving zero would mean a resource that provisions against no quota, which is a
         // resource nobody is charged for.
-        var body = "{\"location\":\"eu-central\",\"properties\":{\"count\":2,\"size\":\"s1.enormous\","
+        var body = """{"location":"eu-central","properties":{"count":2,"size":"s1.enormous","""
             + "\"osDiskSize\":\"60Gi\"}}";
 
         using var document = JsonDocument.Parse(body);

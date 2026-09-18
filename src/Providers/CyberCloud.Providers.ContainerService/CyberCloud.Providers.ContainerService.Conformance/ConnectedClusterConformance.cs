@@ -1,7 +1,6 @@
 using CyberCloud.Conformance;
 using CyberCloud.Conformance.Harness;
 using CyberCloud.Core;
-using CyberCloud.Core.Resources;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.ContainerService.Contracts;
 using CyberCloud.ResourceManager.Contracts;
@@ -32,26 +31,26 @@ public sealed class ConnectedClusterCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase { get; } =
         new() {
             DisplayName = "CyberCloud.ContainerService/connectedClusters",
-            CreateProvider = () => new ContainerServiceProvider(),
+            CreateProvider = static () => new ContainerServiceProvider(),
             ReconcilerType = typeof(ConnectedClusterReconciler),
-            CreateReconciler = clock => new ConnectedClusterReconciler(clock),
+            CreateReconciler = static clock => new ConnectedClusterReconciler(clock),
             Type = ConnectedClusters.Type,
             ApiVersion = ConnectedClusters.V2026,
-            Body = _ => ConnectedClusters.Body(),
-            ChangedBody = _ => ConnectedClusters.Body(heartbeatSeconds: 30),
+            Body = static _ => ConnectedClusters.Body(),
+            ChangedBody = static _ => ConnectedClusters.Body(heartbeatSeconds: 30),
             // Drops the required `/location`.
-            InvalidBody = _ => WithoutLocation(ConnectedClusters.Body()),
+            InvalidBody = static _ => WithoutLocation(ConnectedClusters.Body()),
             InvalidBodyTarget = "/location",
             ActionName = ConnectedClusters.ListInstallCommandAction,
             // ⚠ Empty on purpose, and the reason the shared suite is not run over this case.
-            Objects = (_, _) => [],
-            OperatorWritten = (_, _) => [],
+            Objects = static (_, _) => [],
+            OperatorWritten = static (_, _) => [],
             // Neither clusterless world: this type's own suite reads the tunnel seam directly, and the
             // shared suite that would ask for one is not run over it. Stated rather than defaulted —
             // see ProviderConformanceCase.DataPlane.
             DataPlane = null,
             StoragePrefix = null,
-            ObjectMatchesDesired = _ => true
+            ObjectMatchesDesired = static _ => true
         };
 
     static string WithoutLocation(string body) {
@@ -74,8 +73,14 @@ public sealed class ConnectedClusterCase : IProviderCaseSource {
 ///         other resources can be placed in. Delete it; the agent is revoked.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What a real NAT'd cluster would add is at <c>charts/agent/conformance.yaml
-///         § owed</c>.</b> Nothing here opens a socket: the heartbeat is
+///         ⚠
+///         <b>
+///             What a real NAT'd cluster would add is at
+///             <c>
+/// charts/agent/conformance.yaml
+///         § owed
+///             </c>.
+///         </b> Nothing here opens a socket: the heartbeat is
 ///         <see cref="FakeAgentTunnels.Heartbeat" />, played by the test at the moment a real agent
 ///         would have sent it. The socket, the credential exchange and the grain are
 ///         <c>AgentTunnelGrainTests</c>' — real, in one process, over pipes.
@@ -98,7 +103,7 @@ public sealed class ConnectedClusterConformance(ProviderTestCluster<ConnectedClu
         accepted.Resource.ProvisioningState.ShouldBe(ProvisioningState.Creating);
 
         // No install command yet: every pass is InProgress, and the operation stays open.
-        var waiting = await DriveAsync(accepted, passes: 3);
+        var waiting = await DriveAsync(accepted, 3);
         waiting.IsTerminal.ShouldBeFalse("nothing has asked for an install command, so nothing can have connected");
         (await ReadAsync("byo-flow")).GetValueOrThrow().ProvisioningState.ShouldBe(ProvisioningState.Creating);
 
@@ -111,12 +116,12 @@ public sealed class ConnectedClusterConformance(ProviderTestCluster<ConnectedClu
         command["tunnelEndpoint"]!.GetValue<string>().ShouldBe(FakeAgentTunnels.TunnelEndpoint);
 
         // Still Creating: armed is not connected.
-        (await DriveAsync(accepted, passes: 2)).IsTerminal.ShouldBeFalse();
+        (await DriveAsync(accepted, 2)).IsTerminal.ShouldBeFalse();
 
         // The agent's first heartbeat — the event the resource converges on.
         Agents.Heartbeat(accepted.Resource.Id);
 
-        var converged = await DriveAsync(accepted, passes: 3);
+        var converged = await DriveAsync(accepted, 3);
         converged.State.ShouldBe(OperationState.Succeeded, converged.Error?.Message);
         (await ReadAsync("byo-flow")).GetValueOrThrow().ProvisioningState.ShouldBe(ProvisioningState.Succeeded);
 
@@ -139,7 +144,8 @@ public sealed class ConnectedClusterConformance(ProviderTestCluster<ConnectedClu
         var second = (await InstallCommandAsync("byo-reissue"))["token"]!.GetValue<string>();
 
         second.ShouldNotBe(first);
-        Agents.WouldAdmit(accepted.Resource.Id, first).ShouldBeFalse("a re-issued command is the tenant saying the old one is no good");
+        Agents.WouldAdmit(accepted.Resource.Id, first)
+            .ShouldBeFalse("a re-issued command is the tenant saying the old one is no good");
         Agents.WouldAdmit(accepted.Resource.Id, second).ShouldBeTrue();
     }
 
@@ -150,7 +156,7 @@ public sealed class ConnectedClusterConformance(ProviderTestCluster<ConnectedClu
         // same. The first cut did only the first, and a resource asking for 30 heartbeated at 15.
         ProviderTestCluster<ConnectedClusterCase>.Reset();
 
-        var accepted = (await CreateAsync("byo-heartbeat", heartbeatSeconds: 30)).GetValueOrThrow();
+        var accepted = (await CreateAsync("byo-heartbeat", 30)).GetValueOrThrow();
 
         var command = await InstallCommandAsync("byo-heartbeat");
 
@@ -195,7 +201,7 @@ public sealed class ConnectedClusterConformance(ProviderTestCluster<ConnectedClu
         var accepted = (await CreateAsync("byo-away")).GetValueOrThrow();
         await InstallCommandAsync("byo-away");
         Agents.Heartbeat(accepted.Resource.Id);
-        (await DriveAsync(accepted, passes: 3)).State.ShouldBe(OperationState.Succeeded);
+        (await DriveAsync(accepted, 3)).State.ShouldBe(OperationState.Succeeded);
 
         Agents.Disconnect(accepted.Resource.Id);
 
@@ -223,7 +229,7 @@ public sealed class ConnectedClusterConformance(ProviderTestCluster<ConnectedClu
         var accepted = (await CreateAsync("byo-delete")).GetValueOrThrow();
         await InstallCommandAsync("byo-delete");
         Agents.Heartbeat(accepted.Resource.Id);
-        (await DriveAsync(accepted, passes: 3)).State.ShouldBe(OperationState.Succeeded);
+        (await DriveAsync(accepted, 3)).State.ShouldBe(OperationState.Succeeded);
 
         var deleted = await cluster.Manager.DeleteAsync(
             new() {
@@ -235,7 +241,7 @@ public sealed class ConnectedClusterConformance(ProviderTestCluster<ConnectedClu
         );
 
         deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
-        (await DriveAsync(deleted.GetValueOrThrow(), passes: 3)).State.ShouldBe(OperationState.Succeeded);
+        (await DriveAsync(deleted.GetValueOrThrow(), 3)).State.ShouldBe(OperationState.Succeeded);
 
         Agents.Revocations.ShouldContain(accepted.Resource.Id);
         (await Agents.GetStatusAsync(accepted.Resource.Id, Ct)).GetValueOrThrow().Revoked.ShouldBeTrue();
@@ -263,7 +269,10 @@ public sealed class ConnectedClusterConformance(ProviderTestCluster<ConnectedClu
 
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
-    async Task<Result<WriteAccepted>> CreateAsync(string name, int heartbeatSeconds = ConnectedClusters.DefaultHeartbeatSeconds) {
+    async Task<Result<WriteAccepted>> CreateAsync(
+        string name,
+        int heartbeatSeconds = ConnectedClusters.DefaultHeartbeatSeconds
+    ) {
         var accepted = await cluster.Manager.WriteAsync(
             new() {
                 Path = ProviderTestCluster<ConnectedClusterCase>.Address(name).Path,
