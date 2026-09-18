@@ -370,7 +370,7 @@ that turns a flaky gate into a slow one that fails at a lower rate, which is str
 diagnose.
 
 ⚠ That paragraph is about the *container-backed* suites and stays true of them. The **cluster**-backed
-ones are a different set and they are serialised, because fifteen of the seventeen already serialise
+ones are a different set and they are serialised, because seventeen of the nineteen already serialise
 themselves through a lock file whatever the build does — see "The cluster degree is 1" below. That
 is not full serialisation bought for green; it is the build agreeing with a constraint that was
 already there.
@@ -388,7 +388,11 @@ the CPU budget still bounds the total.
 
 Counted 2026-09-05 over this tree's own build output, at **73** per-PR suites: **21** can start a
 container and **17 of those 21 hold a k3s API server**. The four that do not are
-`CyberCloud.{Authorization,ServiceDefaults,Tenancy,Vault}.Tests`.
+`CyberCloud.{Authorization,ServiceDefaults,Tenancy,Vault}.Tests`. ⚠ Nineteen since 2026-09-17,
+counted over the build output rather than the prose: the bundle suite had joined since the count
+above, and `CyberCloud.Providers.DBforPostgreSQL.Cluster.Conformance` landed that day, after its
+Docker-free half had promised it since the family shipped. docs/plan/23 § The lane that needs a
+kubelet lists all nineteen by name.
 
 ### The degree is derived from the host
 
@@ -439,7 +443,7 @@ wrong on every host but the one it was measured on, and says nothing.
 
 `Build.Test.cs` § `ClusterBackedSuiteDegree` is the constant **1**, and unlike every other number in
 that file it is neither measured nor derived nor overridable, because it is not a property of the
-host. It is the invariant fifteen of the seventeen cluster-backed assemblies already keep among
+host. It is the invariant seventeen of the nineteen cluster-backed assemblies already keep among
 themselves: `ClusterSlot`, in
 [`test/CyberCloud.Cluster.Conformance/Infrastructure/ClusterInfrastructure.cs`](../test/CyberCloud.Cluster.Conformance/Infrastructure/ClusterInfrastructure.cs),
 is a lock file taken before the containers and held until the process exits — "however many of them
@@ -461,7 +465,7 @@ Three disjoint answers to "may I hold a cluster?", so three k3s API servers coul
 underneath a cap that said "three container suites". That is the arithmetic #77 measured.
 
 ⚠ **There is deliberately no `CC_TEST_CLUSTER_PARALLELISM`.** An override that cannot take effect is
-worse than none: raising the degree to 2 would still leave fifteen of the seventeen queued behind
+worse than none: raising the degree to 2 would still leave seventeen of the nineteen queued behind
 `ClusterSlot`, so the setting would appear to work, change almost nothing, and be believed. A host
 that genuinely holds two clusters needs the constant **and** `ClusterSlot`'s permit count moved
 together.
@@ -547,7 +551,7 @@ only one here is `CyberCloud.AppHost`, and ADR-014 puts a k3s in it. What would 
 second `DistributedApplication` in this repository with no cluster in it — and the fix then is to
 read the app host's resources, not to add a project name to a list.
 
-⚠ **It deliberately does not ask whether a suite takes `ClusterSlot`.** Two of the seventeen do not,
+⚠ **It deliberately does not ask whether a suite takes `ClusterSlot`.** Two of the nineteen do not,
 and they are precisely the two whose overlap #77 measured. The evidence has to be the cluster, not
 the promise about it.
 
@@ -555,6 +559,46 @@ The literal `Aspire.Hosting.Testing` in `build/` is checked from the other side 
 `CyberCloud.AppHost.Tests` § `ClusterBackedGatingTests`, which spells the same name against the type
 that actually starts the topology — the defect class `GenerationReportTests` exists for, one
 directory over.
+
+### `Test` says how many cluster-backed cases ran, and fails a lane that skipped beside a daemon
+
+Until 2026-09-15 the whole cluster-backed lane skipped on the machine that wrote it — a cgroup v1
+host, a kubelet that refused to start, every suite's cluster-facing tests skipping
+with a message that read as a missing daemon — and nothing in `build/` could tell that run from one
+that proved everything, because pass and fail come from an exit code and every such suite keeps a
+daemon-free companion that satisfies `--minimum-expected-tests 1`.
+
+`Build.Test.cs` § `ReportClusterBackedCases` reads the `.trx` each cluster-holding suite wrote and
+prints one line: how many cases ran across them, how many skipped, and the two numbers per suite. The
+companions are in the first number and it says so; the second is what tells the two states apart.
+
+⚠ **It fails the run — not merely reports — in exactly one situation: a Docker endpoint is present
+and a cluster-holding suite either skipped at least as many cases as it ran, or skipped any case for
+a named missing prerequisite.** Measured 2026-09-17: with a working cluster every one of the nineteen
+runs between 7 and 146 cases and skips at most one per type (the honest "created no
+PersistentVolumeClaim" skip); without one, each runs its companions and skips the rest. The second
+clause exists because the first missed the suite that mattered on the day it was written —
+`CyberCloud.Bundle.Cluster.Conformance` was sixteen daemon-free tests and four installing ones that
+day (nineteen daemon-free since the review of that commit), and with Docker but no `helm` it
+reported 16 passed, 3 skipped, exit 0. Every prerequisite skip in the tree carries `NEEDS:`, and the
+honest skip does not; `PrerequisiteMarker` is that word here, and on the test side it is one constant,
+`ClusterInfrastructure.PrerequisiteMarker`, that every writer interpolates —
+`ClusterInfrastructure.SkipMessage`, the bundle suite's two fixtures and its
+`BundleInstaller.SkipWithoutBash`. `test/CyberCloud.Cluster.Conformance` § `SkipConventionTests` pins
+the two constants together, `BundleSkipConventionTests` pins the bundle's three writers against the
+test-side one, and the failure quotes the first such skip, which names what to install.
+
+> ⚠ The bundle's thirteen daemon-free `bash`-is-not-on-PATH skips carried no `NEEDS:` for a day
+> while this paragraph said every prerequisite skip did; the review of that commit read them. A
+> missing `bash` beside a daemon is the same shape as the missing `helm` above — a suite green
+> because it skipped, on a machine that could have run it — so they are marked now, through the
+> helper, and such a run asks for bash by name.
+
+⚠ **It is not "any skip fails".** A machine with no daemon skipping the lane is this repository's
+contract (§ `ReportSkippedTests`), and the endpoint probe — the named pipe on Windows,
+`/var/run/docker.sock` elsewhere, `DOCKER_HOST` anywhere; never `docker info`, which hangs when the
+daemon is unhealthy — is what keeps the guard off such a machine. A machine *with* a daemon and
+without `helm` is asked to install helm, by name, rather than told its build is green.
 
 ## Why the analyser exemptions are where they are
 

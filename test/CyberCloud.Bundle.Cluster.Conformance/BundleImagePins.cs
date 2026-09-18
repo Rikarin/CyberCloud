@@ -63,9 +63,11 @@ public sealed class BundleImagePins {
     public async Task AnImageRecordedWithoutADigestRefusesTheComponentBeforeAnythingIsApplied() {
         Assert.SkipUnless(
             BundleInstaller.OnPath("bash"),
-            "SKIPPED — charts/bundle/install.sh is a bash script and `bash` is not on PATH. WOULD "
-            + "PROVE: that an image recorded as `@unresolved` refuses its component before install.sh "
-            + "applies anything."
+            BundleInstaller.SkipWithoutBash(
+                "install.sh",
+                "that an image recorded as `@unresolved` refuses its component before install.sh "
+                + "applies anything."
+            )
         );
 
         using var copy = BundleCopy.Create();
@@ -140,9 +142,11 @@ public sealed class BundleImagePins {
     public async Task ATagThatNoLongerServesTheRecordedDigestRefusesTheComponentBeforeAnythingIsApplied() {
         Assert.SkipUnless(
             BundleInstaller.OnPath("bash"),
-            "SKIPPED — charts/bundle/install.sh is a bash script and `bash` is not on PATH. WOULD "
-            + "PROVE: that a recorded digest the tag no longer serves refuses its component before "
-            + "install.sh applies anything."
+            BundleInstaller.SkipWithoutBash(
+                "install.sh",
+                "that a recorded digest the tag no longer serves refuses its component before "
+                + "install.sh applies anything."
+            )
         );
 
         Assert.SkipUnless(
@@ -215,9 +219,11 @@ public sealed class BundleImagePins {
     public async Task TheRecordedDigestIsWhatTheTagServesToday() {
         Assert.SkipUnless(
             BundleInstaller.OnPath("bash"),
-            "SKIPPED — charts/bundle/install.sh is a bash script and `bash` is not on PATH. WOULD "
-            + "PROVE: that the digest gate passes over the checked-in record, so the two refusals it "
-            + "is tested for are refusals and not a gate that refuses everything."
+            BundleInstaller.SkipWithoutBash(
+                "install.sh",
+                "that the digest gate passes over the checked-in record, so the two refusals it "
+                + "is tested for are refusals and not a gate that refuses everything."
+            )
         );
 
         Assert.SkipUnless(

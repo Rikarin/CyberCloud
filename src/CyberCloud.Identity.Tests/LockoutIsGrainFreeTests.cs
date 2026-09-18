@@ -27,6 +27,21 @@ namespace CyberCloud.Identity.Tests;
 ///         one packet from them, a durable-tier read and an activation slot from us. That is the
 ///         amplification factor the paragraph is about.
 ///     </para>
+///     <para>
+///         ⚠ <b>Seen to fail once under a full <c>./build.sh Test</c> and never alone, and not
+///         diagnosed — written here so the next run that hits it does not start from zero.</b>
+///         2026-09-17, on a 24-CPU host running the whole gate with other agents' clusters beside it:
+///         <c>ALockedIdentifierIsRefusedWithoutTouchingASingleGrain</c> failed with
+///         <c>recorder.References should be 0 but was 6</c>, and
+///         <c>CyberCloud.Identity.Tests</c> then passed 247/247 twice in a row alone. Six
+///         references out of twenty attempts is a path that was refused for some attempts and not
+///         for others, which is not what either branch of the sign-in service does on its own;
+///         what is shared across this collection and could move under the test is
+///         <see cref="TestClock.Instance" />, one static clock the lockout ladder reads and
+///         <c>TotpCounterReplayTests</c> advances — but the collection runs serially, so that is a
+///         hypothesis, not a finding. The build that saw it was branch <c>cluster-lanes</c>, which
+///         does not touch this assembly, and the review of that branch asked for this paragraph.
+///     </para>
 /// </remarks>
 [Collection(IdentitySuite.Name)]
 public sealed class LockoutIsGrainFreeTests(IdentityCluster cluster) {

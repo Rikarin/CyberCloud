@@ -68,6 +68,39 @@ meters:
 # Named here rather than left to be discovered, because an absent capability that nobody wrote down
 # is indistinguishable from one nobody thought of. The convention is charts/managed/ferretdb's.
 owed:
+  - id: a-named-initdb-secret-kept-every-server-from-starting
+    status: closed
+    closed: 2026-09-17
+    says: >
+      ⚠ NO MANAGED POSTGRESQL HAD EVER STARTED, AND THE FIRST RUN WITH THE OPERATOR PRESENT IS WHAT
+      SAID SO. PostgresServers.ClusterJson rendered `bootstrap.initdb.secret: { name: <name>-app }`
+      while its own remarks said the seam was deliberately left unrendered so that CloudNativePG
+      would generate the owner's password. Read against v1.30.0 (api/v1/cluster_funcs.go),
+      `ShouldInitDBCreateApplicationSecret` is true only while the reference is nil or its name is
+      empty: a NAMED secret is one the operator expects somebody else to have written, and nothing in
+      this platform writes it. The initdb Job mounts it and the kubelet answers
+      `CreateContainerConfigError: secret "story-db-app" not found`, forever. The Cluster object reads
+      back matching its spec, so PostgresServerReconciler reported Converged over it — Converged has
+      never meant "PostgreSQL answers", and this is the row where that distinction cost a database.
+      ⚠ A UNIT TEST PINNED THE DEFECT AS CORRECT: PostgresSecretTests required the name to be there,
+      on the reasoning that the operator reads the password out of a Secret named in the CR. It does,
+      and that is exactly why naming one the platform does not write is fatal. The test now asserts
+      the reference is absent and says why. No fake API server in the tree could have shown the
+      difference; test/CyberCloud.Bundle.Cluster.Conformance § M1StoryOnAFreshCluster — the first
+      test that installs cloudnative-pg through charts/bundle/install.sh and then drives a server
+      through the real write path — failed on its first run with the message above and passed once
+      the reference was removed, which is the sabotage reading in both directions.
+      ✅ WHAT THAT TEST NOW PROVES FOR THIS CHART, AND WHAT IT DOES NOT. `connect-in-cluster` above is
+      exercised: the story fetches the credential through listKeys, and `psql` inside the primary
+      connects to the `<name>-rw` Service with it and answers SELECT 1. With `pooling.enabled=false`,
+      so `pooler-is-the-default-endpoint` is NOT exercised — a Pooler would add a PgBouncer pull to a
+      lane measured in minutes; the host asserted is `<name>-rw`, which is the pooling-off answer.
+      Not exercised either, and still owed: `failover-preserves-committed-writes`,
+      `pitr-window-is-the-retention-days`, `extensions-are-the-allow-list` against a real cluster,
+      `storage-grows-never-shrinks`, and the operator's half of
+      `the-recovery-window-is-hollow-because-cloudnativepg-owns-its-claims` — the story creates and
+      never deletes, so no claim has yet been adopted by a re-created Cluster under a real operator.
+      Each is one more step on the same fixture, and the fixture exists now.
   - id: shared-preload-libraries-is-not-a-parameter
     status: closed
     closed: 2026-08-12
@@ -207,8 +240,10 @@ owed:
       (`reconcileOldPrimary`), the operator marks a failover, and the most advanced instance is
       elected — the ordinary failover machinery, and it is READ rather than observed. A run against a
       cluster with the operator installed, deleting and restoring a server with rows in it, is what
-      turns this row's "closed" into evidence; until then `connect-in-cluster` above and this row
-      share the same missing operator.
+      turns this row's "closed" into evidence. ⚠ Such a cluster exists under test since 2026-09-17
+      (`a-named-initdb-secret-kept-every-server-from-starting` above): `connect-in-cluster` is
+      exercised on it and this row's delete-and-restore is not yet — the story creates and never
+      deletes — so the operator's half stays owed, and the fixture to pay it on is now there.
       ── The finding, as recorded before the fix ────────────────────────────────────────────────
       ⚠ THIS TYPE DOES NOT LEAK ITS VOLUMES, AND THE REASON IT DOES NOT IS WORSE THAN THE LEAK.
       Issue #65 lists CyberCloud.DBforPostgreSQL/servers among the three operator-delegated types

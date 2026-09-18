@@ -569,7 +569,9 @@ partial class Build {
         //
         // ⚠ MEASURED 2026-09-05 OVER THIS TREE'S OWN BUILD OUTPUT, AT 73 PER-PR SUITES: 21 ship
         // something that can start a container, and SEVENTEEN OF THE 21 HOLD A WHOLE KUBERNETES
-        // CLUSTER. The four that do not are
+        // CLUSTER. (Nineteen since 2026-09-17 — the bundle suite and the PostgreSQL family's joined,
+        // and seventeen of the nineteen take ClusterSlot; the figures below are the day's own, and
+        // the argument does not move with them.) The four that do not are
         // `CyberCloud.{Authorization,ServiceDefaults,Tenancy,Vault}.Tests`. So a budget denominated
         // in "container-backed suites" was, for very nearly every slot it ever handed out, a budget
         // in k3s clusters — and three separate mechanisms were each answering "may I hold one?" on
@@ -599,7 +601,7 @@ partial class Build {
         // OWN. That is #77's third option, and it is the only one of the three that models the
         // constraint rather than the symptom: the count that has to be capped is clusters, the
         // number is not a property of this host, and it is not tuned — see ClusterBackedSuiteDegree,
-        // which is 1 because 1 is what ClusterSlot already enforces among fifteen of the seventeen.
+        // which is 1 because 1 is what ClusterSlot already enforces among seventeen of the nineteen.
         var containerBacked = projects.Where(StartsContainers).ToHashSet();
 
         // ⚠ A SUBSET of containerBacked by construction rather than by two globs that happen to
@@ -654,7 +656,7 @@ partial class Build {
         // right, for the reason above; what it does not do is fill idle cores.
         //
         // ⚠ And the cluster-backed ones go first WITHIN that, which is new with #77 and is not
-        // cosmetic. Seventeen suites sharing one permit are a serial chain about as long as the whole
+        // cosmetic. Nineteen suites sharing one permit are a serial chain about as long as the whole
         // gate — 18 m 14 s of which the cluster suites are most — so the chain has to start at t = 0.
         // Ordered the other way it starts whenever a thread first happens to reach a cluster suite,
         // and the gate is that chain PLUS whatever ran before it. OrderBy is a stable sort, so the
@@ -674,7 +676,7 @@ partial class Build {
 
         // ⚠ A SECOND semaphore rather than a smaller first one, and the difference is the whole of
         // #77. One semaphore can only express "how many suites", and the suites are not alike: four
-        // of the twenty-one hold a PostgreSQL or a Redis and seventeen hold a Kubernetes control
+        // of the twenty-three hold a PostgreSQL or a Redis and nineteen hold a Kubernetes control
         // plane. Shrinking the shared cap until the heavy case fits makes the light case wait for a
         // reason that is not true of it, and — worse — leaves the tree with no place to write down
         // what the real limit is, so the next cluster-backed suite silently spends the same budget
@@ -813,6 +815,7 @@ partial class Build {
         var named = failures.OrderBy(x => x, StringComparer.Ordinal).ToList();
 
         ReportSkippedTests(target);
+        ReportClusterBackedCases(target, clusterBacked, named.Count == 0);
 
         Assert.Empty(
             named,
@@ -900,6 +903,220 @@ partial class Build {
     }
 
     /// <summary>
+    ///     Prints how many test cases actually ran in the suites that hold a Kubernetes cluster, and
+    ///     fails the run when a Docker daemon is reachable and one of those suites skipped more than
+    ///     it ran.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             Until 2026-09-15 this number was, on the machine that wrote most of these suites,
+    ///             one per assembly — and nothing printed it.
+    ///         </b> docs/plan/23 § The lane that needs a
+    ///         kubelet has the mechanism: a cgroup v1 host, a kubelet that refused to start, a k3s that
+    ///         came up as an API server with no node, and seventeen suites whose every cluster-facing
+    ///         test skipped with a message that read as a missing daemon. <see cref="ReportSkippedTests" />
+    ///         would have shown the skip count, had it existed; what it could not have said is that
+    ///         the count was the WHOLE lane. This line says how many cluster-backed cases a run
+    ///         proved, per suite, so the next reader of a green build can see the lane in one number.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The count includes each suite's daemon-free companions, and says so.</b> Every
+    ///         cluster-backed assembly keeps one or two tests that never touch Docker, so that
+    ///         <c>--minimum-expected-tests 1</c> stays satisfiable without a daemon
+    ///         (<c>ClusterInfrastructure</c>'s remarks) — so "executed" is never zero, with or
+    ///         without Docker, and a reader cannot tell the two states apart from the total alone.
+    ///         The skipped column is what tells them apart, which is why it is printed beside the
+    ///         total and why the guard below is phrased over the two together.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The guard: a Docker endpoint is present, and a suite that holds a cluster either
+    ///             skipped at least as many cases as it ran, or skipped any case for a named missing
+    ///             prerequisite.
+    ///         </b> Measured on 2026-09-17 over all nineteen cluster-backed suites
+    ///         on a cgroup v2 host: with Docker and the tools, every suite ran between 7 and 146 cases
+    ///         and skipped at most one per type — the "created no PersistentVolumeClaim" skip a family
+    ///         whose storage belongs to an operator makes honestly — so executed exceeds skipped by a
+    ///         wide margin in every one. Without a working cluster the same suites execute their
+    ///         companions only and skip the rest, so skipped exceeds executed in every one. The two
+    ///         shapes do not overlap, and a suite in the second beside a daemon that answers is the
+    ///         cgroup-v1 failure wearing a skip.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The first shape alone missed the one suite that mattered on the day it was
+    ///             written, which is why there is a second.
+    ///         </b> <c>CyberCloud.Bundle.Cluster.Conformance</c>
+    ///         is sixteen daemon-free tests — dry runs, roster and pin reads — and four that install
+    ///         onto a k3s, and the four need <c>helm</c>. Run on 2026-09-17 with Docker and no helm:
+    ///         16 executed, 3 skipped, exit 0, every skip saying <c>NEEDS: … `helm` on PATH</c>. That
+    ///         is a suite passing only because it skipped, beside a daemon, under a rule that counts
+    ///         it healthy. So a skip that names a prerequisite — <see cref="PrerequisiteSkips" /> has
+    ///         the convention — flags the suite whatever the ratio, and the failure quotes the first
+    ///         such message, which says what to install. ⚠ It is still <i>not</i> "any skip fails",
+    ///         for the reason <see cref="ReportSkippedTests" /> gives: a machine with no daemon
+    ///         skipping the lane is this repository's contract, and the endpoint probe is what keeps
+    ///         this guard off such a machine. A machine WITH a daemon and without helm is asked to
+    ///         install helm, by name, rather than told its build is green.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The probe is a file's existence, not <c>docker info</c>.</b>
+    ///         <see cref="ContainerBackedSuiteDegree" />'s remarks say why the build never shells out
+    ///         to the daemon: the subprocess hangs when the daemon is unhealthy, inside the target
+    ///         whose job is to tell a starved host from a broken one. The named pipe on Windows and
+    ///         the socket elsewhere are what Testcontainers itself connects to, so their presence is
+    ///         exactly "a daemon this run's suites would have found". <c>DOCKER_HOST</c> counts as
+    ///         present, because a remote daemon has no local file and is still a daemon.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Silent on a suite whose report is missing</b>, and reports rather than fails when
+    ///         another suite already failed: a suite that exited non-zero before writing its
+    ///         <c>.trx</c> is already named in the failure message above, and a second failure about
+    ///         a count it could not have written would be the less informative one.
+    ///     </para>
+    /// </remarks>
+    /// <param name="target">The target whose run is being summarised, for the log line.</param>
+    /// <param name="clusterBacked">The suites <see cref="StartsCluster" /> classified as holding a cluster.</param>
+    /// <param name="enforce">Whether a suite in the second shape fails the run — false when a suite already failed.</param>
+    // HashSet rather than IReadOnlyCollection because CA1859 is an error here — the same concession
+    // ProjectsIn and RunSuites already make.
+    void ReportClusterBackedCases(string target, HashSet<AbsolutePath> clusterBacked, bool enforce) {
+        if (clusterBacked.Count == 0) {
+            return;
+        }
+
+        var rows = clusterBacked
+            .Select(project => project.NameWithoutExtension)
+            .Select(suite => (Suite: suite, Report: TestResultsDirectory / $"{suite}.trx"))
+            .Where(x => x.Report.FileExists())
+            .Select(x => (
+                x.Suite,
+                Executed: Counter(x.Report, "executed"),
+                Skipped: NotExecuted(x.Report),
+                Prerequisite: PrerequisiteSkips(x.Report)
+            ))
+            .OrderBy(x => x.Suite, StringComparer.Ordinal)
+            .ToList();
+
+        Log.Information(
+            "{Target}: {Executed} cluster-backed test case(s) ran across {Suites} suite(s) that hold a "
+            + "Kubernetes cluster, {Skipped} skipped — {Detail}. ⚠ The daemon-free companions every "
+            + "such suite keeps are in the first number; the second is what tells a run without a "
+            + "cluster apart from one with. Build.Test.cs § ReportClusterBackedCases.",
+            target,
+            rows.Sum(x => x.Executed),
+            rows.Count,
+            rows.Sum(x => x.Skipped),
+            string.Join(", ", rows.Select(x => $"{x.Suite} {x.Executed}/{x.Skipped}"))
+        );
+
+        // ⚠ Two shapes, either of which names a lane that did not run. The first needs no convention
+        // and misses a suite that is mostly daemon-free; the second reads the convention every
+        // cluster-backed skip in this tree follows and catches exactly that suite. Both are measured
+        // in the remarks above.
+        var hollow = rows
+            .Where(x => x.Skipped >= x.Executed || x.Prerequisite.Count > 0)
+            .Select(x => x.Prerequisite.Count > 0
+                ? $"{x.Suite} skipped {x.Prerequisite.Count} case(s) for a missing prerequisite — the first says: \"{x.Prerequisite[0]}\""
+                : $"{x.Suite} ran {x.Executed} and skipped {x.Skipped}"
+            )
+            .ToList();
+
+        if (hollow.Count == 0 || !DockerEndpointIsPresent) {
+            return;
+        }
+
+        var message =
+            $"{target}: a Docker endpoint is present on this host and {hollow.Count} cluster-backed suite(s) "
+            + $"did not run their cluster half: {string.Join("; ", hollow)}. Beside a daemon that answers, "
+            + "that is either a cluster that never came up — a k3s whose kubelet refused the host, a "
+            + "container that did not start — or a tool the suite needs and names, and in both cases the "
+            + "skips read like a missing daemon and the exit code says nothing. It is the failure this "
+            + "repository carried unnoticed until 2026-09-15. The quoted skip message names what to fix; "
+            + "run the named suite alone once it is fixed. docs/plan/23 § The lane that needs a kubelet; "
+            + "Build.Test.cs § ReportClusterBackedCases.";
+
+        if (enforce) {
+            Assert.Fail(message);
+        }
+
+        Log.Warning("{Message} (Not failed here: a suite already failed above.)", message);
+    }
+
+    /// <summary>
+    ///     The reasons of the skips in one TRX report that name a missing prerequisite, in report
+    ///     order. Empty when none did or the report cannot be read.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The convention this reads is the one every cluster-backed skip in the tree
+    ///         follows</b>: <c>ClusterInfrastructure.SkipMessage</c>, <c>EmptyClusterFixture.Skip</c>,
+    ///         <c>M1StoryClusterFixture.Skip</c> and <c>BundleInstaller.SkipWithoutBash</c> all say
+    ///         <c>SKIPPED — …: … NEEDS: … WOULD PROVE: …</c>, and the one skip a working lane makes
+    ///         honestly — "created no PersistentVolumeClaim on a real cluster" — does not, because
+    ///         nothing is missing. So <see cref="PrerequisiteMarker" /> is the difference between "the
+    ///         lane did not run" and "the lane ran and this type has nothing to say", and it is the
+    ///         only text this build reads out of a skip. ⚠ "And the hand-written skips beside them"
+    ///         stood here for a day and was not true: the bundle's thirteen daemon-free tests skipped
+    ///         on a missing <c>bash</c> with no marker at all, which the review of that commit read.
+    ///         They go through the helper now, and the word is one constant on the test side.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A string across a boundary no compiler checks</b>, and it is written down here
+    ///         and in <c>ClusterInfrastructure.PrerequisiteMarker</c>'s remarks so that the two move
+    ///         together — the same defence <c>CyberCloud.AppHost.Tests</c> § <c>ClusterBackedGatingTests</c>
+    ///         gives the glob spellings; <c>SkipConventionTests</c> pins the two constants against
+    ///         each other and <c>BundleSkipConventionTests</c> pins the bundle's writers against the
+    ///         test-side one. The cost of the two drifting apart is bounded: a skip that drops the
+    ///         marker falls back to the executed-versus-skipped shape above, which still catches a
+    ///         suite skipping wholesale and misses only a mostly-daemon-free one.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ xunit's TRX writer puts a skip's reason in <c>UnitTestResult/Output/StdOut</c>, which
+    ///         is where this reads it; measured over the 2026-09-17 reports rather than assumed from
+    ///         the schema.
+    ///     </para>
+    /// </remarks>
+    /// <param name="report">The <c>.trx</c> a suite wrote.</param>
+    static List<string> PrerequisiteSkips(AbsolutePath report) {
+        try {
+            return XDocument.Load(report)
+                .Descendants()
+                .Where(x => x.Name.LocalName == "UnitTestResult"
+                    && string.Equals(x.Attribute("outcome")?.Value, "NotExecuted", StringComparison.Ordinal))
+                .Select(x => x.Descendants().FirstOrDefault(y => y.Name.LocalName == "StdOut")?.Value?.Trim() ?? string.Empty)
+                .Where(x => x.Contains(PrerequisiteMarker, StringComparison.Ordinal))
+                .ToList();
+        } catch (Exception unreadable) when (unreadable is IOException or System.Xml.XmlException) {
+            Log.Debug(unreadable, "Test: {Report} could not be read for its skip reasons.", report);
+
+            return [];
+        }
+    }
+
+    /// <summary>The word every prerequisite skip in the tree carries. See <see cref="PrerequisiteSkips" />.</summary>
+    const string PrerequisiteMarker = "NEEDS:";
+
+    /// <summary>
+    ///     Whether a Docker daemon endpoint exists on this host, answered without talking to it.
+    /// </summary>
+    /// <remarks>
+    ///     See <see cref="ReportClusterBackedCases" /> for why a file and not <c>docker info</c>.
+    ///     <c>\\.\pipe\docker_engine</c> is what Docker Desktop and Docker Engine on Windows listen
+    ///     on; <c>/var/run/docker.sock</c> is the default everywhere else, and Docker Desktop on
+    ///     macOS symlinks it there.
+    /// </remarks>
+    static bool DockerEndpointIsPresent =>
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOCKER_HOST"))
+        || (OperatingSystem.IsWindows()
+            ? File.Exists(@"\\.\pipe\docker_engine")
+            : File.Exists("/var/run/docker.sock"));
+
+    /// <summary>
     ///     The skip count in one xunit TRX report, or <c>0</c> if it cannot be read.
     /// </summary>
     /// <remarks>
@@ -909,13 +1126,18 @@ partial class Build {
     ///     report gains an outcome this build has not met.
     /// </remarks>
     /// <param name="report">The <c>.trx</c> a suite wrote.</param>
-    static int NotExecuted(AbsolutePath report) {
+    static int NotExecuted(AbsolutePath report) => Counter(report, "notExecuted");
+
+    /// <summary>One <c>ResultSummary/Counters</c> attribute of a TRX report, or <c>0</c> if it cannot be read.</summary>
+    /// <param name="report">The <c>.trx</c> a suite wrote.</param>
+    /// <param name="attribute">The counter — <c>executed</c>, <c>notExecuted</c>, <c>passed</c>, <c>failed</c>.</param>
+    static int Counter(AbsolutePath report, string attribute) {
         try {
             return XDocument.Load(report)
                 .Descendants()
                 .Where(x => x.Name.LocalName == "Counters")
                 .Select(x => int.TryParse(
-                        x.Attribute("notExecuted")?.Value,
+                        x.Attribute(attribute)?.Value,
                         NumberStyles.Integer,
                         CultureInfo.InvariantCulture,
                         out var parsed
@@ -927,8 +1149,9 @@ partial class Build {
         } catch (Exception unreadable) when (unreadable is IOException or System.Xml.XmlException) {
             Log.Debug(
                 unreadable,
-                "Test: {Report} could not be read for its skip count, so this run's report omits it.",
-                report
+                "Test: {Report} could not be read for its {Counter} count, so this run's report omits it.",
+                report,
+                attribute
             );
 
             return 0;
@@ -1082,8 +1305,8 @@ partial class Build {
     ///     </para>
     ///     <para>
     ///         ⚠ <b>It deliberately does not ask whether the suite takes <c>ClusterSlot</c>.</b> That
-    ///         lock file is the tree's cross-process permit and fifteen assemblies take it, but two of
-    ///         the seventeen do not — <c>ClusterInfrastructure</c>'s own remarks say
+    ///         lock file is the tree's cross-process permit and seventeen assemblies take it, but two of
+    ///         the nineteen do not — <c>ClusterInfrastructure</c>'s own remarks say
     ///         <c>CyberCloud.Kubernetes.Tests</c> does not, and <c>CyberCloud.AppHost.Tests</c> takes
     ///         a different lock file entirely — so a rule phrased over the permit would have missed
     ///         exactly the two suites whose overlap #77 measured. The evidence has to be the cluster,
@@ -1196,7 +1419,7 @@ partial class Build {
     ///             One, and — unlike every other number in this file — it is not measured, not
     ///             derived, and not tunable, because it is not a property of the host.
     ///         </b> It is the
-    ///         invariant fifteen of the seventeen cluster-backed assemblies already keep among
+    ///         invariant seventeen of the nineteen cluster-backed assemblies already keep among
     ///         themselves: <c>ClusterSlot</c>, in
     ///         <c>test/CyberCloud.Cluster.Conformance/Infrastructure/ClusterInfrastructure.cs</c>, is
     ///         a lock file taken before the containers and held until the process exits, and its own
@@ -1211,15 +1434,15 @@ partial class Build {
     ///         as unserialised ("would need one line in that project"), and
     ///         <c>CyberCloud.AppHost.Tests</c>, which takes
     ///         <c>cybercloud-apphost-local-topology.lock</c> — a different file, excluding only a
-    ///         second copy of itself. Gating here covers all seventeen with no edit to either suite,
+    ///         second copy of itself. Gating here covers all nineteen with no edit to either suite,
     ///         and it is the right place for the rule regardless: a permit taken inside a test
-    ///         process cannot stop the build from starting the process, so the seventeen used to
+    ///         process cannot stop the build from starting the process, so the seventeen of the day used to
     ///         spend the container budget on waiting rather than on working.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>There is deliberately no <c>CC_TEST_CLUSTER_PARALLELISM</c>.</b> An override that
-    ///         cannot take effect is worse than none: raising this to 2 would still leave fifteen of
-    ///         the seventeen queued behind <c>ClusterSlot</c>, so the setting would appear to work,
+    ///         cannot take effect is worse than none: raising this to 2 would still leave seventeen of
+    ///         the nineteen queued behind <c>ClusterSlot</c>, so the setting would appear to work,
     ///         change almost nothing, and be believed. If a host genuinely holds two clusters, the
     ///         edit is this constant <em>and</em> <c>ClusterSlot</c>'s permit count, together, and
     ///         the reason they have to move together is this paragraph.
@@ -1293,7 +1516,7 @@ partial class Build {
     ///             <see cref="Parallel" /> worker.
     ///         </b> <c>MaxDegreeOfParallelism</c> is
     ///         <see cref="Environment.ProcessorCount" /> and the partitioner hands out one item at a
-    ///         time in order, so while the head of the queue is seventeen cluster-backed suites, the
+    ///         time in order, so while the head of the queue is nineteen cluster-backed suites, the
     ///         workers are pinned to them and the cheap suites behind them do not start — the queue
     ///         drains rather than overlaps until fewer cluster suites remain than there are workers.
     ///         That was already true before #77 (the container-backed suites were ordered first and

@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The cluster-backed half of the shared provider conformance suite, run against the
+      managed-PostgreSQL provider.
+
+      ⚠ THIS PROJECT WAS MISSING FOR THE SECOND PROVIDER FAMILY IN THE TREE, AND ITS ABSENCE WAS
+      GREEN. CyberCloud.Providers.DBforPostgreSQL.Conformance has carried
+      `PostgresServerClusterConformance : ClusterBackedConformanceTests` since the family landed, and
+      that class's one test skips with a message promising that the five cluster-backed criteria "run
+      in … its own <Provider>.Cluster.Conformance project". Fourteen families had one; this family and
+      CyberCloud.Communication did not, and Communication says so by name in its own conformance
+      project. Nothing counts `.Cluster.Conformance` projects against `ClusterBackedConformanceTests`
+      registrations, so the promise stood unkept until 2026-09-17, when every cluster-backed suite was
+      run for real for the first time and the table of them had no PostgreSQL row. This is the row.
+
+      ⚠ IT CONTAINS NO ASSERTIONS AND NO INFRASTRUCTURE. Everything it runs comes from
+      test/CyberCloud.Cluster.Conformance; what lives here is two class declarations over the SAME
+      ProviderConformanceCase the Docker-free suite already uses, plus one AssemblyInfo line.
+
+      ⚠ IT IS A SEPARATE PROJECT FROM CyberCloud.Providers.DBforPostgreSQL.Conformance, AND THAT IS
+      THE WHOLE SPLIT. That project must keep running on a machine with no Docker — it is the per-PR
+      gate for every provider change, and Build.Architecture § LabelsGate points at it. Adding
+      Testcontainers to it would make the twelve-step write path, the verb grammar, the four
+      reconciler clauses and the cross-tenant 404 all unrunnable without a daemon.
+
+      ⚠ IT IS NOT NAMED `.Conformance.Cluster`. Directory.Build.props § Project role detection and
+      build/Build.Test.cs § SuiteOwning both classify by the SUFFIX of the project name; a name ending
+      in `.Cluster` is claimed by neither, so the project would build as a library rather than as a
+      test host.
+
+      ⚠ WHAT IT PROVES FOR THIS PROVIDER AND CANNOT PROVE. The k3s it starts has no CloudNativePG, so
+      what is exercised is the apply path for the Cluster and the Pooler, ADR-013's label injection
+      under real admission, the refusal a missing CRD produces, drift after a real delete, a conflict
+      with another field manager, the durable round trip and the silo kill. Everything that depends on
+      the operator running — the primary starting, the generated `{name}-app` Secret, listKeys
+      answering — is test/CyberCloud.Bundle.Cluster.Conformance § M1StoryOnAFreshCluster's, which
+      installs the operator first; charts/managed/postgres/conformance.yaml § owed keeps the rest.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+          ⚠ The CASE comes from the provider's Docker-free conformance project rather than being
+          declared again here. One provider, one ProviderConformanceCase: a second copy would be a
+          second description of the same provider, and the two would disagree the first time either
+          changed.
+        -->
+        <ProjectReference
+            Include="../CyberCloud.Providers.DBforPostgreSQL.Conformance/CyberCloud.Providers.DBforPostgreSQL.Conformance.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -209,6 +209,7 @@
         <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Application/CyberCloud.Providers.DBforPostgreSQL.Application.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Tests/CyberCloud.Providers.DBforPostgreSQL.Tests.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Conformance/CyberCloud.Providers.DBforPostgreSQL.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Cluster.Conformance/CyberCloud.Providers.DBforPostgreSQL.Cluster.Conformance.csproj" />
 
         <!--
           ⚠ THIS BLOCK CARRIED UNRESOLVED CONFLICT MARKERS UNTIL 2026-08-12, AND NOTHING NOTICED.

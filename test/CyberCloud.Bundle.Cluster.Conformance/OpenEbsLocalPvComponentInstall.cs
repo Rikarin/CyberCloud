@@ -72,11 +72,12 @@ public sealed class OpenEbsLocalPvComponentInstaller {
     public async Task TheDryRunNamesTheChartVersionTheComponentPinsAndPassesTheDefaultClassOverride() {
         Assert.SkipUnless(
             BundleInstaller.OnPath("bash"),
-            "SKIPPED — charts/bundle/install.sh is a bash script and `bash` is not on PATH, so what "
-            + "the installer would run could not be read. WOULD PROVE: that install.sh derives the "
-            + "openebs-localpv helm invocation, and the default-storage-class override in "
-            + "particular, from charts/bundle/openebs-localpv/component.yaml rather than "
-            + "hard-coding it."
+            BundleInstaller.SkipWithoutBash(
+                "install.sh",
+                "that install.sh derives the openebs-localpv helm invocation, and the "
+                + "default-storage-class override in particular, from "
+                + "charts/bundle/openebs-localpv/component.yaml rather than hard-coding it."
+            )
         );
 
         var run = await BundleInstaller.RunAsync(

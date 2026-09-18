@@ -163,6 +163,16 @@ marked ⛔ rather than ⊘ precisely so that [§ Running total](#running-total) 
 > logs → invite a colleague and grant them Reader on one resource group → do all of it again from
 > `cyc` → see the usage accruing.
 
+⚠ **Steps 4–5 run under test since 2026-09-17**, on a k3s the test installs the operator onto:
+`test/CyberCloud.Bundle.Cluster.Conformance § M1StoryOnAFreshCluster` creates the VPC, a subnet and
+the server through the real resource manager, waits for CloudNativePG's primary, fetches the
+credential and runs `SELECT 1` with it from inside the cluster. Two things the sentence says that the
+test does not: "in it" — no property of `DBforPostgreSQL/servers` names a network or a subnet, so the
+server is merely in the same resource group, and the VPC and subnet are Kube-OVN objects admitted
+against open-schema stubs on a lane with no Kube-OVN; and "from Vault" — this type declines the vault
+seam by design and the credential's path out is `listKeys` reading the operator's Secret
+(`PostgresServers.ClusterJson`). The `psql` is the test's, not the cloud terminal's.
+
 Plus: three design-partner tenants running for four weeks with no cross-tenant incident; the chaos
 invariants green; the load suite meeting the [00](00-vision-and-principles.md) budgets at 10 % of
 target scale.

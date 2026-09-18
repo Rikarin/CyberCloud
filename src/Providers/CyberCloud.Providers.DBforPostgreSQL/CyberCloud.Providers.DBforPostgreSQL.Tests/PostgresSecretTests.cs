@@ -72,24 +72,34 @@ public sealed class PostgresSecretTests {
     }
 
     [Fact]
-    public void TheRenderedClusterNamesACredentialSecretAndCarriesNoPasswordValue() {
-        // CloudNativePG reads the owner's password out of a Secret named in the CR, so the CR itself
-        // never holds one — docs/plan/12 § The pattern, once, piece 5. This asserts the rendering
-        // takes that seam rather than inlining anything.
+    public void TheRenderedClusterNamesNoCredentialSecretAndCarriesNoPasswordValue() {
+        // ⚠ THIS TEST ASSERTED THE OPPOSITE UNTIL 2026-09-17, AND IT WAS GREEN OVER A DATABASE THAT
+        // COULD NOT START. It required `initdb.secret.name` to be `{name}-app`, on the reasoning that
+        // CloudNativePG reads the owner's password out of a Secret named in the CR. It does — and a
+        // NAMED Secret is one the operator expects somebody else to have written:
+        // `ShouldInitDBCreateApplicationSecret` is true only while the reference is absent
+        // (api/v1/cluster_funcs.go, v1.30.0). Nothing in this platform writes it, so the initdb Job
+        // sat in CreateContainerConfigError on `secret "story-db-app" not found` — measured by
+        // test/CyberCloud.Bundle.Cluster.Conformance § M1StoryOnAFreshCluster, the first test here with
+        // the operator installed. ClusterJson's own remarks had said "leave it unrendered" all along;
+        // the code and this test disagreed with them, and no fake could tell. So the seam this type
+        // takes is the operator's: no reference, the operator generates `{name}-app`, and
+        // PostgresServerListKeysHandler reads it by that name.
         using var desired = JsonDocument.Parse(PostgresServers.Body(Guid.NewGuid()));
 
         var rendered = PostgresServers.ClusterJson("credentials", desired.RootElement);
         var initdb = JsonNode.Parse(rendered)!["spec"]!["bootstrap"]!["initdb"]!.AsObject();
 
-        initdb["secret"]!["name"]!.GetValue<string>()
-            .ShouldBe(PostgresServers.CredentialSecretName("credentials"));
+        initdb.ContainsKey("secret")
+            .ShouldBeFalse(
+                "the rendered Cluster names bootstrap.initdb.secret. CloudNativePG creates the owner's "
+                + "Secret only when the reference is ABSENT; naming it makes the initdb Job mount a Secret "
+                + "nothing wrote, and the primary never starts."
+            );
 
         initdb.ContainsKey("password").ShouldBeFalse();
         rendered.Contains("password", StringComparison.OrdinalIgnoreCase)
-            .ShouldBeFalse(
-                "the rendered Cluster mentions a password. The only legal mention is a Secret reference "
-                + "by name, and that is spelled 'secret'."
-            );
+            .ShouldBeFalse("the rendered Cluster mentions a password. The credential is the operator's and travels only through listKeys.");
     }
 
     // ⚠ A FOURTH TEST WAS HERE AND IT IS GONE ON PURPOSE. It projected a desired body through

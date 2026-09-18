@@ -3,13 +3,15 @@
     <!--
       The first thing in this repository that installs a charts/bundle/ component onto an API server.
 
-      ⚠ THE CHEAP HALF. Three installing classes live here — cert-manager, openebs-localpv, and
-      openebs-localpv with cloudnative-pg — at under five minutes together. The fourth,
-      KubeVirtOnAnEmptyCluster, installs CDI and KubeVirt and boots a guest at about eight, and lives
-      in CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance, the Compute family's own
-      operator lane; both projects ride the Cluster lane of Test (every merge, never a PR —
-      build/Build.Test.cs § TestLane), and that project's csproj carries the runner measurement that
-      put the class in a process of its own. It reuses this project's EmptyClusterFixture and
+      ⚠ THE CHEAPER HALF. Four installing classes live here — cert-manager, openebs-localpv,
+      openebs-localpv with cloudnative-pg, and M1StoryOnAFreshCluster, which installs those three
+      in one install.sh run and has the real resource manager start a PostgreSQL primary on them —
+      the first three at under five minutes together and the story at about three and a half more.
+      The fifth, KubeVirtOnAnEmptyCluster, installs CDI and KubeVirt and boots a guest at about
+      eight, and lives in CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance, the Compute
+      family's own operator lane; both projects ride the Cluster lane of Test (every merge, never a
+      PR — build/Build.Test.cs § TestLane), and that project's csproj carries the runner measurement
+      that put the class in a process of its own. It reuses this project's EmptyClusterFixture and
       BundleInstaller by reference.
 
       ⚠ IT COVERS THREE COMPONENTS OF NINETEEN, AND ITS NAME IS THE ONLY HONEST PLACE TO SAY SO.
@@ -61,9 +63,9 @@
       classify by the SUFFIX and nothing else. `CyberCloud.Bundle` or `CyberCloud.Bundle.Cluster`
       would build as a LIBRARY and then fail `AssertEveryTestProjectIsOwned`, which is the check that
       makes "a test project no target runs" unrepresentable. `.Cluster.Conformance` is claimed by both
-      rules with no edit to either, and it carries the meaning the other fifteen assemblies with that
-      suffix carry: this needs a Docker daemon, and it skips loudly rather than silently when none
-      answers.
+      rules with no edit to either, and it carries the meaning the other twenty assemblies with that
+      suffix carry (counted over the *.Cluster.Conformance.csproj files on 2026-09-18): this needs a
+      Docker daemon, and it skips loudly rather than silently when none answers.
 
       ⚠ IT IS NOT COUNTED BY THE Labels ARCHITECTURE GATE, AND THAT IS DELIBERATE ON BOTH SIDES.
       Build.Architecture.cs § LabelsGate selects `.Conformance` projects under src/Providers and
@@ -127,14 +129,30 @@
         -->
         <ProjectReference Include="../CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
         <!--
-          ⚠ NO PROVIDER'S .Contracts, ANY MORE. For one day this project referenced
+          ⚠ NO PROVIDER'S .Contracts DIRECTLY, AND TWO FAMILIES' .Conformance — AND THIS IS THE ONE
+          PLACE UNDER test/ THAT NAMES ANY FAMILY. For one day this project referenced
           CyberCloud.Providers.Compute.Contracts for KubeVirtOnAnEmptyCluster's reading of a real
           VirtualMachine; that class is in CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance
           now — the review of #28 put its eight minutes in a project of its own — and the reference
           went with it. That project references THIS one, for EmptyClusterFixture and BundleInstaller,
           which is why both stay public and why this project's shape must not assume it is the only
           assembly that starts a bundle k3s.
+
+          What stayed, from the same day, is one class that is different in kind. Every other
+          cluster-backed assembly is one provider's, and test/CyberCloud.Cluster.Conformance
+          deliberately references none, so that a provider joins it by declaring a case rather than
+          by an edit. M1StoryOnAFreshCluster is docs/plan/24 § Phase 2's exit story, and the story
+          crosses a provider boundary — "create a VPC and a Postgres server in it" — so it needs both
+          families' cases in one silo, and those cases are declared in the families' own Docker-free
+          conformance projects. Referencing the CONFORMANCE projects rather than the providers keeps
+          the rule the shared harness has: what a provider says about itself arrives as a
+          ProviderConformanceCase, declared once. The two families' .Contracts arrive transitively,
+          for the story's reading of what it wrote, and nothing else here names a type from either.
         -->
+        <ProjectReference
+            Include="../../src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Conformance/CyberCloud.Providers.DBforPostgreSQL.Conformance.csproj"/>
+        <ProjectReference
+            Include="../../src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Conformance/CyberCloud.Providers.Network.Conformance.csproj"/>
     </ItemGroup>
 
 </Project>

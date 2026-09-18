@@ -476,9 +476,26 @@ installed, and **CloudNativePG** — not the test — creates a `PersistentVolum
 > it cannot be a claim the test wrote — which is exactly the criticism `bundle.yaml` § owed,
 > `one-volume-has-been-provisioned`, makes of itself. See `an-operator-created-and-bound-the-claim`.
 
+**cert-manager, openebs-localpv and cloudnative-pg, one run, `--component` three times — and then
+the platform's own reconciler.** `M1StoryOnAFreshCluster` is docs/plan/24 § Phase 2's exit story,
+steps 4–5: one `install.sh` run puts the three components on a fresh k3s across phases 15, 25 and 50,
+then the **real resource manager** — an Orleans silo over the same k3s, a PostgreSQL shard and a Redis,
+with the PostgreSQL and Network providers in it — creates a `virtualNetworks`, a subnet under it and
+a `DBforPostgreSQL/servers` through the real write path. CloudNativePG brings the primary pod to
+`Running`, `listKeys` reads the operator's Secret through the cluster connection, and `psql` inside
+the primary connects to `<name>-rw` with that credential. The first time a managed database has
+started under test — and the first run found none ever could have (`bundle.yaml` § owed,
+`the-reconciler-drove-a-server-onto-an-operator-this-bundle-installed`). About 3 m 25 s warm; it
+lifts the assembly to about eight minutes.
+
+> ⚠ The three components are the same three the classes above install, so the count of pins
+> installed *by a test* is still three. cert-manager is there because the story asks for it, not
+> because anything in it consumes one; the two Kube-OVN objects are admitted against kube-ovn's
+> committed definitions (`kube-ovn/crds/`, issue #91) on a lane with no kube-ovn and route nothing.
+
 What that supports is **the install mechanism**, and now one path through it end to end: the script
 runs unattended against a cluster it is handed, reads a pin out of a `component.yaml` rather than
-carrying one, two components install onto one node without fighting, and its `--wait` makes
+carrying one, three components install onto one node without fighting, and its `--wait` makes
 "installed" mean "serving" — **for a `helm` component**. What it does not support is the roster.
 Sixteen pins are still resolved-but-never-applied *by a test*.
 
@@ -593,22 +610,40 @@ to 3 m 15 s** with two installing classes — roughly 80 s for Testcontainers to
 for the helm install with `--wait`, the assertions in under a second, and the rest variance in what
 the machine was already doing. A red run costs more: the sabotage that removes `crds.enabled` takes
 **6 m 40 s**, because helm retries its post-install hook before giving up. The
-suite takes `ClusterSlot`, the same cross-process permit the other **fourteen** assemblies built on
+suite takes `ClusterSlot`, the same cross-process permit the other **twenty** assemblies built on
 `ClusterInfrastructure` take, so it does not widen the concurrency Task #95 capped — it lengthens the
 serial tail on a machine where a daemon answers, and costs nothing at all on one where none does.
 
-> ⚠ That count read "fifteen" until 2026-09-05 and was one too many: fifteen assemblies take
-> `ClusterSlot` in total, this one included. Two more hold a k3s and take it not at all —
-> `CyberCloud.Kubernetes.Tests` and `CyberCloud.AppHost.Tests` — which is seventeen cluster-backed
-> suites under three unrelated permits, and is what #77 turned out to be. `build/` now caps all
-> seventeen itself; the permit is no longer the only thing holding the line.
+> ⚠ That count has been wrong twice, and it is re-counted rather than edited. It read "fifteen"
+> until 2026-09-05 and was one too many for the tree of that day, in which fifteen took
+> `ClusterSlot` in total, this one included. On 2026-09-17 the sentence above was moved for the
+> PostgreSQL family while this note still argued the old total, and the review of that commit read
+> the two against each other. Counted over the `*.Cluster.Conformance.csproj` files rather than the
+> prose, on 2026-09-18 after the day's thirteen merges — nineteen under `src/Providers` (seventeen
+> families, and a second assembly for the two that install an operator of their own,
+> `Compute.KubeVirt` and `RecoveryServices.Cnpg`), `test/CyberCloud.Cluster.Conformance` and this
+> suite: **twenty-one** assemblies take `ClusterSlot` in total, this one included. Two more hold a
+> k3s and take it not at all — `CyberCloud.Kubernetes.Tests` and `CyberCloud.AppHost.Tests` — which
+> is **twenty-three** cluster-backed suites under three unrelated permits, the shape #77 found at
+> seventeen. `build/` caps all twenty-three itself; the permit is no longer the only thing holding
+> the line.
 
 **With the cloudnative-pg class it is 4 m 27 s to 4 m 47 s green across three runs, 9 tests, none
-skipped, measured 2026-09-03.** The class costs about **1 m 50 s**: 26 s for `install.sh` to put
-both components on the cluster (cheaper than cert-manager's single row, which pays a
-`startupapicheck` Job), 8 s to the operator's claim, 18 s to `Bound`, 68 s to `Ready` — the bulk of
-that last figure being the `ghcr.io/cloudnative-pg/postgresql` pull — and a second k3s start for the
-rest.
+skipped, measured 2026-09-03. With the story class as well: 20 tests, none skipped, about eight
+minutes of real work on a 24-CPU host, measured 2026-09-17 — plus whatever `ClusterSlot` makes it
+wait while another process holds a cluster.** ⚠ Without `helm` on `PATH` the four installing classes
+*skip* and the sixteen daemon-free tests keep the run green — 16 passed, 3 skipped, exit 0, measured
+the same day, before the story class landed — which is why `./build.sh Test` now fails such a run
+when a Docker endpoint is present (`build/README.md` § `Test` says how many cluster-backed cases ran).
+⚠ The same rule reaches a missing `bash`: the daemon-free tests' skips carried no `NEEDS:` for a day
+after that paragraph said every prerequisite skip did, and they go through
+`BundleInstaller.SkipWithoutBash` now — 23 tests in the assembly, three of them
+`BundleSkipConventionTests`, which pin the suite's three skip writers to the word the build reads.
+
+The cloudnative-pg class costs about **1 m 50 s**: 26 s for `install.sh` to put both components on
+the cluster (cheaper than cert-manager's single row, which pays a `startupapicheck` Job), 8 s to the
+operator's claim, 18 s to `Bound`, 68 s to `Ready` — the bulk of that last figure being the
+`ghcr.io/cloudnative-pg/postgresql` pull — and a second k3s start for the rest.
 
 > ⚠ **The lane was decided rather than deferred, and the answer was "here", which is not the same as
 > "cheap".** The only nightly lane that existed was `Build.E2E`, and its own preconditions refuse to
@@ -621,7 +656,7 @@ rest.
 > as `main.yml`'s own `test-cluster` job and inside `nightly.yml`'s full run, and `--test-lane Fast`
 > is what a PR pays for (`docs/plan/23 § CI shape`, `build/Build.Test.cs § TestLane`).
 
-**The KubeVirt class is the fourth installing class, and it is not in this assembly.**
+**The KubeVirt class is the fifth installing class, and it is not in this assembly.**
 `CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance § KubeVirtOnAnEmptyCluster` costs
 **7 m 03 s to 8 m 26 s for the class, k3s start included**, on a fresh k3s — about five minutes (CDI
 `Deployed` at 1 m 30 s, KubeVirt at 5 m, most of it image pulls) for `install.sh` to put
@@ -639,7 +674,8 @@ PR as the `Cluster` lane; so the class is a `.Cluster.Conformance` project of th
 named for the operator it installs the way `CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance`
 is, and it rides that lane — every merge, every night, no PR — rather than a lane of its own. It
 references this assembly for `EmptyClusterFixture` and `BundleInstaller` rather than copying them,
-so both stay public; the three classes here stay under five minutes, in the same lane.
+so both stay public. The three component classes here stay under five minutes, in the same lane; the
+story class, which landed the same day, is what lifts this assembly to about eight.
 
 **The "nothing to run" trap was checked rather than reasoned about.** A run with `helm` off `PATH`
 reports *1 passed, 1 skipped* in 414 ms — not "Zero tests ran", which `--minimum-expected-tests 1`

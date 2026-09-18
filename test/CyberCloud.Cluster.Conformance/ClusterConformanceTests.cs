@@ -862,10 +862,44 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             [.. occupants.Select(x => Occupant(x))]
         );
 
-        verdict.Deletable.ShouldBeFalse(
-            "the namespace this suite runs in holds its own resources, so a reclaim must refuse: "
-            + verdict.Explain()
-        );
+        // ⚠ THIS ARM WAS REACHED FOR THE FIRST TIME ON 2026-09-17, AND WHAT IT ASSERTED WAS FALSE FOR
+        // FOUR FAMILIES. It read `verdict.Deletable.ShouldBeFalse("the namespace this suite runs in
+        // holds its own resources")`, on the assumption that something of this suite is still in the
+        // namespace when this test runs. Two things make that untrue: every test above tears its
+        // resource down, and a family whose objects are CLUSTER-SCOPED — Kube-OVN's Vpc, Subnet,
+        // SecurityGroup, NAT rule — never puts anything in the namespace at all. Nobody had seen it
+        // because the refusing arm is the one a young k3s takes; in a full `./build.sh Test`, where
+        // the suite reaches this test four minutes into the cluster's life, `metrics.k8s.io` had come
+        // up, discovery succeeded, and CyberCloud.Network's four cluster-scoped classes failed on a
+        // namespace that held nothing but Kubernetes' own two objects — which IS deletable, and
+        // correctly so. So the verdict is asserted against what the raw listing actually holds, in
+        // both directions, rather than against a leftover the suite never promised to leave.
+        var significant = occupants.Where(x => !NamespaceReclaim.IsAmbient(Occupant(x))).ToList();
+
+        if (significant.Count > 0) {
+            verdict.Deletable.ShouldBeFalse(
+                $"the namespace holds {significant.Count} object(s) beyond Kubernetes' own — "
+                + string.Join(", ", significant.Select(x => x.Kind.Kind + "/" + x.Name))
+                + " — so a reclaim must refuse, and it did not: "
+                + verdict.Explain()
+            );
+
+            // ⚠ The ordinal-first one, because the refusal samples its names sorted and takes five.
+            var named = significant.Select(x => x.Kind.Kind + "/" + x.Name).Order(StringComparer.Ordinal).First();
+
+            verdict.Explain().ShouldContain(
+                named,
+                Shouldly.Case.Sensitive,
+                "the refusal must name what it found, so an operator knows what would be deleted."
+            );
+        } else {
+            verdict.Deletable.ShouldBeTrue(
+                "the namespace holds nothing but Kubernetes' own ServiceAccount/default and "
+                + "ConfigMap/kube-root-ca.crt — every test above tore its resource down, or this "
+                + "family's objects are cluster-scoped — and a reclaim refused anyway: "
+                + verdict.Explain()
+            );
+        }
     }
 
     /// <summary>Reads a raw object as the reclaim decision sees it.</summary>

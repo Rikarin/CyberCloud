@@ -48,7 +48,7 @@ time.
 |---|---|---|---|
 | **Unit** | xUnit v3, NSubstitute, Shouldly | Every PR, < 3 min | Coverage ≥ 70 % per project |
 | **Grain** | `Orleans.TestingHost` + Testcontainers (Redis, Postgres, NATS) — ADR-018 | Every PR, < 12 min | All pass |
-| **Reconciler** | `k3s` in Testcontainers, real API server, real SSA — the `*.Cluster.Conformance` suites | Every merge to main + nightly. ⚠ Not every PR — see below | All pass |
+| **Reconciler** | `k3s` in Testcontainers, real API server, real SSA — and, since 2026-09-15, a kubelet, so an operator `charts/bundle/install.sh` installs can run under test — the `*.Cluster.Conformance` suites | Every merge to main + nightly. ⚠ Not every PR — see below | All pass; `Test` prints how many cluster-backed cases ran and fails a run in which a cluster-holding suite, beside a Docker endpoint, skipped at least as many cases as it ran or skipped any case for a named missing prerequisite (`Build.Test.cs § ReportClusterBackedCases`) |
 | **Conformance** | The shared provider suite, per provider | Every PR touching a provider | 100 % — a provider that fails is not registered |
 | **Isolation** | `CyberCloud.Isolation` — every provider, every verb, wrong tenant | Every PR | **Zero** findings |
 | **Contract** | OpenAPI diff, SDK/CLI regeneration, wire round-trip | Every PR | No breaks |
@@ -76,9 +76,9 @@ the suites that hold a k3s run one at a time (`build/Build.Test.cs § ClusterBac
 `main.yml` run 35027771880 (2026-09-15) spent **24 minutes** on that serial chain before most other
 suites could start, and `gate / test` took 29 m 14 s: over the PR budget below by itself. The doc's own
 remedy is "parallelism or moving a test to nightly — with a written reason", and this is the reason.
-`./build.sh Test --test-lane Fast` runs everything but the sixteen `*.Cluster.Conformance` suites on
-every PR; `--test-lane Cluster` runs only those, as its own job, on every merge to main; `nightly.yml`
-runs the whole target in one process. `Build.Test.cs § TestLane` has the timestamps and the second
+`./build.sh Test --test-lane Fast` runs everything but the `*.Cluster.Conformance` suites — twenty-one
+on the tree of 2026-09-18 — on every PR; `--test-lane Cluster` runs only those, as its own job, on
+every merge to main; `nightly.yml` runs the whole target in one process. `Build.Test.cs § TestLane` has the timestamps and the second
 measurement that shaped the split: `CyberCloud.Kubernetes.Tests` and `CyberCloud.AppHost.Tests` hold a
 k3s too, and leaving them out of the PR lane put `CyberCloud.Kubernetes` at 10.1 % and `CyberCloud.AppHost`
 at nothing, so they stay on the PR. **The coverage floor follows the lane**: the PR lane enforces it
@@ -156,8 +156,15 @@ Everything else about that pair of gaps runs everywhere and needs nothing:
 
 ### The lane that needs a kubelet
 
-Seventeen suites in this repository hold a `rancher/k3s:v1.35.7-k3s1` in Docker, and until
-2026-09-15 none of them could schedule a pod on the machine that wrote them. The reason was two
+Twenty-three suites in this repository hold a `rancher/k3s:v1.35.7-k3s1` in Docker — nineteen
+provider `*.Cluster.Conformance` assemblies (one per family with a cluster, and a second for the two
+families that install an operator of their own: `Compute.KubeVirt` and `RecoveryServices.Cnpg`; the
+PostgreSQL one was added on 2026-09-17, after its Docker-free half had promised a project that did
+not exist since the family landed), `test/CyberCloud.Cluster.Conformance`,
+`test/CyberCloud.Bundle.Cluster.Conformance`, `CyberCloud.Kubernetes.Tests` and
+`CyberCloud.AppHost.Tests` — counted over the `*.Cluster.Conformance.csproj` files on 2026-09-18,
+after the day's thirteen branches merged — and until 2026-09-15 none of them could schedule a pod
+on the machine that wrote them. The reason was two
 layers down: WSL2's kernel booted cgroup v1 (hybrid), Docker Desktop inherited it (`docker info`:
 `Cgroup Version: 1`), and from Kubernetes 1.35 the kubelet's `failCgroupV1` defaults to `true`, so
 k3s came up as an API server and shut its agent down — every cluster-backed suite skipped, and the
@@ -181,16 +188,18 @@ is moot on a v2 host and is kept for a host in the state this one was in.
 
 **What this lane can and cannot prove**, so nobody re-derives it:
 
-| Proven on k3s-in-Docker (2026-09-15) | Stays for real nodes — the VM lane |
+| Proven on k3s-in-Docker (2026-09-15, re-measured 2026-09-17) | Stays for real nodes — the VM lane |
 |---|---|
 | 19 of the bundle's 20 components installed and serving through `install.sh`; the four Cluster API controllers 1/1 after the `${VAR:=default}` substitution; KubeVirt and CDI `Deployed`; every `waitFor:` returning | **kube-ovn** — needs the `kube-ovn/role=master` node label, a CNI-less cluster, ADR-019 values and OVS kernel modules; refuses at template time here |
-| The `.Cluster.Conformance` suites, the reconciler layer, the bundle suite's three helm rows | **LINSTOR/DRBD** — the replicated storage stage, a kernel module (`bundle.yaml` § owed, `the-replicated-stage-is-not-installed`) |
-| A cgroup-v2 host is the *only* prerequisite for the per-PR lanes above; ⚠ **and KubeVirt guests run here** — the first `VirtualMachine` this platform rendered reported `Running` under KVM on k3s-in-Docker (#28, 2026-09-17, `CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance § KubeVirtOnAnEmptyCluster`). The right-hand column said this lane lends no `/dev/kvm`; a *privileged* container on a WSL2 host with nested virtualization has it, and an unprivileged one — the reading that misled — does not | **A guest that joins a cluster** — the node-pool Machines need the phase-40 rows under test and a guest the platform can reach (console, agent), neither of which this lane has yet; the Cluster e2e row of the table above is this lane's, and it is still nightly-and-unbuilt. ⚠ KVM itself is no longer on this side of the table on a WSL2 host; a real node without nested virtualization leaves a machine at `ErrorUnschedulable`, which `VirtualMachines.ReadinessOf` reports by name |
+| Every one of the nineteen cluster-backed suites of that day's tree, run alone on 2026-09-17 with Docker, `helm` and `kubectl` present: 387 cases executed, 0 failed, 22 skipped (the full `./build.sh Test` run's own line, whose per-suite figures sum to it; an earlier draft said 385, a count from before `SkipConventionTests` was in the run, and the review of that commit did the sum. Four daemon-free cases have joined since: one in `CyberCloud.AppHost.Tests`, three in the bundle suite) — and every one of the 22 is the same honest skip, "created no PersistentVolumeClaim on a real cluster", made once per type whose storage belongs to an operator. Not one skip names the infrastructure. Three defects came out of running them: the initdb one in the next row; `CyberCloud.AppHost.Tests` failing a model-only test on the SeaweedFS identity file the running topology held open (`CyberCloudTopology.HoldsOtherContent`); and, in a full `./build.sh Test`, the reclaim assertion of `ClusterConformanceTests.ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt` reached for the first time — a young k3s answers 503 for `metrics.k8s.io` and the test had always taken its refusing arm — and found asserting a leftover that cluster-scoped families never leave in a namespace. The tree of 2026-09-18 holds twenty-three such suites: the four that joined since are the Compute and RecoveryServices families' `*.Cluster.Conformance` assemblies and the two operator lanes beside them, `Compute.KubeVirt` (#28) and `RecoveryServices.Cnpg` (#30) | **LINSTOR/DRBD** — the replicated storage stage, a kernel module (`bundle.yaml` § owed, `the-replicated-stage-is-not-installed`) |
+| **A managed database, started by the resource manager on an operator the bundle installed** — the M1 exit story's steps 4–5, `test/CyberCloud.Bundle.Cluster.Conformance § M1StoryOnAFreshCluster`: `install.sh` puts cert-manager, openebs-localpv and cloudnative-pg on a fresh k3s in one run; the real write path creates a `virtualNetworks`, a subnet under it and a `DBforPostgreSQL/servers`; CloudNativePG brings the primary pod to Running; `listKeys` hands out the operator's credential and `psql` connects with it. ⚠ The first such run found that no managed database had ever been able to start — the renderer named `bootstrap.initdb.secret`, which makes the operator *expect* the Secret rather than write it (`PostgresServers.ClusterJson`) | **A guest that joins a cluster** — the node-pool Machines need the phase-40 rows under test and a guest the platform can reach (console, agent), neither of which this lane has yet; the Cluster e2e row of the table above is this lane's, and it is still nightly-and-unbuilt. ⚠ KVM itself is no longer on this side of the table on a WSL2 host; a real node without nested virtualization leaves a machine at `ErrorUnschedulable`, which `VirtualMachines.ReadinessOf` reports by name |
+| The two Kube-OVN objects in that story are admitted against the committed definitions of `Vpc` and `Subnet` (`charts/bundle/kube-ovn/crds/`, #91) and route nothing: the network half proves the write path crosses a provider boundary in one silo, not a packet | **kube-ovn's `Vpc` and `Subnet` doing anything** — the same row as the first, seen from the resource manager's side |
+| A cgroup-v2 host is the *only* prerequisite for the `.Cluster.Conformance` lanes above; ⚠ **and KubeVirt guests run here** — the first `VirtualMachine` this platform rendered reported `Running` under KVM on k3s-in-Docker (#28, 2026-09-17, `CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance § KubeVirtOnAnEmptyCluster`). The right-hand column said this lane lends no `/dev/kvm`; a *privileged* container on a WSL2 host with nested virtualization has it, and an unprivileged one — the reading that misled — does not. ⚠ The bundle suite needs two more prerequisites — `helm` and `kubectl` on `PATH` — and without `helm` its three installing classes and the story *skip*, with the daemon-free companions keeping the run green; measured 2026-09-17, 16 passed and 3 skipped with no helm, 20 passed with it. `Build.Test.cs § ReportClusterBackedCases` now fails such a run when a Docker endpoint is present | |
 
-The lane that holds those three is the Hyper-V / real-node lane the Cluster e2e row already names.
-It does not exist yet; what changed on 2026-09-15 is that everything *else* no longer waits for it —
-and what changed on 2026-09-17 is that one of the three, a guest under KVM, turned out not to need
-it on this host.
+The lane that holds the right-hand column is the Hyper-V / real-node lane the Cluster e2e row already
+names. It does not exist yet; what changed on 2026-09-15 is that everything *else* no longer waits for
+it — and what changed on 2026-09-17 is that one of the three it then held, a guest under KVM, turned
+out not to need it on this host.
 
 ### The chaos invariants
 

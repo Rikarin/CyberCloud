@@ -242,9 +242,28 @@ public static class CyberCloudTopology {
         // An unconditional write then dies with "being used by another process" out of a line that
         // reads as a formatting step, and the whole AppHost with it. The content is a constant, so
         // after the first run there is nothing to write.
-        if (!File.Exists(objectStoreConfigFile) || !string.Equals(File.ReadAllText(objectStoreConfigFile), objectStoreIdentities, StringComparison.Ordinal)) {
-            File.WriteAllText(objectStoreConfigFile, objectStoreIdentities);
-        }
+        //
+        // ⚠ AND THE READ ITSELF DIES THE SAME WAY, WHICH THE GUARD ABOVE DID NOT ALLOW FOR. Measured on
+        // 2026-09-17 by CyberCloud.AppHost.Tests run whole: AppHostTopologyTests builds this model in
+        // the same process and at the same moment as the LocalTopology collection fixture starts the
+        // real one, so the SeaweedFS the fixture started holds the bind-mounted file exactly while
+        // `SelfServeSignUpIsOneDecisionOnAllThreeSides` reaches this line — `File.ReadAllText` threw
+        // "being used by another process" out of a step that reads as a comparison, and the model
+        // test failed with a message about a SeaweedFS it never started. This method is the only
+        // writer of the file and the content is a constant, so a file that exists and cannot be read
+        // is one this method wrote with this content and a container is mounting; comparing it would
+        // answer "equal", and the answer is taken without the read.
+        //
+        // ⚠ AND THE WRITE, ON A CHECKOUT THAT HAS NO FILE YET, RACES WITH ITSELF. The guard above reads
+        // nothing when the file is absent, so two Compose calls in one process — the LocalTopology
+        // fixture's and AppHostTopologyTests', which xUnit starts at the same moment — both see
+        // "absent" and both write; `File.WriteAllText` opens with FileShare.Read, so the second dies
+        // with the same "being used by another process" 53 ms into a test that started no container,
+        // and only on a checkout that has never run the AppHost — which is every CI run, and which
+        // the first fix never measured (the review of it did: 1/27 red with the file absent, 2 of 2
+        // times). So the check and the write are one locked section within a process, and a write
+        // refused from outside the process is taken as another writer of the same constant.
+        EnsureObjectStoreIdentityFile(objectStoreConfigFile, objectStoreIdentities);
 
         var objectStore = builder
             .AddContainer(CyberCloudResources.ObjectStore, "chrislusf/seaweedfs", "3.80")
@@ -480,5 +499,55 @@ public static class CyberCloudTopology {
         // to start without a cluster would be modelling the opposite of ADR-001. It also costs: k3s takes
         // about 20 s to serve `/readyz` and the two silos are up in a third of that.
         _ = k3s;
+    }
+
+    /// <summary>The one lock the identity file is checked and written under; see <see cref="EnsureObjectStoreIdentityFile" />.</summary>
+    static readonly Lock ObjectStoreIdentityFileLock = new();
+
+    /// <summary>
+    ///     Leaves <paramref name="path" /> holding <paramref name="content" />, writing it only when
+    ///     it is absent or holds something else — and treating a file that cannot be read, or cannot
+    ///     be written over, as one that already holds it, for the reasons at the one call site.
+    /// </summary>
+    /// <param name="path">The identity file SeaweedFS mounts.</param>
+    /// <param name="content">The constant the file always holds.</param>
+    /// <remarks>
+    ///     ⚠ The lock serialises the Compose calls of one process, which is the race
+    ///     <c>CyberCloud.AppHost.Tests</c> run whole produces on a fresh checkout; it reaches no
+    ///     second process and no container, so the write is caught as well. A refused write means
+    ///     somebody holds the file open, and nobody holds a file that is not there — so after the
+    ///     refusal the file exists, and the only writer of it anywhere writes this constant. A refusal
+    ///     on a file that is <i>still</i> absent is a different story, and is rethrown.
+    /// </remarks>
+    static void EnsureObjectStoreIdentityFile(string path, string content) {
+        lock (ObjectStoreIdentityFileLock) {
+            if (File.Exists(path) && !HoldsOtherContent(path, content)) {
+                return;
+            }
+
+            try {
+                File.WriteAllText(path, content);
+            } catch (IOException) when (File.Exists(path)) {
+                // Written, or being written, by a Compose in another process — or mounted by a
+                // SeaweedFS that started between the check and this line. It holds this content.
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Whether an existing file holds something other than <paramref name="expected" /> — and
+    ///     therefore has to be rewritten. A file that cannot be opened is reported as holding the
+    ///     expected content, for the reason at the one call site.
+    /// </summary>
+    /// <param name="path">The file, which exists.</param>
+    /// <param name="expected">The constant this method's caller would write.</param>
+    static bool HoldsOtherContent(string path, string expected) {
+        try {
+            return !string.Equals(File.ReadAllText(path), expected, StringComparison.Ordinal);
+        } catch (IOException) {
+            // Held by a SeaweedFS that is mounting it, on Docker Desktop for Windows. The only writer
+            // of this file is the line that calls this method, and it writes a constant.
+            return false;
+        }
     }
 }

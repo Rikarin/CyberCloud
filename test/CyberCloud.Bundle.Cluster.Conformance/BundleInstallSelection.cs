@@ -67,9 +67,11 @@ public sealed class BundleInstallSelection {
     public async Task TheDryRunAttemptsEveryRosteredComponentOnceInTheRostersOrder() {
         Assert.SkipUnless(
             BundleInstaller.OnPath("bash"),
-            "SKIPPED — charts/bundle/install.sh is a bash script and `bash` is not on PATH, so the "
-            + "order it would install in could not be read. WOULD PROVE: that a run with no selector "
-            + "attempts all nineteen components, once each, in charts/bundle/bundle.yaml's order."
+            BundleInstaller.SkipWithoutBash(
+                "install.sh",
+                "that a run with no selector attempts all nineteen components, once each, in "
+                + "charts/bundle/bundle.yaml's order."
+            )
         );
 
         var run = await BundleInstaller.RunAsync(
@@ -236,9 +238,11 @@ public sealed class BundleInstallSelection {
     public async Task EveryManifestComponentIsFollowedByAnEstablishmentWait() {
         Assert.SkipUnless(
             BundleInstaller.OnPath("bash"),
-            "SKIPPED — charts/bundle/install.sh is a bash script and `bash` is not on PATH. WOULD "
-            + "PROVE: that every `manifest:` component's apply is followed by a `kubectl wait "
-            + "--for=condition=Established` before the next component begins."
+            BundleInstaller.SkipWithoutBash(
+                "install.sh",
+                "that every `manifest:` component's apply is followed by a `kubectl wait "
+                + "--for=condition=Established` before the next component begins."
+            )
         );
 
         var run = await BundleInstaller.RunAsync(
@@ -549,9 +553,11 @@ public sealed class BundleInstallSelection {
     public async Task EveryManifestComponentWaitsForWhatItsComponentYamlDeclares() {
         Assert.SkipUnless(
             BundleInstaller.OnPath("bash"),
-            "SKIPPED — charts/bundle/install.sh is a bash script and `bash` is not on PATH. WOULD "
-            + "PROVE: that every `manifest:` component's `waitFor:` entries become `kubectl wait` "
-            + "lines after its apply."
+            BundleInstaller.SkipWithoutBash(
+                "install.sh",
+                "that every `manifest:` component's `waitFor:` entries become `kubectl wait` "
+                + "lines after its apply."
+            )
         );
 
         var run = await BundleInstaller.RunAsync(
@@ -646,8 +652,10 @@ public sealed class BundleInstallSelection {
     public async Task TheUsageTextCountsThePhasesOutOfTheRoster() {
         Assert.SkipUnless(
             BundleInstaller.OnPath("bash"),
-            "SKIPPED — charts/bundle/install.sh is a bash script and `bash` is not on PATH. WOULD "
-            + "PROVE: that `--help` reports each phase's size as charts/bundle/bundle.yaml has it."
+            BundleInstaller.SkipWithoutBash(
+                "install.sh",
+                "that `--help` reports each phase's size as charts/bundle/bundle.yaml has it."
+            )
         );
 
         var run = await BundleInstaller.RunAsync(
@@ -705,9 +713,11 @@ public sealed class BundleInstallSelection {
     public async Task APhaseThatSelectsNothingIsAFailureRatherThanAnEmptySuccess() {
         Assert.SkipUnless(
             BundleInstaller.OnPath("bash"),
-            "SKIPPED — charts/bundle/install.sh is a bash script and `bash` is not on PATH. WOULD "
-            + "PROVE: that a --phase matching no component in bundle.yaml fails loudly rather than "
-            + "reporting an install that did nothing."
+            BundleInstaller.SkipWithoutBash(
+                "install.sh",
+                "that a --phase matching no component in bundle.yaml fails loudly rather than "
+                + "reporting an install that did nothing."
+            )
         );
 
         var run = await BundleInstaller.RunAsync(
@@ -746,8 +756,10 @@ public sealed class BundleInstallSelection {
     public async Task AComponentThatIsNotOnTheRosterIsRefusedByName() {
         Assert.SkipUnless(
             BundleInstaller.OnPath("bash"),
-            "SKIPPED — charts/bundle/install.sh is a bash script and `bash` is not on PATH. WOULD "
-            + "PROVE: that --component refuses a name charts/bundle/bundle.yaml does not list."
+            BundleInstaller.SkipWithoutBash(
+                "install.sh",
+                "that --component refuses a name charts/bundle/bundle.yaml does not list."
+            )
         );
 
         var run = await BundleInstaller.RunAsync(
