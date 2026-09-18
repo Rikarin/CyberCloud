@@ -41,6 +41,14 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///         the namespace itself — twenty derivations, twenty chances to disagree — the manager
 ///         computes it once and passes it.
 ///     </para>
+///     <para>
+///         ⚠ <b>Clause 2 has one deliberate reach outside the record: <see cref="View" />.</b> A
+///         reconciler may read a resource it does not own — but only through the view, only as
+///         itself, and only what the tenant has granted it (docs/plan/08 § What the resource manager
+///         deliberately does not do). That is still "everything it needs comes from
+///         <c>ReconcileContext</c>": the view is a member of the context, and the seam behind it is
+///         the manager's, not a field on the reconciler.
+///     </para>
 /// </remarks>
 /// <param name="Id">
 ///     The resource, with <see cref="ResourceId.Id" /> resolved. ⚠ Never the path-parsed form whose
@@ -218,6 +226,57 @@ public readonly record struct ReconcileContext(
     }
 
     readonly IKubeCoWriter? coWriter;
+
+    ///     The read-only, authorization-checked view of resources this reconciler does not own —
+    ///     the one way a provider reaches another provider's resource.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The owner is baked in.</b> The driver builds this view <i>for</i> <see cref="Id" />, so
+    ///     every read it performs is checked with this resource as the subject
+    ///     (<see cref="IResourceView" /> has the rule). A reconciler cannot ask the view to look on
+    ///     behalf of anything else, which is what makes "the owning resource is the
+    ///     principal-equivalent" a property of the seam rather than a convention. Defaults to
+    ///     <see cref="RefusingResourceView" />, which fails by name, for the reason
+    ///     <see cref="SecretWriter" /> does.
+    /// </remarks>
+    public IResourceView View { get; init; } = new RefusingResourceView();
+
+    /// <summary>
+    ///     Where this reconciler asks to hear about changes to resources of a type in its own
+    ///     subscription. The events arrive in <see cref="Changes" /> on a later pass.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Scoped to <see cref="Id" />'s subscription by the driver; a reconciler names a type and
+    ///     nothing else. Defaults to <see cref="RefusingResourceWatch" />.
+    /// </remarks>
+    public IResourceWatch Watch { get; init; } = new RefusingResourceWatch();
+
+    /// <summary>
+    ///     The <c>resource-changed</c> events delivered to this resource since a pass last converged,
+    ///     oldest first. Empty for a resource that watches nothing.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Every event here passed the same check a read would: the resource it names is one this
+    ///         resource may <see cref="IResourceView.ReadAsync" />. It is a hint about where to look,
+    ///         not a record of what is there — read the snapshot through <see cref="View" /> before
+    ///         acting on it, because the event was true at step 11 of a write and the resource has
+    ///         reconciled since.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Acknowledged by the driver when the pass converges, and only then.</b> A pass that
+    ///         returns <see cref="ReconcileOutcome.InProgress" /> or fails sees the same events again
+    ///         next time, with anything that arrived in between appended.
+    ///     </para>
+    /// </remarks>
+    public ImmutableArray<ResourceChangedEvent> Changes { get; init; } = [];
+
+    /// <summary>
+    ///     How many events were dropped because more than <see cref="ReconcileInput.MaxPendingChanges" />
+    ///     arrived before a pass converged. Nonzero means <see cref="Changes" /> is incomplete and the
+    ///     reconciler must rescan what it watches rather than trust the list.
+    /// </summary>
+    public int ChangesDropped { get; init; }
 }
 
 /// <summary>

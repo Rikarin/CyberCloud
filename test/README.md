@@ -88,6 +88,16 @@ It is the one suite that must be written by someone who is *trying to break in*,
 a provider's happy-path tests dilutes that intent. It asserts **404, never 403** — existence is not
 disclosed.
 
+Since issue #90 the attacker is sometimes a *resource*. `CrossResourceViewTests` and
+`ResourceWatchTests` drive the cross-resource seam of
+[08 § What the resource manager deliberately does not do](../docs/plan/08-resource-manager.md)
+through the same real authorizer: a resource in tenant B viewing tenant A's resource is `404`, an
+ungranted resource in the same tenant is the *same* `404` as an absent name, a granted one reads the
+snapshot and the rendered objects' addresses, a change reaches only a watcher that could read the
+changed resource, and there is no member on the seam a write could ride in on. The grant in every
+test is written the way a tenant would write it — a role assignment with `principalType: "resource"`
+— so the suite also pins that a resource from another tenant is not a principal here.
+
 ## The conformance suite is what makes the catalogue safe to grow
 
 One xUnit theory every provider must pass: create → 202 → poll → Succeeded → read back → tag → lock

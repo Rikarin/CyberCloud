@@ -134,6 +134,7 @@ tenant-qualified key. `GrainKeys` is the only type allowed to build the within-t
 | `IManagedIdentityGrain` | `mi/{managedIdentityId:N}` — [11 § Managed identity](11-identity.md) |
 | `IEmailIndexGrain` | `idx/email/{sha256(tenantId + normalizedEmail)[..16]}` |
 | `IClientIndexGrain` | `idx/client/{sha256(tenantId + clientId)[..16]}` — [11 § Protocol](11-identity.md) |
+| `IResourceWatchGrain` | `idx/watch/{sha256(subscriptionId + canonicalType)[..16]}` — [08 § What the resource manager deliberately does not do](08-resource-manager.md) |
 | `ISignUpGrain` | `signup/{signupId:N}` — **hot tier, qualified by the platform tenant**, [11 § Sign-up and tenant creation](11-identity.md) |
 | `IOperationGrain` | `op/{operationId:N}` |
 | `IQuotaGrain` | `sub/{subscriptionId:N}` — same key string as the subscription, different grain **type** |
@@ -193,7 +194,13 @@ would merge two ids the protocol keeps apart; `GrainKeys.EnsureValidClientId` re
 cannot carry (empty, over 254, leading or trailing white space, control or white-space characters)
 and changes nothing. Its consumer is [11 § Protocol](11-identity.md).
 
-⚠ **`[..16]` is sixteen hex characters — 64 bits — not sixteen bytes.** All three index keys are
+The fourth `idx/` row, `idx/watch/`, is the per-(subscription, type) list of resources that asked to
+hear when resources of that type change — the event half of the cross-resource seam in
+[08 § What the resource manager deliberately does not do](08-resource-manager.md). The type is hashed
+in its canonical spelling, as `idx/path/` hashes the canonical path and for the same reason: the
+provider namespace is case-preserving, and two spellings of one type must be one watch list.
+
+⚠ **`[..16]` is sixteen hex characters — 64 bits — not sixteen bytes.** All four index keys are
 scoped *within a tenant*, so the birthday bound is over one tenant's entries: at 1 000 000 resources
 in a single tenant the collision probability is ~3 × 10⁻⁸, and a tenant that large is already an outlier
 ([07 § ListObjects](07-rebac-authorization.md) sizes the big case at 200 000). A collision is a

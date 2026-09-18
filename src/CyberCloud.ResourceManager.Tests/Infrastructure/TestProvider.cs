@@ -88,6 +88,14 @@ public static class FakeWorld {
     /// </remarks>
     public static ConcurrentDictionary<Guid, string> KeepsVolume { get; } = new();
 
+    /// <summary>
+    ///     What each pass saw of the cross-resource seam: the runtime types of
+    ///     <see cref="ReconcileContext.View" /> and <see cref="ReconcileContext.Watch" />, and how many
+    ///     delivered changes the pass was handed. <c>CrossResourceSeamTests</c> asserts the driver
+    ///     hands a pass the real seam rather than the refusing defaults a hand-built context carries.
+    /// </summary>
+    public static ConcurrentDictionary<Guid, (string View, string Watch, int Changes)> Seams { get; } = new();
+
     /// <summary>Forgets everything.</summary>
     public static void Reset() {
         Applied.Clear();
@@ -99,6 +107,7 @@ public static class FakeWorld {
         FailTeardownWith.Clear();
         ProduceClusterAt.Clear();
         KeepsVolume.Clear();
+        Seams.Clear();
     }
 }
 
@@ -126,6 +135,7 @@ public sealed class ConformingReconciler(IClock clock) : IResourceReconciler {
         CancellationToken cancellationToken = default
     ) {
         FakeWorld.Passes.AddOrUpdate(context.Id.Id, 1, (_, count) => count + 1);
+        FakeWorld.Seams[context.Id.Id] = (context.View.GetType().Name, context.Watch.GetType().Name, context.Changes.Length);
 
         if (FakeWorld.FailWith.TryGetValue(context.Id.Id, out var failure)) {
             context.Log.Report("applying", $"refused: {failure}");

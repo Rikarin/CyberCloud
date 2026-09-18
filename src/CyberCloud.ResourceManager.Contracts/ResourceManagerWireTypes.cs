@@ -992,6 +992,19 @@ public sealed record ResourceChangedEvent {
     [Id(16)]
     public long Version { get; init; }
 
+    /// <summary>
+    ///     The resource's full path, as the caller spelled it. What a watcher hands to
+    ///     <see cref="IResourceView.ReadAsync" /> to see the resource the event is about.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Added for the watch fan-out (issue #90) and not derivable from the other members: a child
+    ///     resource's path names its parents and <see cref="Name" /> is the leaf alone, so
+    ///     <c>…/accounts/{a}/fileShares/{s}</c> cannot be rebuilt from <c>{s}</c>. Appended with the
+    ///     next <c>[Id]</c>, so a v0.1.0 peer reads the event without it.
+    /// </remarks>
+    [Id(17)]
+    public string Path { get; init; } = string.Empty;
+
     /// <summary>The stream this event belongs on — <c>cc.{tenantId:N}.res</c>, per step 11.</summary>
     public string StreamNamespace => string.Create(CultureInfo.InvariantCulture, $"cc.{TenantId:N}.res");
 }

@@ -112,11 +112,34 @@ public sealed class RoleAssignmentService(
         new[] { Relations.Owner, Relations.Contributor, Relations.Reader }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>
-    ///     The principal types an assignment may name: the three subject types plus <c>group</c>,
-    ///     which is granted through its <c>member</c> userset.
+    ///     The principal types an assignment may name: the three subject types, <c>group</c>, which
+    ///     is granted through its <c>member</c> userset, and <c>resource</c>.
     /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             <c>resource</c> is a principal here and is not a subject type, and the two sets
+    ///             differ on purpose.
+    ///         </b> <c>SubjectTypes.All</c> is what a token can carry — what can sign in. A resource
+    ///         never signs in; it acts only from its own reconcile pass, where <c>ReconcileDriver</c>
+    ///         makes it the subject of every cross-resource read (<see cref="IResourceView" /> has the
+    ///         rule). Granting <c>reader</c> to <c>resource:{vault}</c> on a resource group is how a
+    ///         tenant lets the vault see the shares in it — Azure's system-assigned identity, without
+    ///         the identity: the resource's own GUID is the principal id, so there is no second object
+    ///         to create, rotate or leak. Nothing is granted to a resource implicitly.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Its existence is answered by <see cref="IResourceGrain" /> in the assignment's
+    ///         tenant rather than by <see cref="IPrincipalDirectory" />, because the directory is the
+    ///         identity module's and a resource is this module's; asking identity about a resource
+    ///         would be a question it has no way to answer. The tenant scoping is the same as the
+    ///         directory's: the grain is reached <c>ForTenant</c>, so another tenant's resource GUID
+    ///         is "does not exist" by construction.
+    ///     </para>
+    /// </remarks>
     public static FrozenSet<string> PrincipalTypes { get; } =
-        SubjectTypes.All.Append(ObjectTypes.Group).ToFrozenSet(StringComparer.Ordinal);
+        SubjectTypes.All.Append(ObjectTypes.Group).Append(ObjectTypes.Resource).ToFrozenSet(StringComparer.Ordinal);
 
     /// <inheritdoc />
     public async Task<Result<RoleAssignmentSnapshot>> AssignAsync(
@@ -149,12 +172,7 @@ public sealed class RoleAssignmentService(
             return Result<RoleAssignmentSnapshot>.Failure(denied);
         }
 
-        var known = await directory.ExistsAsync(
-            assignment.TenantId,
-            assignment.Name.PrincipalType,
-            assignment.Name.PrincipalId,
-            cancellationToken
-        );
+        var known = await ExistsAsync(assignment, cancellationToken);
 
         if (known.TryGetError(out var directoryError)) {
             // ⚠ Refused, never granted on a guess. An unanswerable directory is an unwired seam or an
@@ -180,8 +198,10 @@ public sealed class RoleAssignmentService(
                 + $"tenant '{assignment.TenantId:D}', so nothing can be granted to it. A principal is a "
                 + "user, a service principal, a managed identity or a group that exists in the "
                 + "assignment's own tenant, named by the id its directory object carries — "
-                + "docs/plan/11 § The object model. A principal from another tenant is not one either: "
-                + "a user belongs to exactly one tenant (docs/plan/11 § Sign-up and tenant creation)."
+                + "docs/plan/11 § The object model — or a resource that exists in it, named by its GUID "
+                + "(docs/plan/08 § What the resource manager deliberately does not do). A principal from "
+                + "another tenant is not one either: a user belongs to exactly one tenant (docs/plan/11 "
+                + "§ Sign-up and tenant creation), and a resource to exactly one."
             );
         }
 
@@ -326,6 +346,46 @@ public sealed class RoleAssignmentService(
         return Result<RoleAssignmentPage>.Success(
             new() { Assignments = [.. rows], Continuation = hasMore ? rows[^1].Path : string.Empty }
         );
+    }
+
+    // ── The principal exists ───────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Whether the principal an assignment names exists in the assignment's tenant: the directory
+    ///     for a user, service principal, managed identity or group; the resource grain for a
+    ///     resource.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A resource principal is spelled as its GUID in <c>N</c> form and nothing else.</b>
+    ///     That is the spelling <c>ResourceViews.CallerFor</c> puts in the subject when the resource
+    ///     reads, so a grant spelled any other way would be a tuple the check never matches — a
+    ///     grant to nobody, which is what issue #86 closed for directory principals. It is refused
+    ///     rather than normalized, because the address is the caller's own and echoing it back
+    ///     corrected would leave two spellings of one assignment in the tenant's listing.
+    /// </remarks>
+    async Task<Result<bool>> ExistsAsync(RoleAssignmentId assignment, CancellationToken cancellationToken) {
+        var name = assignment.Name;
+
+        if (!string.Equals(name.PrincipalType, ObjectTypes.Resource, StringComparison.Ordinal)) {
+            return await directory.ExistsAsync(assignment.TenantId, name.PrincipalType, name.PrincipalId, cancellationToken);
+        }
+
+        if (!Guid.TryParseExact(name.PrincipalId, "N", out var resourceId) || resourceId == Guid.Empty) {
+            return Result<bool>.Success(false);
+        }
+
+        var snapshot = await grains
+            .ForTenant(assignment.TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<IResourceGrain>(GrainKeys.Resource(resourceId))
+            .GetAsync(string.Empty, []);
+
+        if (snapshot.IsSuccess) {
+            return Result<bool>.Success(true);
+        }
+
+        return snapshot.Error is { Code: var code } && code == ErrorCode.ResourceNotFound
+            ? Result<bool>.Success(false)
+            : Result<bool>.Failure(snapshot.Error!);
     }
 
     // ── Step 1: resolve ────────────────────────────────────────────────────────────────────────

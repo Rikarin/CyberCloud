@@ -104,8 +104,42 @@ public sealed class ResourceState {
     [Id(16)]
     public ObservedState? Observed { get; set; }
 
+    /// <summary>
+    ///     The <c>resource-changed</c> events handed to this resource by the watch fan-out and not yet
+    ///     acknowledged by a converged pass — <see cref="IResourceGrain.NotifyChangedAsync" />. Bounded
+    ///     at <see cref="ReconcileInput.MaxPendingChanges" />; the oldest is dropped past that and
+    ///     <see cref="ChangesDropped" /> counts it.
+    /// </summary>
+    [Id(17)]
+    public List<PendingChange> PendingChanges { get; set; } = [];
+
+    /// <summary>
+    ///     The sequence number the last delivered event was given. Monotonic for the life of the
+    ///     resource, so an acknowledgement can name "everything up to what I read" and leave what
+    ///     arrived after the read.
+    /// </summary>
+    [Id(18)]
+    public long ChangeSequence { get; set; }
+
+    /// <summary>Events dropped since the last acknowledgement because the list was full.</summary>
+    [Id(19)]
+    public int ChangesDropped { get; set; }
+
     /// <summary>Whether anything has ever been written here.</summary>
     public bool Exists => Path.Length > 0;
+}
+
+/// <summary>One delivered event and the sequence number that lets a pass acknowledge up to it.</summary>
+[GenerateSerializer]
+[Alias("CyberCloud.ResourceManager.State.PendingChange")]
+public sealed class PendingChange {
+    /// <summary>Its position in this resource's delivery order.</summary>
+    [Id(0)]
+    public long Sequence { get; set; }
+
+    /// <summary>The event as the fan-out handed it over.</summary>
+    [Id(1)]
+    public ResourceChangedEvent Change { get; set; } = new();
 }
 
 /// <summary>
@@ -252,4 +286,25 @@ public sealed class ParkedResourceRegistryState {
     /// <summary>The parked resources, by resource id.</summary>
     [Id(0)]
     public Dictionary<Guid, ParkedResource> Entries { get; set; } = [];
+}
+
+/// <summary>
+///     The durable state of an <c>IResourceWatchGrain</c> — the resources in one subscription that
+///     asked to hear when resources of one type change. docs/plan/08 § What the resource manager
+///     deliberately does not do.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Durable for the parked registry's reason: the enumeration has no second home.</b> The
+///     reconciler that registered a watch holds nothing between passes, and the passes in between
+///     are exactly when the fan-out needs to find it. <c>durable-grains.txt</c> carries the argument
+///     beside the line. Keyed by resource GUID so a watcher that is renamed or restored keeps its
+///     watch, and so the fan-out can hand the event to <c>IResourceGrain</c> by the key it already
+///     has.
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.ResourceManager.State.ResourceWatch")]
+public sealed class ResourceWatchState {
+    /// <summary>The watchers, by resource id.</summary>
+    [Id(0)]
+    public Dictionary<Guid, ResourceWatcher> Watchers { get; set; } = [];
 }

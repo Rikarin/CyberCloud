@@ -965,10 +965,15 @@ The list-and-search path, and it is separate from the write path on purpose.
 `resource-changed` → a projector → a per-tenant ClickHouse table:
 
 ```
-resource_id, tenant_id, subscription_id, resource_group, provider, type, name,
+resource_id, tenant_id, subscription_id, resource_group, provider, type, name, path,
 api_version, provisioning_state, location, cluster_id, tags Map(String,String),
 created_at, modified_at, desired_hash, version
 ```
+
+`path` arrived with the watch fan-out of
+[§ The cross-resource seam](#the-cross-resource-seam-what-one-provider-may-see-of-another-and-why-it-is-read-only)
+and is not derivable from the columns before it: a child's path names its parents and `name` is the
+leaf alone. A projector that keys on it gets the address a `GET` takes for free.
 
 Portal lists, filters, tag queries, "show me every Postgres in this subscription", and the M3 resource
 graph API all read this. **It is eventually consistent and the portal shows that** — a freshly created
@@ -1010,6 +1015,106 @@ Rules that make this useful rather than decorative:
 | Rate limit | Gateway | Per-request work must not touch a grain |
 | Emit metrics/logs for tenants | Providers → `CyberCloud.Telemetry` | Volume |
 | Decide *where* a resource goes | The subscription's default cluster, or the explicit `clusterId` | Placement policy is M3 and would be a scheduler; the manager just carries the id |
+| Let one provider *write* another's resource | Nowhere — see below | A write needs a caller, and a reconciler has none |
+
+### The cross-resource seam: what one provider may see of another, and why it is read-only
+
+Decided 2026-09-18, issue #90. Sixteen provider families held
+[03 § Assembly graph rules](03-repository-layout.md), rule 2 — no `Providers.*` assembly references
+another — and the first two types that could not were a backup vault
+([15 § Backup as a service](15-storage-blob-file.md)), which protects *other providers'* resources,
+and a customer-managed key ([18](18-security-vault-and-malware-scan.md)), which every provider that
+persists has to resolve. Nothing in `ReconcileContext` let a reconciler see a resource it did not
+own. The choice was between a seam above the provider and a hole in the rule.
+
+**The seam.** `ReconcileContext` carries two new members, both bound by `ReconcileDriver` to the
+resource the pass is for and rebindable by nothing a reconciler can call:
+
+- `View` — `IResourceView`: `ReadAsync(ResourceId)` returns another resource's snapshot as the
+  gateway would return it (newest api-version, secret pointers dropped);
+  `RenderedObjectsAsync(ResourceId)` returns the *addresses* of the objects the other provider
+  rendered for it, joined on the `cybercloud.io/resource-id` label of ADR-013. Both accept a path
+  with or without the GUID and resolve through the tenant's index like a `GET`.
+- `Watch` — `IResourceWatch`: `SubscribeAsync(type)` asks to hear when resources of that type in the
+  owner's *subscription* change. `resource-changed` at step 11 fans out to the subscribers, each
+  delivery is checked by the same rule as a read, and the watcher's grain keeps what it was handed
+  until a converged pass acknowledges it. The next pass finds the events in `ctx.Changes`, bounded at
+  thirty-two with `ctx.ChangesDropped` saying when the list is incomplete and a rescan is due.
+
+**The rule, written down.** A reconciler for the owning resource `O` may view a target `T` exactly
+when the gateway would answer a `GET` on `T` for a caller whose subject is `O` itself:
+`IResourceAuthorizer.AuthorizeAsync(T, T.read, T.read, { TenantId = O.TenantId, SubjectType = "resource",
+SubjectId = O.Id })`. The same seam, the same engine, the same `404` on refusal
+([07 § The enforcement seam](07-rebac-authorization.md)), with one stated difference: the check is
+`FullyConsistent` where a `GET`'s is `MinimizeLatency`, because the check cache has no TTL and a
+reconciler has no token to pass — a vault denied once before its grant would otherwise be denied
+forever. For the check to say yes, a tuple must grant `resource:O` the `reader` role on `T` or a scope
+above it, and the tenant writes it through the ordinary role-assignment path with
+`principalType: "resource"` — Azure's system-assigned identity without the identity, the resource's
+own GUID being the principal id. **Nothing is granted implicitly**: the user who `PUT` the vault may
+not be able to read the share it names, and a seam that let the vault read it anyway would be the
+confused deputy. Two gates run before the engine, both fail-closed: a target in another tenant is
+`404` before any grain of that tenant is touched, and a target whose type this silo does not serve is
+`404` because its read permission comes from the registration.
+
+**Why read-only, and never a write.** A write is authorized against the *caller*, and a reconciler
+has none: it runs on a reminder, under no user, with no correlation id and nobody to bill or audit the
+change to. Every step of § The write path that makes a write a tenant's write — locks, policy, quota,
+the index claim, the parent edge, the operation record, `resource-changed` — hangs off that caller. A
+resource that wrote another resource would be a write with none of them, from a component clause 2 of
+the reconciler contract forbids to hold state, running twice when the reminder fires twice. So the
+interface has no member that mutates, and `CrossResourceViewTests.TheViewHasNoMemberThatCouldWrite`
+keeps it that way. A provider that needs another resource to *change* asks the tenant to `PUT` it or
+publishes an action on its own type — which is what a vault does: it writes snapshots *beside* the
+protected resource, under its own id, never into it.
+
+**Implementation over contracts, enforced.** The view returns `ResourceSnapshot` and Kubernetes
+`ObjectRef` — the other provider's public *contract* (its schema) and nothing from its assembly. Rule
+2 still forbids the assembly reference, and a new rule 8 in the Assembly graph gate fails a provider
+that names the manager's grain interfaces, entry points or write seams (`IResourceGrain`,
+`IResourceIndexGrain`, `IResourceGroupGrain`, `IQuotaGrain`, `IResourceManager`, the authorizers,
+`IRoleAssignmentStore` and the ReBAC writers) from the two contracts assemblies it legitimately
+references — the road that used to be "a review failure, not a compile one" is now watched from the
+type table. The same rule keeps a provider off the *implementation* assembly, where
+`ResourceViews.For(owner)` lives: only a `.Application` may reference `CyberCloud.ResourceManager`,
+for the registration call and nothing else, because the view is safe exactly as long as
+`ReconcileDriver` is the only caller that chooses the owner
+([03 § Assembly graph rules](03-repository-layout.md) has the probe that found this).
+
+**What it costs.**
+
+- Every view call is a grain hop to the index, a fully consistent ReBAC walk over durable rows, and a
+  grain hop to the resource, inside the reconciler's 30-second budget; forty views in one pass spend
+  it, and the reconciler returns `InProgress` between batches. `RenderedObjectsAsync` adds a
+  namespace listing on the target's cluster.
+- Every accepted write of *every* registered type — watched or not — costs one call to the
+  `idx/watch` grain for its (subscription, type) on the request path, and the first such call for a
+  pair activates the grain, which is a durable read that then answers an empty list; the fan-out has
+  no cheaper way to learn that nobody is watching. A watched type adds one fully consistent check and
+  one grain call per subscriber in that subscription — bounded by construction to the resources that
+  asked. A refused or failed delivery is a log line and the write stands; a grain call that *throws*
+  inside the fan-out propagates out of step 11 as any other grain call on the path does, after the
+  write is durable, and `ResourceManagerService.EmitAsync` says so beside the call — a transport fault
+  is not a watcher's problem to hide.
+- A new grain, `IResourceWatchGrain` at `idx/watch/{sha256(subscriptionId + type)[..16]}`,
+  durable ([05 § Choosing a tier](05-state-and-storage.md): the enumeration has no second home, and
+  a fan-out that read an empty set after a silo restart would deliver nothing and report nothing
+  wrong). Three appended `[Id]`s on `ReconcileInput` and `ResourceState`, one on
+  `ResourceChangedEvent` (its `Path`).
+- `principalType: "resource"` in role assignments — a fifth principal type, whose existence is
+  answered by the resource grain in the assignment's tenant rather than by the directory.
+- The view sees the target's *current* snapshot; a target mid-update reports `Updating`, and a
+  reconciler that must act on a settled shape checks the state before it does.
+
+**What is owed, precisely.** Delivery is durable and the pass that runs next sees it. What does not
+exist is the pass itself: a converged resource has no operation and no reminder, so a delivered change
+waits for the next pass something else starts — a `PUT`, a restore, or the drift scan of § The
+reconcile loop, which is itself owed its reminder. The hook for a manager-started pass is
+`IResourceGrain.NotifyChangedAsync`, and the kind it would start is a seventh `OperationKind` that
+converges without a body change and tears nothing down on cancel; when it lands, "tell me when X
+changes" becomes "run me when X changes" without a change to the provider seam. The vault and the key
+themselves remain owed at `charts/managed/seaweedfs/conformance.yaml § owed` — what this decision
+removed is the sentence that said the seam was the blocker.
 
 ## Effort
 

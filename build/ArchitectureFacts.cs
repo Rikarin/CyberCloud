@@ -65,6 +65,19 @@ sealed record PersistentStateBinding(string DeclaringType, string StateName, str
 ///     is the honest default: an application assembly with no declared host has no own host, and
 ///     rule 4 then permits nothing to reference it.
 /// </param>
+/// <param name="ReferencedTypes">
+///     Every row of the <c>TypeRef</c> table whose resolution scope is another assembly — the types
+///     this assembly binds from elsewhere, by full metadata name, against the simple name of the
+///     assembly each is bound from. What rule 8 of docs/plan/03 § Assembly graph rules reads: a
+///     provider may reference <c>CyberCloud.ResourceManager.Contracts</c> and may not name the
+///     manager's grain interfaces from it, and only the type table can tell the two apart.
+///     <para>
+///         ⚠ A nested type is listed under its outer type's name with a <c>+</c>, and a type
+///         reached only through a <c>const</c> is not listed at all — the compiler inlined it. That
+///         is the hole rule 2 closed with the project-file half, and it does not apply here: an
+///         interface has no <c>const</c> to inline, and a grain call binds the interface.
+///     </para>
+/// </param>
 sealed record AssemblyFacts(
     string Name,
     AbsolutePath Path,
@@ -72,7 +85,8 @@ sealed record AssemblyFacts(
     IReadOnlyList<PersistentStateBinding> PersistentStateBindings,
     IReadOnlyDictionary<string, string?> DurableStateRationales,
     IReadOnlyDictionary<string, IReadOnlyList<string>> InterfaceBases,
-    IReadOnlyList<string?> OwningHosts) {
+    IReadOnlyList<string?> OwningHosts,
+    IReadOnlyList<(string Assembly, string Type)> ReferencedTypes) {
     /// <summary>
     ///     Reads one assembly without loading it.
     ///     <para>
@@ -162,6 +176,16 @@ sealed record AssemblyFacts(
             }
         }
 
+        var referencedTypes = new List<(string Assembly, string Type)>();
+
+        foreach (var handle in metadata.TypeReferences) {
+            var scope = ResolutionAssembly(metadata, handle);
+
+            if (scope is not null) {
+                referencedTypes.Add((scope, ReferenceFullName(metadata, handle)));
+            }
+        }
+
         return new AssemblyFacts(
             metadata.GetString(metadata.GetAssemblyDefinition().Name),
             dll,
@@ -171,8 +195,43 @@ sealed record AssemblyFacts(
                 .ToList(),
             rationales,
             interfaceBases,
-            owningHosts
+            owningHosts,
+            referencedTypes.Distinct()
+                .OrderBy(x => x.Assembly, StringComparer.Ordinal)
+                .ThenBy(x => x.Type, StringComparer.Ordinal)
+                .ToList()
         );
+    }
+
+    /// <summary>
+    ///     The simple name of the assembly a <c>TypeRef</c> row resolves to, walking out of a nested
+    ///     type to its outermost declaring type. <see langword="null" /> for a row scoped to a module
+    ///     or to this assembly itself, which rule 8 has no interest in.
+    /// </summary>
+    static string? ResolutionAssembly(MetadataReader metadata, TypeReferenceHandle handle) {
+        var reference = metadata.GetTypeReference(handle);
+
+        return reference.ResolutionScope.Kind switch {
+            HandleKind.AssemblyReference => metadata.GetString(
+                metadata.GetAssemblyReference((AssemblyReferenceHandle)reference.ResolutionScope).Name
+            ),
+            HandleKind.TypeReference => ResolutionAssembly(metadata, (TypeReferenceHandle)reference.ResolutionScope),
+            _ => null,
+        };
+    }
+
+    /// <summary>The full metadata name of a <c>TypeRef</c> row, with <c>+</c> before a nested type.</summary>
+    static string ReferenceFullName(MetadataReader metadata, TypeReferenceHandle handle) {
+        var reference = metadata.GetTypeReference(handle);
+        var name = metadata.GetString(reference.Name);
+
+        if (reference.ResolutionScope.Kind == HandleKind.TypeReference) {
+            return ReferenceFullName(metadata, (TypeReferenceHandle)reference.ResolutionScope) + "+" + name;
+        }
+
+        var @namespace = metadata.GetString(reference.Namespace);
+
+        return string.IsNullOrEmpty(@namespace) ? name : @namespace + "." + name;
     }
 
     /// <summary>

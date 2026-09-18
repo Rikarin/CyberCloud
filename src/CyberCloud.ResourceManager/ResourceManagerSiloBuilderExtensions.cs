@@ -159,6 +159,17 @@ public static class ResourceManagerSiloBuilderExtensions {
         // would remember nothing and every reconcile pass of every resource would cost a read and a
         // patch against a namespace that has existed for months.
         services.TryAddSingleton<NamespaceEnsurer>();
+
+        // ── The cross-resource seam. docs/plan/08 § What the resource manager deliberately does not do ──
+        //
+        // ⚠ BOTH HALVES RESOLVE THE SAME IResourceAuthorizer THE GATEWAY'S READ PATH DOES, which is
+        // the point: the rule IResourceView writes down is enforced by the one registration above,
+        // not by a second evaluator that could drift from it. ResourceViews is what the driver hands
+        // a pass (bound to the pass's resource); ResourceWatchFanout is what the manager's step 11
+        // hands each event to. Neither is optional and neither has a refusing default — a host that
+        // composes the manager composes the seam, the way it composes the scope path below.
+        services.TryAddSingleton<ResourceViews>();
+        services.TryAddSingleton<ResourceWatchFanout>();
         services.TryAddSingleton<ReconcileDriver>();
 
         // ⚠ Resolved in the GATEWAY as well as in a silo, and unlike DriftScanner and ReconcileDriver

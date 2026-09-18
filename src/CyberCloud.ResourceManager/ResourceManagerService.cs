@@ -1,5 +1,6 @@
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Contracts.Registry;
+using CyberCloud.ResourceManager.Reconcile;
 using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
 using System.Collections.Immutable;
@@ -58,6 +59,17 @@ namespace CyberCloud.ResourceManager;
 ///         <c>CyberCloud.Tenancy/TenancySiloBuilderExtensions.cs</c>. <c>CC1006</c> is what keeps that
 ///         true after the next edit.
 ///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             <c>watches</c> is the one optional dependency, and the default is "no watcher is
+///             told", not "no watcher exists".
+///         </b> <c>AddCyberCloudResourceManager</c> always supplies <see cref="ResourceWatchFanout" />,
+///         so every host fans out; the default is for the six harnesses that build this service by
+///         hand to test step ordering and have no watchers to tell. A harness that asserts a delivery
+///         passes one — <c>CyberCloud.Isolation</c> does — and the shape follows
+///         <c>ReconcileDriver</c>'s <c>agents</c>.
+///     </para>
 /// </remarks>
 public sealed class ResourceManagerService(
     IProviderRegistry registry,
@@ -68,7 +80,8 @@ public sealed class ResourceManagerService(
     IResourceChangedSink changes,
     IGrainFactory grains,
     ActionDispatcher actions,
-    ILogger<ResourceManagerService> logger
+    ILogger<ResourceManagerService> logger,
+    ResourceWatchFanout? watches = null
 )
     : IResourceManager {
     /// <inheritdoc />
@@ -2922,28 +2935,28 @@ public sealed class ResourceManagerService(
         ResourceSnapshot snapshot,
         CancellationToken cancellationToken
     ) {
-        var published = await changes.PublishAsync(
-            new() {
-                Change = change,
-                ResourceId = target.Id.Id,
-                TenantId = target.Id.TenantId,
-                SubscriptionId = target.Id.SubscriptionId,
-                ResourceGroup = target.Id.ResourceGroup,
-                Provider = target.Id.Type.Namespace,
-                Type = target.Id.Type.Type,
-                Name = target.Id.Name,
-                ApiVersion = target.ApiVersion.Value,
-                ProvisioningState = snapshot.ProvisioningState,
-                Location = snapshot.Location,
-                ClusterId = snapshot.ClusterId,
-                Tags = snapshot.Tags,
-                CreatedAt = snapshot.CreatedAt,
-                ModifiedAt = snapshot.ModifiedAt,
-                DesiredHash = DesiredHash.Of(snapshot.Body),
-                Version = 0
-            },
-            cancellationToken
-        );
+        var changed = new ResourceChangedEvent {
+            Change = change,
+            ResourceId = target.Id.Id,
+            TenantId = target.Id.TenantId,
+            SubscriptionId = target.Id.SubscriptionId,
+            ResourceGroup = target.Id.ResourceGroup,
+            Provider = target.Id.Type.Namespace,
+            Type = target.Id.Type.Type,
+            Name = target.Id.Name,
+            ApiVersion = target.ApiVersion.Value,
+            ProvisioningState = snapshot.ProvisioningState,
+            Location = snapshot.Location,
+            ClusterId = snapshot.ClusterId,
+            Tags = snapshot.Tags,
+            CreatedAt = snapshot.CreatedAt,
+            ModifiedAt = snapshot.ModifiedAt,
+            DesiredHash = DesiredHash.Of(snapshot.Body),
+            Version = 0,
+            Path = target.Id.Path
+        };
+
+        var published = await changes.PublishAsync(changed, cancellationToken);
 
         // ⚠ A failed publish does NOT fail the request. docs/plan/08 § The resource-graph projection
         // makes the projection eventually consistent by design; refusing a create because a list view
@@ -2956,6 +2969,17 @@ public sealed class ResourceManagerService(
                 target.Id.Path,
                 publishError.Message
             );
+        }
+
+        // ── The watch fan-out. docs/plan/08 § What the resource manager deliberately does not do ──
+        //
+        // ⚠ AFTER THE PUBLISH AND INDEPENDENT OF ITS OUTCOME, AND NEVER FAILING THE WRITE. The
+        // projection and the watchers are two consumers of one event; neither's trouble is the
+        // tenant's. ResourceWatchFanout turns every per-watcher refusal and failed Result into a log
+        // line rather than an outcome; a grain call that THROWS propagates here exactly as the other
+        // grain calls on this path do, because a transport fault is not a watcher's problem to hide.
+        if (watches is not null) {
+            _ = await watches.DeliverAsync(changed, cancellationToken);
         }
     }
 

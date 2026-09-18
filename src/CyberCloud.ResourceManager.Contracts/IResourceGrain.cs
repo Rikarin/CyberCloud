@@ -279,6 +279,47 @@ public interface IResourceGrain : IGrainWithStringKey {
     /// </returns>
     Task<Result<ReconcileInput>> GetReconcileInputAsync();
 
+    /// <summary>
+    ///     Hands this resource a <c>resource-changed</c> event about a resource it watches, to be
+    ///     read by its next pass through <see cref="ReconcileContext.Changes" />.
+    /// </summary>
+    /// <param name="change">The event, as step 11 of the write path emitted it.</param>
+    /// <returns>
+    ///     Success once the event is durable in this grain's list — or dropped with the drop counted,
+    ///     when the list already holds <see cref="ReconcileInput.MaxPendingChanges" />.
+    ///     <see cref="ErrorCode.ResourceNotFound" /> when this resource is gone, which is how a
+    ///     fan-out learns to drop a dead watcher from the watch index.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Called by the manager's fan-out and by nothing else</b>, after the fan-out has
+    ///         checked that this resource may read the changed one — <see cref="IResourceWatch" />
+    ///         has the rule. The grain does not re-check; a caller that could reach this method
+    ///         without the check could reach the state behind it, and the assembly-graph gate is what
+    ///         keeps providers from being that caller.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Records and returns; it does not start a pass.</b> Starting one is the owed half
+    ///         <see cref="IResourceWatch" /> describes, and this is the method that will do it.
+    ///     </para>
+    /// </remarks>
+    Task<Result> NotifyChangedAsync(ResourceChangedEvent change);
+
+    /// <summary>
+    ///     Drops every delivered event up to and including <paramref name="throughSequence" />, and
+    ///     resets the drop count.
+    /// </summary>
+    /// <param name="throughSequence">
+    ///     The <see cref="ReconcileInput.ChangeSequence" /> the converged pass read. Events delivered
+    ///     after that read have higher numbers and stay.
+    /// </param>
+    /// <remarks>
+    ///     ⚠ Called by <c>ReconcileDriver</c> after a pass that converged, and only then — a pass that
+    ///     is <see cref="ReconcileOutcome.InProgress" /> has not finished acting on what it read, and a
+    ///     failed one may not have started.
+    /// </remarks>
+    Task<Result> AcknowledgeChangesAsync(long throughSequence);
+
     /// <summary>Drops this activation — see <c>ITenantGrain.DeactivateAsync</c>.</summary>
     Task DeactivateAsync();
 }
@@ -324,4 +365,34 @@ public sealed record ReconcileInput {
     /// <summary>The operation currently driving this resource.</summary>
     [Id(7)]
     public Guid OperationId { get; init; }
+
+    /// <summary>
+    ///     The <c>resource-changed</c> events delivered through <see cref="IResourceGrain.NotifyChangedAsync" />
+    ///     and not yet acknowledged, oldest first. At most <see cref="MaxPendingChanges" />.
+    /// </summary>
+    [Id(8)]
+    public ImmutableArray<ResourceChangedEvent> PendingChanges { get; init; } = [];
+
+    /// <summary>
+    ///     The sequence number of the newest event in <see cref="PendingChanges" />, or zero when
+    ///     there is none. What a converged pass hands back to
+    ///     <see cref="IResourceGrain.AcknowledgeChangesAsync" />.
+    /// </summary>
+    [Id(9)]
+    public long ChangeSequence { get; init; }
+
+    /// <summary>How many events were dropped since the last acknowledgement because the list was full.</summary>
+    [Id(10)]
+    public int ChangesDropped { get; init; }
+
+    /// <summary>
+    ///     How many delivered events a resource keeps before dropping the oldest and counting the drop.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Small on purpose. The list is a hint about where to look, and a resource that watches a
+    ///     busy type is better told "you missed some, rescan" than handed a thousand events it has to
+    ///     process inside a 30-second pass. Thirty-two is one event per second for half a minute,
+    ///     which is more than a subscription's resources change in the gap between two passes.
+    /// </remarks>
+    public const int MaxPendingChanges = 32;
 }

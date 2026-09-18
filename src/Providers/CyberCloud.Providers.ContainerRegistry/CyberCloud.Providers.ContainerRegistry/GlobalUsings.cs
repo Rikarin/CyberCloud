@@ -15,7 +15,8 @@
 // ⚠ `CyberCloud.Tenancy.Contracts` is here for `QuotaMeter` alone — docs/plan/06 § Quota owns the
 // families. It also makes IQuotaGrain and IResourceIndexGrain NAMEABLE from a provider, and steps 6
 // and 7 of docs/plan/08 § The write path, end to end are the manager's alone. Naming either from a
-// reconciler is a review failure, not a compile one.
+// reconciler fails the Assembly graph gate — docs/plan/03 § Assembly graph rules, rule 8, added
+// by issue #90; until then it was a review failure and not a compile one.
 
 global using ErrorCode = CyberCloud.Core.ErrorCode;
 global using CyberCloud.Core;
