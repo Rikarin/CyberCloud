@@ -63,6 +63,17 @@ public interface IShardMapMirror {
 ///     wrapping the silo's <c>ShardMapRefresher</c>.
 /// </remarks>
 /// <param name="mirror">The silo's mirror.</param>
+/// <remarks>
+///     ⚠ <b>Aliased, because the type crosses a socket as a generic argument.</b>
+///     <c>SendControlCommandToProvider&lt;ShardMapMirrorController&gt;</c> is a grain call whose
+///     invokable is generic over this type, and a caller in another PROCESS — the identity host, an
+///     Orleans client, creating a tenant at sign-up — serialises that invokable with the type in it.
+///     Without an alias Orleans refuses the whole call: <c>Type "…Invokable_IManagementGrain_…
+///     [[ShardMapMirrorController…]]" is not allowed</c>, and the sign-up fails at its first step.
+///     Every in-process test passed without it (a TestCluster's client and silos share one type
+///     manifest); the AppHost's real process boundary is where it showed, on the merge of #39.
+/// </remarks>
+[Alias("CyberCloud.Tenancy.ShardMapMirrorController")]
 public sealed class ShardMapMirrorController(IShardMapMirror mirror) : IControllable {
     /// <summary>The one command: <see cref="IShardMapMirror.RefreshAndResolveAsync" />.</summary>
     public const int RefreshAndResolve = 1;

@@ -156,6 +156,10 @@ public sealed class TenancyWireContractTests {
         // Enums.
         ("IndexEntryState", "CyberCloud.Tenancy.IndexEntryState"),
 
+        // The one class that is not a message and still needs a name on the wire: it is the generic
+        // argument of a management-grain call a CLIENT makes (ShardMapMirrorController's remarks).
+        ("ShardMapMirrorController", "CyberCloud.Tenancy.ShardMapMirrorController"),
+
         // ⚠ LockLevel's alias reads CyberCloud.ResourceManager.LockLevel and that is DELIBERATE, not
         // a copy-paste. The type moved here from CyberCloud.ResourceManager.Contracts — a lock is a
         // property of the hierarchy, and the scopes that carry one are this assembly's — and the
