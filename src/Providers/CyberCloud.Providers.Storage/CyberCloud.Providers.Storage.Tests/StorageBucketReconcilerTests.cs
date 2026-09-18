@@ -160,9 +160,10 @@ public sealed class StorageBucketReconcilerTests {
         // ⚠ `clusterRef.name`, AN OBJECT — CORRECTED 2026-09-15. For a month this read
         // `["clusterRef"]!.GetValue<string>()` against a renderer that wrote a string, and both were
         // wrong together: api/v1/bucket_types.go spells BucketClusterRef as {name, namespace}, and the
-        // stub CRD the cluster suite derives has an open schema, so nothing in the tree ever met the
-        // refusal a real operator's CRD gives a string here. The expectation is the field's SHAPE as
-        // well as its value, against the operator's source rather than against the renderer.
+        // stub CRD the cluster suite derived had an open schema, so until issue #91 nothing in the
+        // tree met the refusal a real operator's CRD gives a string here. The expectation is the
+        // field's SHAPE as well as its value, against the operator's source rather than against the
+        // renderer.
         Spec(connection.Applied[0].Body)["clusterRef"]!["name"]!.GetValue<string>()
             .ShouldBe(
                 "media",

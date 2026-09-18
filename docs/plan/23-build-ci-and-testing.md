@@ -87,6 +87,35 @@ coverage at all rather than fail every project it does not touch. A merge theref
 reconciler suites the same day, which is what #25 asked for — a suite red on Linux for ten days was
 one whose only run was inside a job that was red anyway.
 
+⚠ **The Conformance row validates against the operators' real definitions since 2026-09-18, and for
+a month it did not.** Every reconciler renders its custom resource in C#, and the Docker-free suite's
+API server was a dictionary that held whatever it was handed; the Reconciler row's k3s served a stub
+definition per kind with an open schema. So `charts/managed/seaweedfs-bucket` rendered three fields
+in a shape SeaweedFS's operator refuses, and twenty-eight green assertions per run said nothing
+(issue #91). The real `CustomResourceDefinition` of every kind a managed chart renders is now
+committed beside the bundle component that installs it, under `charts/bundle/<component>/crds/`,
+fetched from the pinned release by `charts/bundle/crds.sh`; `FakeKubeCluster` validates every apply
+against it — required, type, enum, undeclared fields, bounds, associative-list keys, defaults — and
+the k3s harness installs the same bytes in place of the stub. Two gate rows hold the files: **Bundle**
+checks offline that every rendered operator-owned kind has one and nothing else is committed;
+**Definitions** re-fetches the release and compares bytes, ○ when offline. The first run over every
+family found one more wrong shape, in `charts/managed/postgres` (`conformance.yaml` § owed,
+`backup-destination-is-not-filled-in`). What the fake still cannot evaluate is a definition's CEL
+rules — `charts/bundle/bundle.yaml` § owed, `the-fake-does-not-evaluate-cel-rules`; the k3s lane does.
+
+⚠ **One body per family is one shape per family, and the review of #91 showed what that misses.**
+Every row of the shared suite converges `ProviderConformanceCase.Body`, so the definition was only
+ever asked about the default body: the Postgres renderer wrote `spec.postgresql_synchronous` — a key
+CloudNativePG does not declare — for every server with `synchronousReplication: true`, and the flag
+defaults to `false`. `ProviderConformanceTests.EveryPropertyVariantTheSchemaAdmitsRendersAShapeTheDefinitionAdmits`
+now derives, from the type's own schema, one body per property value the default does not carry —
+booleans flipped, every enum value, the declared bounds, an example or a fixed word for an open
+string — writes each through the manager and holds the fake to the committed definitions on every
+apply (318 variants across the 25 cluster-backed types on 2026-09-18). Its first run found a second
+Postgres shape: a pooling mode the schema publishes and the operator's Pooler refuses
+(`conformance.yaml` § owed, `statement-pooling-is-a-mode-the-pooler-does-not-have`). One property at
+a time; a pair a reconciler renders jointly is the next gap.
+
 ### Skipped by default — the assertions that need a server, and what running them proved
 
 Tracked here rather than left in a commit message, because a test that nobody knows is skipped is

@@ -147,6 +147,12 @@
     <ItemGroup Label="Kubernetes">
         <!-- ⚠ Survival pins 18.0.13; 19 changed the generic client surface — docs/plan/02 § Data, transport, Kubernetes. -->
         <PackageVersion Include="KubernetesClient" Version="19.0.2"/>
+        <!--
+          ⚠ The version KubernetesClient 19.0.2 itself depends on, made explicit because test/CyberCloud.Conformance reads
+          charts/bundle/*/crds/*.yaml with it directly (issue #91): a transitive dependency used by name is a build that
+          breaks the day the client drops it, with an error naming neither. Move both together.
+        -->
+        <PackageVersion Include="YamlDotNet" Version="16.3.0"/>
     </ItemGroup>
 
     <ItemGroup Label="Surfaces">

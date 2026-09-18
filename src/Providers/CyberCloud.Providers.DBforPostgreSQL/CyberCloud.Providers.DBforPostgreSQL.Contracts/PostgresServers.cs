@@ -300,7 +300,14 @@ public static class PostgresServers {
     ///     ⚠ <c>s3</c> only, and not <see cref="SchemaFormat.Uri" />. ADR-008 makes object storage
     ///     speak S3 and nothing else, so a <c>gs://</c> destination is a backup that silently never
     ///     runs; and <see cref="SchemaFormat.Uri" /> would refuse this property's own <c>""</c>
-    ///     default, which is how the platform spells "fill it in from the tenant's default bucket".
+    ///     default, which was meant to spell "fill it in from the tenant's default bucket".
+    ///     ⚠ <b>Nothing fills it in, and CloudNativePG refuses the empty string</b> — the definition
+    ///     puts <c>minLength: 1</c> on <c>spec.backup.barmanObjectStore.destinationPath</c>, found
+    ///     by issue #91 the first time a conformance run validated against it. So a body that leaves
+    ///     backups on and the path empty is refused by <see cref="BackupDestinationProblem" /> before
+    ///     the apply, naming this property, rather than by the API server naming the operator's.
+    ///     The default stays <c>""</c> because the api-version is published and a default is part of
+    ///     its contract; what changed is what the empty string means.
     /// </remarks>
     public const string BackupDestinationPattern = @"(s3://[a-z0-9][a-z0-9.\-]*[a-z0-9](/[^\s]*)?)?";
 
@@ -444,7 +451,9 @@ public static class PostgresServers {
                     "/properties/pooling/mode",
                     SchemaKind.Text,
                     Description: "PgBouncer pooling mode. Transaction pooling is the useful one and "
-                    + "breaks session-scoped features such as prepared statements and advisory locks."
+                    + "breaks session-scoped features such as prepared statements and advisory locks. "
+                    + "statement is published in this api-version and refused while pooling.enabled is "
+                    + "true: CloudNativePG's Pooler admits only session and transaction."
                 ) { AllowedValues = ["session", "transaction", "statement"], DefaultJson = "\"transaction\"" },
                 new(
                     "/properties/pooling/instances",
@@ -483,8 +492,9 @@ public static class PostgresServers {
                     "/properties/backup/destinationPath",
                     SchemaKind.Text,
                     Description: "Object-store URL for base backups and WAL, for example "
-                    + "s3://tenant-bucket/postgres. Empty means the platform fills it in from the "
-                    + "tenant's default bucket."
+                    + "s3://tenant-bucket/postgres. Required while backup.enabled is true: the "
+                    + "platform does not fill in a default bucket yet, and a body that leaves it "
+                    + "empty with backups on is refused naming this property."
                 ) {
                     Pattern = BackupDestinationPattern,
                     DefaultJson = "\"\"",
@@ -754,6 +764,82 @@ public static class PostgresServers {
     /// <param name="desired">The validated desired body.</param>
     public static bool BackupEnabled(JsonElement desired) => Flag(desired, "backup", "enabled", true);
 
+    /// <summary>The object-store URL backups go to, or the empty string when the body names none.</summary>
+    /// <param name="desired">The validated desired body.</param>
+    public static string BackupDestination(JsonElement desired) => Text(desired, "backup", "destinationPath", string.Empty);
+
+    /// <summary>
+    ///     Why the desired body cannot be rendered into a <c>Cluster</c> the operator's definition
+    ///     admits, or <see langword="null" /> when it can.
+    /// </summary>
+    /// <param name="desired">The validated desired body.</param>
+    /// <returns>
+    ///     The sentence the operation fails with when backups are on and no destination is named —
+    ///     the reconciler reports it as <c>InvalidRequestBody</c> at
+    ///     <see cref="BackupDestinationPointer" /> — or <see langword="null" /> when the body renders.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>Found by issue #91, and it was every default-bodied server.</b> <c>backup.enabled</c>
+    ///     defaults to <c>true</c> and <c>destinationPath</c> to <c>""</c>, and
+    ///     <see cref="ClusterJson" /> rendered the pair as
+    ///     <c>spec.backup.barmanObjectStore.destinationPath: ""</c> — which
+    ///     <c>charts/bundle/cloudnative-pg/crds/clusters.postgresql.cnpg.io.yaml</c> refuses with
+    ///     <c>minLength: 1</c>. FakeKubeCluster echoed it, so twelve conformance assertions were
+    ///     green over a Cluster no API server would have stored. The check lives here, before the
+    ///     apply, so the refusal names the tenant's own property and not the operator's field, and
+    ///     so the message says what to do: name a bucket, or turn backups off. Terminal rather than
+    ///     retryable, because the body will say the same thing on every pass.
+    /// </remarks>
+    public static string? BackupDestinationProblem(JsonElement desired) =>
+        BackupEnabled(desired) && BackupDestination(desired).Length == 0
+            ? "backup.enabled is true and backup.destinationPath is empty. CloudNativePG needs an "
+            + "s3://bucket/prefix to archive WAL and base backups to, and the platform does not fill "
+            + "in a default bucket yet. Set " + BackupDestinationPointer + ", or set "
+            + "/properties/backup/enabled to false."
+            : null;
+
+    /// <summary>The property <see cref="BackupDestinationProblem" /> is reported against.</summary>
+    public const string BackupDestinationPointer = "/properties/backup/destinationPath";
+
+    /// <summary>
+    ///     Why the desired body cannot be rendered into a <c>Pooler</c> the operator's definition
+    ///     admits, or <see langword="null" /> when it can.
+    /// </summary>
+    /// <param name="desired">The validated desired body.</param>
+    /// <returns>
+    ///     The sentence the operation fails with when pooling is on and the mode is
+    ///     <c>statement</c> — the reconciler reports it as <c>InvalidRequestBody</c> at
+    ///     <see cref="PoolingModePointer" /> — or <see langword="null" /> when the body renders.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>Found by the review of issue #91, on the first run that varied a property.</b> The
+    ///     2026-08-01 schema publishes three pooling modes — PgBouncer's three — and
+    ///     <c>charts/bundle/cloudnative-pg/crds/poolers.postgresql.cnpg.io.yaml</c> declares
+    ///     <c>spec.pgbouncer.poolMode</c> as an enum of <c>session</c> and <c>transaction</c>. So
+    ///     <c>statement</c> was a value the API accepted and no operator could honour: the Cluster
+    ///     applied, the Pooler was refused with the operator's field named, and the operation failed
+    ///     after the tenant was told 202. The value cannot leave the schema — an api-version is
+    ///     immutable, and <c>OpenApiCompatibility.EnumValueRemoved</c> says so — so the check lives
+    ///     here, before the apply, with the tenant's own property and the two values that work.
+    ///     Terminal, because the body says the same thing on every pass. Only when pooling is on:
+    ///     with it off no Pooler is rendered and the mode reaches nothing.
+    /// </remarks>
+    public static string? PoolingModeProblem(JsonElement desired) =>
+        PoolingEnabled(desired) && string.Equals(PoolingMode(desired), "statement", StringComparison.Ordinal)
+            ? "pooling.enabled is true and pooling.mode is \"statement\". CloudNativePG's Pooler accepts "
+            + "only \"session\" and \"transaction\" for spec.pgbouncer.poolMode, so the operator's "
+            + "definition refuses the object and PgBouncer's statement pooling is not reachable through "
+            + "it. Set " + PoolingModePointer + " to \"transaction\" or \"session\", or set "
+            + "/properties/pooling/enabled to false."
+            : null;
+
+    /// <summary>The property <see cref="PoolingModeProblem" /> is reported against.</summary>
+    public const string PoolingModePointer = "/properties/pooling/mode";
+
+    /// <summary>The PgBouncer pool mode the body asks for, <c>transaction</c> when it names none.</summary>
+    /// <param name="desired">The validated desired body.</param>
+    public static string PoolingMode(JsonElement desired) => Text(desired, "pooling", "mode", "transaction");
+
     /// <summary>The application database <c>bootstrap</c> creates.</summary>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
@@ -842,6 +928,25 @@ public static class PostgresServers {
 
         postgresql["parameters"] = parameters;
 
+        // ⚠ `spec.postgresql.synchronous`, INSIDE the postgresql block — not a `postgresql_synchronous`
+        // sibling of it. api/v1/cluster_types.go declares `Synchronous *SynchronousReplicaConfiguration
+        // `json:"synchronous,omitempty"`` on PostgresConfiguration, beside `parameters`, and the
+        // committed definition (charts/bundle/cloudnative-pg/crds/clusters.postgresql.cnpg.io.yaml)
+        // declares `method` and `number` there and nothing under spec by the other name. The other
+        // spelling was a typed-patch failure — ".spec.postgresql_synchronous: field not declared in
+        // schema" — on every server created with synchronous replication, and it stayed green because
+        // every suite converged the default body, where the flag is off. The review of issue #91 found
+        // it; ProviderConformanceTests.EveryPropertyVariantTheSchemaAdmitsRendersAShapeTheDefinitionAdmits
+        // renders the flag's other value against the definition now.
+        //
+        // ⚠ Absent rather than a `false`-valued block when replication is asynchronous. The definition
+        // has no "asynchronous" member — asynchronous IS the absence of `synchronous` — and an empty
+        // block written anyway would be a field this field manager owns forever under server-side
+        // apply, which is a field the tenant's own controller could then never set.
+        if (Flag(desired, "synchronousReplication", false)) {
+            postgresql["synchronous"] = new JsonObject { ["method"] = "any", ["number"] = 1 };
+        }
+
         var initdb = new JsonObject {
             ["database"] = Database(desired),
             ["owner"] = Owner(desired),
@@ -881,14 +986,6 @@ public static class PostgresServers {
             spec["resources"] = new JsonObject { ["requests"] = quantities.DeepClone(), ["limits"] = quantities };
         }
 
-        // ⚠ Absent rather than a `false`-valued block when replication is asynchronous. The CRD has
-        // no "asynchronous" member — asynchronous IS the absence of `postgresql_synchronous` — and an
-        // empty block written anyway would be a field this field manager owns forever under
-        // server-side apply, which is a field the tenant's own controller could then never set.
-        if (Flag(desired, "synchronousReplication", false)) {
-            spec["postgresql_synchronous"] = new JsonObject { ["method"] = "any", ["number"] = 1 };
-        }
-
         var walSize = Text(desired, "storage", "walSize", string.Empty);
         if (walSize.Length > 0) {
             var wal = new JsonObject { ["size"] = walSize };
@@ -904,7 +1001,9 @@ public static class PostgresServers {
                 ["retentionPolicy"] =
                     Number(desired, "backup", "retentionDays", 14).ToString(CultureInfo.InvariantCulture) + "d",
                 ["barmanObjectStore"] = new JsonObject {
-                    ["destinationPath"] = Text(desired, "backup", "destinationPath", string.Empty),
+                    // ⚠ Never empty here: BackupDestinationProblem refuses the pass first, and the
+                    // reconciler asks it before it asks for this document.
+                    ["destinationPath"] = BackupDestination(desired),
                     ["wal"] = new JsonObject { ["compression"] = "gzip" }
                 }
             };
@@ -926,7 +1025,7 @@ public static class PostgresServers {
                 ["cluster"] = new JsonObject { ["name"] = name },
                 ["instances"] = Number(desired, "pooling", "instances", 2),
                 ["type"] = "rw",
-                ["pgbouncer"] = new JsonObject { ["poolMode"] = Text(desired, "pooling", "mode", "transaction") }
+                ["pgbouncer"] = new JsonObject { ["poolMode"] = PoolingMode(desired) }
             }
         }.ToJsonString();
     }
@@ -976,7 +1075,7 @@ public static class PostgresServers {
     static bool MatchesPooler(JsonObject spec, JsonElement desired) =>
         spec["instances"]?.GetValue<int>() == Number(desired, "pooling", "instances", 2)
         && (spec["pgbouncer"] as JsonObject)?["poolMode"]?.GetValue<string>()
-        == Text(desired, "pooling", "mode", "transaction");
+        == PoolingMode(desired);
 
     /// <summary>
     ///     The CPU and memory a body asks for: the explicit quantities when both are given, otherwise
@@ -1102,6 +1201,10 @@ public static class PostgresServers {
     /// <param name="storageSize">The data volume size.</param>
     /// <param name="pooling">Whether to run a pooler.</param>
     /// <param name="location">The region.</param>
+    /// <param name="backupDestination">
+    ///     Where backups go. Empty leaves backups on with no destination, which
+    ///     <see cref="BackupDestinationProblem" /> refuses — the shape a test reaches for to see that refusal.
+    /// </param>
     /// <remarks>
     ///     ⚠ Every property it writes is a <b>leaf</b>. <c>ResourceSchema.Project</c> skips a
     ///     <see cref="SchemaKind.Nested" /> container and rebuilds it from whichever leaf lands first,
@@ -1113,7 +1216,8 @@ public static class PostgresServers {
         int replicas = 2,
         string storageSize = "20Gi",
         bool pooling = true,
-        string location = "eu-central"
+        string location = "eu-central",
+        string backupDestination = "s3://tenant-bucket/postgres"
     ) =>
         new JsonObject {
             ["location"] = location,
@@ -1123,7 +1227,10 @@ public static class PostgresServers {
                 ["replicas"] = replicas,
                 ["storage"] = new JsonObject { ["size"] = storageSize },
                 ["pooling"] = new JsonObject { ["enabled"] = pooling, ["instances"] = 2 },
-                ["bootstrap"] = new JsonObject { ["database"] = "app", ["owner"] = "app" }
+                ["bootstrap"] = new JsonObject { ["database"] = "app", ["owner"] = "app" },
+                // ⚠ Named, because the schema's own defaults — backups on, no destination — are a
+                // body the operator's definition refuses. See BackupDestinationProblem.
+                ["backup"] = new JsonObject { ["destinationPath"] = backupDestination }
             }
         }.ToJsonString();
 

@@ -247,3 +247,77 @@ owed:
       SupportsSoftDelete(7) from this type until one of the two exists, on the same argument
       PostgresProvider already makes in its own remarks: "a recovery window the platform does not
       honour is a promise made" to a tenant who will find out when they use it.
+  - id: backup-destination-is-not-filled-in
+    says: >
+      ⚠ FOUND BY #91 ON THE FIRST CONFORMANCE RUN THAT VALIDATED AGAINST CLOUDNATIVEPG'S REAL
+      DEFINITION, AND IT WAS EVERY DEFAULT-BODIED SERVER. The schema defaults backup.enabled to true
+      and destinationPath to "" — "Empty means the platform fills it in from the tenant's default
+      bucket", the description said — and ClusterJson rendered the pair as
+      `spec.backup.barmanObjectStore.destinationPath: ""`, which
+      charts/bundle/cloudnative-pg/crds/clusters.postgresql.cnpg.io.yaml refuses with `minLength: 1`.
+      Nothing fills it in: no code reads a tenant's default bucket, and there is no such bucket to
+      read. FakeKubeCluster echoed the object, so twelve assertions per run were green over a Cluster
+      no API server would have stored; against a cluster the bundle installed, every server created
+      with the defaults would have failed its first pass with the operator's field named and no hint
+      that the tenant's own property was the one to set.
+      WHAT CLOSED THE REFUSAL: PostgresServerReconciler asks PostgresServers.BackupDestinationProblem
+      before it applies anything and fails the pass — terminal, InvalidRequestBody, target
+      /properties/backup/destinationPath — with a sentence naming both moves that fix it: name an
+      s3://bucket/prefix, or set backup.enabled false. The description now says so, and
+      PostgresServers.Body names a destination so every suite converges a body the definition admits.
+      PostgresReconcilerTests.BackupsOnWithNoDestinationAreRefusedBeforeAnythingIsAppliedAndNameTheProperty
+      pins the refusal, the empty apply list, and the no-backup body rendering no backup block.
+      WHAT IS STILL OWED: the promise. A tenant who takes the defaults gets a refused operation
+      rather than a backed-up server, and the "default bucket" it names does not exist. Closing it is
+      either a platform-owned object store the reconciler can address on the tenant's behalf — a
+      CyberCloud.Storage/accounts the platform creates, with credentials the Cluster can mount —
+      which is docs/plan/15's work and not this chart's, or a new api-version whose default is
+      backup.enabled: false, which trades a refusal for a silence and is the worse trade on a
+      database. The default stays as published because a default is part of an immutable
+      api-version's contract; what changed is what the empty string means.
+  - id: synchronous-is-a-member-of-postgresql
+    status: closed
+    closed: 2026-09-18
+    says: >
+      ⚠ FOUND BY THE REVIEW OF #91, ONE FLAG AWAY FROM THE BODY EVERY SUITE CONVERGED. With
+      synchronousReplication true, PostgresServers.ClusterJson and templates/cluster.yaml both wrote
+      `spec.postgresql_synchronous: {method: any, number: 1}` — a sibling of `postgresql`. CloudNativePG
+      declares the block as `Synchronous` on PostgresConfiguration, beside `parameters`
+      (api/v1/cluster_types.go), and charts/bundle/cloudnative-pg/crds/clusters.postgresql.cnpg.io.yaml
+      declares `method` and `number` at spec.postgresql.synchronous and nothing under spec by the other
+      name. Server-side apply builds a typed object before it prunes, so the API server — and, since
+      #91, FakeKubeCluster — answered ".spec.postgresql_synchronous: field not declared in schema" and
+      wrote nothing: every server a tenant created with synchronous replication failed its first pass.
+      ⚠ THE DEFAULT IS `false`, WHICH IS THE WHOLE REASON IT SURVIVED #91. The sixteen .Conformance
+      suites converge one default body per family, and the definition was only ever asked about that
+      body; PostgresReconcilerTests.AsynchronousReplicationRendersNoSynchronousBlockAtAll asserted the
+      ABSENCE of the wrong key, which the wrong renderer satisfied. Both spellings now render the block
+      inside `postgresql`, PostgresReconcilerTests.SynchronousReplicationRendersTheBlockWhereTheDefinitionDeclaresIt
+      pins the placement, and ChartRegistryPairTests.TheChartPutsTheSynchronousBlockInsidePostgresql
+      pins the template. What keeps the next flag from doing the same is
+      ProviderConformanceTests.EveryPropertyVariantTheSchemaAdmitsRendersAShapeTheDefinitionAdmits,
+      which renders every property of every cluster-backed family at a value other than the one the
+      case's body carries and holds the fake to the committed definition on each.
+  - id: statement-pooling-is-a-mode-the-pooler-does-not-have
+    status: closed
+    closed: 2026-09-18
+    says: >
+      ⚠ FOUND BY THE VARIANT ROW ON ITS FIRST RUN, MINUTES AFTER IT WAS WRITTEN. The 2026-08-01 schema
+      publishes PgBouncer's three pooling modes — session, transaction, statement — and
+      charts/bundle/cloudnative-pg/crds/poolers.postgresql.cnpg.io.yaml declares spec.pgbouncer.poolMode
+      as an enum of two: session and transaction. So `statement` was a value the API accepted, the
+      portal offered, and no operator could honour: the Cluster applied, the Pooler was refused with
+      "Unsupported value: \"statement\": supported values: \"session\", \"transaction\"", and the
+      operation failed after the tenant was told 202 — with the operator's field named rather than the
+      tenant's property.
+      WHAT CLOSED THE REFUSAL: PostgresServerReconciler asks PostgresServers.PoolingModeProblem before
+      it applies anything and fails the pass — terminal, InvalidRequestBody, target
+      /properties/pooling/mode — naming the two modes that work and the flag that makes the mode moot.
+      The description says so (seven generated surfaces moved with it).
+      PostgresReconcilerTests.StatementPoolingIsRefusedBeforeAnythingIsAppliedAndNamesTheProperty pins
+      the refusal, the empty apply list, and the no-pooler body applying the Cluster alone.
+      ⚠ THE VALUE STAYS IN THE SCHEMA, because an api-version is immutable and
+      OpenApiCompatibility.EnumValueRemoved refuses the removal; what changed is what choosing it
+      means. A next api-version drops it. PgBouncer's statement pooling is real and CloudNativePG does
+      not expose it, so there is nothing to render it to — this is a published value that never had an
+      implementation, the same shape as `backup-destination-is-not-filled-in` above.

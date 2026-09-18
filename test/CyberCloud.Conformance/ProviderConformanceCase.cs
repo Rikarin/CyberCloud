@@ -312,17 +312,30 @@ public sealed record ProviderConformanceCase {
     // 5-of-6 red before their CRDs existed. `Objects` cannot be under-declared, because the suite
     // fails immediately and legibly without it.
     //
-    // ⚠ WHAT NEITHER DESIGN BUYS. The declared version looked stronger because a provider could
-    // supply the operator's real CRD. In practice it did not: the one provider that used it supplied
-    // a hand-written stub with `x-kubernetes-preserve-unknown-fields` and said so in its own remarks.
-    // A stub — derived or written — makes the plural address a real path, makes server-side apply
-    // real, and makes the seven labels pass real admission. It does NOT prove the rendered spec
-    // satisfies the operator's schema. Nothing in this repository checks that today; each chart's
-    // SOURCE file records a review date, which is the weaker claim and is labelled as one.
+    // ⚠ WHAT NEITHER DESIGN BOUGHT, AND WHAT ISSUE #91 ADDED WITHOUT ADDING A MEMBER. The declared
+    // version looked stronger because a provider could supply the operator's real CRD. In practice it
+    // did not: the one provider that used it supplied a hand-written stub with
+    // `x-kubernetes-preserve-unknown-fields` and said so in its own remarks. A stub — derived or
+    // written — makes the plural address a real path, makes server-side apply real, and makes the
+    // seven labels pass real admission. It does NOT prove the rendered spec satisfies the operator's
+    // schema, and for a month nothing in this repository did: charts/managed/seaweedfs-bucket rendered
+    // three fields in a shape the real definition refuses, under twenty-eight green assertions.
     //
-    // If a provider ever needs the operator's real CRD — to assert its manifest validates rather than
-    // merely applies — add the member back as a SUPPLEMENT to the derivation, never as a replacement
-    // for it. The floor must stay underivable-from-nothing.
+    // What checks it now is derived the same way this member was refused for not being: `Objects`
+    // still supplies group, version, kind, plural and scope; charts/bundle/crds.sh derives the SET of
+    // kinds from charts/managed/*/templates/ and commits the real definition of each from the release
+    // the component pins; FakeKubeCluster validates every apply against the committed definition and
+    // ClusterConformanceHarness installs it into k3s in place of the stub; and
+    // ProviderConformanceTests.EveryCustomKindTheCaseRendersHasACommittedDefinition refuses a case
+    // whose Objects name a kind with no definition — or whose reconciler applies one they do not.
+    // A provider still declares nothing it could under-declare. The floor is still
+    // underivable-from-nothing, and the ceiling is the operator's.
+    //
+    // ⚠ AND THE BODIES ARE DERIVED THE SAME WAY, for the same reason. `Body` is one body, and the
+    // review of #91 found the shape one flag away from it refused by the definition every suite
+    // was green against. A `Variants` member here would be a second list to under-declare, so
+    // ProviderConformanceTests.EveryPropertyVariantTheSchemaAdmitsRendersAShapeTheDefinitionAdmits
+    // reads the variants off the type's own schema instead — PropertyVariants' remarks say what.
 }
 
 /// <summary>

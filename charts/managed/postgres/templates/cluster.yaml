@@ -75,12 +75,20 @@ spec:
     {{- end }}
     parameters:
       max_connections: "200"
-
-  {{- if .Values.synchronousReplication }}
-  postgresql_synchronous:
-    method: any
-    number: 1
-  {{- end }}
+    {{- if .Values.synchronousReplication }}
+    {{/*
+      ⚠ INSIDE `postgresql`, NOT A `postgresql_synchronous` SIBLING OF IT. api/v1/cluster_types.go
+      declares `Synchronous` on PostgresConfiguration beside `parameters`, and
+      charts/bundle/cloudnative-pg/crds/clusters.postgresql.cnpg.io.yaml declares `method` and
+      `number` at spec.postgresql.synchronous and nothing under spec by the other name. The other
+      spelling failed the apply patch — "field not declared in schema" — on every server whose body
+      set synchronousReplication, and the default body never does, so nothing rendered it. See
+      conformance.yaml § owed, `synchronous-is-a-member-of-postgresql`.
+    */}}
+    synchronous:
+      method: any
+      number: 1
+    {{- end }}
 
   bootstrap:
     initdb:

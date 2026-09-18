@@ -1000,7 +1000,7 @@ export interface DBforPostgreSQLServersData {
   properties?: {
     /** Backup to the tenant's object store, using CloudNativePG's barman-cloud. */
     backup?: {
-      /** Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket. */
+      /** Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property. */
       destinationPath?: string;
       /** Whether continuous backup and WAL archiving run. */
       enabled?: boolean;
@@ -1029,7 +1029,7 @@ export interface DBforPostgreSQLServersData {
       enabled?: boolean;
       /** Number of pooler pods. */
       instances?: number;
-      /** PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks. */
+      /** PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks. statement is published in this api-version and refused while pooling.enabled is true: CloudNativePG's Pooler admits only session and transaction. */
       mode?: DBforPostgreSQLServersMode;
     };
     /** Number of instances, including the primary. One is a single point of failure and is offered for development only. */

@@ -195,6 +195,38 @@ public sealed partial class ChartRegistryPairTests {
     }
 
     [Fact]
+    public void TheChartPutsTheSynchronousBlockInsidePostgresql() {
+        // ⚠ THE TEMPLATE HALF OF PostgresReconcilerTests.SynchronousReplicationRendersTheBlockWhereTheDefinitionDeclaresIt,
+        // separate for the reason the preload-libraries pair is: the chart is a second hand-written
+        // spelling of the same Cluster and no emitter reads it. Both spellings wrote
+        // `postgresql_synchronous` as a sibling of `postgresql`; CloudNativePG declares the block as
+        // `Synchronous` on PostgresConfiguration (api/v1/cluster_types.go) and the committed definition
+        // knows `spec.postgresql.synchronous` only. The regular expression asks for `synchronous:` at
+        // the postgresql block's own indent (four spaces) with the two members the definition requires.
+        var cluster = Embedded("postgres.cluster.yaml");
+
+        // The KEY, at any indent — the template's own comment names the wrong spelling in prose.
+        Regex.IsMatch(cluster, "\\n\\s*postgresql_synchronous:", RegexOptions.None, TimeSpan.FromSeconds(5))
+            .ShouldBeFalse(
+                "the chart writes `postgresql_synchronous` under spec, which CloudNativePG's definition "
+                + "does not declare. The apply patch refuses the object, so every server rendered with "
+                + "synchronousReplication fails at the cluster after the caller was told 202."
+            );
+
+        Regex.IsMatch(
+                cluster,
+                "\\n    synchronous:\\n      method: any\\n      number: 1\\n",
+                RegexOptions.None,
+                TimeSpan.FromSeconds(5)
+            )
+            .ShouldBeTrue(
+                "the chart declares no `synchronous:` block two levels under spec — inside `postgresql`, "
+                + "where CloudNativePG's PostgresConfiguration.Synchronous sits — carrying `method: any` "
+                + "and `number: 1`, the two members the definition requires there."
+            );
+    }
+
+    [Fact]
     public void TheExtensionCatalogueIsTheChartsExtensionCatalogue() {
         // ⚠ THE SECOND LOOKUP TABLE THIS PAIR CARRIES TWICE, and it is the one whose drift is
         // invisible from either side. PostgresServers.ExtensionCatalogue and the `$catalogue` dict at

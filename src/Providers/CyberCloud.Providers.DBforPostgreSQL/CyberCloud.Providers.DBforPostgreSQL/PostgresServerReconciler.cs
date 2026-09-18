@@ -133,6 +133,22 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
         var name = context.Id.Name;
         var pooling = PostgresServers.PoolingEnabled(context.Desired);
 
+        // ── A body the operator's definition would refuse, refused here with the tenant's name for
+        //    the field. Before anything is written, so a refused server leaves no half-built Cluster.
+        if (PostgresServers.BackupDestinationProblem(context.Desired) is { } backupProblem) {
+            return ReconcileOutcome.Failed(
+                new Error(ErrorCode.InvalidRequestBody, backupProblem, PostgresServers.BackupDestinationPointer)
+            );
+        }
+
+        // ⚠ Before the Cluster, not before the Pooler: the Pooler is applied second, and a refusal
+        // between the two would leave a server with no pooler behind an operation that failed.
+        if (PostgresServers.PoolingModeProblem(context.Desired) is { } poolingProblem) {
+            return ReconcileOutcome.Failed(
+                new Error(ErrorCode.InvalidRequestBody, poolingProblem, PostgresServers.PoolingModePointer)
+            );
+        }
+
         // ── The claims a previous life left, handed over before the operator looks ──────────────
         if (await AdoptRetainedClaimsAsync(context, cluster, cancellationToken) is { } custodyProblem) {
             return custodyProblem;

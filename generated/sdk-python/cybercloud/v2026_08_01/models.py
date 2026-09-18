@@ -2638,7 +2638,7 @@ class PostgreSQLServerData:
         class Backup:
             """Backup to the tenant's object store, using CloudNativePG's barman-cloud."""
 
-            # Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket.
+            # Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.
             destination_path: Optional[str] = None
             # Whether continuous backup and WAL archiving run.
             enabled: Optional[bool] = None
@@ -2720,7 +2720,7 @@ class PostgreSQLServerData:
             enabled: Optional[bool] = None
             # Number of pooler pods.
             instances: Optional[int] = None
-            # PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.
+            # PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks. statement is published in this api-version and refused while pooling.enabled is true: CloudNativePG's Pooler admits only session and transaction.
             mode: Optional[PostgreSQLServerMode] = None
 
             @classmethod

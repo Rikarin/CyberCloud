@@ -50,6 +50,11 @@
         <PackageReference Include="Microsoft.Orleans.TestingHost"/>
         <PackageReference Include="Microsoft.Orleans.Reminders"/>
         <PackageReference Include="Orleans.Multitenant"/>
+        <!--
+          Reads charts/bundle/*/crds/*.yaml — the operator-owned definitions the fake API server validates against
+          (issue #91). The same library KubernetesClient uses; Directory.Packages.props says why it is named here.
+        -->
+        <PackageReference Include="YamlDotNet"/>
     </ItemGroup>
 
     <ItemGroup Label="Global usings">

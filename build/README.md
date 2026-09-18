@@ -11,6 +11,8 @@ build/
 ├── Build.Images.cs           # container images, SBOM, cosign signatures
 ├── Build.Architecture.cs     # the gates in docs/plan/00 § Non-negotiables
 ├── Build.Licence.cs          # ADR-011 scan over charts + images — the artefacts' licences, and syft over every image
+├── Build.Bundle.cs           # the Bundle gate over charts/bundle/: pins, licences, coverage, ordering, committed definitions
+├── Build.Definitions.cs      # charts/bundle/*/crds/ — the offline half of Bundle, and the Definitions row that re-fetches the pinned release (#91)
 ├── OciRegistry.cs            # the OCI distribution API: manifests and configs, for Build.Licence
 ├── Build.Portal.cs           # pnpm install/lint/test/build, performance budget, axe
 ├── Build.Bootstrap.cs        # deploy/bootstrap/bootstrap.sh preflight and --dry-run; the first phase of E2E, and nightly.yml's kind and hostile-BYO jobs (#25)

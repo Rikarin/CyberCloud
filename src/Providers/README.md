@@ -2409,11 +2409,23 @@ at least what you asked for.
 
 **The server adds.** A CRD's `+kubebuilder:default` fills in fields nobody applied, and so do
 `status`, `managedFields`, `creationTimestamp` and a defaulted `protocol` on every port. An
-equality comparison fails against a real cluster and passes everywhere else, because the Docker-free
-harness derives its CRD stub from `ProviderConformanceCase.Objects` and **a derived stub has no
-defaults**. An OpenSearch bug of exactly this shape left that suite 27 of 27 green and was caught
-only by a hand-written unit test. Nothing in the Docker-free half can catch it; `KubeJson.Contains`
-is the shape that survives it, and `CyberCloud.Cluster.Conformance` is what proves it.
+equality comparison fails against a real cluster and passed everywhere else, because until issue
+#91 the Docker-free harness derived its CRD stub from `ProviderConformanceCase.Objects` and **a
+derived stub has no defaults**. An OpenSearch bug of exactly this shape left that suite 27 of 27
+green and was caught only by a hand-written unit test. Since 2026-09-18 `FakeKubeCluster` validates
+every custom resource against the operator's real definition, committed under
+`charts/bundle/<component>/crds/`, and applies its defaults — so that shape is red in the Docker-free
+half too — and `ClusterConformanceHarness` installs the same definition into k3s. `KubeJson.Contains`
+is still the shape to write, because the server adds `status`, `managedFields` and more than
+defaults.
+
+> ⚠ **Remarks across the provider families that say "the derived stub has an open schema", "a
+> derived stub has no defaults" or "a field the operator would refuse is accepted here" describe the
+> harness before 2026-09-18.** They were true when written and are kept as the record of what each
+> family could and could not prove then; the present tense is `charts/bundle/README.md` § The
+> definitions the harness validates against. What has NOT changed: the fake evaluates no CEL rule
+> (`charts/bundle/bundle.yaml` § owed, `the-fake-does-not-evaluate-cel-rules`) and runs no operator,
+> so a readiness assertion is still owed to the cluster lane.
 
 **The server removes — from built-in objects.** A field tagged `omitempty` on the Go type it
 deserialises into is dropped when it is empty, which is *every* optional list and map on *every*

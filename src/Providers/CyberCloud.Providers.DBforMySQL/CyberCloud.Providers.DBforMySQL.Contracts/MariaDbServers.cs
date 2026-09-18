@@ -1042,7 +1042,7 @@ public static class MariaDbServers {
         // `spec.galera != nil && spec.galera.enabled` and `Galera.SetDefaults` runs only when it is
         // enabled, so a `false` block would be a field this field manager owns forever under
         // server-side apply, on a struct the operator would otherwise never touch — the same reasoning
-        // PostgresServers.ClusterJson gives about `postgresql_synchronous`.
+        // PostgresServers.ClusterJson gives about `spec.postgresql.synchronous`.
         if (IsHighlyAvailable(desired)) {
             spec["galera"] = new JsonObject { ["enabled"] = true };
         }

@@ -612,10 +612,12 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         // ⚠ THE ORPHAN'S SPEC IS COPIED FROM A REAL OBJECT, AND IT IS READ BEFORE THE DELETE.
         //
         // The orphan below used to be applied as apiVersion + kind + metadata and nothing else. That
-        // is a valid object for a custom resource — a CRD stub with
-        // `x-kubernetes-preserve-unknown-fields` requires nothing — and it is an INVALID object for a
-        // built-in with required spec fields. `CyberCloud.Terminal/consoles` is the first family to
-        // render one, and the API server refused the metadata-only apply outright:
+        // was a valid object for a custom resource while the harness installed a stub whose schema
+        // was `x-kubernetes-preserve-unknown-fields` — since issue #91 the harness installs the
+        // operator's real definition and a Kafka with no `spec.kafka` is as invalid as the built-in
+        // below — and it is an INVALID object for a built-in with required spec fields.
+        // `CyberCloud.Terminal/consoles` is the first family to render one, and the API server
+        // refused the metadata-only apply outright:
         //
         //   PersistentVolumeClaim "real-drift-orphan" is invalid:
         //     spec.accessModes: Required value: at least 1 access mode is required,

@@ -880,3 +880,20 @@ owed:
       one-click `https:` form is the same gateway route kind again. None of this ships before a relay
       does, for the security reason at the top of this row — with no relay there is nothing to verify
       a bounce against, and an unverified bounce is a stranger suppressing an address.
+  - id: the-fake-does-not-evaluate-cel-rules
+    says: >
+      ⚠ THE HONEST EDGE OF ISSUE #91. Since 2026-09-18 every definition a chart renders against is
+      committed under charts/bundle/<component>/crds/, FakeKubeCluster validates every apply against
+      it (required, type, enum, undeclared fields, bounds, patterns, associative-list keys, defaults,
+      with x-kubernetes-preserve-unknown-fields honoured), and the cluster lane installs the same
+      bytes into k3s. What the fake does NOT do is evaluate `x-kubernetes-validations` — the CEL rules
+      eleven of the twenty-six definitions carry, such as the Bucket's "cannot disable versioning once
+      it has been Enabled or Suspended" — because this repository has no CEL evaluator, and because a
+      transition rule (`oldSelf`) needs the stored object as well as the applied one, which an
+      apply-time check does not see. `format:` is not checked beyond the type. Neither is an
+      operator's admission webhook, which is not a definition. So a rendered shape that only a CEL
+      rule refuses is green in the Docker-free suite and red in the cluster-backed one, where a real
+      API server evaluates the rule; the webhook stays for a cluster with the operator installed.
+      Closing the CEL half is a CEL evaluator in test/CyberCloud.Conformance § StructuralSchema, or a
+      per-family assertion in the cluster lane that applies the transition the rule forbids and reads
+      the refusal.

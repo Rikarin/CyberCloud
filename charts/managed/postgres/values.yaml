@@ -52,7 +52,7 @@ storage:
 pooling:
   ## @param enabled {boolean} Whether to run a connection pooler. On by default — a managed Postgres without one fails at the first serverless workload, and adding it later changes the connection string.
   enabled: true
-  ## @param mode {string} PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.
+  ## @param mode {string} PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks. statement is published in this api-version and refused while pooling.enabled is true: CloudNativePG's Pooler admits only session and transaction.
   ## @enum session | transaction | statement
   mode: transaction
   ## @param instances {integer} Number of pooler pods.
@@ -71,7 +71,7 @@ backup:
   ## @param retentionDays {integer} How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.
   ## @range 1..365
   retentionDays: 14
-  ## @param destinationPath {string} Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket.
+  ## @param destinationPath {string} Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.
   ## @pattern (s3://[a-z0-9][a-z0-9.\-]*[a-z0-9](/[^\s]*)?)?
   ## @example "s3://tenant-bucket/postgres"
   destinationPath: ""

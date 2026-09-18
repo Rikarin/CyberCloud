@@ -463,16 +463,114 @@ public sealed class PostgresReconcilerTests {
     }
 
     [Fact]
+    public async Task BackupsOnWithNoDestinationAreRefusedBeforeAnythingIsAppliedAndNameTheProperty() {
+        // ⚠ ISSUE #91's FINDING FOR THIS FAMILY. The schema's own defaults — backup.enabled true,
+        // destinationPath "" — rendered `spec.backup.barmanObjectStore.destinationPath: ""`, which
+        // CloudNativePG's definition refuses (minLength 1), and FakeKubeCluster echoed for a month.
+        // The refusal is the reconciler's now, before the apply, terminal, and it names the tenant's
+        // property rather than the operator's field.
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId, backupDestination: string.Empty));
+
+        var outcome = await Reconcile(connection, desired.RootElement);
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        outcome.Retryable.ShouldBeFalse("the body says the same thing on every pass");
+        outcome.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        outcome.Error.Target.ShouldBe("/properties/backup/destinationPath");
+        outcome.Error.Message.ShouldContain("/properties/backup/enabled to false");
+        connection.Applied.ShouldBeEmpty("a refused server must leave no half-built Cluster behind");
+
+        // Backups off and no destination is a body the definition admits: no backup block at all.
+        var body = JsonNode.Parse(PostgresServers.Body(ClusterId, backupDestination: string.Empty))!.AsObject();
+        body["properties"]!["backup"]!["enabled"] = false;
+        using var withoutBackups = JsonDocument.Parse(body.ToJsonString());
+
+        await Reconcile(connection, withoutBackups.RootElement);
+
+        connection.Applied.ShouldNotBeEmpty();
+        Spec(connection.Applied[0].Body).ContainsKey("backup").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task StatementPoolingIsRefusedBeforeAnythingIsAppliedAndNamesTheProperty() {
+        // ⚠ THE REVIEW OF #91's SECOND FINDING FOR THIS FAMILY, and the first the variant row found
+        // on its own: the schema publishes PgBouncer's three modes and CloudNativePG's Pooler admits
+        // two of them (spec.pgbouncer.poolMode: enum session, transaction), so `statement` was a
+        // value the API accepted and no operator could honour — the Cluster applied, the Pooler was
+        // refused naming the operator's field. The value cannot leave an immutable api-version, so
+        // the reconciler refuses first, terminal, naming the tenant's property and both ways out.
+        var connection = new RecordingConnection();
+        var body = JsonNode.Parse(PostgresServers.Body(ClusterId))!.AsObject();
+        body["properties"]!["pooling"]!["mode"] = "statement";
+        using var desired = JsonDocument.Parse(body.ToJsonString());
+
+        var outcome = await Reconcile(connection, desired.RootElement);
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        outcome.Retryable.ShouldBeFalse("the body says the same thing on every pass");
+        outcome.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        outcome.Error.Target.ShouldBe("/properties/pooling/mode");
+        outcome.Error.Message.ShouldContain("\"session\" and \"transaction\"");
+        outcome.Error.Message.ShouldContain("/properties/pooling/enabled to false");
+        connection.Applied.ShouldBeEmpty("a refused server must leave no Cluster without its Pooler behind");
+
+        // Pooling off is a body the definition admits whatever the mode says: no Pooler is rendered.
+        body["properties"]!["pooling"]!["enabled"] = false;
+        using var withoutPooling = JsonDocument.Parse(body.ToJsonString());
+
+        await Reconcile(connection, withoutPooling.RootElement);
+
+        connection.Applied.ShouldHaveSingleItem().Target.Kind.Kind.ShouldBe("Cluster");
+    }
+
+    [Fact]
     public async Task AsynchronousReplicationRendersNoSynchronousBlockAtAll() {
         // ⚠ The CRD has no "asynchronous" member — asynchronous IS the absence of the block. Writing
         // an empty one would put the field under this field manager's ownership forever under
         // server-side apply, which is a field the tenant's own controller could then never set.
+        //
+        // ⚠ Asserted at the place the definition declares the block AND at the place the renderer
+        // used to put it. Until the review of #91 this test checked only that `postgresql_synchronous`
+        // was absent — which a renderer that spelled the key wrong when the flag was ON satisfied
+        // just as well. The presence half is SynchronousReplicationRendersTheBlockWhereTheDefinitionDeclaresIt.
         var connection = new RecordingConnection();
         using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
 
         await Reconcile(connection, desired.RootElement);
 
-        Spec(connection.Applied[0].Body).ContainsKey("postgresql_synchronous").ShouldBeFalse();
+        var spec = Spec(connection.Applied[0].Body);
+        spec["postgresql"]!.AsObject().ContainsKey("synchronous").ShouldBeFalse();
+        spec.ContainsKey("postgresql_synchronous").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task SynchronousReplicationRendersTheBlockWhereTheDefinitionDeclaresIt() {
+        // ⚠ THE REVIEW OF #91's FINDING FOR THIS FAMILY. With the flag on, ClusterJson wrote
+        // `spec.postgresql_synchronous`, a sibling of `postgresql`; CloudNativePG declares the block
+        // as `Synchronous` on PostgresConfiguration (api/v1/cluster_types.go), so the committed
+        // definition knows `spec.postgresql.synchronous` and nothing under spec by the other name.
+        // The apply patch refused it as a field not declared in schema — on every server created
+        // with synchronous replication, and on none of the default bodies the suites converge, which
+        // is how it outlived #91 itself. The shared suite's
+        // EveryPropertyVariantTheSchemaAdmitsRendersAShapeTheDefinitionAdmits renders this flag's
+        // other value against the definition; this pins the exact placement and the two members the
+        // definition requires there.
+        var connection = new RecordingConnection();
+        var body = JsonNode.Parse(PostgresServers.Body(ClusterId))!.AsObject();
+        body["properties"]!.AsObject()["synchronousReplication"] = true;
+        using var desired = JsonDocument.Parse(body.ToJsonString());
+
+        await Reconcile(connection, desired.RootElement);
+
+        var spec = Spec(connection.Applied[0].Body);
+        spec.ContainsKey("postgresql_synchronous").ShouldBeFalse(
+            "`postgresql_synchronous` is not a field of CloudNativePG's Cluster spec; the apply patch refuses it"
+        );
+
+        var synchronous = spec["postgresql"]!["synchronous"].ShouldNotBeNull().AsObject();
+        synchronous["method"]!.GetValue<string>().ShouldBe("any");
+        synchronous["number"]!.GetValue<int>().ShouldBe(1);
     }
 
     [Fact]
