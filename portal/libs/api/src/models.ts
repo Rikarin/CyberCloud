@@ -1029,7 +1029,7 @@ export interface DBforPostgreSQLServersData {
       enabled?: boolean;
       /** Number of pooler pods. */
       instances?: number;
-      /** PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks. */
+      /** PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks. statement is published in this api-version and refused while pooling.enabled is true: CloudNativePG's Pooler admits only session and transaction. */
       mode?: DBforPostgreSQLServersMode;
     };
     /** Number of instances, including the primary. One is a single point of failure and is offered for development only. */

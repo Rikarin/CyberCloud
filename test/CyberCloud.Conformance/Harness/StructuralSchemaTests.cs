@@ -84,7 +84,7 @@ public sealed class StructuralSchemaTests {
         var causes = Admit(body);
 
         causes.ShouldHaveSingleItem();
-        causes[0].ShouldBe("spec.clusterRef: Invalid value: \"media\": spec.clusterRef in body must be of type object: \"string\"");
+        causes[0].ShouldBe("spec.clusterRef: Invalid value: \"string\": spec.clusterRef in body must be of type object: \"string\"");
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public sealed class StructuralSchemaTests {
         var causes = Admit(body);
 
         causes.ShouldHaveSingleItem();
-        causes[0].ShouldBe("spec.versioning: Invalid value: true: spec.versioning in body must be of type string: \"boolean\"");
+        causes[0].ShouldBe("spec.versioning: Invalid value: \"boolean\": spec.versioning in body must be of type string: \"boolean\"");
 
         body["spec"]!["versioning"] = "true";
         causes = Admit(body);
@@ -112,7 +112,7 @@ public sealed class StructuralSchemaTests {
         var causes = Admit(body);
 
         causes.ShouldHaveSingleItem();
-        causes[0].ShouldBe("spec.quota: Invalid value: \"10Gi\": spec.quota in body must be of type object: \"string\"");
+        causes[0].ShouldBe("spec.quota: Invalid value: \"string\": spec.quota in body must be of type object: \"string\"");
     }
 
     [Fact]
@@ -166,7 +166,30 @@ public sealed class StructuralSchemaTests {
 
         body["spec"]!["quota"]!["size"] = new JsonObject { ["gb"] = 10 };
 
-        Admit(body).ShouldContain("spec.quota.size: Invalid value: {\"gb\":10}: spec.quota.size in body must be of type integer|string: \"object\"");
+        Admit(body).ShouldContain("spec.quota.size: Invalid value: \"object\": spec.quota.size in body must be of type integer|string: \"object\"");
+    }
+
+    [Fact]
+    public void ANullOnANonNullableFieldIsPrunedOrDefaultedRatherThanRefused() {
+        // ⚠ THE CRD REFERENCE'S § Defaulting and Nullable, which the review of #91 measured this class
+        // against: "null values for fields that either don't specify the nullable flag, or give it a
+        // false value, will be pruned before defaulting happens. If a default is present, it will be
+        // applied." The first version refused the null as a type error, stricter than the real thing.
+        // `owner` has no default and is removed; `reclaimPolicy` has one and carries it.
+        var body = ValidBucket();
+        body["spec"]!["owner"] = null;
+        body["spec"]!["reclaimPolicy"] = null;
+
+        Admit(body).ShouldBeEmpty();
+
+        body["spec"]!.AsObject().ContainsKey("owner").ShouldBeFalse("a non-nullable null with no default is pruned");
+        body["spec"]!["reclaimPolicy"]!.GetValue<string>().ShouldBe("Retain", "a non-nullable null with a default is defaulted");
+
+        // A null the schema has no property for is still a type error: an array item.
+        body = ValidBucket();
+        body["spec"]!["access"] = new JsonArray((JsonNode?)null);
+
+        Admit(body).ShouldContain("spec.access[0]: Invalid value: \"null\": spec.access[0] in body must be of type object: \"null\"");
     }
 
     [Fact]
@@ -188,7 +211,7 @@ public sealed class StructuralSchemaTests {
 
         applied.TryGetError(out var error).ShouldBeTrue();
         error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
-        error.Message.ShouldContain("Bucket.seaweed.seaweedfs.com \"media-assets\" is invalid: spec.clusterRef: Invalid value: \"media\"");
+        error.Message.ShouldContain("Bucket.seaweed.seaweedfs.com \"media-assets\" is invalid: spec.clusterRef: Invalid value: \"string\"");
         error.Message.ShouldContain("charts/bundle/seaweedfs-operator/crds/buckets.seaweed.seaweedfs.com.yaml");
         cluster.Holds(Bucket).ShouldBeFalse("a refused object must not be stored");
     }

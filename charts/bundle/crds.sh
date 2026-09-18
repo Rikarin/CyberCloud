@@ -36,9 +36,11 @@
 # components keep their definitions under templates/ behind a values switch (cloudnative-pg,
 # mariadb-operator-crds, opensearch-operator, prometheus-operator-crds, seaweedfs-operator,
 # victoria-metrics-operator, kube-ovn) and `show crds` reads only the crds/ directory. The render is
-# done with the component's own `values:` block, exactly as install.sh installs it, so a definition
-# a values key turns off is a definition this bundle does not install — and this script does not
-# commit.
+# done with the component's own `values:` block, under the component's release name and namespace,
+# as install.sh installs it with no namespace suffix — so a definition a values key turns off is a
+# definition this bundle does not install and this script does not commit, and a definition that
+# bakes its release identity into an annotation (victoria-metrics-operator's toJson render) carries
+# the identity the bundle gives it.
 #
 # Usage:
 #   ./charts/bundle/crds.sh                       # check: fetch every pinned release and compare bytes
@@ -184,14 +186,21 @@ wanted() {
 # than "different".
 
 render() {
-    local file="$1" install repo chart version crds crdsVersion archive manifest extra line
+    local file="$1" install name repo chart version crds crdsVersion archive manifest extra line
     install=$(key "$file" install)
+    name=$(key "$file" component)
 
     local sets=()
     while IFS= read -r line; do
         [[ -n "$line" ]] && sets+=("$line")
     done < <(helm_sets "$file")
 
+    # ⚠ THE RELEASE NAME AND NAMESPACE ARE THE COMPONENT'S, AS install.sh INSTALLS IT. A definition
+    # rendered through toJson (victoria-metrics-operator) bakes the release identity into its
+    # annotations — meta.helm.sh/release-name and release-namespace — so a render under a throwaway
+    # name is a document the bundle never installs, off by two annotations. install.sh's namespace is
+    # `<component><suffix>` and the suffix is a run-time option, so an install with a suffix differs
+    # from the committed file in that one annotation; with none, the bytes are the bytes.
     case "$install" in
         helm)
             repo=$(key "$file" repo); chart=$(key "$file" chart); version=$(key "$file" version)
@@ -201,15 +210,15 @@ render() {
             # but the split is a property of that one publisher, and a component that carries both
             # keys and a definition in each is a component this script would otherwise half read.
             if [[ -n "$crds" ]]; then
-                helm template x "$crds" --repo "$repo" --version "$crdsVersion" --include-crds || return 1
+                helm template "$crds" "$crds" --repo "$repo" --version "$crdsVersion" --namespace "$name" --include-crds || return 1
                 printf '\n---\n'
             fi
-            helm template x "$chart" --repo "$repo" --version "$version" --include-crds \
+            helm template "$name" "$chart" --repo "$repo" --version "$version" --namespace "$name" --include-crds \
                 ${sets[@]+"${sets[@]}"} || return 1
             ;;
         helm-archive)
             archive=$(key "$file" archive)
-            helm template x "$archive" --include-crds ${sets[@]+"${sets[@]}"} || return 1
+            helm template "$name" "$archive" --namespace "$name" --include-crds ${sets[@]+"${sets[@]}"} || return 1
             ;;
         manifest)
             manifest=$(key "$file" manifest)
@@ -379,7 +388,7 @@ for file in "$here"/*/component.yaml; do
                 if [[ ! -f "$committed/$written" ]]; then
                     echo "crds.sh: charts/bundle/$component/crds/$written MISSING — the pinned release defines it and a chart renders it; run crds.sh --refresh"
                     status=1
-                elif ! tr -d '' < "$committed/$written" | cmp -s "$scratch/out/$written" -; then
+                elif ! tr -d '\r' < "$committed/$written" | cmp -s "$scratch/out/$written" -; then
                     # ⚠ Carriage returns are dropped from the committed side too, so a checkout with
                     # core.autocrlf=true compares the same bytes a Linux runner does.
                     echo "crds.sh: charts/bundle/$component/crds/$written DIFFERS from the release charts/bundle/$component/component.yaml pins; run crds.sh --refresh and review the diff"

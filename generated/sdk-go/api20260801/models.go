@@ -1394,7 +1394,7 @@ type PostgreSQLServerPropertiesPooling struct {
 	Enabled *bool `json:"enabled,omitempty"`
 	// Number of pooler pods.
 	Instances *int64 `json:"instances,omitempty"`
-	// PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.
+	// PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks. statement is published in this api-version and refused while pooling.enabled is true: CloudNativePG's Pooler admits only session and transaction.
 	Mode *PostgreSQLServerMode `json:"mode,omitempty"`
 }
 

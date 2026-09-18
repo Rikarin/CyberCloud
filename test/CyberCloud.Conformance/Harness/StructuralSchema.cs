@@ -29,8 +29,17 @@ namespace CyberCloud.Conformance.Harness;
 ///         </item>
 ///         <item>
 ///             <b>Type</b> (<c>object</c>, <c>array</c>, <c>string</c>, <c>integer</c>, <c>number</c>,
-///             <c>boolean</c>), with <c>x-kubernetes-int-or-string</c> and <c>nullable</c> honoured.
-///             The message is kube-openapi's: <c>spec.clusterRef in body must be of type object: "string"</c>.
+///             <c>boolean</c>), with <c>x-kubernetes-int-or-string</c> honoured. The message is the
+///             one apiextensions-apiserver builds from kube-openapi's failure, which quotes the TYPE
+///             found where a value would go:
+///             <c>spec.clusterRef: Invalid value: "string": spec.clusterRef in body must be of type object: "string"</c>.
+///         </item>
+///         <item>
+///             <b>Nullable</b>: a <c>null</c> on a non-nullable declared property is pruned before
+///             defaulting — and then defaulted, when the property has a default — rather than refused,
+///             which is the CRD reference's § Defaulting and Nullable. A <c>nullable: true</c> field
+///             keeps its null. Only a null the schema has no property for — an array item, a member
+///             of an ungoverned object — is a type error.
 ///         </item>
 ///         <item><b>Required</b> properties: <c>spec.name: Required value</c>.</item>
 ///         <item>
@@ -133,6 +142,17 @@ public static class StructuralSchema {
                         continue;
                     }
 
+                    // ⚠ A null on a non-nullable field is PRUNED, not refused — and a null on one
+                    // with a default is defaulted. That is the API server's order (the CRD reference,
+                    // § Defaulting and Nullable: "null values for fields that either don't specify the
+                    // nullable flag, or give it a false value, will be pruned before defaulting
+                    // happens. If a default is present, it will be applied."). The first version of
+                    // this refused the null as a type error, which is stricter than the real thing;
+                    // the review of #91 measured the gap. A nullable field keeps its null.
+                    if (map.TryGetPropertyValue(name, out var present) && present is null && !IsTrue(property["nullable"])) {
+                        map.Remove(name);
+                    }
+
                     if (!map.ContainsKey(name) && property["default"] is { } fallback) {
                         map[name] = fallback.DeepClone();
                     }
@@ -143,6 +163,8 @@ public static class StructuralSchema {
                 }
 
                 if (schema["additionalProperties"] is JsonObject additional) {
+                    PruneNulls(map, additional, name => properties[name] is null);
+
                     foreach (var (name, child) in map) {
                         if (properties[name] is null) {
                             ApplyDefaults(additional, child);
@@ -153,6 +175,8 @@ public static class StructuralSchema {
                 break;
 
             case JsonObject map when schema["additionalProperties"] is JsonObject additionalOnly:
+                PruneNulls(map, additionalOnly, _ => true);
+
                 foreach (var (_, child) in map) {
                     ApplyDefaults(additionalOnly, child);
                 }
@@ -165,6 +189,23 @@ public static class StructuralSchema {
                 }
 
                 break;
+        }
+    }
+
+    /// <summary>
+    ///     Removes every null-valued entry of a map whose value schema is not nullable — the members
+    ///     an <c>additionalProperties</c> schema governs, which have no per-name default to fall back to.
+    /// </summary>
+    /// <param name="map">The object to prune in place.</param>
+    /// <param name="valueSchema">The schema every governed value shares.</param>
+    /// <param name="governed">Which names the value schema governs — every name, or those no <c>properties</c> entry declares.</param>
+    static void PruneNulls(JsonObject map, JsonObject valueSchema, Func<string, bool> governed) {
+        if (IsTrue(valueSchema["nullable"])) {
+            return;
+        }
+
+        foreach (var name in map.Where(x => x.Value is null && governed(x.Key)).Select(x => x.Key).ToList()) {
+            map.Remove(name);
         }
     }
 
@@ -274,6 +315,9 @@ public static class StructuralSchema {
             || IsTrue(schema["x-kubernetes-embedded-resource"]);
 
         if (value is null) {
+            // ⚠ Reached only for a null ApplyDefaults could not prune: an array item, or a member
+            // of an object no schema governs. A null on a declared non-nullable property was removed
+            // (or defaulted) before validation, as the API server removes it.
             if (!IsTrue(schema["nullable"])) {
                 var declared = schema["type"]?.GetValue<string>();
 
@@ -286,7 +330,12 @@ public static class StructuralSchema {
         }
 
         if (!TypeMatches(schema, value, out var declaredType)) {
-            causes.Add($"{here}: Invalid value: {Describe(value)}: {here} in body must be of type {declaredType}: {TypeName(value)}");
+            // ⚠ The TYPE found is what the API server quotes as the invalid value, not the value:
+            // `spec.clusterRef: Invalid value: "string": spec.clusterRef in body must be of type
+            // object: "string"` — apiextensions-apiserver turns kube-openapi's type failure into a
+            // field.Invalid over the type name. The first version of this quoted the value, which
+            // named the same field with a sentence no real cluster ever produces.
+            causes.Add($"{here}: Invalid value: {TypeName(value)}: {here} in body must be of type {declaredType}: {TypeName(value)}");
 
             // The type is wrong, so nothing below it is worth reporting: a string where an object was
             // expected has no properties to be missing, and the server stops here too.

@@ -3147,7 +3147,7 @@ public sealed partial class PostgreSQLServerData {
             [JsonPropertyName("instances")]
             public long? Instances { get; set; }
 
-            /// <summary>PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.</summary>
+            /// <summary>PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks. statement is published in this api-version and refused while pooling.enabled is true: CloudNativePG's Pooler admits only session and transaction.</summary>
             /// <remarks>Defaults to "transaction" when left unset.</remarks>
             [JsonPropertyName("mode")]
             public PostgreSQLServerMode? Mode { get; set; }

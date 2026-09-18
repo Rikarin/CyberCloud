@@ -84,6 +84,19 @@ family found one more wrong shape, in `charts/managed/postgres` (`conformance.ya
 `backup-destination-is-not-filled-in`). What the fake still cannot evaluate is a definition's CEL
 rules — `charts/bundle/bundle.yaml` § owed, `the-fake-does-not-evaluate-cel-rules`; the k3s lane does.
 
+⚠ **One body per family is one shape per family, and the review of #91 showed what that misses.**
+Every row of the shared suite converges `ProviderConformanceCase.Body`, so the definition was only
+ever asked about the default body: the Postgres renderer wrote `spec.postgresql_synchronous` — a key
+CloudNativePG does not declare — for every server with `synchronousReplication: true`, and the flag
+defaults to `false`. `ProviderConformanceTests.EveryPropertyVariantTheSchemaAdmitsRendersAShapeTheDefinitionAdmits`
+now derives, from the type's own schema, one body per property value the default does not carry —
+booleans flipped, every enum value, the declared bounds, an example or a fixed word for an open
+string — writes each through the manager and holds the fake to the committed definitions on every
+apply (318 variants across the 25 cluster-backed types on 2026-09-18). Its first run found a second
+Postgres shape: a pooling mode the schema publishes and the operator's Pooler refuses
+(`conformance.yaml` § owed, `statement-pooling-is-a-mode-the-pooler-does-not-have`). One property at
+a time; a pair a reconciler renders jointly is the next gap.
+
 ### Skipped by default — the assertions that need a server, and what running them proved
 
 Tracked here rather than left in a commit message, because a test that nobody knows is skipped is

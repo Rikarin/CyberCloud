@@ -218,7 +218,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     }
 
     [Fact]
-    public void EveryCustomKindTheCaseRendersHasACommittedDefinition() {
+    public async Task EveryCustomKindTheCaseRendersHasACommittedDefinition() {
         // ⚠ THE FLOOR UNDER ISSUE #91. FakeKubeCluster validates a custom resource against the
         // operator's real definition WHEN ONE IS COMMITTED under charts/bundle/*/crds/, and echoes it
         // — accepts any shape — when none is. That echo is the state every custom kind was in while
@@ -278,7 +278,160 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                 $"{Case.DisplayName} renders {target.Kind.Kind} {(target.IsClusterScoped ? "cluster-scoped" : "namespaced")} "
                 + $"and {definition.File} declares scope {(definition.IsClusterScoped ? "Cluster" : "Namespaced")}."
             );
+
+            // ⚠ THE STORAGE VERSION, WHEN THE DEFINITION CONVERTS THROUGH A WEBHOOK. Cluster API
+            // serves v1beta1 (deprecated) beside its storage version v1beta2 and names
+            // capi-webhook-service for the conversion between them. The cluster-backed lane installs
+            // the definition and no operator, so a request at any version but the storage one reaches
+            // a webhook nobody answers — and a definition with no webhook converts by changing the
+            // apiVersion string, which needs nobody. The Bundle gate checks only that the version is
+            // SERVED, so this is the one place the distinction is made.
+            if (definition.ConvertsThroughWebhook) {
+                definition.Versions[target.Kind.Version].IsStorage.ShouldBeTrue(
+                    $"{Case.DisplayName} renders {target.Kind} and {definition.File} stores "
+                    + $"{definition.Kind} at {definition.StorageVersion}, converting through a webhook. On a "
+                    + "cluster with the definition and no operator — the cluster-backed conformance lane — "
+                    + "an apply at any other served version is a conversion webhook call nothing answers."
+                );
+            }
         }
+
+        if (!HasClusterDataPlane) {
+            return;
+        }
+
+        // ⚠ AND WHAT THE RECONCILER ACTUALLY APPLIED, not only what the case declared. FakeKubeCluster
+        // echoes a custom kind with no committed definition — it has to, for the driver's own tests —
+        // so a reconciler applying a custom kind its case does not name and no chart renders would be
+        // echoed, pass every row above, and never meet the Bundle gate's template scan either. A
+        // default-bodied converge is the cheapest way to see the applied set; the variant row below
+        // sees every other body, and every apply of a defined kind is validated regardless.
+        ProviderTestCluster<TSource>.Reset();
+        var accepted = (await CreateAsync("definitions-applied")).GetValueOrThrow();
+        await ConvergeAsync(accepted);
+
+        var declared = rendered
+            .Select(x => x.Kind.ApiVersion + "|" + x.Kind.Kind + "|" + x.Kind.Plural + "|" + x.IsClusterScoped)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var command in Cluster.World.Applied.Where(x => !FakeKubeCluster.IsBuiltIn(x.Target.Kind.Group))) {
+            var key = command.Target.Kind.ApiVersion + "|" + command.Target.Kind.Kind + "|" + command.Target.Kind.Plural + "|"
+                + command.Target.IsClusterScoped;
+
+            declared.ShouldContain(
+                key,
+                $"{Case.DisplayName} applied {command.Target} and neither its Objects nor an ancestor's names that "
+                + "kind at that version, plural and scope. An undeclared custom kind is one the fake echoes when no "
+                + "definition is committed for it and one no row of this suite reads back — declare it in Objects, "
+                + "so the rows above hold it to a committed definition."
+            );
+        }
+    }
+
+    [Fact]
+    public async Task EveryPropertyVariantTheSchemaAdmitsRendersAShapeTheDefinitionAdmits() {
+        // ⚠ THE ROW THE REVIEW OF #91 ASKED FOR, AND THE FINDING THAT JUSTIFIED IT IN THE SAME
+        // BREATH. Every other row converges Case.Body — one body per family — so the committed
+        // definition was only ever asked about that body, and a reconciler's other branches were as
+        // unvalidated after #91 as before it. PostgresServers.ClusterJson wrote
+        // `spec.postgresql_synchronous` for `synchronousReplication: true`, a key CloudNativePG's
+        // definition does not declare; the flag defaults to false; sixteen suites were green. This
+        // row derives, from the type's own schema, one body per property value the default body
+        // does not carry — PropertyVariants' remarks say what and why — writes each through the
+        // manager, converges it, and asks the fake whether a committed definition refused anything
+        // on the way. The type's schema refuses some variants at the API (a bound the generator
+        // could not see across two properties); those render nothing and are counted, not failed.
+        //
+        // ⚠ THE FAKE'S RECORD, NOT THE OPERATION'S ERROR. A reconciler may fail a pass for a reason
+        // of its own with the same InvalidRequestBody — PostgresServerReconciler refuses a backup
+        // with no destination before it applies anything — and a row that told the two apart by
+        // reading the message would be one wording change from proving nothing. FakeKubeCluster.Refused
+        // is written only by the definition's answer.
+        if (!HasClusterDataPlane) {
+            Assert.Skip(
+                $"SKIPPED, AND SAYING SO — {Case.DisplayName} declares no RequiresCluster, so no body it accepts "
+                + "renders a custom resource for a committed definition to refuse. The variants of a clusterless "
+                + "type reach its module or data plane, which this row has no schema to hold them to."
+            );
+
+            return;
+        }
+
+        Cluster.Registry.TryGetType(Case.Type, out var registration).ShouldBeTrue();
+        var schema = registration.SchemaFor(ApiVersion.Parse(Case.ApiVersion)).GetValueOrThrow();
+        var variants = PropertyVariants.Of(schema, JsonNode.Parse(Body())!.AsObject(), registration.ClusterIdPointer);
+
+        if (variants.Count == 0) {
+            // A NAT gateway is a subnet reference and a public-IP reference, both under a name
+            // pattern: nothing to flip, nothing to enumerate. The skip is loud so nobody reads the
+            // family's green run as "its variants were checked".
+            Assert.Skip(
+                $"SKIPPED, AND SAYING SO — {Case.DisplayName}'s schema at {Case.ApiVersion} declares no property this "
+                + "row can vary: no boolean, closed set, number, open string or array of a closed set. Every body "
+                + "a tenant can send renders the shape the other rows converge, so there is no second shape to "
+                + "hold to the definition. A property added to the schema later is a variant this row derives "
+                + "without being told."
+            );
+
+            return;
+        }
+
+        var refusedByTheType = new List<string>();
+        var findings = new List<string>();
+        var converged = 0;
+
+        foreach (var (index, variant) in variants.Index()) {
+            ProviderTestCluster<TSource>.Reset();
+            var address = ProviderTestCluster<TSource>.Address("variant-" + index.ToString(CultureInfo.InvariantCulture));
+
+            var accepted = await Cluster.Manager.WriteAsync(Request(address, variant.Body), TestContext.Current.CancellationToken);
+
+            if (accepted.TryGetError(out var refusal)) {
+                // The type's own schema said no, at the API, before anything rendered. That is the
+                // right answer for a value the generator could not know was out of bounds here, and
+                // the wrong answer for anything else — a 404 or a 409 is the harness, not the type.
+                refusal.Code.ShouldBe(
+                    ErrorCode.InvalidRequestBody,
+                    $"{Case.DisplayName} refused the variant {variant.JsonPointer} = {variant.Value} with {refusal.Code}: {refusal.Message}"
+                );
+
+                refusedByTheType.Add($"{variant.JsonPointer} = {variant.Value}");
+                continue;
+            }
+
+            var status = await ConvergeAsync(accepted.GetValueOrThrow());
+            converged++;
+
+            foreach (var (target, message) in Cluster.World.Refused) {
+                findings.Add(
+                    $"{variant.JsonPointer} = {variant.Value} → {target}: {message}"
+                    + (status.Error is { } error ? $" (the operation ended {status.State}: {error.Message})" : string.Empty)
+                );
+            }
+        }
+
+        // What the row measured, in the output rather than only in a failure: a family whose every
+        // variant the type refused at the API is a family this row learned nothing about.
+        TestContext.Current.TestOutputHelper?.WriteLine(
+            $"{Case.DisplayName}: {variants.Count.ToString(CultureInfo.InvariantCulture)} single-property variant(s) derived, "
+            + $"{converged.ToString(CultureInfo.InvariantCulture)} reached the reconciler and the committed definitions, "
+            + $"{refusedByTheType.Count.ToString(CultureInfo.InvariantCulture)} refused by the type's own schema"
+            + (refusedByTheType.Count > 0 ? ": " + string.Join("; ", refusedByTheType) : ".")
+        );
+
+        findings.ShouldBeEmpty(
+            $"{Case.DisplayName} renders a shape a committed definition refuses for {findings.Count.ToString(CultureInfo.InvariantCulture)} "
+            + $"of {variants.Count.ToString(CultureInfo.InvariantCulture)} single-property variant(s) of its default body. Each line "
+            + "names the property and the value that reached the renderer, the object refused, and the API server's own "
+            + $"sentence:{Environment.NewLine}  {string.Join(Environment.NewLine + "  ", findings)}"
+        );
+
+        converged.ShouldBeGreaterThan(
+            0,
+            $"{Case.DisplayName}'s schema refused every one of {variants.Count.ToString(CultureInfo.InvariantCulture)} variant(s) at "
+            + "the API, so none reached the renderer and this row measured nothing: "
+            + string.Join("; ", refusedByTheType)
+        );
     }
 
     [Fact]

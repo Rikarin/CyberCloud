@@ -98,6 +98,22 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     public ConcurrentQueue<ObjectRef> Deleted { get; } = new();
 
     /// <summary>
+    ///     Every apply a committed definition refused, in order — the target and the sentence
+    ///     <see cref="Admit" /> answered with.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A record beside <see cref="Applied" /> rather than a fact to be read back out of an
+    ///     operation's error, because a reconciler is allowed to fail a pass for reasons of its own —
+    ///     <c>PostgresServerReconciler</c> refuses a backup with no destination before it applies
+    ///     anything, terminal, with the same <see cref="ErrorCode.InvalidRequestBody" /> — and a suite
+    ///     that told the two apart by parsing the message would be one wording change from proving
+    ///     nothing. <c>ProviderConformanceTests.EveryPropertyVariantTheSchemaAdmitsRendersAShapeTheDefinitionAdmits</c>
+    ///     reads this after each variant it converges. <see cref="RefuseWith" />'s staged refusals
+    ///     are not recorded here: they are the test's own lever, not the definition's answer.
+    /// </remarks>
+    public ConcurrentQueue<(ObjectRef Target, string Message)> Refused { get; } = new();
+
+    /// <summary>
     ///     When set, every apply answers <see cref="ApplyResult.Suspended" /> and writes nothing —
     ///     the unreachable-cluster case of docs/plan/09 § Cluster connections.
     /// </summary>
@@ -133,6 +149,7 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         addresses.Clear();
         Applied.Clear();
         Deleted.Clear();
+        Refused.Clear();
         Suspended = false;
         ConflictOn = string.Empty;
         RefuseWith = null;
@@ -246,6 +263,7 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         var admitted = Admit(command.Target, command.Body);
 
         if (admitted.TryGetError(out var refused)) {
+            Refused.Enqueue((command.Target, refused.Message));
             return Task.FromResult(Result<ApplyOutcome>.Failure(refused.Code, refused.Message));
         }
 

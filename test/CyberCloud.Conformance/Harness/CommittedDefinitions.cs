@@ -117,6 +117,11 @@ public static class CommittedDefinitions {
 /// <param name="Plural">The plural resource name the REST path uses.</param>
 /// <param name="IsClusterScoped">Whether <c>spec.scope</c> is <c>Cluster</c>.</param>
 /// <param name="Versions">Each served version, by name.</param>
+/// <param name="ConvertsThroughWebhook">
+///     Whether <c>spec.conversion.strategy</c> is <c>Webhook</c> — in which case a request at any
+///     served version but the storage one is a call to a service the definition names, which a
+///     cluster holding the definition and not its operator cannot answer.
+/// </param>
 /// <param name="Document">The whole definition as JSON, for a harness that installs it into a real API server.</param>
 public sealed record CustomResourceDefinition(
     string File,
@@ -125,8 +130,12 @@ public sealed record CustomResourceDefinition(
     string Plural,
     bool IsClusterScoped,
     ImmutableDictionary<string, DefinitionVersion> Versions,
+    bool ConvertsThroughWebhook,
     JsonObject Document
 ) {
+    /// <summary>The one served version the API server stores objects at, or empty when the definition marks none.</summary>
+    public string StorageVersion => Versions.Values.FirstOrDefault(x => x.IsStorage)?.Name ?? string.Empty;
+
     /// <summary>Reads one definition from its YAML.</summary>
     /// <param name="yaml">The document, exactly as committed.</param>
     /// <param name="file">The file it came from, for a message.</param>
@@ -166,7 +175,8 @@ public sealed record CustomResourceDefinition(
                     $"{file} version {name} has no schema.openAPIV3Schema. An apiextensions.k8s.io/v1 "
                     + "definition must carry a structural schema, so this is not a definition the API server would accept."
                 ),
-                version["subresources"] is JsonObject subresources && subresources.ContainsKey("status")
+                version["subresources"] is JsonObject subresources && subresources.ContainsKey("status"),
+                version["storage"] is JsonValue storage && storage.TryGetValue<bool>(out var isStorage) && isStorage
             );
         }
 
@@ -177,6 +187,7 @@ public sealed record CustomResourceDefinition(
             names["plural"]?.GetValue<string>() ?? string.Empty,
             string.Equals(spec["scope"]?.GetValue<string>(), "Cluster", StringComparison.Ordinal),
             versions.ToImmutable(),
+            string.Equals(spec["conversion"]?["strategy"]?.GetValue<string>(), "Webhook", StringComparison.Ordinal),
             document
         );
     }
@@ -189,7 +200,11 @@ public sealed record CustomResourceDefinition(
 ///     Whether <c>status</c> is a subresource — in which case a <c>status</c> in an applied body is
 ///     dropped rather than validated, as the API server drops it.
 /// </param>
-public sealed record DefinitionVersion(string Name, JsonObject Schema, bool HasStatusSubresource);
+/// <param name="IsStorage">
+///     Whether this is the version objects are stored at — the one version a request needs no
+///     conversion to reach, which matters when the definition converts through a webhook.
+/// </param>
+public sealed record DefinitionVersion(string Name, JsonObject Schema, bool HasStatusSubresource, bool IsStorage);
 
 /// <summary>
 ///     Turns a YAML document into <see cref="JsonNode" /> with the YAML 1.2 core schema's typing —

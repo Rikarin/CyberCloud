@@ -126,9 +126,13 @@ installs `monitoring.coreos.com/v1alpha1` and does not claim it, because nothing
 
 Beside each component that a managed chart renders against sits `crds/`, holding the **real**
 `CustomResourceDefinition` of every kind that chart renders — the document as the pinned release
-renders it, byte for byte, one file per definition named `<plural>.<group>.yaml`. Fourteen components
-carry twenty-six of them; six carry none, because nothing under `charts/managed/` renders a kind they
-serve.
+renders it under the component's own release name and namespace, the way `install.sh` installs it
+with no namespace suffix, byte for byte, one file per definition named `<plural>.<group>.yaml`.
+Fourteen components carry twenty-six of them; six carry none, because nothing under `charts/managed/`
+renders a kind they serve. (The identity matters for one publisher: victoria-metrics-operator renders
+each definition through `toJson` and bakes `meta.helm.sh/release-name` and `release-namespace` into
+its annotations. A suffixed install differs from the committed file in that one annotation and in
+nothing the schema reads.)
 
 ```bash
 ./charts/bundle/crds.sh                          # fetch every pinned release and compare bytes
@@ -149,7 +153,11 @@ serve.
 > honoured), `ClusterConformanceHarness` installs them into k3s instead of a stub, and the first run
 > over every family found `charts/managed/postgres` rendering a `destinationPath: ""` that
 > CloudNativePG refuses — `charts/managed/postgres/conformance.yaml` § owed,
-> `backup-destination-is-not-filled-in`.
+> `backup-destination-is-not-filled-in`. That run validated one body per family; since the review
+> of #91, `ProviderConformanceTests.EveryPropertyVariantTheSchemaAdmitsRendersAShapeTheDefinitionAdmits`
+> derives one body per property value from each type's schema and holds every apply to these files
+> too, which is what found `spec.postgresql_synchronous` and the pooling mode the Pooler refuses
+> (`synchronous-is-a-member-of-postgresql`, `statement-pooling-is-a-mode-the-pooler-does-not-have`).
 
 > ⚠ **Only the kinds a chart renders, and the set is derived, not declared.** `crds.sh --wanted` reads
 > every `apiVersion` + `kind` pair out of `charts/managed/*/templates/` — the same scan the Bundle

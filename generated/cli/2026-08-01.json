@@ -6167,7 +6167,7 @@
                   "name": "--mode",
                   "type": "string",
                   "required": false,
-                  "summary": "PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.",
+                  "summary": "PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks. statement is published in this api-version and refused while pooling.enabled is true: CloudNativePG's Pooler admits only session and transaction.",
                   "jsonPointer": "/properties/pooling/mode",
                   "choices": [
                     "session",
@@ -6699,7 +6699,7 @@
                   "name": "--mode",
                   "type": "string",
                   "required": false,
-                  "summary": "PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.",
+                  "summary": "PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks. statement is published in this api-version and refused while pooling.enabled is true: CloudNativePG's Pooler admits only session and transaction.",
                   "jsonPointer": "/properties/pooling/mode",
                   "choices": [
                     "session",

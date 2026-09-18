@@ -52,7 +52,7 @@ storage:
 pooling:
   ## @param enabled {boolean} Whether to run a connection pooler. On by default — a managed Postgres without one fails at the first serverless workload, and adding it later changes the connection string.
   enabled: true
-  ## @param mode {string} PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.
+  ## @param mode {string} PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks. statement is published in this api-version and refused while pooling.enabled is true: CloudNativePG's Pooler admits only session and transaction.
   ## @enum session | transaction | statement
   mode: transaction
   ## @param instances {integer} Number of pooler pods.

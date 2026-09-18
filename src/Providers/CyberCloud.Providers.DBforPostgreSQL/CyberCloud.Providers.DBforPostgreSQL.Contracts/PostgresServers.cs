@@ -451,7 +451,9 @@ public static class PostgresServers {
                     "/properties/pooling/mode",
                     SchemaKind.Text,
                     Description: "PgBouncer pooling mode. Transaction pooling is the useful one and "
-                    + "breaks session-scoped features such as prepared statements and advisory locks."
+                    + "breaks session-scoped features such as prepared statements and advisory locks. "
+                    + "statement is published in this api-version and refused while pooling.enabled is "
+                    + "true: CloudNativePG's Pooler admits only session and transaction."
                 ) { AllowedValues = ["session", "transaction", "statement"], DefaultJson = "\"transaction\"" },
                 new(
                     "/properties/pooling/instances",
@@ -799,6 +801,45 @@ public static class PostgresServers {
     /// <summary>The property <see cref="BackupDestinationProblem" /> is reported against.</summary>
     public const string BackupDestinationPointer = "/properties/backup/destinationPath";
 
+    /// <summary>
+    ///     Why the desired body cannot be rendered into a <c>Pooler</c> the operator's definition
+    ///     admits, or <see langword="null" /> when it can.
+    /// </summary>
+    /// <param name="desired">The validated desired body.</param>
+    /// <returns>
+    ///     The sentence the operation fails with when pooling is on and the mode is
+    ///     <c>statement</c> — the reconciler reports it as <c>InvalidRequestBody</c> at
+    ///     <see cref="PoolingModePointer" /> — or <see langword="null" /> when the body renders.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>Found by the review of issue #91, on the first run that varied a property.</b> The
+    ///     2026-08-01 schema publishes three pooling modes — PgBouncer's three — and
+    ///     <c>charts/bundle/cloudnative-pg/crds/poolers.postgresql.cnpg.io.yaml</c> declares
+    ///     <c>spec.pgbouncer.poolMode</c> as an enum of <c>session</c> and <c>transaction</c>. So
+    ///     <c>statement</c> was a value the API accepted and no operator could honour: the Cluster
+    ///     applied, the Pooler was refused with the operator's field named, and the operation failed
+    ///     after the tenant was told 202. The value cannot leave the schema — an api-version is
+    ///     immutable, and <c>OpenApiCompatibility.EnumValueRemoved</c> says so — so the check lives
+    ///     here, before the apply, with the tenant's own property and the two values that work.
+    ///     Terminal, because the body says the same thing on every pass. Only when pooling is on:
+    ///     with it off no Pooler is rendered and the mode reaches nothing.
+    /// </remarks>
+    public static string? PoolingModeProblem(JsonElement desired) =>
+        PoolingEnabled(desired) && string.Equals(PoolingMode(desired), "statement", StringComparison.Ordinal)
+            ? "pooling.enabled is true and pooling.mode is \"statement\". CloudNativePG's Pooler accepts "
+            + "only \"session\" and \"transaction\" for spec.pgbouncer.poolMode, so the operator's "
+            + "definition refuses the object and PgBouncer's statement pooling is not reachable through "
+            + "it. Set " + PoolingModePointer + " to \"transaction\" or \"session\", or set "
+            + "/properties/pooling/enabled to false."
+            : null;
+
+    /// <summary>The property <see cref="PoolingModeProblem" /> is reported against.</summary>
+    public const string PoolingModePointer = "/properties/pooling/mode";
+
+    /// <summary>The PgBouncer pool mode the body asks for, <c>transaction</c> when it names none.</summary>
+    /// <param name="desired">The validated desired body.</param>
+    public static string PoolingMode(JsonElement desired) => Text(desired, "pooling", "mode", "transaction");
+
     /// <summary>The application database <c>bootstrap</c> creates.</summary>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
@@ -887,6 +928,25 @@ public static class PostgresServers {
 
         postgresql["parameters"] = parameters;
 
+        // ⚠ `spec.postgresql.synchronous`, INSIDE the postgresql block — not a `postgresql_synchronous`
+        // sibling of it. api/v1/cluster_types.go declares `Synchronous *SynchronousReplicaConfiguration
+        // `json:"synchronous,omitempty"`` on PostgresConfiguration, beside `parameters`, and the
+        // committed definition (charts/bundle/cloudnative-pg/crds/clusters.postgresql.cnpg.io.yaml)
+        // declares `method` and `number` there and nothing under spec by the other name. The other
+        // spelling was a typed-patch failure — ".spec.postgresql_synchronous: field not declared in
+        // schema" — on every server created with synchronous replication, and it stayed green because
+        // every suite converged the default body, where the flag is off. The review of issue #91 found
+        // it; ProviderConformanceTests.EveryPropertyVariantTheSchemaAdmitsRendersAShapeTheDefinitionAdmits
+        // renders the flag's other value against the definition now.
+        //
+        // ⚠ Absent rather than a `false`-valued block when replication is asynchronous. The definition
+        // has no "asynchronous" member — asynchronous IS the absence of `synchronous` — and an empty
+        // block written anyway would be a field this field manager owns forever under server-side
+        // apply, which is a field the tenant's own controller could then never set.
+        if (Flag(desired, "synchronousReplication", false)) {
+            postgresql["synchronous"] = new JsonObject { ["method"] = "any", ["number"] = 1 };
+        }
+
         var initdb = new JsonObject {
             ["database"] = Database(desired),
             ["owner"] = Owner(desired),
@@ -924,14 +984,6 @@ public static class PostgresServers {
         if (cpu.Length > 0 && memory.Length > 0) {
             var quantities = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
             spec["resources"] = new JsonObject { ["requests"] = quantities.DeepClone(), ["limits"] = quantities };
-        }
-
-        // ⚠ Absent rather than a `false`-valued block when replication is asynchronous. The CRD has
-        // no "asynchronous" member — asynchronous IS the absence of `postgresql_synchronous` — and an
-        // empty block written anyway would be a field this field manager owns forever under
-        // server-side apply, which is a field the tenant's own controller could then never set.
-        if (Flag(desired, "synchronousReplication", false)) {
-            spec["postgresql_synchronous"] = new JsonObject { ["method"] = "any", ["number"] = 1 };
         }
 
         var walSize = Text(desired, "storage", "walSize", string.Empty);
@@ -973,7 +1025,7 @@ public static class PostgresServers {
                 ["cluster"] = new JsonObject { ["name"] = name },
                 ["instances"] = Number(desired, "pooling", "instances", 2),
                 ["type"] = "rw",
-                ["pgbouncer"] = new JsonObject { ["poolMode"] = Text(desired, "pooling", "mode", "transaction") }
+                ["pgbouncer"] = new JsonObject { ["poolMode"] = PoolingMode(desired) }
             }
         }.ToJsonString();
     }
@@ -1023,7 +1075,7 @@ public static class PostgresServers {
     static bool MatchesPooler(JsonObject spec, JsonElement desired) =>
         spec["instances"]?.GetValue<int>() == Number(desired, "pooling", "instances", 2)
         && (spec["pgbouncer"] as JsonObject)?["poolMode"]?.GetValue<string>()
-        == Text(desired, "pooling", "mode", "transaction");
+        == PoolingMode(desired);
 
     /// <summary>
     ///     The CPU and memory a body asks for: the explicit quantities when both are given, otherwise

@@ -141,6 +141,14 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
             );
         }
 
+        // ⚠ Before the Cluster, not before the Pooler: the Pooler is applied second, and a refusal
+        // between the two would leave a server with no pooler behind an operation that failed.
+        if (PostgresServers.PoolingModeProblem(context.Desired) is { } poolingProblem) {
+            return ReconcileOutcome.Failed(
+                new Error(ErrorCode.InvalidRequestBody, poolingProblem, PostgresServers.PoolingModePointer)
+            );
+        }
+
         // ── The claims a previous life left, handed over before the operator looks ──────────────
         if (await AdoptRetainedClaimsAsync(context, cluster, cancellationToken) is { } custodyProblem) {
             return custodyProblem;

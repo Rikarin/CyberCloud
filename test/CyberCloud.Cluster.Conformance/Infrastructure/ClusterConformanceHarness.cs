@@ -628,9 +628,14 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
     ///         ⚠ <b>A conversion webhook in a committed definition is installed as written and never
     ///         called.</b> Cluster API's definitions name <c>capi-webhook-service</c>, which no bare
     ///         k3s has; the API server accepts the definition regardless and invokes the webhook only
-    ///         for a request at a version other than the storage version. Every chart renders the
-    ///         storage version — the coverage half of the Bundle gate is what keeps that true — so
-    ///         nothing here reaches the webhook. What no definition can supply is the controller:
+    ///         for a request at a version other than the storage version. ⚠ The Bundle gate does NOT
+    ///         keep the rendered version at the storage version — it checks only that the version is
+    ///         among the served ones, and Cluster API serves the deprecated <c>v1beta1</c> beside its
+    ///         storage <c>v1beta2</c>. What does is
+    ///         <c>ProviderConformanceTests.EveryCustomKindTheCaseRendersHasACommittedDefinition</c>,
+    ///         which fails a case addressing a webhook-converted kind at any version but the storage
+    ///         one, so nothing that reaches this harness reaches the webhook. What no definition can
+    ///         supply is the controller:
     ///         nothing in this suite writes <c>status.conditions</c>, which is why every provider's
     ///         readiness assertion is owed in its <c>conformance.yaml</c> rather than made here.
     ///     </para>

@@ -327,8 +327,15 @@ public sealed record ProviderConformanceCase {
     // the component pins; FakeKubeCluster validates every apply against the committed definition and
     // ClusterConformanceHarness installs it into k3s in place of the stub; and
     // ProviderConformanceTests.EveryCustomKindTheCaseRendersHasACommittedDefinition refuses a case
-    // whose Objects name a kind with no definition. A provider still declares nothing it could
-    // under-declare. The floor is still underivable-from-nothing, and the ceiling is the operator's.
+    // whose Objects name a kind with no definition — or whose reconciler applies one they do not.
+    // A provider still declares nothing it could under-declare. The floor is still
+    // underivable-from-nothing, and the ceiling is the operator's.
+    //
+    // ⚠ AND THE BODIES ARE DERIVED THE SAME WAY, for the same reason. `Body` is one body, and the
+    // review of #91 found the shape one flag away from it refused by the definition every suite
+    // was green against. A `Variants` member here would be a second list to under-declare, so
+    // ProviderConformanceTests.EveryPropertyVariantTheSchemaAdmitsRendersAShapeTheDefinitionAdmits
+    // reads the variants off the type's own schema instead — PropertyVariants' remarks say what.
 }
 
 /// <summary>
