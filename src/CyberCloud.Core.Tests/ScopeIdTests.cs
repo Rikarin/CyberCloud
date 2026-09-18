@@ -47,6 +47,45 @@ public class ScopeIdTests {
         ScopeId.ParsePath(scope.Path).GetValueOrThrow().ShouldBe(scope);
     }
 
+    /// <summary>
+    ///     ⚠ The fourth form (issue #39): four segments like a subscription, told apart by the third,
+    ///     and the payload is a DNS-1123 name rather than a GUID.
+    /// </summary>
+    [Fact]
+    public void AManagementGroupRoundTrips() {
+        var scope = ScopeId.ManagementGroupOf(Tenant, "platform");
+
+        scope.Path.ShouldBe($"/tenants/{Tenant:D}/managementGroups/platform");
+        scope.Kind.ShouldBe(ScopeKind.ManagementGroup);
+        scope.SubscriptionId.ShouldBe(Guid.Empty);
+        ScopeId.ParsePath(scope.Path).GetValueOrThrow().ShouldBe(scope);
+    }
+
+    /// <summary>
+    ///     ⚠ Four segments is two shapes and neither reads as the other: a GUID after
+    ///     <c>managementGroups</c> is not a legal name, and a name after <c>subscriptions</c> is not a
+    ///     GUID. Both are refused rather than reinterpreted.
+    /// </summary>
+    [Fact]
+    public void TheTwoFourSegmentShapesDoNotReadAsEachOther() {
+        // A 32-hex-digit lower-case string IS a legal DNS-1123 label, so a group may be named with
+        // one — what the grammar must not do is read it as a subscription.
+        var hexNamed = ScopeId.ParsePath($"/tenants/{Tenant:D}/managementGroups/{Subscription:N}");
+        hexNamed.IsSuccess.ShouldBeTrue(hexNamed.Error?.Message);
+        hexNamed.GetValueOrThrow().Kind.ShouldBe(ScopeKind.ManagementGroup);
+        hexNamed.GetValueOrThrow().SubscriptionId.ShouldBe(Guid.Empty);
+
+        // The D form carries hyphens between hex runs — legal characters — but 36 characters with
+        // hyphens is a legal label too; what makes it a management group and not a subscription is
+        // the literal, never the payload's shape.
+        ScopeId.ParsePath($"/tenants/{Tenant:D}/managementGroups/{Subscription:D}")
+            .GetValueOrThrow()
+            .Kind.ShouldBe(ScopeKind.ManagementGroup);
+
+        ScopeId.TryParsePath($"/tenants/{Tenant:D}/subscriptions/platform", out _)
+            .ShouldBeFalse("a name after 'subscriptions' was read as a subscription id");
+    }
+
     // ── The parent chain the ReBAC rewrites follow ─────────────────────────────────────────────
 
     [Fact]
@@ -61,6 +100,11 @@ public class ScopeIdTests {
         // produce a grant on one and only a direct tuple can — which is why
         // IScopeManager.CreateTenantAsync requires an owner in its request and refuses without one.
         ScopeId.Tenant(Tenant).Parent.ShouldBeNull();
+
+        // ⚠ A MANAGEMENT GROUP'S ADDRESS PARENT IS THE TENANT — THE IMPLICIT ROOT — AND ONLY THE
+        // DEFAULT. The address does not carry a parent group; that is state, and ScopeManagerService
+        // reads it before it writes an edge. Same for a subscription's group.
+        ScopeId.ManagementGroupOf(Tenant, "platform").Parent.ShouldBe(ScopeId.Tenant(Tenant));
     }
 
     // ── Disjointness from the resource grammar ─────────────────────────────────────────────────
@@ -99,14 +143,22 @@ public class ScopeIdTests {
     // ── Refusals ───────────────────────────────────────────────────────────────────────────────
 
     [Theory]
-    // Odd segment counts sit between the three legal shapes and are neither.
+    // Odd segment counts sit between the four legal shapes and are neither.
     [InlineData("/tenants")]
     [InlineData("/tenants/{t}/subscriptions")]
+    [InlineData("/tenants/{t}/managementGroups")]
     [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups")]
     [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/extra")]
+    // A management group has no scope children in its ADDRESS: the tree is flat under the tenant.
+    [InlineData("/tenants/{t}/managementGroups/platform/managementGroups/child")]
+    [InlineData("/tenants/{t}/managementGroups/platform/subscriptions/{s}")]
     // Wrong literals.
     [InlineData("/tenant/{t}")]
     [InlineData("/tenants/{t}/subscription/{s}")]
+    [InlineData("/tenants/{t}/managementGroup/platform")]
+    // An illegal management group name.
+    [InlineData("/tenants/{t}/managementGroups/PLATFORM")]
+    [InlineData("/tenants/{t}/managementGroups/-platform")]
     // Empty segments: a doubled slash, a trailing slash.
     [InlineData("/tenants//{t}")]
     [InlineData("/tenants/{t}/")]
@@ -184,6 +236,7 @@ public class ScopeIdTests {
 
         foreach (var name in new[] { "prod", "a", new string('z', 63) }) {
             yield return ScopeId.Group(Tenant, Subscription, name).Path;
+            yield return ScopeId.ManagementGroupOf(Tenant, name).Path;
         }
     }
 

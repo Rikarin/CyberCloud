@@ -53,6 +53,13 @@ public static class ObjectTypes {
     /// <summary>A subscription.</summary>
     public const string Subscription = "subscription";
 
+    /// <summary>
+    ///     A management group — the optional tree between the tenant and its subscriptions,
+    ///     docs/plan/06 § The hierarchy (issue #39). Its object id is the group's name, because the
+    ///     name is the grain key's payload and is unique within the tenant the tuple store is for.
+    /// </summary>
+    public const string ManagementGroup = "managementGroup";
+
     /// <summary>A resource group.</summary>
     public const string ResourceGroup = "resourceGroup";
 

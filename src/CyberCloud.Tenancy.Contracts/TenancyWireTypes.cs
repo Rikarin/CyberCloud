@@ -217,6 +217,18 @@ public sealed record SubscriptionDescriptor {
     /// </remarks>
     [Id(7)]
     public LockLevel Lock { get; init; } = LockLevel.None;
+
+    /// <summary>
+    ///     The management group this subscription hangs off, by name, or empty for one that hangs
+    ///     off the tenant directly — docs/plan/06 § The hierarchy's optional tree, issue #39.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Appended at 8 — docs/plan/05 § Serialization, numbers are never reused. Empty and
+    ///     absent mean the same thing here, deliberately: a record written before the member existed
+    ///     reads back as "no group", which is exactly what every such subscription is.
+    /// </remarks>
+    [Id(8)]
+    public string ManagementGroup { get; init; } = string.Empty;
 }
 
 /// <summary>

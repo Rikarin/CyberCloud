@@ -50,12 +50,16 @@ namespace CyberCloud.ResourceManager.Reconcile;
 ///         whatever the namespace refused over re-drives it and it finishes.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What is NOT done here, stated so it is owed rather than assumed.</b> The group's
-///         <c>parent</c> tuple is left behind: <c>IScopeRelationWriter</c> has no unlink, and the
-///         residue is inert for the same reason its own remarks give about a link written before a
-///         create that failed — the tuple names an object that resolves to nothing, and a group
-///         later recreated under the same name would be written the identical tuple. Adding the
-///         unlink is a change to the authorization writer rather than to this choreography.
+///         ⚠ <b>What is NOT done here, and where it is done instead.</b> The group's tuples — its
+///         <c>parent</c> edge and every role assigned at it — are not this choreography's: it holds
+///         no <c>IScopeRelationWriter</c>, for the reason <c>IResourceRelationWriter</c>'s remarks
+///         give about providers naming tuple types. <c>ScopeManagerService.DeleteAsync</c> sweeps
+///         them with <c>IScopeRelationWriter.ClearAsync</c> after this returns, and on a re-driven
+///         <c>DELETE</c> for a group that is already gone. Until issue #39's review that sweep did not
+///         exist and the writer had no call that could do it; the residue was called inert because
+///         the object resolved to nothing, which was true of the edge and not of the grants — a
+///         group recreated under the same name in the same subscription has the same object, and
+///         would have inherited them.
 ///     </para>
 /// </remarks>
 /// <param name="grains">The grain factory. Every reference goes through <c>ForTenant</c>.</param>

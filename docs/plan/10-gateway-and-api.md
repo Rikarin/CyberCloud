@@ -41,7 +41,10 @@ kind for it rather than a content-type member — [18](18-security-vault-and-mal
 component behind the same door.** `GET` and `PUT` on `/tenants/{t}/subscriptions/{s}` and on that plus
 `/resourceGroups/{rg}` reach `IScopeManager`; everything longer reaches `IResourceManager`. The two
 grammars are disjoint — a resource address is at least ten segments and must contain `/providers/` —
-so the router tries both without a precedence rule. A scope answers `201` on a create and `200` on a
+so the router tries both without a precedence rule. ⚠ Since #39 the scope API also has one shape that
+is *not* a prefix of the resource path: `/tenants/{t}/managementGroups/{name}`, four segments like a
+subscription and told apart by the literal ([06 § The hierarchy](06-tenancy-and-resource-model.md)).
+It added no segment count, so the disjointness argument is unchanged. A scope answers `201` on a create and `200` on a
 repeat rather than the resource path's `202`: a subscription and a resource group are one grain
 activation each and converge before the call returns, so there is nothing to poll and an
 `Azure-AsyncOperation` header would name a URL that answers `404`. `DELETE` on a scope answers `405`,
@@ -70,11 +73,14 @@ stage 3 below resolves the request's tenant from the token, so a create route co
 and documenting one would have generated a `cyc` verb that fails every time it is used.
 
 **The scope collections are the third scope grammar, and #63's answer applied a second time.**
-`GET /tenants/{t}/subscriptions` and `GET /tenants/{t}/subscriptions/{s}/resourceGroups` — the
+`GET /tenants/{t}/subscriptions`, `GET /tenants/{t}/managementGroups` (#39 — flat, every group in
+the tenant, each carrying its parent) and `GET /tenants/{t}/subscriptions/{s}/resourceGroups` — the
 item address one segment short, three or five segments, no `/providers/` — route as
 `RouteKind.ScopeCollection`, tried after the item grammar and only on a `GET`, and reach
 `IScopeManager.ListAsync`, which is the resource collection's shape one level up: the parent grain's
-own index (`ITenantGrain.ListSubscriptionsAsync`, `ISubscriptionGrain.ListResourceGroupsAsync`)
+own index (`ITenantGrain.ListSubscriptionsAsync`, `ITenantGrain.ListManagementGroupsAsync`,
+`ISubscriptionGrain.ListResourceGroupsAsync`; ⚠ a tenant has two collections since #39, so
+`ScopeCollectionId.MemberKind` travels with the parent rather than being derived from it)
 ordered ordinally and cut by `$top`/`$skipToken`, one `ListObjects` for the page filtered by `read`
 ([07](07-rebac-authorization.md) § ListObjects — Azure's `GET /subscriptions` semantics, what the
 caller holds any role on), a `Check` per member when the engine declines, and each survivor rendered

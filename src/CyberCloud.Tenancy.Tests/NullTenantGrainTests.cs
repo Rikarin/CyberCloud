@@ -3,7 +3,6 @@ using CyberCloud.ServiceDefaults.Storage;
 using CyberCloud.Tenancy.Contracts;
 using CyberCloud.Tenancy.Tests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
-using Npgsql;
 using Orleans.Configuration;
 using Orleans.Multitenant;
 using Shouldly;
@@ -165,15 +164,6 @@ public sealed class NullTenantGrainTests(TenancyCluster cluster) {
         cluster.ShardMap.Shards.ShouldBe(TenancyCluster.TenantShards, true);
     }
 
-    async Task<long> CountKeys(string shard, string keyWithinTenant, CancellationToken token) {
-        await using var connection = await cluster.OpenShardAsync(shard, token);
-        await using var command = new NpgsqlCommand(
-            "SELECT count(*) FROM orleansstorage WHERE grainidextensionstring = @key",
-            connection
-        );
-
-        command.Parameters.AddWithValue("key", keyWithinTenant);
-
-        return (long)(await command.ExecuteScalarAsync(token))!;
-    }
+    Task<long> CountKeys(string shard, string keyWithinTenant, CancellationToken token) =>
+        cluster.CountRowsAsync(shard, keyWithinTenant, token);
 }

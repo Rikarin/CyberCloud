@@ -72,8 +72,15 @@ public readonly record struct ResourceId(
     // two parsers must agree on the literals byte for byte — a second `"resourceGroups"` in
     // ScopeId.cs is a string that can drift, and the drift would make one of the two grammars
     // unreachable while both still compiled.
+    //
+    // ⚠ ManagementGroupsSegment is the one literal a RESOURCE path never carries. A management
+    // group is a scope above the subscription (docs/plan/06 § The hierarchy) and a resource path
+    // runs tenant → subscription → resource group → provider with no room for it, so it lives here
+    // only so that ScopeId spells it beside the three it shares — the same drift argument — and
+    // ParsePath below never looks for it. Issue #39.
     internal const string TenantsSegment = "tenants";
     internal const string SubscriptionsSegment = "subscriptions";
+    internal const string ManagementGroupsSegment = "managementGroups";
     internal const string ResourceGroupsSegment = "resourceGroups";
     const string ProvidersSegment = "providers";
 

@@ -31,9 +31,14 @@ namespace CyberCloud.Tenancy;
 ///         property worth having: for a tenant that has been assigned but whose assignment has not
 ///         yet reached a silo's cache, the cache's fallback and the recorded answer are the
 ///         <i>same</i> shard, so there is no window in which one silo writes to shard P while
-///         another reads from shard Q. When they must differ — a full or draining shard — the
-///         recording happens at tenant creation, before the tenant has any state, and the recorded
-///         value wins everywhere from then on.
+///         another reads from shard Q. When they must differ — a draining shard, or a pin
+///         (<see cref="PinAsync" />, issue #39) — the recording happens at tenant creation, before
+///         the tenant has any state, and ⚠ <b>that alone is not enough</b>: the silo that activates
+///         the tenant's first grain builds its storage provider from its own cache, and if the record
+///         has not reached that cache the first rows go to the hash-chosen shard. The create
+///         therefore waits for <c>ShardMapPropagation.ConfirmAsync</c> — every silo refreshed and
+///         answering with the recorded shard — before the tenant grain is touched; the review of
+///         issue #39 found the split that ran without it.
 ///     </para>
 /// </remarks>
 public sealed class ShardMapGrain(
@@ -106,7 +111,15 @@ public sealed class ShardMapGrain(
             // ⚠ THE PROPERTY. docs/plan/05 § The shard map: "Assignment is at tenant creation and it
             // is permanent … There is no automatic rebalancing, and that is a decision rather than
             // an omission." Nothing below this line runs for a tenant that already has an
-            // assignment, whatever the shard list looks like now.
+            // assignment, whatever the shard list looks like now — with one completion: a pin
+            // (PinAsync, issue #39) arrives before the tenant's record and carries no region, and
+            // this is the call that does, so the region is filled in once and the shard untouched.
+            if (existing.Region.Length == 0 && !string.IsNullOrWhiteSpace(region)) {
+                existing = existing with { Region = region, Version = ++state.State.Version };
+                state.State.Assignments[tenantId] = existing;
+                await state.WriteStateAsync();
+            }
+
             return Result<ShardAssignment>.Success(existing);
         }
 
@@ -178,15 +191,92 @@ public sealed class ShardMapGrain(
     }
 
     /// <inheritdoc />
-    public Task<Result> PinAsync(Guid tenantId, string durableShard, string? hotOverride) =>
-        throw new NotSupportedException(
-            "PinAsync is not implemented. docs/plan/05 § The shard map budgets it at 0.5 EM in M2, "
-            + "and what makes it safe is not the map edit but the four steps around it: quiesce the "
-            + "tenant (rejecting writes with 503 Retry-After), copy the grain rows, flip the map, "
-            + "un-quiesce. Flipping the map alone would repoint a live tenant at an empty database — "
-            + "worse than not having the method. Until M2, an operator pin is configuration: "
-            + "CyberCloud:Storage:Durable:Pins, honoured by IShardMapCache at wiring time."
-        );
+    public async Task<Result> PinAsync(Guid tenantId, string durableShard, string? hotOverride) {
+        if (string.IsNullOrWhiteSpace(durableShard)) {
+            return Result.Failure(
+                ErrorCode.InvalidRequestBody,
+                "A pin names the durable shard the tenant's state goes to, and none was named."
+            );
+        }
+
+        var defaultHotTag = StaticShardMapCache.HotTagPrefix + tenantId.ToString("N", CultureInfo.InvariantCulture);
+
+        if (hotOverride is not null && !string.Equals(hotOverride, defaultHotTag, StringComparison.Ordinal)) {
+            // ⚠ Refused rather than recorded and ignored. The map records a HotHashTag per
+            // assignment, but IShardMapCache.HotHashTagFor reads the configured
+            // Hot:HashTagOverrides and never the map — so an override recorded here would be a fact
+            // in the map that no silo acts on, which is worse than a refusal that names the seam.
+            return Result.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"A hot hash-tag override ('{hotOverride}') is not applied through the map. "
+                + "IShardMapCache.HotHashTagFor reads CyberCloud:Storage:Hot:HashTagOverrides at wiring "
+                + "time and does not consult the map's assignments, so recording it here would record "
+                + "something nothing acts on. Pass null, and configure the override if one is wanted — "
+                + "docs/plan/05 § The shard map records the gap."
+            );
+        }
+
+        if (state.State.Assignments.TryGetValue(tenantId, out var existing)) {
+            if (string.Equals(existing.DurableShard, durableShard, StringComparison.Ordinal)) {
+                // Idempotent: the tenant is already where the pin says. A re-driven create finds
+                // its own pin.
+                return Result.Success;
+            }
+
+            // ⚠ THE REFUSAL THAT IS THE POINT. docs/plan/05 § The shard map describes PinAsync as the
+            // operator-run MOVE — quiesce, copy the grain rows, flip the map, un-quiesce — and only
+            // the flip is a map edit. Flipping without the copy repoints a live tenant at an empty
+            // database. The copy is not built, so a pin that would move a tenant is refused here,
+            // with the four steps named, and docs/plan/05 records the move as M3.
+            return Result.Failure(
+                ErrorCode.Conflict,
+                $"Tenant {tenantId:D} is assigned to durable shard '{existing.DurableShard}' and "
+                + $"cannot be pinned to '{durableShard}': that is a move, and a move is not built. "
+                + "docs/plan/05 § The shard map — what makes a move safe is not the map edit but the "
+                + "four steps around it (quiesce the tenant with 503 Retry-After, copy the grain "
+                + "rows, flip the map, un-quiesce), and flipping the map alone would repoint a live "
+                + "tenant at an empty database. A pin is honoured at creation only; the move is M3."
+            );
+        }
+
+        if (!state.State.Shards.TryGetValue(durableShard, out var accepting)) {
+            return Result.Failure(
+                ErrorCode.ResourceNotFound,
+                $"Shard '{durableShard}' is not in the map. A pin names one of the shards "
+                + "ConfigureShardsAsync registered — docs/plan/05 § The shard map."
+            );
+        }
+
+        if (!accepting) {
+            // ⚠ A pin does not override the rotation. A shard is taken out of it to be drained, and
+            // placing a new tenant on it by name defeats the drain in exactly the way the flag exists
+            // to prevent. An operator who wants the shard back puts it back with
+            // SetAcceptingNewTenantsAsync first, which is one call and leaves a record.
+            return Result.Failure(
+                ErrorCode.Conflict,
+                $"Shard '{durableShard}' is out of the placement rotation, so tenant {tenantId:D} "
+                + "cannot be pinned to it. Put the shard back with SetAcceptingNewTenantsAsync first "
+                + "— a pin that bypassed the rotation would defeat the drain the flag exists for."
+            );
+        }
+
+        var assignment = new ShardAssignment {
+            TenantId = tenantId,
+            DurableShard = durableShard,
+            HotHashTag = defaultHotTag,
+            // ⚠ Empty rather than guessed: a pin arrives before the tenant's record exists and the
+            // signature docs/plan/05 declares carries no region. AssignAsync — the call that does —
+            // fills it in on the pinned assignment and leaves the shard alone.
+            Region = string.Empty,
+            AssignedAt = clock.UtcNow,
+            Version = ++state.State.Version
+        };
+
+        state.State.Assignments[tenantId] = assignment;
+        await state.WriteStateAsync();
+
+        return Result.Success;
+    }
 
     /// <inheritdoc />
     public Task DeactivateAsync() {

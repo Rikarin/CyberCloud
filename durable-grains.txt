@@ -30,6 +30,9 @@ CyberCloud.Tenancy.TenantDirectoryGrain
 CyberCloud.Tenancy.ShardMapGrain
 CyberCloud.Tenancy.SubscriptionGrain
 CyberCloud.Tenancy.ResourceGroupGrain
+# The scope above the subscription (issue #39). Role assignments are scoped to it, so losing the
+# record would detach every grant made at it while the tuples still named it.
+CyberCloud.Tenancy.ManagementGroupGrain
 CyberCloud.Tenancy.QuotaGrain
 
 # The indexes. Rebuildable in principle by scanning every tenant, which is exactly the operation

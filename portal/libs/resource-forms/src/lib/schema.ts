@@ -100,9 +100,12 @@ export interface ResourceForm {
   readonly actions: readonly FormAction[];
 }
 
-/** The form for a subscription or a resource group — the second, non-registry source of issue #63. */
+/** The scopes the document carries a create form for — the tenant has none, because it has no PUT. */
+export type ScopeFormKind = 'managementGroup' | 'subscription' | 'resourceGroup';
+
+/** The form for a management group, a subscription or a resource group — the second, non-registry source of issue #63, and the fourth scope of #39. */
 export interface ScopeForm {
-  readonly scope: 'subscription' | 'resourceGroup';
+  readonly scope: ScopeFormKind;
   readonly scopeType: string;
   readonly apiVersion: string;
   readonly title: string;
@@ -119,7 +122,7 @@ export interface FormsDocument {
   readonly format: string;
   readonly apiVersion: string;
   readonly forms: Readonly<Record<string, ResourceForm>>;
-  readonly scopeForms: Readonly<Record<'subscription' | 'resourceGroup', ScopeForm>>;
+  readonly scopeForms: Readonly<Record<ScopeFormKind, ScopeForm>>;
 }
 
 /** What the renderer accepts: either kind, seen through the members both have. */

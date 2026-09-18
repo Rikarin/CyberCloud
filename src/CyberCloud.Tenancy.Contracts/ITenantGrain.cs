@@ -70,6 +70,20 @@ public interface ITenantGrain : IGrainWithStringKey {
     Task<Result<IReadOnlyList<Guid>>> ListSubscriptionsAsync();
 
     /// <summary>
+    ///     Records a management group as belonging to this tenant — every group, nested or not,
+    ///     because the tenant's group collection is flat (docs/plan/06 § The hierarchy, issue #39).
+    /// </summary>
+    /// <param name="name">The group's name.</param>
+    Task<Result> AddManagementGroupAsync(string name);
+
+    /// <summary>Forgets a management group. Idempotent — one that was never listed is a success.</summary>
+    /// <param name="name">The group's name.</param>
+    Task<Result> RemoveManagementGroupAsync(string name);
+
+    /// <summary>Every management group in the tenant, ordered ordinally by name.</summary>
+    Task<Result<IReadOnlyList<string>>> ListManagementGroupsAsync();
+
+    /// <summary>
     ///     Drops this activation. The next call re-reads durable state — the test seam for "the silo
     ///     died here".
     /// </summary>

@@ -79,13 +79,13 @@ public sealed class SwitchableScopeAuthorizer : IScopeAuthorizer {
 
     /// <inheritdoc />
     public Task<ScopeCollectionVisibility> ListReadableAsync(
-        ScopeId parent,
+        ScopeCollectionId collection,
         IReadOnlyList<ScopeId> candidates,
         string readPermission,
         CallerContext caller,
         CancellationToken cancellationToken = default
     ) {
-        CollectionsAsked.Enqueue((parent, candidates.Count));
+        CollectionsAsked.Enqueue((collection.Parent, candidates.Count));
 
         return Task.FromResult(
             AnswersCollections
@@ -106,9 +106,44 @@ public sealed class SwitchableScopeAuthorizer : IScopeAuthorizer {
 ///     entry a listing test then reads.
 /// </remarks>
 public sealed class NoOpScopeRelationWriter : IScopeRelationWriter {
+    /// <summary>
+    ///     Every parent edge the manager asked for, in order — <c>(scope, null, parent)</c> for a
+    ///     link and <c>(scope, previous, next)</c> for a relink. What a test reads to assert the
+    ///     manager moved the edge before the record. A delete's sweep is <see cref="Cleared" />.
+    /// </summary>
+    public static ConcurrentQueue<(ScopeId Scope, ScopeId? From, ScopeId? To)> Edges { get; } = new();
+
     /// <inheritdoc />
-    public Task<Result> LinkToParentAsync(ScopeId scope, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Result.Success);
+    public Task<Result> LinkToParentAsync(ScopeId scope, CancellationToken cancellationToken = default) {
+        Edges.Enqueue((scope, null, scope.Parent));
+        return Task.FromResult(Result.Success);
+    }
+
+    /// <inheritdoc />
+    public Task<Result> LinkToParentAsync(ScopeId scope, ScopeId parent, CancellationToken cancellationToken = default) {
+        Edges.Enqueue((scope, null, parent));
+        return Task.FromResult(Result.Success);
+    }
+
+    /// <inheritdoc />
+    public Task<Result> RelinkParentAsync(
+        ScopeId scope,
+        ScopeId currentParent,
+        ScopeId newParent,
+        CancellationToken cancellationToken = default
+    ) {
+        Edges.Enqueue((scope, currentParent, newParent));
+        return Task.FromResult(Result.Success);
+    }
+
+    /// <summary>Every scope the manager asked to have every tuple cleared from, in order.</summary>
+    public static ConcurrentQueue<ScopeId> Cleared { get; } = new();
+
+    /// <inheritdoc />
+    public Task<Result> ClearAsync(ScopeId scope, CancellationToken cancellationToken = default) {
+        Cleared.Enqueue(scope);
+        return Task.FromResult(Result.Success);
+    }
 
     /// <inheritdoc />
     public Task<Result> GrantOwnerAsync(

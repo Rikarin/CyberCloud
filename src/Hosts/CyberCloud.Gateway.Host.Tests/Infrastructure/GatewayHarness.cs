@@ -212,6 +212,12 @@ sealed class GatewayHarness {
     /// <param name="tenantId">Which tenant's path to spell.</param>
     public static string SubscriptionPath(Guid tenantId) => $"/tenants/{tenantId:D}/subscriptions/{Subscription:D}";
 
+    /// <summary>The scope path of a tenant's <c>platform</c> management group — issue #39.</summary>
+    /// <param name="tenantId">Which tenant's path to spell.</param>
+    /// <param name="group">The group name.</param>
+    public static string ManagementGroupPath(Guid tenantId, string group = "platform") =>
+        $"/tenants/{tenantId:D}/managementGroups/{group}";
+
     /// <summary>The happy-path resource path for a tenant.</summary>
     /// <param name="tenantId">Which tenant's path to spell.</param>
     /// <param name="name">The resource name.</param>

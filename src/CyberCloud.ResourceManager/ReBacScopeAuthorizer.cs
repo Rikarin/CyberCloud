@@ -55,6 +55,9 @@ public sealed class ReBacScopeAuthorizer(IGrainFactory grains, ILogger<ReBacScop
     /// <summary>The ReBAC object type of a resource group.</summary>
     public const string ResourceGroupObjectType = ObjectTypes.ResourceGroup;
 
+    /// <summary>The ReBAC object type of a management group — issue #39.</summary>
+    public const string ManagementGroupObjectType = ObjectTypes.ManagementGroup;
+
     /// <summary>The ReBAC object type of the platform itself.</summary>
     public const string PlatformObjectType = ObjectTypes.Platform;
 
@@ -229,9 +232,27 @@ public sealed class ReBacScopeAuthorizer(IGrainFactory grains, ILogger<ReBacScop
     ///         and the one function that spells both is the one the check side uses. A second
     ///         spelling here would be a filter that dropped every member while every check passed.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The management-group tree is where "depth 1" stops being true, and the two
+    ///         collections it touches answer <see cref="ScopeCollectionVisibility.Unanswered" />
+    ///         rather than a wrong page — issue #39.</b> A subscription assigned to a group hangs off
+    ///         the group and the group off the tenant, so it is two or more <c>parent</c> hops below
+    ///         the tenant and a depth-1 walk does not reach it; a nested group is the same one level
+    ///         up; and the tenant's group collection is <i>flat</i>, so its members sit at every depth
+    ///         from one to <c>IManagementGroupGrain.MaxDepth</c>. Walking deeper is not the fix: the
+    ///         scoped walk descends every tupleset edge to the depth asked, so a depth-seven walk under
+    ///         a tenant reads every resource group and resource under every root-level subscription
+    ///         on the way to the subscriptions nested under groups, which is the "single most likely
+    ///         performance mistake in this subsystem" docs/plan/07 § ListObjects names. So: the group
+    ///         collection is always per-member — groups are few — and the subscription collection is
+    ///         per-member as soon as the tenant has any group at all, read off
+    ///         <c>ITenantGrain.ListManagementGroupsAsync</c> before the walk is asked. A tenant with
+    ///         no groups keeps the one-walk listing it had, and the fallback is the path that was
+    ///         correct before the walk existed.
+    ///     </para>
     /// </remarks>
     public async Task<ScopeCollectionVisibility> ListReadableAsync(
-        ScopeId parent,
+        ScopeCollectionId collection,
         IReadOnlyList<ScopeId> candidates,
         string readPermission,
         CallerContext caller,
@@ -241,20 +262,41 @@ public sealed class ReBacScopeAuthorizer(IGrainFactory grains, ILogger<ReBacScop
         ArgumentNullException.ThrowIfNull(caller);
         ArgumentException.ThrowIfNullOrWhiteSpace(readPermission);
 
-        var memberType = parent.Kind switch {
-            ScopeKind.Tenant => SubscriptionObjectType,
-            ScopeKind.Subscription => ResourceGroupObjectType,
+        var parent = collection.Parent;
+
+        var memberType = collection.MemberKind switch {
+            ScopeKind.Subscription => SubscriptionObjectType,
+            ScopeKind.ResourceGroup => ResourceGroupObjectType,
+            // ⚠ Per member, always — see the remarks: the collection is flat and its members sit
+            // at every depth of the tree, which a depth-1 walk cannot see and a deeper walk cannot
+            // afford.
+            ScopeKind.ManagementGroup => "",
             _ => ""
         };
 
         if (memberType.Length == 0) {
-            logger.LogError(
-                "'{Path}' is a {Kind} and has no scope children to list. Listing per member.",
-                parent.Path,
-                parent.Kind
-            );
+            if (collection.MemberKind != ScopeKind.ManagementGroup) {
+                logger.LogError(
+                    "'{Path}' is a {Kind} and has no scope children to list. Listing per member.",
+                    parent.Path,
+                    parent.Kind
+                );
+            }
 
             return ScopeCollectionVisibility.Unanswered;
+        }
+
+        if (collection.MemberKind == ScopeKind.Subscription) {
+            // ⚠ A tenant with a management group has subscriptions the depth-1 walk cannot reach,
+            // so the walk is not asked at all — the remarks say why deeper is not the answer.
+            var groups = await grains
+                .ForTenant(parent.TenantId.ToString("D", CultureInfo.InvariantCulture))
+                .GetGrain<ITenantGrain>(GrainKeys.Tenant(parent.TenantId))
+                .ListManagementGroupsAsync();
+
+            if (groups.IsFailure || groups.GetValueOrThrow().Count > 0) {
+                return ScopeCollectionVisibility.Unanswered;
+            }
         }
 
         var subject = SubjectRef.Create(caller.SubjectType, caller.SubjectId);
@@ -357,6 +399,9 @@ public sealed class ReBacScopeAuthorizer(IGrainFactory grains, ILogger<ReBacScop
             ScopeKind.Tenant => (TenantObjectType, N(scope.TenantId)),
             ScopeKind.Subscription => (SubscriptionObjectType, N(scope.SubscriptionId)),
             ScopeKind.ResourceGroup => (ResourceGroupObjectType, N(scope.SubscriptionId) + "-" + scope.ResourceGroup),
+            // The name alone: unique within the tenant by the grain key's construction, and the
+            // tuple store is per tenant, so nothing wider is needed to make the object id unique.
+            ScopeKind.ManagementGroup => (ManagementGroupObjectType, scope.ManagementGroup),
             _ => ("", "")
         };
 

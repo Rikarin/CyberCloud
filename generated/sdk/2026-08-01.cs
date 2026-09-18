@@ -8205,17 +8205,21 @@ public enum ScopeResourceType {
     /// <summary>Never assigned. Not a value the API accepts.</summary>
     Unknown = 0,
 
+    /// <summary>CyberCloud.Resources/managementGroups</summary>
+    [JsonStringEnumMemberName("CyberCloud.Resources/managementGroups")]
+    CyberCloudResourcesManagementGroups = 1,
+
     /// <summary>CyberCloud.Resources/subscriptions/resourceGroups</summary>
     [JsonStringEnumMemberName("CyberCloud.Resources/subscriptions/resourceGroups")]
-    CyberCloudResourcesSubscriptionsResourceGroups = 1,
+    CyberCloudResourcesSubscriptionsResourceGroups = 2,
 
     /// <summary>CyberCloud.Resources/subscriptions</summary>
     [JsonStringEnumMemberName("CyberCloud.Resources/subscriptions")]
-    CyberCloudResourcesSubscriptions = 2,
+    CyberCloudResourcesSubscriptions = 3,
 
     /// <summary>CyberCloud.Resources/tenants</summary>
     [JsonStringEnumMemberName("CyberCloud.Resources/tenants")]
-    CyberCloudResourcesTenants = 3
+    CyberCloudResourcesTenants = 4
 }
 
 /// <summary>A tenant, a subscription or a resource group, as the API renders it.</summary>
@@ -8232,6 +8236,10 @@ public sealed partial class ScopeResource {
     [JsonPropertyName("location")]
     public string? Location { get; set; }
 
+    /// <summary>The management group this scope hangs off — a subscription's group, or a group's parent group. ⚠ Absent for a scope that hangs off the tenant directly, and for a tenant or a resource group. docs/plan/06 § The hierarchy.</summary>
+    [JsonPropertyName("managementGroup")]
+    public string? ManagementGroup { get; set; }
+
     /// <summary>The name a human reads.</summary>
     [JsonPropertyName("name")]
     public required string Name { get; set; }
@@ -8241,6 +8249,18 @@ public sealed partial class ScopeResource {
     public required ScopeResourceType Type { get; set; }
 }
 
+/// <summary>The body of a PUT that creates a management group.</summary>
+public sealed partial class ManagementGroupCreateContent {
+
+    /// <summary>The name a person reads. Optional; defaults to the group's name.</summary>
+    [JsonPropertyName("displayName")]
+    public string? DisplayName { get; set; }
+
+    /// <summary>The parent group, by name. Optional: absent or empty hangs the group off the tenant. ⚠ Set at creation and not movable — a later PUT naming a different parent is a 409. The tree is capped at six levels.</summary>
+    [JsonPropertyName("managementGroup")]
+    public string? ManagementGroup { get; set; }
+}
+
 /// <summary>The body of a PUT that creates a subscription.</summary>
 public sealed partial class SubscriptionCreateContent {
 
@@ -8248,6 +8268,10 @@ public sealed partial class SubscriptionCreateContent {
     /// <remarks>Required on a create.</remarks>
     [JsonPropertyName("displayName")]
     public required string DisplayName { get; set; }
+
+    /// <summary>The management group to assign the subscription to, by name. Optional. ⚠ Absent leaves the assignment unchanged on a subscription that exists and means the tenant root on one that does not; the empty string moves the subscription to the tenant root. Assigning needs write on the group as well as on the tenant. docs/plan/06 § The hierarchy.</summary>
+    [JsonPropertyName("managementGroup")]
+    public string? ManagementGroup { get; set; }
 }
 
 /// <summary>The body of a PUT that creates a resource group.</summary>
@@ -8283,6 +8307,38 @@ public sealed partial class ScopeClient {
     // tenant is resolved from its token, so a call creating another tenant necessarily
     // carries a token that is not that tenant's and is refused before routing runs —
     // IScopeManager.CreateTenantAsync is off the request pipeline entirely.
+
+    /// <summary>The URL template management group operations address.</summary>
+    public const string ManagementGroupPathTemplate = "/tenants/{tenantId}/managementGroups/{managementGroupName}";
+
+    /// <summary>The type string a management group response carries.</summary>
+    public const string ManagementGroupType = "CyberCloud.Resources/managementGroups";
+
+    /// <summary>Reads one management group. The optional tree above the subscription, for role inheritance. docs/plan/06 § The hierarchy.</summary>
+    public partial Task<Response<ScopeResource>> GetManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListManagementGroupsAsync pages.</summary>
+    public const string ManagementGroupCollectionPathTemplate = "/tenants/{tenantId}/managementGroups";
+
+    /// <summary>The management groups the caller may read, paged.</summary>
+    /// <remarks>⚠ A short page never means "that is all there is": the page holds
+    /// what the caller may read and the envelope carries no count.</remarks>
+    public partial AsyncPageable<ScopeResource> ListManagementGroupsAsync(
+        string tenantId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Creates one management group, or returns the existing one unchanged.</summary>
+    /// <remarks>⚠ No WaitUntil and no Operation&lt;T&gt;: this converges before it
+    /// returns. Repeating it with the same address is a success — 201 the first time
+    /// and 200 after, which is what makes the verb PUT.</remarks>
+    public partial Task<Response<ScopeResource>> CreateManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        ManagementGroupCreateContent content,
+        CancellationToken cancellationToken = default);
 
     /// <summary>The URL template subscription operations address.</summary>
     public const string SubscriptionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}";

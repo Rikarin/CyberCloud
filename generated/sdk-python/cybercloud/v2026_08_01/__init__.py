@@ -108,6 +108,7 @@ __all__ = [
     "ManagedKubernetesClusterListCredentialsResult",
     "ManagedKubernetesClusterResource",
     "ManagedKubernetesClusterVersion",
+    "ManagementGroupCreateContent",
     "MariaDBServerData",
     "MariaDBServerHighAvailability",
     "MariaDBServerListKeysResult",

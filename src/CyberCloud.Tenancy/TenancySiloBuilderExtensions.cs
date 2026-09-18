@@ -1,11 +1,13 @@
 using CyberCloud.Core.Time;
 using CyberCloud.ServiceDefaults.Storage;
+using CyberCloud.Tenancy.Contracts;
 using CyberCloud.Tenancy.Directory;
 using CyberCloud.Tenancy.Separation;
 using CyberCloud.Tenancy.Shards;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Orleans.Multitenant;
+using Orleans.Providers;
 
 namespace CyberCloud.Tenancy;
 
@@ -114,6 +116,22 @@ public static class TenancySiloBuilderExtensions {
 
                 services.AddSingleton(shardMap);
                 services.AddSingleton<ShardMapRefresher>();
+
+                // ⚠ THE SAME REFRESHER, wrapped in the controller and keyed AS IControllable under the
+                // name the fan-out addresses. Orleans 10.2.2's SiloControl resolves
+                // SendControlCommandToProvider<T>(name, …) as GetKeyedServices<IControllable>(name)
+                // filtered to the object whose GetType() == typeof(T) — ShardMapMirrorController's
+                // remarks quote the decompiled line — so the registration is by IControllable, the
+                // instance's concrete type is what the caller names, and a refresher registered here
+                // directly under any interface is "Could not find a controllable service" (observed).
+                // A second ShardMapRefresher would refresh a cache nothing routes with and answer for
+                // it; ShardMapPropagation.ConfirmAsync's remarks say why a tenant create needs every
+                // silo's answer.
+                services.AddKeyedSingleton<IControllable>(
+                    ShardMapPropagation.ProviderName,
+                    (sp, _) => new ShardMapMirrorController(sp.GetRequiredService<ShardMapRefresher>())
+                );
+
                 services.AddSingleton<TenantDirectoryCache>();
 
                 services.AddHostedService<ShardMapRefreshService>();

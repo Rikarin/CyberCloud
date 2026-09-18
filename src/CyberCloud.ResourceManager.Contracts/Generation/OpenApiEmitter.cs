@@ -118,6 +118,7 @@ public static class OpenApiEmitter {
 
     const string SubscriptionCreateSchema = "Scope.SubscriptionCreate";
     const string ResourceGroupCreateSchema = "Scope.ResourceGroupCreate";
+    const string ManagementGroupCreateSchema = "Scope.ManagementGroupCreate";
 
     /// <summary>
     ///     The envelope every resource is read in: <c>id</c>, <c>name</c>, <c>type</c>,
@@ -214,6 +215,12 @@ public static class OpenApiEmitter {
     public const string ResourceGroupPathTemplate =
         SubscriptionPathTemplate + "/resourceGroups/{resourceGroupName}";
 
+    /// <summary>
+    ///     The management group scope's path template — the one scope shape that is <i>not</i> a
+    ///     prefix of the resource path (issue #39). docs/plan/06 § The hierarchy.
+    /// </summary>
+    public const string ManagementGroupPathTemplate = TenantPathTemplate + "/managementGroups/{managementGroupName}";
+
     /// <summary>The subscription collection's path template — a tenant's subscriptions.</summary>
     /// <remarks>
     ///     ⚠ Derived from the item template by cutting its last segment, as
@@ -224,6 +231,12 @@ public static class OpenApiEmitter {
 
     /// <summary>The resource group collection's path template — a subscription's resource groups.</summary>
     public const string ResourceGroupCollectionPathTemplate = SubscriptionPathTemplate + "/resourceGroups";
+
+    /// <summary>
+    ///     The management group collection's path template — every group in the tenant, flat, each
+    ///     carrying its parent.
+    /// </summary>
+    public const string ManagementGroupCollectionPathTemplate = TenantPathTemplate + "/managementGroups";
 
     /// <summary>
     ///     The extension a scope <i>collection</i> path item carries beside <see cref="ScopeExtension" />.
@@ -1106,7 +1119,7 @@ public static class OpenApiEmitter {
     // ── The scope API: the second, non-registry source, and the whole of issue #63 ─────────────
 
     /// <summary>
-    ///     The three scope path items and the two scope collections, keyed by path.
+    ///     The four scope path items and the three scope collections, keyed by path.
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -1195,10 +1208,28 @@ public static class OpenApiEmitter {
                 + "⚠ Every resource path names a resource group, so this is the call that has to "
                 + "succeed before any resource can be created at all."
             ),
-            // ⚠ THE TWO COLLECTIONS, EMITTED THROUGH THE SAME SOURCE — #63's answer applied a
-            // second time. A collection routed by hand and left out of the document would recreate
-            // the state that issue closed: an address the gateway serves and no gate can see break.
-            // See ScopeCollectionPathItem for the shape.
+            [ManagementGroupPathTemplate] = ScopePathItem(
+                "managementGroup",
+                ScopeTypeNames.ManagementGroup,
+                "Management group",
+                "Management groups",
+                "The optional tree above the subscription, for role inheritance. docs/plan/06 § The "
+                + "hierarchy.",
+                [Ref("parameters", "TenantId"), Ref("parameters", "ManagementGroupName")],
+                ManagementGroupCreateSchema,
+                "Reads one management group. Its managementGroup property is the parent group, absent "
+                + "for a group that hangs off the tenant.",
+                "Creates the management group at this address, or returns the existing one unchanged. "
+                + "⚠ The parent is set at creation: a repeated PUT naming the same parent is a 200, one "
+                + "naming a different parent is a 409 — a move is not built (docs/plan/06 § The "
+                + "hierarchy). A role assigned at a group is inherited by every subscription assigned "
+                + "to it and everything below them; a subscription is assigned by PUT on the "
+                + "subscription with its managementGroup property set."
+            ),
+            // ⚠ THE THREE COLLECTIONS, EMITTED THROUGH THE SAME SOURCE — #63's answer applied a
+            // second time, and a third for #39. A collection routed by hand and left out of the
+            // document would recreate the state that issue closed: an address the gateway serves and
+            // no gate can see break. See ScopeCollectionPathItem for the shape.
             [SubscriptionCollectionPathTemplate] = ScopeCollectionPathItem(
                 "subscription",
                 ScopeTypeNames.Subscription,
@@ -1219,6 +1250,16 @@ public static class OpenApiEmitter {
                 + "the groups the caller may read. ⚠ 404 when the caller cannot read the "
                 + "subscription, which is the same answer as for a subscription that does not "
                 + "exist — docs/plan/07 § The enforcement seam. Stop when nextLink is absent."
+            ),
+            [ManagementGroupCollectionPathTemplate] = ScopeCollectionPathItem(
+                "managementGroup",
+                ScopeTypeNames.ManagementGroup,
+                "Management groups",
+                [Ref("parameters", "TenantId")],
+                "Lists every management group in the tenant the token names — flat, nested groups "
+                + "included, each carrying its parent in managementGroup — one page at a time, "
+                + "filtered to the groups the caller may read. No permission on the tenant itself is "
+                + "needed. Stop when nextLink is absent."
             )
         };
 
@@ -1397,9 +1438,10 @@ public static class OpenApiEmitter {
                 ["type"] = "object",
                 ["title"] = ScopeSchema,
                 ["description"] =
-                    "A tenant, a subscription or a resource group, as the API renders it. ⚠ There is "
-                    + "no provisioningState: a scope is one grain activation and converges before the "
-                    + "call returns, which is the visible half of \"a scope is not a resource\".",
+                    "A tenant, a management group, a subscription or a resource group, as the API "
+                    + "renders it. ⚠ There is no provisioningState: a scope is one grain activation and "
+                    + "converges before the call returns, which is the visible half of \"a scope is "
+                    + "not a resource\".",
                 ["properties"] = new JsonObject {
                     ["id"] = new JsonObject {
                         ["type"] = "string", ["description"] = "The scope's own path — docs/plan/06 § Identifiers."
@@ -1411,12 +1453,23 @@ public static class OpenApiEmitter {
                             + "than empty where the scope has none, so a client tests for the "
                             + "property instead of comparing against \"\"."
                     },
+                    [ScopeBodyProperties.ManagementGroup] = new JsonObject {
+                        ["type"] = "string",
+                        ["description"] =
+                            "The management group this scope hangs off — a subscription's group, or a "
+                            + "group's parent group. ⚠ Absent for a scope that hangs off the tenant "
+                            + "directly, and for a tenant or a resource group. docs/plan/06 § The "
+                            + "hierarchy."
+                    },
                     ["name"] = new JsonObject { ["type"] = "string", ["description"] = "The name a human reads." },
                     ["type"] = new JsonObject {
                         ["type"] = "string",
                         ["description"] = "The Azure-shaped type string.",
                         ["enum"] = new JsonArray {
-                            ScopeTypeNames.ResourceGroup, ScopeTypeNames.Subscription, ScopeTypeNames.Tenant
+                            ScopeTypeNames.ManagementGroup,
+                            ScopeTypeNames.ResourceGroup,
+                            ScopeTypeNames.Subscription,
+                            ScopeTypeNames.Tenant
                         }
                     }
                 },
@@ -1432,8 +1485,8 @@ public static class OpenApiEmitter {
                 ["type"] = "object",
                 ["title"] = ScopeListSchema,
                 ["description"] =
-                    "One page of scopes — a tenant's subscriptions or a subscription's resource "
-                    + "groups. ⚠ The page holds what the caller may read: a listing runs a "
+                    "One page of scopes — a tenant's subscriptions, a tenant's management groups or a "
+                    + "subscription's resource groups. ⚠ The page holds what the caller may read: a listing runs a "
                     + "permission check per member (docs/plan/07 § The enforcement seam), so a "
                     + "short or empty page means \"that is what you may see\" and never \"that is "
                     + "all there is\". Stop when nextLink is absent, never when a page is smaller "
@@ -1467,9 +1520,37 @@ public static class OpenApiEmitter {
                             "The name on an invoice and in every scope picker. Required — a "
                             + "subscription identified only by its GUID is one nobody can pick out of "
                             + "a list."
+                    },
+                    [ScopeBodyProperties.ManagementGroup] = new JsonObject {
+                        ["type"] = "string",
+                        ["description"] =
+                            "The management group to assign the subscription to, by name. Optional. "
+                            + "⚠ Absent leaves the assignment unchanged on a subscription that exists "
+                            + "and means the tenant root on one that does not; the empty string moves "
+                            + "the subscription to the tenant root. Assigning needs write on the group "
+                            + "as well as on the tenant. docs/plan/06 § The hierarchy."
                     }
                 },
                 ["required"] = new JsonArray { ScopeBodyProperties.DisplayName },
+                ["additionalProperties"] = false
+            },
+            [ManagementGroupCreateSchema] = new JsonObject {
+                ["type"] = "object",
+                ["title"] = ManagementGroupCreateSchema,
+                ["description"] = "The body of a PUT that creates a management group.",
+                ["properties"] = new JsonObject {
+                    [ScopeBodyProperties.DisplayName] = new JsonObject {
+                        ["type"] = "string",
+                        ["description"] = "The name a person reads. Optional; defaults to the group's name."
+                    },
+                    [ScopeBodyProperties.ManagementGroup] = new JsonObject {
+                        ["type"] = "string",
+                        ["description"] =
+                            "The parent group, by name. Optional: absent or empty hangs the group off "
+                            + "the tenant. ⚠ Set at creation and not movable — a later PUT naming a "
+                            + "different parent is a 409. The tree is capped at six levels."
+                    }
+                },
                 ["additionalProperties"] = false
             },
             [ResourceGroupCreateSchema] = new JsonObject {
@@ -2137,6 +2218,11 @@ public static class OpenApiEmitter {
                 ["description"] = "The operation, from the Azure-AsyncOperation header of a 202.",
                 ["schema"] = new JsonObject { ["type"] = "string", ["format"] = "uuid" }
             },
+            ["ManagementGroupName"] = NameParameter(
+                "managementGroupName",
+                "The management group — the optional tree above the subscription, unique within the "
+                + "tenant. docs/plan/06 § The hierarchy."
+            ),
             ["ResourceGroupName"] = NameParameter(
                 "resourceGroupName",
                 "The resource group — the lifecycle boundary. docs/plan/06 § The hierarchy."

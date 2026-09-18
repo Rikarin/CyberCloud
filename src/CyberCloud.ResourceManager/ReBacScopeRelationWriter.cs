@@ -53,7 +53,7 @@ public sealed class ReBacScopeRelationWriter(IGrainFactory grains, ILogger<ReBac
     ///     relation that the object type does not declare is written successfully against a relation
     ///     no rewrite follows, so every create reports success and every scope is invisible, with
     ///     nothing in any log. <c>ScopeCreationTests</c> reads this constant to assert it is one
-    ///     <c>CyberCloudSchema</c> rewrites through on both scope types.
+    ///     <c>CyberCloudSchema</c> rewrites through on every scope type that has a parent.
     /// </remarks>
     public const string ParentRelation = Relations.Parent;
 
@@ -78,7 +78,96 @@ public sealed class ReBacScopeRelationWriter(IGrainFactory grains, ILogger<ReBac
 
         var (parentType, parentId) = ReBacScopeAuthorizer.ObjectOf(parent);
 
-        return await ApplyAsync(scope, ParentRelation, SubjectRef.Of(parentType, parentId));
+        return await ApplyAsync(scope, ParentRelation, SubjectRef.Of(parentType, parentId), delete: false);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> LinkToParentAsync(ScopeId scope, ScopeId parent, CancellationToken cancellationToken = default) {
+        var legal = EnsureCanHangOff(scope, parent);
+        if (legal.IsFailure) {
+            return legal;
+        }
+
+        var (parentType, parentId) = ReBacScopeAuthorizer.ObjectOf(parent);
+
+        return await ApplyAsync(scope, ParentRelation, SubjectRef.Of(parentType, parentId), delete: false);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> RelinkParentAsync(
+        ScopeId scope,
+        ScopeId currentParent,
+        ScopeId newParent,
+        CancellationToken cancellationToken = default
+    ) {
+        var legal = EnsureCanHangOff(scope, newParent);
+        if (legal.IsFailure) {
+            return legal;
+        }
+
+        if (currentParent == newParent) {
+            return Result.Success;
+        }
+
+        // ⚠ DELETE FIRST — IScopeRelationWriter.RelinkParentAsync says which window this chooses and
+        // why the other one is the unsafe one.
+        var (fromType, fromId) = ReBacScopeAuthorizer.ObjectOf(currentParent);
+
+        var removed = await ApplyAsync(scope, ParentRelation, SubjectRef.Of(fromType, fromId), delete: true);
+        if (removed.IsFailure) {
+            return removed;
+        }
+
+        var (toType, toId) = ReBacScopeAuthorizer.ObjectOf(newParent);
+
+        return await ApplyAsync(scope, ParentRelation, SubjectRef.Of(toType, toId), delete: false);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> ClearAsync(ScopeId scope, CancellationToken cancellationToken = default) {
+        var (type, id) = ReBacScopeAuthorizer.ObjectOf(scope);
+
+        if (type.Length == 0) {
+            return Result.Failure(
+                ErrorCode.InvalidResourceId,
+                "A scope with no kind names no ReBAC object, so there is nothing to clear."
+            );
+        }
+
+        var tenant = grains.ForTenant(scope.TenantId.ToString("D", CultureInfo.InvariantCulture));
+
+        // ⚠ The durable read, because this is a destructive path and the row is the authority —
+        // docs/plan/07 § Consistency's "read durable". An activation's memory is what the two-grain
+        // write keeps current; the case this guards is a tuple that reached the row by a repair or a
+        // replayed journal and not this activation, which a memory read would leave standing.
+        var snapshot = await tenant
+            .GetGrain<IObjectRelationsGrain>(GrainKeys.ObjectRelations(type, id))
+            .ReadDurableAsync();
+
+        if (snapshot.TryGetError(out var readError)) {
+            logger.LogError(
+                "Reading the tuples on scope {Path} to clear them failed: {Message}.",
+                scope.Path,
+                readError.Message
+            );
+
+            return Result.Failure(readError);
+        }
+
+        // ⚠ One tuple at a time through the store, and not a bulk truncate on the object grain: each
+        // delete is the two-grain write in reverse, so the reverse index forgets the subject too and
+        // the tenant's relation version moves, which is what invalidates every cached check that
+        // was answered through a grant on this object.
+        foreach (var (relation, subjects) in snapshot.GetValueOrThrow().ByRelation) {
+            foreach (var subject in subjects) {
+                var removed = await ApplyAsync(scope, relation, subject, delete: true);
+                if (removed.IsFailure) {
+                    return removed;
+                }
+            }
+        }
+
+        return Result.Success;
     }
 
     /// <inheritdoc />
@@ -100,10 +189,46 @@ public sealed class ReBacScopeRelationWriter(IGrainFactory grains, ILogger<ReBac
             return Result.Failure(subjectError);
         }
 
-        return await ApplyAsync(scope, OwnerRelation, subject.GetValueOrThrow());
+        return await ApplyAsync(scope, OwnerRelation, subject.GetValueOrThrow(), delete: false);
     }
 
-    async Task<Result> ApplyAsync(ScopeId scope, string relation, SubjectRef subject) {
+    /// <summary>
+    ///     Whether <paramref name="parent" /> is a parent the schema lets <paramref name="scope" />
+    ///     hang off through the two-argument form: a management group under a tenant or a group, a
+    ///     subscription under a tenant or a group. Anything else has a parent its address spells and
+    ///     goes through the one-argument form.
+    /// </summary>
+    static Result EnsureCanHangOff(ScopeId scope, ScopeId parent) {
+        if (parent.TenantId != scope.TenantId) {
+            return Result.Failure(
+                ErrorCode.InvalidResourceId,
+                $"'{scope.Path}' cannot hang off '{parent.Path}': the two are in different tenants, "
+                + "and a tuple store holds one tenant's edges — docs/plan/07 § Storage."
+            );
+        }
+
+        var legal = (scope.Kind, parent.Kind) switch {
+            (ScopeKind.ManagementGroup, ScopeKind.Tenant or ScopeKind.ManagementGroup) => true,
+            (ScopeKind.Subscription, ScopeKind.Tenant or ScopeKind.ManagementGroup) => true,
+            _ => false
+        };
+
+        if (!legal) {
+            return Result.Failure(
+                ErrorCode.InvalidResourceId,
+                $"'{scope.Path}' ({scope.Kind}) cannot hang off '{parent.Path}' ({parent.Kind}). A "
+                + "management group hangs off the tenant or another group; a subscription hangs off "
+                + "the tenant or a group; everything else has the parent its address spells — "
+                + "docs/plan/06 § The hierarchy."
+            );
+        }
+
+        return parent == scope
+            ? Result.Failure(ErrorCode.InvalidRequestBody, $"'{scope.Path}' cannot be its own parent.")
+            : Result.Success;
+    }
+
+    async Task<Result> ApplyAsync(ScopeId scope, string relation, SubjectRef subject, bool delete) {
         var (type, id) = ReBacScopeAuthorizer.ObjectOf(scope);
 
         if (type.Length == 0) {
@@ -136,11 +261,14 @@ public sealed class ReBacScopeRelationWriter(IGrainFactory grains, ILogger<ReBac
             .ForTenant(scope.TenantId.ToString("D", CultureInfo.InvariantCulture))
             .GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(scope.TenantId));
 
-        var written = await store.WriteAsync(built.GetValueOrThrow());
+        var written = delete
+            ? await store.DeleteAsync(built.GetValueOrThrow())
+            : await store.WriteAsync(built.GetValueOrThrow());
 
         if (written.TryGetError(out var failure)) {
             logger.LogError(
-                "Writing the '{Relation}' edge of scope {Path} failed: {Message}.",
+                "{Verb} the '{Relation}' edge of scope {Path} failed: {Message}.",
+                delete ? "Deleting" : "Writing",
                 relation,
                 scope.Path,
                 failure.Message

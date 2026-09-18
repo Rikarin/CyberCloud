@@ -81,6 +81,37 @@ public sealed class SubscriptionGrain(
     }
 
     /// <inheritdoc />
+    /// <inheritdoc />
+    public async Task<Result<SubscriptionDescriptor>> SetManagementGroupAsync(string managementGroup) {
+        if (state.State.Descriptor is not { } descriptor) {
+            return Result<SubscriptionDescriptor>.Failure(
+                TenancyGrainKeys.NotCreated(
+                    ErrorCode.SubscriptionNotFound,
+                    "Subscription",
+                    subscriptionId.ToString("D")
+                )
+            );
+        }
+
+        if (managementGroup.Length > 0) {
+            var validated = ResourceNaming.Validate(managementGroup, "management group name");
+            if (validated.TryGetError(out var invalid)) {
+                return Result<SubscriptionDescriptor>.Failure(invalid);
+            }
+        }
+
+        if (string.Equals(descriptor.ManagementGroup, managementGroup, StringComparison.Ordinal)) {
+            return Result<SubscriptionDescriptor>.Success(Snapshot(descriptor));
+        }
+
+        state.State.Descriptor = descriptor with {
+            ManagementGroup = managementGroup, Version = descriptor.Version + 1
+        };
+
+        await state.WriteStateAsync();
+        return Result<SubscriptionDescriptor>.Success(Snapshot(state.State.Descriptor));
+    }
+
     public async Task<Result<ResourceGroupDescriptor>> CreateResourceGroupAsync(string name, string region) {
         if (state.State.Descriptor is null) {
             return Result<ResourceGroupDescriptor>.Failure(

@@ -1,4 +1,6 @@
+using CyberCloud.Core.Resources;
 using CyberCloud.ServiceDefaults.Storage;
+using CyberCloud.Tenancy.Contracts;
 using CyberCloud.Tenancy.Shards;
 using CyberCloud.Tenancy.Tests.Infrastructure;
 using Shouldly;
@@ -157,17 +159,163 @@ public sealed class ShardMapTests(TenancyCluster cluster) {
         refused.Error.Message.ShouldContain("SetAcceptingNewTenantsAsync");
     }
 
+    // ── Pinning — the placement half of docs/plan/05 § The shard map's PinAsync (issue #39) ────
+
+    /// <summary>
+    ///     ⚠ A pin placed before the tenant exists is the assignment <c>AssignAsync</c> then finds,
+    ///     whatever the hash would have said — and the assign fills in the region the pin could not
+    ///     carry.
+    /// </summary>
     [Fact]
-    public async Task PinAsyncIsNotImplementedAndSaysSoWithTheDocumentInTheMessage() {
-        // docs/plan/05 § The shard map budgets PinAsync at 0.5 EM in M2. The signature exists
-        // because the document declares it; the body does not, because the map edit without the
-        // quiesce/copy/flip/un-quiesce would repoint a live tenant at an empty database.
+    public async Task APinBeforeCreationIsTheAssignmentTheCreateFinds() {
+        var map = cluster.ShardMapGrain();
+        await AddShardsAsync("durable-02", "durable-03");
+
+        // Find a tenant the hash would NOT put on durable-03, so the pin is doing the placing.
+        var tenant = Tenant(500);
+        var hashed = (await map.AssignAsync(Tenant(501), "eu-central")).GetValueOrThrow().DurableShard;
+        var chosen = hashed == "durable-03" ? "durable-02" : "durable-03";
+
+        (await map.PinAsync(tenant, chosen, null)).IsSuccess.ShouldBeTrue();
+
+        var assigned = (await map.AssignAsync(tenant, "eu-central")).GetValueOrThrow();
+
+        assigned.DurableShard.ShouldBe(chosen, "the create placed the tenant somewhere other than its pin");
+        assigned.Region.ShouldBe("eu-central", "the assign did not complete the region the pin could not carry");
+        assigned.HotHashTag.ShouldBe(StaticShardMapCache.HotTagPrefix + TenancyCluster.Id(tenant).Replace("-", "", StringComparison.Ordinal));
+
+        // Idempotent: the re-driven create carries the same pin and finds it.
+        (await map.PinAsync(tenant, chosen, null)).IsSuccess.ShouldBeTrue();
+    }
+
+    /// <summary>
+    ///     ⚠ <b>THE REFUSAL THAT IS THE POINT.</b> A pin that would move an assigned tenant is the
+    ///     move docs/plan/05 § The shard map describes as quiesce, copy, flip, un-quiesce; only the
+    ///     flip is a map edit and flipping alone repoints a live tenant at an empty database. The
+    ///     move is M3 and the refusal names the four steps.
+    /// </summary>
+    [Fact]
+    public async Task APinThatWouldMoveAnAssignedTenantIsRefusedByName() {
+        var map = cluster.ShardMapGrain();
+        await AddShardsAsync("durable-02", "durable-03");
+
+        var tenant = Tenant(510);
+        var resident = (await map.AssignAsync(tenant, "eu-central")).GetValueOrThrow();
+        var elsewhere = resident.DurableShard == "durable-03" ? "durable-02" : "durable-03";
+
+        var refused = await map.PinAsync(tenant, elsewhere, null);
+
+        refused.IsFailure.ShouldBeTrue("a pin moved a tenant that already had durable state somewhere");
+        refused.Error!.Code.ShouldBe(ErrorCode.Conflict);
+        refused.Error.Message.ShouldContain("docs/plan/05");
+        refused.Error.Message.ShouldContain("quiesce");
+        refused.Error.Message.ShouldContain("M3");
+
+        (await map.GetAssignmentAsync(tenant)).GetValueOrThrow()
+            .DurableShard.ShouldBe(resident.DurableShard, "the refused pin moved the map anyway");
+    }
+
+    [Fact]
+    public async Task APinToAnUnknownOrDrainedShardIsRefused() {
+        var map = cluster.ShardMapGrain();
+        await AddShardsAsync("durable-02", "durable-03");
+
+        var unknown = await map.PinAsync(Tenant(520), "durable-nowhere", null);
+        unknown.IsFailure.ShouldBeTrue();
+        unknown.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+        (await map.SetAcceptingNewTenantsAsync("durable-03", false)).IsSuccess.ShouldBeTrue();
+
+        try {
+            var drained = await map.PinAsync(Tenant(521), "durable-03", null);
+            drained.IsFailure.ShouldBeTrue("a pin bypassed the placement rotation");
+            drained.Error!.Code.ShouldBe(ErrorCode.Conflict);
+            drained.Error.Message.ShouldContain("SetAcceptingNewTenantsAsync");
+        } finally {
+            (await map.SetAcceptingNewTenantsAsync("durable-03", true)).IsSuccess.ShouldBeTrue();
+        }
+
+        // Nothing was recorded for either.
+        (await map.GetAssignmentAsync(Tenant(520))).IsFailure.ShouldBeTrue();
+        (await map.GetAssignmentAsync(Tenant(521))).IsFailure.ShouldBeTrue();
+    }
+
+    /// <summary>
+    ///     ⚠ A hot hash-tag override is refused rather than recorded: the cache reads the configured
+    ///     overrides and never the map, so a recorded one would be a fact nothing acts on.
+    /// </summary>
+    [Fact]
+    public async Task AHotOverrideIsRefusedBecauseTheMapCannotDeliverIt() {
         var map = cluster.ShardMapGrain();
 
-        var thrown = await Should.ThrowAsync<Exception>(() => map.PinAsync(Tenant(500), TenancyCluster.ShardB, null));
+        var refused = await map.PinAsync(Tenant(530), TenancyCluster.ShardB, "cc:t:custom");
 
-        thrown.ToString().ShouldContain("docs/plan/05");
-        thrown.ToString().ShouldContain("quiesce");
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        refused.Error.Message.ShouldContain("HashTagOverrides");
+        (await map.GetAssignmentAsync(Tenant(530))).IsFailure.ShouldBeTrue("a refused pin left an assignment");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>THE SPLIT THE REVIEW OF ISSUE #39 FOUND, AND THE STEP THAT CLOSES IT.</b> A pin is a
+    ///     record in the map; the silo that activates the tenant's first grain routes its state
+    ///     through its own mirror, which for a tenant it has not heard of falls back to the hash — the
+    ///     shard the pin exists to disagree with. This drives the real storage layer: the mirror's
+    ///     answer before and after <c>ShardMapPropagation.ConfirmAsync</c>, and then which PostgreSQL
+    ///     server the tenant grain's row actually landed in.
+    /// </summary>
+    /// <remarks>
+    ///     One silo, so "every silo" is this one; what the multi-silo case adds is Orleans'
+    ///     <c>IManagementGrain</c> fan-out, which is the runtime's and not this repository's to
+    ///     prove. The pin is to a REAL shard because the test reads rows back; the hash fallback may
+    ///     name one of the shard ids other tests added to the map without a server behind it, which
+    ///     is why the "not here" assertion is against the other real shard rather than the hashed one.
+    /// </remarks>
+    [Fact]
+    public async Task APinnedTenantIsPlacedOnItsPinOnceTheMirrorHasConfirmedIt() {
+        var token = TestContext.Current.CancellationToken;
+        var map = cluster.ShardMapGrain();
+        var tenant = Tenant(540);
+        var id = TenancyCluster.Id(tenant);
+
+        // What this silo's storage layer would do for the tenant right now, with no record: the hash.
+        var hashed = cluster.ShardMap.DurableShardFor(id);
+        var pinned = hashed == TenancyCluster.ShardA ? TenancyCluster.ShardB : TenancyCluster.ShardA;
+        var other = pinned == TenancyCluster.ShardA ? TenancyCluster.ShardB : TenancyCluster.ShardA;
+
+        (await map.PinAsync(tenant, pinned, null)).IsSuccess.ShouldBeTrue();
+        var assigned = (await map.AssignAsync(tenant, "eu-central")).GetValueOrThrow();
+        assigned.DurableShard.ShouldBe(pinned);
+
+        // The record is in the map and NOT in this silo's mirror — the gap the timer would close in
+        // fifteen seconds, and the gap a tenant grain activated now would write its first row into.
+        cluster.ShardMap.DurableShardFor(id).ShouldBe(
+            hashed,
+            "the mirror learned the pin without a refresh, so this test no longer exercises the gap"
+        );
+
+        var before = cluster.ShardMapRefresher.Commands;
+        var confirmed = await ShardMapPropagation.ConfirmAsync(cluster.Grains, assigned);
+
+        confirmed.IsSuccess.ShouldBeTrue(confirmed.Error?.Message);
+        cluster.ShardMapRefresher.Commands.ShouldBe(before + 1, "the fan-out did not reach this silo's mirror");
+        cluster.ShardMap.DurableShardFor(id).ShouldBe(pinned, "the mirror was refreshed and still does not resolve the pin");
+
+        // And the rows land on the pin — the storage provider for this tenant is built on this silo
+        // now, for the first time, from the mirror that has the record.
+        var grain = cluster.For(tenant).GetGrain<ITenantGrain>(GrainKeys.Tenant(tenant));
+        var created = await grain.CreateAsync("pinned-540", "Pinned", "eu-central");
+
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+
+        // ⚠ The PHYSICAL key: Orleans.Multitenant prefixes the tenant, so GrainKeys.Tenant alone
+        // matches no row — the same read CrossTenantAuthorizationTests makes.
+        var physicalKey = grain.GetGrainId().Key.ToString()!;
+
+        (await cluster.CountRowsAsync(pinned, physicalKey, token))
+            .ShouldBe(1L, $"the pinned tenant's row is not on '{pinned}'");
+        (await cluster.CountRowsAsync(other, physicalKey, token))
+            .ShouldBe(0L, $"the pinned tenant has a row on '{other}' as well — the split");
     }
 
     [Fact]

@@ -42,6 +42,44 @@ public class ScopeCollectionIdTests {
         ScopeCollectionId.ParsePath(collection.Path).GetValueOrThrow().ShouldBe(collection);
     }
 
+    /// <summary>
+    ///     ⚠ The tenant's <i>second</i> collection (issue #39), and the reason
+    ///     <see cref="ScopeCollectionId.MemberKind" /> is a field: the parent alone no longer says
+    ///     which collection a path names.
+    /// </summary>
+    [Fact]
+    public void TheManagementGroupCollectionRoundTrips() {
+        var collection = ScopeCollectionId.ManagementGroupsOf(Tenant);
+
+        collection.Path.ShouldBe($"/tenants/{Tenant:D}/managementGroups");
+        collection.MemberKind.ShouldBe(ScopeKind.ManagementGroup);
+        collection.Parent.ShouldBe(ScopeId.Tenant(Tenant));
+        ScopeCollectionId.ParsePath(collection.Path).GetValueOrThrow().ShouldBe(collection);
+
+        collection.ShouldNotBe(
+            ScopeCollectionId.SubscriptionsOf(Tenant),
+            "two collections of one tenant compared equal — a listing of one would answer for the other"
+        );
+    }
+
+    /// <summary>
+    ///     ⚠ The one-parameter shape a caller written before #39 used still means what it meant.
+    /// </summary>
+    [Fact]
+    public void AnUnstatedMemberKindIsTheOneTheParentHadBeforeGroupsExisted() {
+        new ScopeCollectionId(ScopeId.Tenant(Tenant)).MemberKind.ShouldBe(ScopeKind.Subscription);
+        new ScopeCollectionId(ScopeId.Subscription(Tenant, Subscription)).MemberKind.ShouldBe(ScopeKind.ResourceGroup);
+    }
+
+    [Fact]
+    public void AParentAndAMemberKindThatDoNotGoTogetherAreRefused() {
+        Should.Throw<ArgumentException>(() => new ScopeCollectionId(ScopeId.Subscription(Tenant, Subscription), ScopeKind.ManagementGroup));
+        Should.Throw<ArgumentException>(() => new ScopeCollectionId(ScopeId.Tenant(Tenant), ScopeKind.ResourceGroup));
+
+        // ⚠ And a management group is not a parent: the tree is listed flat under the tenant.
+        Should.Throw<ArgumentException>(() => new ScopeCollectionId(ScopeId.ManagementGroupOf(Tenant, "platform")));
+    }
+
     [Fact]
     public void TheParentShortcutOnScopeIdAgrees() {
         ScopeId.TryParseCollectionParent($"/tenants/{Tenant:D}/subscriptions", out var parent).ShouldBeTrue();
@@ -64,6 +102,7 @@ public class ScopeCollectionIdTests {
     public void NoCollectionPathIsAlsoAScopeItemOrAResourcePath() {
         foreach (var path in new[] {
                      ScopeCollectionId.SubscriptionsOf(Tenant).Path,
+                     ScopeCollectionId.ManagementGroupsOf(Tenant).Path,
                      ScopeCollectionId.ResourceGroupsOf(Tenant, Subscription).Path
                  }) {
             ScopeId.TryParsePath(path, out _)
@@ -80,6 +119,7 @@ public class ScopeCollectionIdTests {
     [Theory]
     [InlineData("/tenants/{t}")]
     [InlineData("/tenants/{t}/subscriptions/{s}")]
+    [InlineData("/tenants/{t}/managementGroups/platform")]
     [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod")]
     [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Cache/redis/main")]
     [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Cache/redis")]
@@ -95,7 +135,11 @@ public class ScopeCollectionIdTests {
     // Wrong literal under a well-formed parent.
     [InlineData("/tenants/{t}/resourceGroups")]
     [InlineData("/tenants/{t}/subscriptions/{s}/subscriptions")]
+    [InlineData("/tenants/{t}/subscriptions/{s}/managementGroups")]
     [InlineData("/tenants/{t}/subscriptions/{s}/providers")]
+    // ⚠ A management group has no collections of its own: the tree is flat under the tenant.
+    [InlineData("/tenants/{t}/managementGroups/platform/managementGroups")]
+    [InlineData("/tenants/{t}/managementGroups/platform/subscriptions")]
     // Wrong literals higher up.
     [InlineData("/tenant/{t}/subscriptions")]
     [InlineData("/tenants/{t}/subscription/{s}/resourceGroups")]

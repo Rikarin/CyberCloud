@@ -243,11 +243,16 @@ public sealed class ScopeSurfaceTests {
 
         DocumentReader.LeavesOf(scopes.Single(x => x.Kind == "subscription").Body)
             .Select(x => x.Name)
-            .ShouldBe([ScopeBodyProperties.DisplayName]);
+            .ShouldBe([ScopeBodyProperties.DisplayName, ScopeBodyProperties.ManagementGroup]);
 
         DocumentReader.LeavesOf(scopes.Single(x => x.Kind == "resourceGroup").Body)
             .Select(x => x.Name)
             .ShouldBe([ScopeBodyProperties.Location]);
+
+        // The fourth scope (issue #39): a display name and the parent group, both optional.
+        DocumentReader.LeavesOf(scopes.Single(x => x.Kind == "managementGroup").Body)
+            .Select(x => x.Name)
+            .ShouldBe([ScopeBodyProperties.DisplayName, ScopeBodyProperties.ManagementGroup]);
     }
 
     /// <summary>
@@ -300,10 +305,13 @@ public sealed class ScopeSurfaceTests {
         var document = Document;
         var scopes = DocumentReader.ScopesOf(document);
 
-        scopes.Select(x => x.Kind).ShouldBe(["tenant", "subscription", "resourceGroup"]);
+        // Ordered by path, ordinally — which puts the management group (issue #39) between the
+        // tenant and the subscription, because 'm' sorts before 's'.
+        scopes.Select(x => x.Kind).ShouldBe(["tenant", "managementGroup", "subscription", "resourceGroup"]);
 
         scopes.Single(x => x.Kind == "subscription").CollectionPath.ShouldBe(OpenApiEmitter.SubscriptionCollectionPathTemplate);
         scopes.Single(x => x.Kind == "resourceGroup").CollectionPath.ShouldBe(OpenApiEmitter.ResourceGroupCollectionPathTemplate);
+        scopes.Single(x => x.Kind == "managementGroup").CollectionPath.ShouldBe(OpenApiEmitter.ManagementGroupCollectionPathTemplate);
 
         // ⚠ The tenant has none, and the absence is the contract: the only tenant a request can
         // address is its own, so there is nothing to enumerate.

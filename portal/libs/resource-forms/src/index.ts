@@ -66,7 +66,8 @@ export type {
   FormField,
   FormsDocument,
   ResourceForm,
-  ScopeForm
+  ScopeForm,
+  ScopeFormKind
 } from './lib/schema';
 export { applyServerErrors, messagesOf } from './lib/validation';
 export type { FormValidationMessage, PlatformError } from './lib/validation';

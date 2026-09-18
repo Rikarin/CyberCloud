@@ -1356,4 +1356,75 @@ public class GrainKeysTests {
             () => GrainKeys.ExpirySweeper(Subscription, "pr/od"),
             "a resource group name containing '/' must not be constructible into a sweeper key"
         );
+
+    // ── The twenty-sixth shape — the management group, docs/plan/06 § The hierarchy (issue #39) ──
+
+    /// <summary>
+    ///     <c>mg/{name}</c>: two segments like a subscription key, with a name where the GUID would
+    ///     be, and the parser decides by the prefix before it reads the payload.
+    /// </summary>
+    [Fact]
+    public void TheManagementGroupShapeIsKeyedByNameAndRoundTrips() {
+        var key = GrainKeys.ManagementGroup("platform");
+
+        key.ShouldBe("mg/platform");
+
+        var decoded = GrainKeys.Parse(key).GetValueOrThrow();
+        decoded.Kind.ShouldBe(GrainKeyKind.ManagementGroup);
+        decoded.Name.ShouldBe("platform");
+        decoded.Id.ShouldBe(Guid.Empty);
+        decoded.ToString().ShouldBe(key);
+
+        GrainKeys.IsTenantQualificationSafe(key).ShouldBeTrue();
+    }
+
+    /// <summary>
+    ///     ⚠ A group may be named with 32 lower-case hex digits — a legal DNS-1123 label — and the
+    ///     key is still a group, not a subscription with the wrong prefix; and a name where a
+    ///     subscription's GUID belongs is not a key at all. Neither shape can be re-cut into the other.
+    /// </summary>
+    [Fact]
+    public void AHexNamedGroupIsAGroupAndANamedSubscriptionIsNotAKey() {
+        var hexName = Subscription.ToString("N", CultureInfo.InvariantCulture);
+
+        var group = GrainKeys.Parse(GrainKeys.ManagementGroup(hexName)).GetValueOrThrow();
+        group.Kind.ShouldBe(GrainKeyKind.ManagementGroup);
+        group.Name.ShouldBe(hexName);
+        group.Id.ShouldBe(Guid.Empty, "a hex-named group decoded as if its name were a GUID");
+
+        GrainKeys.TryParse("sub/platform", out _).ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData("mg", "the prefix alone")]
+    [InlineData("mg/", "the prefix with an empty name")]
+    [InlineData("mg/platform/extra", "a third segment")]
+    [InlineData("mg/PLATFORM", "an upper-case name")]
+    [InlineData("mg/-platform", "a leading hyphen")]
+    [InlineData("mg/plat_form", "an underscore")]
+    [InlineData("MG/platform", "the prefix is matched case-sensitively")]
+    [InlineData("mgs/platform", "a near-miss prefix is not the prefix")]
+    [InlineData("mi/platform", "the managed-identity prefix with a name is not a GUID")]
+    public void AForgedManagementGroupKeyIsRejectedRatherThanReinterpreted(string forged, string why) {
+        GrainKeys.TryParse(forged, out _).ShouldBeFalse($"'{forged}' — {why}");
+        GrainKeys.Parse(forged).Error!.Code.ShouldBe(ErrorCode.InvalidGrainKey);
+    }
+
+    [Fact]
+    public void TheManagementGroupFactoryRefusesAnInjectedName() =>
+        Should.Throw<ArgumentException>(
+            () => GrainKeys.ManagementGroup("plat/form"),
+            "a management group name containing '/' must not be constructible into a key"
+        );
+
+    /// <summary>
+    ///     ⚠ The count prose on <see cref="GrainKeys" /> is re-derived off the enum, and this is the
+    ///     derivation: every member but <see cref="GrainKeyKind.None" /> is a key. The number here
+    ///     has to move with the enum AND with the prose — it was twenty-six on #39's branch, and
+    ///     twenty-nine on the day it merged beside #90's <see cref="GrainKeyKind.WatchIndex" /> and
+    ///     #94's two, which is the drift the prose paragraph describes happening to itself.
+    /// </summary>
+    [Fact]
+    public void TheClosedSetHasTwentyNineShapes() =>
+        Enum.GetValues<GrainKeyKind>().Count(x => x != GrainKeyKind.None).ShouldBe(29);
 }

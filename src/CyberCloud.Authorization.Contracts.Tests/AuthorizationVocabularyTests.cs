@@ -56,6 +56,7 @@ public sealed class AuthorizationVocabularyTests {
     [Fact]
     public void EveryObjectTypeKeepsItsExactSpelling() {
         ObjectTypes.Tenant.ShouldBe("tenant");
+        ObjectTypes.ManagementGroup.ShouldBe("managementGroup");
         ObjectTypes.Subscription.ShouldBe("subscription");
         ObjectTypes.ResourceGroup.ShouldBe("resourceGroup");
         ObjectTypes.Resource.ShouldBe("resource");
@@ -65,9 +66,10 @@ public sealed class AuthorizationVocabularyTests {
 
         // ⚠ The one that has actually cost a platform-wide outage. Asserted twice over — the literal
         // above, and the shape below — because `resourcegroup` is what a careless retype produces and
-        // it differs from the truth in exactly one bit.
+        // it differs from the truth in exactly one bit. The same trap one type over, since #39.
         ObjectTypes.ResourceGroup.ShouldNotBe("resourcegroup");
-        Literals(typeof(ObjectTypes)).Count.ShouldBe(7, "a new object type is a schema change");
+        ObjectTypes.ManagementGroup.ShouldNotBe("managementgroup");
+        Literals(typeof(ObjectTypes)).Count.ShouldBe(8, "a new object type is a schema change — SchemaVersion 3 was #39's");
     }
 
     [Fact]

@@ -37,6 +37,9 @@ public sealed class IndexGrainCardinalityTests(TenancyCluster cluster) {
         ("ITenantGrain", "tenant/{tenantId:N}", Cardinality.PerTenant),
         ("ISubscriptionGrain", "sub/{subscriptionId:N}", Cardinality.PerEntity),
         ("IResourceGroupGrain", "sub/{subscriptionId:N}/rg/{name}", Cardinality.PerEntity),
+        // One per management group: the name is unique within the tenant by construction, so the
+        // key needs nothing wider — docs/plan/06 § Grain keys, issue #39.
+        ("IManagementGroupGrain", "mg/{name}", Cardinality.PerEntity),
         ("IResourceIndexGrain", "idx/path/{sha256(canonicalPath)[..16]}", Cardinality.PerEntity),
         ("IEmailIndexGrain", "idx/email/{sha256(tenantId + email)[..16]}", Cardinality.PerEntity),
         ("IClientIndexGrain", "idx/client/{sha256(tenantId + clientId)[..16]}", Cardinality.PerEntity),

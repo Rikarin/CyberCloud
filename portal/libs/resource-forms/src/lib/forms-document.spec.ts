@@ -20,7 +20,7 @@ export const formsDocument: FormsDocument = JSON.parse(
 /** Every resource form, in document order. */
 export const resourceForms: readonly ResourceForm[] = Object.values(formsDocument.forms);
 
-/** Both scope forms. */
+/** The three scope forms. */
 export const scopeForms: readonly ScopeForm[] = Object.values(formsDocument.scopeForms);
 
 /** Every form the renderer must handle. */
@@ -107,9 +107,9 @@ describe('generated/forms — the document the renderer reads', () => {
     expect(formsDocument.format).toBe('1');
   });
 
-  it('has a form for every type, and both scope forms', () => {
+  it('has a form for every type, and the three scope forms', () => {
     expect(resourceForms.length).toBeGreaterThan(0);
-    expect(scopeForms.map(s => s.scope).sort()).toEqual(['resourceGroup', 'subscription']);
+    expect(scopeForms.map(s => s.scope).sort()).toEqual(['managementGroup', 'resourceGroup', 'subscription']);
 
     for (const form of resourceForms) {
       expect(form.overrideKey).toBe(`${form.resourceType}@${form.apiVersion}`);

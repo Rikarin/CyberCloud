@@ -411,7 +411,7 @@ public sealed class RoleAssignmentService(
     ///         ⚠ <b>Existence is read from the scope's own grain and not inferred from the check.</b>
     ///         A check on a scope that does not exist fails closed — no tuple, no parent edge, no
     ///         answer but <c>false</c> — so the inference would usually hold. It would not hold for
-    ///         the residue <see cref="IScopeRelationWriter.LinkToParentAsync" />'s remarks describe:
+    ///         the residue <see cref="IScopeRelationWriter.LinkToParentAsync(ScopeId, CancellationToken)" />'s remarks describe:
     ///         a <c>parent</c> edge aimed at a scope whose create then failed. The edge is inert for
     ///         every other purpose; through this path it would let the tenant's owner write role
     ///         tuples on a subscription that was never created.
@@ -497,6 +497,11 @@ public sealed class RoleAssignmentService(
                 .GetAsync()).IsSuccess,
             ScopeKind.ResourceGroup => (await tenant
                 .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(scope.SubscriptionId, scope.ResourceGroup))
+                .GetAsync()).IsSuccess,
+            // #70's assignments at the new scope, issue #39 — the same existence question, asked of
+            // the group's own grain.
+            ScopeKind.ManagementGroup => (await tenant
+                .GetGrain<IManagementGroupGrain>(GrainKeys.ManagementGroup(scope.ManagementGroup))
                 .GetAsync()).IsSuccess,
             _ => false
         };

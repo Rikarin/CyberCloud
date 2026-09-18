@@ -192,6 +192,43 @@ public sealed class TenantGrain(
         Task.FromResult(Result<IReadOnlyList<Guid>>.Success([.. state.State.Subscriptions]));
 
     /// <inheritdoc />
+    public async Task<Result> AddManagementGroupAsync(string name) {
+        if (state.State.Descriptor is null) {
+            return Result.Failure(
+                TenancyGrainKeys.NotCreated(ErrorCode.TenantNotFound, "Tenant", tenantId.ToString("D"))
+            );
+        }
+
+        var validated = ResourceNaming.Validate(name, "management group name");
+        if (validated.TryGetError(out var invalid)) {
+            return Result.Failure(invalid);
+        }
+
+        if (state.State.ManagementGroups.Contains(name, StringComparer.Ordinal)) {
+            return Result.Success;
+        }
+
+        state.State.ManagementGroups.Add(name);
+        state.State.ManagementGroups.Sort(StringComparer.Ordinal);
+        await state.WriteStateAsync();
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> RemoveManagementGroupAsync(string name) {
+        if (!state.State.ManagementGroups.Remove(name)) {
+            return Result.Success;
+        }
+
+        await state.WriteStateAsync();
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<string>>> ListManagementGroupsAsync() =>
+        Task.FromResult(Result<IReadOnlyList<string>>.Success([.. state.State.ManagementGroups]));
+
+    /// <inheritdoc />
     public Task DeactivateAsync() {
         DeactivateOnIdle();
         return Task.CompletedTask;

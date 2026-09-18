@@ -101,7 +101,7 @@ class OperationStatus:
         )
 
 
-ScopeType = Literal["CyberCloud.Resources/subscriptions/resourceGroups", "CyberCloud.Resources/subscriptions", "CyberCloud.Resources/tenants"]
+ScopeType = Literal["CyberCloud.Resources/managementGroups", "CyberCloud.Resources/subscriptions/resourceGroups", "CyberCloud.Resources/subscriptions", "CyberCloud.Resources/tenants"]
 """The values /type accepts. ⚠ Closed: the write path refuses anything else."""
 
 
@@ -117,6 +117,8 @@ class ScopeResource:
     type: ScopeType
     # The region: a tenant's home region or a group's default. ⚠ Absent rather than empty where the scope has none, so a client tests for the property instead of comparing against "".
     location: Optional[str] = None
+    # The management group this scope hangs off — a subscription's group, or a group's parent group. ⚠ Absent for a scope that hangs off the tenant directly, and for a tenant or a resource group. docs/plan/06 § The hierarchy.
+    management_group: Optional[str] = None
 
     @classmethod
     def from_wire(cls, wire: Wire) -> ScopeResource:
@@ -126,7 +128,35 @@ class ScopeResource:
             name=wire["name"],
             type=wire["type"],
             location=wire.get("location"),
+            management_group=wire.get("managementGroup"),
         )
+
+
+@dataclass
+class ManagementGroupCreateContent:
+    """The body of a PUT that creates a management group."""
+
+    # The name a person reads. Optional; defaults to the group's name.
+    display_name: Optional[str] = None
+    # The parent group, by name. Optional: absent or empty hangs the group off the tenant. ⚠ Set at creation and not movable — a later PUT naming a different parent is a 409. The tree is capped at six levels.
+    management_group: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ManagementGroupCreateContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            display_name=wire.get("displayName"),
+            management_group=wire.get("managementGroup"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.display_name is not None:
+            wire["displayName"] = self.display_name
+        if self.management_group is not None:
+            wire["managementGroup"] = self.management_group
+        return wire
 
 
 @dataclass
@@ -135,18 +165,23 @@ class SubscriptionCreateContent:
 
     # The name on an invoice and in every scope picker. Required — a subscription identified only by its GUID is one nobody can pick out of a list.
     display_name: str
+    # The management group to assign the subscription to, by name. Optional. ⚠ Absent leaves the assignment unchanged on a subscription that exists and means the tenant root on one that does not; the empty string moves the subscription to the tenant root. Assigning needs write on the group as well as on the tenant. docs/plan/06 § The hierarchy.
+    management_group: Optional[str] = None
 
     @classmethod
     def from_wire(cls, wire: Wire) -> SubscriptionCreateContent:
         """Reads one off the wire. Unknown members are ignored."""
         return cls(
             display_name=wire["displayName"],
+            management_group=wire.get("managementGroup"),
         )
 
     def to_wire(self) -> Wire:
         """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
         wire: Wire = {}
         wire["displayName"] = self.display_name
+        if self.management_group is not None:
+            wire["managementGroup"] = self.management_group
         return wire
 
 
@@ -7797,6 +7832,7 @@ __all__ = [
     "OperationStatus",
     "ScopeType",
     "ScopeResource",
+    "ManagementGroupCreateContent",
     "SubscriptionCreateContent",
     "ResourceGroupCreateContent",
     "ProvisioningState",

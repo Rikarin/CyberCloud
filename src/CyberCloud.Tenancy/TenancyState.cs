@@ -49,6 +49,41 @@ public sealed class TenantState {
     /// <summary>Why the status last changed, for the audit trail.</summary>
     [Id(2)]
     public string LastStatusReason { get; set; } = string.Empty;
+
+    /// <summary>
+    ///     Every management group in the tenant, by name, ordered ordinally — the flat collection
+    ///     docs/plan/06 § The hierarchy lists. ⚠ Appended at 3; docs/plan/05 § Serialization.
+    /// </summary>
+    [Id(3)]
+    public List<string> ManagementGroups { get; set; } = [];
+}
+
+/// <summary>Durable state of <see cref="ManagementGroupGrain" /> — the record and the tree around it.</summary>
+[GenerateSerializer]
+[Alias("CyberCloud.Tenancy.State.ManagementGroup")]
+public sealed class ManagementGroupState {
+    /// <summary>The record, or <see langword="null" /> before creation and after deletion.</summary>
+    [Id(0)]
+    public ManagementGroupDescriptor? Descriptor { get; set; }
+
+    /// <summary>The child groups' names, kept sorted ordinally so a listing needs no sort.</summary>
+    [Id(1)]
+    public List<string> Children { get; set; } = [];
+
+    /// <summary>The subscriptions assigned here, kept sorted so a listing needs no sort.</summary>
+    [Id(2)]
+    public List<Guid> Subscriptions { get; set; } = [];
+
+    /// <summary>
+    ///     The parent the record named when it was deleted, kept after <see cref="Descriptor" /> is
+    ///     cleared. ⚠ It is what lets a re-driven <c>DELETE</c> of a group that is already gone still
+    ///     take the group out of its parent's child list — without it, a crash between the record's
+    ///     delete and that sweep would leave a parent that lists a child nothing can name again, and
+    ///     so a parent nothing can ever delete. The group's own tuples, the <c>parent</c> edge among
+    ///     them, need no remembered parent: the sweep reads them off the object and clears them all.
+    /// </summary>
+    [Id(3)]
+    public string LastParent { get; set; } = string.Empty;
 }
 
 /// <summary>The subscription grain's durable record.</summary>

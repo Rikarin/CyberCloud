@@ -15243,6 +15243,118 @@
       "name": "scope",
       "summary": "The tenant, subscription and resource group a resource lives in — docs/plan/06 § The hierarchy. ⚠ These are not resources: a scope converges before the call returns, so there is nothing to wait for and no --wait.",
       "commands": {
+        "management-group": {
+          "name": "management-group",
+          "scopeType": "CyberCloud.Resources/managementGroups",
+          "title": "Management group",
+          "plural": "Management groups",
+          "summary": "The optional tree above the subscription, for role inheritance. docs/plan/06 § The hierarchy.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create a management group. Repeating it with the same name is a success and changes nothing.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/managementGroups/{managementGroupName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "scope": "managementGroup",
+              "flags": [
+                {
+                  "name": "--display-name",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The name a person reads. Optional; defaults to the group's name.",
+                  "jsonPointer": "/displayName"
+                },
+                {
+                  "name": "--management-group",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The parent group, by name. Optional: absent or empty hangs the group off the tenant. ⚠ Set at creation and not movable — a later PUT naming a different parent is a 409. The tree is capped at six levels.",
+                  "jsonPointer": "/managementGroup"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The management group's own name. ⚠ Required, and never taken from the profile: the flag that names what you are addressing is never the flag that remembers where you are working, or a create with the flag left off would create the scope you are already in.",
+                  "pathPlaceholder": "managementGroupName"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the management groups the caller may read. ⚠ A short page never means \"that is all there is\".",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/managementGroups",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "scope": "managementGroup",
+              "flags": [
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a management group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/managementGroups/{managementGroupName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "scope": "managementGroup",
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The management group's own name. ⚠ Required, and never taken from the profile: the flag that names what you are addressing is never the flag that remembers where you are working, or a create with the flag left off would create the scope you are already in.",
+                  "pathPlaceholder": "managementGroupName"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            }
+          }
+        },
         "resource-group": {
           "name": "resource-group",
           "scopeType": "CyberCloud.Resources/subscriptions/resourceGroups",
@@ -15395,6 +15507,13 @@
                   "required": true,
                   "summary": "The name on an invoice and in every scope picker. Required — a subscription identified only by its GUID is one nobody can pick out of a list.",
                   "jsonPointer": "/displayName"
+                },
+                {
+                  "name": "--management-group",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The management group to assign the subscription to, by name. Optional. ⚠ Absent leaves the assignment unchanged on a subscription that exists and means the tenant root on one that does not; the empty string moves the subscription to the tenant root. Assigning needs write on the group as well as on the tenant. docs/plan/06 § The hierarchy.",
+                  "jsonPointer": "/managementGroup"
                 },
                 {
                   "name": "--name",

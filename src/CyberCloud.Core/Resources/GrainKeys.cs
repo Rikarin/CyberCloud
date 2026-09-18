@@ -165,7 +165,15 @@ public enum GrainKeyKind {
     ///     <see cref="GrainKeys.MembershipIndex" /> for why the document's
     ///     <c>{usersetType}/{usersetId}</c> is not the key that shipped.
     /// </summary>
-    MembershipIndex
+    MembershipIndex,
+
+    /// <summary>
+    ///     <c>IManagementGroupGrain</c> — <c>mg/{name}</c>, docs/plan/06 § The hierarchy's optional
+    ///     tree above the subscription (issue #39). Keyed by the group's DNS-1123 <b>name</b> and not
+    ///     by a GUID; see <see cref="GrainKeys.ManagementGroup" /> for why, and for why the name is
+    ///     unique within the tenant by construction.
+    /// </summary>
+    ManagementGroup
 }
 
 /// <summary>
@@ -259,7 +267,8 @@ public readonly record struct GrainKey {
     /// <summary>
     ///     The resource group name, for <see cref="GrainKeyKind.ResourceGroup" />,
     ///     <see cref="GrainKeyKind.ParkedResourceRegistry" /> and
-    ///     <see cref="GrainKeyKind.ExpirySweeper" />.
+    ///     <see cref="GrainKeyKind.ExpirySweeper" />; the management group name, for
+    ///     <see cref="GrainKeyKind.ManagementGroup" />.
     /// </summary>
     public string Name => name ?? string.Empty;
 
@@ -329,6 +338,7 @@ public readonly record struct GrainKey {
             GrainKeyKind.ExpirySweeper => GrainKeys.ExpirySweeper(Id, Name),
             GrainKeyKind.ListObjects => GrainKeys.ListObjects(ObjectType, ObjectId),
             GrainKeyKind.MembershipIndex => GrainKeys.MembershipIndex(ObjectType, ObjectId),
+            GrainKeyKind.ManagementGroup => GrainKeys.ManagementGroup(Name),
             _ => string.Empty
         };
 }
@@ -345,7 +355,7 @@ public readonly record struct GrainKey {
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The twenty-eight shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
+///         <b>The twenty-nine shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
 ///         two more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
 ///         table is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
 ///         Platform rows; four are docs/plan/07 § Storage's authorization grains; five are
@@ -371,7 +381,10 @@ public readonly record struct GrainKey {
 ///         <see cref="AuthorizationCode" /> and <see cref="ConsentGrant" />, the hot-tier code store
 ///         RFC 6749 § 4.1.2's one-time use needs and the record of a person's consent to a
 ///         tenant-registered client, both of which docs/plan/11 § Protocol carried as owed until
-///         #94. See the remarks on each. Every one of them is formatted <i>and</i> parsed —
+///         #94; the twenty-eighth is <see cref="WatchIndex" />, #90's; and the twenty-ninth is
+///         <see cref="ManagementGroup" />, the scope above the subscription that docs/plan/06 § The
+///         hierarchy drew from the first day and docs/plan/06 § Grain keys carried no row for until
+///         issue #39 put a grain behind it. See the remarks on each. Every one of them is formatted <i>and</i> parsed —
 ///         a key that can
 ///         be built but not decoded is half a type, and routing a physical key back to a grain type
 ///         (in a log, in a repair tool, in a dead-letter handler) needs the other half.
@@ -379,13 +392,13 @@ public readonly record struct GrainKey {
 ///     <para>
 ///         ⚠
 ///         <b>
-///             Twenty-seven was twenty-five, was twenty-four, was twenty-three, was twenty-two, was
+///             Twenty-eight was twenty-seven, was twenty-five, was twenty-four, was twenty-three, was twenty-two, was
 ///             twenty-one, was twenty, was nineteen, and was eight before that, and the count is
 ///             re-derived rather than incremented.
 ///         </b> Counted on 2026-09-18 off
 ///         <see cref="GrainKeyKind" />'s members, excluding <see cref="GrainKeyKind.None" />, which
-///         is not a key — twenty-eight members: <see cref="WatchIndex" /> is #90's, merged on this
-///         date beside #94's <see cref="AuthorizationCode" /> and
+///         is not a key — twenty-nine members: <see cref="ManagementGroup" /> is #39's and
+///         <see cref="WatchIndex" /> #90's, both merged on this date beside #94's <see cref="AuthorizationCode" /> and
 ///         <see cref="ConsentGrant" />, the two added on top of the twenty-five #88's
 ///         <see cref="SignUp" /> had made of the twenty-four the same day's merge of three branches
 ///         (#37, #88 and the ListObjects half of #37) had counted, each branch having counted itself
@@ -393,7 +406,8 @@ public readonly record struct GrainKey {
 ///         and #88 before this. It goes stale the moment a
 ///         member is added without this sentence being reread, which is exactly how issue #71 came to
 ///         describe this type as covering "eight key shapes today": eight is the size of
-///         docs/plan/06's <i>table</i>, and it stopped being the size of this type fourteen shapes ago.
+///         docs/plan/06's <i>table</i>, and it stopped being the size of this type twenty-one shapes ago (twenty-nine less eight — re-derived, as #39's review of this sentence
+///         asked; #39's own task text had called its kind "the 25th", a count from an older tree).
 ///     </para>
 ///     <list type="table">
 ///         <item>
@@ -569,6 +583,12 @@ public readonly record struct GrainKey {
 ///                 <c>sweep/{subscriptionId:N}/rg/{name}</c> — docs/plan/07 § Azure RBAC
 ///             </description>
 ///         </item>
+///         <item>
+///             <term>
+///                 <see cref="ManagementGroup" />
+///             </term>
+///             <description><c>mg/{name}</c> — docs/plan/06 § Grain keys, since issue #39</description>
+///         </item>
 ///     </list>
 ///     <para>
 ///         The six <c>rel/</c> shapes are docs/plan/07 § Storage's three indexes, plus the three
@@ -626,12 +646,13 @@ public readonly record struct GrainKey {
 ///         <b>The shapes cannot collide, and that is a property rather than a coincidence.</b> Each
 ///         shape is fixed by its first segment (<c>sub</c>, <c>res</c>, <c>user</c>, <c>op</c>,
 ///         <c>cluster</c>, <c>group</c>, <c>app</c>, <c>sp</c>, <c>session</c>, <c>mi</c>,
-///         <c>signup</c>, <c>code</c>, <c>consent</c>, <c>parked</c>, <c>sweep</c>, <c>idx</c>,
-///         <c>rel</c>, <c>tenant</c>, <c>platform</c>) and
-///         its segment count, and the only caller-controlled component
+///         <c>signup</c>, <c>code</c>, <c>consent</c>, <c>mg</c>, <c>parked</c>, <c>sweep</c>, <c>idx</c>, <c>rel</c>, <c>tenant</c>,
+///         <c>platform</c>) and
+///         its segment count, and the only caller-controlled components
 ///         — the resource group name, in <see cref="ResourceGroup" />, in
 ///         <see cref="ParkedResourceRegistry" /> and in <see cref="ExpirySweeper" />, which are all
-///         the same name — is validated by
+///         the same name, and the management group name in <see cref="ManagementGroup" /> — are
+///         validated by
 ///         <see cref="ResourceNaming" />, which forbids <c>/</c>. A name that somehow carried a
 ///         <c>/</c> would change the segment count and be rejected on the way back in rather than
 ///         re-parsed as a different shape. See <c>GrainKeysTests</c> § key-shape collision.
@@ -673,6 +694,8 @@ public static class GrainKeys {
 
     /// <summary><c>consent/</c> — a person's consent to one client, docs/plan/11 § Protocol.</summary>
     public const string ConsentGrantPrefix = "consent/";
+    /// <summary><c>mg/</c> — a management group, keyed by its name within the tenant.</summary>
+    public const string ManagementGroupPrefix = "mg/";
 
     /// <summary><c>cluster/</c> — a cluster connection. Null tenant.</summary>
     public const string ClusterConnectionPrefix = "cluster/";
@@ -1367,6 +1390,44 @@ public static class GrainKeys {
     }
 
     /// <summary>
+    ///     <c>mg/{name}</c> — <c>IManagementGroupGrain</c>, the scope above the subscription in
+    ///     docs/plan/06 § The hierarchy (issue #39).
+    /// </summary>
+    /// <param name="name">The group's DNS-1123 name, validated as <see cref="ResourceGroup" /> validates one.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Keyed by NAME, which is the second shape in this type to be, and for the reason
+    ///         the first is.</b> A resource group is <c>sub/{id}/rg/{name}</c> because its name is
+    ///         what a person types and what makes it unique within its subscription; a management
+    ///         group is <c>mg/{name}</c> because its name is what a person types into a policy scope
+    ///         or a role assignment and what makes it unique within its <i>tenant</i> — the key is
+    ///         tenant-qualified, so one activation per name per tenant is the uniqueness rule, held
+    ///         by Orleans rather than by an index. Azure keys its management groups by a caller-chosen
+    ///         id for the same reason and a group has no GUID here at all: a GUID would buy a rename,
+    ///         and a scope that policies and grants name by its address is exactly the thing a rename
+    ///         would silently detach them from.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Not <c>tenant/{id}/mg/{name}</c>.</b> The tenant is already the qualification
+    ///         <c>Orleans.Multitenant</c> prepends to every key in this type, and repeating it inside
+    ///         the key would be the same fact spelled twice with a way to disagree —
+    ///         <c>TenantGrain.OnActivateAsync</c> already has to check that its two spellings agree,
+    ///         and one such check is enough.
+    ///     </para>
+    ///     <para>
+    ///         Two segments, like <see cref="Subscription" />, but the second is a name rather than a
+    ///         GUID: <see cref="Parse" /> branches on the prefix before it reads the payload, so
+    ///         <c>mg/{32 hex}</c> is a group that happens to be named with hex digits and
+    ///         <c>sub/prod</c> is not a key at all.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="name" /> breaks <see cref="ResourceNaming" />.</exception>
+    public static string ManagementGroup(string name) {
+        var validated = ResourceNaming.EnsureValid(name, nameof(name), "management group name");
+        return ManagementGroupPrefix + validated;
+    }
+
+    /// <summary>
     ///     <c>cluster/{clusterId:N}</c> — <c>IClusterConnectionGrain</c>, docs/plan/06 § Grain keys.
     /// </summary>
     /// <remarks>
@@ -1767,6 +1828,8 @@ public static class GrainKeys {
                 + "'code/{id}', 'consent/{digest}', 'platform/{singleton}', 'idx/path/{digest}', "
                 + "'idx/email/{digest}', 'idx/client/{digest}', 'idx/watch/{digest}', "
                 + "'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
+                + "'mg/{name}', 'platform/{singleton}', 'idx/path/{digest}', "
+                + "'idx/email/{digest}', 'idx/client/{digest}', 'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
                 + "'rel/sub/{type}/{id}', 'rel/check/{type}/{id}', 'rel/list/{type}/{id}' or "
                 + "'rel/idx/{type}/{id}' — see "
                 + "docs/plan/06 § Grain keys, "
@@ -1865,6 +1928,16 @@ public static class GrainKeys {
                 );
         }
 
+        if (string.Equals(segments[0], "mg", StringComparison.Ordinal)) {
+            // ⚠ The one two-segment shape whose payload is a name and not a GUID, so it is decided
+            // before the GUID rule below runs — a group named with 32 hex digits is still a group.
+            var groupName = ResourceNaming.Validate(segments[1], "management group name");
+
+            return groupName.TryGetError(out var groupNameError)
+                ? Result<GrainKey>.Failure(new(ErrorCode.InvalidGrainKey, groupNameError.Message))
+                : Result<GrainKey>.Success(new(GrainKeyKind.ManagementGroup, Guid.Empty, segments[1], null));
+        }
+
         var kind = segments[0] switch {
             "sub" => GrainKeyKind.Subscription,
             "res" => GrainKeyKind.Resource,
@@ -1887,6 +1960,8 @@ public static class GrainKeys {
                 $"'{key}' is not a grain key: '{segments[0]}' is not one of 'sub', 'res', 'user', "
                 + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session', 'mi', 'signup', 'code', "
                 + "'consent' or 'platform'. "
+                + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session', 'mi', 'signup', 'mg' or "
+                + "'platform'. "
                 + "The prefix is matched case-sensitively — see docs/plan/06 § Grain keys and "
                 + "docs/plan/11 § The object model."
             );

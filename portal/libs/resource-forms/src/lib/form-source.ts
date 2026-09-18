@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { FormsDocument, ResourceForm, ScopeForm } from './schema';
+import { FormsDocument, ResourceForm, ScopeForm, ScopeFormKind } from './schema';
 
 /** Identifies which form a page is for. Both halves are required; a type without a version is ambiguous. */
 export interface ResourceSchemaKey {
@@ -58,8 +58,8 @@ export class ResourceFormSource {
     return (await this.document(key.apiVersion)).forms[key.resourceType];
   }
 
-  /** The form for a subscription or a resource group. */
-  async scopeForm(kind: 'subscription' | 'resourceGroup', apiVersion: string): Promise<ScopeForm> {
+  /** The form for a management group, a subscription or a resource group. */
+  async scopeForm(kind: ScopeFormKind, apiVersion: string): Promise<ScopeForm> {
     return (await this.document(apiVersion)).scopeForms[kind];
   }
 

@@ -99,8 +99,9 @@ way and for the same reason.
 
 **That gap is now closed for two of the three, by a component beside this one rather than inside it.**
 `IScopeManager` serves a **scope** address — `/tenants/{t}/subscriptions/{s}` and that plus
-`/resourceGroups/{rg}`, the first four and six segments of § Identifiers' path — under a sixth
-`RouteKind`. It is not this write path and deliberately not: eight of the twelve steps have nothing to
+`/resourceGroups/{rg}`, the first four and six segments of § Identifiers' path, and since #39
+`/tenants/{t}/managementGroups/{name}`, the one scope shape that is *not* a prefix of a resource path
+([06 § The hierarchy](06-tenancy-and-resource-model.md)) — under a sixth `RouteKind`. It is not this write path and deliberately not: eight of the twelve steps have nothing to
 act on for a scope (no provider, so no registry lookup; no schema per api-version; no meter; no index
 entry, since a group's name is made unique by the subscription's own activation; no membership record;
 no desired state, no reconciler and therefore no operation), and giving `WriteTrace.Canonical` a second
@@ -260,6 +261,25 @@ dispute waiting to happen, so cancellation *completes* rather than abandoning.
 
 **Nested operations.** Deleting a resource group is one operation with N child operations, ordered by
 the dependency graph. The parent's progress is the children's. Deployments ([01](01-azure-parity-catalogue.md) § A, M2) use the same machinery.
+
+⚠ **Nested operations are not built, and that is why `CyberCloud.Resources/deployments` did not land
+with #39 — recorded here so the next reader of that issue does not re-derive it.** A resource group's
+delete refuses while the group holds anything rather than cascading (`IScopeManager.DeleteAsync`), so
+no operation has ever had a child. A deployment is exactly the thing that needs one: a template of
+resources with `dependsOn`, evaluated into an ordered set of `PUT`s through *this* write path, each of
+which is itself a `202` and an operation to wait on, as one parent operation with a step per resource,
+a what-if that is the same evaluation with no write, and rollback on a failed step recorded rather than
+performed. Two things stand in front of it. First, the machinery above: a durable parent that holds the
+template, the caller and a step cursor, re-registers its reminder after a silo loss and drives child
+operations to a terminal state in dependency order — an `IDeploymentGrain` with the shape
+`IOperationGrain` has, and the first grain of its kind. Second, **the write path needs a caller and a
+reconcile pass carries none**: `ReconcileContext` and `ActionContext` have no `CallerContext`, because
+a provider acts as the platform against the cluster and never as a tenant against this API, so a
+deployment cannot be an ordinary provider whose reconciler issues `PUT`s — it would have nothing to put
+in step 3's check. The deployment is therefore a fourth entry point beside `IScopeManager` and
+`IRoleAssignmentManager` (their remarks carry the "beside, not inside" argument), driven by a grain that
+persists the creator's identity, and that is the shape to build — not a provider, and not a stub of
+one. It stays at M2 in [24](24-roadmap.md)'s `Platform` row, priced there.
 
 ### Deleting a parent resource that has children
 

@@ -25,6 +25,7 @@ func segment(value string) string {
 type Client struct {
 	Operations        *OperationsClient
 	Tenants           *TenantsClient
+	ManagementGroups  *ManagementGroupsClient
 	Subscriptions     *SubscriptionsClient
 	ResourceGroups    *ResourceGroupsClient
 	Analytics         *AnalyticsProvider
@@ -51,6 +52,7 @@ func NewClient(transport Transport) *Client {
 	return &Client{
 		Operations:        &OperationsClient{transport: transport},
 		Tenants:           &TenantsClient{transport: transport},
+		ManagementGroups:  &ManagementGroupsClient{transport: transport},
 		Subscriptions:     &SubscriptionsClient{transport: transport},
 		ResourceGroups:    &ResourceGroupsClient{transport: transport},
 		Analytics:         newAnalyticsProvider(transport),
@@ -105,6 +107,37 @@ func (c *TenantsClient) Get(ctx context.Context, tenantID string) (*ScopeResourc
 
 // ⚠ There is no Create, and the absence is the contract: a request's tenant is resolved from its
 // token, so a call creating another tenant is refused before routing runs.
+
+// ManagementGroupsClient reads management groups. The optional tree above the subscription, for role inheritance. docs/plan/06 § The hierarchy.
+type ManagementGroupsClient struct {
+	transport Transport
+}
+
+// Get reads one management group.
+func (c *ManagementGroupsClient) Get(ctx context.Context, tenantID, managementGroupName string) (*ScopeResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName)
+	var result ScopeResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// List pages through the management groups the caller may read. ⚠ A short page never means "that is all there is".
+func (c *ManagementGroupsClient) List(tenantID string, options *ListOptions) *Pager[ScopeResource] {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups"
+	return newPager[ScopeResource](c.transport, path, options)
+}
+
+// Create creates one management group, or returns the existing one unchanged. ⚠ 201 the first time and 200 on a repeat, and no operation to poll.
+func (c *ManagementGroupsClient) Create(ctx context.Context, tenantID, managementGroupName string, content ManagementGroupCreateContent) (*ScopeResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName)
+	var result ScopeResource
+	if err := call(ctx, c.transport, "PUT", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
 
 // SubscriptionsClient reads subscriptions. The billing and quota boundary. docs/plan/06 § The hierarchy.
 type SubscriptionsClient struct {

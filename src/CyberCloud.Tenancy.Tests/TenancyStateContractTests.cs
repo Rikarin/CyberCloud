@@ -29,9 +29,18 @@ public sealed class TenancyStateContractTests {
         ("TenantState", 0, "Descriptor"),
         ("TenantState", 1, "Subscriptions"),
         ("TenantState", 2, "LastStatusReason"),
+        // Appended with the management group (issue #39) — the tenant's flat listing of its groups.
+        ("TenantState", 3, "ManagementGroups"),
 
         ("SubscriptionState", 0, "Descriptor"),
         ("SubscriptionState", 1, "ResourceGroups"),
+
+        // The scope above the subscription — docs/plan/06 § The hierarchy, issue #39. LastParent
+        // outlives Descriptor so a re-driven DELETE can still sweep the parent's child list.
+        ("ManagementGroupState", 0, "Descriptor"),
+        ("ManagementGroupState", 1, "Children"),
+        ("ManagementGroupState", 2, "Subscriptions"),
+        ("ManagementGroupState", 3, "LastParent"),
 
         ("ResourceGroupState", 0, "Descriptor"),
         ("ResourceGroupState", 1, "Members"),
@@ -63,6 +72,7 @@ public sealed class TenancyStateContractTests {
 
     static readonly (string Type, string Alias)[] Aliases = [
         ("IndexState", "CyberCloud.Tenancy.State.Index"),
+        ("ManagementGroupState", "CyberCloud.Tenancy.State.ManagementGroup"),
         ("QuotaState", "CyberCloud.Tenancy.State.Quota"),
         ("ResourceGroupState", "CyberCloud.Tenancy.State.ResourceGroup"),
         ("ShardMapState", "CyberCloud.Tenancy.State.ShardMap"),
@@ -143,8 +153,8 @@ public sealed class TenancyStateContractTests {
             .ToList();
 
         grains.Count.ShouldBe(
-            9,
-            "the tenancy grains: tenant, subscription, resource group, resource index, email "
+            10,
+            "the tenancy grains: tenant, management group, subscription, resource group, resource index, email "
             + "index, client index, tenant directory, shard map, quota."
         );
 
