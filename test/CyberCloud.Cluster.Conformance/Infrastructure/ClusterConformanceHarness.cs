@@ -165,6 +165,51 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
     /// <summary>The raw Kubernetes client — the half of every assertion that is deliberately not us.</summary>
     public IKubernetes Raw { get; private set; } = null!;
 
+    /// <summary>The kubeconfig <see cref="Raw" /> was built from — host, CA and client certificate.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Kept for the one request the generated client cannot make.</b> The API server's
+    ///     <c>…/services/{name}:{port}/proxy/{path}</c> forwards a request to a <c>ClusterIP</c> the
+    ///     harness cannot otherwise reach — the k3s exposes one port to this process — and the client's
+    ///     generated <c>ConnectPost…ProxyWithPath</c> methods carry no body and no content type, which
+    ///     is what an OTLP export is. <see cref="CreateApiServerClient" /> builds the plain
+    ///     <see cref="HttpClient" /> that can; the first caller is
+    ///     <c>MonitorCollectorClusterBackedConformance.TheCollectorPodStartsAndAcceptsAnOtlpExport</c>.
+    /// </remarks>
+    public KubernetesClientConfiguration ClientConfiguration { get; private set; } = null!;
+
+    /// <summary>
+    ///     A plain HTTP client authenticated to the API server the way <see cref="Raw" /> is, for a
+    ///     request the generated client has no method for.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The server certificate is accepted without validation, and that is a property of this
+    ///     harness rather than a shortcut a caller may copy.</b> The k3s minted its CA a minute ago and
+    ///     the kubeconfig carries it as <c>certificate-authority-data</c>; <see cref="Raw" /> validates
+    ///     against it through <c>Kubernetes.CertificateValidationCallBack</c>, which is not reachable
+    ///     from here. A test asserting what a pod answered is not asserting the API server's identity,
+    ///     and the client certificate the request carries is the one the same kubeconfig issued — a
+    ///     wrong server would refuse it.
+    /// </remarks>
+    public HttpClient CreateApiServerClient() {
+        var handler = new HttpClientHandler {
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+        };
+
+        // ⚠ The client's own CertUtils is internal, so the certificate is rebuilt from the kubeconfig's
+        // two PEM blocks — and re-imported through PKCS#12, because a certificate created from PEM on
+        // Windows carries an ephemeral key SChannel refuses to use for client authentication. The
+        // round trip is the documented workaround and costs nothing on Linux.
+        var pem = Encoding.UTF8.GetString(Convert.FromBase64String(ClientConfiguration.ClientCertificateData));
+        var keyPem = Encoding.UTF8.GetString(Convert.FromBase64String(ClientConfiguration.ClientCertificateKeyData));
+
+        using var ephemeral = System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromPem(pem, keyPem);
+        var exported = ephemeral.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pkcs12);
+
+        handler.ClientCertificates.Add(System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12(exported, null));
+
+        return new HttpClient(handler, disposeHandler: true) { BaseAddress = new Uri(ClientConfiguration.Host) };
+    }
+
     /// <summary>The fabric's client over the same cluster.</summary>
     public IKubeApiClient Api { get; private set; } = null!;
 
@@ -281,6 +326,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             .BuildConfigFromConfigFileAsync(yaml)
             .ConfigureAwait(false);
 
+        harness.ClientConfiguration = config;
         harness.Raw = new k8s.Kubernetes(config);
         harness.Api = new KubeApiClient(
             harness.Raw,

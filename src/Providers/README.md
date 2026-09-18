@@ -1523,13 +1523,104 @@ Grafana are the other half.
   is an action (`listInstances`) rather than a child type, because an instance is an event and a
   resource for one would have a PUT nothing could apply.
 
-**What landed: `workspaces` and `workspaces/alertRules`.** `collectors` is M2 and the other half of
-#32; `workspaces/ingestKeys` is **owed** with the reason — docs/plan/16 wants rotation *"with a grace
-period"*, which is two live credentials at once, and `ISecretWriter` mints once. ⚠ **The largest
-single gap on the workspace is that nothing consumes the ingest row**, because `CyberCloud.Ingest.Host`
-does not exist; the `VMUser` half is enforced by vmauth the moment it is applied and everything else
-is a promise with a schema. ⚠ **The largest on the rule is that nothing answers its query.** Every gap
-is at `charts/managed/monitor-workspace/conformance.yaml § owed`.
+**What landed: `workspaces`, `workspaces/alertRules`, and — on 2026-09-17 — `workspaces/collectors`
+and `CyberCloud.Dashboard/grafanas`.** `workspaces/ingestKeys` is **owed** with the reason —
+docs/plan/16 wants rotation *"with a grace period"*, which is two live credentials at once, and
+`ISecretWriter` mints once. ⚠ **The largest single gap on the workspace is that nothing enforces the
+ingest row's caps**, because `CyberCloud.Ingest.Host` does not exist; the `VMUser` half is enforced by
+vmauth the moment it is applied and everything else is a promise with a schema. ⚠ **The largest on
+the rule is that nothing answers its query.** Every gap is at
+`charts/managed/monitor-workspace/conformance.yaml § owed`.
+
+### What the collector and the managed Grafana measured (#32, 2026-09-17)
+
+`CyberCloud.Monitor/workspaces/collectors` — upstream's OpenTelemetry collector under a workspace,
+pinned by digest, with a rendered OTLP configuration exporting into the workspace's stores,
+[16 § OTel Collector as a service](../../docs/plan/16-observability.md). `CyberCloud.Dashboard/grafanas`
+— an unmodified Grafana OSS per resource, provisioned with one workspace's two datasources,
+[16 § Managed Grafana](../../docs/plan/16-observability.md). The second and third nouns of #32.
+
+- **⚠ THE WORKSPACE'S COORDINATES ARE IN NEITHER TYPE'S RENDERED DOCUMENTS, AND THE ROW PUBLISHED FOR
+  A HOST THAT DOES NOT EXIST FOUND ITS FIRST READERS.** The obvious shape — read the workspace's row in
+  the reconciler, render the `accountID` into the configuration — makes every document a function of a
+  cluster read, puts the ingest key through the control plane a second time, and fails a collector
+  created a minute before its workspace. Both types instead name the row and the key by
+  `configMapKeyRef` and `secretKeyRef` and let the **kubelet** substitute them at pod start; the
+  collector's configuration writes `${env:…}` and Grafana's provisioning file writes `$VAR`, each
+  tool's own late-binding syntax. Every rendered document is a pure function of the address and the
+  body, so `Matches` compares the configuration byte for byte where the workspace's own case had to
+  settle for a shape. The cost is a placement rule — the pod runs where the workspace publishes — and
+  it is `charts/managed/monitor-collector/conformance.yaml § owed`,
+  `collector-runs-where-its-workspace-is-published`.
+- **⚠ THE FIRST CLUSTER-BACKED ASSERTION THAT WAITS FOR A POD.** Every shared criterion reads objects
+  back off the API server; this type's product *is* the pod, so
+  `MonitorCollectorClusterBackedConformance.TheCollectorPodStartsAndAcceptsAnOtlpExport` waits for the
+  Deployment to be available on the harness's k3s and POSTs an OTLP/HTTP export through the API
+  server's service proxy — `200`, `{"partialSuccess":{}}`. The generated client's proxy methods carry
+  no body, so `ClusterConformanceHarness.CreateApiServerClient` was added: a plain `HttpClient` holding
+  the kubeconfig's client certificate, rebuilt from its PEM blocks through PKCS#12 because a PEM-born
+  certificate on Windows carries a key SChannel refuses for client authentication. Measured first
+  against the image in Docker: `prometheusremotewrite` is a deprecated alias at 0.161.0, and
+  clickhouse-go reads a DSN's path as the database — so the workspace's `/sql/{database}` endpoint
+  became `database=sql%2Fws_x` on the first request, and the exporter now takes the host and the
+  database as two settings. `charts/managed/monitor-collector/SOURCE` has the transcript.
+- **⚠ THE CONFIGURATION IS RENDERED, NOT ACCEPTED, AND THAT IS THE SMALLER PRODUCT SHIPPED
+  HONESTLY.** docs/plan/16 sketches a tenant declaring receivers, processors and exporters behind an
+  allow-list; what landed offers the allow-list's safest subset as two switches and renders the file
+  itself, so there is no config to validate and no exporter a tenant can point elsewhere. The
+  declarative surface, tenant-owned exporters, metered egress and `daemonset` mode are one owed row,
+  `tenant-authored-config-is-not-accepted`.
+- **⚠ ADR-011, READ FOR A DEPLOYED COMPONENT: ALLOWED, ON A CONDITION THE TYPE KEEPS.** The row says
+  *"Offerable as a managed instance (we distribute, we do not modify). Our portal must not embed or
+  link Grafana code — it embeds rendered dashboards by URL."* `Grafanas` runs upstream's image by
+  digest, configured through `GF_*` variables and a provisioning file; the portal takes no Grafana
+  package (`GrafanaDeclarationTests.ThePortalTakesNoGrafanaPackage` reads `portal/package.json`); the
+  `url` action is the one integration and `GF_SECURITY_ALLOW_EMBEDDING=true` is what lets a panel
+  render in a frame. The exception ADR-011 § Enforcement asks for is written into
+  `build/Build.Licence.cs § LicenceExceptions` — its first entry — keyed `grafana/grafana` with the
+  reading beside it, and `GrafanaDeclarationTests.TheLicenceGateCarriesTheGrafanaExceptionBesideTheImage`
+  is its only reader, because **the scan does not read a workload image yet**: it reads bundle
+  components and platform images, and a chart under `charts/managed/` is neither
+  (`charts/managed/grafana/conformance.yaml § owed`, `licence-scan-does-not-read-workload-images`).
+  Had the row refused, the type would be declared exactly as it is and the reconciler would fail every
+  pass naming the ADR.
+- **⚠ TWO `IResourceProvider`s IN ONE ASSEMBLY, WHICH docs/plan/03 ASKED FOR BEFORE ANY FAMILY DID
+  IT.** § Providers' tree reads `CyberCloud.Providers.Monitor/ # workspaces, collectors, alerts,
+  grafanas` while docs/plan/01 gives Grafana its own namespace; a provider declares one namespace, so
+  the two documents together say two providers, one family. `ProviderDiscovery.FromAssembly` already
+  meant *"every provider an assembly declares"*, `MonitorApplicationModule` registers both, and
+  `HostCompositionTests` names seventeen namespaces from sixteen modules. What the shape buys is the
+  one reference a seventeenth family could not take under rule 2: `MonitorWorkspaces.WorkspaceEnv` and
+  the row's key names.
+- **⚠ NOT `grafana-operator`, AND THE STATE IS AN `emptyDir` ON PURPOSE.** The operator is a bundle
+  component that does not exist and a second reconciler between this one and the pod; what it would
+  buy — dashboards as a versioned sub-resource — needs an api-version with an array of objects. A
+  `PersistentVolumeClaim` would make dashboards survive a restart and look versioned while being
+  neither, and a tenant would trust it. `dashboards-are-not-a-sub-resource`, `not-grafana-operator`,
+  `oidc-against-identity-is-not-wired` and `clickhouse-plugin-is-fetched-at-start` are the row's
+  debts, each at `charts/managed/grafana/conformance.yaml § owed`.
+- **⚠ THE POD IS PROVED ON A KUBELET BY EACH DATASOURCE'S HEALTH, BECAUSE THE SERVER'S HEALTH LIED.**
+  The first version of the branch left the Grafana pod unproved by record and the adversarial review
+  ran the image: Grafana 13.2.2's installer updates the *bundled* Prometheus plugin in place on start,
+  which on the read-only root stopped the plugin and could not put it back, while `/api/health` — the
+  readiness probe — answered `200` and the provisioned default datasource answered `Plugin not
+  registered`. `GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false` keeps the bundled plugins as the image
+  shipped them and `GF_PLUGINS_PREINSTALL_SYNC=grafana-clickhouse-datasource@4.21.3` installs the one
+  plugin the image lacks (not `GF_INSTALL_PLUGINS`, which the image's `run.sh` logs as deprecated and
+  ignores without a `FORCE` flag).
+  `GrafanaClusterBackedConformance.TheGrafanaPodStartsAndBothDatasourcesAnswer` watches the kubelet
+  hold the pod in `CreateContainerConfigError` naming the workspace's row, writes the row and
+  ingest-key `Secret` from the workspace contract's own documents — the suite registers one provider,
+  so no workspace reconciler runs there (`the-workspace-in-the-kubelet-test-is-the-harness-standing-in`)
+  — waits for Ready, and asks both datasources' health through the API server's service proxy,
+  asserting each request carried the workspace's accountID or database and neither answer was
+  `plugin.notRegistered`. `charts/managed/grafana/SOURCE § What was run` is the transcript.
+- **⚠ SABOTAGE-VERIFIED.** The ingest-key reference made `optional: true` in
+  `MonitorWorkspaces.WorkspaceEnv` turned
+  `CollectorDeclarationTests.TheDeploymentReadsTheWorkspacesRowAndSecretByReferenceAndNoneIsOptional`
+  red on `CYBERCLOUD_INGEST_KEY is optional`; the chart's exporter key drifted back to the deprecated
+  alias turned `CollectorDeclarationTests.TheChartsConfigurationIsTheContractsForTheDefaultBody` red.
+  Both restored before the commit.
 
 `CyberCloud.Providers.ContainerRegistry` — `CyberCloud.ContainerRegistry/registries` on Harbor,
 [13 § Container Registry](../../docs/plan/13-compute-vm-containers.md), **M1 · 1.5 EM**. **The family

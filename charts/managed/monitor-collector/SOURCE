@@ -1,0 +1,100 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked. open-telemetry
+# publishes `opentelemetry-collector` as a Helm chart, and it is a general-purpose chart with a
+# tenant-authored `config:` block at its heart — the exact surface docs/plan/16 says is "a
+# data-exfiltration primitive and a code-execution surface" if accepted from a tenant. What is wanted
+# here is one Deployment whose configuration this platform renders, so the three objects are written
+# here and the only thing taken from upstream is the container image.
+
+vendored: none
+upstream: https://github.com/open-telemetry/opentelemetry-collector-contrib
+
+# The image this chart runs, unmodified — the contrib distribution, because the two exporters and the
+# extension the rendered configuration names are contrib components.
+image: docker.io/otel/opentelemetry-collector-contrib
+image-source: https://github.com/open-telemetry/opentelemetry-collector-releases
+
+# ⚠ LICENCE. Apache-2.0, on ADR-011's allow-list without an argument. The image's own
+# `org.opencontainers.image.licenses` label reads `Apache-2.0` (read 2026-09-17). ⚠ It is a workload
+# image and not a bundle component, so `Build.Licence` does not read it yet — conformance.yaml § owed,
+# `licence-scan-does-not-read-workload-images` on charts/managed/grafana carries that gap for both.
+licence: Apache-2.0
+
+# ── The pin, and how it was resolved ─────────────────────────────────────────────────────────────
+#
+# ⚠ BY DIGEST, IN THE BUNDLE'S SHAPE — `repository:tag@sha256:…`, the spelling every
+# charts/bundle/*/component.yaml § images row uses. Resolved on 2026-09-17:
+#
+#   $ docker buildx imagetools inspect otel/opentelemetry-collector-contrib:0.161.0
+#   Name:      docker.io/otel/opentelemetry-collector-contrib:0.161.0
+#   MediaType: application/vnd.docker.distribution.manifest.list.v2+json
+#   Digest:    sha256:fd328de2552466ad78385e1b1289c3f2402b1c45f265b252aab1955b42845ac1
+#
+# The first `Digest:` is the manifest LIST — the index a kubelet resolves per platform — and it is
+# what is pinned, so amd64 and arm64 nodes pull through one reference. 0.161.0 was published
+# 2026-09-16 and was the newest release tag when resolved; 0.160.0 (2026-09-02) is the one before it.
+# The same pin is MonitorCollectors.Image in C# and `image` in values.yaml, and
+# CollectorDeclarationTests compares the two; a tag alone is what haproxy records as owed and this
+# chart does not repeat.
+#
+# ── What was read off the image, and where it landed ─────────────────────────────────────────────
+#
+# Read from the image config (`docker buildx imagetools inspect --format '{{json .Image}}'`):
+#
+#   * `User: 10001:10001` — numeric, so `runAsNonRoot: true` would work alone; the uid is written into
+#     the pod's securityContext anyway (MonitorCollectors.CollectorUid) so a rebuilt image that switched
+#     to a named user cannot change who the collector runs as without a diff here.
+#   * `Entrypoint: /otelcol-contrib`, `Cmd: --config /etc/otelcol-contrib/config.yaml` — the mount path
+#     is the image's own and not a choice. The ConfigMap is mounted over that directory, so no `args`
+#     override and one spelling of the path.
+#   * `ExposedPorts: 4317, 4318, 55679` — OTLP gRPC, OTLP HTTP, and zpages. The first two are the
+#     receivers; zpages is not enabled and not exposed.
+#
+# ── The configuration's components, each a contrib component checked to exist at 0.161.0 ────────
+#
+#   * receiver `otlp` (grpc, http) — core.
+#   * processors `memory_limiter`, `batch` — core. ⚠ The limiter FIRST in every pipeline: upstream's
+#     own documentation says a limiter not first protects nothing. The batch is what makes an export
+#     failure asynchronous, so a receiver in front of a failing exporter still answers 200 and the
+#     tenant's SDK does not retry into a collector that is up.
+#   * exporter `prometheus_remote_write` with `auth.authenticator: basicauth/workspace` — contrib. The
+#     endpoint is MonitorWorkspaces.RemoteWriteEndpoint under the workspace's accountID, which is the
+#     VMUser-through-vmauth path the workspace's own listKeys publishes. ⚠ Spelled with underscores:
+#     `prometheusremotewrite` is a deprecated alias at 0.161.0 and logs a warning on every start
+#     (measured, below), as does `resource_to_telemetry_conversion`, which is therefore not set.
+#   * exporter `clickhouse` with `create_schema: false` — contrib. The endpoint is
+#     `https://telemetry.cybercloud.svc` — MonitorWorkspaces.QueryHost — and the database is the
+#     workspace's, as two settings. ⚠ NOT MonitorWorkspaces.SqlEndpoint's `/sql/{database}` URL, and
+#     that was measured rather than guessed: clickhouse-go reads a DSN's PATH as the database name, so
+#     with the SQL endpoint as `endpoint:` the first request the collector sent carried
+#     `database=sql%2Fws_abc`. The `/sql/` path is the query gateway's grammar for a client that speaks
+#     HTTP paths — Grafana's plugin has a `path` setting for it — and not for a driver that speaks DSNs.
+#     ⚠ `create_schema: false` because the database is the workspace's tenancy and the platform owns
+#     its tables; what the exporter expects to find there is conformance.yaml § owed.
+#   * extensions `health_check` (the readiness probe's target, port 13133), `basicauth` — contrib.
+#
+# ── What was measured against the image in Docker, before the kubelet ────────────────────────────
+#
+#   $ docker run … otel/opentelemetry-collector-contrib:0.161.0 validate --config /etc/otelcol-contrib/config.yaml
+#   (exit 0)
+#   $ docker run -d -p 14318:4318 -p 13133:13133 … otel/opentelemetry-collector-contrib:0.161.0
+#   $ curl -w '%{http_code}' http://localhost:13133/                 → 200
+#   $ curl -d '{"resourceLogs":[…]}' http://localhost:14318/v1/logs  → {"partialSuccess":{}} 200
+#
+# with CYBERCLOUD_ACCOUNT_ID, CYBERCLOUD_DATABASE and CYBERCLOUD_INGEST_KEY set to placeholders and
+# neither `ingest.cybercloud.svc` nor `telemetry.cybercloud.svc` resolving. The log carried one
+# `error clickhouseexporter … schema detection failed … no such host` and then `Everything is ready.
+# Begin running and processing data.` — the exporter's start does not fail on an unreachable store,
+# which is what lets a collector come up in the minute before the region's stores answer.
+#
+# ── What was measured on a real kubelet ──────────────────────────────────────────────────────────
+#
+# MonitorCollectorClusterBackedConformance.TheCollectorPodStartsAndAcceptsAnOtlpExport runs the
+# rendered Deployment on a k3s whose only other objects are the workspace's — no VictoriaMetrics, no
+# ClickHouse, no ingest host — and asserts the pod goes Ready and an OTLP/HTTP export POSTed through
+# the API server's service proxy is answered 200. That is the collector starting with both exporters
+# pointing at hosts that do not resolve, which is exactly the state of a tenant's collector in the
+# minute before the region's stores answer; the export is accepted because the batch processor is in
+# front of the exporter, and what happens to it afterwards is the exporter's retry queue.

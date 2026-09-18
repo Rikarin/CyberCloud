@@ -2997,6 +2997,159 @@ class PostgreSQLServerListKeysResult:
         return wire
 
 
+ManagedGrafanaPreset = Literal["c1.large", "c1.medium", "c1.small"]
+"""The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class ManagedGrafanaData:
+    """Managed Grafana. An unmodified Grafana OSS instance in your cluster, provisioned with one monitor workspace's metrics and logs as its datasources and reachable at a URL your pages embed rendered dashboards from. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The instance's own settings."""
+
+        @dataclass
+        class Sizing:
+            """CPU and memory for the instance."""
+
+            # How much the pod gets. Grafana renders in the browser and queries the workspace's stores, so the small row serves a team; the larger rows are for many concurrent dashboards.
+            preset: Optional[ManagedGrafanaPreset] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ManagedGrafanaData.Properties.Sizing:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    preset=wire.get("preset"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.preset is not None:
+                    wire["preset"] = self.preset
+                return wire
+
+        # The cluster the instance runs in. ⚠ It must be the cluster its workspace publishes into: Grafana reads the workspace's accountID, database and ingest key from the workspace's own objects in the same namespace.
+        cluster_id: str
+        # The CyberCloud.Monitor/workspaces resource the datasources point at, as its full resource id path. It must be in this tenant and in the same resource group as the instance; the instance sees that workspace and nothing else.
+        workspace: str
+        # Whether anybody who can reach the URL may view dashboards without signing in, as a Viewer. Off means every visit signs in as the admin user the url action returns. ⚠ A rendered panel embedded by URL in another page is a visit like any other, so embedding needs this on or a signed-in browser.
+        anonymous_viewers: Optional[bool] = None
+        # CPU and memory for the instance.
+        sizing: Optional[ManagedGrafanaData.Properties.Sizing] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> ManagedGrafanaData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                cluster_id=wire["clusterId"],
+                workspace=wire["workspace"],
+                anonymous_viewers=wire.get("anonymousViewers"),
+                sizing=_opt(wire, "sizing", ManagedGrafanaData.Properties.Sizing.from_wire),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["clusterId"] = self.cluster_id
+            wire["workspace"] = self.workspace
+            if self.anonymous_viewers is not None:
+                wire["anonymousViewers"] = self.anonymous_viewers
+            if self.sizing is not None:
+                wire["sizing"] = self.sizing.to_wire()
+            return wire
+
+    # The region the instance is billed in — its workspace's.
+    location: str
+    # The instance's own settings.
+    properties: Optional[ManagedGrafanaData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ManagedGrafanaData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", ManagedGrafanaData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class ManagedGrafanaResource:
+    """One Managed Grafana, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: ManagedGrafanaData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ManagedGrafanaResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=ManagedGrafanaData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class ManagedGrafanaUrlResult:
+    """What url returns. ⚠ Secret material — never log or persist this."""
+
+    # The administrator's password, read from the tenant's vault for this call only. Minted once when the instance was created.
+    admin_password: str
+    # The administrator's user name.
+    admin_user: str
+    # Where the instance answers inside the cluster. A dashboard or a panel is embedded by appending Grafana's own /d/… or /d-solo/… path to it — ADR-011's one permitted integration.
+    url: str
+    # The workspace the two provisioned datasources read from.
+    workspace: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ManagedGrafanaUrlResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            admin_password=wire["adminPassword"],
+            admin_user=wire["adminUser"],
+            url=wire["url"],
+            workspace=wire["workspace"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["adminPassword"] = self.admin_password
+        wire["adminUser"] = self.admin_user
+        wire["url"] = self.url
+        wire["workspace"] = self.workspace
+        return wire
+
+
 DocumentDatabaseAccountPreset = Literal["s1.2xlarge", "s1.4xlarge", "s1.large", "s1.medium", "s1.micro", "s1.nano", "s1.small", "s1.xlarge"]
 """The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else."""
 
@@ -4977,6 +5130,186 @@ class AlertRuleListInstancesResult:
         wire["instances"] = self.instances
         wire["open"] = self.open
         wire["state"] = self.state
+        return wire
+
+
+OpenTelemetryCollectorPreset = Literal["c1.large", "c1.medium", "c1.small"]
+"""The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class OpenTelemetryCollectorData:
+    """OpenTelemetry collector. A managed OpenTelemetry collector in your cluster that your workloads send OTLP to, carrying metrics, logs and traces into this workspace. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The collector's own settings."""
+
+        @dataclass
+        class Receivers:
+            """Which OTLP protocols the collector listens on. At least one; both is the default."""
+
+            # Accept OTLP over gRPC on port 4317 — what most SDKs send by default.
+            otlp_grpc: Optional[bool] = None
+            # Accept OTLP over HTTP on port 4318 — protobuf or JSON, for browsers and anything that cannot speak gRPC.
+            otlp_http: Optional[bool] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> OpenTelemetryCollectorData.Properties.Receivers:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    otlp_grpc=wire.get("otlpGrpc"),
+                    otlp_http=wire.get("otlpHttp"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.otlp_grpc is not None:
+                    wire["otlpGrpc"] = self.otlp_grpc
+                if self.otlp_http is not None:
+                    wire["otlpHttp"] = self.otlp_http
+                return wire
+
+        @dataclass
+        class Sizing:
+            """CPU and memory for each collector pod."""
+
+            # How much each pod gets. The small row carries a few thousand spans a second; the larger rows are for a whole cluster's telemetry through one gateway. The memory limiter is set from the preset, so an oversized burst is refused rather than killed.
+            preset: Optional[OpenTelemetryCollectorPreset] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> OpenTelemetryCollectorData.Properties.Sizing:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    preset=wire.get("preset"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.preset is not None:
+                    wire["preset"] = self.preset
+                return wire
+
+        # The cluster the collector runs in. ⚠ It must be the cluster its workspace publishes into: the collector reads the workspace's accountID, database and ingest key from the workspace's own objects in the same namespace, and in any other cluster the pod waits on a ConfigMap that is not there.
+        cluster_id: str
+        # Which OTLP protocols the collector listens on. At least one; both is the default.
+        receivers: Optional[OpenTelemetryCollectorData.Properties.Receivers] = None
+        # How many collector pods share the endpoint. The collector is stateless, so more replicas is more fan-in and nothing else.
+        replicas: Optional[int] = None
+        # CPU and memory for each collector pod.
+        sizing: Optional[OpenTelemetryCollectorData.Properties.Sizing] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> OpenTelemetryCollectorData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                cluster_id=wire["clusterId"],
+                receivers=_opt(wire, "receivers", OpenTelemetryCollectorData.Properties.Receivers.from_wire),
+                replicas=wire.get("replicas"),
+                sizing=_opt(wire, "sizing", OpenTelemetryCollectorData.Properties.Sizing.from_wire),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["clusterId"] = self.cluster_id
+            if self.receivers is not None:
+                wire["receivers"] = self.receivers.to_wire()
+            if self.replicas is not None:
+                wire["replicas"] = self.replicas
+            if self.sizing is not None:
+                wire["sizing"] = self.sizing.to_wire()
+            return wire
+
+    # The region the collector is billed in — its workspace's.
+    location: str
+    # The collector's own settings.
+    properties: Optional[OpenTelemetryCollectorData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> OpenTelemetryCollectorData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", OpenTelemetryCollectorData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class OpenTelemetryCollectorResource:
+    """One OpenTelemetry collector, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: OpenTelemetryCollectorData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> OpenTelemetryCollectorResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=OpenTelemetryCollectorData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class OpenTelemetryCollectorListEndpointsResult:
+    """What listEndpoints returns."""
+
+    # Where OTLP over gRPC is accepted inside the cluster, host:port — empty when the gRPC receiver is off.
+    otlp_grpc_endpoint: str
+    # Where OTLP over HTTP is accepted inside the cluster, as a URL — empty when the HTTP receiver is off. Signals go to /v1/traces, /v1/metrics and /v1/logs under it.
+    otlp_http_endpoint: str
+    # The Service's in-cluster DNS name, for a workload that builds its own URL.
+    service: str
+    # The workspace everything sent here lands in.
+    workspace: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> OpenTelemetryCollectorListEndpointsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            otlp_grpc_endpoint=wire["otlpGrpcEndpoint"],
+            otlp_http_endpoint=wire["otlpHttpEndpoint"],
+            service=wire["service"],
+            workspace=wire["workspace"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["otlpGrpcEndpoint"] = self.otlp_grpc_endpoint
+        wire["otlpHttpEndpoint"] = self.otlp_http_endpoint
+        wire["service"] = self.service
+        wire["workspace"] = self.workspace
         return wire
 
 
@@ -7910,6 +8243,10 @@ __all__ = [
     "PostgreSQLServerData",
     "PostgreSQLServerResource",
     "PostgreSQLServerListKeysResult",
+    "ManagedGrafanaPreset",
+    "ManagedGrafanaData",
+    "ManagedGrafanaResource",
+    "ManagedGrafanaUrlResult",
     "DocumentDatabaseAccountPreset",
     "DocumentDatabaseAccountVersion",
     "DocumentDatabaseAccountData",
@@ -7950,6 +8287,10 @@ __all__ = [
     "AlertRuleData",
     "AlertRuleResource",
     "AlertRuleListInstancesResult",
+    "OpenTelemetryCollectorPreset",
+    "OpenTelemetryCollectorData",
+    "OpenTelemetryCollectorResource",
+    "OpenTelemetryCollectorListEndpointsResult",
     "PublicIPAddressData",
     "PublicIPAddressResource",
     "PublicIPAddressShowAllocationResult",

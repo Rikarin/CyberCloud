@@ -253,6 +253,7 @@
     "CyberCloud.ContainerService",
     "CyberCloud.DBforMySQL",
     "CyberCloud.DBforPostgreSQL",
+    "CyberCloud.Dashboard",
     "CyberCloud.DocumentDB",
     "CyberCloud.Mail",
     "CyberCloud.Messaging",
@@ -435,6 +436,19 @@
       }
     },
     {
+      "type": "CyberCloud.Dashboard/grafanas",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Managed Grafana",
+        "plural": "Managed Grafanas",
+        "alias": "grafana",
+        "summary": "An unmodified Grafana OSS instance in your cluster, provisioned with one monitor workspace's metrics and logs as its datasources and reachable at a URL your pages embed rendered dashboards from.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.DocumentDB/accounts",
       "apiVersions": [
         "2026-08-01"
@@ -522,6 +536,19 @@
         "plural": "Alert rules",
         "alias": "alert",
         "summary": "A condition over the workspace's metrics or logs, evaluated on a schedule; when it holds for long enough the action group is told through a Communication service, and again when it stops.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Monitor/workspaces/collectors",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "OpenTelemetry collector",
+        "plural": "OpenTelemetry collectors",
+        "alias": "collector",
+        "summary": "A managed OpenTelemetry collector in your cluster that your workloads send OTLP to, carrying metrics, logs and traces into this workspace.",
         "declared": true
       }
     },

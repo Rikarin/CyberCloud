@@ -607,8 +607,14 @@ OpenBao not Vault, FerretDB not MongoDB, OpenSearch not Elasticsearch.
 > The **Bundle** gate still checks the *declared* identifier on every PR with no network; the scan
 > runs weekly with one, and both write the same finding from opposite sides. AGPL-3.0 is deliberately
 > off the allow-list even though ADR-011 marks Grafana offerable, because that row carries a
-> condition — *we distribute, we do not modify* — and the day a Grafana image enters the bundle the
-> condition gets written into `LicenceExceptions` beside the artefact, not into the list.
+> condition — *we distribute, we do not modify* — and the condition is written into
+> `LicenceExceptions` beside the artefact, not into the list: `grafana/grafana`, the image
+> `charts/managed/grafana` renders for `CyberCloud.Dashboard/grafanas` (#32, 2026-09-17). ⚠ **The
+> scan does not read that image yet.** It reads bundle components and the platform's own images; an
+> image a chart under `charts/managed/` renders — haproxy's GPL-2.0, the collector's Apache-2.0,
+> Grafana's AGPL-3.0 — is outside both halves, so the entry is argued and unexercised until the
+> scan widens (`charts/managed/grafana/conformance.yaml § owed`,
+> `licence-scan-does-not-read-workload-images`).
 > `./build.sh Licence --skip Charts Images` runs it on a workstation; `artifacts/licence/report.md`
 > lists every artefact and its evidence.
 

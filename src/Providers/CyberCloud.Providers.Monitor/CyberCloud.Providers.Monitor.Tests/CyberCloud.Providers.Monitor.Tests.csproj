@@ -44,6 +44,47 @@
     <ItemGroup Label="The half generation does not reach — see the header">
         <EmbeddedResource Include="../../../../charts/managed/monitor-workspace/templates/_helpers.tpl"
                           LogicalName="monitor-workspace.helpers.tpl"/>
+        <!--
+          ⚠ THE TWO POD-SHAPED CHARTS EMBED THEIR values.yaml AS WELL AS THEIR HELPERS, and for a fact
+          generation cannot reach either: the image pin. `image:` is an @internal value, which the
+          emitter carries through untouched, so nothing compares it with MonitorCollectors.Image or
+          Grafanas.Image except CollectorDeclarationTests and GrafanaDeclarationTests. A pin that
+          drifted between the two files is a chart running one digest and a reconciler another.
+        -->
+        <EmbeddedResource Include="../../../../charts/managed/monitor-collector/templates/_helpers.tpl"
+                          LogicalName="monitor-collector.helpers.tpl"/>
+        <EmbeddedResource Include="../../../../charts/managed/monitor-collector/values.yaml"
+                          LogicalName="monitor-collector.values.yaml"/>
+        <EmbeddedResource Include="../../../../charts/managed/grafana/templates/_helpers.tpl"
+                          LogicalName="grafana.helpers.tpl"/>
+        <EmbeddedResource Include="../../../../charts/managed/grafana/values.yaml"
+                          LogicalName="grafana.values.yaml"/>
+        <!--
+          ⚠ AND GRAFANA'S DEPLOYMENT TEMPLATE, for the two plugin settings the adversarial review of
+          #32 found the pod's life depends on: GF_PLUGINS_PREINSTALL_SYNC at a pinned version and
+          GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false. Grafanas.DeploymentJson's remarks say what happens
+          without the second; a chart that drifted back to GF_INSTALL_PLUGINS would render a Ready pod
+          whose default datasource is dead, and nothing but GrafanaDeclarationTests compares the two.
+        -->
+        <EmbeddedResource Include="../../../../charts/managed/grafana/templates/grafana.yaml"
+                          LogicalName="grafana.deployment.yaml"/>
+        <!--
+          ⚠ AND ONE FILE FROM build/, WHICH NO TEST PROJECT HAD EMBEDDED BEFORE. ADR-011 § Enforcement
+          asks for "an allow-list with a written reason"; Build.Licence.cs § LicenceExceptions is that
+          list, and Grafanas' remarks are the reason. GrafanaDeclarationTests.TheLicenceGateCarriesTheGrafanaExceptionBesideTheImage
+          is what keeps the two from parting — the gate's own scan does not reach a workload image
+          yet (charts/managed/grafana/conformance.yaml § owed), so this test is the only thing that
+          reads the entry.
+        -->
+        <EmbeddedResource Include="../../../../build/Build.Licence.cs"
+                          LogicalName="build.licence.cs"/>
+        <!--
+          ⚠ AND THE PORTAL'S package.json, for ADR-011's other half: "our portal must not embed or
+          link Grafana code". A dependency named grafana in that file is the rule broken at the one
+          place a build gate does not look.
+        -->
+        <EmbeddedResource Include="../../../../portal/package.json"
+                          LogicalName="portal.package.json"/>
     </ItemGroup>
 
     <ItemGroup>

@@ -5406,6 +5406,407 @@
         }
       }
     },
+    "dashboard": {
+      "name": "dashboard",
+      "summary": "Commands for the CyberCloud.Dashboard provider.",
+      "commands": {
+        "grafanas": {
+          "name": "grafanas",
+          "resourceType": "CyberCloud.Dashboard/grafanas",
+          "title": "Managed Grafana",
+          "plural": "Managed Grafanas",
+          "summary": "An unmodified Grafana OSS instance in your cluster, provisioned with one monitor workspace's metrics and logs as its datasources and reachable at a URL your pages embed rendered dashboards from.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Managed Grafana.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Dashboard/grafanas/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--anonymous-viewers",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether anybody who can reach the URL may view dashboards without signing in, as a Viewer. Off means every visit signs in as the admin user the url action returns. ⚠ A rendered panel embedded by URL in another page is a visit like any other, so embedding needs this on or a signed-in browser.",
+                  "jsonPointer": "/properties/anonymousViewers",
+                  "default": false
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster the instance runs in. ⚠ It must be the cluster its workspace publishes into: Grafana reads the workspace's accountID, database and ingest key from the workspace's own objects in the same namespace.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the instance is billed in — its workspace's.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How much the pod gets. Grafana renders in the browser and queries the workspace's stores, so the small row serves a team; the larger rows are for many concurrent dashboards.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.large",
+                    "c1.medium",
+                    "c1.small"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--workspace",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The CyberCloud.Monitor/workspaces resource the datasources point at, as its full resource id path. It must be in this tenant and in the same resource group as the instance; the instance sees that workspace and nothing else.",
+                  "jsonPointer": "/properties/workspace",
+                  "immutable": true,
+                  "example": "/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.Monitor/workspaces/prod"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Managed Grafana. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Dashboard/grafanas/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the Managed Grafanas in a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Dashboard/grafanas",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Managed Grafana.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Dashboard/grafanas/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Managed Grafana. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Dashboard/grafanas/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--anonymous-viewers",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether anybody who can reach the URL may view dashboards without signing in, as a Viewer. Off means every visit signs in as the admin user the url action returns. ⚠ A rendered panel embedded by URL in another page is a visit like any other, so embedding needs this on or a signed-in browser.",
+                  "jsonPointer": "/properties/anonymousViewers",
+                  "default": false
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster the instance runs in. ⚠ It must be the cluster its workspace publishes into: Grafana reads the workspace's accountID, database and ingest key from the workspace's own objects in the same namespace.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the instance is billed in — its workspace's.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How much the pod gets. Grafana renders in the browser and queries the workspace's stores, so the small row serves a team; the larger rows are for many concurrent dashboards.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.large",
+                    "c1.medium",
+                    "c1.small"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--workspace",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The CyberCloud.Monitor/workspaces resource the datasources point at, as its full resource id path. It must be in this tenant and in the same resource group as the instance; the instance sees that workspace and nothing else.",
+                  "jsonPointer": "/properties/workspace",
+                  "immutable": true,
+                  "example": "/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.Monitor/workspaces/prod"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "url": {
+              "name": "url",
+              "summary": "url a Managed Grafana. ⚠ The response carries secret material — it is always audited and must not be written to a log or a shell history.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Dashboard/grafanas/{resourceName}/url",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "url",
+              "permission": "url",
+              "secret": true,
+              "rawBody": true
+            }
+          },
+          "alias": "grafana"
+        }
+      }
+    },
     "dbformysql": {
       "name": "dbformysql",
       "summary": "Commands for the CyberCloud.DBforMySQL provider.",
@@ -11043,6 +11444,456 @@
             }
           },
           "alias": "alert"
+        },
+        "workspaces-collectors": {
+          "name": "workspaces-collectors",
+          "resourceType": "CyberCloud.Monitor/workspaces/collectors",
+          "title": "OpenTelemetry collector",
+          "plural": "OpenTelemetry collectors",
+          "summary": "A managed OpenTelemetry collector in your cluster that your workloads send OTLP to, carrying metrics, logs and traces into this workspace.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a OpenTelemetry collector.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/collectors/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster the collector runs in. ⚠ It must be the cluster its workspace publishes into: the collector reads the workspace's accountID, database and ingest key from the workspace's own objects in the same namespace, and in any other cluster the pod waits on a ConfigMap that is not there.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the collector is billed in — its workspace's.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--otlp-grpc",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Accept OTLP over gRPC on port 4317 — what most SDKs send by default.",
+                  "jsonPointer": "/properties/receivers/otlpGrpc",
+                  "default": true
+                },
+                {
+                  "name": "--otlp-http",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Accept OTLP over HTTP on port 4318 — protobuf or JSON, for browsers and anything that cannot speak gRPC.",
+                  "jsonPointer": "/properties/receivers/otlpHttp",
+                  "default": true
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How much each pod gets. The small row carries a few thousand spans a second; the larger rows are for a whole cluster's telemetry through one gateway. The memory limiter is set from the preset, so an oversized burst is refused rather than killed.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.large",
+                    "c1.medium",
+                    "c1.small"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many collector pods share the endpoint. The collector is stateless, so more replicas is more fan-in and nothing else.",
+                  "jsonPointer": "/properties/replicas",
+                  "default": 1
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this OpenTelemetry collector lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a OpenTelemetry collector. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/collectors/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this OpenTelemetry collector lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the OpenTelemetry collectors in a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/collectors",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this OpenTelemetry collector lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "list-endpoints": {
+              "name": "list-endpoints",
+              "summary": "listEndpoints a OpenTelemetry collector.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/collectors/{resourceName}/listEndpoints",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this OpenTelemetry collector lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "action": "listEndpoints",
+              "permission": "read",
+              "rawBody": true
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a OpenTelemetry collector.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/collectors/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this OpenTelemetry collector lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a OpenTelemetry collector. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/collectors/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster the collector runs in. ⚠ It must be the cluster its workspace publishes into: the collector reads the workspace's accountID, database and ingest key from the workspace's own objects in the same namespace, and in any other cluster the pod waits on a ConfigMap that is not there.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the collector is billed in — its workspace's.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--otlp-grpc",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Accept OTLP over gRPC on port 4317 — what most SDKs send by default.",
+                  "jsonPointer": "/properties/receivers/otlpGrpc",
+                  "default": true
+                },
+                {
+                  "name": "--otlp-http",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Accept OTLP over HTTP on port 4318 — protobuf or JSON, for browsers and anything that cannot speak gRPC.",
+                  "jsonPointer": "/properties/receivers/otlpHttp",
+                  "default": true
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How much each pod gets. The small row carries a few thousand spans a second; the larger rows are for a whole cluster's telemetry through one gateway. The memory limiter is set from the preset, so an oversized burst is refused rather than killed.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.large",
+                    "c1.medium",
+                    "c1.small"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many collector pods share the endpoint. The collector is stateless, so more replicas is more fan-in and nothing else.",
+                  "jsonPointer": "/properties/replicas",
+                  "default": 1
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this OpenTelemetry collector lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "collector"
         }
       }
     },

@@ -122,11 +122,16 @@ owed:
   - id: nothing-consumes-the-row
     says: >
       CyberCloud.Ingest.Host does not exist — docs/plan/03 § Hosts plans it, src/Hosts holds four
-      hosts and not that one. So the ConfigMap is published and read by nobody, and with it go the
-      logs and traces retention, all three daily allowances, the series cap, the cardinality cap and
-      the over-quota sample rate. ⚠ THIS IS THE LARGEST SINGLE GAP ON THE ROW and it is deliberately
-      not hidden behind the half that does work: the VMUser is enforced by vmauth the moment it is
-      applied, and everything else here is a promise with a schema.
+      hosts and not that one. So the row's logs and traces retention, all three daily allowances,
+      the series cap, the cardinality cap and the over-quota sample rate are published and enforced
+      by nobody. ⚠ THIS IS THE LARGEST SINGLE GAP ON THE ROW and it is deliberately not hidden
+      behind the half that does work: the VMUser is enforced by vmauth the moment it is applied, and
+      everything else here is a promise with a schema. ⚠ SINCE 2026-09-17 THE ROW IS READ, BY TWO
+      PODS AND FOR THREE KEYS: the collector under this workspace and the Grafana pointed at it name
+      `accountId` and `database` by configMapKeyRef and the ingest key's Secret by secretKeyRef, and
+      the kubelet substitutes them at pod start (MonitorWorkspaces.WorkspaceEnv). That is a reader
+      of the tenancy coordinates and not of the enforcement half; the sentence above stands for the
+      caps and the allowances.
     closes: The ingest host, watching ConfigMaps labelled cybercloud.io/telemetry-row across the region.
   - id: clickhouse-ttl-is-published-not-applied
     says: >
@@ -325,22 +330,18 @@ owed:
       A webhook ChannelKind in the sending module with signed delivery and a receipt, which is that
       module's design to make; and a portal inbox surface reading the instance history, which is a
       portal page and an unread marker on the instance, at the api-version that grows the tree.
-  - id: observability-three-of-four-nouns-not-landed
+  - id: observability-app-insights-views-not-landed
     says: >
       Issue #32 names four tenant-facing surfaces — "application-insights-shaped views; an OTel
-      collector as a managed service; managed Grafana; alerts" — and this branch landed the fourth.
-      The other three are not resource types, not charts and not portal pages: docs/plan/16 prices
-      the collector (CyberCloud.Monitor/collectors, 1.0 EM, an allow-listed collector config the
-      reconciler validates before apply) and managed Grafana (CyberCloud.Dashboard/grafanas, 0.8 EM,
-      grafana-operator per tenant with ADR-011's no-embed rule) and does not price the App Insights
-      views at all. The roadmap row is ◐ and counts the row's 3.0 EM as zero for the same reason the
-      Mail row does — one noun of several, no per-noun split to read. Recorded here rather than only
-      in the roadmap's prose so the debt has an id a later branch closes by name. (2026-09-15, #32
-      review: three of the issue's four nouns are not delivered.)
-    closes: >
-      Three landings, each its own branch: CyberCloud.Monitor/collectors with its chart and the
-      component allow-list; CyberCloud.Dashboard/grafanas with grafana-operator and the portal's
-      by-URL embed; and the App Insights-shaped views, which docs/plan/16 must first design.
+      collector as a managed service; managed Grafana; alerts" — and three are published: the alerts
+      (2026-09-15), and on 2026-09-17 CyberCloud.Monitor/workspaces/collectors with
+      charts/managed/monitor-collector and CyberCloud.Dashboard/grafanas with charts/managed/grafana,
+      each with its own conformance.yaml § owed. The App Insights-shaped views are the noun left:
+      not a resource type, not a chart, not a portal page, and docs/plan/16 neither designs nor
+      prices them, so there is nothing to build until the document says what an "App Insights-shaped
+      view" over a workspace's stores is. (This row used to be
+      `observability-three-of-four-nouns-not-landed`; two of the three landed and the id follows.)
+    closes: docs/plan/16 designing the views first — which store they read, what they show, whether they are a resource or a portal surface — and then the landing.
 
 # Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
 #

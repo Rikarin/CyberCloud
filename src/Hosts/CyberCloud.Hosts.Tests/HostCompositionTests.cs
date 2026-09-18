@@ -54,8 +54,9 @@ public sealed class HostCompositionTests {
     ///     ⚠
     ///     <b>
     ///         The prose said "twelve" over a list of fourteen until <c>CyberCloud.Mail</c> made it
-    ///         fifteen, <c>CyberCloud.Communication</c> made it sixteen, and
-    ///         <c>CyberCloud.RecoveryServices</c> seventeen.
+    ///         fifteen, <c>CyberCloud.Communication</c> made it sixteen, <c>CyberCloud.RecoveryServices</c>
+    ///         seventeen, and <c>CyberCloud.Dashboard</c> eighteen — from seventeen modules, because
+    ///         the Monitor module registers two.
     ///     </b> The list is what the test reads and the list was right; the number beside it
     ///     was three behind, which is the ordinary fate of a count written next to the thing it
     ///     counts. It is corrected rather than deleted because a reader who sees a number can tell at
@@ -75,6 +76,11 @@ public sealed class HostCompositionTests {
         "CyberCloud.ContainerService",
         "CyberCloud.DBforMySQL",
         "CyberCloud.DBforPostgreSQL",
+        // ⚠ Two namespaces from ONE module — MonitorApplicationModule registers MonitorProvider and
+        // DashboardProvider both (#32, 2026-09-17). A host that lost the second AddCyberCloudProvider
+        // line would still compose the Monitor namespace and this list is what would notice. ⚠ After
+        // the two DBfor… rows, because the comparison is ordinal and `B` sorts before `a`.
+        "CyberCloud.Dashboard",
         "CyberCloud.DocumentDB",
         "CyberCloud.Mail",
         "CyberCloud.Messaging",

@@ -4,9 +4,14 @@
       The cluster-backed half of the shared provider conformance suite, run against the
       monitor-workspace provider.
 
-      ⚠ IT CONTAINS NO ASSERTIONS AND NO INFRASTRUCTURE. Everything it runs comes from
-      test/CyberCloud.Cluster.Conformance; what lives here is two class declarations over the SAME
-      ProviderConformanceCase the Docker-free suite already uses.
+      ⚠ IT CONTAINED NO ASSERTIONS AND NO INFRASTRUCTURE UNTIL #32, AND STILL NO INFRASTRUCTURE.
+      Everything the shared criteria run comes from test/CyberCloud.Cluster.Conformance; what lives
+      here is class declarations over the SAME ProviderConformanceCase the Docker-free suite already
+      uses — plus, since #32, the two tests in this tree that wait for a POD: the collector's, which
+      POSTs an export to it, and Grafana's, which asks each provisioned datasource's health after the
+      adversarial review found a Ready pod whose default datasource was dead. Both go through the API
+      server's service proxy with ClusterConformanceHarness.CreateApiServerClient; PodDiagnostics is
+      the one helper they share.
 
       ⚠ ONE CRD STUB, DERIVED, AND TWO KINDS THAT NEED NONE. A bare k3s serves
       /api/v1/namespaces/{ns}/configmaps and /secrets without being told; it serves no REST path for

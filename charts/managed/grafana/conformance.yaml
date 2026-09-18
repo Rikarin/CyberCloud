@@ -1,0 +1,196 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Dashboard/grafanas. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet, and the
+# target says so in its own log rather than implying otherwise.
+
+resourceType: CyberCloud.Dashboard/grafanas
+apiVersion: "2026-08-01"
+chart: grafana
+
+# Objects the reconciler must have applied once the resource reports Succeeded, in apply order.
+#
+# ⚠ FOUR CORE KINDS, AND THE FIRST IS ONE THIS CHART DOES NOT RENDER. The admin Secret is built from
+# what the tenant's vault returned, inside one reconcile pass — the arrangement
+# charts/managed/monitor-workspace has for its ingest key. The ConfigMap is the provisioning file; the
+# Deployment is Grafana; the Service is what the `url` action names.
+renders:
+  - group: ""
+    version: v1
+    kind: Secret
+    count: 1
+  - group: ""
+    version: v1
+    kind: ConfigMap
+    count: 1
+  - group: apps
+    version: v1
+    kind: Deployment
+    count: 1
+  - group: ""
+    version: v1
+    kind: Service
+    count: 1
+
+# ADR-013 — every rendered object carries all seven labels.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.dashboard_grafanas
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: the-instance-sees-its-workspace-and-nothing-else
+    says: >
+      The two provisioned datasources read the named workspace's accountID and database and no
+      other's, and a signed-in admin cannot add a third: both are `editable: false`, and the only
+      credential in the pod is that workspace's own ingest key. docs/plan/16: "datasources pre-wired
+      to that tenant's workspace and nothing else". ⚠ Provable only against a real VictoriaMetrics
+      and ClickHouse, which the cluster-backed suite does not have.
+  - id: a-panel-embeds-by-url
+    says: >
+      A GET of `{url}/d-solo/…` from another origin, in an iframe, renders — Grafana sends no
+      X-Frame-Options: deny — and nothing of Grafana's is loaded into the embedding page. ADR-011's
+      rule, as a behaviour.
+  - id: the-workspace-pointer-is-refused-across-tenants-and-groups
+    says: >
+      A body naming another tenant's workspace, a resource that is not a CyberCloud.Monitor/workspaces,
+      or a workspace in another resource group is accepted by the API and REFUSED BY NAME at the first
+      pass, before anything is minted or applied. ✅ ASSERTED: GrafanaReconcilerTests.
+  - id: the-credential-is-minted-once
+    says: >
+      Two `url` calls return the same admin password, and the password the pod holds is the one they
+      return. A restart of the silo does not rotate it.
+  - id: the-pod-starts-and-both-datasources-answer
+    says: >
+      On a real kubelet, with the named workspace's row and ingest-key Secret in the namespace, the
+      rendered Deployment becomes a Ready pod, and BOTH provisioned datasources answer a health check
+      from their own plugin — the Prometheus one with a request to `/select/{accountID}/prometheus`
+      and the ClickHouse one with a request to `/sql/{database}` — where accountID and database are
+      the row's values, substituted by the kubelet into the pod and by Grafana into the provisioning
+      file. ⚠ NOT `/api/health`, which is the readiness probe and which answered 200 for a pod whose
+      default datasource was dead: the adversarial review of #32 found Grafana 13.2.2's installer
+      updating the BUNDLED Prometheus plugin in place on the read-only root, stopping it, and failing
+      to put it back, and the server reporting itself healthy throughout. SOURCE § What was run has
+      the transcript; GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false is the fix, and this assertion is what
+      would have caught it. What a datasource answers about its STORE is not asserted here — the
+      harness's k3s has no VictoriaMetrics and no ClickHouse, so each request fails on DNS after the
+      plugin made it, and the assertion is on the request's shape and on neither datasource answering
+      `plugin.notRegistered`. ✅ ASSERTED:
+      GrafanaClusterBackedConformance.TheGrafanaPodStartsAndBothDatasourcesAnswer.
+  - id: a-delete-takes-the-instance-down
+    says: >
+      After DELETE the old address answers the canonical 404, the Service is gone before the pod is,
+      and the admin Secret is gone with them. The vault entry stays — ISecretWriter mints and does not
+      delete.
+
+# ── Owed ────────────────────────────────────────────────────────────────────────────────────────
+#
+# What this row does NOT do, each with what closes it. A gap that is written down is a decision; a
+# gap that is not is a defect somebody rediscovers.
+owed:
+  - id: licence-scan-does-not-read-workload-images
+    says: >
+      ADR-011 § Enforcement: "a build gate runs a licence scan over the chart set and the container
+      images in the platform bundle [and] fails on any SSPL/BUSL/AGPL image outside an allow-list with
+      a written reason". build/Build.Licence.cs is that gate, and it reads charts/bundle/ components'
+      images and the platform's own images — NOT the image a chart under charts/managed/ renders. So
+      the AGPL-3.0 image this chart pins is the first artefact in the tree the ADR's own family list
+      names and the scan does not see, and the collector's Apache-2.0 image and haproxy's GPL-2.0
+      image are outside it the same way. The exception ADR-011 asks for is written anyway —
+      Build.Licence.cs § LicenceExceptions, keyed `grafana/grafana`, carrying the deployed-component
+      reading from Grafanas' remarks — so the day the scan widens it finds an argued exception and
+      not a red row. What is NOT true today is that a gate proved this image is what SOURCE says.
+    closes: >
+      Build.Licence reading `image:` out of charts/managed/*/values.yaml and scanning each the way it
+      scans a bundle component's — label, SBOM, and the allow-list with LicenceExceptions applied.
+  - id: dashboards-are-not-a-sub-resource
+    says: >
+      docs/plan/16 asks for "dashboards as a sub-resource so they are versioned and restorable like
+      any resource". A dashboard is a JSON document with panels, targets and variables — an array of
+      objects several levels deep — and the schema has no array of objects (the remarks on
+      SchemaKind.Array). So a dashboard a tenant saves in the UI lives in Grafana's SQLite on an
+      emptyDir and dies with the pod; the datasources come back from the provisioning file, the
+      dashboards do not. ⚠ THIS IS THE LARGEST SINGLE GAP ON THE ROW and it is why the state is
+      deliberately ephemeral rather than a PersistentVolumeClaim: a claim would make dashboards
+      survive a restart and look versioned while being neither, and the tenant would trust it.
+    closes: >
+      A `grafanas/dashboards` child type at the api-version that grows the tree, rendered into a
+      second provisioning ConfigMap the pod mounts, which is also what grafana-operator's
+      GrafanaDashboard would have done.
+  - id: not-grafana-operator
+    says: >
+      docs/plan/16 § Managed Grafana names grafana-operator. This type renders one Deployment from a
+      pinned image instead: the operator is a bundle component that does not exist, a CRD the
+      cluster-backed harness would stub with an open schema, and a second reconciler between this one
+      and the pod, and what it would buy is the dashboards sub-resource above. If the catalogue's
+      Grafana count ever makes upgrades the operator's job rather than a digest bump here, the seam
+      to swap is Grafanas.DeploymentJson.
+    closes: Nothing, unless the dashboards sub-resource is built on the operator's CRD rather than a ConfigMap; recorded because the plan says the other thing.
+  - id: oidc-against-identity-is-not-wired
+    says: >
+      docs/plan/16 asks for "OIDC against our identity system". The instance signs in with one admin
+      user whose password the `url` action returns, or with nobody when `anonymousViewers` is on.
+      Grafana's generic OAuth needs a client registered with CyberCloud.Identity, a redirect URL the
+      instance is reachable at from a browser, and a role mapping — none of which exists for a pod
+      with an in-cluster URL. Every visit is the admin or a viewer; there is no per-user identity.
+    closes: The GF_AUTH_GENERIC_OAUTH_* block rendered from an identity client the reconciler registers, once the instance has a browser-reachable URL.
+  - id: no-external-endpoint
+    says: >
+      The `url` action returns `http://grafana-{name}.{namespace}.svc:3000`, an in-cluster address.
+      docs/plan/12 § Cross-cutting decisions requires an explicit CIDR allow-list on any exposure and
+      this type declares no exposure property at all — charts/managed/monitor-workspace's decision,
+      for its reason. A tenant's browser cannot reach it, so the portal's by-URL embed is a promise
+      about an address the portal's own in-cluster proxy would have to serve.
+    closes: An ingress with a source-range list and TLS, once the exposure axis exists platform-wide.
+  - id: clickhouse-plugin-is-fetched-at-start
+    says: >
+      Grafana OSS has no built-in ClickHouse datasource. GF_PLUGINS_PREINSTALL_SYNC has Grafana's own
+      in-process installer fetch grafana-clickhouse-datasource@4.21.3 from grafana.com on every pod
+      start, into the emptyDir, before the server listens. ⚠ Two facts here were recorded from
+      documentation until the review of #32 ran the image, and both were wrong: it is not grafana-cli
+      (the image's run.sh logs GF_INSTALL_PLUGINS as deprecated and ignores it without a FORCE flag),
+      and a cluster with no egress does NOT start a Grafana with one datasource of two — the
+      synchronous install fails the installer module, the modules depending on it, and the process
+      exits 1 before it listens, so the pod crash-loops naming grafana.com. That is the louder failure
+      and the one kept; SOURCE § What was run, step 6. What remains owed: every start depends on
+      grafana.com, and the plugin's bytes are pinned by version, not by digest, which is weaker than
+      the image's pin beside it. The bundled plugins are pinned the other way — auto-update off — so a
+      fix to the Prometheus datasource arrives with an image digest bump, which is how everything else
+      in this tree takes one.
+    closes: An image the platform builds with the plugin baked in — which build/Build.Images.cs cannot do today, for the reason charts/managed/cloud-shell records as `no-image-pipeline` — or a plugin archive served from the platform's own registry.
+  - id: one-instance-is-a-single-point-of-failure
+    says: >
+      One replica, Recreate. Grafana OSS keeps its state in SQLite on an emptyDir, so a second pod
+      would be a second instance; a node loss is an outage until the pod is rescheduled, and a
+      configuration change restarts it.
+    closes: A Postgres behind Grafana — a CyberCloud.DBforPostgreSQL/servers the instance names — and then a replica count.
+  - id: the-workspace-in-the-kubelet-test-is-the-harness-standing-in
+    says: >
+      GrafanaClusterBackedConformance.TheGrafanaPodStartsAndBothDatasourcesAnswer needs the named
+      workspace's row and ingest-key Secret in the namespace, and the suite registers ONE provider —
+      CyberCloud.Dashboard — so no workspace reconciler runs there and the workspace is not an
+      ancestor (it is a body property, not a parent). The test applies the two objects itself, from
+      MonitorWorkspaces.RowJson and MonitorWorkspaces.KeySecretJson with a fresh GUID, which are the
+      documents MonitorWorkspaceReconciler applies; what it does not prove is that a real
+      workspace's reconcile pass and a Grafana's compose in one cluster. ⚠ The first version of this
+      file said the harness "has" such a workspace; it did not, and the pod would have sat in
+      CreateContainerConfigError naming `monitor-telemetry` — which the test now does observe before
+      it applies the two objects, as the shape "a Grafana created before its workspace" is documented
+      to take.
+    closes: A conformance harness that registers two providers, or a workspace and a Grafana converged in one silo by the dev-run smoke.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
+meters:
+  - vcpu
+  - memoryGb
+  - resources

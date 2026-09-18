@@ -1,0 +1,70 @@
+# A managed Grafana over one monitor workspace — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from Grafanas.Schema2026 by `./build.sh Charts`,
+# and so is values.schema.json. ADR-010 § Which end authors the schema: "The C# ResourceSchema is
+# authored. The chart's @param annotations are generated from it and diffed." Editing a generated row
+# here is undone on the next run and fails the build in between; add the field in C# instead.
+#
+# ⚠ `workspace` IS A RESOURCE ID PATH AND NOT A NAME, and the reconciler checks what the format cannot:
+# that it is this tenant's, that it names a CyberCloud.Monitor/workspaces resource, and that it is in
+# the same resource group — because the pod reads the workspace's ingest key from a Secret in its own
+# namespace and a Secret cannot be mounted across namespaces. The chart renders from the NAME the
+# reconciler writes into `platform.workspace`.
+#
+# ⚠ NO `replicas`. Grafana OSS keeps its state in SQLite on an emptyDir; two pods would be two
+# instances with two sets of sessions behind one URL. conformance.yaml § owed,
+# `one-instance-is-a-single-point-of-failure`.
+#
+# ⚠ NO `dashboards`. docs/plan/16 asks for dashboards as a sub-resource "so they are versioned and
+# restorable like any resource"; that needs an api-version with an array of objects. conformance.yaml
+# § owed, `dashboards-are-not-a-sub-resource`.
+
+## @param workspace {string} The CyberCloud.Monitor/workspaces resource the datasources point at, as its full resource id path. It must be in this tenant and in the same resource group as the instance; the instance sees that workspace and nothing else.
+## @required
+## @immutable
+## @length ..512
+## @format cybercloud-resource-id
+## @example "/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.Monitor/workspaces/prod"
+workspace: ""
+
+## @param anonymousViewers {boolean} Whether anybody who can reach the URL may view dashboards without signing in, as a Viewer. Off means every visit signs in as the admin user the url action returns. ⚠ A rendered panel embedded by URL in another page is a visit like any other, so embedding needs this on or a signed-in browser.
+anonymousViewers: false
+
+## @param sizing {object} CPU and memory for the instance.
+sizing:
+  ## @param preset {string} How much the pod gets. Grafana renders in the browser and queries the workspace's stores, so the small row serves a team; the larger rows are for many concurrent dashboards.
+  ## @enum c1.large | c1.medium | c1.small
+  ## @widget cozy-preset
+  preset: c1.small
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Dashboard/grafanas
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+  ## @param workspace {string} The workspace's own NAME, read by the reconciler off the `workspace` path above — the stem of the workspace's row and ingest-key Secret the pod reads its coordinates from, and the VMUser the datasources authenticate as.
+  workspace: prod
+
+## @param image {string} The Grafana image, pinned by digest in the bundle's shape.
+## @internal Upstream's grafana/grafana, unmodified — ADR-011's "we distribute, we do not modify", and SOURCE carries the reading. ⚠ `repository:tag@sha256:…`, the same string as Grafanas.Image; GrafanaDeclarationTests fails when the two drift. Resolved 2026-09-17.
+image: grafana/grafana:13.2.2@sha256:ac461fb352abc50da10a51c7d02462e9c05488f11f53f14b3ad79a8145f638a0
+
+## @param preinstall {string} What GF_PLUGINS_PREINSTALL_SYNC installs before Grafana starts serving, as `id@version`.
+## @internal The ClickHouse datasource plugin at a pinned version — Grafanas.ClickHousePreinstall, and GrafanaDeclarationTests compares the two. ⚠ The version is load-bearing: an entry without one means "latest, kept updated". Fetched from grafana.com on every start by Grafana's own installer and not pinned by digest; a cluster with no egress gets a pod that exits 1 before it listens. conformance.yaml § owed, `clickhouse-plugin-is-fetched-at-start`.
+preinstall: grafana-clickhouse-datasource@4.21.3
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

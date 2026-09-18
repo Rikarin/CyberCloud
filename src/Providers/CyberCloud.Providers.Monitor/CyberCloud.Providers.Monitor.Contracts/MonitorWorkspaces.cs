@@ -962,8 +962,9 @@ public static class MonitorWorkspaces {
     ///         ⚠ <b>THE INGEST MAP ROW. It is the product of this resource type.</b> Everything the
     ///         data plane needs to accept, label, cap and route one tenant's telemetry is here, in
     ///         one object, in a form something that is not an Orleans client can read — which is the
-    ///         constraint the whole design turns on. Nothing reads it yet;
-    ///         <c>conformance.yaml § owed</c>, <c>nothing-consumes-the-row</c>.
+    ///         constraint the whole design turns on. The ingest host it was published for does not
+    ///         exist — <c>conformance.yaml § owed</c>, <c>nothing-consumes-the-row</c> — and its first
+    ///         readers are two pods: see <see cref="RowKeyAccountId" />.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The retention is written as DAYS and not as the tier name, and that matters.</b>
@@ -990,9 +991,9 @@ public static class MonitorWorkspaces {
                 ["tenantId"] = id.TenantId.ToString("D", CultureInfo.InvariantCulture),
                 ["workspaceId"] = id.Id.ToString("D", CultureInfo.InvariantCulture),
                 ["workspace"] = id.Name,
-                ["accountId"] = AccountId(id).ToString(CultureInfo.InvariantCulture),
-                ["database"] = Database(id),
-                ["ingestKeySecret"] = KeySecretName(id.Name),
+                [RowKeyAccountId] = AccountId(id).ToString(CultureInfo.InvariantCulture),
+                [RowKeyDatabase] = Database(id),
+                [RowKeyIngestKeySecret] = KeySecretName(id.Name),
                 ["retentionMetricsDays"] = Text(Days(desired, Metrics)),
                 ["retentionLogsDays"] = Text(Days(desired, Logs)),
                 ["retentionTracesDays"] = Text(Days(desired, Traces)),
@@ -1276,23 +1277,154 @@ public static class MonitorWorkspaces {
     /// <summary>Where Prometheus remote-write is accepted, for one workspace.</summary>
     /// <param name="id">The resource, with its GUID resolved.</param>
     public static string RemoteWriteEndpoint(ResourceId id) =>
-        string.Create(
-            CultureInfo.InvariantCulture,
-            $"https://{IngestHost}/insert/{AccountId(id)}/prometheus/api/v1/write"
-        );
+        RemoteWriteEndpoint(AccountId(id).ToString(CultureInfo.InvariantCulture));
+
+    /// <summary>
+    ///     Where Prometheus remote-write is accepted, for the workspace whose <c>accountID</c> this
+    ///     is — spelled, so a caller holding the row rather than the address can render it.
+    /// </summary>
+    /// <param name="accountId">
+    ///     The <c>accountId</c> the row carries, or a placeholder a data plane substitutes at start
+    ///     — see <see cref="RowKeyAccountId" />.
+    /// </param>
+    /// <remarks>
+    ///     ⚠ <b>One spelling, two callers, and the second is what forced the split.</b>
+    ///     <c>listKeys</c> holds the address and derives the accountID; a collector or a Grafana
+    ///     under this workspace holds the workspace's <i>name</i> only — a child's pass never learns
+    ///     its parent's GUID — so it addresses the same store through the row the workspace
+    ///     published, read by the kubelet into an environment variable. The URL grammar is written
+    ///     once here so the two cannot disagree on where <c>/insert/</c> goes.
+    /// </remarks>
+    public static string RemoteWriteEndpoint(string accountId) {
+        ArgumentException.ThrowIfNullOrEmpty(accountId);
+
+        return $"https://{IngestHost}/insert/{accountId}/prometheus/api/v1/write";
+    }
 
     /// <summary>The read-only PromQL datasource, for one workspace.</summary>
     /// <param name="id">The resource, with its GUID resolved.</param>
-    public static string PromqlEndpoint(ResourceId id) =>
-        string.Create(
-            CultureInfo.InvariantCulture,
-            $"https://{QueryHost}/select/{AccountId(id)}/prometheus"
-        );
+    public static string PromqlEndpoint(ResourceId id) => PromqlEndpoint(AccountId(id).ToString(CultureInfo.InvariantCulture));
+
+    /// <inheritdoc cref="RemoteWriteEndpoint(string)" />
+    /// <summary>The read-only PromQL datasource, for the workspace whose <c>accountID</c> this is.</summary>
+    public static string PromqlEndpoint(string accountId) {
+        ArgumentException.ThrowIfNullOrEmpty(accountId);
+
+        return $"https://{QueryHost}/select/{accountId}/prometheus";
+    }
 
     /// <summary>The read-only SQL datasource for logs, traces and events, for one workspace.</summary>
     /// <param name="id">The resource, with its GUID resolved.</param>
-    public static string SqlEndpoint(ResourceId id) =>
-        string.Create(CultureInfo.InvariantCulture, $"https://{QueryHost}/sql/{Database(id)}");
+    public static string SqlEndpoint(ResourceId id) => SqlEndpoint(Database(id));
+
+    /// <inheritdoc cref="RemoteWriteEndpoint(string)" />
+    /// <summary>The read-only SQL datasource, for the workspace whose database this is.</summary>
+    public static string SqlEndpoint(string database) {
+        ArgumentException.ThrowIfNullOrEmpty(database);
+
+        return $"https://{QueryHost}/sql/{database}";
+    }
+
+    // ── What a workload under a workspace reads off the row ──────────────────────────────────
+
+    /// <summary>The row's key carrying the VictoriaMetrics <c>accountID</c>.</summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             THE ROW WAS PUBLISHED FOR A HOST THAT DOES NOT EXIST, AND ITS FIRST READERS TURNED
+    ///             OUT TO BE TWO PODS.
+    ///         </b> <see cref="RowJson" /> says <i>"nothing reads it yet"</i>; a collector
+    ///         (<c>workspaces/collectors</c>) and a managed Grafana (<c>CyberCloud.Dashboard/grafanas</c>)
+    ///         now do, and neither reads it from a reconciler. Both render an object whose
+    ///         <c>env</c> names the row by <c>configMapKeyRef</c> and the ingest key's <c>Secret</c>
+    ///         by <c>secretKeyRef</c>, so the <b>kubelet</b> substitutes the coordinates at pod
+    ///         start. Three things follow, and each is a property the reconciler-side reading would
+    ///         not have had:
+    ///     </para>
+    ///     <list type="bullet">
+    ///         <item>
+    ///             The rendered documents are pure functions of the address and the body — clause 1
+    ///             of docs/plan/08 § The reconcile loop — because the coordinates are not in them.
+    ///         </item>
+    ///         <item>
+    ///             The ingest key never passes through the control plane a second time: the
+    ///             workspace's reconciler wrote it into its <c>Secret</c> once and the pod reads it
+    ///             from there.
+    ///         </item>
+    ///         <item>
+    ///             A pod under a workspace that has not converged yet is a pod the kubelet holds in
+    ///             <c>CreateContainerConfigError</c> until the row appears, and then starts —
+    ///             which is what "converges once its workspace does" looks like on a node.
+    ///         </item>
+    ///     </list>
+    ///     <para>
+    ///         ⚠ <b>The keys are the row's own spelling and are constants here so a rename fails to
+    ///         compile in three places rather than starting a pod with an empty accountID.</b> The
+    ///         set is the three a data plane under a workspace needs: which account, which database,
+    ///         and what authenticates.
+    ///     </para>
+    /// </remarks>
+    public const string RowKeyAccountId = "accountId";
+
+    /// <summary>The row's key carrying the ClickHouse database.</summary>
+    public const string RowKeyDatabase = "database";
+
+    /// <summary>The row's key naming the <c>Secret</c> the ingest key is in.</summary>
+    public const string RowKeyIngestKeySecret = "ingestKeySecret";
+
+    /// <summary>
+    ///     The environment variable a pod under a workspace finds the <c>accountID</c> in.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The same three names on the collector and on Grafana, on purpose.</b> A tenant
+    ///     reading either pod's spec sees the same three variables pointing at the same two
+    ///     objects, and a platform operator debugging a pod that will not start has one vocabulary.
+    /// </remarks>
+    public const string EnvAccountId = "CYBERCLOUD_ACCOUNT_ID";
+
+    /// <summary>The environment variable a pod under a workspace finds the database in.</summary>
+    public const string EnvDatabase = "CYBERCLOUD_DATABASE";
+
+    /// <summary>The environment variable a pod under a workspace finds the ingest key in.</summary>
+    public const string EnvIngestKey = "CYBERCLOUD_INGEST_KEY";
+
+    /// <summary>
+    ///     The <c>env</c> entries that hand a pod its workspace's coordinates: two from the row, one
+    ///     from the ingest key's <c>Secret</c>.
+    /// </summary>
+    /// <param name="workspace">The workspace's own name — the child's <see cref="ResourceId.Parent" /> name, or the path's.</param>
+    /// <remarks>
+    ///     ⚠ <b>Not <c>optional</c>, and that is the load-bearing default.</b> An optional reference
+    ///     would start the pod with three empty strings and a collector exporting to
+    ///     <c>/insert//prometheus</c>, which VictoriaMetrics would refuse or, worse, route to a
+    ///     default account. Held in <c>CreateContainerConfigError</c> until the workspace's row
+    ///     exists is the honest state for a collector whose workspace does not.
+    /// </remarks>
+    public static JsonArray WorkspaceEnv(string workspace) {
+        ArgumentException.ThrowIfNullOrEmpty(workspace);
+
+        return new JsonArray {
+            new JsonObject {
+                ["name"] = EnvAccountId,
+                ["valueFrom"] = new JsonObject {
+                    ["configMapKeyRef"] = new JsonObject { ["name"] = RowName(workspace), ["key"] = RowKeyAccountId }
+                }
+            },
+            new JsonObject {
+                ["name"] = EnvDatabase,
+                ["valueFrom"] = new JsonObject {
+                    ["configMapKeyRef"] = new JsonObject { ["name"] = RowName(workspace), ["key"] = RowKeyDatabase }
+                }
+            },
+            new JsonObject {
+                ["name"] = EnvIngestKey,
+                ["valueFrom"] = new JsonObject {
+                    ["secretKeyRef"] = new JsonObject { ["name"] = KeySecretName(workspace), ["key"] = IngestKeyField }
+                }
+            }
+        };
+    }
 
     // ── A body, for tests, the conformance case and the chart ────────────────────────────────
 
