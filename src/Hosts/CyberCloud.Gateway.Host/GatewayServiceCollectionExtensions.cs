@@ -12,6 +12,7 @@ using CyberCloud.Kubernetes.Contracts.Tunnel;
 using CyberCloud.Kubernetes.Tunnel;
 using CyberCloud.Identity.Validation;
 using CyberCloud.ResourceManager;
+using CyberCloud.ServiceDefaults.RateLimiting;
 using CyberCloud.Tenancy;
 using CyberCloud.Tenancy.Directory;
 using Microsoft.Extensions.DependencyInjection;

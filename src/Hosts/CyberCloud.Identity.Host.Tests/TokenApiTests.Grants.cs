@@ -206,7 +206,9 @@ public sealed partial class TokenApiTests {
         var handler = new DegradedModeHandlers.ValidateTokenRequest(
             Api,
             fixture.Services.GetRequiredService<IClientResolver>(),
-            fixture.Services.GetRequiredService<FirstPartyClients>()
+            fixture.Services.GetRequiredService<FirstPartyClients>(),
+            fixture.Services.GetRequiredService<IClientSecretSeam>(),
+            NullLogger<DegradedModeHandlers.ValidateTokenRequest>.Instance
         );
         var (code, _) = await CodeAsync();
 
@@ -375,10 +377,17 @@ public sealed partial class TokenApiTests {
             Portal,
             cookie,
             "/authorize",
-            Ct
+            cancellationToken: Ct
         );
 
-        return (decision.ShouldBeOfType<AuthorizeDecision.IssueCode>().Principal, outcome.SessionId);
+        var code = decision.ShouldBeOfType<AuthorizeDecision.IssueCode>().Principal;
+
+        // What DegradedModeHandlers.StampAuthorizationCodeId does on the wire, where the principal
+        // AuthorizeApi hands OpenIddict is signed: the exchange refuses a code with no id, because a
+        // code it cannot burn is a code it must not exchange.
+        code.SetTokenId(Guid.NewGuid().ToString("N"));
+
+        return (code, outcome.SessionId);
     }
 
     /// <summary>

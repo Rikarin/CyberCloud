@@ -40,12 +40,13 @@ namespace CyberCloud.Identity.Host.Tokens;
 ///         chain derived from a sign-in without enumerating them.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every refusal after the token validated is <c>invalid_grant</c> and one of two
+///         ⚠ <b>Every refusal after the token validated is <c>invalid_grant</c> and one of three
 ///         sentences.</b> A revoked interactive session, a replayed handle, an expired chain and a
 ///         session that no longer exists are told apart in the log
 ///         (<c>GrantLog.GrantRefused</c>) and not in the body — a body that distinguished "replayed"
 ///         from "expired" would tell whoever holds a stolen token whether the legitimate client is
-///         still active.
+///         still active. The third, <see cref="CodeReplayedDescription" />, is the one that may be
+///         specific, and its own remarks say why.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The <c>client_id</c> of a service principal is its own id, in <c>N</c> form.</b>
@@ -85,6 +86,18 @@ public sealed class TokenApi(
 
     /// <summary>What a refresh answers when the chain refused the handle — replayed, expired or unknown.</summary>
     public const string RefreshRejectedDescription = "That refresh token is no longer valid. Sign in again.";
+
+    /// <summary>
+    ///     What a second exchange of one authorization code answers — and the first exchange's
+    ///     token session is revoked as it is said. RFC 6749 § 4.1.2.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A third sentence beside the two above, and it is allowed to be specific where they are
+    ///     not: a replayed code tells whoever holds it nothing about the legitimate client that a
+    ///     generic refusal would hide, because the code was single-use by contract and the client
+    ///     that exchanged it first has already been signed out by this very answer.
+    /// </remarks>
+    public const string CodeReplayedDescription = "That authorization code was already used. The session it opened has been revoked; sign in again.";
 
     /// <summary>
     ///     Authenticates the client behind a client-credentials request.
@@ -294,11 +307,33 @@ public sealed class TokenApi(
     ///     <see cref="SessionRevokedDescription" /> — the endpoint answers <c>invalid_grant</c>.
     /// </returns>
     /// <remarks>
-    ///     ⚠ The interactive session is read first and the token session opened second, so a code
-    ///     minted before a sign-out is refused rather than turned into a session that outlives the
-    ///     sign-in it came from. The token session is tracked on the user
-    ///     (<see cref="IUserGrain.TrackSessionAsync" />) like any other, so "sign out everywhere"
-    ///     reaches it.
+    ///     <para>
+    ///         ⚠ The interactive session is read first and the token session opened second, so a
+    ///         code minted before a sign-out is refused rather than turned into a session that
+    ///         outlives the sign-in it came from. The token session is tracked on the user
+    ///         (<see cref="IUserGrain.TrackSessionAsync" />) like any other, so "sign out everywhere"
+    ///         reaches it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The code is burnt between the two, and the order of the three grain calls is the
+    ///         whole of RFC 6749 § 4.1.2.</b> The token session's id is minted here, before anything
+    ///         is written; <see cref="IAuthorizationCodeGrain.ConsumeAsync" /> records it against
+    ///         the code's <c>jti</c> in one grain turn; only then is the session opened under that
+    ///         id. A second exchange of the same code — a replay from a log, a <c>Referer</c>, or a
+    ///         client that retried its callback — finds the record, is refused with
+    ///         <see cref="CodeReplayedDescription" />, and revokes the session the record names
+    ///         with <see cref="RevocationReason.AuthorizationCodeReuseDetected" />, whether or not
+    ///         the first exchange has finished opening it (<c>SessionGrain.OpenAsync</c> refuses to
+    ///         open over a revocation). After the interactive-session check rather than before, so
+    ///         a code whose sign-in is gone is refused without a write; before the open, so a replay
+    ///         can never race a second session into existence.
+    ///         <c>GrantsOverHttpTests.AReplayedCodeIsRefusedAndRevokesTheSessionTheFirstExchangeOpened</c>.
+    ///     </para>
+    ///     <para>
+    ///         The code's id is <see cref="DegradedModeHandlers.StampAuthorizationCodeId" />'s. A
+    ///         code without one — minted by a host that predates the stamp, inside its five minutes
+    ///         — is refused, because a code this host cannot burn is a code it must not exchange.
+    ///     </para>
     /// </remarks>
     public async Task<Result<ClaimsPrincipal>> MintForCodeAsync(
         ClaimsPrincipal code,
@@ -337,7 +372,32 @@ public sealed class TokenApi(
             }
         }
 
+        if (!Guid.TryParseExact(code.GetTokenId(), "N", out var codeId) || codeId == Guid.Empty) {
+            return Refused(facts.TenantId, OpenIddictConstants.GrantTypes.AuthorizationCode, facts.InteractiveSessionId, "code-missing-id", SessionRevokedDescription);
+        }
+
         var tokenSessionId = Guid.NewGuid();
+
+        // ⚠ Burn the code under the session id BEFORE the session exists — the type's remarks say
+        // why the order is the mechanism. The expiry is the code's own, so the record lives exactly
+        // as long as OpenIddict would accept the code, plus the grain's skew grace.
+        var consumed = await tenant
+            .GetGrain<IAuthorizationCodeGrain>(GrainKeys.AuthorizationCode(codeId))
+            .ConsumeAsync(tokenSessionId, code.GetExpirationDate() ?? clock.UtcNow + AccessTokenPolicy.AuthorizationCodeLifetime);
+
+        if (consumed.TryGetError(out var notConsumed)) {
+            return Refused(facts.TenantId, OpenIddictConstants.GrantTypes.AuthorizationCode, facts.InteractiveSessionId, notConsumed.Message, SessionRevokedDescription);
+        }
+
+        if (!consumed.GetValueOrThrow().FirstUse) {
+            var firstSession = consumed.GetValueOrThrow().TokenSessionId;
+
+            await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(firstSession)).RevokeAsync(RevocationReason.AuthorizationCodeReuseDetected);
+
+            GrantLog.AuthorizationCodeReplayed(logger, facts.TenantId, facts.UserId, codeId, firstSession);
+
+            return Refused(facts.TenantId, OpenIddictConstants.GrantTypes.AuthorizationCode, firstSession, "code-replayed", CodeReplayedDescription);
+        }
 
         var opened = await tenant
             .GetGrain<ISessionGrain>(GrainKeys.Session(tokenSessionId))

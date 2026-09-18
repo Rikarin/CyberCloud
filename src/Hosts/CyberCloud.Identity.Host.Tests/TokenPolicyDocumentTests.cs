@@ -1,4 +1,5 @@
 using CyberCloud.Identity.Contracts;
+using CyberCloud.Identity.Host.RateLimiting;
 using CyberCloud.Identity.Host.Tests.Infrastructure;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -136,14 +137,15 @@ public sealed class TokenPolicyDocumentTests {
         // ⚠ THE INVARIANT OnRedirectToLogin DEPENDS ON. A script-called endpoint mapped outside
         // `/api` receives a 302 to a login page instead of a 401, which every caller then fails to
         // parse — see UnauthenticatedApiCallsGet401Tests, which asserts the other half of the pair.
-        // The navigable exceptions are named here so adding another is a decision. The three OIDC
-        // passthroughs are the last three: OpenIddict hands each a request it has already validated,
-        // /token never authorizes (a cookie has nothing to say to it), and /authorize and /logout
-        // are navigations by definition — a person arrives at them by redirect, and a 302 to the
-        // sign-in page is exactly what an unauthenticated /authorize answers.
+        // The exceptions are named here so adding another is a decision. The four OIDC passthroughs
+        // are the last four: OpenIddict hands each a request it has already validated, /token and
+        // /userinfo never consult the cookie (a bearer token is their credential, and OpenIddict's
+        // own challenge answers 401 for a bad one), and /authorize and /logout are navigations by
+        // definition — a person arrives at them by redirect, and a 302 to the sign-in page is
+        // exactly what an unauthenticated /authorize answers.
         var navigable = new[] {
             "/health/live", "/.well-known/cybercloud-token-policy", IdentityHostOpenIddict.TokenPath,
-            IdentityHostOpenIddict.AuthorizationPath, IdentityHostOpenIddict.EndSessionPath
+            IdentityHostOpenIddict.UserInfoPath, IdentityHostOpenIddict.AuthorizationPath, IdentityHostOpenIddict.EndSessionPath
         };
 
         var mapped = Endpoints()
@@ -175,7 +177,7 @@ public sealed class TokenPolicyDocumentTests {
         foreach (var route in new[] {
                      "/api/signin/begin", "/api/signin/password", "/api/signin/passkey/begin",
                      "/api/signin/passkey/complete", "/api/signup/begin", "/api/signup/verify",
-                     "/api/signup/passkey/begin", "/api/signup/complete"
+                     "/api/signup/passkey/begin", "/api/signup/complete", "/api/consent"
                  }) {
             mapped.ShouldContain(route, $"the identity page calls {route}");
         }
@@ -192,31 +194,68 @@ public sealed class TokenPolicyDocumentTests {
 
         mapped.ShouldContain(IdentityHostOpenIddict.TokenPath, "the token passthrough must have a handler behind it");
         mapped.ShouldContain(IdentityHostOpenIddict.AuthorizationPath, "the authorization passthrough must have a handler behind it");
+        mapped.ShouldContain(IdentityHostOpenIddict.UserInfoPath, "the userinfo passthrough must have a handler behind it");
         mapped.ShouldContain(IdentityHostOpenIddict.EndSessionPath, "the end-session passthrough must have a handler behind it");
 
         Route(IdentityHostOpenIddict.TokenPath)
             .Metadata.GetMetadata<HttpMethodMetadata>()!
             .HttpMethods.ShouldBe([HttpMethods.Post]);
 
-        // Navigations, both of them: a person arrives by redirect, and a POST /authorize would be
-        // the form-post response mode this server does not offer.
+        // A navigation on GET — a person arrives by redirect — and the consent page's answer on
+        // POST, which is the form-post OF the request (every pair plus `consent`), not the form-post
+        // response mode this server does not offer. IdentityEndpoints.MapAuthorize says what makes
+        // the POST trustworthy and the GET's `consent=` parameter not.
         Route(IdentityHostOpenIddict.AuthorizationPath)
             .Metadata.GetMetadata<HttpMethodMetadata>()!
-            .HttpMethods.ShouldBe([HttpMethods.Get]);
+            .HttpMethods.ShouldBe([HttpMethods.Get, HttpMethods.Post]);
+
+        // OIDC Core § 5.3.1: GET or POST, and OpenIddict extracts both.
+        Route(IdentityHostOpenIddict.UserInfoPath)
+            .Metadata.GetMetadata<HttpMethodMetadata>()!
+            .HttpMethods.ShouldBe([HttpMethods.Get, HttpMethods.Post]);
 
         Route(IdentityHostOpenIddict.EndSessionPath)
             .Metadata.GetMetadata<HttpMethodMetadata>()!
             .HttpMethods.ShouldBe([HttpMethods.Get]);
 
-        // ⚠ The two the portal calls cross-origin carry the first-party CORS policy, and nothing
+        // ⚠ The three the portal calls cross-origin carry the first-party CORS policy, and nothing
         // else does — an /api endpoint with CORS headers would let a page on the portal's origin
-        // drive the sign-in surface with the cookie attached.
+        // drive the sign-in surface with the cookie attached. /userinfo is a bearer endpoint, so
+        // the cookie is nothing to it; the policy lets the portal read the person's profile with
+        // the token it already holds.
         foreach (var route in mapped) {
-            var expected = route == IdentityHostOpenIddict.TokenPath || route == IdentityHostOpenIddict.EndSessionPath;
+            var expected = route == IdentityHostOpenIddict.TokenPath
+                || route == IdentityHostOpenIddict.EndSessionPath
+                || route == IdentityHostOpenIddict.UserInfoPath;
 
             (Route(route).Metadata.GetMetadata<Microsoft.AspNetCore.Cors.Infrastructure.ICorsMetadata>() is not null)
                 .ShouldBe(expected, $"{route} carries CORS metadata it should{(expected ? "" : " not")}");
         }
+    }
+
+    [Fact]
+    public void TheRateLimitedRoutesAreExactlyTheOnesThatIssueOrTakeACode() {
+        // ⚠ Named on both sides, so a route that starts issuing or taking a code without a bucket is
+        // a failing test, and so is a bucket that lands on the password endpoint — which has the
+        // lockout counter and the dummy hash and does not need one (IdentityRateLimits' remarks).
+        var limited = Endpoints()
+            .OfType<RouteEndpoint>()
+            .Select(x => (Route: x.RoutePattern.RawText!, Bucket: x.Metadata.OfType<IdentityRateLimitBucket>().ToList()))
+            .Where(x => x.Bucket.Count > 0)
+            .ToDictionary(x => x.Route, x => x.Bucket.Single().Name, StringComparer.Ordinal);
+
+        limited.ShouldBe(
+            new Dictionary<string, string>(StringComparer.Ordinal) {
+                ["/api/signup/begin"] = IdentityRateLimits.SignUpBegin.Name,
+                ["/api/signup/verify"] = IdentityRateLimits.CodeVerify.Name,
+                ["/api/signin/otp"] = IdentityRateLimits.CodeVerify.Name,
+                ["/api/signin/totp"] = IdentityRateLimits.CodeVerify.Name,
+                ["/api/signin/recovery-code"] = IdentityRateLimits.CodeVerify.Name
+            },
+            ignoreOrder: true
+        );
+
+        IdentityRateLimits.All.Select(x => x.Name).ShouldBe(["signup-begin", "code-verify"]);
     }
 
     [Fact]
@@ -237,9 +276,20 @@ public sealed class TokenPolicyDocumentTests {
                      .Where(x => x.RoutePattern.RawText!.StartsWith("/api/", StringComparison.Ordinal))) {
             var methods = endpoint.Metadata.GetMetadata<HttpMethodMetadata>();
 
+            methods.ShouldNotBeNull(endpoint.RoutePattern.RawText);
+
+            // ⚠ The one GET, named so a second one is a decision: /api/consent reads what the consent
+            // page renders, and the only thing in its URL is the /authorize request the person was
+            // already sent with — a URL the access log and the Referer have seen. It takes no
+            // address and no credential, and it answers behind the cookie.
+            if (string.Equals(endpoint.RoutePattern.RawText, "/api/consent", StringComparison.Ordinal)) {
+                methods.HttpMethods.ShouldBe([HttpMethods.Get], endpoint.RoutePattern.RawText);
+
+                continue;
+            }
+
             // ⚠ POST, so the address and the credential are never in a URL. A GET would put them in
             // the access log, the browser history and the Referer header of whatever loads next.
-            methods.ShouldNotBeNull(endpoint.RoutePattern.RawText);
             methods.HttpMethods.ShouldBe([HttpMethods.Post], endpoint.RoutePattern.RawText);
         }
     }

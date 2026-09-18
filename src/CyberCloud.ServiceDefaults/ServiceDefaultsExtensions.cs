@@ -46,6 +46,14 @@ public static class ServiceDefaultsExtensions {
                 // headers the ingress sets are dropped and every request appears to come from the node.
                 // The proxy in front of these pods is the platform's own ingress; anything reaching a
                 // pod directly is not a request path we serve.
+                //
+                // ⚠ But cleared is not "trust the ingress": ForwardedHeadersMiddleware checks the
+                // connection's address against these lists only when one of them has an entry, so on
+                // cleared lists it believes an X-Forwarded-For from ANY connection. That is why no
+                // host runs UseForwardedHeaders on these options as they stand. The identity host,
+                // whose per-IP buckets are keyed by the address, post-configures the lists from
+                // CyberCloud:Identity:TrustedProxies and runs the middleware only when that names the
+                // ingress — CyberCloud.Identity.Host's TrustedProxies has the argument.
                 options.KnownIPNetworks.Clear();
                 options.KnownProxies.Clear();
             }

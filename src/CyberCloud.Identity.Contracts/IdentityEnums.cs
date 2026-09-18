@@ -144,7 +144,21 @@ public enum RevocationReason {
     RefreshReuseDetected = 5,
 
     /// <summary>The session outlived its absolute lifetime.</summary>
-    Expired = 6
+    Expired = 6,
+
+    /// <summary>
+    ///     The authorization code that opened this token session was presented a second time —
+    ///     RFC 6749 § 4.1.2's "SHOULD revoke (when possible) all tokens previously issued based on
+    ///     that authorization code".
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The same reading as <see cref="RefreshReuseDetected" />: the second presenter and the
+    ///     first cannot be told apart at the endpoint, so the session the first exchange opened dies
+    ///     with the replay. Under the innocent reading (a client retried its callback) the person
+    ///     signs in again; under the hostile one (a code was stolen from a log or a <c>Referer</c>
+    ///     and exchanged before the legitimate tab could) the thief's session is the one revoked.
+    /// </remarks>
+    AuthorizationCodeReuseDetected = 7
 }
 
 /// <summary>

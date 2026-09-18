@@ -295,6 +295,18 @@ public static class AccessTokenPolicy {
     public static TimeSpan RefreshTokenLifetime { get; } = TimeSpan.FromDays(14);
 
     /// <summary>
+    ///     Five minutes for an authorization code: long enough for a slow redirect chain, short
+    ///     enough that a code that leaked through a <c>Referer</c> or a log is stale before anybody
+    ///     reads it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Read by the identity host, which hands it to OpenIddict, and by
+    ///     <c>IAuthorizationCodeGrain</c>, which keeps a code's one-time-use record for this long
+    ///     plus a skew grace — one number, so the record cannot expire before the code it guards.
+    /// </remarks>
+    public static TimeSpan AuthorizationCodeLifetime { get; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
     ///     Ninety days, after which a session dies however active it has been.
     /// </summary>
     /// <remarks>

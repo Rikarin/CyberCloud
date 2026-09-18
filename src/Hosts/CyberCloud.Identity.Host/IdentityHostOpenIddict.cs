@@ -256,11 +256,12 @@ public static class IdentityHostOpenIddict {
                     options.SetAccessTokenLifetime(AccessTokenPolicy.AccessTokenLifetime);
                     options.SetRefreshTokenLifetime(AccessTokenPolicy.RefreshTokenLifetime);
 
-                    // Five minutes for a code: long enough for a slow redirect chain, short enough
-                    // that a code that leaked through a Referer or a log is stale before anybody
-                    // reads it. ⚠ One-time use is not enforced (no token store in degraded mode);
-                    // PKCE is the mitigation, and the code store is owed — IdentityEndpoints' list.
-                    options.SetAuthorizationCodeLifetime(TimeSpan.FromMinutes(5));
+                    // Five minutes for a code — AccessTokenPolicy.AuthorizationCodeLifetime says why
+                    // that number, and IAuthorizationCodeGrain reads the same one so the one-time-use
+                    // record cannot expire before the code it guards. ⚠ One-time use is not
+                    // OpenIddict's here (no token store in degraded mode): StampAuthorizationCodeId
+                    // gives the code an id and TokenApi.MintForCodeAsync burns it in the hot tier.
+                    options.SetAuthorizationCodeLifetime(AccessTokenPolicy.AuthorizationCodeLifetime);
 
                     // ⚠ The claims a code and a refresh token carry that OpenIddict does not know by
                     // name, registered so it keeps them through its own claim mapping. The two

@@ -167,6 +167,43 @@ public sealed class IdentityHostOptions {
     public string DefaultRegion { get; set; } = string.Empty;
 
     /// <summary>
+    ///     The proxies whose <c>X-Forwarded-For</c> and <c>X-Forwarded-Proto</c> this host believes —
+    ///     addresses (<c>10.42.0.17</c>) or CIDR blocks (<c>10.42.0.0/16</c>). Empty means the
+    ///     connection's own address is the caller's and the headers are ignored.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Set it behind the ingress, or the per-IP limits are one bucket for everybody.</b>
+    ///         docs/plan/10 § Shape puts Envoy in front of every host, so what
+    ///         <c>HttpContext.Connection.RemoteIpAddress</c> holds on a deployed pod is the ingress's
+    ///         address — the same one for every person. <c>IdentityRateLimits</c> keys its two
+    ///         buckets by that address, so without this list ten sign-ups in ten minutes and sixty
+    ///         code answers a minute become platform-wide caps, and ten requests from one hostile
+    ///         caller close sign-up for everyone. With the ingress named here,
+    ///         <c>IdentityComposition.MapIdentityHost</c> runs the forwarded-headers middleware first
+    ///         and the address the buckets — and <c>SignInContext.ClientAddress</c> — see is the one
+    ///         Envoy appended to <c>X-Forwarded-For</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Name the ingress and nothing wider.</b> The middleware believes a forwarded
+    ///         header only when the connection it arrived on is from an address in this list, and
+    ///         that is the whole defence: a caller sets their own headers, so a list that includes
+    ///         the caller — the whole pod network, say, when tenant workloads share it — is a
+    ///         rate-limit key the caller picks. One hop is read (<c>ForwardLimit</c> stays 1), the
+    ///         rightmost entry, which is the address Envoy itself appends; anything the caller put
+    ///         in the header before it is never reached. A value that parses as neither an address
+    ///         nor a block refuses start-up with a sentence naming this setting.
+    ///     </para>
+    ///     <para>
+    ///         Leave it empty on the development run: the browser reaches the host directly on
+    ///         <c>127.0.0.1</c>, and <c>IdentityHostFixture</c> starts the host the same way.
+    ///         <c>GrantsOverHttpTests.TheForwardedAddressCountsOnlyWhenTheDeploymentNamesItsProxy</c>
+    ///         pins both halves.
+    ///     </para>
+    /// </remarks>
+    public IList<string> TrustedProxies { get; } = [];
+
+    /// <summary>
     ///     The two first-party clients' redirect URIs — the only thing about them a deployment
     ///     decides. Everything else on the registration is fixed in <c>FirstPartyClients</c>.
     /// </summary>

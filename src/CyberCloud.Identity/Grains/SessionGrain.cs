@@ -71,6 +71,20 @@ public sealed class SessionGrain(
             );
         }
 
+        // ⚠ REVOKED BEFORE IT OPENED STAYS REVOKED. A code exchange mints its token session id,
+        // consumes the code under that id, and only then opens this grain; a replay of the same code
+        // that lands between the two finds the id on the code's record and revokes it — and if that
+        // revocation could be opened over, the replay would have revoked nothing. RevokeAsync on an
+        // unopened session writes the reason and leaves UserId empty, so this is the one check that
+        // tells "never opened" from "killed before it could open".
+        if (state.State.RevokedBecause != RevocationReason.None) {
+            return Result<RefreshRotation>.Failure(
+                ErrorCode.AuthorizationFailed,
+                $"Session {sessionId:D} was revoked ({state.State.RevokedBecause}) before it opened, and "
+                + "a revoked session does not open."
+            );
+        }
+
         var now = clock.UtcNow;
 
         state.State.UserId = userId;

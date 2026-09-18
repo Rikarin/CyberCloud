@@ -332,10 +332,11 @@ public sealed class RecordingOtpDelivery : IOtpDeliverySeam {
 ///     delivery seam, an in-memory reminder service and a clock the tests drive.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Its own cluster rather than <c>IdentityCluster</c>, for the reminder.</b>
-///     <c>SignUpGrain</c> registers one at <c>BeginAsync</c> and that throws on a silo with no
-///     reminder service — late, inside the grain call — so the fixture wires
-///     <c>UseInMemoryReminderService</c>, which every fixture that activates a reminding grain has to.
+///     ⚠ <b>Its own cluster rather than <c>IdentityCluster</c>, for the delivery seam and the clock
+///     reset.</b> <c>SignUpGrain</c> registers a reminder at <c>BeginAsync</c> and that throws on a
+///     silo with no reminder service — late, inside the grain call — so the fixture wires
+///     <c>UseInMemoryReminderService</c>, which every fixture that activates a reminding grain has to
+///     (<c>IdentityCluster</c> does too, since <c>AuthorizationCodeGrain</c> reminds).
 /// </remarks>
 public sealed class SignUpCluster : IAsyncLifetime {
     readonly Dictionary<Guid, string> addresses = [];

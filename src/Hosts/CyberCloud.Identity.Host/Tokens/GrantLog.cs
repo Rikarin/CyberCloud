@@ -84,6 +84,38 @@ static partial class GrantLog {
         Guid interactiveSessionId
     );
 
+    /// <summary>
+    ///     An authorization code was presented a second time; the token session its first exchange
+    ///     opened was revoked. RFC 6749 § 4.1.2.
+    /// </summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">The tenant.</param>
+    /// <param name="userId">Whose code.</param>
+    /// <param name="codeId">The code's <c>jti</c> — an id, never the code.</param>
+    /// <param name="revokedSessionId">The token session the first exchange opened, now revoked.</param>
+    /// <remarks>
+    ///     ⚠ Warning, not information: a replayed code is either a client bug or a code that leaked,
+    ///     and both are worth a person's attention where a refused refresh is routine.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 1137,
+        Level = LogLevel.Warning,
+        Message = "Authorization code {CodeId} for user {UserId} in tenant {TenantId} was presented again; token session {RevokedSessionId} revoked."
+    )]
+    public static partial void AuthorizationCodeReplayed(ILogger logger, Guid tenantId, Guid userId, Guid codeId, Guid revokedSessionId);
+
+    /// <summary>A person allowed a tenant-registered client — the consent page's yes, recorded.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">The tenant.</param>
+    /// <param name="userId">Who.</param>
+    /// <param name="applicationId">The client's registration — its GUID, not its client id.</param>
+    [LoggerMessage(
+        EventId = 1138,
+        Level = LogLevel.Information,
+        Message = "User {UserId} in tenant {TenantId} consented to application {ApplicationId}."
+    )]
+    public static partial void ConsentGranted(ILogger logger, Guid tenantId, Guid userId, Guid applicationId);
+
     /// <summary>A person signed out: the interactive session was revoked.</summary>
     /// <param name="logger">The sink.</param>
     /// <param name="tenantId">The tenant.</param>

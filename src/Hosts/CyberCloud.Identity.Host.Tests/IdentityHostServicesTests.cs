@@ -99,6 +99,45 @@ public sealed class IdentityHostServicesTests {
     }
 
     [Fact]
+    public void TheTrustedProxiesBecomeTheForwardedHeadersKnownListsAndABadEntryRefusesStartUp() {
+        // The list is what stands between "per address" and "one bucket for the platform" behind
+        // the ingress — IdentityHostOptions.TrustedProxies. A bare address and a block land on the
+        // two lists the middleware checks, and one hop is read.
+        using var provider = Build(
+            ($"{IdentityHostOptions.SectionName}:TrustedProxies:0", "10.42.0.17"),
+            ($"{IdentityHostOptions.SectionName}:TrustedProxies:1", "10.43.0.0/16")
+        );
+
+        var forwarded = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>>().Value;
+
+        forwarded.KnownProxies.ShouldBe([System.Net.IPAddress.Parse("10.42.0.17")]);
+        forwarded.KnownIPNetworks.ShouldBe([System.Net.IPNetwork.Parse("10.43.0.0/16")]);
+        forwarded.ForwardLimit.ShouldBe(1);
+        TrustedProxies.AreConfigured(provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<IdentityHostOptions>>().Value).ShouldBeTrue();
+
+        // Empty: nothing on either list — not even the framework's loopback default — and the
+        // middleware stays out of the pipeline, because a cleared list is "believe anybody", which
+        // TrustedProxies' remarks explain.
+        using var unset = Build();
+
+        var untouched = unset.GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>>().Value;
+
+        untouched.KnownProxies.ShouldBeEmpty();
+        untouched.KnownIPNetworks.ShouldBeEmpty();
+        TrustedProxies.AreConfigured(unset.GetRequiredService<Microsoft.Extensions.Options.IOptions<IdentityHostOptions>>().Value).ShouldBeFalse();
+
+        // A value that is neither: the first resolution — start-up — fails with the setting's name.
+        using var broken = Build(($"{IdentityHostOptions.SectionName}:TrustedProxies:0", "the-ingress"));
+
+        var refused = Should.Throw<InvalidOperationException>(() =>
+            broken.GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>>().Value
+        );
+
+        refused.Message.ShouldContain("CyberCloud:Identity:TrustedProxies");
+        refused.Message.ShouldContain("'the-ingress'");
+    }
+
+    [Fact]
     public void TotpSecretsAreStillUnwiredAndSayWhy() {
         using var provider = Build();
 

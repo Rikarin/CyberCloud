@@ -119,6 +119,18 @@ public enum GrainKeyKind {
     SignUp,
 
     /// <summary>
+    ///     <c>IAuthorizationCodeGrain</c> — <c>code/{codeId:N}</c>, the one-time-use record of an
+    ///     authorization code. See <see cref="GrainKeys.AuthorizationCode" />.
+    /// </summary>
+    AuthorizationCode,
+
+    /// <summary>
+    ///     <c>IConsentGrain</c> — <c>consent/{digest}</c>, a person's standing consent to one
+    ///     client. See <see cref="GrainKeys.ConsentGrant" />.
+    /// </summary>
+    ConsentGrant,
+
+    /// <summary>
     ///     <c>IParkedResourceRegistryGrain</c> — <c>parked/{subscriptionId:N}/rg/{name}</c>,
     ///     docs/plan/08 § Soft delete. See <see cref="GrainKeys.ParkedResourceRegistry" /> for why a
     ///     second shape addresses the same resource group <see cref="ResourceGroup" /> already does.
@@ -244,7 +256,7 @@ public readonly record struct GrainKey {
     /// </summary>
     public string Name => name ?? string.Empty;
 
-    /// <summary>The index digest, for the two <c>idx/</c> shapes.</summary>
+    /// <summary>The digest, for the three <c>idx/</c> shapes and <see cref="GrainKeyKind.ConsentGrant" />.</summary>
     public string Digest => digest ?? string.Empty;
 
     /// <summary>
@@ -303,6 +315,8 @@ public readonly record struct GrainKey {
             GrainKeyKind.Session => GrainKeys.Session(Id),
             GrainKeyKind.ManagedIdentity => GrainKeys.ManagedIdentity(Id),
             GrainKeyKind.SignUp => GrainKeys.SignUp(Id),
+            GrainKeyKind.AuthorizationCode => GrainKeys.AuthorizationCode(Id),
+            GrainKeyKind.ConsentGrant => GrainKeys.ConsentGrantPrefix + Digest,
             GrainKeyKind.ParkedResourceRegistry => GrainKeys.ParkedResourceRegistry(Id, Name),
             GrainKeyKind.ExpirySweeper => GrainKeys.ExpirySweeper(Id, Name),
             GrainKeyKind.ListObjects => GrainKeys.ListObjects(ObjectType, ObjectId),
@@ -323,7 +337,7 @@ public readonly record struct GrainKey {
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The twenty-five shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
+///         <b>The twenty-seven shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
 ///         two more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
 ///         table is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
 ///         Platform rows; four are docs/plan/07 § Storage's authorization grains; five are
@@ -345,7 +359,11 @@ public readonly record struct GrainKey {
 ///         the twenty-fifth is <see cref="SignUp" />, the pre-tenant state of a self-serve sign-up
 ///         docs/plan/11 § Sign-up and tenant creation describes, which is the one identity shape
 ///         qualified by the platform tenant rather than by the tenant it belongs to — because the
-///         tenant it belongs to is what it creates. See the remarks on each. Every one of them is formatted <i>and</i> parsed —
+///         tenant it belongs to is what it creates; and the twenty-sixth and twenty-seventh are
+///         <see cref="AuthorizationCode" /> and <see cref="ConsentGrant" />, the hot-tier code store
+///         RFC 6749 § 4.1.2's one-time use needs and the record of a person's consent to a
+///         tenant-registered client, both of which docs/plan/11 § Protocol carried as owed until
+///         #94. See the remarks on each. Every one of them is formatted <i>and</i> parsed —
 ///         a key that can
 ///         be built but not decoded is half a type, and routing a physical key back to a grain type
 ///         (in a log, in a repair tool, in a dead-letter handler) needs the other half.
@@ -353,16 +371,17 @@ public readonly record struct GrainKey {
 ///     <para>
 ///         ⚠
 ///         <b>
-///             Twenty-four was twenty-three, was twenty-two, was twenty-one, was twenty, was
-///             nineteen, and was eight before that, and the count is re-derived rather than
-///             incremented.
-///         </b> Counted on 2026-09-15 off
+///             Twenty-five was twenty-four, was twenty-three, was twenty-two, was twenty-one, was
+///             twenty, was nineteen, and was eight before that, and the count is re-derived rather
+///             than incremented.
+///         </b> Counted on 2026-09-17 off
 ///         <see cref="GrainKeyKind" />'s members, excluding <see cref="GrainKeyKind.None" />, which
-///         is not a key — twenty-five members, of which <see cref="SignUp" /> is the one added for
-///         self-serve sign-up (#88) on top of the twenty-four the same day's merge of three branches
+///         is not a key — twenty-seven members, of which <see cref="AuthorizationCode" /> and
+///         <see cref="ConsentGrant" /> are the two added for #94 on top of the twenty-five #88's
+///         <see cref="SignUp" /> had made of the twenty-four the same day's merge of three branches
 ///         (#37, #88 and the ListObjects half of #37) had counted, each branch having counted itself
-///         and not the others, which is why the merge is where this sentence was last reread before
-///         this. It goes stale the moment a
+///         and not the others, which is why the merge is where this sentence was reread before #88
+///         and #88 before this. It goes stale the moment a
 ///         member is added without this sentence being reread, which is exactly how issue #71 came to
 ///         describe this type as covering "eight key shapes today": eight is the size of
 ///         docs/plan/06's <i>table</i>, and it stopped being the size of this type thirteen shapes ago.
@@ -598,7 +617,8 @@ public readonly record struct GrainKey {
 ///         <b>The shapes cannot collide, and that is a property rather than a coincidence.</b> Each
 ///         shape is fixed by its first segment (<c>sub</c>, <c>res</c>, <c>user</c>, <c>op</c>,
 ///         <c>cluster</c>, <c>group</c>, <c>app</c>, <c>sp</c>, <c>session</c>, <c>mi</c>,
-///         <c>signup</c>, <c>parked</c>, <c>sweep</c>, <c>idx</c>, <c>rel</c>, <c>tenant</c>, <c>platform</c>) and
+///         <c>signup</c>, <c>code</c>, <c>consent</c>, <c>parked</c>, <c>sweep</c>, <c>idx</c>,
+///         <c>rel</c>, <c>tenant</c>, <c>platform</c>) and
 ///         its segment count, and the only caller-controlled component
 ///         — the resource group name, in <see cref="ResourceGroup" />, in
 ///         <see cref="ParkedResourceRegistry" /> and in <see cref="ExpirySweeper" />, which are all
@@ -638,6 +658,12 @@ public static class GrainKeys {
 
     /// <summary><c>signup/</c> — a self-serve sign-up in progress, docs/plan/11 § Sign-up and tenant creation.</summary>
     public const string SignUpPrefix = "signup/";
+
+    /// <summary><c>code/</c> — an authorization code's one-time-use record, docs/plan/11 § Protocol.</summary>
+    public const string AuthorizationCodePrefix = "code/";
+
+    /// <summary><c>consent/</c> — a person's consent to one client, docs/plan/11 § Protocol.</summary>
+    public const string ConsentGrantPrefix = "consent/";
 
     /// <summary><c>cluster/</c> — a cluster connection. Null tenant.</summary>
     public const string ClusterConnectionPrefix = "cluster/";
@@ -1255,6 +1281,76 @@ public static class GrainKeys {
     public static string SignUp(Guid signupId) => SignUpPrefix + N(signupId);
 
     /// <summary>
+    ///     <c>code/{codeId:N}</c> — <c>IAuthorizationCodeGrain</c>, docs/plan/11 § Protocol.
+    ///     <b>Hot tier</b>, tenant-qualified.
+    /// </summary>
+    /// <param name="codeId">
+    ///     The code's <c>jti</c> — random, minted by the identity host when the code is generated
+    ///     and carried inside the encrypted code, so nothing but the server that opens the code can
+    ///     name the grain.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Keyed by the code's id and never by the code, and that is the trap worth naming.</b>
+    ///         The code is a bearer credential for five minutes; a grain keyed by it would put that
+    ///         credential in every log line and trace that prints a grain id. The id is a GUID the
+    ///         server put inside the code, so an exchange that reaches this grain has already opened
+    ///         the code with the server's own key — reaching the grain proves nothing on its own,
+    ///         which is the same argument <see cref="Session" /> makes for the session id.
+    ///     </para>
+    ///     <para>
+    ///         <b>What it records</b> is the one fact RFC 6749 § 4.1.2 needs that a self-contained
+    ///         code cannot carry: whether it has been exchanged, and which token session that exchange
+    ///         opened, so a second exchange can be refused and the first one's session revoked. Hot,
+    ///         because losing the record after the code has expired costs nothing and losing it before
+    ///         costs one replay window on one code — bounded by concurrent sign-ins, which is the
+    ///         hot tier's shape. <b>Cardinality</b> is one activation per code, and the activation is
+    ///         short: the grain clears itself once the code it records has expired.
+    ///     </para>
+    /// </remarks>
+    public static string AuthorizationCode(Guid codeId) => AuthorizationCodePrefix + N(codeId);
+
+    /// <summary>
+    ///     <c>consent/{sha256(tenantId + userId + clientId)[..16]}</c> — <c>IConsentGrain</c>, a
+    ///     person's standing consent to one tenant-registered client. docs/plan/11 § Protocol.
+    ///     <b>Durable</b>, tenant-qualified.
+    /// </summary>
+    /// <param name="tenantId">The tenant both the person and the client belong to.</param>
+    /// <param name="userId">The person.</param>
+    /// <param name="clientId">The <c>client_id</c>, verbatim. Validated by <see cref="EnsureValidClientId" />.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A digest and not <c>consent/{userId}/{clientId}</c>, because a client id is not
+    ///         key-safe text.</b> An OAuth <c>client_id</c> is opaque and may carry any character
+    ///         but the few <see cref="EnsureValidClientId" /> refuses; a key that spelled it out
+    ///         would need every one of them to survive tenant qualification and Redis's key syntax,
+    ///         and <see cref="IsTenantQualificationSafe" /> would then be false of a key this type
+    ///         built. The same three inputs digested the way <see cref="ClientIndex" /> digests two
+    ///         of them gives one activation per (person, client), which is the unit a consent is
+    ///         given and revoked in; the scopes it covers are the grain's <i>state</i>, so a request
+    ///         for a wider set finds the narrower grant and asks again rather than finding nothing.
+    ///     </para>
+    ///     <para>
+    ///         The client id is in the digest verbatim and case-sensitively, as <see cref="ClientIndex" />
+    ///         says an OAuth identifier must be; the user id is there rather than only in the
+    ///         qualification for the reason <see cref="EmailIndex" /> gives — a key read outside its
+    ///         qualification still says whose it is.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    ///     <paramref name="clientId" /> is not a value <see cref="EnsureValidClientId" /> accepts.
+    /// </exception>
+    public static string ConsentGrant(Guid tenantId, Guid userId, string clientId) {
+        var validated = EnsureValidClientId(clientId);
+        if (validated.TryGetError(out var error)) {
+            throw new ArgumentException(error.Message, nameof(clientId));
+        }
+
+        return ConsentGrantPrefix
+            + Digest(ConsentGrantPrefix, N(tenantId) + "\n" + N(userId) + "\n" + validated.GetValueOrThrow());
+    }
+
+    /// <summary>
     ///     <c>cluster/{clusterId:N}</c> — <c>IClusterConnectionGrain</c>, docs/plan/06 § Grain keys.
     /// </summary>
     /// <remarks>
@@ -1608,7 +1704,7 @@ public static class GrainKeys {
                 + "'res/{id}', 'user/{id}', "
                 + "'op/{id}', 'cluster/{id}', "
                 + "'tenant/{id}', 'group/{id}', 'app/{id}', 'sp/{id}', 'session/{id}', 'mi/{id}', 'signup/{id}', "
-                + "'platform/{singleton}', 'idx/path/{digest}', "
+                + "'code/{id}', 'consent/{digest}', 'platform/{singleton}', 'idx/path/{digest}', "
                 + "'idx/email/{digest}', 'idx/client/{digest}', 'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
                 + "'rel/sub/{type}/{id}', 'rel/check/{type}/{id}', 'rel/list/{type}/{id}' or "
                 + "'rel/idx/{type}/{id}' — see "
@@ -1684,6 +1780,21 @@ public static class GrainKeys {
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
 
     static Result<GrainKey> ParseTwoSegments(string key, string[] segments) {
+        // ⚠ The one two-segment shape whose payload is a digest rather than a GUID — see
+        // ConsentGrant for why a client id cannot be spelled into a key. Cut before the GUID shapes
+        // so a consent digest is never read as a malformed id.
+        if (string.Equals(segments[0], "consent", StringComparison.Ordinal)) {
+            return IsDigest(segments[1])
+                ? Result<GrainKey>.Success(new(GrainKeyKind.ConsentGrant, Guid.Empty, null, segments[1]))
+                : Invalid(
+                    $"'{segments[1]}' is not a consent digest: it must be exactly "
+                    + Int(DigestLength)
+                    + " lower-case hexadecimal characters, the first "
+                    + Int(DigestLength)
+                    + " of a SHA-256."
+                );
+        }
+
         if (string.Equals(segments[0], "platform", StringComparison.Ordinal)) {
             return PlatformSingletons.Contains(segments[1], StringComparer.Ordinal)
                 ? Result<GrainKey>.Success(new(GrainKeyKind.PlatformSingleton, Guid.Empty, segments[1], null))
@@ -1706,13 +1817,15 @@ public static class GrainKeys {
             "session" => GrainKeyKind.Session,
             "mi" => GrainKeyKind.ManagedIdentity,
             "signup" => GrainKeyKind.SignUp,
+            "code" => GrainKeyKind.AuthorizationCode,
             _ => GrainKeyKind.None
         };
 
         if (kind == GrainKeyKind.None) {
             return Invalid(
                 $"'{key}' is not a grain key: '{segments[0]}' is not one of 'sub', 'res', 'user', "
-                + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session', 'mi', 'signup' or 'platform'. "
+                + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session', 'mi', 'signup', 'code', "
+                + "'consent' or 'platform'. "
                 + "The prefix is matched case-sensitively — see docs/plan/06 § Grain keys and "
                 + "docs/plan/11 § The object model."
             );

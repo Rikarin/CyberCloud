@@ -641,3 +641,121 @@ public interface ISignUpGrain : IGrainWithStringKey {
     /// <summary>Drops this activation — see <c>ITenantGrain.DeactivateAsync</c>.</summary>
     Task DeactivateAsync();
 }
+
+/// <summary>
+///     The one-time-use record of an authorization code — RFC 6749 § 4.1.2's "the client MUST NOT
+///     use the authorization code more than once", which a self-contained code cannot enforce on
+///     its own. docs/plan/11 § Protocol.
+/// </summary>
+/// <remarks>
+///     <para>
+///         <b>Kind</b> Entity · <b>Tier</b> <b>Hot</b> · <b>Key</b> <c>code/{codeId:N}</c>,
+///         tenant-qualified. Build it with <c>GrainKeys.AuthorizationCode</c>.
+///     </para>
+///     <para>
+///         ⚠ <b>Consumed, never issued.</b> Nothing writes here when a code is minted: the code is
+///         OpenIddict's encrypted envelope and carries its own id, tenant and expiry, so the first
+///         thing this grain hears about a code is the exchange that presents it. That keeps the
+///         hot path of <c>/authorize</c> free of a grain write, and it means a code the tier has
+///         forgotten is exchangeable once — exactly what a code the tier never heard of is. The
+///         record is the <i>second</i> exchange's problem, and it answers with the token session the
+///         first one opened so the caller can revoke it, which is the second half of § 4.1.2:
+///         "SHOULD revoke (when possible) all tokens previously issued based on that authorization
+///         code."
+///     </para>
+///     <para>
+///         ⚠ <b>The caller mints the token session id before it consumes, and hands it in.</b> Two
+///         exchanges of one code racing each other are serialized by the grain; the loser must be
+///         able to revoke the winner's session even if the winner has not opened it yet, and it can
+///         only do that if the id was recorded in the same turn that consumed the code. A session
+///         revoked before it opens stays revoked — <see cref="ISessionGrain.OpenAsync" /> refuses to
+///         open one.
+///     </para>
+///     <para>
+///         ⚠ <b>Hot, because the record outlives its usefulness by minutes.</b> A code lives five
+///         minutes (<see cref="AccessTokenPolicy.AuthorizationCodeLifetime" />); once it has expired
+///         OpenIddict refuses it before this grain is asked, so a record older than that protects
+///         nothing and the grain clears itself. Losing the tier early costs one replay window on the
+///         codes in flight at that moment — bounded by concurrent sign-ins, which is docs/plan/05
+///         § Hot's shape — and PKCE still binds each of those to the verifier only the legitimate
+///         tab holds.
+///     </para>
+/// </remarks>
+[Alias("CyberCloud.Identity.IAuthorizationCodeGrain")]
+public interface IAuthorizationCodeGrain : IGrainWithStringKey {
+    /// <summary>
+    ///     Consumes the code: records that it was exchanged and by which token session, or reports
+    ///     that it already was.
+    /// </summary>
+    /// <param name="tokenSessionId">The session the caller is about to open for this exchange.</param>
+    /// <param name="expiresAt">
+    ///     When the code itself expires, off its own <c>exp</c>. The record is kept until then plus
+    ///     a grace for clock skew, and cleared afterwards.
+    /// </param>
+    /// <returns>
+    ///     <see cref="CodeConsumption.FirstUse" /> <c>true</c> exactly once per code, with
+    ///     <paramref name="tokenSessionId" /> echoed; on every later call <c>false</c>, carrying
+    ///     the session the <i>first</i> call recorded — the one to revoke.
+    /// </returns>
+    Task<Result<CodeConsumption>> ConsumeAsync(Guid tokenSessionId, DateTimeOffset expiresAt);
+
+    /// <summary>Whether this code has been exchanged, for a test asserting on the record.</summary>
+    Task<Result<bool>> IsConsumedAsync();
+
+    /// <summary>Drops this activation.</summary>
+    Task DeactivateAsync();
+}
+
+/// <summary>
+///     A person's standing consent to one tenant-registered client, and the scopes it covers.
+///     docs/plan/11 § Protocol.
+/// </summary>
+/// <remarks>
+///     <para>
+///         <b>Kind</b> Entity · <b>Tier</b> Durable · <b>Key</b>
+///         <c>consent/{sha256(tenantId + userId + clientId)[..16]}</c>, tenant-qualified. Build it
+///         with <c>GrainKeys.ConsentGrant</c>; the person and the client are the grain's state
+///         because the key is a digest of them.
+///     </para>
+///     <para>
+///         ⚠ <b>First-party clients never reach this grain.</b> The portal and the CLI are the
+///         platform's own pages and are consent-free by registration (<c>FirstPartyClients</c>);
+///         a grant recorded for one would be a row nothing reads. The identity host asks here only
+///         for a client it resolved through the tenant's index, after the person's session checked
+///         out, and before it mints a code.
+///     </para>
+///     <para>
+///         ⚠ <b>A grant is per scope set, and a wider request asks again.</b> A person who allowed
+///         <c>openid profile</c> has not allowed <c>cyc.api</c>; <see cref="ConsentGrant.Scopes" />
+///         is what was allowed, <see cref="GrantAsync" /> unions a later allowance into it, and the
+///         host compares the request's scopes against the union. Revocation clears the set, so a
+///         revoked client is asked from scratch.
+///     </para>
+///     <para>
+///         ⚠ <b>Durable, unlike the code store, because the shape is wrong for the hot tier.</b>
+///         docs/plan/05 § Hot holds "session-shaped state, which is bounded by concurrent activity,
+///         not by tenant size"; consent grants are bounded by users × clients, which is tenant size.
+///         Losing one costs the person a consent prompt they already answered, which is safe but is
+///         a loss a person notices — the durable tier's row in <c>durable-grains.txt</c> says so.
+///     </para>
+/// </remarks>
+[Alias("CyberCloud.Identity.IConsentGrain")]
+public interface IConsentGrain : IGrainWithStringKey {
+    /// <summary>
+    ///     Records that <paramref name="userId" /> allowed <paramref name="clientId" /> the
+    ///     <paramref name="scopes" /> — unioned into whatever was allowed before.
+    /// </summary>
+    /// <param name="userId">The person. ⚠ Must match the key's; a mismatch is refused, not recorded.</param>
+    /// <param name="clientId">The client. Same rule.</param>
+    /// <param name="scopes">What the consent page showed and the person allowed.</param>
+    Task<Result<ConsentGrant>> GrantAsync(Guid userId, string clientId, IReadOnlyList<string> scopes);
+
+    /// <summary>What is on record, or <see cref="ErrorCode.ResourceNotFound" /> when nothing is.</summary>
+    Task<Result<ConsentGrant>> GetAsync();
+
+    /// <summary>Withdraws the consent. The next authorization request asks again.</summary>
+    Task<Result> RevokeAsync();
+
+    /// <summary>Drops this activation.</summary>
+    Task DeactivateAsync();
+}

@@ -1,6 +1,8 @@
+using CyberCloud.Authorization.Contracts;
 using CyberCloud.Core.Resources;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Host.Api;
+using CyberCloud.Identity.Host.RateLimiting;
 using CyberCloud.Identity.Host.Tokens;
 using CyberCloud.Identity.SignIn;
 using Microsoft.AspNetCore;
@@ -9,9 +11,12 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
 using Orleans.Multitenant;
+using System.Globalization;
 
 namespace CyberCloud.Identity.Host;
 
@@ -39,25 +44,28 @@ namespace CyberCloud.Identity.Host;
 ///         error, which is why those records pin their JSON names explicitly.
 ///     </para>
 ///     <para>
-///         <b>What is still owed.</b> The consent page described at the foot of these remarks has no
-///         endpoint here (a tenant-registered client is answered <c>consent_required</c> at
-///         <c>/authorize</c> until it does), and neither does password reset —
+///         <b>What is still owed.</b> Password reset —
 ///         <c>SignInService.RequestPasswordResetAsync</c> exists and answers uniformly, but nothing
 ///         mails the link. TOTP is mapped and will refuse every code until an
 ///         <c>ITotpSecretSeam</c> is wired over a vault; recovery codes and the delivered email code
-///         at <c>/api/signin/otp</c> both work today. <c>/userinfo</c> is not mapped — the portal
-///         reads <c>tid</c> and <c>sub</c> off the access token and <c>email</c> and <c>name</c> off
-///         the id_token. One-time use of an authorization code is not enforced: it needs a hot-tier
-///         code store, and PKCE binds a replayed code to the verifier only the legitimate tab holds
-///         — <c>GrantsOverHttpTests.TheVerifierIsWhatBindsACodeToTheTabThatAskedForIt</c> is what
-///         keeps that binding from being dropped by an upgrade. <c>/logout</c> ends the session on
-///         any top-level navigation that carries the cookie, so any site can sign a person out with
-///         a link: the standard RP-initiated-logout weakness, closed by a confirmation page or by
+///         at <c>/api/signin/otp</c> both work today. <c>/logout</c> ends the session on any
+///         top-level navigation that carries the cookie, so any site can sign a person out with a
+///         link: the standard RP-initiated-logout weakness, closed by a confirmation page or by
 ///         binding <c>id_token_hint</c> and <c>state</c> to the session, neither of which is built.
-///         A confidential client's <c>client_secret</c> is not verified on the code and refresh
-///         grants — unreachable today, because every tenant-registered client is answered
-///         <c>consent_required</c>, and to be closed with the consent page, not after it. The
-///         device flow and token exchange keep their <c>temporarily_unavailable</c> answers.
+///         The device flow and token exchange keep their <c>temporarily_unavailable</c> answers.
+///     </para>
+///     <para>
+///         <b>What #94 closed on this surface.</b> The consent page has its endpoint
+///         (<see cref="MapConsent" />) and its answer is posted back to <c>/authorize</c>
+///         (<see cref="MapAuthorize" />, which takes <c>POST</c> for that reason); a confidential
+///         client authenticates on the code and refresh grants
+///         (<c>DegradedModeHandlers.ValidateTokenRequest</c>); <c>/userinfo</c> is mapped
+///         (<see cref="MapUserInfo" />) and answers from the access token's session; an
+///         authorization code is exchanged once (<c>TokenApi.MintForCodeAsync</c> over
+///         <c>IAuthorizationCodeGrain</c>), and a second exchange revokes the first one's session;
+///         and <c>/api/signup/begin</c> and the code-verify endpoints carry a per-IP limit
+///         (<see cref="IdentityRateLimits" />) that leaves the uniform-failure answers untouched
+///         below it.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -143,9 +151,15 @@ namespace CyberCloud.Identity.Host;
 ///     </para>
 ///     <para>
 ///         <b>What the consent page needs:</b> the client's display name, the scopes requested, and
-///         nothing else. ⚠ It must render the registered display name from
+///         nothing else — <c>GET /api/consent?returnUrl=…</c> answers both
+///         (<see cref="ConsentPageResponse" />). ⚠ It must render the registered display name from
 ///         <see cref="ApplicationRegistration.DisplayName" /> and never a value from the
-///         authorization request's query string, which is attacker-controlled.
+///         authorization request's query string, which is attacker-controlled; the endpoint gives it
+///         nothing else to render. The answer is a form <c>POST</c> to the return URL — the
+///         <c>/authorize</c> request itself — carrying every query pair of that request as a hidden
+///         field plus <c>consent=allow</c> or <c>consent=deny</c>, so OpenIddict answers the client
+///         in the response mode it asked for. ⚠ A full-page form post and never a <c>fetch</c>: the
+///         answer is a redirect to the client, which a <c>fetch</c> would swallow.
 ///     </para>
 /// </remarks>
 public static class IdentityEndpoints {
@@ -161,8 +175,8 @@ public static class IdentityEndpoints {
     ///     ⚠ A passthrough with no handler behind it is a <c>404</c>, which is what <c>/token</c>
     ///     answered for as long as nothing mapped it and the reason
     ///     https://github.com/Rikarin/CyberCloud/issues/68's gateway had no token to validate.
-    ///     <c>/userinfo</c>, <c>/device</c> and <c>/device/verify</c> are enabled and unmapped, and
-    ///     their validators refuse before the passthrough is reached.
+    ///     <c>/device</c> and <c>/device/verify</c> are enabled and unmapped, and their validators
+    ///     refuse before the passthrough is reached; <c>/userinfo</c> is mapped since #94.
     ///     <para>
     ///         The <c>/api</c> prefix is what
     ///         <see cref="IdentityHostAuthentication" />'s <c>OnRedirectToLogin</c> keys off to answer
@@ -203,8 +217,10 @@ public static class IdentityEndpoints {
 
         MapSignIn(app);
         MapSignUp(app);
+        MapConsent(app);
         MapAuthorize(app);
         MapToken(app);
+        MapUserInfo(app);
         MapLogout(app);
 
         return app;
@@ -234,13 +250,31 @@ public static class IdentityEndpoints {
     ///         <see cref="ReturnUrl.Sanitize" /> accepts only a same-origin path, on both ends of the
     ///         redirect, and the sign-in page resumes by navigating to it — on the development run
     ///         through its dev server's proxy, which is what makes the page's origin look like this
-    ///         one and carry the cookie.
+    ///         one and carry the cookie. On a <c>POST</c> the query is empty and the request lives in
+    ///         the form, so the return URL is rebuilt from OpenIddict's parsed parameters — every
+    ///         pair the page posted back, minus the answer itself.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>POST</c> is the consent page's answer, and the answer counts only from the
+    ///         page.</b> The page posts the request's own parameters back with
+    ///         <c>consent=allow</c> or <c>consent=deny</c> (<see cref="AuthorizeApi.ConsentParameter" />);
+    ///         OpenIddict reads a <c>POST</c> at this endpoint exactly as it reads a <c>GET</c>, so
+    ///         the validator runs unchanged and the passthrough sees one request shape. What differs
+    ///         is trust: the parameter is honoured only on a <c>POST</c> whose <c>Origin</c> is this
+    ///         host's own or the page's (<see cref="IdentityHostOptions.SignInPageBaseUri" />), and
+    ///         ignored otherwise — so a <c>GET</c> link carrying <c>consent=allow</c>, or a form on
+    ///         some other site posting it with the person's <c>Lax</c> cookie, is a request with no
+    ///         answer and lands on the consent page like any other. The browser sets <c>Origin</c>
+    ///         on every <c>POST</c> and a page cannot forge it, which is the same argument
+    ///         <c>DegradedModeHandlers.ValidateTokenRequest</c> makes at <c>/token</c>.
+    ///         <c>GrantsOverHttpTests.ATenantClientNeedsConsentAndGetsACodeOnceItIsGiven</c>.
     ///     </para>
     /// </remarks>
     static void MapAuthorize(IEndpointRouteBuilder app) {
-        app.MapGet(
+        app.MapMethods(
             IdentityHostOpenIddict.AuthorizationPath,
-            async (HttpContext context, AuthorizeApi api, CancellationToken cancellationToken) => {
+            [HttpMethods.Get, HttpMethods.Post],
+            async (HttpContext context, AuthorizeApi api, IOptions<IdentityHostOptions> options, CancellationToken cancellationToken) => {
                 var request = context.GetOpenIddictServerRequest()
                     ?? throw new InvalidOperationException(
                         "The authorization endpoint was reached outside OpenIddict's pipeline. "
@@ -248,13 +282,14 @@ public static class IdentityEndpoints {
                     );
 
                 var transaction = context.Features.Get<OpenIddictServerAspNetCoreFeature>()?.Transaction;
+                var pathAndQuery = AuthorizePathAndQuery(context, request);
 
                 // A hint that named no tenant: to the sign-in page to name one, before anything
                 // reads the cookie — DegradedModeHandlers.UnknownTenantProperty says why this is
                 // not the error page.
                 if (transaction?.Properties.TryGetValue(DegradedModeHandlers.UnknownTenantProperty, out var unknown) == true
                     && unknown is string hint) {
-                    return Results.Redirect(api.SignInLocationWithoutTenant(context.Request.Path + context.Request.QueryString, hint, request.ClientId));
+                    return Results.Redirect(api.SignInLocationWithoutTenant(pathAndQuery, hint, request.ClientId));
                 }
 
                 if (transaction?.Properties.TryGetValue(DegradedModeHandlers.TenantProperty, out var tenantValue) != true
@@ -269,7 +304,8 @@ public static class IdentityEndpoints {
                     tenantId,
                     client,
                     context.User,
-                    context.Request.Path + context.Request.QueryString,
+                    pathAndQuery,
+                    ConsentAnswer(context, request, options.Value),
                     cancellationToken
                 );
 
@@ -280,10 +316,86 @@ public static class IdentityEndpoints {
                     ),
                     AuthorizeDecision.Refuse refused => OpenIddictError(refused.Error, refused.Description),
                     AuthorizeDecision.SignIn signIn => Results.Redirect(signIn.Location),
+                    AuthorizeDecision.Consent consent => Results.Redirect(consent.Location),
                     _ => throw new InvalidOperationException($"Unhandled decision {decision.GetType().Name}.")
                 };
             }
         );
+    }
+
+    /// <summary>
+    ///     This request as a same-origin path and query — the request line on a <c>GET</c>, and the
+    ///     form's pairs re-encoded on a <c>POST</c>, minus the consent answer.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Byte-for-byte fidelity is the requirement on the <c>GET</c> side (the PKCE challenge and
+    ///     the state are the client's), and on the <c>POST</c> side the values are the same bytes
+    ///     under a possibly different pair order, which nothing downstream reads positionally.
+    /// </remarks>
+    static string AuthorizePathAndQuery(HttpContext context, OpenIddictRequest request) {
+        if (!HttpMethods.IsPost(context.Request.Method)) {
+            return context.Request.Path + context.Request.QueryString;
+        }
+
+        var pairs = request.GetParameters()
+            .Where(x => !string.Equals(x.Key, AuthorizeApi.ConsentParameter, StringComparison.Ordinal))
+            .SelectMany(x => Values(x.Value).Select(value => Uri.EscapeDataString(x.Key) + "=" + Uri.EscapeDataString(value)))
+            .ToList();
+
+        return pairs.Count == 0 ? context.Request.Path.ToString() : context.Request.Path + "?" + string.Join('&', pairs);
+    }
+
+    /// <summary>A form parameter's values — one per repeated field, as the browser posted them.</summary>
+    static string[] Values(OpenIddictParameter parameter) =>
+        [.. ((StringValues)parameter).Select(x => x ?? string.Empty)];
+
+    /// <summary>
+    ///     The consent page's answer, when this request carries one it may be trusted with.
+    /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> for every <c>GET</c>, for a <c>POST</c> from an origin that is
+    ///     neither this host's nor the page's, and for a value that is neither <c>allow</c> nor
+    ///     <c>deny</c>. <see cref="MapAuthorize" />'s remarks carry the argument.
+    /// </remarks>
+    static ConsentDecision? ConsentAnswer(HttpContext context, OpenIddictRequest request, IdentityHostOptions options) {
+        if (!HttpMethods.IsPost(context.Request.Method)) {
+            return null;
+        }
+
+        var origin = context.Request.Headers.Origin.ToString();
+        var own = context.Request.Scheme + "://" + context.Request.Host;
+        var page = Uri.TryCreate(options.SignInPageBaseUri, UriKind.Absolute, out var pageUri) ? pageUri.GetLeftPart(UriPartial.Authority) : own;
+
+        if (!string.Equals(origin, own, StringComparison.Ordinal) && !string.Equals(origin, page, StringComparison.Ordinal)) {
+            return null;
+        }
+
+        return (string?)request[AuthorizeApi.ConsentParameter] switch {
+            "allow" => ConsentDecision.Allow,
+            "deny" => ConsentDecision.Deny,
+            _ => null
+        };
+    }
+
+    // ── The consent page's API ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Maps what the consent page reads: the client's registered name and the scopes asked for.
+    /// </summary>
+    /// <param name="app">The host's route builder.</param>
+    /// <remarks>
+    ///     Read-only. The person's answer is a form <c>POST</c> to <c>/authorize</c>, not to this
+    ///     surface — <see cref="ConsentApi" />'s remarks say why the answer and the description are
+    ///     two different endpoints. Under <c>/api</c> and behind the cookie, so an anonymous call is
+    ///     a <c>401</c> and a signed-in one describes only a request its own tenant would accept.
+    /// </remarks>
+    static void MapConsent(IEndpointRouteBuilder app) {
+        app.MapGet(
+                "/api/consent",
+                async (string? returnUrl, HttpContext context, ConsentApi api, CancellationToken cancellationToken) =>
+                    Results.Ok(await api.DescribeAsync(returnUrl, context.User, cancellationToken))
+            )
+            .RequireAuthorization();
     }
 
     // ── /token ─────────────────────────────────────────────────────────────────────────────────
@@ -313,32 +425,47 @@ public static class IdentityEndpoints {
     ///         <c>SignUpOrchestrator</c>'s; what is left here is what needs an <c>HttpContext</c> —
     ///         the two cookies, the caller's address, and the session cookie on success.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>begin</c> and <c>verify</c> carry a per-IP bucket, and it sits in front of
+    ///         the uniform answer rather than inside it.</b> <c>begin</c> issues a code per call and
+    ///         the grain caps issues per <i>sign-up</i>, so a caller minting sign-ups was uncapped;
+    ///         <c>verify</c> is a guess per call and the grain caps attempts per <i>code</i>. The
+    ///         filter decides on the connection's address and on nothing in the body, so the
+    ///         <c>429</c> says nothing about the address in the body — <see cref="IdentityRateLimits" />
+    ///         carries the argument, and its window is what a flood buys before the answer changes.
+    ///         ⚠ "Nothing in the body" is not "before the body": an endpoint filter runs after
+    ///         parameter binding, so the JSON has been deserialized by the time it counts, and a body
+    ///         that does not deserialize is a <c>400</c> from the binder that is never counted. What
+    ///         holds, and what the test pins, is that the decision does not depend on it.
+    ///     </para>
     /// </remarks>
     static void MapSignUp(IEndpointRouteBuilder app) {
         app.MapPost(
-            "/api/signup/begin",
-            async (
-                SignUpBeginRequest? request,
-                HttpContext context,
-                SignUpApi api,
-                SignUpTicketCookie tickets,
-                CancellationToken cancellationToken
-            ) => {
-                var result = await api.BeginAsync(request, tickets.Take(context), cancellationToken);
+                "/api/signup/begin",
+                async (
+                    SignUpBeginRequest? request,
+                    HttpContext context,
+                    SignUpApi api,
+                    SignUpTicketCookie tickets,
+                    CancellationToken cancellationToken
+                ) => {
+                    var result = await api.BeginAsync(request, tickets.Take(context), cancellationToken);
 
-                if (result.Ticket is { } ticket) {
-                    tickets.Issue(context, ticket);
+                    if (result.Ticket is { } ticket) {
+                        tickets.Issue(context, ticket);
+                    }
+
+                    return Results.Ok(result.Body);
                 }
-
-                return Results.Ok(result.Body);
-            }
-        );
+            )
+            .RateLimited(IdentityRateLimits.SignUpBegin);
 
         app.MapPost(
-            "/api/signup/verify",
-            async (SignUpVerifyRequest? request, HttpContext context, SignUpApi api, SignUpTicketCookie tickets) =>
-                Answer(await api.VerifyAsync(request, tickets.Take(context)))
-        );
+                "/api/signup/verify",
+                async (SignUpVerifyRequest? request, HttpContext context, SignUpApi api, SignUpTicketCookie tickets) =>
+                    Answer(await api.VerifyAsync(request, tickets.Take(context)))
+            )
+            .RateLimited(IdentityRateLimits.CodeVerify);
 
         app.MapPost(
             "/api/signup/passkey/begin",
@@ -477,6 +604,122 @@ public static class IdentityEndpoints {
             )
             .RequireCors(FirstPartyClients.CorsPolicy);
     }
+
+    // ── /userinfo ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Maps the UserInfo endpoint's passthrough — OIDC Core § 5.3, answered from the access
+    ///     token's session rather than from the token.
+    /// </summary>
+    /// <param name="app">The host's route builder.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>By the time this runs, OpenIddict has validated the bearer access token</b> —
+    ///         signature, issuer, expiry — and the passthrough hands its principal back through
+    ///         <c>AuthenticateAsync</c> with OpenIddict's scheme, the way <see cref="MapToken" />
+    ///         receives a code's. What the token cannot say is whether the session it names is still
+    ///         live, and that is the one thing this endpoint adds: the token session
+    ///         (<c>sid</c>) is asked, and a revoked one answers <c>401 invalid_token</c> though the
+    ///         JWT itself has minutes left. docs/plan/11 § Sessions and revocation keeps access
+    ///         tokens irrevocable at the gateway on purpose; this endpoint is on the identity host,
+    ///         where the grain is, so it can afford the read.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The claims come from the user grain, not from the token.</b> The access token
+    ///         carries exactly <c>AccessTokenClaims.Permitted</c>, which has no <c>email</c> and no
+    ///         <c>name</c> — a person's name is not an access-token claim on this platform. So
+    ///         <c>/userinfo</c> reads them off <c>IUserGrain</c> as the id_token was minted from
+    ///         them, which also means a renamed person's next <c>/userinfo</c> says the new name
+    ///         where a cached id_token says the old one. <c>sub</c> is the token's and MUST match
+    ///         the id_token's (OIDC Core § 5.3.2); <c>name</c> and <c>email</c> ride under the
+    ///         <c>profile</c> scope, as the id_token carries them — this server registers no
+    ///         <c>email</c> scope, and splitting the two here would give a client with the same
+    ///         scopes a different answer from two endpoints. <c>tid</c> and <c>sub_typ</c> are
+    ///         carried so a relying party can build the same subject reference the gateway does. A
+    ///         token for anything but a person — a service principal's — answers <c>sub</c> alone:
+    ///         there is no End-User behind it.
+    ///         <c>GrantsOverHttpTests.UserInfoAnswersTheSessionsClaimsAndDiesWithTheSession</c>.
+    ///     </para>
+    ///     <para>
+    ///         Marked with the first-party CORS policy so the portal can call it cross-origin with
+    ///         its bearer token, as the discovery document advertises it may; <c>GET</c> and
+    ///         <c>POST</c>, as OIDC Core § 5.3.1 allows and OpenIddict extracts.
+    ///     </para>
+    /// </remarks>
+    static void MapUserInfo(IEndpointRouteBuilder app) {
+        app.MapMethods(
+                IdentityHostOpenIddict.UserInfoPath,
+                [HttpMethods.Get, HttpMethods.Post],
+                async (HttpContext context, IGrainFactory grains, CancellationToken cancellationToken) => {
+                    var token = await context.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+
+                    if (token.Principal is not { } presented
+                        || presented.GetClaim(AccessTokenClaims.Subject) is not { Length: > 0 } subject) {
+                        return UserInfoChallenge("The access token could not be read.");
+                    }
+
+                    var claims = new Dictionary<string, object>(StringComparer.Ordinal) {
+                        [OpenIddictConstants.Claims.Subject] = subject
+                    };
+
+                    if (!string.Equals(presented.GetClaim(AccessTokenClaims.SubjectType), SubjectTypes.User, StringComparison.Ordinal)
+                        || !Guid.TryParseExact(presented.GetClaim(AccessTokenClaims.TenantId), "N", out var tenantId)
+                        || !Guid.TryParseExact(subject, "N", out var userId)
+                        || !Guid.TryParseExact(presented.GetClaim(AccessTokenClaims.SessionId), "N", out var sessionId)) {
+                        return Results.Ok(claims);
+                    }
+
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var tenant = grains.ForTenant(TenantHint.Qualifier(tenantId));
+                    var live = await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(sessionId)).IsLiveAsync();
+
+                    if (live.TryGetError(out _) || !live.GetValueOrThrow()) {
+                        return UserInfoChallenge("The session behind this access token has been revoked.");
+                    }
+
+                    claims[AccessTokenClaims.TenantId] = tenantId.ToString("N", CultureInfo.InvariantCulture);
+                    claims[AccessTokenClaims.SubjectType] = SubjectTypes.User;
+
+                    var scopes = (presented.GetClaim(AccessTokenClaims.Scope) ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+                    if (scopes.Contains(IdentityHostOpenIddict.Scopes.Profile, StringComparer.Ordinal)) {
+                        var profile = await tenant.GetGrain<IUserGrain>(GrainKeys.User(userId)).GetAsync();
+
+                        if (profile.TryGetError(out _)) {
+                            return UserInfoChallenge("The person behind this access token no longer exists.");
+                        }
+
+                        if (profile.GetValueOrThrow().DisplayName is { Length: > 0 } name) {
+                            claims[OpenIddictConstants.Claims.Name] = name;
+                        }
+
+                        if (profile.GetValueOrThrow().Email is { Length: > 0 } email) {
+                            claims[OpenIddictConstants.Claims.Email] = email;
+                        }
+                    }
+
+                    return Results.Ok(claims);
+                }
+            )
+            .RequireCors(FirstPartyClients.CorsPolicy);
+    }
+
+    /// <summary>
+    ///     A <c>401</c> through OpenIddict: <c>WWW-Authenticate: Bearer error="invalid_token"</c>, the
+    ///     shape RFC 6750 § 3 gives a refused bearer token, with no body a client could mistake for
+    ///     claims.
+    /// </summary>
+    static IResult UserInfoChallenge(string description) =>
+        Results.Challenge(
+            new AuthenticationProperties(
+                new Dictionary<string, string?>(StringComparer.Ordinal) {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = OpenIddictConstants.Errors.InvalidToken,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = description
+                }
+            ),
+            [OpenIddictServerAspNetCoreDefaults.AuthenticationScheme]
+        );
 
     // ── /logout ────────────────────────────────────────────────────────────────────────────────
 
@@ -665,15 +908,16 @@ public static class IdentityEndpoints {
         // .RequireAuthorization() is what guarantees the principal is there at all — without it the
         // handler would be reasoning about an anonymous identity.
         app.MapPost(
-            "/api/signin/totp",
-            async (
-                SecondFactorRequest? request,
-                HttpContext context,
-                SignInApi api,
-                CancellationToken cancellationToken
-            ) => await IssueAsync(context, await api.VerifyTotpAsync(request, context.User, cancellationToken))
-        )
-            .RequireAuthorization();
+                "/api/signin/totp",
+                async (
+                    SecondFactorRequest? request,
+                    HttpContext context,
+                    SignInApi api,
+                    CancellationToken cancellationToken
+                ) => await IssueAsync(context, await api.VerifyTotpAsync(request, context.User, cancellationToken))
+            )
+            .RequireAuthorization()
+            .RateLimited(IdentityRateLimits.CodeVerify);
 
         // ── The delivered second factor — docs/plan/11 § Credentials' email OTP row ────────────
         //
@@ -693,30 +937,37 @@ public static class IdentityEndpoints {
         )
             .RequireAuthorization();
 
+        // ⚠ Per IP as well as per code: the grain burns a code at OtpPolicy.MaxAttempts, and this
+        // bucket is what keeps a caller from buying more attempts with more codes —
+        // IdentityRateLimits' remarks.
         app.MapPost(
-            "/api/signin/otp",
-            async (
-                SecondFactorRequest? request,
-                HttpContext context,
-                SignInApi api,
-                CancellationToken cancellationToken
-            ) => await IssueAsync(context, await api.VerifyEmailOtpAsync(request, context.User, cancellationToken))
-        )
-            .RequireAuthorization();
-
-        app.MapPost(
-            "/api/signin/recovery-code",
-            async (
-                SecondFactorRequest? request,
-                HttpContext context,
-                SignInApi api,
-                CancellationToken cancellationToken
-            ) => await IssueAsync(
-                context,
-                await api.RedeemRecoveryCodeAsync(request, context.User, cancellationToken)
+                "/api/signin/otp",
+                async (
+                    SecondFactorRequest? request,
+                    HttpContext context,
+                    SignInApi api,
+                    CancellationToken cancellationToken
+                ) => await IssueAsync(context, await api.VerifyEmailOtpAsync(request, context.User, cancellationToken))
             )
-        )
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RateLimited(IdentityRateLimits.CodeVerify);
+
+        // In the code-verify bucket with the other three, for the reason IdentityRateLimits gives:
+        // it takes a code, and the rule is every route that does.
+        app.MapPost(
+                "/api/signin/recovery-code",
+                async (
+                    SecondFactorRequest? request,
+                    HttpContext context,
+                    SignInApi api,
+                    CancellationToken cancellationToken
+                ) => await IssueAsync(
+                    context,
+                    await api.RedeemRecoveryCodeAsync(request, context.User, cancellationToken)
+                )
+            )
+            .RequireAuthorization()
+            .RateLimited(IdentityRateLimits.CodeVerify);
     }
 
     /// <summary>
@@ -750,9 +1001,11 @@ public static class IdentityEndpoints {
     ///     <para>
     ///         ⚠ <c>RemoteIpAddress</c> and not an <c>X-Forwarded-For</c> header. A caller sets their
     ///         own headers, so trusting one would let an attacker pick which device record their
-    ///         session is filed under. Behind a proxy the correct fix is
-    ///         <c>UseForwardedHeaders</c> with a configured known-proxy list, which is a deployment
-    ///         decision this file must not pre-empt by reading the header directly.
+    ///         session is filed under. Behind a proxy the correct fix is the forwarded-headers
+    ///         middleware with a known-proxy list, which is what
+    ///         <c>CyberCloud:Identity:TrustedProxies</c> configures and
+    ///         <c>IdentityComposition.MapIdentityHost</c> runs before anything here — this file
+    ///         must not pre-empt it by reading the header directly.
     ///     </para>
     /// </remarks>
     static SignInContext Describe(HttpContext context) =>

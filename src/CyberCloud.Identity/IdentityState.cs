@@ -443,3 +443,67 @@ public sealed class SignUpGrainState {
     [Id(12)]
     public List<SignUpStep> CompletedSteps { get; set; } = [];
 }
+
+/// <summary>
+///     <c>AuthorizationCodeGrain</c>'s hot-tier state — whether a code has been exchanged, and by
+///     which token session. docs/plan/11 § Protocol.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Never the code and never its verifier.</b> The grain is reached by the code's id, which
+///     the server put inside the encrypted code; the record says only that the id was seen. A stored
+///     code would be a stored bearer credential, in a tier that is still a database somebody can
+///     read.
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Identity.AuthorizationCodeGrainState")]
+public sealed class AuthorizationCodeGrainState {
+    /// <summary>The token session the first exchange opened. <see cref="Guid.Empty" /> until then.</summary>
+    [Id(0)]
+    public Guid TokenSessionId { get; set; }
+
+    /// <summary>When the first exchange happened.</summary>
+    [Id(1)]
+    public DateTimeOffset ConsumedAt { get; set; }
+
+    /// <summary>When the record stops protecting anything — the code's own expiry plus a skew grace.</summary>
+    [Id(2)]
+    public DateTimeOffset ForgetAt { get; set; }
+}
+
+/// <summary>
+///     <c>ConsentGrain</c>'s durable state — who consented to which client, for which scopes.
+///     docs/plan/11 § Protocol.
+/// </summary>
+/// <remarks>
+///     The person and the client are here because the key is a digest of them
+///     (<c>GrainKeys.ConsentGrant</c>) and cannot be read back; a repair tool or an audit export
+///     reads them off the state. <see cref="Scopes" /> is <c>{ get; set; }</c> over a concrete list
+///     for the reason <see cref="UserGrainState" /> gives.
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Identity.ConsentGrainState")]
+public sealed class ConsentGrainState {
+    /// <summary>The person. <see cref="Guid.Empty" /> before the first grant.</summary>
+    [Id(0)]
+    public Guid UserId { get; set; }
+
+    /// <summary>The <c>client_id</c>.</summary>
+    [Id(1)]
+    public string ClientId { get; set; } = string.Empty;
+
+    /// <summary>Every scope allowed so far. Empty after a revocation.</summary>
+    [Id(2)]
+    public List<string> Scopes { get; set; } = [];
+
+    /// <summary>When consent was first given.</summary>
+    [Id(3)]
+    public DateTimeOffset GrantedAt { get; set; }
+
+    /// <summary>When the scope set last changed.</summary>
+    [Id(4)]
+    public DateTimeOffset UpdatedAt { get; set; }
+
+    /// <summary>Whether a grant is on record — false before the first grant and after a revocation.</summary>
+    [Id(5)]
+    public bool Granted { get; set; }
+}

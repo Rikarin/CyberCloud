@@ -105,8 +105,45 @@ it. The decisions that shape the served half, each argued in the type that makes
 - **First-party clients are static.** `cyc-portal` and `cyc-cli` are `ApplicationRegistration`
   records in the host (`FirstPartyClients`), consulted before a tenant's `IClientIndexGrain` so no
   tenant can shadow them; `cyc-cli`'s loopback redirect matches any port, RFC 8252 § 7.3. Every
-  other client is the tenant's own, resolved through its index — and answered `consent_required`
-  at `/authorize` until the consent page exists.
+  other client is the tenant's own, resolved through its index — and consent-gated: `/authorize`
+  sends the person to the consent page (`portal/apps/identity`, `/consent`) unless `IConsentGrain`
+  holds a grant for this (person, client) that covers every scope asked for, or `prompt=consent`
+  asks anyway. The page renders the *registered* display name (`GET /api/consent` resolves it; a
+  name from the request's own query would be a phisher's) and posts the request's parameters back
+  to `/authorize` with `consent=allow` or `consent=deny`, honoured only on a `POST` from the page's
+  origin — so a `GET` link carrying `consent=allow` is a request with no answer. Allow records the
+  grant (durable, per (person, client), scopes unioned) *before* the code is minted; deny is
+  `access_denied` at the registered redirect URI through OpenIddict's own error redirect;
+  `prompt=none` with nothing on record is `consent_required`. A grant is revocable
+  (`IConsentGrain.RevokeAsync`) and the next request asks from scratch. #94.
+- **A confidential client authenticates on the code and refresh grants.** RFC 6749 § 4.1.3 and
+  § 6: `DegradedModeHandlers.ValidateTokenRequest` requires `client_secret` from a client whose
+  registration is not public and verifies it through `IClientSecretSeam` against the registration's
+  `ClientSecretRef` — the same vault seam the client-credentials grant checks a service principal
+  through — before the origin and grant checks and before any grain is touched; missing, wrong and
+  unreadable are one `invalid_client` sentence. Landed with the consent page (#94), which is what
+  made a tenant client's code mintable at all; a public client that sends a secret is still refused.
+- **An authorization code is exchanged once.** RFC 6749 § 4.1.2, both halves. Degraded mode has
+  no token store, so OpenIddict's own `CreateTokenEntry` never gives a code an id;
+  `DegradedModeHandlers.StampAuthorizationCodeId` sets `oi_tkn_id` on the code's principal before
+  it is signed, and `TokenApi.MintForCodeAsync` burns that id in `IAuthorizationCodeGrain` —
+  hot tier, keyed `code/{jti:N}`, never by the code — *between* the interactive-session check and
+  the token session's open, under the token session id it is about to open. A second exchange
+  finds the record, is refused with one sentence, and revokes the session the first exchange
+  opened (`RevocationReason.AuthorizationCodeReuseDetected`); `SessionGrain.OpenAsync` refuses to
+  open over a revocation, so the race between two exchanges cannot lose it. The record clears
+  itself one minute after the code's own expiry (`AccessTokenPolicy.AuthorizationCodeLifetime`,
+  five minutes, one number for the host and the grain). PKCE stays in front of it: a wrong
+  verifier is refused before the code is burnt, so a thief guessing verifiers costs the legitimate
+  tab nothing. #94.
+- **`/userinfo` is served, from the session.** OIDC Core § 5.3, `GET` or `POST`, advertised in the
+  discovery document. OpenIddict validates the bearer access token; the passthrough asks the token
+  session (`sid`) whether it is still live — a revoked one is `401 invalid_token` though the JWT
+  has minutes left, which is the one thing this endpoint knows that the token cannot — and reads
+  `name` and `email` off `IUserGrain` under the `profile` scope, as the id_token was minted from it.
+  `sub` matches the id_token's; `tid` and `sub_typ` ride beside it so a relying party can build
+  the subject reference the gateway builds. A token for anything but a person answers `sub` alone.
+  #94.
 - **The refresh token is OpenIddict's envelope around the session grain's handle.** The exchange
   opens one `ISessionGrain` per (user, client) — a *token session*, bound to the interactive cookie
   session by `cyc:isid` — and the refresh token carries its handle as `cyc:rh`. Rotation, one-time
@@ -149,23 +186,18 @@ naming one id. `ClientResolver` in the identity host is the reader.
 
 **What is still owed on the person's path**, each named where the code refuses it:
 
-- **The consent page.** A tenant-registered client is answered `consent_required` at `/authorize`;
-  first-party clients are consent-free.
-- **One-time use of an authorization code.** Degraded mode has no token store to burn a code in;
-  a code lives five minutes and PKCE binds a replay to the verifier only the legitimate tab holds.
-  A hot-tier code store is the fix. `GrantsOverHttpTests.TheVerifierIsWhatBindsACodeToTheTabThatAskedForIt`
-  pins the binding — and pins the replay succeeding, so the store's landing is visible there.
-- **A confidential client's `client_secret` on the code and refresh grants.**
-  `DegradedModeHandlers.ValidateTokenRequest` refuses a secret from a public client and verifies
-  none from a confidential one. Unreachable while every tenant-registered client is answered
-  `consent_required` at `/authorize`, and to land *with* the consent page: the day a tenant's
-  confidential client can hold a code, anyone holding that code could exchange it.
+- ~~The consent page~~, ~~one-time use of an authorization code~~, ~~a confidential client's
+  `client_secret` on the code and refresh grants~~ and ~~`/userinfo`~~ — landed as #94's four
+  security items, each argued in the bullets above and pinned over the wire in
+  `GrantsOverHttpTests`: `ATenantClientNeedsConsentAndGetsACodeOnceItIsGiven`,
+  `AReplayedCodeIsRefusedAndRevokesTheSessionTheFirstExchangeOpened`,
+  `AConfidentialClientMustPresentItsSecretOnTheCodeAndRefreshGrants` and
+  `UserInfoAnswersTheSessionsClaimsAndDiesWithTheSession`. The same issue's per-IP limit on
+  `/api/signup/begin` and the code-verify endpoints is in [§ Credentials](#credentials).
 - **`/logout` on a bare link.** Any site can sign a person out: the end-session request is a
   top-level navigation, `Lax` sends the cookie, and `id_token_hint` is ignored. A nuisance, not a
   breach — a confirmation page, or binding `id_token_hint` and `state` to the cookie's session,
   closes it.
-- **`/userinfo`.** Not mapped; the portal reads `tid` and `sub` off the access token and `email`
-  and `name` off the id_token.
 - **The signing key from the vault.** `DevelopmentKeyFile` is the development run's answer and
   refuses to be anything else; the fix is `CyberCloud.Vault` through the seam docs/plan/18 names,
   wired in `Identity.Host` beside `IClientSecretSeam` and `ITotpSecretSeam`.
@@ -182,6 +214,15 @@ naming one id. `ClientResolver` in the identity host is the reader.
 - **Device authorization and token exchange (RFC 8693)** remain owed as before — the device flow
   needs a verification page and a code store, and token exchange has `ITokenExchange` built and
   waiting on `/token` to accept the grant.
+- **`displayName` on the tenant body.** `ScopeManagerService.ReadTenantAsync` renders the slug as
+  `name` and `ScopeSnapshot` carries no display name, so `GET /tenants/{t}` has none and the
+  portal's context bar (`portal/libs/shell`, `context-bar.ts`) shows `contoso` rather than
+  "Contoso". `TenantDescriptor.DisplayName` holds the value; what is owed is the property on the
+  snapshot and the scope body (`ScopeBodyProperties.DisplayName` is already the name the
+  subscription body uses), the emitter's schema and the regenerated clients, and the bar reading it.
+  #94's item 11, carried here so it is tracked somewhere; the same issue's items 9 and 10 — the
+  sign-up long-running operation with its progress UI, and the welcome mail — are
+  [§ Sign-up and tenant creation](#sign-up-and-tenant-creation)'s owed paragraph.
 
 ## Credentials
 
@@ -200,6 +241,40 @@ naming one id. `ClientResolver` in the identity host is the reader.
 detail that matters — **the lockout counter lives in the hot tier keyed by the user id**, so it is a
 Redis `INCR`, not a grain call. An authentication endpoint whose failure path costs a grain activation
 is a denial-of-service amplifier.
+
+⚠ **The per-IP limit is the identity host's, not the gateway's, and it counts through the gateway's
+counters.** [10 § Rate limiting](10-gateway-and-api.md)'s *per IP, unauthenticated* row names sign-in
+and token, which live here; `IdentityRateLimits` (#94) carries two buckets over the sliding-window
+counters that moved to `CyberCloud.ServiceDefaults.RateLimiting` so both hosts count the same way:
+`/api/signup/begin`, ten per ten minutes per address, because each call issues a code and the grain
+caps issues per *sign-up* rather than per caller; and the code-verify endpoints — `/api/signup/verify`,
+`/api/signin/otp`, `/api/signin/totp` and `/api/signin/recovery-code` — sixty per minute per address,
+because each call is a guess and the grain caps guesses per *code* (a recovery code is unguessable
+in practice and is in the bucket anyway, so the rule stays "every route that takes a code").
+Per IP and nothing finer, on purpose: a limit keyed by the address in the body would be a second
+answer for an address somebody is hammering, which is the enumeration the next paragraph forbids.
+The `429` depends on the connection's address alone and on nothing in the body, a made-up address
+and a real one are refused alike, and the uniform answers below the limit are untouched. The
+password endpoint carries no bucket — the lockout counter and the dummy hash are its. The accepted
+risk beside this: an unknown `tenant` hint on `/api/signin/*` is answered before the 250 ms floor
+(`SignInApi` argues it — slugs are public names, the lookup is one platform-grain call), which #94
+recorded as a decision rather than an oversight.
+
+⚠ **"Per address" is only true once the deployment has named its ingress.** Behind the Envoy
+[10 § Shape](10-gateway-and-api.md#shape) puts in front of every host, the connection's address is
+the ingress's for everybody, and both buckets become platform-wide caps — ten requests from one
+hostile caller would close sign-up for everyone. `CyberCloud:Identity:TrustedProxies` (addresses or
+CIDR blocks; `IdentityHostOptions` argues it) is the list of proxies whose `X-Forwarded-For` the host
+believes; set, `IdentityComposition.MapIdentityHost` runs the forwarded-headers middleware first and
+the address every bucket — and the hashed `SignInContext.ClientAddress` — sees is the one Envoy
+appended. Unset, the header is a caller's claim and is ignored, which is right on the development run
+and wrong on every deployment. The middleware is conditional rather than always on because the
+options `AddServiceDefaults` leaves behind have both known lists cleared, and cleared lists believe
+the header from anywhere — a rate-limit key the caller picks (`TrustedProxies` carries that). The
+gateway's own per-IP row has the same shape and no knob yet. ⚠ And the counters count per replica
+today: the Redis pair is registered when the container holds an `IConnectionMultiplexer`, and no host
+composition in this repository registers one — N replicas are N× each budget, the same gap
+`ILockoutCounter`'s registration names.
 
 **Enumeration.** Sign-in, password reset and sign-up return the same response and take the same time
 whether or not the account exists. The reset email is the only signal, and it goes to the address

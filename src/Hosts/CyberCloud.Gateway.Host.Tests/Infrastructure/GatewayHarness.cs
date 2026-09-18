@@ -4,6 +4,7 @@ using CyberCloud.Gateway.Host.Operations;
 using CyberCloud.Gateway.Host.Pipeline;
 using CyberCloud.Gateway.Host.Pipeline.Stages;
 using CyberCloud.Gateway.Host.RateLimiting;
+using CyberCloud.ServiceDefaults.RateLimiting;
 using CyberCloud.Gateway.Host.Regions;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using CyberCloud.Tenancy.Directory;
