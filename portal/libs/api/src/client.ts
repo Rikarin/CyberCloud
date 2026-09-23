@@ -83,7 +83,11 @@ import type {
   MonitorWorkspacesCollectorsResource,
   MonitorWorkspacesData,
   MonitorWorkspacesListKeysResult,
+  MonitorWorkspacesListMetricLabelsContent,
+  MonitorWorkspacesListMetricLabelsResult,
+  MonitorWorkspacesQueryMetricsContent,
   MonitorWorkspacesResource,
+  MonitorWorkspacesSearchLogsContent,
   NetworkPublicIpAddressesData,
   NetworkPublicIpAddressesResource,
   NetworkPublicIpAddressesShowAllocationResult,
@@ -930,14 +934,29 @@ export class CyberCloudApi {
     return this.transport.send<MonitorWorkspacesListKeysResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(resourceName)}/listKeys` });
   }
 
+  /** listMetricLabels — permission 'read'. */
+  listMetricLabelsMonitorWorkspace(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: MonitorWorkspacesListMetricLabelsContent): Promise<ApiResponse<MonitorWorkspacesListMetricLabelsResult>> {
+    return this.transport.send<MonitorWorkspacesListMetricLabelsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(resourceName)}/listMetricLabels`, body: content });
+  }
+
   /** purge — permission 'purge'. ⚠ Long-running. */
   purgeMonitorWorkspace(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<unknown>> {
     return this.transport.send<unknown>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(resourceName)}/purge` });
   }
 
+  /** queryMetrics — permission 'read'. */
+  queryMetricsMonitorWorkspace(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: MonitorWorkspacesQueryMetricsContent): Promise<ApiResponse<unknown>> {
+    return this.transport.send<unknown>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(resourceName)}/queryMetrics`, body: content });
+  }
+
   /** restore — permission 'write'. ⚠ Long-running. */
   restoreMonitorWorkspace(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<unknown>> {
     return this.transport.send<unknown>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(resourceName)}/restore` });
+  }
+
+  /** searchLogs — permission 'read'. */
+  searchLogsMonitorWorkspace(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: MonitorWorkspacesSearchLogsContent): Promise<ApiResponse<unknown>> {
+    return this.transport.send<unknown>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(resourceName)}/searchLogs`, body: content });
   }
 
   /** Reads one Alert rule. */

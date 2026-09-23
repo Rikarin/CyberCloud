@@ -112,7 +112,24 @@ sealed class GatewayHarness {
     ///     the real translator, the real access filter and a real ClickHouse.
     /// </summary>
     /// <param name="graph">The real query service.</param>
-    public GatewayHarness(IResourceGraphQuery graph) : this(graph, "", "", TenantStatus.Active) { }
+    public GatewayHarness(IResourceGraphQuery graph) : this(graph, null, null, [], "", "", TenantStatus.Active) { }
+
+    /// <summary>
+    ///     Composes the pipeline over a real <see cref="IResourceManager" /> and the registry it was
+    ///     built from — the substitution <c>MonitorQueryOverHttpTests</c> undoes, so an action typed at
+    ///     the gateway reaches the real write path, the real action dispatcher and a real handler.
+    /// </summary>
+    /// <param name="manager">The real manager, over a test cluster.</param>
+    /// <param name="registry">
+    ///     The registry that manager serves. ⚠ Stage 6 routes from it, so a harness that kept
+    ///     <see cref="OneTypeRegistry" /> would 404 every path the manager could have answered.
+    /// </param>
+    /// <param name="tenants">
+    ///     The tenants the manager's cluster was seeded with, added to the directory beside
+    ///     <see cref="TenantA" /> and <see cref="TenantB" /> so stage 3 resolves them.
+    /// </param>
+    public GatewayHarness(IResourceManager manager, IProviderRegistry registry, params Guid[] tenants)
+        : this(null, manager, registry, tenants, "", "", TenantStatus.Active) { }
 
     /// <summary>Composes the pipeline.</summary>
     /// <param name="region">This pod's region. Empty means "serve everything here".</param>
@@ -122,10 +139,13 @@ sealed class GatewayHarness {
         string region = "",
         string tenantARegion = "",
         TenantStatus status = TenantStatus.Active
-    ) : this(null, region, tenantARegion, status) { }
+    ) : this(null, null, null, [], region, tenantARegion, status) { }
 
     GatewayHarness(
         IResourceGraphQuery? graph,
+        IResourceManager? manager,
+        IProviderRegistry? registry,
+        Guid[] tenants,
         string region,
         string tenantARegion,
         TenantStatus status
@@ -152,7 +172,14 @@ sealed class GatewayHarness {
                     new() { TenantId = TenantA, Slug = "tenant-a", HomeRegion = tenantARegion, Status = status },
                     new() {
                         TenantId = TenantB, Slug = "tenant-b", HomeRegion = tenantARegion, Status = TenantStatus.Active
-                    }
+                    },
+                    .. tenants.Select(static (x, i) => new TenantDirectoryEntry {
+                            TenantId = x,
+                            Slug = "tenant-" + i.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                            HomeRegion = "",
+                            Status = TenantStatus.Active
+                        }
+                    )
                 ]
             }
         );
@@ -163,9 +190,9 @@ sealed class GatewayHarness {
             new ResolveTenantStage(directory, NullLogger<ResolveTenantStage>.Instance),
             new RegionRoutingStage(Options, new UnconfiguredRegionProxy()),
             new RateLimitStage(new GatewayRateLimiter(Counters)),
-            new RouteStage(new OneTypeRegistry(), Options),
+            new RouteStage(registry ?? new OneTypeRegistry(), Options),
             new ValidateStage(Options),
-            new DispatchStage(Manager, Scopes, Roles, graph ?? Graph, Operations, Tickets, Options)
+            new DispatchStage(manager ?? Manager, Scopes, Roles, graph ?? Graph, Operations, Tickets, Options)
         ];
 
         pipeline = new(Stages, NullLogger<GatewayPipeline>.Instance);

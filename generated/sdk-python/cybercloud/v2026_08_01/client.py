@@ -82,7 +82,11 @@ from .models import (
     MessageTemplateResource,
     MonitorWorkspaceData,
     MonitorWorkspaceListKeysResult,
+    MonitorWorkspaceListMetricLabelsContent,
+    MonitorWorkspaceListMetricLabelsResult,
+    MonitorWorkspaceQueryMetricsContent,
     MonitorWorkspaceResource,
+    MonitorWorkspaceSearchLogsContent,
     NATGatewayData,
     NATGatewayResource,
     NATGatewayShowEgressResult,
@@ -1365,17 +1369,35 @@ class MonitorWorkspaceClient:
         raise_for_status(response)
         return MonitorWorkspaceListKeysResult.from_wire(wire_of(response))
 
+    def list_metric_labels(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: MonitorWorkspaceListMetricLabelsContent) -> MonitorWorkspaceListMetricLabelsResult:
+        """listMetricLabels — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(resource_name)}/listMetricLabels", body=content.to_wire()))
+        raise_for_status(response)
+        return MonitorWorkspaceListMetricLabelsResult.from_wire(wire_of(response))
+
     def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
         """purge — permission 'purge'. ⚠ Long-running, and it removes the resource: wait() resolves to None, because there is nothing left to read."""
         response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(resource_name)}/purge"))
         raise_for_status(response)
         return Operation(self._transport, response, _nothing, None)
 
+    def query_metrics(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: MonitorWorkspaceQueryMetricsContent) -> None:
+        """queryMetrics — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(resource_name)}/queryMetrics", body=content.to_wire()))
+        raise_for_status(response)
+        return None
+
     def begin_restore(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[MonitorWorkspaceResource]:
         """restore — permission 'write'. ⚠ Long-running: wait() resolves to the resource afterwards."""
         response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(resource_name)}/restore"))
         raise_for_status(response)
         return Operation(self._transport, response, MonitorWorkspaceResource.from_wire, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(resource_name)}")
+
+    def search_logs(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: MonitorWorkspaceSearchLogsContent) -> None:
+        """searchLogs — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(resource_name)}/searchLogs", body=content.to_wire()))
+        raise_for_status(response)
+        return None
 
 
 class AlertRuleClient:

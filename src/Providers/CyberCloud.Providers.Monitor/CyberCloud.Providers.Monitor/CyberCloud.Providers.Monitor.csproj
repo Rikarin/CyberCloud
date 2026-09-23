@@ -2,8 +2,11 @@
 
     <!--
       docs/plan/03 § Providers — the implementation assembly: "grains, reconcilers, the chart
-      bindings". Two reconcilers, two action handlers, one chart binding — and, since #32, ONE GRAIN,
-      which is the first grain in any provider's implementation assembly.
+      bindings". Four reconcilers, seven action handlers, three chart bindings — and, since #32, ONE
+      GRAIN, which is the first grain in any provider's implementation assembly. Three of the handlers
+      (#41, Query/) are the first in the tree to reach a store over HTTP from the request path: vmselect
+      and ClickHouse, through the two HttpClients MonitorQueryServiceCollectionExtensions builds. No
+      package came with them: HttpClient is the base library's, and neither store takes a client SDK.
 
       ⚠ THIS IS THE SECOND LOOK CyberCloud.Providers.Sample's .csproj ASKED FOR. That file: "If a
       future provider needs Orleans in its implementation assembly, that is worth a second look before

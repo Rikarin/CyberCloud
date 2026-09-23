@@ -55,7 +55,7 @@
               "optimization": true,
               "extractLicenses": true,
               "sourceMap": false,
-              "namedChunks": false,
+              "namedChunks": true,
               "outputHashing": "all",
               "budgets": [
                 {

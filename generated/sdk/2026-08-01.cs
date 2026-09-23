@@ -5862,14 +5862,159 @@ public sealed partial class MonitorWorkspaceResource {
     public partial Task<Response<ListKeysResult>> ListKeysAsync(
         CancellationToken cancellationToken = default);
 
+    /// <summary>The parameters of listMetricLabels.</summary>
+    public sealed partial class ListMetricLabelsContent {
+
+        /// <summary>The window's end. Defaults to now.</summary>
+        [JsonPropertyName("end")]
+        public DateTimeOffset? End { get; set; }
+
+        /// <summary>The label whose values to list — __name__ for the metric names. Leave it out to list the label names instead.</summary>
+        [JsonPropertyName("label")]
+        public string? Label { get; set; }
+
+        /// <summary>A series selector the answer is narrowed to, for example http_requests_total.</summary>
+        [JsonPropertyName("match")]
+        public string? Match { get; set; }
+
+        /// <summary>The window's start. Defaults to a day before end.</summary>
+        [JsonPropertyName("start")]
+        public DateTimeOffset? Start { get; set; }
+    }
+
+    /// <summary>What listMetricLabels returns.</summary>
+    public sealed partial class ListMetricLabelsResult {
+
+        /// <summary>Whether more than 10000 matched and the rest were left out.</summary>
+        [JsonPropertyName("truncated")]
+        public required bool Truncated { get; set; }
+
+        /// <summary>The label values, or the label names when no label was named, sorted.</summary>
+        [JsonPropertyName("values")]
+        public IList<string> Values { get; set; } = new List<string>();
+    }
+
+    /// <summary>ListMetricLabels. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListMetricLabelsResult>> ListMetricLabelsAsync(
+        ListMetricLabelsContent content,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Purge. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
     public partial Task<Operation<System.Text.Json.JsonElement>> PurgeAsync(
         WaitUntil waitUntil,
         CancellationToken cancellationToken = default);
 
+    /// <summary>The parameters of queryMetrics.</summary>
+    public sealed partial class QueryMetricsContent {
+
+        /// <summary>Where a range query ends. Give it with start.</summary>
+        [JsonPropertyName("end")]
+        public DateTimeOffset? End { get; set; }
+
+        /// <summary>A PromQL or MetricsQL expression, run under this workspace's metrics tenancy.</summary>
+        [JsonPropertyName("query")]
+        public required string Query { get; set; }
+
+        /// <summary>Where a range query starts. Give it with end, or neither for an instant query.</summary>
+        [JsonPropertyName("start")]
+        public DateTimeOffset? Start { get; set; }
+
+        /// <summary>A range query's resolution. Defaults to the window cut into 240 points; the window divided by it may not exceed 11000.</summary>
+        [JsonPropertyName("stepSeconds")]
+        public long? StepSeconds { get; set; }
+
+        /// <summary>The instant an instant query is evaluated at. Defaults to now.</summary>
+        [JsonPropertyName("time")]
+        public DateTimeOffset? Time { get; set; }
+    }
+
+    /// <summary>QueryMetrics. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<System.Text.Json.JsonElement>> QueryMetricsAsync(
+        QueryMetricsContent content,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Restore. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
     public partial Task<Operation<System.Text.Json.JsonElement>> RestoreAsync(
         WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /severities accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum SearchLogsContentSeverities {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>trace</summary>
+        [JsonStringEnumMemberName("trace")]
+        Trace = 1,
+
+        /// <summary>debug</summary>
+        [JsonStringEnumMemberName("debug")]
+        Debug = 2,
+
+        /// <summary>info</summary>
+        [JsonStringEnumMemberName("info")]
+        Info = 3,
+
+        /// <summary>warn</summary>
+        [JsonStringEnumMemberName("warn")]
+        Warn = 4,
+
+        /// <summary>error</summary>
+        [JsonStringEnumMemberName("error")]
+        Error = 5,
+
+        /// <summary>fatal</summary>
+        [JsonStringEnumMemberName("fatal")]
+        Fatal = 6
+    }
+
+    /// <summary>The parameters of searchLogs.</summary>
+    public sealed partial class SearchLogsContent {
+
+        /// <summary>Up to 10 key=value filters, each matched against the record's own attributes and its resource's.</summary>
+        [JsonPropertyName("attributes")]
+        public IList<string> Attributes { get; set; } = new List<string>();
+
+        /// <summary>The histogram's bucket width. Defaults to the window cut into 60.</summary>
+        [JsonPropertyName("bucketSeconds")]
+        public long? BucketSeconds { get; set; }
+
+        /// <summary>Answer how many rows the search would read, and run nothing else.</summary>
+        [JsonPropertyName("estimate")]
+        public bool? Estimate { get; set; }
+
+        /// <summary>The window's start, inclusive.</summary>
+        [JsonPropertyName("from")]
+        public required DateTimeOffset From { get; set; }
+
+        /// <summary>The service.name the record must come from.</summary>
+        [JsonPropertyName("service")]
+        public string? Service { get; set; }
+
+        /// <summary>The severity classes to keep. Leave it out for every record, including those with no severity.</summary>
+        [JsonPropertyName("severities")]
+        public IList<SearchLogsContentSeverities> Severities { get; set; } = new List<SearchLogsContentSeverities>();
+
+        /// <summary>Text the log body must contain, compared without regard to case.</summary>
+        [JsonPropertyName("text")]
+        public string? Text { get; set; }
+
+        /// <summary>The window's end, exclusive. At most 90 days after from.</summary>
+        [JsonPropertyName("to")]
+        public required DateTimeOffset To { get; set; }
+
+        /// <summary>How many records to return, newest first. Defaults to 100.</summary>
+        [JsonPropertyName("top")]
+        public long? Top { get; set; }
+
+        /// <summary>The trace the record must belong to, 32 hex digits.</summary>
+        [JsonPropertyName("traceId")]
+        public string? TraceId { get; set; }
+    }
+
+    /// <summary>SearchLogs. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<System.Text.Json.JsonElement>> SearchLogsAsync(
+        SearchLogsContent content,
         CancellationToken cancellationToken = default);
 }
 

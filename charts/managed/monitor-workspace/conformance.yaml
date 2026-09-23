@@ -275,6 +275,11 @@ owed:
       look-back honoured as a hard range; the cancellation token honoured, because the evaluator
       sets it to QueryTimeout; and for `logs`, a refusal or a rewrite of any expression that names
       a database, because a MetricsQL expression cannot choose an account and a SQL one can.
+      ⚠ SINCE #41 THE STORES EXIST: VictoriaMetricsQueryStore and ClickHouseLogStore answer the
+      explorers' queries under a workspace's accountID and database, and MonitorQueryOverHttpTests
+      proves the accountID isolation of the metrics half against a real VictoriaMetrics cluster.
+      What is still missing for the seam is the evaluator's side — it knows the workspace by path,
+      not GUID — and the logs half, which here is a filter and in a rule is tenant-authored SQL.
     closes: >
       An IAlertQuerySeam over the query gateway, registered by the silo host before
       AddCyberCloudMonitorAlerting's TryAdd — and the metrics-round-trip assertion above extended to
@@ -342,6 +347,66 @@ owed:
       view" over a workspace's stores is. (This row used to be
       `observability-three-of-four-nouns-not-landed`; two of the three landed and the id follows.)
     closes: docs/plan/16 designing the views first — which store they read, what they show, whether they are a resource or a portal surface — and then the landing.
+  - id: query-responses-are-undeclared
+    says: >
+      queryMetrics and searchLogs (#41, docs/plan/16 § Querying a workspace) declare a request schema
+      and NO response schema, because a series list and a row list are arrays of objects and
+      SchemaKind.Array refuses an element that is an object. So ActionDispatcher does not check what
+      the two handlers return, openapi/2026-08-01.json says nothing about the 200 body, and every
+      generated client types it `unknown` — the portal's MonitorQueriesApi checks the shape at run
+      time against interfaces written by hand from the handlers' Render methods. listMetricLabels
+      answers a list of strings and is declared. The house workaround — one text line per item, as
+      listInstances does — was rejected for these two: a line is right for a person to read and wrong
+      for numbers a chart plots.
+    closes: The api-version with an array-of-objects SchemaKind — the same one alert-rules-one-instance-per-rule waits on — declaring both responses, after which the portal's interfaces become generated imports.
+  - id: logs-have-no-query-language
+    says: >
+      searchLogs takes a structured filter — a required window, severities, a service, body text,
+      key=value attributes, a trace id — and not a query language. #54's KqlTranslator was the
+      candidate and was not reused, for three reasons MonitorQueries.SearchLogsRequest records: its
+      subset refuses ago, now and bin, which a log search is made of; the window must be a bound the
+      API requires rather than a where clause a translator has to find; and every statement it emits
+      ANDs in the resource graph's per-row access filter, which a log row does not have. So there is
+      no projection, aggregation or join over logs from the API, and the portal's query box is a
+      filter grammar parsed in the browser.
+    closes: KqlTranslator generalised over a declared table schema (MonitorLogsTable's columns), with the window made mandatory and the access filter optional, served as a second searchLogs mode.
+  - id: log-search-reads-the-exporters-table-by-hand
+    says: >
+      MonitorLogsTable.CreateSql is the collector's clickhouse exporter's logs DDL reproduced by hand
+      at otel/opentelemetry-collector-contrib 0.161.0, and the search reads nine of its columns. No
+      test compares it with the exporter's own source, and nothing in production runs it —
+      charts/managed/monitor-collector/conformance.yaml § owed,
+      collector-clickhouse-tables-are-the-exporters-shape. A workspace with no table answers an empty
+      search with a note naming that item, which is every workspace until the schema step exists.
+    closes: The ingest host's schema step creating otel_logs from one definition that the search reads its column list from, and a cluster-backed assertion that a collector's export lands rows the search returns.
+  - id: metrics-query-reads-one-tier
+    says: >
+      queryMetrics reads the vmselect of the workspace's CURRENT metrics tier
+      (MonitorQueryOptions.MetricsEndpoint's {tier}). A workspace moved to another tier has its older
+      samples in the old tier's VMCluster, which MonitorWorkspaces.MetricsClusterName already records
+      for the write half, and the explorer does not see them. It also reads vmselect directly under
+      the accountID path rather than through the query gateway's vmauth with the workspace's
+      credential; the isolation is the path segment the platform writes, which
+      MonitorQueryOverHttpTests proves against a real VictoriaMetrics cluster, and vmauth's per-user
+      limits do not apply to a portal query.
+    closes: A query that fans out across the tiers the workspace has held — which needs the tier history on the row — and a decision on whether portal queries go through vmauth with a read-only credential.
+  - id: query-actions-count-as-writes
+    says: >
+      The three reads are POST actions, and the gateway's stage 5 classifies a request before routing
+      by verb and path prefix alone — GatewayRouter.Classify — so each spends the subscription-write
+      bucket (1 200 / 5 min, sized for creates) rather than the read bucket. The resource graph's
+      address is exempted by suffix; an action name is not, because a suffix list of provider action
+      names in the gateway is the coupling Classify's remarks keep out. A busy explorer tab is about
+      one query a refresh, well inside the bucket, and a tenant who scripts queries meets the smaller
+      limit first.
+    closes: A read flag on ActionRegistration published where stage 5 can read it without the registry — or the explorers' reads moving to GET once the api-version can carry a query in a URL.
+  - id: explorers-are-a-first-cut
+    says: >
+      The metrics explorer runs one query, draws one chart and cannot pin it anywhere — there are no
+      portal dashboards, and ADR-011 keeps Grafana's out; nothing saves a query. Log search answers
+      the newest `top` rows of a window and pages only by narrowing (a histogram bar), not by a
+      cursor. Traces have no explorer at all.
+    closes: A cursor on searchLogs (timestamp and a tie-breaker), saved queries as a resource or a user setting, and a trace view over otel_traces — docs/plan/16 § Querying a workspace.
 
 # Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
 #

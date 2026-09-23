@@ -6007,6 +6007,43 @@
           "confirmOnly": true
         },
         {
+          "name": "listMetricLabels",
+          "label": "List metric labels",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/end",
+              "name": "end",
+              "label": "End",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/label",
+              "name": "label",
+              "label": "Label",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/match",
+              "name": "match",
+              "label": "Match",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/start",
+              "name": "start",
+              "label": "Start",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        },
+        {
           "name": "purge",
           "label": "Purge",
           "permission": "purge",
@@ -6016,6 +6053,50 @@
           "confirmOnly": true
         },
         {
+          "name": "queryMetrics",
+          "label": "Query metrics",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/end",
+              "name": "end",
+              "label": "End",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/query",
+              "name": "query",
+              "label": "Query",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/start",
+              "name": "start",
+              "label": "Start",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/stepSeconds",
+              "name": "stepSeconds",
+              "label": "Step seconds",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/time",
+              "name": "time",
+              "label": "Time",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        },
+        {
           "name": "restore",
           "label": "Restore",
           "permission": "write",
@@ -6023,6 +6104,85 @@
           "secret": false,
           "fields": [],
           "confirmOnly": true
+        },
+        {
+          "name": "searchLogs",
+          "label": "Search logs",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/attributes",
+              "name": "attributes",
+              "label": "Attributes",
+              "control": "xui-chip-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/bucketSeconds",
+              "name": "bucketSeconds",
+              "label": "Bucket seconds",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/estimate",
+              "name": "estimate",
+              "label": "Estimate",
+              "control": "xui-switch",
+              "required": false
+            },
+            {
+              "jsonPointer": "/from",
+              "name": "from",
+              "label": "From",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/service",
+              "name": "service",
+              "label": "Service",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/severities",
+              "name": "severities",
+              "label": "Severities",
+              "control": "xui-select",
+              "required": false
+            },
+            {
+              "jsonPointer": "/text",
+              "name": "text",
+              "label": "Text",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/to",
+              "name": "to",
+              "label": "To",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/top",
+              "name": "top",
+              "label": "Top",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/traceId",
+              "name": "traceId",
+              "label": "Trace id",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
         }
       ]
     },

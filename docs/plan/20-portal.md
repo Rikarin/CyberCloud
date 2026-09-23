@@ -103,8 +103,9 @@ portal/README.md § The Angular pin and § SSR isolation.
 |---|---|---|
 | Dashboard / home | Cost, health, recent, quick-create. Nothing generic about it | 0.4 |
 | Cost analysis | `@xui/echarts` — breakdowns by tag, resource group, service, day. Forecast, budgets | 0.6 |
-| Metrics explorer | Query builder, chart types, pinning to dashboards | 0.6 |
-| Log search | `@xui/code-block` + a results grid over ClickHouse. ⚠ Needs a query cost preview or someone will run a 400-day scan | 0.6 |
+| Metrics explorer | Query builder, chart types, pinning to dashboards. ⚠ Landed 2026-09-23 (#41) as `…/providers/CyberCloud.Monitor/workspaces/{name}/metrics`, `portal/apps/portal/src/pages/monitor`: a metric picker fed by the workspace's own label API, label filters, `rate`, an aggregation `by` labels, the PromQL it writes (editable by hand), a time-series chart and the same numbers as a table — over `queryMetrics` and `listMetricLabels`, [16 § Querying a workspace](16-observability.md). No pinning: the portal has no dashboards to pin to | 0.6 |
+| Log search | `@xui/code-block` + a results grid over ClickHouse. ⚠ Needs a query cost preview or someone will run a 400-day scan. ⚠ Landed 2026-09-23 (#41) at `…/workspaces/{name}/logs` over `searchLogs`: a query box whose grammar (`severity:error service:api "text" key=value trace:…`) is parsed into a structured filter rather than a query language — 16 § Querying a workspace says why — a time range, a severity-stacked histogram whose bars narrow the window, and newest-first rows that expand to their attributes. The cost preview is ClickHouse's `EXPLAIN ESTIMATE`: on demand, and asked first by any search over more than a day, which stops for a confirmation above ten million rows. A plain input rather than `@xui/code-block`, which highlights code and does not edit it | 0.6 |
+| Resource graph explorer | ⚠ Landed 2026-09-23 (#41) at `/graph`: a KQL box over #54's address ([08 § The resource-graph projection](08-resource-manager.md)), results with the columns the translator names, and "load more" by `$skipToken` — never by following `nextLink`'s URL. The subset's refusal is shown as the platform wrote it, because it is the documentation. `ResourceGraphApi` is hand-written beside `RoleAssignmentsApi`, for the reason [10 § Shape](10-gateway-and-api.md) gives | — |
 | Network topology | `@xui/node-graph` — VPCs, subnets, endpoints, peerings. The one view that is genuinely better than a list | 0.5 |
 | Cloud terminal | `xterm.js` over a console's `connect` ([19](19-cloud-terminal-and-virtual-desktop.md)). ⚠ Landed as a routed page under the resource group — `subscriptions/{s}/resourceGroups/{g}/terminal`, `portal/apps/portal/src/pages/terminal` — not the dockable panel this row first said: a shell runs in a console resource, and a console has a group, so the page has a scope and a link can name a console. A dockable pane over the same `TerminalSession` is a later affordance, not a second terminal | 0.4 |
 | Access (ReBAC) | Role assignments, the effective-permissions explorer, "why does this user have access" | 0.6 |
@@ -144,10 +145,28 @@ Enforced in CI, failing the build:
 |---|---|
 | Initial JS (shell, gzipped) | < 250 KB |
 | Route chunk | < 120 KB |
+| Chart engine — one lazy chunk, `echarts-engine` | < 180 KB |
 | LCP on a resource list, cold, 4G | < 2.5 s |
 | INP | < 200 ms |
 | Data table, 10 000 rows, virtualised | 60 fps scroll |
 | Blade open → first content | < 300 ms warm |
+
+⚠ **The chart engine has its own row, and the measurement is why (#41).** This document names
+`@xui/echarts` for the portal's charts and puts a route chunk under 120 KB, and at ECharts 6.1.0 the
+two cannot both hold: measured with esbuild, `echarts/core` with the canvas renderer and nothing else
+is 101.7 KB gzipped, one line chart with a grid is 159.4 KB, and the build the portal ships — line,
+bar, grid, tooltip, canvas — is 173.6 KB. So ECharts is one chunk of its own (`libs/charts`,
+`echarts-engine.ts`), reached only by `import()` when a charting page first draws, which is after
+that page has painted and never on the path to its first content, and cached across every chart page
+after that. `scripts/bundle-budget.mjs` matches it by the name `namedChunks` gives it and holds it to
+180 KB; every other lazy chunk, including the metrics explorer's (4.9 KB) and the log search's
+(4.6 KB), is still held to 120 KB, and an engine inlined into a route would fail as a route chunk. A
+chart primitive light enough for the route budget is xUI's to build (ADR-017), not this portal's.
+
+⚠ **`xui-th` and `xui-td` carry no ARIA role at `@xui/table` 3.0.0**, while `xui-tr` is a `row`, so a
+table with body rows fails axe's `aria-required-children`. The explorers set `role="columnheader"`
+and `role="cell"` on each cell; the fix belongs in xUI, and no spec axe-checks a table that predates
+#41 — the resource list's, the access page's — with a row in it, which is how the defect went unseen.
 
 ⚠ **Route-level code splitting is mandatory**, and with 100 resource types the generated form renderer
 must not pull every schema into the main bundle. Schemas are fetched per type, cached, and versioned by

@@ -5,6 +5,7 @@
  *
  *   Initial JS (shell, gzipped)   < 250 KB
  *   Route chunk                   < 120 KB
+ *   Chart engine (one chunk)      < 180 KB   — see CHART_ENGINE below
  *
  * ⚠ Angular's own `budgets` in angular.json are a first line of defence but not sufficient on their
  * own: they measure the initial set and named bundles, and their "estimated transfer size" is a
@@ -27,8 +28,27 @@ const KB = 1024;
 /** docs/plan/20 § Performance budget. */
 const BUDGET = {
   initialJsGzip: 250 * KB,
-  routeChunkGzip: 120 * KB
+  routeChunkGzip: 120 * KB,
+  chartEngineGzip: 180 * KB
 };
+
+/**
+ * ⚠ The one lazy chunk that is measured against its own ceiling, and it is named, not sized (#41).
+ *
+ * `libs/charts/src/lib/echarts-engine.ts` is ECharts, tree-shaken to two chart types, two
+ * components and the canvas renderer, and reached only through `import()` after a charting page
+ * has painted. It cannot meet the 120 KB route ceiling at any build: measured with esbuild on
+ * echarts 6.1.0, `echarts/core` plus the canvas renderer alone is 101.7 KB gzipped, a line chart
+ * with a grid is 159.4 KB, and the build this portal ships is 173.6 KB. docs/plan/20 names
+ * `@xui/echarts` for the portal's charts and puts a 120 KB ceiling on a route chunk, and the two
+ * sentences disagree by that measurement; § Performance budget records the resolution — a second
+ * row for this chunk, loaded after first content and cached across every chart page.
+ *
+ * It is matched by the chunk name `namedChunks` gives it (angular.json, production), so a route
+ * chunk cannot hide under the larger ceiling by growing, and a build with a chart page and no
+ * engine chunk — the engine inlined into a route — fails below as a route chunk over 120 KB.
+ */
+const CHART_ENGINE = /^echarts-engine-[A-Za-z0-9_-]+\.js$/;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const browserDir = join(here, '..', 'dist', 'portal', 'browser');
@@ -98,12 +118,22 @@ if (lazy.length === 0) {
 
 for (const f of lazy.sort()) {
   const size = gzipOf(f);
-  const verdict = size < BUDGET.routeChunkGzip ? 'pass' : 'FAIL';
-  console.log(`    ${f.padEnd(44)} ${fmt(size).padStart(10)}  / ${fmt(BUDGET.routeChunkGzip)}  ${verdict}`);
+  const engine = CHART_ENGINE.test(f);
+  const ceiling = engine ? BUDGET.chartEngineGzip : BUDGET.routeChunkGzip;
+  const verdict = size < ceiling ? 'pass' : 'FAIL';
+  console.log(
+    `    ${f.padEnd(44)} ${fmt(size).padStart(10)}  / ${fmt(ceiling)}  ${verdict}${engine ? '  (chart engine)' : ''}`
+  );
 
-  if (size >= BUDGET.routeChunkGzip) {
-    failures.push(`route chunk ${f} is ${fmt(size)} gzipped, over the ${fmt(BUDGET.routeChunkGzip)} budget`);
+  if (size >= ceiling) {
+    failures.push(
+      `${engine ? 'chart engine chunk' : 'route chunk'} ${f} is ${fmt(size)} gzipped, over the ${fmt(ceiling)} budget`
+    );
   }
+}
+
+if (lazy.filter(f => CHART_ENGINE.test(f)).length > 1) {
+  failures.push('more than one chunk is named echarts-engine — the chart engine ceiling covers exactly one');
 }
 
 if (failures.length > 0) {

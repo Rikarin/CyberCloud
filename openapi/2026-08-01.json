@@ -11630,6 +11630,81 @@
       "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces",
       "x-cybercloud-action": "listKeys"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}/listMetricLabels": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Monitor_workspaces_ListMetricLabels",
+        "summary": "listMetricLabels a CyberCloud.Monitor/workspaces.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.ListMetricLabelsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.ListMetricLabelsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces",
+      "x-cybercloud-action": "listMetricLabels"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}/purge": {
       "parameters": [
         {
@@ -11713,6 +11788,79 @@
       "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces",
       "x-cybercloud-action": "purge"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}/queryMetrics": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Monitor_workspaces_QueryMetrics",
+        "summary": "queryMetrics a CyberCloud.Monitor/workspaces.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.QueryMetricsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result. ⚠ Unconstrained: this action declares no response schema, so no generated surface can type it. Declare one on IResourceTypeBuilder.Action.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces",
+      "x-cybercloud-action": "queryMetrics"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}/restore": {
       "parameters": [
         {
@@ -11795,6 +11943,79 @@
       },
       "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces",
       "x-cybercloud-action": "restore"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}/searchLogs": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Monitor_workspaces_SearchLogs",
+        "summary": "searchLogs a CyberCloud.Monitor/workspaces.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.SearchLogsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result. ⚠ Unconstrained: this action declares no response schema, so no generated surface can type it. Declare one on IResourceTypeBuilder.Action.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces",
+      "x-cybercloud-action": "searchLogs"
     },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/alertRules": {
       "parameters": [
@@ -25070,6 +25291,173 @@
           "sqlEndpoint"
         ],
         "title": "CyberCloud.Monitor.workspaces.ListKeysResponse",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.ListMetricLabelsRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Monitor/workspaces/listMetricLabels.",
+        "properties": {
+          "end": {
+            "description": "The window's end. Defaults to now.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "label": {
+            "description": "The label whose values to list — __name__ for the metric names. Leave it out to list the label names instead.",
+            "maxLength": 128,
+            "pattern": "^(?:[a-zA-Z_][a-zA-Z0-9_]*)$",
+            "type": "string"
+          },
+          "match": {
+            "description": "A series selector the answer is narrowed to, for example http_requests_total.",
+            "maxLength": 1000,
+            "type": "string"
+          },
+          "start": {
+            "description": "The window's start. Defaults to a day before end.",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "title": "CyberCloud.Monitor.workspaces.ListMetricLabelsRequest",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.ListMetricLabelsResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Monitor/workspaces/listMetricLabels returns.",
+        "properties": {
+          "truncated": {
+            "description": "Whether more than 10000 matched and the rest were left out.",
+            "type": "boolean"
+          },
+          "values": {
+            "description": "The label values, or the label names when no label was named, sorted.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "truncated",
+          "values"
+        ],
+        "title": "CyberCloud.Monitor.workspaces.ListMetricLabelsResponse",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.QueryMetricsRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Monitor/workspaces/queryMetrics.",
+        "properties": {
+          "end": {
+            "description": "Where a range query ends. Give it with start.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "query": {
+            "description": "A PromQL or MetricsQL expression, run under this workspace's metrics tenancy.",
+            "maxLength": 4000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "start": {
+            "description": "Where a range query starts. Give it with end, or neither for an instant query.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "stepSeconds": {
+            "description": "A range query's resolution. Defaults to the window cut into 240 points; the window divided by it may not exceed 11000.",
+            "maximum": 86400,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "time": {
+            "description": "The instant an instant query is evaluated at. Defaults to now.",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "CyberCloud.Monitor.workspaces.QueryMetricsRequest",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.SearchLogsRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Monitor/workspaces/searchLogs.",
+        "properties": {
+          "attributes": {
+            "description": "Up to 10 key=value filters, each matched against the record's own attributes and its resource's.",
+            "items": {
+              "maxLength": 641,
+              "pattern": "^(?:[^=]{1,128}=.{0,512})$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "bucketSeconds": {
+            "description": "The histogram's bucket width. Defaults to the window cut into 60.",
+            "maximum": 86400,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "estimate": {
+            "description": "Answer how many rows the search would read, and run nothing else.",
+            "type": "boolean"
+          },
+          "from": {
+            "description": "The window's start, inclusive.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "service": {
+            "description": "The service.name the record must come from.",
+            "maxLength": 256,
+            "type": "string"
+          },
+          "severities": {
+            "description": "The severity classes to keep. Leave it out for every record, including those with no severity.",
+            "items": {
+              "enum": [
+                "trace",
+                "debug",
+                "info",
+                "warn",
+                "error",
+                "fatal"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "text": {
+            "description": "Text the log body must contain, compared without regard to case.",
+            "maxLength": 512,
+            "type": "string"
+          },
+          "to": {
+            "description": "The window's end, exclusive. At most 90 days after from.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "top": {
+            "description": "How many records to return, newest first. Defaults to 100.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "traceId": {
+            "description": "The trace the record must belong to, 32 hex digits.",
+            "pattern": "^(?:[0-9a-fA-F]{32})$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "title": "CyberCloud.Monitor.workspaces.SearchLogsRequest",
         "type": "object"
       },
       "CyberCloud.Monitor.workspaces.alertRules": {

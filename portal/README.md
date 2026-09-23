@@ -10,7 +10,7 @@ portal/
 ├── libs/resource-forms/             # the schema → xUI form renderer (ADR-012), over generated/forms
 ├── libs/resource-forms-overrides/   # hand-written forms that replace the generated one, by type+version
 ├── libs/shell/                      # navigation, breadcrumbs, resource blades, the omnibar, sign-in
-└── libs/charts/                     # metric/log views over @xui/echarts — stub
+└── libs/charts/                     # metric/log views over @xui/echarts — the explorers' charts (#41)
 ```
 
 ## Rules

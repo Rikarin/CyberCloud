@@ -153,6 +153,30 @@ export const appRoutes: Routes = [
     title: 'Access'
   },
   {
+    // ⚠ The explorers (#41) are a Monitor workspace's own pages, so the provider and the type are
+    // literal segments rather than `:provider/:type`: `…/{name}/metrics` on any other type would
+    // be a page over data that type does not have. Four segments after `providers/`, like `edit`
+    // and `access`, and told apart from them by the literal — docs/plan/16 § Querying a workspace.
+    path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/providers/CyberCloud.Monitor/workspaces/:name/metrics',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/monitor/metrics-explorer').then(m => m.MetricsExplorer),
+    title: 'Metrics explorer'
+  },
+  {
+    path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/providers/CyberCloud.Monitor/workspaces/:name/logs',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/monitor/log-search').then(m => m.LogSearch),
+    title: 'Log search'
+  },
+  {
+    // The resource graph is a tenant's, not a subscription's — #54's one address has no scope in it
+    // but the tenant, and the tenant comes from the token.
+    path: 'graph',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/graph/graph-explorer').then(m => m.GraphExplorer),
+    title: 'Resource graph'
+  },
+  {
     path: 'operations/:operationId',
     canActivate: [authGuard],
     loadComponent: () => import('../pages/operations/operation-view').then(m => m.OperationView),

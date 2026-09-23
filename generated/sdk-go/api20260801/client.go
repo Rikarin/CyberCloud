@@ -1534,16 +1534,38 @@ func (c *MonitorWorkspaceClient) ListKeys(ctx context.Context, tenantID, subscri
 	return &result, nil
 }
 
+// ListMetricLabels runs listMetricLabels — permission 'read'.
+func (c *MonitorWorkspaceClient) ListMetricLabels(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content MonitorWorkspaceListMetricLabelsContent) (*MonitorWorkspaceListMetricLabelsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(resourceName) + "/listMetricLabels"
+	var result MonitorWorkspaceListMetricLabelsResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // BeginPurge runs purge — permission 'purge'. ⚠ Long-running, and it removes the resource: Wait reads nothing afterwards, because there is nothing left to read.
 func (c *MonitorWorkspaceClient) BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(resourceName) + "/purge"
 	return begin[struct{}](ctx, c.transport, "POST", path, nil, "")
 }
 
+// QueryMetrics runs queryMetrics — permission 'read'.
+func (c *MonitorWorkspaceClient) QueryMetrics(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content MonitorWorkspaceQueryMetricsContent) error {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(resourceName) + "/queryMetrics"
+	return call(ctx, c.transport, "POST", path, content, nil)
+}
+
 // BeginRestore runs restore — permission 'write'. ⚠ Long-running: Wait resolves to the resource afterwards.
 func (c *MonitorWorkspaceClient) BeginRestore(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[MonitorWorkspaceResource], error) {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(resourceName)
 	return begin[MonitorWorkspaceResource](ctx, c.transport, "POST", path+"/restore", nil, path)
+}
+
+// SearchLogs runs searchLogs — permission 'read'.
+func (c *MonitorWorkspaceClient) SearchLogs(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content MonitorWorkspaceSearchLogsContent) error {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(resourceName) + "/searchLogs"
+	return call(ctx, c.transport, "POST", path, content, nil)
 }
 
 // AlertRuleClient is alert rules — CyberCloud.Monitor/workspaces/alertRules. A condition over the workspace's metrics or logs, evaluated on a schedule; when it holds for long enough the action group is told through a Communication service, and again when it stops.

@@ -2553,6 +2553,76 @@ type MonitorWorkspaceListKeysResult struct {
 	SqlEndpoint string `json:"sqlEndpoint"`
 }
 
+// MonitorWorkspaceListMetricLabelsContent is the parameters of listMetricLabels.
+type MonitorWorkspaceListMetricLabelsContent struct {
+	// The window's end. Defaults to now.
+	End *string `json:"end,omitempty"`
+	// The label whose values to list — __name__ for the metric names. Leave it out to list the label names instead.
+	Label *string `json:"label,omitempty"`
+	// A series selector the answer is narrowed to, for example http_requests_total.
+	Match *string `json:"match,omitempty"`
+	// The window's start. Defaults to a day before end.
+	Start *string `json:"start,omitempty"`
+}
+
+// MonitorWorkspaceListMetricLabelsResult is what listMetricLabels returns.
+type MonitorWorkspaceListMetricLabelsResult struct {
+	// Whether more than 10000 matched and the rest were left out.
+	Truncated bool `json:"truncated"`
+	// The label values, or the label names when no label was named, sorted.
+	Values []string `json:"values"`
+}
+
+// MonitorWorkspaceQueryMetricsContent is the parameters of queryMetrics.
+type MonitorWorkspaceQueryMetricsContent struct {
+	// Where a range query ends. Give it with start.
+	End *string `json:"end,omitempty"`
+	// A PromQL or MetricsQL expression, run under this workspace's metrics tenancy.
+	Query string `json:"query"`
+	// Where a range query starts. Give it with end, or neither for an instant query.
+	Start *string `json:"start,omitempty"`
+	// A range query's resolution. Defaults to the window cut into 240 points; the window divided by it may not exceed 11000.
+	StepSeconds *int64 `json:"stepSeconds,omitempty"`
+	// The instant an instant query is evaluated at. Defaults to now.
+	Time *string `json:"time,omitempty"`
+}
+
+// MonitorWorkspaceSearchLogsContentSeverities is the values /severities accepts. ⚠ Closed: the write path refuses anything else.
+type MonitorWorkspaceSearchLogsContentSeverities string
+
+const (
+	MonitorWorkspaceSearchLogsContentSeveritiesTrace MonitorWorkspaceSearchLogsContentSeverities = "trace"
+	MonitorWorkspaceSearchLogsContentSeveritiesDebug MonitorWorkspaceSearchLogsContentSeverities = "debug"
+	MonitorWorkspaceSearchLogsContentSeveritiesInfo  MonitorWorkspaceSearchLogsContentSeverities = "info"
+	MonitorWorkspaceSearchLogsContentSeveritiesWarn  MonitorWorkspaceSearchLogsContentSeverities = "warn"
+	MonitorWorkspaceSearchLogsContentSeveritiesError MonitorWorkspaceSearchLogsContentSeverities = "error"
+	MonitorWorkspaceSearchLogsContentSeveritiesFatal MonitorWorkspaceSearchLogsContentSeverities = "fatal"
+)
+
+// MonitorWorkspaceSearchLogsContent is the parameters of searchLogs.
+type MonitorWorkspaceSearchLogsContent struct {
+	// Up to 10 key=value filters, each matched against the record's own attributes and its resource's.
+	Attributes []string `json:"attributes,omitempty"`
+	// The histogram's bucket width. Defaults to the window cut into 60.
+	BucketSeconds *int64 `json:"bucketSeconds,omitempty"`
+	// Answer how many rows the search would read, and run nothing else.
+	Estimate *bool `json:"estimate,omitempty"`
+	// The window's start, inclusive.
+	From string `json:"from"`
+	// The service.name the record must come from.
+	Service *string `json:"service,omitempty"`
+	// The severity classes to keep. Leave it out for every record, including those with no severity.
+	Severities []MonitorWorkspaceSearchLogsContentSeverities `json:"severities,omitempty"`
+	// Text the log body must contain, compared without regard to case.
+	Text *string `json:"text,omitempty"`
+	// The window's end, exclusive. At most 90 days after from.
+	To string `json:"to"`
+	// How many records to return, newest first. Defaults to 100.
+	Top *int64 `json:"top,omitempty"`
+	// The trace the record must belong to, 32 hex digits.
+	TraceID *string `json:"traceId,omitempty"`
+}
+
 // AlertRuleChannel is the values /properties/actionGroup/channel accepts. ⚠ Closed: the write path refuses anything else.
 type AlertRuleChannel string
 
