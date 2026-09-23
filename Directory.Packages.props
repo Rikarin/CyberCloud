@@ -343,6 +343,15 @@
           XML comment early, and a props file that fails to parse takes every restore down with it.)
         -->
         <PackageVersion Include="SSH.NET" Version="2026.0.0"/>
+        <!--
+          The independent cryptography a key vault's signatures and ciphertexts are checked against
+          (CyberCloud.Providers.KeyVault.Tests, CyberCloud.Gateway.Host.Tests) — TEST PROJECTS ONLY;
+          the vault itself uses System.Security.Cryptography and nothing else. MIT. ⚠ 2.7.0 and not
+          the 2.6.2 Testcontainers 4.13.0 asks for, because the SSH.NET pin above asks for >= 2.7.0 and
+          every Testcontainers suite already resolves 2.7.0 — a 2.6.2 line here was NU1109 (a
+          downgrade) in all of them. With transitive pinning on, this line moves no suite's version.
+        -->
+        <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0"/>
         <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1"/>
         <!--
           ⚠ For ONE test class, and it is the only honest way to assert what ADR-013 claims.

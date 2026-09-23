@@ -59,6 +59,54 @@ from .models import (
     KafkaClusterData,
     KafkaClusterListKeysResult,
     KafkaClusterResource,
+    KeyVaultCreateKeyContent,
+    KeyVaultCreateKeyResult,
+    KeyVaultData,
+    KeyVaultDecryptContent,
+    KeyVaultDecryptResult,
+    KeyVaultDeleteKeyContent,
+    KeyVaultDeleteKeyResult,
+    KeyVaultDeleteSecretContent,
+    KeyVaultDeleteSecretResult,
+    KeyVaultEncryptContent,
+    KeyVaultEncryptResult,
+    KeyVaultGetKeyContent,
+    KeyVaultGetKeyResult,
+    KeyVaultGetSecretContent,
+    KeyVaultGetSecretResult,
+    KeyVaultImportKeyContent,
+    KeyVaultImportKeyResult,
+    KeyVaultListDeletedKeysResult,
+    KeyVaultListDeletedSecretsResult,
+    KeyVaultListKeyVersionsContent,
+    KeyVaultListKeyVersionsResult,
+    KeyVaultListKeysResult,
+    KeyVaultListSecretVersionsContent,
+    KeyVaultListSecretVersionsResult,
+    KeyVaultListSecretsResult,
+    KeyVaultPurgeDeletedKeyContent,
+    KeyVaultPurgeDeletedKeyResult,
+    KeyVaultPurgeDeletedSecretContent,
+    KeyVaultPurgeDeletedSecretResult,
+    KeyVaultRecoverDeletedKeyContent,
+    KeyVaultRecoverDeletedKeyResult,
+    KeyVaultRecoverDeletedSecretContent,
+    KeyVaultRecoverDeletedSecretResult,
+    KeyVaultResource,
+    KeyVaultSetSecretContent,
+    KeyVaultSetSecretResult,
+    KeyVaultSignContent,
+    KeyVaultSignResult,
+    KeyVaultUnwrapKeyContent,
+    KeyVaultUnwrapKeyResult,
+    KeyVaultUpdateKeyContent,
+    KeyVaultUpdateKeyResult,
+    KeyVaultUpdateSecretContent,
+    KeyVaultUpdateSecretResult,
+    KeyVaultVerifyContent,
+    KeyVaultVerifyResult,
+    KeyVaultWrapKeyContent,
+    KeyVaultWrapKeyResult,
     LoadBalancerData,
     LoadBalancerResource,
     LoadBalancerShowBackendsResult,
@@ -1141,6 +1189,212 @@ class DocumentDBProvider:
         self.accounts = DocumentDatabaseAccountClient(transport)
 
 
+class KeyVaultClient:
+    """Key vaults — CyberCloud.KeyVault/vaults. Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> KeyVaultResource:
+        """Reads one Key vault."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return KeyVaultResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: KeyVaultData) -> Operation[KeyVaultResource]:
+        """Creates or replaces one Key vault. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, KeyVaultResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: KeyVaultData) -> Operation[KeyVaultResource]:
+        """Amends one Key vault. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, KeyVaultResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Key vault. ⚠ Recoverable for 7 day(s)."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[KeyVaultResource]:
+        """Lists the Key vaults in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults", top, KeyVaultResource.from_wire)
+
+    def create_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultCreateKeyContent) -> KeyVaultCreateKeyResult:
+        """createKey — permission 'writeKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/createKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultCreateKeyResult.from_wire(wire_of(response))
+
+    def decrypt(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultDecryptContent) -> KeyVaultDecryptResult:
+        """decrypt — permission 'useKeys'. ⚠ The response carries secret material."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/decrypt", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultDecryptResult.from_wire(wire_of(response))
+
+    def delete_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultDeleteKeyContent) -> KeyVaultDeleteKeyResult:
+        """deleteKey — permission 'writeKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/deleteKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultDeleteKeyResult.from_wire(wire_of(response))
+
+    def delete_secret(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultDeleteSecretContent) -> KeyVaultDeleteSecretResult:
+        """deleteSecret — permission 'writeSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/deleteSecret", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultDeleteSecretResult.from_wire(wire_of(response))
+
+    def encrypt(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultEncryptContent) -> KeyVaultEncryptResult:
+        """encrypt — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/encrypt", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultEncryptResult.from_wire(wire_of(response))
+
+    def get_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultGetKeyContent) -> KeyVaultGetKeyResult:
+        """getKey — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/getKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultGetKeyResult.from_wire(wire_of(response))
+
+    def get_secret(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultGetSecretContent) -> KeyVaultGetSecretResult:
+        """getSecret — permission 'readSecrets'. ⚠ The response carries secret material."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/getSecret", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultGetSecretResult.from_wire(wire_of(response))
+
+    def import_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultImportKeyContent) -> KeyVaultImportKeyResult:
+        """importKey — permission 'writeKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/importKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultImportKeyResult.from_wire(wire_of(response))
+
+    def list_deleted_keys(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> KeyVaultListDeletedKeysResult:
+        """listDeletedKeys — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/listDeletedKeys"))
+        raise_for_status(response)
+        return KeyVaultListDeletedKeysResult.from_wire(wire_of(response))
+
+    def list_deleted_secrets(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> KeyVaultListDeletedSecretsResult:
+        """listDeletedSecrets — permission 'readSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/listDeletedSecrets"))
+        raise_for_status(response)
+        return KeyVaultListDeletedSecretsResult.from_wire(wire_of(response))
+
+    def list_key_versions(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultListKeyVersionsContent) -> KeyVaultListKeyVersionsResult:
+        """listKeyVersions — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/listKeyVersions", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultListKeyVersionsResult.from_wire(wire_of(response))
+
+    def list_keys(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> KeyVaultListKeysResult:
+        """listKeys — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/listKeys"))
+        raise_for_status(response)
+        return KeyVaultListKeysResult.from_wire(wire_of(response))
+
+    def list_secret_versions(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultListSecretVersionsContent) -> KeyVaultListSecretVersionsResult:
+        """listSecretVersions — permission 'readSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/listSecretVersions", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultListSecretVersionsResult.from_wire(wire_of(response))
+
+    def list_secrets(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> KeyVaultListSecretsResult:
+        """listSecrets — permission 'readSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/listSecrets"))
+        raise_for_status(response)
+        return KeyVaultListSecretsResult.from_wire(wire_of(response))
+
+    def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """purge — permission 'purge'. ⚠ Long-running, and it removes the resource: wait() resolves to None, because there is nothing left to read."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/purge"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def purge_deleted_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultPurgeDeletedKeyContent) -> KeyVaultPurgeDeletedKeyResult:
+        """purgeDeletedKey — permission 'purgeKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/purgeDeletedKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultPurgeDeletedKeyResult.from_wire(wire_of(response))
+
+    def purge_deleted_secret(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultPurgeDeletedSecretContent) -> KeyVaultPurgeDeletedSecretResult:
+        """purgeDeletedSecret — permission 'purgeSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/purgeDeletedSecret", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultPurgeDeletedSecretResult.from_wire(wire_of(response))
+
+    def recover_deleted_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultRecoverDeletedKeyContent) -> KeyVaultRecoverDeletedKeyResult:
+        """recoverDeletedKey — permission 'writeKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/recoverDeletedKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultRecoverDeletedKeyResult.from_wire(wire_of(response))
+
+    def recover_deleted_secret(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultRecoverDeletedSecretContent) -> KeyVaultRecoverDeletedSecretResult:
+        """recoverDeletedSecret — permission 'writeSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/recoverDeletedSecret", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultRecoverDeletedSecretResult.from_wire(wire_of(response))
+
+    def begin_restore(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[KeyVaultResource]:
+        """restore — permission 'write'. ⚠ Long-running: wait() resolves to the resource afterwards."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/restore"))
+        raise_for_status(response)
+        return Operation(self._transport, response, KeyVaultResource.from_wire, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}")
+
+    def set_secret(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultSetSecretContent) -> KeyVaultSetSecretResult:
+        """setSecret — permission 'writeSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/setSecret", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultSetSecretResult.from_wire(wire_of(response))
+
+    def sign(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultSignContent) -> KeyVaultSignResult:
+        """sign — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/sign", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultSignResult.from_wire(wire_of(response))
+
+    def unwrap_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultUnwrapKeyContent) -> KeyVaultUnwrapKeyResult:
+        """unwrapKey — permission 'useKeys'. ⚠ The response carries secret material."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/unwrapKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultUnwrapKeyResult.from_wire(wire_of(response))
+
+    def update_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultUpdateKeyContent) -> KeyVaultUpdateKeyResult:
+        """updateKey — permission 'writeKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/updateKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultUpdateKeyResult.from_wire(wire_of(response))
+
+    def update_secret(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultUpdateSecretContent) -> KeyVaultUpdateSecretResult:
+        """updateSecret — permission 'writeSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/updateSecret", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultUpdateSecretResult.from_wire(wire_of(response))
+
+    def verify(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultVerifyContent) -> KeyVaultVerifyResult:
+        """verify — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/verify", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultVerifyResult.from_wire(wire_of(response))
+
+    def wrap_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultWrapKeyContent) -> KeyVaultWrapKeyResult:
+        """wrapKey — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/wrapKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultWrapKeyResult.from_wire(wire_of(response))
+
+
+class KeyVaultProvider:
+    """The resource types of CyberCloud.KeyVault."""
+
+    def __init__(self, transport: Transport) -> None:
+        self.vaults = KeyVaultClient(transport)
+
+
 class MailDomainClient:
     """Mail domains — CyberCloud.Mail/domains. A managed mail domain on Dovecot, Postfix and Rspamd, with a per-tenant mail store, DKIM signing, and the SPF, DKIM, DMARC and MX records the domain must publish before the platform will send for it."""
 
@@ -2174,6 +2428,7 @@ class CyberCloudClient:
         self.dbforpostgresql = DBforPostgreSQLProvider(transport)
         self.dashboard = DashboardProvider(transport)
         self.documentdb = DocumentDBProvider(transport)
+        self.keyvault = KeyVaultProvider(transport)
         self.mail = MailProvider(transport)
         self.messaging = MessagingProvider(transport)
         self.monitor = MonitorProvider(transport)

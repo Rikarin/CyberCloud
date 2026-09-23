@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fourth project. What only THIS family can be wrong about: its
+      cryptography, its grain's rules (versions, the recovery window, purge protection, the validity
+      window), its reconciler's two teardowns, its declaration, the permission names it shares with
+      the ReBAC schema, and the aliases its wire types need to cross a process.
+
+      ⚠ The lifecycle is the shared suite's (the .Conformance project) and the data plane over the
+      real gateway, with a real OpenBao holding the root and the real ReBAC schema deciding every
+      call, is CyberCloud.Gateway.Host.Tests' KeyVaultOverTheGatewayTests — the one place that can
+      compose the gateway's internal stages.
+
+      ⚠ BouncyCastle.Cryptography IS IN TEST PROJECTS ONLY — here and in the gateway suite — as the INDEPENDENT implementation a
+      signature and a ciphertext are checked against. A vault whose sign and verify both run on
+      System.Security.Cryptography could agree with itself about a wrong encoding — r‖s against DER,
+      a PSS salt length, OAEP's label — and every round trip would pass. MIT-licensed, and the same
+      version the Testcontainers suites already resolve (2.7.0, through the SSH.NET pin).
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+        <PackageReference Include="BouncyCastle.Cryptography"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.csproj"/>
+        <!-- ProviderRegistry.Build and InMemorySecretVault. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <!-- CyberCloudSchema, to pin the six permission names the data plane checks against the schema. -->
+        <ProjectReference Include="../../../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+    </ItemGroup>
+
+</Project>

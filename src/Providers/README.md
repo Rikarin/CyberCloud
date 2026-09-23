@@ -2324,6 +2324,41 @@ attached to and a child shares its parent's lifetime by construction.
   namespace, waiting for a log-streaming path), and `deallocate` (`deallocate-is-stop`: a halted
   KubeVirt machine already holds no compute and keeps every disk).
 
+### What the nineteenth provider measured
+
+`CyberCloud.KeyVault/vaults`, [18 § `CyberCloud.KeyVault/vaults`](../../docs/plan/18-security-vault-and-malware-scan.md),
+M1 · 2.0 EM, 2026-09-23 — the prerequisite #30's customer-managed keys named. Secrets and RSA/EC keys
+behind a data plane of 25 actions through the gateway, sealed under a per-vault root the platform vault
+holds. What it measured:
+
+- **⚠ THE FIRST FAMILY WHOSE ACTIONS CHECK PERMISSIONS NO CONTROL-PLANE ROLE HOLDS, AND THE SCHEMA HAD
+  TO LEARN THEM FIRST.** Every earlier action checks `read`, `write` or a name like `listKeys`; these
+  check six data-plane permissions defined in `CyberCloudSchema` (`SchemaVersion` 4) in terms of four
+  new grantable roles on every scope — `keyVaultSecretsOfficer/User`, `keyVaultCryptoOfficer/User` —
+  and of nothing `owner` reaches. The provider spells the six without referencing the schema
+  (docs/plan/07 § The enforcement seam), so `KeyVaultDeclarationTests.TheSixPermissionsAreTheSchemasAndNoControlPlaneRoleHoldsThem`
+  pins the two spellings, and `KeyVaultOverTheGatewayTests.TheOwnerOfTheVaultIsRefusedEveryDataPlaneAction`
+  drives the refusal over HTTP; widening `readSecrets` to `owner` turned it red (`403` expected, `404`
+  — the owner reached the grain — found).
+- **⚠ THE THIRD PROVIDER GRAIN, AND THE FIRST WHOSE STATE IS CIPHERTEXT BY CONSTRUCTION.**
+  `KeyVaultGrain` holds every version of every item AES-256-GCM-sealed under a root minted into
+  OpenBao through `ISecretWriter` and read back through `ISecretResolver` — the platform vault seam,
+  not a second client. `durable-grains.txt` carries the argument; `CC1005` stays on in the assembly and
+  has nothing to say, because no member is named like a secret and none holds one.
+- **⚠ A SOFT DELETE AND A PURGE WERE THE SAME CALL.** Both run `DeleteAsync`, and every earlier type's
+  data plane lived in a cluster, where the manager reclaims what a park kept. A grain-backed vault has
+  nothing the manager can reclaim, so `ReconcileContext.Parking` now carries the operation's own
+  `SoftDelete` flag; setting it to `false` in the driver turned the shared suite's
+  `DeleteTearsDownTheDataPlaneAndTheResourceIsGone` red — the restore never converged, because the park
+  had destroyed the vault it was restoring.
+- **⚠ The world the suite reads is the grain, through `IConvergedModule`**, the Communication family's
+  registration: a seal stands for "removed behind the reconciler's back" and a changed recovery window
+  for "edited", both of which a pass puts back from the body.
+- **⚠ What is owed is in [18 § What landed, and what is owed](../../docs/plan/18-security-vault-and-malware-scan.md)**
+  — certificates, rotation, the caller on the audit line, crypto-shredding the root on purge — and what
+  customer-managed keys still need is one `customer-managed-keys` row per stateful family's
+  `conformance.yaml § owed`, all pointing at the key-use seam `ctx.View` cannot be.
+
 ## Namespaces
 
 Every namespaced object this platform applies lands in `{subscriptionId:N}-{resourceGroup}`, derived

@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the implementation assembly: "grains, reconcilers, the chart
+      bindings". One reconciler, one action handler serving every data-plane action, and
+      KeyVaultGrain — the vault's secrets and keys.
+
+      ⚠ THE CRYPTOGRAPHY IS System.Security.Cryptography AND NOTHING ELSE, AND THAT IS THE ADR-011
+      ANSWER. docs/plan/02 § ADR-011 refuses a licence that forbids offering the software as a
+      service. System.Security.Cryptography is part of the .NET runtime (MIT) and adds no package
+      here; it performs no cryptography of its own but calls the platform's — OpenSSL 3 on the Linux
+      the silo image runs (Apache-2.0 since 3.0), CNG on a Windows developer machine (an operating
+      system component). Neither licence says anything about hosting. Every primitive this vault uses
+      is there: AesGcm for sealing, RSA with OAEP and PSS/PKCS#1 v1.5 signatures, ECDsa on the three
+      NIST curves, PKCS#8 import and export. BouncyCastle is in the TEST project only, as the
+      independent implementation a signature is verified against — see its .csproj.
+
+      ⚠ NO OpenBao CLIENT HERE. CyberCloud.Vault is the platform's one; this assembly reaches it
+      through ISecretWriter (the reconciler mints the vault's root) and ISecretResolver (the grain
+      reads it), both CyberCloud.ResourceManager.Contracts seams, and never names CyberCloud.Vault.
+    -->
+
+    <ItemGroup>
+        <!-- Grain, IPersistentState, and the source generator over the grain's state. -->
+        <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!-- IGrainFactory.ForTenant and GetTenantId — ADR-002. -->
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.KeyVault.Contracts/CyberCloud.Providers.KeyVault.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

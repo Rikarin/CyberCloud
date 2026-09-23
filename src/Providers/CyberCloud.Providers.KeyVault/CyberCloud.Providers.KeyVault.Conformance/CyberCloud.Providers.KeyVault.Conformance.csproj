@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fifth project: "the shared provider conformance suite,
+      parameterised". One case and a module: a vault's world is its grain, read and broken through
+      IConvergedModule the way CyberCloud.Communication's grains are.
+
+      ⚠ THIS PROJECT IS COUNTED BY THE Labels ARCHITECTURE GATE, and on a clusterless family that gate
+      reads "no object was applied" rather than "every object is labelled".
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -256,6 +256,7 @@
     "CyberCloud.DBforPostgreSQL",
     "CyberCloud.Dashboard",
     "CyberCloud.DocumentDB",
+    "CyberCloud.KeyVault",
     "CyberCloud.Mail",
     "CyberCloud.Messaging",
     "CyberCloud.Monitor",
@@ -498,6 +499,19 @@
         "plural": "Document database accounts",
         "alias": "docdb",
         "summary": "MongoDB-compatible, not MongoDB: FerretDB over PostgreSQL, covering CRUD, indexes and the wire protocol. Multi-document transactions are not supported. Runs on a CloudNativePG cluster, so failover, backup and point-in-time recovery are the operator's.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.KeyVault/vaults",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Key vault",
+        "plural": "Key vaults",
+        "alias": "vault",
+        "summary": "Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection.",
         "declared": true
       }
     },

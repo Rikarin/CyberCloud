@@ -133,6 +133,19 @@ ask, because a grant to a principal since deprovisioned must remain removable. T
 `N`-form GUID a token carries as `sub` — any other spelling names a subject no token presents and is
 refused rather than folded. `RoleAssignmentTests` drives all of it through the real grains.
 
+**Four more grantable roles are data-plane roles, and no control-plane role implies them (2026-09-23,
+`SchemaVersion` 4).** `CyberCloud.KeyVault/vaults` ([18](18-security-vault-and-malware-scan.md))
+needed Azure's split between managing a vault and reading what is in it: `keyVaultSecretsOfficer`,
+`keyVaultSecretsUser`, `keyVaultCryptoOfficer` and `keyVaultCryptoUser` are roles on every scope type,
+inherited `From(parent, …)` like the three, each Officer implying its User, and none rewritten from
+`owner`, `contributor` or `reader`. The vault's actions check six permissions defined on `resource`
+in terms of them — `readSecrets`, `writeSecrets`, `purgeSecrets`, `useKeys`, `writeKeys`,
+`purgeKeys`, the two purges carrying the `!suspended` deny — so the tenant's owner is answered `403`
+on every data-plane action until a data-plane role is granted, which `assignRole` lets the owner do.
+`RoleAssignmentService.GrantableRoles` is seven, and `ReBacResourceRelationWriter.DirectRoles` drops
+all seven on a soft delete. Where this section says "the schema's three" below, it means the three
+control-plane roles.
+
 **A resource is a fifth principal type, and it is not a subject type (issue #90).** `SubjectTypes`
 stays closed at `user`, `servicePrincipal` and `managedIdentity` — what a token can carry, what can
 sign in. `principalType: "resource"` with the resource's own `N`-form GUID is what a tenant grants

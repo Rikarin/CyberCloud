@@ -312,6 +312,10 @@ public sealed class ReconcileDriver(
                 // — a test, a conformance harness — gets RefusingSecretWriter and has to say otherwise.
                 SecretWriter = secretWriter,
                 Objects = objects,
+                // ⚠ FROM THE OPERATION, NEVER FROM THE BODY: a soft delete's teardown parks and a
+                // purge's ends, and a reconciler whose data plane is a grain has nothing else to tell
+                // them apart by. ReconcileContext.Parking carries the argument.
+                Parking = tearingDown && spec.Kind == OperationKind.Delete && spec.SoftDelete,
                 // ⚠ COLLECTED HERE AND ACTED ON BELOW, WHICH IS WHAT KEEPS THE ATTACH BEHIND THE
                 // CONVERGENCE. The reconciler reports; this driver decides whether the report is due.
                 ClusterConnections = produced,

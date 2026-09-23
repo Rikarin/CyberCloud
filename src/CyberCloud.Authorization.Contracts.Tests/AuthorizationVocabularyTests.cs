@@ -84,7 +84,14 @@ public sealed class AuthorizationVocabularyTests {
         Relations.Member.ShouldBe("member");
         Relations.Operator.ShouldBe("operator");
 
-        Literals(typeof(Relations)).Count.ShouldBe(7);
+        // The key-vault data-plane roles (docs/plan/18). A role tuple written under any other spelling
+        // is a grant the schema does not rewrite, which reads as "the role does nothing".
+        Relations.KeyVaultSecretsOfficer.ShouldBe("keyVaultSecretsOfficer");
+        Relations.KeyVaultSecretsUser.ShouldBe("keyVaultSecretsUser");
+        Relations.KeyVaultCryptoOfficer.ShouldBe("keyVaultCryptoOfficer");
+        Relations.KeyVaultCryptoUser.ShouldBe("keyVaultCryptoUser");
+
+        Literals(typeof(Relations)).Count.ShouldBe(11, "a new relation is a schema change — SchemaVersion 4 was the key vault's");
     }
 
     [Fact]
@@ -108,7 +115,17 @@ public sealed class AuthorizationVocabularyTests {
 
         // The other camelCase one, and one of the two permissions with a negation in its rewrite.
         Permissions.AssignRole.ShouldNotBe("assignrole");
-        Literals(typeof(Permissions)).Count.ShouldBe(6);
+
+        // ⚠ The key vault's six, and they are half of a pair exactly as `purge` is: the provider spells
+        // them in KeyVaults without referencing this assembly. KeyVaultDeclarationTests is the other half.
+        Permissions.ReadSecrets.ShouldBe("readSecrets");
+        Permissions.WriteSecrets.ShouldBe("writeSecrets");
+        Permissions.PurgeSecrets.ShouldBe("purgeSecrets");
+        Permissions.UseKeys.ShouldBe("useKeys");
+        Permissions.WriteKeys.ShouldBe("writeKeys");
+        Permissions.PurgeKeys.ShouldBe("purgeKeys");
+
+        Literals(typeof(Permissions)).Count.ShouldBe(12);
     }
 
     [Fact]

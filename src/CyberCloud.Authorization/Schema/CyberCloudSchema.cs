@@ -81,7 +81,15 @@ public static class CyberCloudSchema {
     ///     <para>
     ///         ⚠
     ///         <b>
-    ///             3 since <see cref="ObjectTypes.ManagementGroup" /> was defined (issue #39) — a new
+    ///             4 since the key-vault data-plane roles and permissions were defined (issue #30's
+    ///             prerequisite, <c>CyberCloud.KeyVault/vaults</c>).
+    ///         </b> A cached answer for <c>readSecrets</c> computed under 3 would be a failure
+    ///         to evaluate an undeclared permission, which is not the same answer.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             It was 3 since <see cref="ObjectTypes.ManagementGroup" /> was defined (issue #39) — a new
     ///             type with a <c>parent</c> relation, which changes what a <c>subscription</c>'s
     ///             <c>From("parent", …)</c> can resolve through.
     ///         </b> A cached check computed under version 2 saw a subscription whose parent could
@@ -95,7 +103,7 @@ public static class CyberCloudSchema {
     ///         permission for how a permission that always evaluated false went unnoticed.
     ///     </para>
     /// </remarks>
-    public const int SchemaVersion = 3;
+    public const int SchemaVersion = 4;
 
     /// <summary>The built-in schema, built once.</summary>
     public static AuthorizationSchema Instance { get; } = Build();
@@ -107,6 +115,7 @@ public static class CyberCloudSchema {
             .Role(Relations.Contributor, This | Rel(Relations.Owner))
             .Role(Relations.Reader, This | Rel(Relations.Contributor))
             .Relation(Relations.Suspended)
+            .KeyVaultRoles(inherited: false)
             .Permission(Permissions.Read, Rel(Relations.Reader))
             .Permission(Permissions.Write, Rel(Relations.Contributor))
             .Permission(Permissions.Delete, Rel(Relations.Owner))
@@ -141,6 +150,7 @@ public static class CyberCloudSchema {
                     This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
                 )
                 .Relation(Relations.Suspended)
+                .KeyVaultRoles(inherited: true)
                 .Permission(Permissions.Read, Rel(Relations.Reader))
                 .Permission(Permissions.Write, Rel(Relations.Contributor))
                 .Permission(Permissions.Delete, Rel(Relations.Owner))
@@ -160,6 +170,7 @@ public static class CyberCloudSchema {
                     This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
                 )
                 .Relation(Relations.Suspended)
+                .KeyVaultRoles(inherited: true)
                 .Permission(Permissions.Read, Rel(Relations.Reader))
                 .Permission(Permissions.Write, Rel(Relations.Contributor))
                 .Permission(Permissions.Delete, Rel(Relations.Owner))
@@ -179,6 +190,7 @@ public static class CyberCloudSchema {
                     This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
                 )
                 .Relation(Relations.Suspended)
+                .KeyVaultRoles(inherited: true)
                 .Permission(Permissions.Read, Rel(Relations.Reader))
                 .Permission(Permissions.Write, Rel(Relations.Contributor))
                 .Permission(Permissions.Delete, Rel(Relations.Owner))
@@ -198,6 +210,7 @@ public static class CyberCloudSchema {
                     This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
                 )
                 .Relation(Relations.Suspended)
+                .KeyVaultRoles(inherited: true)
                 .Permission(Permissions.Read, Rel(Relations.Reader))
                 .Permission(Permissions.Write, Rel(Relations.Contributor))
                 .Permission(Permissions.Delete, Rel(Relations.Owner))
@@ -250,6 +263,28 @@ public static class CyberCloudSchema {
                     Permissions.Purge,
                     Rel(Relations.Owner) & !Rel(Relations.Suspended)
                 )
+                // ⚠ THE KEY-VAULT DATA PLANE — docs/plan/18 § CyberCloud.KeyVault/vaults. On
+                // `resource` only, because an action is checked on the resource it is posted to, and
+                // defined in terms of the four data-plane roles and NEVER of owner, contributor or
+                // reader: the tenant's owner can create a vault and cannot read what is in it until
+                // somebody — the owner included, through assignRole — grants a data-plane role.
+                // KeyVaultOverTheGatewayTests.TheOwnerOfTheVaultIsRefusedEveryDataPlaneAction drives
+                // the refusal through the real gateway.
+                //
+                // ⚠ The two purges carry the deny row, as `purge` does: a `suspended` tuple removes the
+                // one irreversible verb and leaves the rest of the role standing.
+                .Permission(Permissions.ReadSecrets, Rel(Relations.KeyVaultSecretsUser))
+                .Permission(Permissions.WriteSecrets, Rel(Relations.KeyVaultSecretsOfficer))
+                .Permission(
+                    Permissions.PurgeSecrets,
+                    Rel(Relations.KeyVaultSecretsOfficer) & !Rel(Relations.Suspended)
+                )
+                .Permission(Permissions.UseKeys, Rel(Relations.KeyVaultCryptoUser))
+                .Permission(Permissions.WriteKeys, Rel(Relations.KeyVaultCryptoOfficer))
+                .Permission(
+                    Permissions.PurgeKeys,
+                    Rel(Relations.KeyVaultCryptoOfficer) & !Rel(Relations.Suspended)
+                )
                 .DefineType(ObjectTypes.Group)
                 // Direct only, and nested groups work because a tuple's SUBJECT may itself be the
                 // userset `group:platform#member` — docs/plan/07 § The model's fourth example.
@@ -265,4 +300,42 @@ public static class CyberCloudSchema {
                 .Permission(Permissions.Administer, Rel(Relations.Operator))
                 .DefineType(ObjectTypes.User)
                 .Build();
+
+    /// <summary>
+    ///     Declares the four key-vault data-plane roles on a scope — docs/plan/18
+    ///     § <c>CyberCloud.KeyVault/vaults</c>.
+    /// </summary>
+    /// <param name="type">The scope type being defined.</param>
+    /// <param name="inherited">
+    ///     Whether the scope has a <c>parent</c> to inherit from. False for the tenant, the root.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>On every scope and not only on <c>resource</c>, because inheritance is a
+    ///         property of the whole chain.</b> A Secrets User granted on a resource group reaches the
+    ///         vaults in it through <c>From("parent", …)</c> exactly as a reader does — and
+    ///         <c>CheckGrain</c>'s role-assignment view lists an inherited row only where the parent's
+    ///         type declares the role, so a role missing from one link would be granted and invisible.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Roles, so they are grantable and listable, and never rewritten from a
+    ///         control-plane role.</b> <c>RoleAssignmentService.GrantableRoles</c> and
+    ///         <c>ReBacResourceRelationWriter.DirectRoles</c> carry the same four names.
+    ///     </para>
+    /// </remarks>
+    static SchemaTypeBuilder KeyVaultRoles(this SchemaTypeBuilder type, bool inherited) {
+        RelationExpression Inherited(string role) => inherited ? This | From(Relations.Parent, role) : This;
+
+        return type
+            .Role(Relations.KeyVaultSecretsOfficer, Inherited(Relations.KeyVaultSecretsOfficer))
+            .Role(
+                Relations.KeyVaultSecretsUser,
+                Inherited(Relations.KeyVaultSecretsUser) | Rel(Relations.KeyVaultSecretsOfficer)
+            )
+            .Role(Relations.KeyVaultCryptoOfficer, Inherited(Relations.KeyVaultCryptoOfficer))
+            .Role(
+                Relations.KeyVaultCryptoUser,
+                Inherited(Relations.KeyVaultCryptoUser) | Rel(Relations.KeyVaultCryptoOfficer)
+            );
+    }
 }

@@ -1413,6 +1413,748 @@ export interface DocumentDBAccountsListKeysResult {
   username: string;
 }
 
+/** Key vault. Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection. */
+export interface KeyVaultVaultsData {
+  /** The region the vault is billed in and served from. */
+  location: string;
+  /** The vault's own settings. */
+  properties?: {
+    /** What the vault is for, shown in the portal beside its name. */
+    description?: string;
+    /** Whether a deleted vault, secret or key may be purged before its seven-day recovery window ends. Once true it stays true: a write that sets it false is refused, and so is every purge until the window is out. */
+    enablePurgeProtection?: boolean;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Key vault, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface KeyVaultVaultsResource extends Resource, KeyVaultVaultsData {
+  readonly type: 'CyberCloud.KeyVault/vaults';
+}
+
+/** The values /curve accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsCreateKeyContentCurve =
+  | 'P-256'
+  | 'P-384'
+  | 'P-521';
+
+/** The values /keyOps accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsCreateKeyContentKeyOps =
+  | 'encrypt'
+  | 'decrypt'
+  | 'sign'
+  | 'verify'
+  | 'wrapKey'
+  | 'unwrapKey';
+
+/** The values /kty accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsCreateKeyContentKty =
+  | 'RSA'
+  | 'EC';
+
+/** The parameters of createKey. */
+export interface KeyVaultVaultsCreateKeyContent {
+  /** An EC key's curve. P-256 when omitted; refused on an RSA key. */
+  curve?: KeyVaultVaultsCreateKeyContentCurve;
+  /** Whether the version may be used. A disabled version is refused, not hidden. */
+  enabled?: boolean;
+  /** The version is refused from this time on. */
+  expiresOn?: string;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only. */
+  keyOps?: KeyVaultVaultsCreateKeyContentKeyOps[];
+  /** An RSA key's modulus in bits: 2048, 3072 or 4096. 2048 when omitted; refused on an EC key. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: KeyVaultVaultsCreateKeyContentKty;
+  /** The version is refused before this time. */
+  notBefore?: string;
+}
+
+/** What createKey returns. */
+export interface KeyVaultVaultsCreateKeyResult {
+  /** When the version was created. */
+  created: string;
+  /** An EC key's curve. */
+  crv?: string;
+  /** An RSA key's public exponent, base64url. */
+  e?: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** Whether the key was imported rather than generated here. */
+  imported: boolean;
+  /** The operations the key permits. */
+  keyOps: string[];
+  /** An RSA key's modulus in bits. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: string;
+  /** An RSA key's modulus, base64url. */
+  n?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+  /** An EC key's x coordinate, base64url. */
+  x?: string;
+  /** An EC key's y coordinate, base64url. */
+  y?: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsDecryptContentAlg =
+  | 'RSA-OAEP'
+  | 'RSA-OAEP-256';
+
+/** The parameters of decrypt. */
+export interface KeyVaultVaultsDecryptContent {
+  /** RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256). */
+  alg: KeyVaultVaultsDecryptContentAlg;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The bytes to transform, base64url without padding. */
+  value: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What decrypt returns. ⚠ Secret material — never log or persist this. */
+export interface KeyVaultVaultsDecryptResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** The plaintext, base64url. */
+  value: string;
+  /** The key version that did the work. */
+  version: string;
+}
+
+/** The parameters of deleteKey. */
+export interface KeyVaultVaultsDeleteKeyContent {
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+}
+
+/** What deleteKey returns. */
+export interface KeyVaultVaultsDeleteKeyResult {
+  /** When the item was deleted. */
+  deletedOn: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** When the item is purged unless it is recovered first. */
+  scheduledPurgeDate: string;
+}
+
+/** The parameters of deleteSecret. */
+export interface KeyVaultVaultsDeleteSecretContent {
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+}
+
+/** What deleteSecret returns. */
+export interface KeyVaultVaultsDeleteSecretResult {
+  /** When the item was deleted. */
+  deletedOn: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** When the item is purged unless it is recovered first. */
+  scheduledPurgeDate: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsEncryptContentAlg =
+  | 'RSA-OAEP'
+  | 'RSA-OAEP-256';
+
+/** The parameters of encrypt. */
+export interface KeyVaultVaultsEncryptContent {
+  /** RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256). */
+  alg: KeyVaultVaultsEncryptContentAlg;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The bytes to transform, base64url without padding. */
+  value: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What encrypt returns. */
+export interface KeyVaultVaultsEncryptResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** The result, base64url. */
+  value: string;
+  /** The key version that did the work. */
+  version: string;
+}
+
+/** The parameters of getKey. */
+export interface KeyVaultVaultsGetKeyContent {
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What getKey returns. */
+export interface KeyVaultVaultsGetKeyResult {
+  /** When the version was created. */
+  created: string;
+  /** An EC key's curve. */
+  crv?: string;
+  /** An RSA key's public exponent, base64url. */
+  e?: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** Whether the key was imported rather than generated here. */
+  imported: boolean;
+  /** The operations the key permits. */
+  keyOps: string[];
+  /** An RSA key's modulus in bits. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: string;
+  /** An RSA key's modulus, base64url. */
+  n?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+  /** An EC key's x coordinate, base64url. */
+  x?: string;
+  /** An EC key's y coordinate, base64url. */
+  y?: string;
+}
+
+/** The parameters of getSecret. */
+export interface KeyVaultVaultsGetSecretContent {
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What getSecret returns. ⚠ Secret material — never log or persist this. */
+export interface KeyVaultVaultsGetSecretResult {
+  /** What the value is. Absent when unset. */
+  contentType?: string;
+  /** When the version was created. */
+  created: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The secret's value. */
+  value: string;
+  /** The version this response is about. */
+  version: string;
+}
+
+/** The values /keyOps accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsImportKeyContentKeyOps =
+  | 'encrypt'
+  | 'decrypt'
+  | 'sign'
+  | 'verify'
+  | 'wrapKey'
+  | 'unwrapKey';
+
+/** The parameters of importKey. */
+export interface KeyVaultVaultsImportKeyContent {
+  /** Whether the version may be used. A disabled version is refused, not hidden. */
+  enabled?: boolean;
+  /** The version is refused from this time on. */
+  expiresOn?: string;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only. */
+  keyOps?: KeyVaultVaultsImportKeyContentKeyOps[];
+  /** The version is refused before this time. */
+  notBefore?: string;
+  /** The private key as unencrypted PKCS#8 DER, in standard base64. RSA of 2048, 3072 or 4096 bits, or EC on P-256, P-384 or P-521. Sealed on arrival and never returned. */
+  pkcs8: string;
+}
+
+/** What importKey returns. */
+export interface KeyVaultVaultsImportKeyResult {
+  /** When the version was created. */
+  created: string;
+  /** An EC key's curve. */
+  crv?: string;
+  /** An RSA key's public exponent, base64url. */
+  e?: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** Whether the key was imported rather than generated here. */
+  imported: boolean;
+  /** The operations the key permits. */
+  keyOps: string[];
+  /** An RSA key's modulus in bits. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: string;
+  /** An RSA key's modulus, base64url. */
+  n?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+  /** An EC key's x coordinate, base64url. */
+  x?: string;
+  /** An EC key's y coordinate, base64url. */
+  y?: string;
+}
+
+/** What listDeletedKeys returns. */
+export interface KeyVaultVaultsListDeletedKeysResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** What listDeletedSecrets returns. */
+export interface KeyVaultVaultsListDeletedSecretsResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** The parameters of listKeyVersions. */
+export interface KeyVaultVaultsListKeyVersionsContent {
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+}
+
+/** What listKeyVersions returns. */
+export interface KeyVaultVaultsListKeyVersionsResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** What listKeys returns. */
+export interface KeyVaultVaultsListKeysResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** The parameters of listSecretVersions. */
+export interface KeyVaultVaultsListSecretVersionsContent {
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+}
+
+/** What listSecretVersions returns. */
+export interface KeyVaultVaultsListSecretVersionsResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** What listSecrets returns. */
+export interface KeyVaultVaultsListSecretsResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** The parameters of purgeDeletedKey. */
+export interface KeyVaultVaultsPurgeDeletedKeyContent {
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+}
+
+/** What purgeDeletedKey returns. */
+export interface KeyVaultVaultsPurgeDeletedKeyResult {
+  /** The secret's or key's name. */
+  name: string;
+  /** True: the item and every version of it are gone. */
+  purged: boolean;
+}
+
+/** The parameters of purgeDeletedSecret. */
+export interface KeyVaultVaultsPurgeDeletedSecretContent {
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+}
+
+/** What purgeDeletedSecret returns. */
+export interface KeyVaultVaultsPurgeDeletedSecretResult {
+  /** The secret's or key's name. */
+  name: string;
+  /** True: the item and every version of it are gone. */
+  purged: boolean;
+}
+
+/** The parameters of recoverDeletedKey. */
+export interface KeyVaultVaultsRecoverDeletedKeyContent {
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+}
+
+/** What recoverDeletedKey returns. */
+export interface KeyVaultVaultsRecoverDeletedKeyResult {
+  /** When the version was created. */
+  created: string;
+  /** An EC key's curve. */
+  crv?: string;
+  /** An RSA key's public exponent, base64url. */
+  e?: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** Whether the key was imported rather than generated here. */
+  imported: boolean;
+  /** The operations the key permits. */
+  keyOps: string[];
+  /** An RSA key's modulus in bits. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: string;
+  /** An RSA key's modulus, base64url. */
+  n?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+  /** An EC key's x coordinate, base64url. */
+  x?: string;
+  /** An EC key's y coordinate, base64url. */
+  y?: string;
+}
+
+/** The parameters of recoverDeletedSecret. */
+export interface KeyVaultVaultsRecoverDeletedSecretContent {
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+}
+
+/** What recoverDeletedSecret returns. */
+export interface KeyVaultVaultsRecoverDeletedSecretResult {
+  /** What the value is. Absent when unset. */
+  contentType?: string;
+  /** When the version was created. */
+  created: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+}
+
+/** The parameters of setSecret. */
+export interface KeyVaultVaultsSetSecretContent {
+  /** What the value is, for the consumer — for example text/plain. Not interpreted. */
+  contentType?: string;
+  /** Whether the version may be used. A disabled version is refused, not hidden. */
+  enabled?: boolean;
+  /** The version is refused from this time on. */
+  expiresOn?: string;
+  /** The version is refused before this time. */
+  notBefore?: string;
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+  /** The secret's value. Sealed under the vault's root before it is stored. */
+  value: string;
+}
+
+/** What setSecret returns. */
+export interface KeyVaultVaultsSetSecretResult {
+  /** What the value is. Absent when unset. */
+  contentType?: string;
+  /** When the version was created. */
+  created: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsSignContentAlg =
+  | 'RS256'
+  | 'RS384'
+  | 'RS512'
+  | 'PS256'
+  | 'PS384'
+  | 'PS512'
+  | 'ES256'
+  | 'ES384'
+  | 'ES512';
+
+/** The parameters of sign. */
+export interface KeyVaultVaultsSignContent {
+  /** A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521. */
+  alg: KeyVaultVaultsSignContentAlg;
+  /** The digest to sign, base64url. Its length must be the algorithm's hash length. */
+  digest: string;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What sign returns. */
+export interface KeyVaultVaultsSignResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** The result, base64url. */
+  value: string;
+  /** The key version that did the work. */
+  version: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsUnwrapKeyContentAlg =
+  | 'RSA-OAEP'
+  | 'RSA-OAEP-256';
+
+/** The parameters of unwrapKey. */
+export interface KeyVaultVaultsUnwrapKeyContent {
+  /** RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256). */
+  alg: KeyVaultVaultsUnwrapKeyContentAlg;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The bytes to transform, base64url without padding. */
+  value: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What unwrapKey returns. ⚠ Secret material — never log or persist this. */
+export interface KeyVaultVaultsUnwrapKeyResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** The plaintext, base64url. */
+  value: string;
+  /** The key version that did the work. */
+  version: string;
+}
+
+/** The values /keyOps accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsUpdateKeyContentKeyOps =
+  | 'encrypt'
+  | 'decrypt'
+  | 'sign'
+  | 'verify'
+  | 'wrapKey'
+  | 'unwrapKey';
+
+/** The parameters of updateKey. */
+export interface KeyVaultVaultsUpdateKeyContent {
+  /** Whether the version may be used. A disabled version is refused, not hidden. */
+  enabled?: boolean;
+  /** The version is refused from this time on. */
+  expiresOn?: string;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only. */
+  keyOps?: KeyVaultVaultsUpdateKeyContentKeyOps[];
+  /** The version is refused before this time. */
+  notBefore?: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What updateKey returns. */
+export interface KeyVaultVaultsUpdateKeyResult {
+  /** When the version was created. */
+  created: string;
+  /** An EC key's curve. */
+  crv?: string;
+  /** An RSA key's public exponent, base64url. */
+  e?: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** Whether the key was imported rather than generated here. */
+  imported: boolean;
+  /** The operations the key permits. */
+  keyOps: string[];
+  /** An RSA key's modulus in bits. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: string;
+  /** An RSA key's modulus, base64url. */
+  n?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+  /** An EC key's x coordinate, base64url. */
+  x?: string;
+  /** An EC key's y coordinate, base64url. */
+  y?: string;
+}
+
+/** The parameters of updateSecret. */
+export interface KeyVaultVaultsUpdateSecretContent {
+  /** What the value is, for the consumer — for example text/plain. Not interpreted. */
+  contentType?: string;
+  /** Whether the version may be used. A disabled version is refused, not hidden. */
+  enabled?: boolean;
+  /** The version is refused from this time on. */
+  expiresOn?: string;
+  /** The version is refused before this time. */
+  notBefore?: string;
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What updateSecret returns. */
+export interface KeyVaultVaultsUpdateSecretResult {
+  /** What the value is. Absent when unset. */
+  contentType?: string;
+  /** When the version was created. */
+  created: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsVerifyContentAlg =
+  | 'RS256'
+  | 'RS384'
+  | 'RS512'
+  | 'PS256'
+  | 'PS384'
+  | 'PS512'
+  | 'ES256'
+  | 'ES384'
+  | 'ES512';
+
+/** The parameters of verify. */
+export interface KeyVaultVaultsVerifyContent {
+  /** A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521. */
+  alg: KeyVaultVaultsVerifyContentAlg;
+  /** The digest to sign, base64url. Its length must be the algorithm's hash length. */
+  digest: string;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The signature, base64url. An EC signature is r‖s, as JWS spells it. */
+  signature: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What verify returns. */
+export interface KeyVaultVaultsVerifyResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** Whether the signature is valid. */
+  value: boolean;
+  /** The key version that did the work. */
+  version: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsWrapKeyContentAlg =
+  | 'RSA-OAEP'
+  | 'RSA-OAEP-256';
+
+/** The parameters of wrapKey. */
+export interface KeyVaultVaultsWrapKeyContent {
+  /** RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256). */
+  alg: KeyVaultVaultsWrapKeyContentAlg;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The bytes to transform, base64url without padding. */
+  value: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What wrapKey returns. */
+export interface KeyVaultVaultsWrapKeyResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** The result, base64url. */
+  value: string;
+  /** The key version that did the work. */
+  version: string;
+}
+
 /** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
 export type MailDomainsPreset =
   | 'c1.large'

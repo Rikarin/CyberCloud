@@ -6,10 +6,19 @@ import { ResourceAddress } from './resource-verbs';
 
 /**
  * The roles a `PUT` may grant — `RoleAssignmentService.GrantableRoles`, spelled as the tuple store
- * spells the relation. docs/plan/07 § Azure RBAC, expressed in it: the three roles are the
- * schema's three, and a deny assignment is a different resource type.
+ * spells the relation. docs/plan/07 § Azure RBAC, expressed in it: the first three are the
+ * control-plane roles; the four `keyVault*` roles are the key-vault data plane's (docs/plan/18),
+ * which no control-plane role implies. A deny assignment is a different resource type.
  */
-export const roles = ['owner', 'contributor', 'reader'] as const;
+export const roles = [
+  'owner',
+  'contributor',
+  'reader',
+  'keyVaultSecretsOfficer',
+  'keyVaultSecretsUser',
+  'keyVaultCryptoOfficer',
+  'keyVaultCryptoUser'
+] as const;
 export type Role = (typeof roles)[number];
 
 /**

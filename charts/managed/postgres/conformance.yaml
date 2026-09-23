@@ -390,3 +390,18 @@ owed:
       removes — or the honest alternative until then, `backup.enabled` defaulting to false so the
       section is absent rather than refused. Either is a decision about docs/plan/12 § Backups' "to
       the tenant's bucket", and it is this row's and not the vault's.
+  - id: customer-managed-keys
+    says: >
+      CyberCloud.DBforPostgreSQL/servers. OWED. THE ENGINE STEP: PostgreSQL as CloudNativePG runs it
+      has no transparent data encryption, so at-rest encryption has to come from the volume — a
+      storage class that encrypts per claim with a key the platform can wrap — and the bundle installs
+      openebs-localpv, which encrypts nothing (LINSTOR, #19, is the replicated path and is not
+      installed). The backup half is the object store's and inherits charts/managed/seaweedfs § owed,
+      `customer-managed-keys`. What every family still needs is docs/plan/18 § What customer-managed
+      keys still need: (1) a key-use seam — the grant is expressible today, `keyVaultCryptoUser` with
+      principalType `resource` on a CyberCloud.KeyVault/vaults, but `ctx.View` is read-only by
+      construction and wrapKey/unwrapKey are actions, so no reconciler can call them; (2) an
+      `encryption.keyUri` property on a NEW api-version of this type; (3) revocation — a disabled key
+      taking the data offline, which needs a re-unwrap on a schedule nothing runs. The key's home is
+      no longer the blocker: CyberCloud.KeyVault/vaults was published on 2026-09-23. None of this row
+      is started.

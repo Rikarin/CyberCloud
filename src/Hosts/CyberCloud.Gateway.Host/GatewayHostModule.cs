@@ -7,6 +7,7 @@ using CyberCloud.Providers.ContainerService.Application;
 using CyberCloud.Providers.DBforMySQL.Application;
 using CyberCloud.Providers.DBforPostgreSQL.Application;
 using CyberCloud.Providers.DocumentDB.Application;
+using CyberCloud.Providers.KeyVault.Application;
 using CyberCloud.Providers.Mail.Application;
 using CyberCloud.Providers.Messaging.Application;
 using CyberCloud.Providers.Monitor.Application;
@@ -76,5 +77,6 @@ namespace CyberCloud.Gateway.Host;
 [DependsOn(typeof(SearchApplicationModule))]
 [DependsOn(typeof(StorageApplicationModule))]
 [DependsOn(typeof(RecoveryServicesApplicationModule))]
+[DependsOn(typeof(KeyVaultApplicationModule))]
 [DependsOn(typeof(TerminalApplicationModule))]
 public sealed class GatewayHostModule : AbpModule;

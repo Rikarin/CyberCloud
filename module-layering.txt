@@ -440,6 +440,14 @@ CyberCloud.Providers.RecoveryServices -> CyberCloud.Core
 CyberCloud.Providers.RecoveryServices -> CyberCloud.Kubernetes
 CyberCloud.Providers.RecoveryServices -> CyberCloud.ResourceManager
 CyberCloud.Providers.RecoveryServices -> CyberCloud.Tenancy
+# ⚠ THREE LINES, LIKE THE OTHER CLUSTERLESS FAMILY (Communication has its fourth for the module it IS).
+# CyberCloud.KeyVault/vaults applies nothing to a cluster, so it names nothing of CyberCloud.Kubernetes; and
+# it reaches the platform vault through ISecretWriter and ISecretResolver on ReconcileContext — seams in
+# CyberCloud.ResourceManager.Contracts — so there is no line to CyberCloud.Vault, which would be a second
+# OpenBao client inside a provider (docs/plan/18 § CyberCloud.KeyVault/vaults).
+CyberCloud.Providers.KeyVault -> CyberCloud.Core
+CyberCloud.Providers.KeyVault -> CyberCloud.ResourceManager
+CyberCloud.Providers.KeyVault -> CyberCloud.Tenancy
 CyberCloud.Providers.Sample -> CyberCloud.Core
 CyberCloud.Providers.Sample -> CyberCloud.Kubernetes
 CyberCloud.Providers.Sample -> CyberCloud.ResourceManager

@@ -47,15 +47,16 @@ namespace CyberCloud.Hosts.Tests;
 /// </remarks>
 public sealed class HostCompositionTests {
     /// <summary>
-    ///     The seventeen provider namespaces both hosts must serve, spelled out rather than counted.
+    ///     The twenty provider namespaces both hosts must serve, spelled out rather than counted.
     /// </summary>
     /// <remarks>
     ///     ⚠
     ///     <b>
     ///         The prose said "twelve" over a list of fourteen until <c>CyberCloud.Mail</c> made it
     ///         fifteen, <c>CyberCloud.Communication</c> made it sixteen, <c>CyberCloud.RecoveryServices</c>
-    ///         seventeen, and <c>CyberCloud.Dashboard</c> eighteen — from seventeen modules, because
-    ///         the Monitor module registers two.
+    ///         seventeen, <c>CyberCloud.Dashboard</c> eighteen — from seventeen modules, because
+    ///         the Monitor module registers two — and <c>CyberCloud.KeyVault</c> twenty, arriving to a
+    ///         summary that still said "seventeen" over a list of nineteen.
     ///     </b> The list is what the test reads and the list was right; the number beside it
     ///     was three behind, which is the ordinary fate of a count written next to the thing it
     ///     counts. It is corrected rather than deleted because a reader who sees a number can tell at
@@ -82,6 +83,7 @@ public sealed class HostCompositionTests {
         // the two DBfor… rows, because the comparison is ordinal and `B` sorts before `a`.
         "CyberCloud.Dashboard",
         "CyberCloud.DocumentDB",
+        "CyberCloud.KeyVault",
         "CyberCloud.Mail",
         "CyberCloud.Messaging",
         "CyberCloud.Monitor",
