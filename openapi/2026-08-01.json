@@ -26316,7 +26316,7 @@
             "type": "string"
           },
           "value": {
-            "description": "The bytes to transform, base64url without padding.",
+            "description": "The ciphertext or wrapped key, base64url without padding.",
             "maxLength": 4096,
             "type": "string"
           },
@@ -26475,9 +26475,12 @@
             "type": "string"
           },
           "value": {
-            "description": "The bytes to transform, base64url without padding.",
+            "description": "The plaintext to encrypt or the key to wrap, base64url without padding.",
+            "format": "password",
             "maxLength": 4096,
-            "type": "string"
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
           },
           "version": {
             "description": "A version, as 32 hex digits. Omit it for the newest.",
@@ -27494,7 +27497,7 @@
             "type": "string"
           },
           "value": {
-            "description": "The bytes to transform, base64url without padding.",
+            "description": "The ciphertext or wrapped key, base64url without padding.",
             "maxLength": 4096,
             "type": "string"
           },
@@ -27878,9 +27881,12 @@
             "type": "string"
           },
           "value": {
-            "description": "The bytes to transform, base64url without padding.",
+            "description": "The plaintext to encrypt or the key to wrap, base64url without padding.",
+            "format": "password",
             "maxLength": 4096,
-            "type": "string"
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
           },
           "version": {
             "description": "A version, as 32 hex digits. Omit it for the newest.",

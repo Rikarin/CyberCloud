@@ -2053,7 +2053,7 @@ type KeyVaultDecryptContent struct {
 	Alg KeyVaultDecryptContentAlg `json:"alg"`
 	// The key's name: 1–127 letters, digits and dashes.
 	KeyName string `json:"keyName"`
-	// The bytes to transform, base64url without padding.
+	// The ciphertext or wrapped key, base64url without padding.
 	Value string `json:"value"`
 	// A version, as 32 hex digits. Omit it for the newest.
 	Version *string `json:"version,omitempty"`
@@ -2117,7 +2117,7 @@ type KeyVaultEncryptContent struct {
 	Alg KeyVaultEncryptContentAlg `json:"alg"`
 	// The key's name: 1–127 letters, digits and dashes.
 	KeyName string `json:"keyName"`
-	// The bytes to transform, base64url without padding.
+	// The plaintext to encrypt or the key to wrap, base64url without padding.
 	Value string `json:"value"`
 	// A version, as 32 hex digits. Omit it for the newest.
 	Version *string `json:"version,omitempty"`
@@ -2518,7 +2518,7 @@ type KeyVaultUnwrapKeyContent struct {
 	Alg KeyVaultUnwrapKeyContentAlg `json:"alg"`
 	// The key's name: 1–127 letters, digits and dashes.
 	KeyName string `json:"keyName"`
-	// The bytes to transform, base64url without padding.
+	// The ciphertext or wrapped key, base64url without padding.
 	Value string `json:"value"`
 	// A version, as 32 hex digits. Omit it for the newest.
 	Version *string `json:"version,omitempty"`
@@ -2691,7 +2691,7 @@ type KeyVaultWrapKeyContent struct {
 	Alg KeyVaultWrapKeyContentAlg `json:"alg"`
 	// The key's name: 1–127 letters, digits and dashes.
 	KeyName string `json:"keyName"`
-	// The bytes to transform, base64url without padding.
+	// The plaintext to encrypt or the key to wrap, base64url without padding.
 	Value string `json:"value"`
 	// A version, as 32 hex digits. Omit it for the newest.
 	Version *string `json:"version,omitempty"`

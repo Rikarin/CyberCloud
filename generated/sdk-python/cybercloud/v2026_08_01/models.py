@@ -4214,7 +4214,7 @@ class KeyVaultDecryptContent:
     alg: KeyVaultDecryptContentAlg
     # The key's name: 1–127 letters, digits and dashes.
     key_name: str
-    # The bytes to transform, base64url without padding.
+    # The ciphertext or wrapped key, base64url without padding.
     value: str
     # A version, as 32 hex digits. Omit it for the newest.
     version: Optional[str] = None
@@ -4385,7 +4385,7 @@ class KeyVaultEncryptContent:
     alg: KeyVaultEncryptContentAlg
     # The key's name: 1–127 letters, digits and dashes.
     key_name: str
-    # The bytes to transform, base64url without padding.
+    # The plaintext to encrypt or the key to wrap, base64url without padding.
     value: str
     # A version, as 32 hex digits. Omit it for the newest.
     version: Optional[str] = None
@@ -5426,7 +5426,7 @@ class KeyVaultUnwrapKeyContent:
     alg: KeyVaultUnwrapKeyContentAlg
     # The key's name: 1–127 letters, digits and dashes.
     key_name: str
-    # The bytes to transform, base64url without padding.
+    # The ciphertext or wrapped key, base64url without padding.
     value: str
     # A version, as 32 hex digits. Omit it for the newest.
     version: Optional[str] = None
@@ -5809,7 +5809,7 @@ class KeyVaultWrapKeyContent:
     alg: KeyVaultWrapKeyContentAlg
     # The key's name: 1–127 letters, digits and dashes.
     key_name: str
-    # The bytes to transform, base64url without padding.
+    # The plaintext to encrypt or the key to wrap, base64url without padding.
     value: str
     # A version, as 32 hex digits. Omit it for the newest.
     version: Optional[str] = None

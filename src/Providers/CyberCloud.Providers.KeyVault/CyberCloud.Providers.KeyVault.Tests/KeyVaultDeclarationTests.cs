@@ -43,6 +43,39 @@ public sealed class KeyVaultDeclarationTests {
         action.Secret.ShouldBeTrue();
     }
 
+    [Theory]
+    [InlineData(KeyVaults.SetSecretAction, "/value", true)]
+    [InlineData(KeyVaults.ImportKeyAction, "/pkcs8", true)]
+    [InlineData(KeyVaults.EncryptAction, "/value", true)]
+    [InlineData(KeyVaults.WrapKeyAction, "/value", true)]
+    [InlineData(KeyVaults.DecryptAction, "/value", false)]
+    [InlineData(KeyVaults.UnwrapKeyAction, "/value", false)]
+    public void AnInputThatCarriesAPlaintextIsMarkedSecret(string name, string field, bool secret) {
+        // ⚠ Field-level Secret is what gives the input writeOnly in OpenAPI and a masked field in the
+        // portal and cyc. encrypt and wrapKey were ordinary text until the #30 review, while the same
+        // plaintext coming back out of decrypt was marked.
+        Registration.TryGetAction(name, out var action).ShouldBeTrue();
+
+        action.Request.ShouldNotBeNull()
+            .Properties.Single(x => x.JsonPointer == field)
+            .Secret.ShouldBe(secret, $"{name}'s {field}");
+    }
+
+    [Fact]
+    public void AVaultCallNeverPrintsItsBody() {
+        // ⚠ A record's generated ToString prints every property, and Body is a secret's value, a
+        // plaintext or a private key. A log template or a Shouldly message formats it that way.
+        var call = new VaultCall {
+            Action = KeyVaults.SetSecretAction, Body = """{"secretName":"db","value":"hunter2-not-for-logs"}""", TraceId = "abc"
+        };
+
+        var printed = call.ToString();
+
+        printed.ShouldNotContain("hunter2-not-for-logs");
+        printed.ShouldContain(KeyVaults.SetSecretAction);
+        printed.ShouldContain("abc");
+    }
+
     [Fact]
     public void TheVaultHasASevenDayWindowAndItsPurgeProtectionIsTheBodysFlag() {
         Registration.SoftDeleteDays.ShouldBe(7);

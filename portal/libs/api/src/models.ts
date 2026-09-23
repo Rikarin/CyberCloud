@@ -1520,7 +1520,7 @@ export interface KeyVaultVaultsDecryptContent {
   alg: KeyVaultVaultsDecryptContentAlg;
   /** The key's name: 1–127 letters, digits and dashes. */
   keyName: string;
-  /** The bytes to transform, base64url without padding. */
+  /** The ciphertext or wrapped key, base64url without padding. */
   value: string;
   /** A version, as 32 hex digits. Omit it for the newest. */
   version?: string;
@@ -1581,7 +1581,7 @@ export interface KeyVaultVaultsEncryptContent {
   alg: KeyVaultVaultsEncryptContentAlg;
   /** The key's name: 1–127 letters, digits and dashes. */
   keyName: string;
-  /** The bytes to transform, base64url without padding. */
+  /** The plaintext to encrypt or the key to wrap, base64url without padding. */
   value: string;
   /** A version, as 32 hex digits. Omit it for the newest. */
   version?: string;
@@ -1973,7 +1973,7 @@ export interface KeyVaultVaultsUnwrapKeyContent {
   alg: KeyVaultVaultsUnwrapKeyContentAlg;
   /** The key's name: 1–127 letters, digits and dashes. */
   keyName: string;
-  /** The bytes to transform, base64url without padding. */
+  /** The ciphertext or wrapped key, base64url without padding. */
   value: string;
   /** A version, as 32 hex digits. Omit it for the newest. */
   version?: string;
@@ -2137,7 +2137,7 @@ export interface KeyVaultVaultsWrapKeyContent {
   alg: KeyVaultVaultsWrapKeyContentAlg;
   /** The key's name: 1–127 letters, digits and dashes. */
   keyName: string;
-  /** The bytes to transform, base64url without padding. */
+  /** The plaintext to encrypt or the key to wrap, base64url without padding. */
   value: string;
   /** A version, as 32 hex digits. Omit it for the newest. */
   version?: string;

@@ -86,10 +86,10 @@ public sealed class KeyVaultProvider : IResourceProvider {
         Data(type, KeyVaults.PurgeDeletedKeyAction, KeyVaults.PurgeKeysPermission, KeyVaults.KeyNameRequest, KeyVaults.PurgedResponse);
 
         // ── Using a key ─────────────────────────────────────────────────────────────────────────
-        Data(type, KeyVaults.EncryptAction, KeyVaults.UseKeysPermission, KeyVaults.CryptoRequest, KeyVaults.CryptoResponse);
-        Data(type, KeyVaults.DecryptAction, KeyVaults.UseKeysPermission, KeyVaults.CryptoRequest, KeyVaults.PlaintextResponse, true);
-        Data(type, KeyVaults.WrapKeyAction, KeyVaults.UseKeysPermission, KeyVaults.CryptoRequest, KeyVaults.CryptoResponse);
-        Data(type, KeyVaults.UnwrapKeyAction, KeyVaults.UseKeysPermission, KeyVaults.CryptoRequest, KeyVaults.PlaintextResponse, true);
+        Data(type, KeyVaults.EncryptAction, KeyVaults.UseKeysPermission, KeyVaults.PlaintextRequest, KeyVaults.CryptoResponse);
+        Data(type, KeyVaults.DecryptAction, KeyVaults.UseKeysPermission, KeyVaults.CiphertextRequest, KeyVaults.PlaintextResponse, true);
+        Data(type, KeyVaults.WrapKeyAction, KeyVaults.UseKeysPermission, KeyVaults.PlaintextRequest, KeyVaults.CryptoResponse);
+        Data(type, KeyVaults.UnwrapKeyAction, KeyVaults.UseKeysPermission, KeyVaults.CiphertextRequest, KeyVaults.PlaintextResponse, true);
         Data(type, KeyVaults.SignAction, KeyVaults.UseKeysPermission, KeyVaults.SignRequest, KeyVaults.CryptoResponse);
         Data(type, KeyVaults.VerifyAction, KeyVaults.UseKeysPermission, KeyVaults.VerifyRequest, KeyVaults.VerifyResponse);
 

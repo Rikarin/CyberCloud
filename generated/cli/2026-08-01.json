@@ -9399,7 +9399,7 @@
                   "name": "--value",
                   "type": "string",
                   "required": true,
-                  "summary": "The bytes to transform, base64url without padding.",
+                  "summary": "The ciphertext or wrapped key, base64url without padding.",
                   "jsonPointer": "/value"
                 },
                 {
@@ -9620,8 +9620,9 @@
                   "name": "--value",
                   "type": "string",
                   "required": true,
-                  "summary": "The bytes to transform, base64url without padding.",
-                  "jsonPointer": "/value"
+                  "summary": "The plaintext to encrypt or the key to wrap, base64url without padding.",
+                  "jsonPointer": "/value",
+                  "secret": true
                 },
                 {
                   "name": "--version",
@@ -10734,7 +10735,7 @@
                   "name": "--value",
                   "type": "string",
                   "required": true,
-                  "summary": "The bytes to transform, base64url without padding.",
+                  "summary": "The ciphertext or wrapped key, base64url without padding.",
                   "jsonPointer": "/value"
                 },
                 {
@@ -11157,8 +11158,9 @@
                   "name": "--value",
                   "type": "string",
                   "required": true,
-                  "summary": "The bytes to transform, base64url without padding.",
-                  "jsonPointer": "/value"
+                  "summary": "The plaintext to encrypt or the key to wrap, base64url without padding.",
+                  "jsonPointer": "/value",
+                  "secret": true
                 },
                 {
                   "name": "--version",

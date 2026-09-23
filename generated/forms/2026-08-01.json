@@ -4468,7 +4468,7 @@
               "jsonPointer": "/value",
               "name": "value",
               "label": "Value",
-              "control": "xui-input",
+              "control": "xui-secret-ref",
               "required": true
             },
             {
@@ -5023,7 +5023,7 @@
               "jsonPointer": "/value",
               "name": "value",
               "label": "Value",
-              "control": "xui-input",
+              "control": "xui-secret-ref",
               "required": true
             },
             {

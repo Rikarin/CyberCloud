@@ -267,6 +267,20 @@ public sealed class KeyVaultGrain(
             );
         }
 
+        var size = Encoding.UTF8.GetByteCount(value);
+
+        if (size > KeyVaults.MaxSecretLength) {
+            return Refuse(
+                ErrorCode.InvalidRequestBody,
+                string.Create(CultureInfo.InvariantCulture, $"The value is {size} bytes in UTF-8, and a secret holds at most {KeyVaults.MaxSecretLength}."),
+                "/value"
+            );
+        }
+
+        if (Full(size) is { } full) {
+            return full;
+        }
+
         var root = await RootAsync();
         if (root.TryGetError(out var rootError)) {
             return Result<string>.Failure(rootError);
@@ -441,6 +455,10 @@ public sealed class KeyVaultGrain(
                     $"Key '{name}' is deleted and recoverable until {KeyVaults.Timestamp(existing.ScheduledPurgeDate!.Value)}. "
                     + "Recover it, or purge it, before creating it again."
                 );
+            }
+
+            if (Full(material.Pkcs8.Length) is { } full) {
+                return full;
             }
 
             var root = await RootAsync();
@@ -812,11 +830,22 @@ public sealed class KeyVaultGrain(
             return Result<string>.Failure(error);
         }
 
-        if (Times(body) is { IsFailure: true } times) {
-            return Result<string>.Failure(times.Error!);
-        }
-
         var (_, item, version) = found.GetValueOrThrow();
+
+        // ⚠ THE WINDOW THE VERSION WILL HAVE, NOT THE ONE THE BODY SPELLS. Times checks a body that
+        // carries both ends, and an update may carry one: moving expiresOn before the stored
+        // notBefore, or the reverse, left a version no call could ever use. Found by the #30 review.
+        var notBefore = body.TryGetProperty("notBefore", out _) ? Stamp(body, "notBefore") : version.NotBefore;
+        var expiresOn = body.TryGetProperty("expiresOn", out _) ? Stamp(body, "expiresOn") : version.ExpiresOn;
+
+        if (notBefore is not null && expiresOn is not null && notBefore >= expiresOn) {
+            return Refuse(
+                ErrorCode.InvalidRequestBody,
+                $"notBefore ({KeyVaults.Timestamp(notBefore.Value)}) would not be before expiresOn "
+                + $"({KeyVaults.Timestamp(expiresOn.Value)}), so version {version.Version} could never be used.",
+                "/expiresOn"
+            );
+        }
 
         if (kind == KeyKind && body.TryGetProperty("keyOps", out _)) {
             var operations = Operations(body, version.Kty);
@@ -835,14 +864,8 @@ public sealed class KeyVaultGrain(
             version.Enabled = enabled;
         }
 
-        if (body.TryGetProperty("notBefore", out _)) {
-            version.NotBefore = Stamp(body, "notBefore");
-        }
-
-        if (body.TryGetProperty("expiresOn", out _)) {
-            version.ExpiresOn = Stamp(body, "expiresOn");
-        }
-
+        version.NotBefore = notBefore;
+        version.ExpiresOn = expiresOn;
         version.Updated = clock.UtcNow;
         await state.WriteStateAsync();
 
@@ -959,6 +982,41 @@ public sealed class KeyVaultGrain(
         await state.WriteStateAsync();
 
         return Result<string>.Success(new JsonObject { ["name"] = item.Name, ["purged"] = true }.ToJsonString());
+    }
+
+    /// <summary>
+    ///     Returns the refusal for a new version that would take the vault past
+    ///     <see cref="KeyVaults.MaxVersionsPerVault" /> or <see cref="KeyVaults.MaxSealedBytesPerVault" />,
+    ///     or <see langword="null" /> when it fits.
+    /// </summary>
+    /// <param name="adding">The plaintext bytes about to be sealed. The seal's own overhead isn't counted.</param>
+    /// <remarks>
+    ///     ⚠ Deleted items count, because their ciphertext is still in the row. So a vault under purge
+    ///     protection that is full stays full until the recovery windows end, which the message says.
+    /// </remarks>
+    Result<string>? Full(int adding) {
+        var versions = 0;
+        long bytes = adding;
+
+        foreach (var item in state.State.Secrets.Values.Concat(state.State.Keys.Values)) {
+            versions += item.Versions.Count;
+            bytes += item.Versions.Sum(static x => (long)x.Sealed.Length);
+        }
+
+        if (versions < KeyVaults.MaxVersionsPerVault && bytes <= KeyVaults.MaxSealedBytesPerVault) {
+            return null;
+        }
+
+        var held = string.Create(CultureInfo.InvariantCulture, $"This vault holds {versions} versions and {bytes - adding} sealed bytes");
+        var limit = string.Create(
+            CultureInfo.InvariantCulture,
+            $"one vault holds at most {KeyVaults.MaxVersionsPerVault} versions and {KeyVaults.MaxSealedBytesPerVault} bytes"
+        );
+
+        return Refuse(
+            ErrorCode.QuotaExceeded,
+            $"{held}, and {limit}. Deleted items count until they are purged. Purge them, or move items to another vault."
+        );
     }
 
     /// <summary>Drops every deleted item whose window has ended. See the class remarks.</summary>

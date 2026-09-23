@@ -66,9 +66,16 @@ namespace CyberCloud.Gateway.Host.Tests;
 ///         covers that), and the tenant directory is seeded rather than refreshed.
 ///     </para>
 ///     <para>
-///         ⚠ <b>One silo, one process</b> — the gateway-to-silo process boundary is not crossed here,
-///         which is why <c>KeyVaultDeclarationTests.EveryWireTypeCarriesAnAlias</c> asserts the aliases
-///         an in-process type manifest would hide.
+///         ⚠ <b>One silo, one process</b>, so the gateway-to-silo process boundary isn't crossed here.
+///         <c>CyberCloud.AppHost.Tests</c>' <c>KeyVaultOverTheRealHostsTests</c> crosses it, against
+///         the AppHost's silo processes.
+///     </para>
+///     <para>
+///         ⚠ <b>The OpenBao pair is registered by hand in <see cref="Configurator" />.</b> This is not
+///         what a real silo does. <c>SiloComposition</c> registers it only when
+///         <c>CyberCloud:Vault</c> is configured, and no topology configures that yet. So a green run
+///         here says the vault works over a vault, not that a deployment has one. docs/plan/18 § What
+///         landed, and what is owed, <c>openbao-on-the-platform-topology</c>.
 ///     </para>
 /// </remarks>
 public sealed class KeyVaultGateway : IAsyncLifetime {

@@ -90,13 +90,31 @@ public sealed record VaultCall {
     public string Action { get; init; } = string.Empty;
 
     /// <summary>The request body. <c>{}</c> for an action that takes none.</summary>
-    /// <remarks>⚠ May carry a secret's value or plaintext to encrypt. Never logged, never stored as sent.</remarks>
+    /// <remarks>
+    ///     ⚠ May carry a secret's value, a plaintext to encrypt or a PKCS#8 private key. Never
+    ///     stored as sent, and kept out of <see cref="ToString" />, which is what a log template or
+    ///     an exception message would print.
+    /// </remarks>
     [Id(1)]
     public string Body { get; init; } = "{}";
 
     /// <summary>The trace the call belongs to, for the audit line. Empty when there is none.</summary>
     [Id(2)]
     public string TraceId { get; init; } = string.Empty;
+
+    /// <summary>Names the action, the body's length and the trace, and never the body itself.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Overridden because a record prints every property.</b> The compiler's
+    ///     <c>ToString</c> put <see cref="Body" /> into any log line, assertion message or Orleans
+    ///     diagnostic that formatted a call. So "never logged" was a promise nothing kept until the
+    ///     #30 review. <c>KeyVaultDeclarationTests.AVaultCallNeverPrintsItsBody</c> holds it.
+    /// </remarks>
+    /// <returns>For example <c>VaultCall { Action = setSecret, Body = 41 chars, TraceId = none }</c>.</returns>
+    public override string ToString() =>
+        string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"VaultCall {{ Action = {Action}, Body = {Body.Length} chars, TraceId = {(TraceId.Length > 0 ? TraceId : "none")} }}"
+        );
 }
 
 /// <summary>

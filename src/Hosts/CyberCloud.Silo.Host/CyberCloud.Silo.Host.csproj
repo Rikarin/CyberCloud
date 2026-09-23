@@ -55,6 +55,15 @@
         -->
         <ProjectReference Include="../../CyberCloud.ResourceGraph/CyberCloud.ResourceGraph.csproj"/>
         <!--
+          docs/plan/18's OpenBao client — ReconcileContext.SecretWriter and .Secrets for every
+          reconciler, and the resolver KeyVaultGrain unseals under. SiloComposition calls
+          AddOpenBaoSecretResolver only when CyberCloud:Vault is configured; without it the refusing
+          seams stay. ⚠ ABSENT UNTIL THE #30 REVIEW, while the gateway had it: the gateway serves a
+          synchronous listKeys, but every mint and every vault's data plane run on a silo, so no
+          deployed vault could have been created and every green run registered OpenBao by hand.
+        -->
+        <ProjectReference Include="../../CyberCloud.Vault/CyberCloud.Vault.csproj"/>
+        <!--
           docs/plan/17's sending domain. Orleans DISCOVERS grains by scanning referenced assemblies,
           so this line is what puts CyberCloud.Communication's seven grain types in the silo; the
           AddCyberCloudCommunication() call in Program.cs is what registers the services their

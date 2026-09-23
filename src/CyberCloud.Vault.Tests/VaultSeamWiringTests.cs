@@ -40,9 +40,10 @@ public sealed class VaultSeamWiringTests {
 
     [Fact]
     public void ASiloThatOnlyAddsTheResourceManagerGetsTheRefusingResolver() {
-        // ⚠ The default, and it must stay the default. This is every silo in the repository today:
-        // CyberCloud.Silo.Host composes the resource manager and calls nothing from CyberCloud.Vault,
-        // so the refusal is reachable and is what ReconcileDriver hands a reconciler.
+        // ⚠ The default, and it must stay the default. This is every silo whose CyberCloud:Vault is
+        // unconfigured, which is every silo any topology runs today: SiloComposition opts in only on
+        // that section (since the #30 review), and neither the AppHost nor a chart sets it. So the
+        // refusal is reachable and is what ReconcileDriver hands a reconciler.
         Resolver(static silo => silo.AddCyberCloudResourceManager()).ShouldBeOfType<UnavailableSecretResolver>();
     }
 
@@ -112,20 +113,17 @@ public sealed class VaultSeamWiringTests {
 
     [Fact]
     public void NothingOutsideThisSuiteOptsIn() {
-        // ⚠ THIS ROW RECORDS AN UNCOMFORTABLE FACT RATHER THAN A GUARANTEE, AND IT IS HERE BECAUSE
-        // THE ALTERNATIVE IS A COMMENT NOBODY CHECKS.
+        // ⚠ THE NAME OUTLIVED ITS FACT, AND THE ASSERTION BELOW IS WHY THE ROW STAYS.
         //
-        // AddOpenBaoSecretResolver has no caller outside this test project. That is exactly the shape
-        // UnavailableOtpDelivery was in — a seam whose real implementation nothing installs — with
-        // one difference that matters: there, the REFUSING side was also unreachable, so the message
-        // an operator needed could not be produced at all. Here the refusing side is what every silo
-        // resolves and ReconcileDriver drives it on every provider, which the row above asserts.
+        // When this row was written AddOpenBaoSecretResolver had no caller outside this test project.
+        // Both hosts call it now, the gateway first and the silo since the #30 review, when
+        // CyberCloud:Vault is configured (HostCompositionTests.BothHostsThatReachOpenBaoWireItOnlyWhenTheVaultIsConfigured).
+        // What is still true is that no topology configures that section. The AppHost declares no
+        // OpenBao and no chart deploys the hosts, so a running silo still refuses.
         //
-        // So what is owed is a host that calls this when CyberCloud:Vault is configured, next to the
-        // AddCommunicationOtpDelivery line SiloIdentityOptions already has. This test does not assert
-        // the absence — a gate that fails the moment somebody does the right thing is a gate that
-        // gets deleted. It asserts that the opt-in WORKS from a bare configuration section, which is
-        // the part that would silently rot while nothing called it.
+        // This test never asserted the absence, because a gate that fails the moment somebody does
+        // the right thing gets deleted. It asserts that the opt-in WORKS from a bare configuration
+        // section, which is what a host's conditional relies on.
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(
                 new Dictionary<string, string?> {

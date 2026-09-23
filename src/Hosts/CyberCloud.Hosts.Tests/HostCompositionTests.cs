@@ -1006,6 +1006,82 @@ public sealed class HostCompositionTests {
     }
 
     /// <summary>
+    ///     ⚠ The silo wires the OpenBao writer and resolver when <c>CyberCloud:Vault</c> is
+    ///     configured, as the gateway does, and both keep the refusing seams when it is not.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The silo half is the half that was missing, and the #30 review found it.
+    ///         </b> Only the gateway called <c>AddOpenBaoSecretResolver</c>. But
+    ///         <c>ReconcileDriver</c> hands every reconciler the <i>silo's</i> <c>ISecretWriter</c>,
+    ///         and <c>KeyVaultGrain</c> resolves its root through the <i>silo's</i>
+    ///         <c>ISecretResolver</c>. So no configuration could have let a deployed silo mint a
+    ///         vault's root, a Valkey password or a mail domain's key. Every green key-vault run
+    ///         registered the OpenBao pair inside its own <c>TestCluster</c>.
+    ///     </para>
+    ///     <para>
+    ///         By type name, as the object-store test above does. Nothing connects to the address,
+    ///         because composition builds the client and does not call it.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task BothHostsThatReachOpenBaoWireItOnlyWhenTheVaultIsConfigured() {
+        await using var bareSilo = await BuildSiloAsync();
+        await using var bareGateway = await BuildGatewayAsync();
+
+        bareSilo.Services.GetRequiredService<ISecretWriter>().ShouldBeOfType<UnavailableSecretWriter>();
+        bareSilo.Services.GetRequiredService<ISecretResolver>().ShouldBeOfType<UnavailableSecretResolver>();
+        bareGateway.Services.GetRequiredService<ISecretResolver>().ShouldBeOfType<UnavailableSecretResolver>();
+
+        await using var silo = await SiloComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                .. VaultArguments
+            ]
+        );
+
+        await using var gateway = await GatewayComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                IssuerArgument,
+                .. VaultArguments
+            ]
+        );
+
+        silo.Services.GetRequiredService<ISecretWriter>()
+            .GetType()
+            .Name.ShouldBe(
+                "OpenBaoSecretWriter",
+                "a silo with CyberCloud:Vault configured must mint through OpenBao — every reconciler's "
+                + "ReconcileContext.SecretWriter is this registration"
+            );
+
+        silo.Services.GetRequiredService<ISecretResolver>()
+            .GetType()
+            .Name.ShouldBe(
+                "OpenBaoSecretResolver",
+                "a silo with CyberCloud:Vault configured must resolve through OpenBao — KeyVaultGrain "
+                + "unseals under this registration"
+            );
+
+        gateway.Services.GetRequiredService<ISecretResolver>().GetType().Name.ShouldBe("OpenBaoSecretResolver");
+    }
+
+    /// <summary>A vault section both hosts accept: an address, a role, and plaintext allowed for a test.</summary>
+    static readonly string[] VaultArguments = [
+        "--CyberCloud:Vault:Address=http://127.0.0.1:1",
+        "--CyberCloud:Vault:Role=cc-silo",
+        "--CyberCloud:Vault:AllowInsecureTransport=true"
+    ];
+
+    /// <summary>
     ///     ⚠ The silo wires the email carrier — and, in Development, routes the platform's own codes
     ///     through it — when <c>CyberCloud:Communication:Smtp</c> names a relay, and keeps the
     ///     refusing seam and the console-only OTP seam when it does not (#93).

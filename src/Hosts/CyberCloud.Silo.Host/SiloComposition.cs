@@ -12,6 +12,7 @@ using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ServiceDefaults;
 using CyberCloud.ServiceDefaults.Storage;
 using CyberCloud.Tenancy;
+using CyberCloud.Vault;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -107,6 +108,34 @@ public static class SiloComposition {
 
         if (objectStorage.IsConfigured) {
             builder.Services.AddS3ObjectStore(objectStorage);
+        }
+
+        // ── The platform vault — docs/plan/18, docs/plan/12 § The pattern, once, piece 5 ─────────
+        //
+        // ⚠ THE SILO TOO, AND NOT ONLY THE GATEWAY, BECAUSE A RECONCILE AND A VAULT'S DATA PLANE RUN
+        // HERE. The gateway's registration serves a synchronous listKeys inside
+        // ResourceManagerService. Everything else that touches OpenBao runs in this process:
+        // ReconcileDriver hands every reconciler ReconcileContext.SecretWriter and .Secrets, and
+        // KeyVaultGrain resolves its vault's root on every sealing call. Until this block existed no
+        // silo called it, so every mint — a vault's root, Valkey's, a registry's, a mail domain's —
+        // refused with UnavailableSecretWriter's sentence, and only fixtures that registered the
+        // OpenBao pair inside their own TestCluster ever saw a vault work (the #30 review).
+        //
+        // ⚠ CONDITIONAL, LIKE THE OBJECT STORE ABOVE AND THE GATEWAY'S VAULT. Unconfigured keeps the
+        // two refusing seams, whose messages name this section. Misconfigured is not unconfigured: a
+        // plaintext address without AllowInsecureTransport throws out of AddOpenBaoSecretResolver
+        // here, so the pod does not start. Replace inside it, so the order against
+        // AddCyberCloudResourceManager's TryAdd does not matter — VaultSeamWiringTests holds both.
+        //
+        // ⚠ CONFIGURING IT IS NOT YET SOMETHING ANY TOPOLOGY DOES. The AppHost declares no OpenBao and
+        // no chart deploys the platform's hosts, and KubernetesVaultTokenSource logs in with the
+        // pod's projected service-account token, which a silo process on a developer machine does
+        // not have. docs/plan/18 § What landed, and what is owed, `openbao-on-the-platform-topology`.
+        var vault = new VaultOptions();
+        builder.Configuration.GetSection(VaultOptions.SectionName).Bind(vault);
+
+        if (vault.IsConfigured) {
+            builder.Services.AddOpenBaoSecretResolver(vault);
         }
 
         // ── The resource-changed stream and its projection — docs/plan/08 § The resource-graph projection ──

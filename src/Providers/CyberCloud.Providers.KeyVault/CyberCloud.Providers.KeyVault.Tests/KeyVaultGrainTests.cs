@@ -261,5 +261,94 @@ public sealed class KeyVaultGrainTests(VaultSilo silo) : IClassFixture<VaultSilo
         (await vault.OpenAsync(new() { VaultId = id })).Error!.Code.ShouldBe(ErrorCode.Conflict, "a purged vault never reopens");
     }
 
+    [Fact]
+    public async Task AnUpdateThatMovesOneEndOfTheWindowPastTheOtherIsRefused() {
+        // ⚠ The #30 review: Times checked a body carrying both ends, and an update may carry one.
+        var (_, vault) = await silo.OpenVaultAsync();
+        var now = VaultSilo.Clock.UtcNow;
+
+        var set = await vault.OkAsync(
+            KeyVaults.SetSecretAction,
+            new { secretName = "windowed", value = "v", notBefore = KeyVaults.Timestamp(now.AddDays(1)) }
+        );
+
+        var version = set.GetProperty("version").GetString();
+
+        var earlier = await vault.RunAsync(
+            KeyVaults.UpdateSecretAction,
+            new { secretName = "windowed", version, expiresOn = KeyVaults.Timestamp(now.AddHours(1)) }
+        );
+
+        earlier.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        earlier.Error.Target.ShouldBe("/expiresOn");
+
+        var stored = await vault.OkAsync(KeyVaults.ListSecretVersionsAction, new { secretName = "windowed" });
+        stored.GetProperty("items")[0].GetString()!.ShouldEndWith("expires never", customMessage: "a refused update changed the version anyway");
+
+        await vault.OkAsync(
+            KeyVaults.UpdateSecretAction,
+            new { secretName = "windowed", version, expiresOn = KeyVaults.Timestamp(now.AddDays(2)) }
+        );
+    }
+
+    [Fact]
+    public async Task ASecretsSizeIsCountedInBytesNotCharacters() {
+        var (_, vault) = await silo.OpenVaultAsync();
+
+        // 10,000 characters of three bytes each: inside the schema's maxLength, three times the bytes.
+        var wide = new string('€', 10_000);
+
+        var refused = await vault.RunAsync(KeyVaults.SetSecretAction, new { secretName = "wide", value = wide });
+
+        refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        refused.Error.Message.ShouldContain("30000 bytes");
+
+        await vault.OkAsync(KeyVaults.SetSecretAction, new { secretName = "narrow", value = new string('€', 8_000) });
+    }
+
+    [Fact]
+    public async Task AVaultStopsGrowingAtItsVersionBoundAndAPurgeFreesIt() {
+        var (_, vault) = await silo.OpenVaultAsync();
+
+        for (var i = 0; i < KeyVaults.MaxVersionsPerVault; i++) {
+            await vault.OkAsync(KeyVaults.SetSecretAction, new { secretName = "rolling", value = "v" });
+        }
+
+        var full = await vault.RunAsync(KeyVaults.SetSecretAction, new { secretName = "another", value = "v" });
+
+        full.Error!.Code.ShouldBe(ErrorCode.QuotaExceeded, "one Secrets Officer could otherwise grow one durable row without limit");
+
+        await vault.OkAsync(KeyVaults.DeleteSecretAction, new { secretName = "rolling" });
+
+        (await vault.RunAsync(KeyVaults.SetSecretAction, new { secretName = "another", value = "v" }))
+            .Error!.Code.ShouldBe(ErrorCode.QuotaExceeded, "a deleted item's ciphertext is still in the row until it is purged");
+
+        await vault.OkAsync(KeyVaults.PurgeDeletedSecretAction, new { secretName = "rolling" });
+        await vault.OkAsync(KeyVaults.SetSecretAction, new { secretName = "another", value = "v" });
+    }
+
+    [Fact]
+    public async Task AVaultStopsGrowingAtItsByteBound() {
+        var (_, vault) = await silo.OpenVaultAsync();
+        var largest = new string('x', KeyVaults.MaxSecretLength);
+        var fitted = 0;
+
+        while (true) {
+            var set = await vault.RunAsync(KeyVaults.SetSecretAction, new { secretName = "large", value = largest });
+
+            if (set.IsFailure) {
+                set.Error!.Code.ShouldBe(ErrorCode.QuotaExceeded);
+                break;
+            }
+
+            fitted++;
+            fitted.ShouldBeLessThan(KeyVaults.MaxVersionsPerVault, "the byte bound never engaged");
+        }
+
+        // About 163: 4 MiB over 25,600 bytes, less each seal's nonce and tag.
+        var bound = KeyVaults.MaxSealedBytesPerVault / KeyVaults.MaxSecretLength;
+        fitted.ShouldBeInRange(bound - 1, bound);
+    }
+
     static bool Contains(byte[] haystack, byte[] needle) => haystack.AsSpan().IndexOf(needle) >= 0;
 }

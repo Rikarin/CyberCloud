@@ -205,8 +205,29 @@ public static class KeyVaults {
     /// <summary>A version: 32 lower-case hex digits, as Azure spells one.</summary>
     public const string VersionPattern = "^[0-9a-f]{32}$";
 
-    /// <summary>The largest secret value accepted, in characters — Azure's 25 KB.</summary>
+    /// <summary>The largest secret value accepted — Azure's 25 KB, enforced in UTF-8 bytes.</summary>
+    /// <remarks>
+    ///     ⚠ The schema's <c>maxLength</c> counts characters, which is what JSON Schema can say. The
+    ///     grain counts the UTF-8 bytes it seals, so a value of 25,600 characters that are three bytes
+    ///     each isn't 75 KB of durable state. The #30 review found the count was characters only.
+    /// </remarks>
     public const int MaxSecretLength = 25_600;
+
+    /// <summary>How many versions, of secrets and keys together and deleted ones included, one vault holds.</summary>
+    /// <remarks>
+    ///     ⚠ <b>A bound on one durable row, not a product limit copied from Azure</b>, which has none.
+    ///     A vault is one grain, and every write serializes its whole state. Without a bound, one
+    ///     Secrets Officer could grow a single row without limit, and quota counts vaults only.
+    ///     Deleting and purging an item frees its versions.
+    /// </remarks>
+    public const int MaxVersionsPerVault = 1_000;
+
+    /// <summary>How many sealed bytes one vault holds across every version of every item.</summary>
+    /// <remarks>
+    ///     The bytes half of <see cref="MaxVersionsPerVault" />'s bound: 4 MiB is about 160 secrets at
+    ///     the largest size, and far more than any count of keys reaches first.
+    /// </remarks>
+    public const int MaxSealedBytesPerVault = 4 * 1024 * 1024;
 
     /// <summary>The key types a vault generates and imports.</summary>
     public static ImmutableArray<string> KeyTypes { get; } = ["RSA", "EC"];
@@ -457,14 +478,33 @@ public static class KeyVaults {
             AllowedValues = [.. EncryptionAlgorithms], ExampleJson = "\"RSA-OAEP-256\""
         };
 
-    /// <summary>What encrypt, decrypt, wrapKey and unwrapKey take.</summary>
-    public static ResourceSchema CryptoRequest { get; } =
+    /// <summary>What encrypt and wrapKey take: plaintext, so marked secret.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Secret because a wrapKey's input is a data key.</b> Until the #30 review this shared one
+    ///     schema with decrypt, and its <c>/value</c> was ordinary text. So the plaintext a caller
+    ///     wrapped reached OpenAPI without <c>writeOnly</c> and the portal's form without masking, while
+    ///     the same bytes coming back out of decrypt were marked.
+    /// </remarks>
+    public static ResourceSchema PlaintextRequest { get; } =
         ResourceSchema.Of(
             [
                 KeyName,
                 Version,
                 EncryptionAlgorithm,
-                new("/value", SchemaKind.Text, true, Description: "The bytes to transform, base64url without padding.") {
+                new("/value", SchemaKind.Text, true, Secret: true, Description: "The plaintext to encrypt or the key to wrap, base64url without padding.") {
+                    MaxLength = 4_096
+                }
+            ]
+        );
+
+    /// <summary>What decrypt and unwrapKey take: ciphertext, which isn't secret.</summary>
+    public static ResourceSchema CiphertextRequest { get; } =
+        ResourceSchema.Of(
+            [
+                KeyName,
+                Version,
+                EncryptionAlgorithm,
+                new("/value", SchemaKind.Text, true, Description: "The ciphertext or wrapped key, base64url without padding.") {
                     MaxLength = 4_096
                 }
             ]

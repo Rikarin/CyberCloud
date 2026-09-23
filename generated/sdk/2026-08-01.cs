@@ -4693,7 +4693,7 @@ public sealed partial class KeyVaultResource {
         [JsonPropertyName("keyName")]
         public required string KeyName { get; set; }
 
-        /// <summary>The bytes to transform, base64url without padding.</summary>
+        /// <summary>The ciphertext or wrapped key, base64url without padding.</summary>
         [JsonPropertyName("value")]
         public required string Value { get; set; }
 
@@ -4810,7 +4810,7 @@ public sealed partial class KeyVaultResource {
         [JsonPropertyName("keyName")]
         public required string KeyName { get; set; }
 
-        /// <summary>The bytes to transform, base64url without padding.</summary>
+        /// <summary>The plaintext to encrypt or the key to wrap, base64url without padding.</summary>
         [JsonPropertyName("value")]
         public required string Value { get; set; }
 
@@ -5602,7 +5602,7 @@ public sealed partial class KeyVaultResource {
         [JsonPropertyName("keyName")]
         public required string KeyName { get; set; }
 
-        /// <summary>The bytes to transform, base64url without padding.</summary>
+        /// <summary>The ciphertext or wrapped key, base64url without padding.</summary>
         [JsonPropertyName("value")]
         public required string Value { get; set; }
 
@@ -5952,7 +5952,7 @@ public sealed partial class KeyVaultResource {
         [JsonPropertyName("keyName")]
         public required string KeyName { get; set; }
 
-        /// <summary>The bytes to transform, base64url without padding.</summary>
+        /// <summary>The plaintext to encrypt or the key to wrap, base64url without padding.</summary>
         [JsonPropertyName("value")]
         public required string Value { get; set; }
 
