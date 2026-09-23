@@ -143,15 +143,35 @@ public sealed class TupleStoreGrain(
     public Task<Result<ConsistencyToken>> GetTokenAsync() => Task.FromResult(Result<ConsistencyToken>.Success(Token()));
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ <b>Only the latest entry for a tuple is replayed, and the older ones are dropped.</b>
+    ///     The journal holds intents, and a later write or delete of the same tuple is a later
+    ///     intent: replaying an earlier one over it would resurrect a revoked grant, or turn a
+    ///     shortened grant back into a permanent one that the register then forgets — with no
+    ///     sweep and no audit event for its end. Replaying the latest entry is enough on its own,
+    ///     because every replay runs steps 2 to 6 in full, and so undoes whatever an older entry's
+    ///     crash left half-applied. <see cref="ApplyAsync" /> drops superseded entries the same
+    ///     way when a write succeeds. <c>TimeBoundedRelationTests</c> has a test for each case.
+    /// </remarks>
     public async Task<Result<SweepReport>> SweepAsync() {
         var pending = state.State.Pending.OrderBy(static x => x.Sequence).ToList();
         if (pending.Count == 0) {
             return Result<SweepReport>.Success(new());
         }
 
+        var latest = pending
+            .Where(entry => !pending.Any(later => later.Sequence > entry.Sequence && later.Tuple.IsSameTupleAs(entry.Tuple)))
+            .ToList();
+
+        var superseded = pending.Count - latest.Count;
+        if (superseded > 0) {
+            var kept = latest.Select(static x => x.Sequence).ToHashSet();
+            state.State.Pending.RemoveAll(x => !kept.Contains(x.Sequence));
+        }
+
         var repaired = 0;
 
-        foreach (var entry in pending) {
+        foreach (var entry in latest) {
             var applied = await ApplyBothHalvesAsync(entry.Tuple, entry.IsDelete, false);
             if (applied.IsFailure) {
                 continue;
@@ -172,7 +192,12 @@ public sealed class TupleStoreGrain(
         await state.WriteStateAsync();
 
         return Result<SweepReport>.Success(
-            new() { Pending = pending.Count, Repaired = repaired, Remaining = state.State.Pending.Count }
+            new() {
+                Pending = pending.Count,
+                Repaired = repaired,
+                Remaining = state.State.Pending.Count,
+                Superseded = superseded
+            }
         );
     }
 
@@ -193,7 +218,15 @@ public sealed class TupleStoreGrain(
         var removed = 0;
         var failed = 0;
 
-        foreach (var tuple in state.State.Expiring.Where(x => !TupleExpiry.IsLive(x.ExpiresOn, now)).ToList()) {
+        // ⚠ A registered tuple with a journal entry still outstanding is left for a later tick. The
+        // entry is its latest intent — a rewrite as permanent, say, whose replay failed again — and
+        // the register reflects the write before it. Deleting it here would act on the older intent,
+        // and the delete's own step 7 would then drop the newer entry as superseded.
+        var expired = state.State.Expiring
+            .Where(x => !TupleExpiry.IsLive(x.ExpiresOn, now) && !state.State.Pending.Any(p => p.Tuple.IsSameTupleAs(x)))
+            .ToList();
+
+        foreach (var tuple in expired) {
             // The same seven steps as a revoke — the step-7 register update is what takes the
             // tuple out of the list this loop is walking a copy of.
             var deleted = await ApplyAsync(tuple, true);
@@ -272,8 +305,10 @@ public sealed class TupleStoreGrain(
         }
 
         // Step 7 — the journal entry goes, the register follows the tuple, and the version moves,
-        // in one durable write.
-        state.State.Pending.RemoveAll(x => x.Sequence == sequence);
+        // in one durable write. ⚠ Older entries for the same tuple go with it: this write is the
+        // latest intent and has just run every step, so a replay of an earlier write or delete
+        // could only undo it. See the remarks on SweepAsync.
+        state.State.Pending.RemoveAll(x => x.Sequence <= sequence && x.Tuple.IsSameTupleAs(tuple));
         Register(tuple, isDelete);
         state.State.Version++;
         await state.WriteStateAsync();

@@ -660,6 +660,70 @@ describe('the portal pages, signed in', () => {
       expect(rows()).toEqual([name]);
     });
 
+    it('grants until an end: refuses one already past, sends the instant in UTC, and shows what came back', async () => {
+      await open(`/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/access`);
+      const name = `reader-user-${RITA}`;
+      const address = `${GROUP_SCOPE}${ROLE_ASSIGNMENTS}/${name}`;
+      const row = (): HTMLElement | null =>
+        host().querySelector<HTMLElement>(`xui-tr[data-assignment="${name}"] [data-expires-on]`);
+      const withEnd = (expiresOn: string | null) => {
+        const body = served(GROUP_SCOPE.slice(4), name);
+        return { ...body, properties: { ...body.properties, expiresOn } };
+      };
+
+      type('#cc-access-principal-id', RITA);
+      type('#cc-access-expires-on', '2000-01-01T09:00');
+      click('Assign role');
+      await settle();
+
+      http.expectNone(r => r.method === 'PUT');
+      expect(host().querySelector('#cc-access-expires-on-error')?.textContent).toContain('later than now');
+
+      // The gate on the field and its error, run before a row exists. ⚠ Once any row does, axe
+      // reports aria-required-children on the xui-tr rows (the header row's xui-th, and the
+      // Remove button in a data row), which the table already had before this field and which
+      // no access-page test has gated — so it isn't this test's to fix or to hide.
+      const results = await axe.run(host(), WCAG_22_AA);
+      expect(results.violations.map(v => `${v.id}: ${v.help}`)).toEqual([]);
+
+      type('#cc-access-expires-on', '2099-01-02T09:30');
+      await settle();
+      expect(host().querySelector('#cc-access-expires-on-error')).toBeNull();
+      click('Assign role');
+      await settle();
+
+      // ⚠ The field is local time, and what goes out is the instant it names — with the Z the
+      // platform requires, or the grant would end at a different instant on each gateway replica.
+      const put = http.expectOne(r => r.method === 'PUT' && r.url === address);
+      expect(put.request.body).toEqual({
+        principalId: RITA,
+        principalType: 'user',
+        roleDefinitionId: 'reader',
+        expiresOn: new Date('2099-01-02T09:30').toISOString()
+      });
+      const end = '2099-01-02T09:30:00+00:00';
+      put.flush(withEnd(end), { status: 201, statusText: 'Created' });
+      await settle();
+
+      expect(outcome()).toBe('granted');
+      expect(host().querySelector('[data-outcome-ends]')?.getAttribute('data-outcome-ends')).toBe(end);
+      expect(row()?.getAttribute('data-expires-on')).toBe(end);
+
+      // Assigned again with the field empty: no end is sent, and the row says the grant is now permanent.
+      type('#cc-access-expires-on', '');
+      click('Assign role');
+      await settle();
+      const repeat = http.expectOne(r => r.method === 'PUT' && r.url === address);
+      expect(repeat.request.body).toEqual({ principalId: RITA, principalType: 'user', roleDefinitionId: 'reader' });
+      repeat.flush(withEnd(null), { status: 200, statusText: 'OK' });
+      await settle();
+
+      expect(outcome()).toBe('repeated');
+      expect(host().querySelector('[data-outcome-ends]')).toBeNull();
+      expect(row()?.getAttribute('data-expires-on')).toBe('');
+      expect(row()?.textContent?.trim()).toBe('Permanent');
+    });
+
     it('checks by name: a 404 is "not assigned", a 200 is a row', async () => {
       await open(`/subscriptions/${SUBSCRIPTION}/access`);
       const scope = `/tenants/${TENANT}/subscriptions/${SUBSCRIPTION}`;

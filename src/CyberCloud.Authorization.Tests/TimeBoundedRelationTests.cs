@@ -1,6 +1,8 @@
 using CyberCloud.Authorization.Contracts;
+using CyberCloud.Authorization.Grains;
 using CyberCloud.Authorization.Tests.Infrastructure;
 using CyberCloud.Core.Resources;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 
 namespace CyberCloud.Authorization.Tests;
@@ -403,6 +405,192 @@ public sealed class TimeBoundedRelationTests(AuthorizationCluster cluster) {
         );
     }
 
+    // ── The journal under the sweep ────────────────────────────────────────────────────────────
+    //
+    // ⚠ The review of #49 found both of these with a probe against this silo. The sweep replays the
+    // journal on every tick, and an entry used to leave the journal only by its own sequence
+    // number, so a write that died half-applied stayed there after a later write or delete of the
+    // same tuple had landed — and the next tick replayed it over the later one.
+
+    [Fact]
+    public async Task ARevokeAfterAFailedExpiringWriteIsNotUndoneByTheSweep() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4930);
+                var scope = Group("jit-m");
+                const string grant = "resourceGroup:jit-m#reader@user:alice";
+
+                cluster.Interceptor.Armed = true;
+                await Should.ThrowAsync<Exception>(() =>
+                    cluster.Store(tenant).WriteAsync(Tuple(grant) with { ExpiresOn = InAnHour })
+                );
+                (await cluster.Store(tenant).PendingCountAsync()).GetValueOrThrow().ShouldBe(1);
+
+                // The owner revokes it, and the revoke lands in full.
+                await cluster.RevokeAsync(tenant, grant);
+                (await cluster.Store(tenant).PendingCountAsync()).GetValueOrThrow().ShouldBe(
+                    0,
+                    "the revoke is the tuple's latest intent, and the failed write it supersedes is still journalled"
+                );
+
+                await SweepAsync(tenant);
+
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeFalse(
+                    "the sweep replayed a failed just-in-time write over the revoke that came after it"
+                );
+                (await cluster.SubjectIndex(tenant, Alice).ListAsync()).GetValueOrThrow()
+                    .ShouldNotContain(e => e.Object == scope, "the replay put the revoked grant back in the reverse index");
+            }
+        );
+    }
+
+    [Fact]
+    public async Task AReplayOfTwoJournalledEntriesForOneTupleAppliesOnlyTheLater() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4931);
+                var scope = Group("jit-n");
+                const string grant = "resourceGroup:jit-n#reader@user:alice";
+
+                // Both die between their halves, so both stay journalled — the case step 7's drop
+                // can't reach, because neither one got there.
+                cluster.Interceptor.Armed = true;
+                await Should.ThrowAsync<Exception>(() =>
+                    cluster.Store(tenant).WriteAsync(Tuple(grant) with { ExpiresOn = InAnHour })
+                );
+
+                cluster.Interceptor.Armed = true;
+                await Should.ThrowAsync<Exception>(() => cluster.Store(tenant).DeleteAsync(Tuple(grant)));
+
+                (await cluster.Store(tenant).PendingCountAsync()).GetValueOrThrow().ShouldBe(2);
+
+                var replayed = (await cluster.Store(tenant).SweepAsync()).GetValueOrThrow();
+                replayed.Pending.ShouldBe(2);
+                replayed.Superseded.ShouldBe(1, "the write is older than the delete and must not be replayed");
+                replayed.Repaired.ShouldBe(1);
+                replayed.Remaining.ShouldBe(0);
+
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeFalse(
+                    "the replay applied the older write after the newer delete"
+                );
+            }
+        );
+    }
+
+    [Fact]
+    public async Task AShortenedGrantIsNotMadePermanentAgainByTheSweep() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4932);
+                var scope = Group("jit-o");
+                const string grant = "resourceGroup:jit-o#reader@user:alice";
+
+                // A permanent grant whose first attempt died, and whose retry landed.
+                cluster.Interceptor.Armed = true;
+                await Should.ThrowAsync<Exception>(() => cluster.Store(tenant).WriteAsync(Tuple(grant)));
+                await cluster.WriteAsync(tenant, grant);
+
+                // Then shortened to an hour.
+                await WriteAsync(tenant, grant, InAnHour);
+                (await cluster.Store(tenant).PendingCountAsync()).GetValueOrThrow().ShouldBe(0);
+
+                cluster.Clock.UtcNow = InAnHour;
+
+                var swept = await SweepAsync(tenant);
+                swept.Removed.ShouldBe(1, "the shortened grant was not swept");
+                swept.Armed.ShouldBeFalse();
+
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeFalse(
+                    "the sweep replayed the failed permanent write and the shortened grant outlived its hour"
+                );
+
+                cluster.Audit.Events.ShouldContain(
+                    e => e.Id == 1701 && (string?)e.Fields["Tuple"] == grant && (Guid?)e.Fields["TenantId"] == tenant,
+                    "the grant's end was not audited"
+                );
+
+                // Deleted rather than hidden, as in the sweep's own test.
+                cluster.Clock.UtcNow = Start;
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeFalse();
+            }
+        );
+    }
+
+    // ── The reminder ───────────────────────────────────────────────────────────────────────────
+    //
+    // ⚠ The tick is delivered by hand, as the call the reminder service itself makes: the grain as
+    // IRemindable, with the store's own reminder name. What Orleans owns — a timer firing a row
+    // five minutes out — isn't waited for; what this code owns is that the row exists with the
+    // period the grain asked for, that the tick runs the sweep, and that the row goes when the
+    // sweep leaves nothing. The row is read from the silo's IReminderTable, which is the Redis
+    // table here, as OrphanReaperArmingTests does in CyberCloud.Tenancy.Tests.
+
+    [Fact]
+    public async Task TheSweepReminderIsARowInTheTableAndItsTickSweepsAndDisarms() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4933);
+                var scope = Group("jit-p");
+                const string grant = "resourceGroup:jit-p#reader@user:alice";
+
+                (await ReminderRowAsync(tenant)).ShouldBeNull("nothing expiring was written yet");
+
+                await WriteAsync(tenant, grant, InAnHour);
+
+                var row = (await ReminderRowAsync(tenant)).ShouldNotBeNull("an expiring write left no reminder row");
+                row.Period.ShouldBe(TupleStoreGrain.SweepPeriod);
+
+                cluster.Clock.UtcNow = InAnHour;
+                await TickAsync(tenant);
+
+                cluster.Audit.Events.ShouldContain(
+                    e => e.Id == 1701 && (string?)e.Fields["Tuple"] == grant && (Guid?)e.Fields["TenantId"] == tenant,
+                    "the reminder's tick did not sweep the expired grant"
+                );
+
+                (await ReminderRowAsync(tenant)).ShouldBeNull("the tick left nothing to sweep and kept its row");
+
+                cluster.Clock.UtcNow = Start;
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeFalse(
+                    "the tick's sweep hid the tuple rather than deleting it"
+                );
+            }
+        );
+    }
+
+    [Fact]
+    public async Task AnExpiringWriteThatDiesIsStillArmedAndTheTickReplaysItThenSweepsIt() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4934);
+                var scope = Group("jit-q");
+                const string grant = "resourceGroup:jit-q#reader@user:alice";
+
+                // ⚠ The reminder is armed BEFORE the journal write, so the write that dies between
+                // its halves has already put the row there — and that row is what replays it.
+                cluster.Interceptor.Armed = true;
+                await Should.ThrowAsync<Exception>(() =>
+                    cluster.Store(tenant).WriteAsync(Tuple(grant) with { ExpiresOn = InAnHour })
+                );
+
+                (await ReminderRowAsync(tenant)).ShouldNotBeNull("a write that died after arming left no row");
+                (await cluster.SubjectIndex(tenant, Alice).ListAsync()).GetValueOrThrow()
+                    .ShouldNotContain(e => e.Object == scope, "the write died before step 5");
+
+                await TickAsync(tenant);
+
+                (await cluster.Store(tenant).PendingCountAsync()).GetValueOrThrow().ShouldBe(0, "the tick didn't replay the journal");
+                (await cluster.SubjectIndex(tenant, Alice).ListAsync()).GetValueOrThrow()
+                    .ShouldContain(e => e.Object == scope && e.ExpiresOn == InAnHour, "the replay didn't land the reverse half");
+                (await ReminderRowAsync(tenant)).ShouldNotBeNull("the replayed grant is registered and has to stay armed");
+
+                cluster.Clock.UtcNow = InAnHour;
+                await TickAsync(tenant);
+
+                (await ReminderRowAsync(tenant)).ShouldBeNull();
+                cluster.Clock.UtcNow = Start;
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeFalse(
+                    "the replayed grant was not swept at its expiry"
+                );
+            }
+        );
+    }
+
     // ── The tenant boundary ────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -480,6 +668,20 @@ public sealed class TimeBoundedRelationTests(AuthorizationCluster cluster) {
         swept.IsSuccess.ShouldBeTrue(swept.Error?.Message);
         return swept.GetValueOrThrow();
     }
+
+    /// <summary>The store's sweep reminder as the reminder table holds it, or <c>null</c>.</summary>
+    async Task<ReminderEntry?> ReminderRowAsync(Guid tenant) =>
+        await cluster.Services.GetRequiredService<IReminderTable>()
+            .ReadRow(cluster.Store(tenant).GetGrainId(), TupleStoreGrain.SweepReminderName);
+
+    /// <summary>Delivers one tick of the sweep reminder, as the reminder service would.</summary>
+    Task TickAsync(Guid tenant) =>
+        cluster.Store(tenant)
+            .AsReference<IRemindable>()
+            .ReceiveReminder(
+                TupleStoreGrain.SweepReminderName,
+                new(Start.UtcDateTime, TupleStoreGrain.SweepPeriod, cluster.Clock.UtcNow.UtcDateTime)
+            );
 
     async Task<string[]> ListAsync(Guid tenant, SubjectRef subject) =>
         await ListOfAsync(tenant, subject, ObjectTypes.Resource);

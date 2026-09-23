@@ -111,7 +111,8 @@ public sealed class AuthorizationWireContractTests {
 
         ("SweepReport", 0, "Pending"),
         ("SweepReport", 1, "Repaired"),
-        ("SweepReport", 2, "Remaining")
+        ("SweepReport", 2, "Remaining"),
+        ("SweepReport", 3, "Superseded")
     ];
 
     static readonly (string Type, string Alias)[] Aliases = [

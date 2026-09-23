@@ -369,6 +369,9 @@ public sealed class RoleAssignmentService(
         // API pages by (ListRequest.Continuation). The addresses are distinct — one tuple, one
         // address — so "the first row after the token" is well defined, and a grant or a revoke
         // between two pages moves only its own row.
+        // ⚠ The resume filter was lost in the 2026-09-18 reformat, which turned it into a second
+        // OrderBy — every page after the first repeated the first, and
+        // RoleAssignmentTests.TheCollectionIsPagedByAddressAndAPageIsNeverSilentlyShort went red on it.
         var rows = listed.GetValueOrThrow()
             .OrderBy(static x => x.Path, StringComparer.Ordinal)
             .Where(x => request.Continuation.Length == 0 || string.CompareOrdinal(x.Path, request.Continuation) > 0)

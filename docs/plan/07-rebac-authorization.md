@@ -709,14 +709,35 @@ is something to sweep", never off a deadline**, for § Azure RBAC, expressed in 
 parked resource: a due time equal to an expiry would be a second durable copy of it. And it lives on
 the store rather than on a grain of its own because, unlike a purge, a tuple delete never calls back
 into the grain that holds the reminder. The same `GetReminder` guard as `ExpirySweeperGrain` keeps a
-tenant granting faster than once a period from pushing its own sweep out for ever.
+tenant granting faster than once a period from pushing its own sweep out for ever
+(`TimeBoundedRelationTests.TheSweepReminderIsARowInTheTableAndItsTickSweepsAndDisarms` reads the row
+out of the reminder table and delivers the tick the reminder service would;
+`TimeBoundedRelationTests.AnExpiringWriteThatDiesIsStillArmedAndTheTickReplaysItThenSweepsIt` is the
+write that dies after arming).
+
+⚠ **The journal holds intents, and only a tuple's latest one is ever replayed.** A write that dies
+half-applied stays journalled, and before the sweep had a reminder nothing replayed it on its own;
+once every tick replays the journal, an entry that outlives a later write or delete of the same
+tuple is a hazard. Replayed over the later one, a failed just-in-time write resurrects the grant
+its owner then revoked, and a failed permanent write undoes the rewrite that shortened it — the
+register forgets the tuple, the reminder disarms, and the grant's end is never swept or audited.
+So a write's step 7 drops every older entry for the same tuple with its own, and a replay applies
+only the latest entry per tuple and drops the rest (`SweepReport.Superseded`). Replaying the latest
+alone is enough because a replay runs steps 2 to 6 in full, which undoes whatever an older entry's
+crash left behind. And the sweep leaves a registered tuple alone while an entry for it is still
+outstanding: the register reflects the write before it, and deleting on that would act on the older
+intent. The review of #49 found both cases with a probe; they are
+`TimeBoundedRelationTests.ARevokeAfterAFailedExpiringWriteIsNotUndoneByTheSweep`,
+`TimeBoundedRelationTests.AShortenedGrantIsNotMadePermanentAgainByTheSweep`, and
+`TimeBoundedRelationTests.AReplayOfTwoJournalledEntriesForOneTupleAppliesOnlyTheLater`.
 
 **The surface.** `PUT …/roleAssignments/{name}` takes `expiresOn` — an ISO 8601 instant with an
 explicit offset, later than now — and every rendered assignment carries `properties.expiresOn`, in
 UTC or `null`. A `PUT` without it makes the assignment permanent: a `PUT` states the whole
 assignment. After the instant, `GET` is the canonical `404`, the collection omits the row, and every
 check denies, with no revoke and before any sweep (`RoleAssignmentTests.AJustInTimeGrantReadsBackItsExpiryAndEndsOnItsOwnWithNoRevoke`).
-The resource-graph access column leaves a time-bounded grant out, because the column is recomputed on
+The portal's access page takes an optional end as a local date and time, sends the UTC instant it
+names, and shows the served end, or "Permanent", on every row it knows. The resource-graph access column leaves a time-bounded grant out, because the column is recomputed on
 a resource change and on nothing else and would otherwise keep an expired grant's resource in its
 holder's graph query ([08](08-resource-manager.md) § The resource-graph projection).
 
@@ -738,9 +759,10 @@ holder's graph query ([08](08-resource-manager.md) § The resource-graph project
 - **The resource-graph access column** carries no expiry, so a just-in-time reader is shown less by
   the graph query than a check allows; carrying the instant into the row and filtering on it in the
   query is the fix.
-- **The portal, `cyc` and the SDKs.** The address is still outside the generated document (#63's
-  question, § Azure RBAC), and the portal's hand-written `RoleAssignmentsApi` does not send or show
-  `expiresOn`.
+- **`cyc` and the SDKs.** Neither has a role-assignment command or client to carry `expiresOn` in:
+  the address is still outside the generated document (#63's question, § Azure RBAC), and the SDKs
+  and `cyc` are generated from that document. The portal's hand-written `RoleAssignmentsApi` sends
+  and shows it.
 - **Journal replay has one scheduled caller, and only while it is armed.** The sweep reminder replays
   the store's journal on every tick; a tenant with nothing expiring holds no reminder, and nothing else
   in the tree calls `ITupleStoreGrain.SweepAsync` — so the "sweeper replays it" this document leans
@@ -751,9 +773,12 @@ holder's graph query ([08](08-resource-manager.md) § The resource-graph project
   `ListObjects` can reach the object through it until the journal is replayed — the same window a
   delete that dies between steps 3 and 5 already leaves, and, per the item above, just as unscheduled.
 - **The process boundary.** Every new wire member carries an `[Id]` under an aliased type
-  (`AuthorizationWireContractTests`), and `ExpirySweepReport` is aliased; no test drives an expiring
-  `PUT` from a gateway process into a separate silo process, because the only topology that has one
-  is the AppHost's, whose fixed ports this branch's environment could not share.
+  (`AuthorizationWireContractTests`), `ExpirySweepReport` is aliased, and no grain method the path
+  calls is generic, which is the shape #39's refused type had. No test drives an expiring `PUT` from
+  a gateway process into a separate silo process: the only topology with one is the AppHost's
+  (`LocalTopology`), whose ports are fixed, and the machine this branch was built on shares them
+  with other runs. `TenantOverHttpTests`' arrangement — the real gateway in the test process, the
+  AppHost's two silos in theirs — is where the case belongs.
 - **Delegation**, the other half of § Effort and sequencing's row, is not touched.
 
 ## The enforcement seam

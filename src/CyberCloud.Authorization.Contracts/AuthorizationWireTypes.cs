@@ -710,4 +710,12 @@ public sealed record SweepReport {
     /// <summary>How many could not be reconciled and remain in the journal.</summary>
     [Id(2)]
     public int Remaining { get; init; }
+
+    /// <summary>
+    ///     How many were dropped without a replay because a later entry for the same tuple was
+    ///     outstanding too. The later entry is the tuple's intent, and an earlier one replayed over
+    ///     it could resurrect a revoke — issue #49.
+    /// </summary>
+    [Id(3)]
+    public int Superseded { get; init; }
 }

@@ -148,6 +148,35 @@ describe('RoleAssignmentsApi — the three verbs, through the portal transport',
     expect(response.operationUrl).toBeUndefined();
   });
 
+  it('sends a just-in-time grant’s end as a UTC instant with its Z, and reads it back', async () => {
+    // ⚠ The platform refuses an instant with no offset; toISOString always writes the Z.
+    const end = new Date(Date.UTC(2099, 0, 2, 9, 30));
+    const pending = api.assign(group, reader, end);
+
+    const request = http.expectOne(r => r.method === 'PUT' && r.url === PATH);
+    expect(request.request.body).toEqual({
+      principalId: RITA,
+      principalType: 'user',
+      roleDefinitionId: 'reader',
+      expiresOn: '2099-01-02T09:30:00.000Z'
+    });
+    request.flush(
+      { ...served, properties: { ...served.properties, expiresOn: '2099-01-02T09:30:00+00:00' } },
+      { status: 201, statusText: 'Created' }
+    );
+
+    expect((await pending).value.properties.expiresOn).toBe('2099-01-02T09:30:00+00:00');
+  });
+
+  it('leaves the end out of a permanent grant, which is what makes it permanent', async () => {
+    const pending = api.assign(group, reader, null);
+
+    const request = http.expectOne(r => r.method === 'PUT' && r.url === PATH);
+    expect(Object.keys(request.request.body as object)).not.toContain('expiresOn');
+    request.flush(served, { status: 200, statusText: 'OK' });
+    await pending;
+  });
+
   it('reports 200 on a repeated grant — the same name is the same tuple', async () => {
     const pending = api.assign(group, reader);
     http.expectOne(r => r.method === 'PUT' && r.url === PATH).flush(served, { status: 200, statusText: 'OK' });

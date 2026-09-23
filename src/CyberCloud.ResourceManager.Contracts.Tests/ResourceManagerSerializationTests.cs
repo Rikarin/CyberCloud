@@ -394,7 +394,11 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
                     Scope = "/tenants/t/subscriptions/s/resourceGroups/rg",
                     RoleDefinitionId = "reader",
                     PrincipalType = "group",
-                    PrincipalId = "2b4a1c662e704a9d9d0a1f7ec1f1a4b3"
+                    PrincipalId = "2b4a1c662e704a9d9d0a1f7ec1f1a4b3",
+
+                    // A just-in-time row — issue #49. An offset other than zero, so a serializer
+                    // that kept only the ticks would be caught by the equality below.
+                    ExpiresOn = new DateTimeOffset(2026, 9, 24, 11, 0, 0, TimeSpan.FromHours(2))
                 }
             ],
             Continuation =
@@ -409,6 +413,9 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
         round.Assignments[0].Inherited.ShouldBeTrue();
         round.Assignments[1].ShouldBe(value.Assignments[1]);
         round.Assignments[1].Inherited.ShouldBeFalse();
+        round.Assignments[0].ExpiresOn.ShouldBeNull("a permanent row came back with an expiry");
+        round.Assignments[1].ExpiresOn.ShouldBe(value.Assignments[1].ExpiresOn);
+        round.Assignments[1].ExpiresOn!.Value.Offset.ShouldBe(TimeSpan.FromHours(2));
         round.Continuation.ShouldBe(value.Continuation);
         round.HasMore.ShouldBeTrue();
 
