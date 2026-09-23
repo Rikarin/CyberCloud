@@ -138,6 +138,16 @@ public sealed class MonitorQueryTests {
     }
 
     [Fact]
+    public void ALogSearchValueIsSpelledInClickHousesEscapedFormat() {
+        // ⚠ ClickHouse reads param_* in the escaped format: sent raw, "\t" in a Windows path is a tab
+        // and a lone backslash fails the search. The store's search tests find each over a real server.
+        ClickHouseLogStore.ParameterValue(@"C:\temp\new").ShouldBe(@"C:\\temp\\new");
+        ClickHouseLogStore.ParameterValue(@"\").ShouldBe(@"\\");
+        ClickHouseLogStore.ParameterValue("a\tb\nc\rd\0e").ShouldBe(@"a\tb\nc\rd\0e");
+        ClickHouseLogStore.ParameterValue("')) OR 1=1 --").ShouldBe("')) OR 1=1 --", "a quote means nothing in the escaped format");
+    }
+
+    [Fact]
     public void SeverityIsTheBandOfTheNumber() {
         MonitorQueries.SeverityOf(0).ShouldBe("unspecified");
         MonitorQueries.SeverityOf(9).ShouldBe("info");

@@ -304,4 +304,41 @@ public static class CyberCloudResourceExtensions {
             .WithEnvironment("CyberCloud__ResourceGraph__ClickHousePassword", CyberCloudResources.ClickHousePassword)
             .WithEnvironment("CyberCloud__ResourceGraph__AllowInsecureTransport", "true");
     }
+
+    /// <summary>
+    ///     Points the gateway's log search at the region's ClickHouse, the store a Monitor workspace's
+    ///     <c>ws_{guid}</c> database lives in, so <c>searchLogs</c> answers on a local run.
+    /// </summary>
+    /// <param name="builder">The gateway being configured.</param>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <returns>The same builder, for chaining.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         Writes <c>CyberCloud__Monitor__Query__…</c>, the section <c>MonitorQueryOptions</c>
+    ///         binds (#41). The gateway is the host that needs it: a synchronous action runs inside
+    ///         <c>ResourceManagerService</c>, in the gateway's process. ⚠ <c>AllowInsecureTransport</c>
+    ///         for the same reason <see cref="WithResourceGraph{T}" /> sets it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The logs half only.</b> This run has no VictoriaMetrics, so <c>MetricsEndpoint</c>
+    ///         stays empty and <c>queryMetrics</c> refuses by naming the section rather than answering
+    ///         an empty chart. Nothing creates a workspace's <c>otel_logs</c> table yet either, so a
+    ///         search answers empty with <c>ClickHouseLogStore.NoTableNote</c>, which names that gap.
+    ///         Both are <c>charts/managed/monitor-workspace/conformance.yaml § owed</c>,
+    ///         <c>explorers-are-wired-on-a-laptop-only</c>.
+    ///     </para>
+    /// </remarks>
+    public static IResourceBuilder<T> WithMonitorLogSearch<T>(this IResourceBuilder<T> builder)
+        where T : IResourceWithEnvironment {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder
+            .WithEnvironment(
+                "CyberCloud__Monitor__Query__LogsEndpoint",
+                $"http://localhost:{CyberCloudResources.ClickHouseHttpPort.ToString(CultureInfo.InvariantCulture)}"
+            )
+            .WithEnvironment("CyberCloud__Monitor__Query__LogsUser", CyberCloudResources.ClickHouseUser)
+            .WithEnvironment("CyberCloud__Monitor__Query__LogsPassword", CyberCloudResources.ClickHousePassword)
+            .WithEnvironment("CyberCloud__Monitor__Query__AllowInsecureTransport", "true");
+    }
 }

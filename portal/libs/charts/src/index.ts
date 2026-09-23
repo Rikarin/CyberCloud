@@ -11,8 +11,9 @@
  * own component, so the shell's import graph does not reach `@xui/echarts`; and ECharts itself is
  * reached only through `CHART_ENGINE`'s `import()`, so it is a chunk of its own that loads on the
  * first chart and never with a route. `echarts-engine.ts` says what the build contains and why the
- * rest is left out. `scripts/bundle-budget.mjs` measures that chunk against docs/plan/20 §
- * Performance budget's 120 KB like every other lazy chunk.
+ * rest is left out. `scripts/bundle-budget.mjs` finds that chunk by name and holds it to docs/plan/20
+ * § Performance budget's chart-engine row, 180 KB, because no ECharts build fits the 120 KB every
+ * other lazy chunk is held to.
  *
  * ⚠ The two pages this library was sketched for next are still not built: cost analysis waits on
  * docs/plan/22's billing aggregates, and network topology is `@xui/node-graph` rather than a chart.

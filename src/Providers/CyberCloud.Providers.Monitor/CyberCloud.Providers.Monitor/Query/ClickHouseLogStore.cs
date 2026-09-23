@@ -14,12 +14,21 @@ namespace CyberCloud.Providers.Monitor.Query;
 ///     <para>
 ///         ⚠ <b>EVERY VALUE IS A PARAMETER AND THE ONE IDENTIFIER IS CHECKED.</b> The statement is
 ///         built from fixed text and <c>{name:Type}</c> placeholders, and the values travel as
-///         <c>param_{name}</c> in the query string, which ClickHouse binds server-side — so a quote, a
-///         backslash or a <c>')) OR 1=1 --</c> in the search text is a string the body is searched
-///         for. The database is the one thing spelled into the SQL, and
+///         <c>param_{name}</c> in the query string, which ClickHouse binds server-side — so a quote or
+///         a <c>')) OR 1=1 --</c> in the search text is a string the body is searched for. The
+///         database is the one thing spelled into the SQL, and
 ///         <see cref="MonitorQueries.IsWorkspaceDatabase" /> refuses anything that is not
 ///         <c>ws_</c> and 32 hex digits before it is. <c>MonitorQueryOverHttpTests</c> sends the
 ///         injection and asserts it matches the one row whose body carries it.
+///     </para>
+///     <para>
+///         ⚠ <b>ClickHouse reads a parameter's value in its ESCAPED format, not verbatim.</b> Bound
+///         as sent, <c>C:\temp</c> searched for <c>C:</c>, a tab and <c>emp</c> and found nothing; a
+///         lone backslash was a <c>400</c> (<c>CANNOT_PARSE_ESCAPE_SEQUENCE</c>) and a literal tab a
+///         <c>500</c> (<c>BAD_QUERY_PARAMETER</c>), and both reached the caller as
+///         <see cref="FailedSentence" />. <see cref="ParameterValue" /> escapes every value before
+///         it's sent, and the search tests seed a Windows path, a lone backslash and a tab and find
+///         each. The review of #41 found it: the first cut's tests sent no backslash.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Four settings ride on every statement and none is the caller's.</b>
@@ -285,7 +294,7 @@ public sealed class ClickHouseLogStore : IMonitorLogStore {
         query.Append("&max_rows_to_read=").Append(options.LogsMaxRowsToRead.ToString(CultureInfo.InvariantCulture));
 
         foreach (var (name, value) in parameters) {
-            query.Append("&param_").Append(Uri.EscapeDataString(name)).Append('=').Append(Uri.EscapeDataString(value));
+            query.Append("&param_").Append(Uri.EscapeDataString(name)).Append('=').Append(Uri.EscapeDataString(ParameterValue(value)));
         }
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -331,6 +340,44 @@ public sealed class ClickHouseLogStore : IMonitorLogStore {
         } catch (HttpRequestException exception) {
             return Failed<Executed>(database, "ClickHouse could not be reached", exception.Message);
         }
+    }
+
+    /// <summary>
+    ///     Returns a parameter's value in ClickHouse's escaped format, so the server reads back exactly
+    ///     the characters the caller sent.
+    /// </summary>
+    /// <param name="value">The value as the caller meant it, any characters at all.</param>
+    /// <returns>
+    ///     The value with each backslash doubled and each tab, line feed, carriage return and NUL
+    ///     spelled as its escape sequence. Every other character, a quote included, is left alone: the
+    ///     escaped format gives a quote no meaning outside a backslash sequence.
+    /// </returns>
+    /// <remarks>
+    ///     A tab and a line feed are the format's separators, so ClickHouse refuses them raw. The other
+    ///     two are escaped because ClickHouse's own writer escapes them, and a value spelled the way the
+    ///     writer spells it is one the reader can't misread.
+    /// </remarks>
+    public static string ParameterValue(string value) {
+        ArgumentNullException.ThrowIfNull(value);
+
+        if (value.AsSpan().IndexOfAny("\\\t\n\r\0") < 0) {
+            return value;
+        }
+
+        var escaped = new StringBuilder(value.Length + 8);
+
+        foreach (var c in value) {
+            _ = c switch {
+                '\\' => escaped.Append(@"\\"),
+                '\t' => escaped.Append(@"\t"),
+                '\n' => escaped.Append(@"\n"),
+                '\r' => escaped.Append(@"\r"),
+                '\0' => escaped.Append(@"\0"),
+                _ => escaped.Append(c)
+            };
+        }
+
+        return escaped.ToString();
     }
 
     const string CodeMarker = "clickhouse-code:";

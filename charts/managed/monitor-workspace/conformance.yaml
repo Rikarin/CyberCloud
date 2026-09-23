@@ -173,6 +173,11 @@ owed:
       a bijection: the birthday bound puts a collision at even odds around 77 000 workspaces, which is
       inside target scale, and two workspaces sharing an accountID read each other's metrics. ⚠ The
       first thing to consume this value is the thing that enforces isolation.
+      ⚠ SINCE #41 A TENANT READS UNDER IT. queryMetrics and listMetricLabels ask vmselect at
+      /select/{accountID}/, so a collision now lets a Reader of one workspace query the other
+      tenant's metrics through the portal's explorer — the gateway checks the workspace the caller
+      named and cannot see that a second one shares its account. Nothing detects a collision: the only
+      check is MonitorQueryFixture's, for one pair of GUIDs.
     closes: >
       An allocator — either an accountID grain per region, or `accountID:projectID` (VictoriaMetrics
       accepts both as arbitrary 32-bit integers), which makes the space 64 bits and the collision
@@ -407,6 +412,22 @@ owed:
       the newest `top` rows of a window and pages only by narrowing (a histogram bar), not by a
       cursor. Traces have no explorer at all.
     closes: A cursor on searchLogs (timestamp and a tie-breaker), saved queries as a resource or a user setting, and a trace view over otel_traces — docs/plan/16 § Querying a workspace.
+  - id: explorers-are-wired-on-a-laptop-only
+    says: >
+      The explorers answer only where CyberCloud:Monitor:Query is configured on the GATEWAY, the
+      process a synchronous action runs in. The AppHost gives its gateway LogsEndpoint — the region's
+      ClickHouse, where a workspace's ws_{guid} database lives — and no MetricsEndpoint, because the
+      AppHost runs no VictoriaMetrics, so the metrics explorer refuses by naming the section there.
+      No chart in this repository deploys the gateway (deploy/bootstrap carries its ServiceAccount and
+      RBAC, not a Deployment), so a region's gateway gets the section from whoever writes its Deployment, the
+      way CyberCloud:ResourceGraph is supplied today. ⚠ Two more things stand between that and an
+      answer. MetricsEndpoint must be https — MonitorQueryOptions.Validate refuses plain http without
+      AllowInsecureTransport, which is for a laptop — and the victoria-metrics-operator's VMCluster
+      serves vmselect over plain http unless it passes -tls with a certificate, which nothing in
+      charts/bundle/ issues. And nothing creates a workspace's otel_logs table, so every search
+      answers empty with ClickHouseLogStore.NoTableNote (log-search-reads-the-exporters-table-by-hand).
+      The review of #41 found that no composed environment configured the section at all.
+    closes: A gateway Deployment in the bundle that renders CyberCloud:Monitor:Query from the region's VMCluster and ClickHouse Services, a certificate for vmselect, and a VictoriaMetrics cluster in the AppHost — with AppHostTopologyTests asserting the metrics half as it asserts the logs half.
 
 # Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
 #

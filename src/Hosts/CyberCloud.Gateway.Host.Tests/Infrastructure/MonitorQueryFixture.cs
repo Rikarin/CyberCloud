@@ -64,6 +64,12 @@ public sealed class MonitorQueryFixture : IAsyncLifetime {
     /// <summary>A workspace in tenant A that nothing has written a log to.</summary>
     public const string EmptyWorkspace = "quiet";
 
+    /// <summary>
+    ///     The body of tenant A's one record with a Windows path, a lone backslash and a tab in it —
+    ///     the three things ClickHouse's escaped parameter format reads as something else.
+    /// </summary>
+    public const string BackslashBody = "copied C:\\temp\\new to\tshare \\ done";
+
     const string ClickHouseUser = "cybercloud";
     const string ClickHousePassword = "cyber-cloud-test-password";
 
@@ -333,7 +339,7 @@ public sealed class MonitorQueryFixture : IAsyncLifetime {
     }
 
     /// <summary>
-    ///     Seven records in A's database and two in B's, all inside the hour after <see cref="Origin" />.
+    ///     Eight records in A's database and two in B's, all inside the hour after <see cref="Origin" />.
     /// </summary>
     async Task SeedLogsAsync(CancellationToken cancellationToken) {
         var databaseA = MonitorWorkspaces.Database(new(TenantA, ConformanceIds.Subscription, ConformanceIds.ResourceGroup, MonitorWorkspaces.Type, Workspace, WorkspaceA));
@@ -353,6 +359,7 @@ public sealed class MonitorQueryFixture : IAsyncLifetime {
                 Record(25, 17, "Error", "worker", "job failed: TIMED OUT waiting", ("queue", "billing")),
                 Record(33, 9, "info", "api", "user said ')) OR 1=1 -- and left", ("http.method", "POST")),
                 Record(47, 21, "FATAL", "api", "process exiting", ("http.method", "GET")),
+                Record(50, 9, "INFO", @"sync\agent", BackslashBody, ("file.path", @"C:\temp\new")),
                 Record(58, 0, "", "cron", "tick", ("job", "nightly"))
             ],
             cancellationToken

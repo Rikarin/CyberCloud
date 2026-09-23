@@ -15,6 +15,7 @@ import {
   aggregations,
   buildPromQL,
   matchers,
+  rateWindowFor,
   seriesName
 } from '../../app/api/monitor-queries';
 import { ResourceAddress } from '../../app/api/resource-verbs';
@@ -188,7 +189,9 @@ interface SeriesRow {
         <div class="flex flex-wrap items-end gap-4">
           <label class="flex items-center gap-2 text-sm">
             <input type="checkbox" [checked]="rate()" (change)="rate.set(!rate())" />
-            <span i18n="@@metrics.rate">Per-second rate over 5 minutes — for a counter</span>
+            <span i18n="@@metrics.rate"
+              >Per-second rate over each point's interval, at least 5 minutes — for a counter</span
+            >
           </label>
 
           <div class="flex flex-col gap-1.5">
@@ -361,13 +364,17 @@ export class MetricsExplorer {
       return text.length === 0 ? null : text;
     }
 
-    return buildPromQL({
-      metric: this.metric().trim(),
-      filters: this.filters(),
-      rate: this.rate(),
-      aggregation: this.aggregation(),
-      by: this.by()
-    });
+    // The rate window follows the range, so a 30-day chart's three-hour step reads three hours.
+    return buildPromQL(
+      {
+        metric: this.metric().trim(),
+        filters: this.filters(),
+        rate: this.rate(),
+        aggregation: this.aggregation(),
+        by: this.by()
+      },
+      rateWindowFor(this.range().ms)
+    );
   });
 
   protected readonly result = pageState<MetricsAnswer>();

@@ -316,6 +316,15 @@ anything else is a `500` whose detail is in the gateway's log. ⚠ MetricsQL can
 `vm_account_id` is a filter only on `/select/multitenant/`, which nothing builds —
 `MonitorQueryOverHttpTests.TheOtherTenantsWorkspaceOfTheSameNameReadsOnlyItsOwnAccount` sends one.
 
+⚠ **The accountID is the GUID folded to 32 bits, so "each workspace reads its own series" holds only
+while no two workspaces fold alike.** `MonitorWorkspaces.AccountId` derives the account rather than
+allocating it, and the birthday bound puts a collision at even odds around 77 000 workspaces — inside
+target scale. Before #41 nothing read under the account; now the explorer does, so a collision lets a
+Reader of either workspace query both tenants' metrics, and the gateway, which checks the workspace
+the caller named, cannot see that a second one shares its account. Nothing detects a collision. The
+closure is `conformance.yaml § owed`, `accountid-is-folded-not-allocated` — `accountID:projectID`,
+changed in the write path's vmauth suffix and in this read together.
+
 **Logs** are searched in `{database}.otel_logs`, the collector's ClickHouse exporter's table
 (`MonitorLogsTable`), and ⚠ **the search is a structured filter and not #54's KQL.** The translator
 was the obvious reuse and was declined for three reasons: its subset refuses `ago`, `now` and `bin`,
@@ -323,7 +332,9 @@ and a log search is a window and a histogram; the window has to be a bound the A
 (90 days at most, the longest log retention) rather than a `where` a translator would have to find
 and prove present; and every statement it emits ANDs in the resource graph's per-row access filter,
 which a log row does not have — a log row is visible to whoever may read the workspace, decided once
-by the action. Every value is a ClickHouse `{name:Type}` parameter; the database is the one identifier
+by the action. Every value is a ClickHouse `{name:Type}` parameter — ⚠ sent in ClickHouse's
+*escaped* format, because the server reads a `param_` value that way: sent raw, the `\t` in
+`C:\temp` was a tab and a lone backslash failed the search with a `500`; the database is the one identifier
 spelled into the SQL and must match `ws_` plus 32 hex digits; each statement carries `readonly=2`,
 `max_execution_time`, `max_rows_to_read` and `timeout_overflow_mode=throw`, and a breach is a `400`
 naming the budget. Time is compared as Unix integers, never as zoned values, because a `DateTime64`
@@ -342,7 +353,8 @@ write path over an Orleans test cluster, and a VictoriaMetrics *cluster* (three 
 single-node image has no `accountID`) and a ClickHouse in Testcontainers, seeded for two workspaces
 of the same name in two tenants: each reads its own series and rows, another tenant's path is `404`,
 a caller without `read` is `404` and one with only `read` is `200`, the limits refuse before the
-store is asked, and a `')) OR 1=1 --` in the search text matches the one row that contains it.
+store is asked, and a `')) OR 1=1 --`, a Windows path, a lone backslash and a tab in the search each
+match the one row that contains them.
 
 What this does not do, each `charts/managed/monitor-workspace/conformance.yaml § owed`: declare the
 two responses (`query-responses-are-undeclared`); offer a query language over logs
@@ -350,7 +362,11 @@ two responses (`query-responses-are-undeclared`); offer a query language over lo
 (`log-search-reads-the-exporters-table-by-hand`); read a tier the workspace used to have, or go
 through vmauth (`metrics-query-reads-one-tier`); count as reads at the rate limiter
 (`query-actions-count-as-writes`); page a log window, save or pin a query, or explore traces
-(`explorers-are-a-first-cut`). The alert evaluator's query seam is still the refusing default
+(`explorers-are-a-first-cut`); give two workspaces accounts that cannot collide
+(`accountid-is-folded-not-allocated`, above); or answer anywhere but a laptop's log search — the
+AppHost's gateway reads the region's ClickHouse and has no VictoriaMetrics, no chart deploys a
+gateway, and a region's vmselect has no TLS to satisfy an `https` endpoint
+(`explorers-are-wired-on-a-laptop-only`). The alert evaluator's query seam is still the refusing default
 (`alert-rules-query-seam-is-refusing`), though the stores it would use now exist.
 
 ## What the platform monitors about itself

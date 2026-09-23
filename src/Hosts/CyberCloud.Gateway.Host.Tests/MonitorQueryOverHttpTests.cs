@@ -28,6 +28,7 @@ public sealed class MonitorQueryOverHttpTests(MonitorQueryFixture stack) : IClas
     static readonly string[] ErrorsAndWorse = ["error", "fatal"];
     static readonly string[] GetRequests = ["http.method=GET"];
     static readonly string[] ProdBilling = ["deployment.environment=prod", "queue=billing"];
+    static readonly string[] AWindowsPath = [@"file.path=C:\temp\new"];
 
     // ── A workspace reads its own tenancy and nothing else ────────────────────────────────────
 
@@ -128,7 +129,7 @@ public sealed class MonitorQueryOverHttpTests(MonitorQueryFixture stack) : IClas
             body.ShouldNotContain("upstream timed out");
         }
 
-        // Tenant B's search of its own workspace sees its own two rows, and none of A's seven.
+        // Tenant B's search of its own workspace sees its own two rows, and none of A's eight.
         var (own, ownBody) = await stack.PostAsync(
             MonitorQueryFixture.TenantB,
             MonitorQueryFixture.ActionPath(MonitorQueryFixture.TenantB, MonitorQueries.SearchLogsAction),
@@ -261,7 +262,7 @@ public sealed class MonitorQueryOverHttpTests(MonitorQueryFixture stack) : IClas
         var root = document.RootElement;
         var rows = root.GetProperty("rows").EnumerateArray().ToList();
 
-        rows.Count.ShouldBe(7);
+        rows.Count.ShouldBe(8);
         rows[0].GetProperty("body").GetString().ShouldBe("tick");
         rows[0].GetProperty("severity").GetString().ShouldBe("unspecified");
         rows[^1].GetProperty("body").GetString().ShouldBe("request served");
@@ -282,7 +283,7 @@ public sealed class MonitorQueryOverHttpTests(MonitorQueryFixture stack) : IClas
         histogram.GetProperty("bucketSeconds").GetInt32().ShouldBe(600);
 
         var buckets = histogram.GetProperty("buckets").EnumerateArray().ToList();
-        buckets.Sum(static x => x.GetProperty("total").GetInt64()).ShouldBe(7);
+        buckets.Sum(static x => x.GetProperty("total").GetInt64()).ShouldBe(8);
         buckets[0].GetProperty("start").GetString().ShouldBe(Stamp(stack.Origin));
         buckets[0].GetProperty("bySeverity").GetProperty("info").GetInt64().ShouldBe(1);
         buckets[0].GetProperty("bySeverity").GetProperty("error").GetInt64().ShouldBe(1);
@@ -312,10 +313,20 @@ public sealed class MonitorQueryOverHttpTests(MonitorQueryFixture stack) : IClas
         (await Search(new { from, to, traceId = "0AF7651916CD43DD8448EB211C80319C" })).ShouldBe(["upstream timed out"]);
 
         // ⚠ The injection is a string the body is searched for: it matches the one row that carries
-        // it, and the next search still sees all seven, which a statement that ran it would not.
+        // it, and the next search still sees all eight, which a statement that ran it would not.
         (await Search(new { from, to, text = "')) OR 1=1 --" })).ShouldBe(["user said ')) OR 1=1 -- and left"]);
         (await Search(new { from, to, service = "x' OR '1'='1" })).ShouldBeEmpty();
-        (await Search(new { from, to })).Count.ShouldBe(7);
+        (await Search(new { from, to })).Count.ShouldBe(8);
+
+        // ⚠ ClickHouse reads a parameter in its escaped format, so each of these went wrong before the
+        // store escaped them: "\t" in the path was a tab and found nothing, the lone backslash was a
+        // CANNOT_PARSE_ESCAPE_SEQUENCE and the literal tab a BAD_QUERY_PARAMETER, both a 500.
+        string[] copied = [MonitorQueryFixture.BackslashBody];
+        (await Search(new { from, to, text = @"C:\temp\new" })).ShouldBe(copied);
+        (await Search(new { from, to, text = @"\" })).ShouldBe(copied);
+        (await Search(new { from, to, text = "to\tshare" })).ShouldBe(copied);
+        (await Search(new { from, to, service = @"sync\agent" })).ShouldBe(copied);
+        (await Search(new { from, to, attributes = AWindowsPath })).ShouldBe(copied);
 
         // top is honoured and a longer result says so.
         var (_, topBody) = await stack.PostAsync(MonitorQueryFixture.TenantA, path, new { from, to, top = 2 });
@@ -343,7 +354,7 @@ public sealed class MonitorQueryOverHttpTests(MonitorQueryFixture stack) : IClas
 
         using (var document = JsonDocument.Parse(body)) {
             document.RootElement.TryGetProperty("rows", out _).ShouldBeFalse("an estimate runs nothing");
-            document.RootElement.GetProperty("estimate").GetProperty("rows").GetInt64().ShouldBe(7);
+            document.RootElement.GetProperty("estimate").GetProperty("rows").GetInt64().ShouldBe(8);
         }
 
         var (quiet, quietBody) = await stack.PostAsync(

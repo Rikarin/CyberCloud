@@ -419,6 +419,22 @@ public sealed class AppHostTopologyTests {
     }
 
     [Fact]
+    public async Task TheGatewaysLogSearchReadsTheRegionsClickHouseAndItsMetricsHalfIsLeftToRefuse() {
+        // #41: searchLogs runs inside ResourceManagerService, in the gateway's process, and a gateway
+        // with no CyberCloud:Monitor:Query section refuses every search by naming it — which is what
+        // every composed environment did before the review of #41 found it.
+        var gateway = await Model().EnvironmentOf(CyberCloudResources.Gateway);
+
+        gateway["CyberCloud__Monitor__Query__LogsEndpoint"].ShouldBe($"http://localhost:{CyberCloudResources.ClickHouseHttpPort}");
+        gateway["CyberCloud__Monitor__Query__LogsUser"].ShouldBe(CyberCloudResources.ClickHouseUser);
+        gateway["CyberCloud__Monitor__Query__AllowInsecureTransport"].ShouldBe("true");
+
+        // ⚠ No VictoriaMetrics on this run, so no metrics endpoint: the explorer refuses by name
+        // rather than drawing an empty chart. conformance.yaml § owed, explorers-are-wired-on-a-laptop-only.
+        gateway.ShouldNotContainKey("CyberCloud__Monitor__Query__MetricsEndpoint");
+    }
+
+    [Fact]
     public void ThePortalProxyForwardsApiToTheGatewayOnItsPinnedPort() {
         var proxy = ReadProxy(Path.Combine("apps", "portal", "proxy.conf.json"));
 

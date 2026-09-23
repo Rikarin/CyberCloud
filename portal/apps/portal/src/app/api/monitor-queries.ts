@@ -243,6 +243,27 @@ export interface MetricsQueryModel {
   readonly by: readonly string[];
 }
 
+/** The points the platform cuts a range query into when it names no step — `MonitorQueries.DefaultPoints`. */
+export const DEFAULT_POINTS = 240;
+
+/**
+ * The `rate` window for a range query over `rangeMs`: the step the platform will choose, and never
+ * less than five minutes.
+ *
+ * ⚠ **A fixed `[5m]` samples five minutes of each step.** Over 30 days the step is three hours, so a
+ * five-minute window reads one thirty-sixth of the data and draws whatever those minutes did. The
+ * window grows with the step, which the platform derives from the window over `DEFAULT_POINTS`, so
+ * every sample counts once; five minutes stays the floor, because a window narrower than two scrapes
+ * has no rate at all.
+ */
+export function rateWindowFor(rangeMs: number): string {
+  const seconds = Math.max(300, Math.ceil(rangeMs / 1000 / DEFAULT_POINTS));
+
+  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
+  if (seconds % 60 === 0) return `${seconds / 60}m`;
+  return `${seconds}s`;
+}
+
 /** A label value as a PromQL string literal: `\` and `"` escaped, a newline spelled. */
 export function quote(value: string): string {
   return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\n', '\\n')}"`;
@@ -314,7 +335,13 @@ export interface LogQueryProblem {
  * - `service:api` — the `service.name`;
  * - `trace:0af76519…` — a trace id, 32 hex digits;
  * - `key=value` — an attribute of the record or its resource;
- * - `"quoted words"` or bare words — text the body must contain, joined with single spaces.
+ * - bare words, or one `"quoted phrase"` — ONE phrase the body must contain, words joined with
+ *   single spaces.
+ *
+ * ⚠ **The text is one phrase, because `searchLogs` searches one substring.** `"timed out" billing`
+ * used to become the phrase "timed out billing", which is not what the quotes asked for; a quoted
+ * phrase beside any other text is now a problem rather than a search for something else. Bare
+ * words stay one phrase, which is what a person typing `connection refused` means.
  *
  * ⚠ **A structured filter, not a query language**, and the reason is recorded in
  * `MonitorQueries.SearchLogsRequest`'s remarks: the platform binds every value as a parameter and
@@ -331,11 +358,15 @@ export function parseLogQuery(input: string): { filter: LogFilter; problems: rea
   let traceId = '';
 
   const tokens = input.match(/"[^"]*"|\S+/g) ?? [];
+  let quoted = 0;
 
   for (const token of tokens) {
     if (token.startsWith('"')) {
       const phrase = token.slice(1, -1).trim();
-      if (phrase.length > 0) text.push(phrase);
+      if (phrase.length > 0) {
+        text.push(phrase);
+        quoted++;
+      }
       continue;
     }
 
@@ -379,6 +410,13 @@ export function parseLogQuery(input: string): { filter: LogFilter; problems: rea
     }
 
     text.push(token);
+  }
+
+  if (quoted > 0 && text.length > 1) {
+    problems.push({
+      token: text.map(t => `"${t}"`).join(' '),
+      reason: $localize`:@@logs.problem.phrases:The search looks for one phrase. Put all the text in one pair of quotes, or search for each piece in turn.`
+    });
   }
 
   return { filter: { text: text.join(' '), severities: found, service, attributes, traceId }, problems };

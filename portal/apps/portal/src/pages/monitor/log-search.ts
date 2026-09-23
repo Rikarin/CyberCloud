@@ -97,7 +97,7 @@ export const CONFIRM_ROWS = 10_000_000;
 
         <p class="text-foreground-muted text-xs" id="cc-logs-query-hint" i18n="@@logs.queryHint">
           severity:error (or error,fatal), service:name, trace:32-hex-digits, key=value for an attribute, and any other
-          words or "quoted phrases" as text the message must contain.
+          words, or one "quoted phrase", as the one phrase the message must contain.
         </p>
 
         @if (problems().length > 0) {

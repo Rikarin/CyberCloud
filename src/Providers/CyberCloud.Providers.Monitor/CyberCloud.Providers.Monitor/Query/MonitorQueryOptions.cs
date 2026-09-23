@@ -34,10 +34,17 @@ public sealed class MonitorQueryOptions {
     ///     ⚠ <b>A template, because a workspace's metrics live in its tier's cluster.</b>
     ///     <see cref="MonitorWorkspaces.MetricsClusterName" /> puts each retention tier in its own
     ///     <c>VMCluster</c>, and the operator names that cluster's vmselect Service
-    ///     <c>vmselect-{cluster}</c>, so <c>http://vmselect-telemetry-{tier}.cybercloud-telemetry.svc:8481</c>
+    ///     <c>vmselect-{cluster}</c>, so <c>https://vmselect-telemetry-{tier}.cybercloud-telemetry.svc:8481</c>
     ///     reaches the right one for every tier. ⚠ A workspace that moved tier reads the new tier's
     ///     cluster only: the samples written before the move stay where they were written, which
     ///     <see cref="MonitorWorkspaces.MetricsClusterName" />'s remarks already say of the write half.
+    ///     ⚠ <b>https, and the operator doesn't give vmselect TLS by default.</b> Its Service serves
+    ///     plain http unless the <c>VMCluster</c> passes vmselect <c>-tls</c> with a certificate, and
+    ///     <see cref="Validate" /> refuses a plain <c>http</c> endpoint without
+    ///     <see cref="AllowInsecureTransport" />. So a region needs that certificate before this
+    ///     endpoint works, and nothing in the bundle issues it yet —
+    ///     <c>charts/managed/monitor-workspace/conformance.yaml § owed</c>,
+    ///     <c>explorers-are-wired-on-a-laptop-only</c>.
     /// </remarks>
     public string MetricsEndpoint { get; set; } = string.Empty;
 

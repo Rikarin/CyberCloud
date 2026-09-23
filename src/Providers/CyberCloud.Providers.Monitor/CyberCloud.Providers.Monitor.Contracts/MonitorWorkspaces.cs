@@ -305,9 +305,18 @@ public static class MonitorWorkspaces {
     ///         whole document exists to prevent. At 2^32 accounts the birthday bound is a coin-flip
     ///         at roughly 77 000 workspaces, which is inside this platform's target scale — so this
     ///         is a <b>known limit with a named closure</b> rather than a safe derivation:
-    ///         <c>conformance.yaml § owed</c>, <c>accountid-is-folded-not-allocated</c>. What makes
-    ///         it acceptable today is that nothing reads it yet; what makes it unacceptable to leave
-    ///         is that the first thing to read it is the thing that enforces isolation.
+    ///         <c>conformance.yaml § owed</c>, <c>accountid-is-folded-not-allocated</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>SINCE #41 A TENANT READS UNDER IT, SO THE COLLISION IS NOW A READ PATH.</b> This
+    ///         remark used to say the limit was acceptable because nothing read the value yet. The
+    ///         metrics explorer's <c>queryMetrics</c> and <c>listMetricLabels</c> read vmselect at
+    ///         <c>/select/{accountID}/</c>, so two workspaces whose GUIDs fold to one value let a
+    ///         Reader of either query both tenants' metrics. The gateway checks the caller against the
+    ///         workspace they named and can't see that another workspace shares its account. Nothing
+    ///         detects a collision today: the only check is <c>MonitorQueryFixture</c>'s, and it
+    ///         covers one pair of GUIDs. The owed item's closure, <c>accountID:projectID</c>, has to
+    ///         change the write path's vmauth suffix and this read together.
     ///     </para>
     ///     <para>
     ///         ⚠ Zero is skipped. VictoriaMetrics treats <c>accountID=0</c> as a legal tenant, and a

@@ -1,4 +1,12 @@
-import { asLogAnswer, asMetricsAnswer, buildPromQL, parseLogQuery, quote, seriesName } from './monitor-queries';
+import {
+  asLogAnswer,
+  asMetricsAnswer,
+  buildPromQL,
+  parseLogQuery,
+  quote,
+  rateWindowFor,
+  seriesName
+} from './monitor-queries';
 import { asGraphPage, graphPath, skipTokenOf } from './resource-graph';
 
 describe('the metrics query builder', () => {
@@ -18,6 +26,22 @@ describe('the metrics query builder', () => {
 
     expect(buildPromQL({ metric: 'up', filters: [], rate: false, aggregation: 'none', by: ['ignored'] })).toBe('up');
     expect(buildPromQL({ metric: 'up', filters: [], rate: false, aggregation: 'count', by: [] })).toBe('count(up)');
+  });
+
+  it('widens the rate window to the step the platform will choose, never below five minutes', () => {
+    const hour = 60 * 60_000;
+
+    expect(rateWindowFor(hour)).toBe('5m');
+    expect(rateWindowFor(24 * hour)).toBe('6m');
+    expect(rateWindowFor(7 * 24 * hour)).toBe('42m');
+    // Thirty days over 240 points is a three-hour step; a [5m] window would read a thirty-sixth of it.
+    expect(rateWindowFor(30 * 24 * hour)).toBe('3h');
+    expect(
+      buildPromQL(
+        { metric: 'x_total', filters: [], rate: true, aggregation: 'none', by: [] },
+        rateWindowFor(30 * 24 * hour)
+      )
+    ).toBe('rate(x_total[3h])');
   });
 
   it('quotes every value, so no value can write syntax', () => {
@@ -54,12 +78,12 @@ describe('the metrics query builder', () => {
 describe('the log search query box', () => {
   it('reads severities, a service, a trace, attributes, and the rest as text', () => {
     const { filter, problems } = parseLogQuery(
-      'severity:error,fatal service:api "timed out" upstream http.method=GET trace:0AF7651916CD43DD8448EB211C80319C'
+      'severity:error,fatal service:api "timed out" http.method=GET trace:0AF7651916CD43DD8448EB211C80319C'
     );
 
     expect(problems).toEqual([]);
     expect(filter).toEqual({
-      text: 'timed out upstream',
+      text: 'timed out',
       severities: ['error', 'fatal'],
       service: 'api',
       attributes: ['http.method=GET'],
@@ -73,6 +97,15 @@ describe('the log search query box', () => {
     expect(problems.map(p => p.token)).toEqual(['severity:critical', 'trace:xyz', '=value']);
     expect(filter.text).toBe('hello');
     expect(filter.severities).toEqual([]);
+  });
+
+  it('searches one phrase, and names a quoted phrase beside other text instead of gluing them', () => {
+    expect(parseLogQuery('connection refused severity:error').filter.text).toBe('connection refused');
+
+    // Before the review of #41 this searched for the literal "timed out billing".
+    const { problems } = parseLogQuery('"timed out" billing');
+    expect(problems).toEqual([{ token: '"timed out" "billing"', reason: expect.stringContaining('one phrase') }]);
+    expect(parseLogQuery('"a" "b"').problems).toHaveLength(1);
   });
 
   it('keeps a value with an equals sign whole, and repeats a severity once', () => {
