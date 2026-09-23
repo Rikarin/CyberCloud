@@ -337,7 +337,7 @@ public sealed class RoleAssignmentService(
         // between two pages moves only its own row.
         var rows = listed.GetValueOrThrow()
             .OrderBy(static x => x.Path, StringComparer.Ordinal)
-            .OrderBy(x => x.Path, StringComparer.Ordinal)
+            .Where(x => request.Continuation.Length == 0 || string.CompareOrdinal(x.Path, request.Continuation) > 0)
             .Take(request.PageSize + 1)
             .ToList();
 

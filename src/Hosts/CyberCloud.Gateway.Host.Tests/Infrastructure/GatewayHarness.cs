@@ -91,6 +91,9 @@ sealed class GatewayHarness {
     /// </summary>
     public RecordingResourceGraphQuery Graph { get; } = new();
 
+    /// <summary>The recording invitation manager stage 8 dispatches an invitation to (#43).</summary>
+    public RecordingInvitationManager Invitations { get; } = new();
+
     /// <summary>The operation reader, scripted so an LRO poll needs no cluster.</summary>
     public ScriptedOperationReader Operations { get; } = new();
 
@@ -165,7 +168,7 @@ sealed class GatewayHarness {
             new RateLimitStage(new GatewayRateLimiter(Counters)),
             new RouteStage(new OneTypeRegistry(), Options),
             new ValidateStage(Options),
-            new DispatchStage(Manager, Scopes, Roles, graph ?? Graph, Operations, Tickets, Options)
+            new DispatchStage(Manager, Scopes, Roles, graph ?? Graph, Invitations, Operations, Tickets, Options)
         ];
 
         pipeline = new(Stages, NullLogger<GatewayPipeline>.Instance);

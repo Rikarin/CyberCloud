@@ -130,6 +130,27 @@ public sealed class UserGrain(
     }
 
     /// <inheritdoc />
+    public async Task<Result<UserProfile>> SetDisplayNameAsync(string displayName) {
+        if (!Exists()) {
+            return NotFound<UserProfile>();
+        }
+
+        var name = (displayName ?? string.Empty).Trim();
+
+        if (name.Length is 0 or > 200) {
+            return Result<UserProfile>.Failure(
+                ErrorCode.InvalidRequestBody,
+                "A display name is between one and two hundred characters."
+            );
+        }
+
+        state.State.DisplayName = name;
+        await state.WriteStateAsync();
+
+        return Result<UserProfile>.Success(Profile());
+    }
+
+    /// <inheritdoc />
     public async Task<Result<UserProfile>> ChangeEmailAsync(string email) {
         if (!Exists()) {
             return NotFound<UserProfile>();

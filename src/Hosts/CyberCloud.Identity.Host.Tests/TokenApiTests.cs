@@ -152,6 +152,7 @@ public sealed partial class TokenApiTests(IdentityHostFixture fixture) {
             secrets,
             SignInApiHarness.Hint(grains),
             new SystemClock(),
+            new DeviceFlow(grains, Microsoft.Extensions.Logging.Abstractions.NullLogger<DeviceFlow>.Instance),
             logger ?? new CapturingLogger()
         );
 

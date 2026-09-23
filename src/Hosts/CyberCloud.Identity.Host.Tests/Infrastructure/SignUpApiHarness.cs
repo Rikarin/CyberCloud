@@ -452,6 +452,10 @@ public sealed class FakeUserGrain : IUserGrain {
     public Task<Result<UserProfile>> ChangeEmailAsync(string email) => throw OffPath(nameof(ChangeEmailAsync));
 
     /// <inheritdoc />
+    public Task<Result<UserProfile>> SetDisplayNameAsync(string displayName) =>
+        throw OffPath(nameof(SetDisplayNameAsync));
+
+    /// <inheritdoc />
     public Task<Result<bool>> VerifyPasswordAsync(string candidate) => throw OffPath(nameof(VerifyPasswordAsync));
 
     /// <inheritdoc />

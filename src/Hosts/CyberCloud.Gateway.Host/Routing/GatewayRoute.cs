@@ -137,6 +137,19 @@ enum RouteKind {
     /// </remarks>
     ResourceGraphQuery,
 
+    /// <summary>
+    ///     An invitation — <c>POST /tenants/{t}/providers/CyberCloud.Identity/invitations</c> with
+    ///     <c>{ "email": "…" }</c>. docs/plan/11 § Sign-up and tenant creation; issue #43, step 7.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The resource graph's arrangement under a namespace of its own
+    ///     (<c>InvitationAddress.ProviderNamespace</c>): one grammar, asked before the scope and
+    ///     resource grammars and the <c>POST</c> branch, a <c>400</c> naming the address for
+    ///     anything else under it. Dispatched to <c>IInvitationManager</c>, which owns the
+    ///     <c>assignRole</c> check. <c>InvitationRoutingTests</c> pins the shape and the verb.
+    /// </remarks>
+    Invitation,
+
     /// <summary>A <c>POST</c> action on an existing resource — <c>restart</c>, <c>rotateKeys</c>.</summary>
     Action,
 
@@ -256,6 +269,10 @@ enum RouteKind {
 ///     The query address, for <see cref="RouteKind.ResourceGraphQuery" />. ⚠ Its tenant is the
 ///     <i>token's</i> too — the address carries nothing but a tenant, and that one is rebuilt.
 /// </param>
+/// <param name="Invitations">
+///     The invitations address, for <see cref="RouteKind.Invitation" />. ⚠ The token's tenant, rebuilt,
+///     as for <paramref name="ResourceGraph" />.
+/// </param>
 readonly record struct GatewayRoute(
     RouteKind Kind,
     ResourceId Resource,
@@ -267,7 +284,8 @@ readonly record struct GatewayRoute(
     RoleAssignmentId RoleAssignment = default,
     RoleAssignmentCollectionId RoleAssignments = default,
     ScopeCollectionId Scopes = default,
-    ResourceGraphAddress ResourceGraph = default
+    ResourceGraphAddress ResourceGraph = default,
+    InvitationAddress Invitations = default
 ) {
     /// <summary>Nothing matched.</summary>
     public static GatewayRoute None { get; } = new(RouteKind.Unknown, default, "", Guid.Empty, "");
@@ -300,6 +318,7 @@ readonly record struct GatewayRoute(
             RouteKind.ScopeCollection => Scopes.Path,
             // The query answers a collection envelope and pages with a nextLink built from this.
             RouteKind.ResourceGraphQuery => ResourceGraph.Path,
+            RouteKind.Invitation => Invitations.Path,
             _ => ""
         };
 }
@@ -479,6 +498,24 @@ static class GatewayRouter {
                     // now, and the positional form would put an assignment into Scope and compile.
                     RoleAssignment: assignment.GetValueOrThrow().WithTenant(tenantId)
                 )
+            );
+        }
+
+        // ── An invitation, under the third reserved namespace (#43). ─────────────────────────────
+        //
+        // ⚠ THE RESOURCE GRAPH'S ARRANGEMENT, BELOW: one grammar, a 400 naming the address for any
+        // other path under the namespace, and before the POST branch so ResolveAction never reads the
+        // address as an action called `invitations`. POST only; anything else on the address is a 405
+        // that names the verb, answered by dispatch where the Allow header is written.
+        if (InvitationAddress.IsUnderNamespace(path)) {
+            var invitations = InvitationAddress.ParsePath(path);
+
+            if (invitations.TryGetError(out var invitationsError)) {
+                return Result<GatewayRoute>.Failure(invitationsError);
+            }
+
+            return Result<GatewayRoute>.Success(
+                new(RouteKind.Invitation, default, "", Guid.Empty, "", Invitations: new(tenantId))
             );
         }
 

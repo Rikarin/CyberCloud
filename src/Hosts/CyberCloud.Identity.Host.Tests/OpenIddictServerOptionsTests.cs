@@ -114,6 +114,7 @@ public sealed class OpenIddictServerOptionsTests {
         ShouldBeAt(options.DeviceAuthorizationEndpointUris, IdentityHostOpenIddict.DeviceAuthorizationPath);
         ShouldBeAt(options.EndUserVerificationEndpointUris, IdentityHostOpenIddict.EndUserVerificationPath);
         ShouldBeAt(options.EndSessionEndpointUris, IdentityHostOpenIddict.EndSessionPath);
+        ShouldBeAt(options.RevocationEndpointUris, IdentityHostOpenIddict.RevocationPath);
     }
 
     [Fact]
@@ -129,15 +130,20 @@ public sealed class OpenIddictServerOptionsTests {
     }
 
     [Fact]
-    public void ThereIsNoIntrospectionAndNoRevocationEndpoint() {
+    public void ThereIsNoIntrospectionEndpointAndRevocationTakesOnlyRefreshTokens() {
         var options = Options();
 
-        // ⚠ Both absent on purpose, and both are what AccessTokenPolicy tells the gateway. An
+        // ⚠ No introspection, on purpose, and that is what AccessTokenPolicy tells the gateway. An
         // introspection endpoint that appeared here would make the "validate locally" contract
         // optional, and the first caller to use it would turn a ten-minute token into a per-request
         // round trip nobody measured.
         options.IntrospectionEndpointUris.ShouldBeEmpty();
-        options.RevocationEndpointUris.ShouldBeEmpty();
+
+        // ⚠ /revoke since #43, for `cyc logout` — refresh tokens only, which end the session behind
+        // them. An access token stays irrevocable, and the endpoint says so rather than quietly
+        // accepting one: DegradedModeHandlers.ValidateRevocationRequest.
+        options.RevocationEndpointUris.Select(static x => "/" + x.ToString().TrimStart('/'))
+            .ShouldBe([IdentityHostOpenIddict.RevocationPath]);
         AccessTokenPolicy.AccessTokensAreRevocable.ShouldBeFalse();
     }
 
@@ -199,6 +205,7 @@ public sealed class OpenIddictServerOptionsTests {
                      typeof(OpenIddictServerEvents.ValidateDeviceAuthorizationRequestContext),
                      typeof(OpenIddictServerEvents.ValidateEndUserVerificationRequestContext),
                      typeof(OpenIddictServerEvents.ValidateEndSessionRequestContext),
+                     typeof(OpenIddictServerEvents.ValidateRevocationRequestContext),
                      typeof(OpenIddictServerEvents.ValidateTokenContext),
                      typeof(OpenIddictServerEvents.GenerateTokenContext)
                  }) {
@@ -222,6 +229,18 @@ public sealed class OpenIddictServerOptionsTests {
         );
         handlers.ShouldContain(x => x.ServiceDescriptor.ImplementationType
             == typeof(DegradedModeHandlers.ValidateEndSessionRequest)
+        );
+
+        // #43: the device flow and /revoke serve rather than refuse — a Refuse* handler put back
+        // here, or OpenIddict's own RevokeToken relied on in degraded mode (it never runs), fails by name.
+        handlers.ShouldContain(x => x.ServiceDescriptor.ImplementationType
+            == typeof(DegradedModeHandlers.ValidateDeviceAuthorizationRequest)
+        );
+        handlers.ShouldContain(x => x.ServiceDescriptor.ImplementationType
+            == typeof(DegradedModeHandlers.StoreDeviceCodes)
+        );
+        handlers.ShouldContain(x => x.ServiceDescriptor.ImplementationType
+            == typeof(DegradedModeHandlers.RevokeTokenSession)
         );
     }
 

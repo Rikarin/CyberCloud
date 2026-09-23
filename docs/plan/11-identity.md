@@ -48,7 +48,7 @@ OpenIddict 7.3.0 (ADR-015), OAuth 2.1 + OIDC.
 | Flow | For | Notes |
 |---|---|---|
 | Authorization Code + PKCE | Portal, third-party apps | The only interactive flow. No implicit, no hybrid |
-| Device Authorization | `cyc login` on a headless box | |
+| Device Authorization | `cyc login` on a headless box | RFC 8628, served since #43 — see the bullet below |
 | Client Credentials | Service principals, CI | |
 | Refresh Token | All of the above | Rotating, one-time-use, with reuse detection → revoke the whole chain |
 | Token Exchange (RFC 8693) | Workload identity | A cluster's SA token → a platform token |
@@ -77,7 +77,7 @@ groups into a JWT produces the header-size failures every large enterprise hits.
 `Check` per request, which is the p99 < 10 ms budget in [00](00-vision-and-principles.md), and is why
 that budget exists.
 
-⚠ **What is served today, and what is not.** Three rows of the flow table are served, and a person
+⚠ **What is served today, and what is not.** Four rows of the flow table are served, and a person
 can hold a token. `/authorize` + PKCE mints an authorization code from the fully authenticated
 session cookie; `/token` exchanges it for an access token, an id_token and a refresh token, and
 rotates the refresh token; the client-credentials grant serves service principals as before. The
@@ -164,6 +164,34 @@ it. The decisions that shape the served half, each argued in the type that makes
   `AccessTokenClaims.Permitted`: OpenIddict's own `scope`, `client_id` and presenter claims are
   stripped before signing, because `scope` is on the forbidden list and the gateway refuses a token
   that carries it.
+- **Device authorization is RFC 8628 over the same degraded mode, with a grain for a store.**
+  `/device` is open to `cyc-cli` alone (the one registration with the grant, and the request names no
+  tenant to resolve another in), counted per IP (`IdentityRateLimits.DeviceAuthorization`, 20 per 10
+  minutes). OpenIddict cannot make a user code self-contained and has no token store to remember one,
+  so `DegradedModeHandlers.StoreDeviceCodes` mints both codes into `IDeviceAuthorizationGrain` —
+  platform-tenant, hot, keyed `device/{digest(userCode)}` — at generation: the user code is eight
+  letters from RFC 8628 § 6.1's twenty consonants, shown `BCDF-GHJK` and typed any way; the device
+  code is `{userCode}.{256 random bits}`, and the grain keeps only the secret's SHA-256, so the user
+  code on a screen is half a credential. Both live ten minutes and the response says `interval: 5`;
+  ⚠ the grain measures the ten minutes from its own clock, as it does the interval, because an
+  expiry instant stamped by the host would tie every code's life to the skew between two machines.
+  A poll is answered from the grain, in one turn, with exactly § 3.5's errors — `authorization_pending`,
+  `slow_down` (and five seconds more for this and every later poll, as state), `access_denied`,
+  `expired_token` — and `invalid_grant` for a code that is spent or never existed; a guessed secret
+  moves nothing. The person's half is the identity app's device page (`/device-code`, reached from
+  `/device/verify`, which only redirects): enter the code (`/api/device/lookup`, anonymous), sign in
+  through the existing flow if the cookie is not a complete sign-in, then allow or deny
+  (`/api/device/decision`, the cookie's session and never the body, and only from the page's
+  origin) — both in the `code-verify` bucket, and a user code is answered once. An approved code is
+  redeemed at `/token` like an authorization code — the token session id recorded before the session
+  opens, a second redemption refused and the first session revoked
+  (`RevocationReason.DeviceCodeReuseDetected`) — with one deliberate difference: the device's token
+  session is bound to **itself**, not to the browser session that approved it, because the device
+  and the browser are two machines and a sign-out on the phone must not end a build agent's CLI.
+  `/revoke` (RFC 7009) takes a refresh token and ends its token session (`RevokedByClient`) — what
+  `cyc logout` calls — and answers an access token `unsupported_token_type`, since access tokens stay
+  irrevocable. `DeviceFlowOverHttpTests` pins every answer over the wire; `DeviceFlowThroughTheSdkTests`
+  runs the SDK's credential, its refresh and its sign-out against the host. #43.
 - **Keys persist on the development run, and nowhere else.** `IdentityHostOptions.DevelopmentKeyDirectory`
   keeps the ES256 signing key, the encryption key and the data-protection ring on disk under the
   AppHost's `.identity/`, so a restart does not sign every portal tab out — both keys, because codes
@@ -211,9 +239,12 @@ naming one id. `ClientResolver` in the identity host is the reader.
   #88's closing criterion (a person signs in, holds a `cyc.api` token, reads through the gateway,
   refreshes, survives a restart) was also performed by hand on the dev run, in a browser, on
   2026-09-15.
-- **Device authorization and token exchange (RFC 8693)** remain owed as before — the device flow
-  needs a verification page and a code store, and token exchange has `ITokenExchange` built and
-  waiting on `/token` to accept the grant.
+- ~~Device authorization~~ — landed with #43, in the bullet above. **Token exchange (RFC 8693)**
+  remains owed: `ITokenExchange` is built and waiting on `/token` to accept the grant. ⚠ And two
+  things the device flow leaves: a tenant-registered device client (the request would need a
+  `tenant` to resolve one in), and the device page saying *where* the request came from — the
+  flow's known weakness is a person talked into typing somebody else's code, and the page's only
+  defence today is naming the account being lent and the scopes.
 - **`displayName` on the tenant body.** `ScopeManagerService.ReadTenantAsync` renders the slug as
   `name` and `ScopeSnapshot` carries no display name, so `GET /tenants/{t}` has none and the
   portal's context bar (`portal/libs/shell`, `context-bar.ts`) shows `contoso` rather than
@@ -323,8 +354,32 @@ The progress UI, the welcome mail and the optional cluster are the part
 of [06 § Tenant lifecycle](06-tenancy-and-resource-model.md)'s operation still owed; the step record
 in the grain is its seed.
 
-**Invited.** An existing tenant owner invites an email into their tenant with a role. The invitee
+**Invited.** An existing tenant owner invites an email into their tenant ~~with a role~~. The invitee
 either signs in (if they already have a user in *another* tenant — see below) or signs up.
+
+⚠ **What shipped with #43, and the two places it departs from that sentence.** An owner `POST`s
+`{ "email" }` to `/tenants/{t}/providers/CyberCloud.Identity/invitations` at the gateway;
+`InvitationService` in the resource manager checks `assignRole` on the tenant, fully consistent, and
+`IInvitationGrain` (durable, `invite/{id:N}`) claims the address in the tenant's email index, creates
+the user in `Invited`, keeps the SHA-256 of a 256-bit secret and mails a seven-day link —
+`{identity app}/invitation?tenant=…&invitation=…&token=…` — through the platform's own communication
+service (`CommunicationInvitationDelivery`, a template in code, and a refusing seam on a silo with no
+route). The identity app's invitation page describes the link and accepts it: the person chooses a
+name and a password, the link is spent (a second use is told it was used), the user becomes
+`Active`, and they are signed in with a session stamped password + delivered code, because the link
+went to the address and nowhere else. (1) **No role.** The invitation makes a member; what they may
+do is a role assignment — the existing `PUT …/roleAssignments/{name}`, which `GrainPrincipalDirectory`
+now answers for the invited user — so a role is granted, audited and revoked in one place.
+(2) **"Signs in" is not what an existing person does.** Under the one-user-one-tenant rule below, a
+colleague who already has an account elsewhere is still a new user *here*: the same page asks them
+for a name and a password for this organisation and leaves the other account untouched. Re-inviting
+an address whose user is still `Invited` reuses that user, which is how an expired link is replaced;
+inviting a member is a conflict. `InvitationsOverHttpTests` (Mailpit) and `CyberCloud.Isolation §
+InvitationTests` pin both halves. ⚠ **Owed:** a registered Communication template in place of the
+code template ([17 § The outbound carrier](17-communication-and-email.md)); a passkey at acceptance
+(the page takes a password, the sign-up page's passkey ceremony is not reused yet); listing and
+revoking pending invitations; the portal page that sends one (#22); and the welcome mail, which is
+still [§ the owed paragraph above](#sign-up-and-tenant-creation)'s.
 
 ⚠ **A user belongs to exactly one tenant.** The same human with accounts in two tenants has two user
 objects with two GUIDs and (probably) the same email. This is Azure's guest-user problem and Azure's

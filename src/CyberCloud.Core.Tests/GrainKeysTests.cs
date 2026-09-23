@@ -651,6 +651,60 @@ public class GrainKeysTests {
         }
     }
 
+    // ── #43: the device authorization and the invitation ───────────────────────────────────────
+
+    [Fact]
+    public void ADeviceAuthorizationIsKeyedByItsUserCodesDigestAndNeverSpellsTheCode() {
+        var key = GrainKeys.DeviceAuthorization("BCDFGHJK");
+
+        key.ShouldStartWith("device/");
+        key.Length.ShouldBe("device/".Length + GrainKeys.DigestLength);
+        // ⚠ The code is a credential for its ten minutes; a key that spelled it would print it in
+        // every log line that prints a grain id — GrainKeys.DeviceAuthorization's remarks.
+        key.ShouldNotContain("BCDFGHJK");
+        key.ShouldNotBe(GrainKeys.DeviceAuthorization("BCDFGHJL"));
+
+        var parsed = GrainKeys.Parse(key).GetValueOrThrow();
+
+        parsed.Kind.ShouldBe(GrainKeyKind.DeviceAuthorization);
+        parsed.ToString().ShouldBe(key);
+
+        // Normalized input only: a separator, lower case or a control character is the caller's
+        // bug, and a digest of the un-normalized form would be a second grain for one code.
+        Should.Throw<ArgumentException>(static () => GrainKeys.DeviceAuthorization("BCDF-GHJK"));
+        Should.Throw<ArgumentException>(static () => GrainKeys.DeviceAuthorization("bcdfghjk"));
+        Should.Throw<ArgumentException>(static () => GrainKeys.DeviceAuthorization(""));
+        GrainKeys.Parse("device/" + Resource.ToString("N")).IsFailure.ShouldBeTrue();
+        GrainKeys.Parse("device/" + parsed.Digest.ToUpperInvariant()).IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void TheInvitationShapeIsInviteSlashIdAndRoundTrips() {
+        GrainKeys.Invitation(Resource).ShouldBe("invite/0a1b2c3d4e5f40718293a4b5c6d7e8f9");
+
+        var parsed = GrainKeys.Parse(GrainKeys.Invitation(Resource)).GetValueOrThrow();
+
+        parsed.Kind.ShouldBe(GrainKeyKind.Invitation);
+        parsed.Id.ShouldBe(Resource);
+        GrainKeys.Parse("invite/" + Resource.ToString("D")).IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void TheTwoIssue43ShapesCollideWithNoneOfTheOthers() {
+        foreach (var id in Corpus.ResourceIds(300, 4300)) {
+            var device = GrainKeys.DeviceAuthorization(id.Id.ToString("N")[..8].ToUpperInvariant());
+            var invite = GrainKeys.Invitation(id.Id);
+
+            GrainKeys.IsTenantQualificationSafe(device).ShouldBeTrue();
+            GrainKeys.IsTenantQualificationSafe(invite).ShouldBeTrue();
+
+            foreach (var other in Corpus.EveryGrainKeyShapeFor(id)) {
+                other.ShouldNotBe(device);
+                other.ShouldNotBe(invite);
+            }
+        }
+    }
+
     // ── The watch index: hash(subscriptionId + canonical type), per subscription ──────────────
 
     [Fact]
@@ -1422,9 +1476,11 @@ public class GrainKeysTests {
     ///     derivation: every member but <see cref="GrainKeyKind.None" /> is a key. The number here
     ///     has to move with the enum AND with the prose — it was twenty-six on #39's branch, and
     ///     twenty-nine on the day it merged beside #90's <see cref="GrainKeyKind.WatchIndex" /> and
-    ///     #94's two, which is the drift the prose paragraph describes happening to itself.
+    ///     #94's two, which is the drift the prose paragraph describes happening to itself; thirty-one
+    ///     since #43's <see cref="GrainKeyKind.DeviceAuthorization" /> and
+    ///     <see cref="GrainKeyKind.Invitation" />.
     /// </summary>
     [Fact]
-    public void TheClosedSetHasTwentyNineShapes() =>
-        Enum.GetValues<GrainKeyKind>().Count(static x => x != GrainKeyKind.None).ShouldBe(29);
+    public void TheClosedSetHasThirtyOneShapes() =>
+        Enum.GetValues<GrainKeyKind>().Count(static x => x != GrainKeyKind.None).ShouldBe(31);
 }

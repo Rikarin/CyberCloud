@@ -274,8 +274,21 @@ public static class CyberCloudResourceExtensions {
             .WithEnvironment(
                 "CyberCloud__Communication__Smtp__UnsubscribeMailbox",
                 CyberCloudResources.PlatformUnsubscribeMailbox
+            )
+            // #43: the page an invitation mail links to — the identity app's dev server. Beside the
+            // relay because the invitation route is taken only when there is one; without the page
+            // the silo keeps the refusing seam and says which setting is missing.
+            .WithEnvironment(
+                InvitationPageVariable,
+                $"http://localhost:{CyberCloudResources.IdentityAppPort.ToString(CultureInfo.InvariantCulture)}"
             );
     }
+
+    /// <summary>
+    ///     <c>CyberCloud:Identity:Invitations:PageBaseUri</c>, as an environment variable — where an
+    ///     invitation mail's link points. <c>SiloIdentityComposition.AddSiloIdentity</c> reads it.
+    /// </summary>
+    public const string InvitationPageVariable = "CyberCloud__Identity__Invitations__PageBaseUri";
 
     /// <summary>
     ///     Points a silo at the region's ClickHouse, so its <c>ResourceGraphProjector</c> has

@@ -23,7 +23,8 @@ public class CyberCloudCredentialOptions {
 
     /// <summary>
     ///     Where refresh tokens are kept between processes. Defaults to
-    ///     <see cref="TokenCache.CreatePersistent" />, which is the OS keychain and never a file.
+    ///     <see cref="TokenCache.CreatePersistent" />: the OS keychain, or an owner-only file where
+    ///     there is none (<see cref="FileTokenCache" />).
     /// </summary>
     /// <remarks>
     ///     ⚠ Set to <see cref="TokenCache.None" /> for a credential that must leave no trace — a CI

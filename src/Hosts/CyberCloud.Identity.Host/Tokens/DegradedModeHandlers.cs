@@ -1,5 +1,9 @@
 using CyberCloud.Identity.Contracts;
+using CyberCloud.Authorization.Contracts;
+using CyberCloud.Core;
+using CyberCloud.Core.Resources;
 using CyberCloud.Identity.Host.Api;
+using CyberCloud.Identity.Host.RateLimiting;
 using CyberCloud.Identity.SignIn;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
@@ -7,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
 using OpenIddict.Server.AspNetCore;
+using Orleans.Multitenant;
 using System.Globalization;
 using System.Security.Claims;
 using static OpenIddict.Server.OpenIddictServerEvents;
@@ -51,11 +56,19 @@ namespace CyberCloud.Identity.Host.Tokens;
 ///         (<c>ValidateCodeVerifier</c>) has no such filter and stays OpenIddict's.
 ///     </para>
 ///     <para>
-///         The device flow's two handlers still answer <c>temporarily_unavailable</c>, naming what
-///         the flow is waiting on — a verification page and a code store. ⚠ Rejecting in the
-///         <i>validation</i> stage is what keeps <c>/authorize</c> from being an open redirect:
-///         OpenIddict sends an error to the client's redirect URI only for a request whose
-///         validation succeeded, and renders an error page for one whose validation did not.
+///         ⚠ Rejecting in the <i>validation</i> stage is what keeps <c>/authorize</c> from being an
+///         open redirect: OpenIddict sends an error to the client's redirect URI only for a request
+///         whose validation succeeded, and renders an error page for one whose validation did not.
+///     </para>
+///     <para>
+///         ⚠ <b>The device flow (#43) is the second store degraded mode takes away, and
+///         <see cref="StoreDeviceCodes" /> is the store.</b> OpenIddict cannot make a user code
+///         self-contained — a person types it — and without a token store it neither remembers the
+///         codes nor knows whether anybody has answered. The four device handlers here put
+///         <c>IDeviceAuthorizationGrain</c> in that place: the codes are minted and recorded at
+///         generation, a poll is answered from the grain at validation with exactly the error RFC
+///         8628 § 3.5 names, and the answer itself is taken by the verification page's own API,
+///         not by OpenIddict's verification endpoint, which only redirects to the page.
 ///     </para>
 /// </remarks>
 public static class DegradedModeHandlers {
@@ -94,10 +107,13 @@ public static class DegradedModeHandlers {
         ValidateEndSessionRequest.Descriptor,
         KeepAccessTokenToTheClosedSet.Descriptor,
         StampAuthorizationCodeId.Descriptor,
-        RefuseDeviceAuthorizationRequests.Descriptor,
-        RefuseEndUserVerificationRequests.Descriptor,
-        RefuseDeviceCodeStorage.GenerateDescriptor,
-        RefuseDeviceCodeStorage.ValidateDescriptor
+        ValidateDeviceAuthorizationRequest.Descriptor,
+        AttachPollingInterval.Descriptor,
+        ValidateEndUserVerificationRequest.Descriptor,
+        StoreDeviceCodes.GenerateDescriptor,
+        StoreDeviceCodes.ValidateDescriptor,
+        ValidateRevocationRequest.Descriptor,
+        RevokeTokenSession.Descriptor
     ];
 
     // ── /authorize ─────────────────────────────────────────────────────────────────────────────
@@ -341,8 +357,9 @@ public static class DegradedModeHandlers {
 
     /// <summary>
     ///     Validates a token request, by grant: client credentials through
-    ///     <see cref="TokenApi.AuthenticateClientAsync" />; a code or a refresh token by resolving
-    ///     the client the token was minted for and checking it is the one asking.
+    ///     <see cref="TokenApi.AuthenticateClientAsync" />; a code, a refresh token or an approved
+    ///     device code by resolving the client the token was minted for and checking it is the one
+    ///     asking.
     /// </summary>
     /// <param name="api">The client-credentials decision.</param>
     /// <param name="clients">The client resolver.</param>
@@ -446,7 +463,9 @@ public static class DegradedModeHandlers {
                 return;
             }
 
-            if (context.Request.IsAuthorizationCodeGrantType() || context.Request.IsRefreshTokenGrantType()) {
+            if (context.Request.IsAuthorizationCodeGrantType()
+                || context.Request.IsRefreshTokenGrantType()
+                || context.Request.IsDeviceCodeGrantType()) {
                 await ValidateTokenBearingGrantAsync(context);
 
                 return;
@@ -454,8 +473,8 @@ public static class DegradedModeHandlers {
 
             context.Reject(
                 OpenIddictConstants.Errors.UnsupportedGrantType,
-                "The device and token-exchange grants are owed — docs/plan/11 § Protocol, and TokenApi's "
-                + "remarks say what each is waiting on."
+                "The token-exchange grant is owed — docs/plan/11 § Protocol, and TokenApi's remarks say "
+                + "what it is waiting on."
             );
         }
 
@@ -476,7 +495,8 @@ public static class DegradedModeHandlers {
         }
 
         async Task ValidateTokenBearingGrantAsync(ValidateTokenRequestContext context) {
-            if ((context.AuthorizationCodePrincipal ?? context.RefreshTokenPrincipal) is not { } principal
+            if ((context.AuthorizationCodePrincipal ?? context.RefreshTokenPrincipal ?? context.DeviceCodePrincipal) is not
+                { } principal
                 || !Guid.TryParseExact(principal.GetClaim(AccessTokenClaims.TenantId), "N", out var tenantId)) {
                 context.Reject(OpenIddictConstants.Errors.InvalidGrant, "The token names no tenant.");
 
@@ -557,7 +577,9 @@ public static class DegradedModeHandlers {
 
             var grant = context.Request.IsRefreshTokenGrantType()
                 ? GrantType.RefreshToken
-                : GrantType.AuthorizationCode;
+                : context.Request.IsDeviceCodeGrantType()
+                    ? GrantType.DeviceAuthorization
+                    : GrantType.AuthorizationCode;
 
             if (!client.AllowedGrants.Contains(grant)) {
                 context.Reject(OpenIddictConstants.Errors.UnauthorizedClient, "This client may not use this grant.");
@@ -845,7 +867,12 @@ public static class DegradedModeHandlers {
         public ValueTask HandleAsync(GenerateTokenContext context) {
             ArgumentNullException.ThrowIfNull(context);
 
-            if (context.TokenType is not null
+            // ⚠ The code and nothing else. The tree-wide reformat (e21006d) rewrote this test to
+            // `TokenType is not null`, which stamped every token — and an access token carrying
+            // `oi_tkn_id` is outside AccessTokenClaims.Permitted, since KeepAccessTokenToTheClosedSet
+            // keeps OpenIddict's private claims. GrantsOverHttpTests' closed-set assertion went red
+            // on the merged tree; #43's device grant found it on the way past.
+            if (context.TokenType is OpenIddictConstants.TokenTypeIdentifiers.Private.AuthorizationCode
                 && context.Principal is { } principal
                 && string.IsNullOrEmpty(principal.GetTokenId())) {
                 principal.SetTokenId(Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture));
@@ -855,40 +882,144 @@ public static class DegradedModeHandlers {
         }
     }
 
-    // ── The device flow, still owed ────────────────────────────────────────────────────────────
+    // ── The device flow — RFC 8628, #43 ────────────────────────────────────────────────────────
 
-    /// <summary>The device flow, until there is a verification page and a code store.</summary>
-    public sealed class RefuseDeviceAuthorizationRequests
+    /// <summary>
+    ///     Validates a device authorization request: a first-party client registered for the grant,
+    ///     public and presenting no secret, asking for scopes it may have — and inside the per-IP
+    ///     budget for starting device sign-ins.
+    /// </summary>
+    /// <param name="clients">The first-party registrations — the only clients the grant is open to.</param>
+    /// <param name="limiter">The per-IP counters <c>IdentityRateLimits</c> shares with the pages.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>First-party clients only, because there is no tenant to resolve anything else in.</b>
+    ///         A tenant-registered client lives in its tenant's <c>IClientIndexGrain</c>, and a device
+    ///         authorization request names no tenant — the person picks one on the sign-in page after
+    ///         the codes exist. <c>cyc-cli</c> is the one client registered for
+    ///         <see cref="GrantType.DeviceAuthorization" />; a tenant's own device client is a
+    ///         registration that would need a <c>tenant</c> parameter here, and it is owed rather than
+    ///         guessed at.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Counted per IP before a code is drawn.</b> Every request writes a hot-tier grain
+    ///         that lives ten minutes, so a caller looping on <c>/device</c> is a caller filling the
+    ///         tier; <see cref="IdentityRateLimits.DeviceAuthorization" /> caps that per address. The
+    ///         refusal is a <c>429</c> with <c>Retry-After</c> in the pages' own shape, written here
+    ///         and marked handled, because RFC 8628 defines no error for this endpoint being busy and
+    ///         <c>slow_down</c> belongs to the token endpoint.
+    ///     </para>
+    /// </remarks>
+    public sealed class ValidateDeviceAuthorizationRequest(FirstPartyClients clients, IdentityRateLimiter limiter)
         : IOpenIddictServerHandler<ValidateDeviceAuthorizationRequestContext> {
-        /// <summary>The registration.</summary>
+        /// <summary>The registration — after OpenIddict's own parameter and scope checks.</summary>
         public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
             OpenIddictServerHandlerDescriptor.CreateBuilder<ValidateDeviceAuthorizationRequestContext>()
-                .UseSingletonHandler<RefuseDeviceAuthorizationRequests>()
-                .SetOrder(int.MinValue + 100_000)
+                .UseSingletonHandler<ValidateDeviceAuthorizationRequest>()
+                .SetOrder(OpenIddictServerHandlers.Device.ValidateDeviceAuthentication.Descriptor.Order + 1_000)
                 .SetType(OpenIddictServerHandlerType.Custom)
                 .Build();
 
         /// <inheritdoc />
-        public ValueTask HandleAsync(ValidateDeviceAuthorizationRequestContext context) {
+        public async ValueTask HandleAsync(ValidateDeviceAuthorizationRequestContext context) {
             ArgumentNullException.ThrowIfNull(context);
 
-            context.Reject(
-                OpenIddictConstants.Errors.TemporarilyUnavailable,
-                "The device-authorization flow is not served yet: it needs the verification page and "
-                + "a store for device and user codes. docs/plan/11 § Protocol."
-            );
+            if (context.Transaction.GetHttpRequest()?.HttpContext is { } http) {
+                var decision = await limiter.EvaluateAsync(
+                    IdentityRateLimits.DeviceAuthorization,
+                    http,
+                    context.CancellationToken
+                );
 
-            return ValueTask.CompletedTask;
+                if (!decision.Allowed) {
+                    await IdentityRateLimits.WriteRefusalAsync(http, decision);
+                    context.HandleRequest();
+
+                    return;
+                }
+            }
+
+            if (clients.Find(context.ClientId) is not { } client) {
+                context.Reject(OpenIddictConstants.Errors.InvalidClient, "The client is not registered.");
+
+                return;
+            }
+
+            if (!client.AllowedGrants.Contains(GrantType.DeviceAuthorization)) {
+                context.Reject(
+                    OpenIddictConstants.Errors.UnauthorizedClient,
+                    "This client may not use the device authorization grant."
+                );
+
+                return;
+            }
+
+            if (client.IsPublicClient && !string.IsNullOrEmpty(context.Request.ClientSecret)) {
+                context.Reject(OpenIddictConstants.Errors.InvalidClient, "A public client must not send a client_secret.");
+
+                return;
+            }
+
+            if (context.Request.GetScopes().Any(x => !client.AllowedScopes.Contains(x, StringComparer.Ordinal))) {
+                context.Reject(
+                    OpenIddictConstants.Errors.InvalidScope,
+                    "A requested scope is not allowed for this client."
+                );
+            }
         }
     }
 
-    /// <summary>The device flow's other half, refused for the same reason.</summary>
-    public sealed class RefuseEndUserVerificationRequests
+    /// <summary>
+    ///     Adds <c>interval</c> to a device authorization response — RFC 8628 § 3.2, which OpenIddict
+    ///     does not write on its own.
+    /// </summary>
+    /// <remarks>
+    ///     Optional in the RFC, with five seconds as the client's default when absent; said out loud
+    ///     anyway, because the grain holds the same number and a client that read it knows what
+    ///     <c>slow_down</c> is measured against.
+    /// </remarks>
+    public sealed class AttachPollingInterval : IOpenIddictServerHandler<ApplyDeviceAuthorizationResponseContext> {
+        /// <summary>The registration — before the JSON body is written.</summary>
+        public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
+            OpenIddictServerHandlerDescriptor.CreateBuilder<ApplyDeviceAuthorizationResponseContext>()
+                .UseSingletonHandler<AttachPollingInterval>()
+                .SetOrder(
+                    OpenIddictServerAspNetCoreHandlers.ProcessJsonResponse<ApplyDeviceAuthorizationResponseContext>
+                        .Descriptor.Order
+                    - 1_000
+                )
+                .SetType(OpenIddictServerHandlerType.Custom)
+                .Build();
+
+        /// <inheritdoc />
+        public ValueTask HandleAsync(ApplyDeviceAuthorizationResponseContext context) {
+            ArgumentNullException.ThrowIfNull(context);
+
+            if (string.IsNullOrEmpty(context.Response.Error) && !string.IsNullOrEmpty(context.Response.DeviceCode)) {
+                context.Response[OpenIddictConstants.Parameters.Interval] =
+                    (long)DeviceCodes.PollingInterval.TotalSeconds;
+            }
+
+            return default;
+        }
+    }
+
+    /// <summary>
+    ///     Accepts every end-user verification request, because the endpoint only redirects to the
+    ///     page — <c>IdentityEndpoints.MapDeviceVerification</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Nothing is checked here and nothing needs to be: the passthrough answers a redirect to
+    ///     the identity app's device page and touches no grain, and the page's own API is where a
+    ///     code is looked up — behind the per-IP bucket. A lookup here would be an unmetered code
+    ///     guess on a <c>GET</c>.
+    /// </remarks>
+    public sealed class ValidateEndUserVerificationRequest
         : IOpenIddictServerHandler<ValidateEndUserVerificationRequestContext> {
         /// <summary>The registration.</summary>
         public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
             OpenIddictServerHandlerDescriptor.CreateBuilder<ValidateEndUserVerificationRequestContext>()
-                .UseSingletonHandler<RefuseEndUserVerificationRequests>()
+                .UseSingletonHandler<ValidateEndUserVerificationRequest>()
                 .SetOrder(int.MinValue + 100_000)
                 .SetType(OpenIddictServerHandlerType.Custom)
                 .Build();
@@ -897,50 +1028,63 @@ public static class DegradedModeHandlers {
         public ValueTask HandleAsync(ValidateEndUserVerificationRequestContext context) {
             ArgumentNullException.ThrowIfNull(context);
 
-            context.Reject(
-                OpenIddictConstants.Errors.TemporarilyUnavailable,
-                "The device-authorization flow is not served yet, so there is no user code to verify. "
-                + "docs/plan/11 § Protocol."
-            );
-
-            return ValueTask.CompletedTask;
+            return default;
         }
     }
 
     /// <summary>
-    ///     The device flow's codes, which in degraded mode the server cannot store or look up
-    ///     without help — refused at generation and at validation.
+    ///     The device flow's store: mints and records the two codes at generation, and answers a
+    ///     device code's poll at validation — RFC 8628 § 3.5, from <c>IDeviceAuthorizationGrain</c>.
     /// </summary>
+    /// <param name="devices">The grains a code names.</param>
     /// <remarks>
-    ///     ⚠
-    ///     <b>
-    ///         Required at start-up, not at request time, and that is the one place the pattern on
-    ///         this file breaks.
-    ///     </b> A device code and a user code are the two tokens OpenIddict cannot make
-    ///     self-contained — a user types the user code into a page, so something has to map it back
-    ///     — and its post-configuration refuses to build the server options at all when the device
-    ///     flow is allowed and no custom <c>ValidateTokenContext</c> and <c>GenerateTokenContext</c>
-    ///     handler exists:
-    ///     <i>
-    ///         "No custom token validation handler was found. When enabling the
-    ///         degraded mode, a custom 'IOpenIddictServerHandler&lt;ValidateTokenContext&gt;' must be
-    ///         implemented to handle device and user codes"
-    ///     </i>.
-    ///     <c>OpenIddictServerOptionsTests.TheOptionsCanBeMaterialisedAtAll</c> found it. ⚠ Both
-    ///     handlers act on those two token types and no other — an access token, a code and a
-    ///     refresh token pass through untouched, which is what makes them safe to register beside
-    ///     the grants that are served.
+    ///     <para>
+    ///         ⚠ <b>Required at start-up, and now serving rather than refusing.</b> OpenIddict's
+    ///         post-configuration refuses the whole server when the device flow is allowed in
+    ///         degraded mode and no custom <c>GenerateTokenContext</c> and <c>ValidateTokenContext</c>
+    ///         handler exists — <c>OpenIddictServerOptionsTests.TheOptionsCanBeMaterialisedAtAll</c>.
+    ///         Both halves act on device and user codes and nothing else; an access token, a code and a
+    ///         refresh token pass through untouched.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Generation: the device code first, and the user code is the one it drew.</b>
+    ///         OpenIddict generates the device code before the user code in one sign-in, so the device
+    ///         code's generation draws the user code, records the authorization under it, and leaves
+    ///         it in the transaction for the user code's generation to hand out. Setting the token
+    ///         here is what keeps OpenIddict's own <c>GenerateIdentityModelToken</c> from minting a
+    ///         JWT in its place — it leaves an attached token alone. ⚠ The user code is handed out in
+    ///         its display form (<see cref="DeviceCodes.Display" />), because OpenIddict's own
+    ///         formatting is switched off with token storage.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Validation: one error per RFC 8628 § 3.5 response, exactly.</b> A poll is answered
+    ///         by the grain, and every outcome but approval is a rejection with the RFC's own error
+    ///         code — <c>authorization_pending</c>, <c>slow_down</c>, <c>access_denied</c>,
+    ///         <c>expired_token</c> — which OpenIddict's token endpoint passes through
+    ///         (<c>NormalizeErrorResponse</c> rewrites only <c>invalid_token</c>). An approval becomes
+    ///         the device code's principal — tenant, person and presenter — so
+    ///         <see cref="ValidateTokenRequest" /> resolves the client in the tenant the person chose,
+    ///         and the grain is redeemed only in the passthrough, after every check that could still
+    ///         refuse, for the reason that validator gives about rotations.
+    ///     </para>
+    ///     <para>
+    ///         A user code presented to OpenIddict's own verification endpoint is refused quietly —
+    ///         the endpoint does not require one, so the refusal only means OpenIddict attaches no
+    ///         principal — because the lookup is the page API's, behind the per-IP bucket.
+    ///     </para>
     /// </remarks>
-    public sealed class RefuseDeviceCodeStorage
+    public sealed class StoreDeviceCodes(DeviceFlow devices)
         : IOpenIddictServerHandler<GenerateTokenContext>, IOpenIddictServerHandler<ValidateTokenContext> {
-        const string Reason =
-            "The device-authorization flow is not served yet: its device and user codes need a store "
-            + "this host does not have. docs/plan/11 § Protocol.";
+        /// <summary>Where the device code's generation leaves the user code it drew.</summary>
+        public const string UserCodeProperty = "cybercloud.device.user-code";
+
+        /// <summary>What a device code this server cannot find answers — RFC 6749 § 5.2's <c>invalid_grant</c>.</summary>
+        public const string UnknownDeviceCode = "The device code is not valid.";
 
         /// <summary>The generation half.</summary>
         public static OpenIddictServerHandlerDescriptor GenerateDescriptor { get; } =
             OpenIddictServerHandlerDescriptor.CreateBuilder<GenerateTokenContext>()
-                .UseSingletonHandler<RefuseDeviceCodeStorage>()
+                .UseSingletonHandler<StoreDeviceCodes>()
                 .SetOrder(int.MinValue + 100_000)
                 .SetType(OpenIddictServerHandlerType.Custom)
                 .Build();
@@ -948,38 +1092,284 @@ public static class DegradedModeHandlers {
         /// <summary>The validation half.</summary>
         public static OpenIddictServerHandlerDescriptor ValidateDescriptor { get; } =
             OpenIddictServerHandlerDescriptor.CreateBuilder<ValidateTokenContext>()
-                .UseSingletonHandler<RefuseDeviceCodeStorage>()
+                .UseSingletonHandler<StoreDeviceCodes>()
                 .SetOrder(int.MinValue + 100_000)
                 .SetType(OpenIddictServerHandlerType.Custom)
                 .Build();
 
         /// <inheritdoc />
-        public ValueTask HandleAsync(GenerateTokenContext context) {
+        public async ValueTask HandleAsync(GenerateTokenContext context) {
             ArgumentNullException.ThrowIfNull(context);
 
-            if (context.TokenType is OpenIddictConstants.TokenTypeIdentifiers.Private.DeviceCode
-                or OpenIddictConstants.TokenTypeIdentifiers.Private.UserCode) {
-                context.Reject(OpenIddictConstants.Errors.TemporarilyUnavailable, Reason);
-            }
+            switch (context.TokenType) {
+                case OpenIddictConstants.TokenTypeIdentifiers.Private.DeviceCode: {
+                    var principal = context.Principal;
+                    var begun = await devices.BeginAsync(
+                        new() {
+                            ClientId = context.ClientId ?? string.Empty,
+                            Scopes = [.. principal?.GetScopes() ?? []],
+                            // ⚠ The configured lifetime, not the principal's expiry: OpenIddict
+                            // stamps that from its own TimeProvider, and the grain measures the
+                            // ten minutes from the silo's clock (DeviceAuthorizationRequest.Lifetime).
+                            Lifetime = DeviceCodes.Lifetime,
+                            Interval = DeviceCodes.PollingInterval
+                        },
+                        context.CancellationToken
+                    );
 
-            return ValueTask.CompletedTask;
+                    if (begun.TryGetError(out var error)) {
+                        context.Reject(
+                            OpenIddictConstants.Errors.ServerError,
+                            "The device sign-in could not be started. Try again. " + error.Code
+                        );
+
+                        return;
+                    }
+
+                    var (deviceCode, userCode) = begun.GetValueOrThrow();
+                    context.Transaction.Properties[UserCodeProperty] = userCode;
+                    context.Token = deviceCode;
+
+                    return;
+                }
+
+                case OpenIddictConstants.TokenTypeIdentifiers.Private.UserCode:
+                    if (context.Transaction.Properties.TryGetValue(UserCodeProperty, out var drawn)
+                        && drawn is string code) {
+                        // ⚠ Formatted here: OpenIddict's own formatting is off in degraded mode —
+                        // IdentityHostOpenIddict says why — so the dash is ours to add.
+                        context.Token = DeviceCodes.Display(code);
+                    } else {
+                        context.Reject(
+                            OpenIddictConstants.Errors.ServerError,
+                            "A user code was asked for with no device code drawn before it."
+                        );
+                    }
+
+                    return;
+            }
         }
 
         /// <inheritdoc />
-        public ValueTask HandleAsync(ValidateTokenContext context) {
+        public async ValueTask HandleAsync(ValidateTokenContext context) {
             ArgumentNullException.ThrowIfNull(context);
 
-            // Only when the caller could ONLY be presenting a device or user code. A validation that
-            // would also accept an access token or a refresh token is somebody else's to answer.
-            if (context.ValidTokenTypes.Count > 0
-                && context.ValidTokenTypes.All(static x =>
-                    x is OpenIddictConstants.TokenTypeIdentifiers.Private.DeviceCode
-                        or OpenIddictConstants.TokenTypeIdentifiers.Private.UserCode
-                )) {
-                context.Reject(OpenIddictConstants.Errors.TemporarilyUnavailable, Reason);
+            if (context.ValidTokenTypes.Count == 0) {
+                return;
             }
 
-            return ValueTask.CompletedTask;
+            if (context.ValidTokenTypes.All(static x => x is OpenIddictConstants.TokenTypeIdentifiers.Private.UserCode)) {
+                context.Reject(
+                    OpenIddictConstants.Errors.InvalidToken,
+                    "User codes are looked up by the verification page, not by this endpoint."
+                );
+
+                return;
+            }
+
+            if (!context.ValidTokenTypes.All(static x => x is OpenIddictConstants.TokenTypeIdentifiers.Private.DeviceCode)) {
+                return;
+            }
+
+            var poll = await devices.PollAsync(context.Token);
+
+            switch (poll.Outcome) {
+                case DevicePollOutcome.Pending:
+                    context.Reject(
+                        OpenIddictConstants.Errors.AuthorizationPending,
+                        "The person has not answered yet. Poll again after the interval."
+                    );
+
+                    return;
+                case DevicePollOutcome.SlowDown:
+                    context.Reject(
+                        OpenIddictConstants.Errors.SlowDown,
+                        "Polled inside the interval. The interval is now "
+                        + ((long)poll.Interval.TotalSeconds).ToString(CultureInfo.InvariantCulture)
+                        + " seconds."
+                    );
+
+                    return;
+                case DevicePollOutcome.Denied:
+                    context.Reject(OpenIddictConstants.Errors.AccessDenied, "The person declined the sign-in.");
+
+                    return;
+                case DevicePollOutcome.Expired:
+                    context.Reject(
+                        OpenIddictConstants.Errors.ExpiredToken,
+                        "The device code expired. Start the sign-in again."
+                    );
+
+                    return;
+                // ⚠ A spent code is carried through as well — DevicePollOutcome.Redeemed says why:
+                // the passthrough's redemption is what refuses it, and what revokes the session the
+                // first redemption opened.
+                case DevicePollOutcome.Approved or DevicePollOutcome.Redeemed when poll.Approval is { } approval:
+                    context.Principal = Principal(approval, poll);
+
+                    return;
+                default:
+                    context.Reject(OpenIddictConstants.Errors.InvalidGrant, UnknownDeviceCode);
+
+                    return;
+            }
+        }
+
+        /// <summary>
+        ///     The device code's principal once the person approved: who, in which tenant, for which
+        ///     client and scopes. Nothing here reaches a token — <c>TokenApi.MintForDeviceCodeAsync</c>
+        ///     builds the access token from the grain's approval, as the code exchange builds it from
+        ///     the code's facts.
+        /// </summary>
+        static ClaimsPrincipal Principal(DeviceApproval approval, DevicePoll poll) {
+            var identity = new ClaimsIdentity(
+                "CyberCloud.DeviceCode",
+                AccessTokenClaims.Subject,
+                "urn:cybercloud:roles-are-not-in-the-token"
+            );
+
+            identity.AddClaim(new Claim(AccessTokenClaims.Subject, approval.UserId.ToString("N", CultureInfo.InvariantCulture)));
+            identity.AddClaim(new Claim(AccessTokenClaims.SubjectType, SubjectTypes.User));
+            identity.AddClaim(
+                new Claim(AccessTokenClaims.TenantId, approval.TenantId.ToString("N", CultureInfo.InvariantCulture))
+            );
+
+            var principal = new ClaimsPrincipal(identity);
+
+            principal.SetTokenType(OpenIddictConstants.TokenTypeIdentifiers.Private.DeviceCode);
+            principal.SetPresenters(poll.ClientId);
+            principal.SetScopes(poll.Scopes);
+
+            return principal;
+        }
+    }
+
+    // ── /revoke — RFC 7009, #43 ────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Validates a revocation request: a client that names itself, a refresh token, and — for a
+    ///     confidential client — its secret.
+    /// </summary>
+    /// <param name="clients">The client resolver.</param>
+    /// <param name="secrets">The vault seam a confidential client's secret is checked through.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Refresh tokens only, and an access token is told so rather than quietly
+    ///         accepted.</b> <see cref="AccessTokenPolicy.AccessTokensAreRevocable" /> is
+    ///         <see langword="false" />: the gateway validates a JWT locally for its ten minutes and
+    ///         nothing here can reach into that. RFC 7009 § 2.2.1 gives the answer for a server that
+    ///         cannot revoke a type — <c>unsupported_token_type</c> — and giving it is what keeps this
+    ///         endpoint from being the "revocation endpoint that silently did nothing to an
+    ///         already-issued access token" <c>IdentityHostOpenIddict</c> refused to publish.
+    ///     </para>
+    ///     <para>
+    ///         Ordered after OpenIddict's <c>ValidateAuthentication</c>, which has decrypted the token
+    ///         and put it on the context; OpenIddict's own <c>ValidateAuthorizedParty</c> after this
+    ///         holds the presenter to the <c>client_id</c>, so a client cannot revoke another
+    ///         client's chain. <c>client_id</c> is required here because that check is skipped for a
+    ///         request that names none.
+    ///     </para>
+    /// </remarks>
+    public sealed class ValidateRevocationRequest(IClientResolver clients, IClientSecretSeam secrets)
+        : IOpenIddictServerHandler<ValidateRevocationRequestContext> {
+        /// <summary>The registration.</summary>
+        public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
+            OpenIddictServerHandlerDescriptor.CreateBuilder<ValidateRevocationRequestContext>()
+                .UseSingletonHandler<ValidateRevocationRequest>()
+                .SetOrder(OpenIddictServerHandlers.Revocation.ValidateAuthentication.Descriptor.Order + 500)
+                .SetType(OpenIddictServerHandlerType.Custom)
+                .Build();
+
+        /// <inheritdoc />
+        public async ValueTask HandleAsync(ValidateRevocationRequestContext context) {
+            ArgumentNullException.ThrowIfNull(context);
+
+            if (string.IsNullOrEmpty(context.ClientId)) {
+                context.Reject(OpenIddictConstants.Errors.InvalidRequest, "The 'client_id' parameter is required.");
+
+                return;
+            }
+
+            if (context.GenericTokenPrincipal is not { } principal) {
+                context.Reject(OpenIddictConstants.Errors.InvalidToken, "The token could not be read.");
+
+                return;
+            }
+
+            if (!principal.HasTokenType(OpenIddictConstants.TokenTypeIdentifiers.RefreshToken)) {
+                context.Reject(
+                    OpenIddictConstants.Errors.UnsupportedTokenType,
+                    "Only refresh tokens are revocable here. An access token lives ten minutes and is "
+                    + "not revocable by design — revoke the refresh token, which ends the session."
+                );
+
+                return;
+            }
+
+            if (!Guid.TryParseExact(principal.GetClaim(AccessTokenClaims.TenantId), "N", out var tenantId)
+                || await clients.ResolveAsync(tenantId, context.ClientId, context.CancellationToken) is not { } client) {
+                context.Reject(OpenIddictConstants.Errors.InvalidClient, "The client is not registered.");
+
+                return;
+            }
+
+            if (client.IsPublicClient) {
+                if (!string.IsNullOrEmpty(context.Request.ClientSecret)) {
+                    context.Reject(OpenIddictConstants.Errors.InvalidClient, "A public client must not send a client_secret.");
+                }
+
+                return;
+            }
+
+            var verified = string.IsNullOrEmpty(context.Request.ClientSecret) || client.ClientSecretRef.IsEmpty
+                ? Result<bool>.Success(false)
+                : await secrets.VerifyAsync(client.ClientSecretRef, context.Request.ClientSecret, context.CancellationToken);
+
+            if (!verified.IsSuccess || !verified.GetValueOrThrow()) {
+                context.Reject(OpenIddictConstants.Errors.InvalidClient, ValidateTokenRequest.ClientNotAuthenticated);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Revokes the token session a refresh token belongs to — which is what ends the chain, since
+    ///     the refresh token is only the session grain's handle in OpenIddict's envelope.
+    /// </summary>
+    /// <param name="grains">The cluster. ⚠ Every reference goes through <c>ForTenant</c>.</param>
+    /// <param name="logger">Where the revocation is recorded.</param>
+    /// <remarks>
+    ///     ⚠ OpenIddict's own <c>RevokeToken</c> carries <c>RequireDegradedModeDisabled</c> — it marks
+    ///     a row in a token store this host does not have — so without this handler the endpoint
+    ///     would answer <c>200</c> and revoke nothing. The token's <c>sid</c> is the token session
+    ///     (<c>TokenApi</c>'s shape), and revoking it with <see cref="RevocationReason.RevokedByClient" />
+    ///     makes the next refresh of any generation of the chain <c>invalid_grant</c>.
+    /// </remarks>
+    public sealed class RevokeTokenSession(IGrainFactory grains, ILogger<RevokeTokenSession> logger)
+        : IOpenIddictServerHandler<HandleRevocationRequestContext> {
+        /// <summary>The registration — after OpenIddict attaches the principal.</summary>
+        public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
+            OpenIddictServerHandlerDescriptor.CreateBuilder<HandleRevocationRequestContext>()
+                .UseSingletonHandler<RevokeTokenSession>()
+                .SetOrder(OpenIddictServerHandlers.Revocation.AttachPrincipal.Descriptor.Order + 1_000)
+                .SetType(OpenIddictServerHandlerType.Custom)
+                .Build();
+
+        /// <inheritdoc />
+        public async ValueTask HandleAsync(HandleRevocationRequestContext context) {
+            ArgumentNullException.ThrowIfNull(context);
+
+            if (context.GenericTokenPrincipal is not { } principal
+                || !Guid.TryParseExact(principal.GetClaim(AccessTokenClaims.TenantId), "N", out var tenantId)
+                || !Guid.TryParseExact(principal.GetClaim(AccessTokenClaims.SessionId), "N", out var sessionId)) {
+                // RFC 7009 § 2.2: a token the server cannot act on is answered as revoked.
+                return;
+            }
+
+            await grains.ForTenant(TenantHint.Qualifier(tenantId))
+                .GetGrain<ISessionGrain>(GrainKeys.Session(sessionId))
+                .RevokeAsync(RevocationReason.RevokedByClient);
+
+            GrantLog.RevokedByClient(logger, tenantId, sessionId);
         }
     }
 }

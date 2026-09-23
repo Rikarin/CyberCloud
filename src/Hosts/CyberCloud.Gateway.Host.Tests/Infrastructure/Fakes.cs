@@ -738,3 +738,32 @@ sealed class RecordingResourceGraphQuery : IResourceGraphQuery {
         return Task.FromResult(OnQuery(request));
     }
 }
+
+/// <summary>An <see cref="IInvitationManager" /> that records what stage 8 handed it (#43).</summary>
+sealed class RecordingInvitationManager : IInvitationManager {
+    /// <summary>Every request, in order.</summary>
+    public ConcurrentQueue<InvitationManagerRequest> Requests { get; } = new();
+
+    /// <summary>What <see cref="InviteAsync" /> answers. Default: a pending invitation for the address.</summary>
+    public Func<InvitationManagerRequest, Result<InvitationSnapshot>> OnInvite { get; set; } =
+        static request => Result<InvitationSnapshot>.Success(
+            new() {
+                InvitationId = Guid.Parse("11111111-2222-4333-8444-555555555555"),
+                TenantId = request.TenantId,
+                UserId = Guid.Parse("66666666-7777-4888-8999-aaaaaaaaaaaa"),
+                Email = request.Email.ToLowerInvariant(),
+                Status = "pending",
+                ExpiresAt = DateTimeOffset.UnixEpoch.AddDays(7)
+            }
+        );
+
+    /// <inheritdoc />
+    public Task<Result<InvitationSnapshot>> InviteAsync(
+        InvitationManagerRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+        Requests.Enqueue(request);
+        return Task.FromResult(OnInvite(request));
+    }
+}

@@ -312,6 +312,21 @@ public sealed class IsolationCluster : IAsyncLifetime {
     public IRoleAssignmentManager Roles { get; private set; } = null!;
 
     /// <summary>
+    ///     The invitation path (#43), held the way the gateway holds it: the real
+    ///     <c>InvitationService</c> and its <c>assignRole</c> check over the real engine, and the
+    ///     gateway's own <c>GrainInvitationIssuer</c> over the real invitation grain.
+    /// </summary>
+    public IInvitationManager Invitations { get; private set; } = null!;
+
+    /// <summary>
+    ///     Every invitation the silo mailed, as the delivery seam received it — so a test can follow
+    ///     the link. ⚠ Static for <see cref="Vault" />'s reason: the silo resolves its own container.
+    ///     The mail itself is <c>Identity.Host.Tests</c>' <c>InvitationsOverHttpTests</c>, against
+    ///     Mailpit; this suite is about the membership and the grant.
+    /// </summary>
+    public static CapturingInvitationDelivery InvitationMail { get; } = new();
+
+    /// <summary>
     ///     The cross-resource seam of docs/plan/08 § What the resource manager deliberately does not
     ///     do, over the real authorizer. <c>Views.For(owner)</c> is what a reconcile pass for
     ///     <c>owner</c> receives; <c>CrossResourceViewTests</c> and <c>ResourceWatchTests</c> attack
@@ -707,6 +722,13 @@ public sealed class IsolationCluster : IAsyncLifetime {
             NullLogger<RoleAssignmentService>.Instance
         );
 
+        Invitations = new InvitationService(
+            new ReBacScopeAuthorizer(cluster.GrainFactory, NullLogger<ReBacScopeAuthorizer>.Instance),
+            new GrainInvitationIssuer(cluster.GrainFactory),
+            cluster.GrainFactory,
+            NullLogger<InvitationService>.Instance
+        );
+
         // ⚠ The subscriptions and their groups are real records now, because step 1 of the write path
         // reads ISubscriptionGrain and answers 404 for a subscription the caller's tenant does not
         // have. That check is what closes the /tenants/{mine}/subscriptions/{theirs}/… hole
@@ -846,6 +868,10 @@ public sealed class IsolationCluster : IAsyncLifetime {
                     services.AddSingleton<ISecretResolver>(Vault);
                     services.AddSingleton<ISecretWriter>(Vault);
 
+                    // #43: FIRST, so AddCyberCloudIdentity's TryAdd keeps it — the invitation's mail,
+                    // captured for the link.
+                    services.AddSingleton<IInvitationDeliverySeam>(InvitationMail);
+
                     services.TryAddSingleton<ILoggerFactory>(static _ => NullLoggerFactory.Instance);
                 }
             );
@@ -868,4 +894,17 @@ public sealed class IsolationCluster : IAsyncLifetime {
 public sealed class IsolationSuite : ICollectionFixture<IsolationCluster> {
     /// <summary>The collection name.</summary>
     public const string Name = "isolation";
+}
+
+/// <summary>An <see cref="IInvitationDeliverySeam" /> that keeps every invitation it is handed (#43).</summary>
+public sealed class CapturingInvitationDelivery : IInvitationDeliverySeam {
+    /// <summary>Every delivery, oldest first.</summary>
+    public System.Collections.Concurrent.ConcurrentQueue<InvitationDelivery> Deliveries { get; } = new();
+
+    /// <inheritdoc />
+    public Task<Result> DeliverAsync(InvitationDelivery delivery, CancellationToken cancellationToken = default) {
+        Deliveries.Enqueue(delivery);
+
+        return Task.FromResult(Result.Success);
+    }
 }

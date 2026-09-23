@@ -181,6 +181,20 @@ opens exactly one edge: a call **into the platform tenant's `IMessageGrain`** is
 Nothing else in the platform tenant is reachable that way — its tuple store above all — and
 [11 § Sign-up](11-identity.md) and the separator's own remarks carry what the edge costs.
 
+**The second thing the platform sends: invitations (#43).** `IInvitationGrain`, in the inviting
+tenant, mails its link through the same platform service and across the same edge —
+`CommunicationInvitationDelivery`, idempotent on the invitation id so a retry after a relay outage is
+one mail. In Development the silo routes it through the platform's service when a relay is
+configured and `CyberCloud:Identity:Invitations:PageBaseUri` names the identity app (the AppHost
+sets both); anywhere else it takes the configured OTP route, and with neither it refuses and says
+which setting is missing — there is no console fallback, because the link makes a member.
+`Identity.Host.Tests § InvitationsOverHttpTests` sends it to Mailpit and follows the link back out.
+⚠ **The message is a template in code, not a `templates` resource**, and that is owed: the
+platform's service has no template registered and nothing bootstraps one, so the subject, the body
+and the link's line are rendered by `CommunicationInvitationDelivery.Render`. Moving it to a
+registered template is `PlatformBootstrapTask` writing one beside the service, and a localized body
+is the same change.
+
 ⚠ **What remains — the part of #93 that is still open — each with its row in
 `charts/bundle/bundle.yaml § owed`.** The relay itself
 (`the-platform-has-no-mta`): a warmed outbound pool with PTR records, feedback-loop registrations,

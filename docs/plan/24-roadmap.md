@@ -173,6 +173,27 @@ against open-schema stubs on a lane with no Kube-OVN; and "from Vault" — this 
 seam by design and the credential's path out is `listKeys` reading the operator's Secret
 (`PostgresServers.ClusterJson`). The `psql` is the test's, not the cloud terminal's.
 
+⚠ **Steps 7 and 8 run under test since 2026-09-23 (#43)**, and neither needs a cluster. *Invite a
+colleague and grant them Reader on one resource group*: an owner `POST`s an address to
+`/tenants/{t}/providers/CyberCloud.Identity/invitations` (a reserved namespace like the resource
+graph's, so no resource type and no change to [§ What has landed](#what-has-landed--recounted-2026-09-18)'s
+count); `InvitationService` checks `assignRole` on the tenant, the invitation grain creates an
+invited user and mails a one-time, seven-day link through the platform's communication service, and
+the link opens the identity app's invitation page, where a new person — or one who already has a
+user in another organisation, since a user is per tenant — chooses a name and a password and lands as
+a member with **no role**; Reader on the group is the existing role-assignment `PUT`, which the
+invited user now answers for. `Identity.Host.Tests § InvitationsOverHttpTests` sends the mail to a
+Mailpit Testcontainer and follows the link out of it (a second use refused); `CyberCloud.Isolation §
+InvitationTests` runs invite → accept → Reader → `Check` through the real manager and engine.
+*Do all of it again from `cyc`*: `cyc login --device-code` is RFC 8628 against the identity host
+([21 § Signing in and out](21-cli-and-sdks.md)), and `cyc logout` revokes;
+`Identity.Host.Tests § DeviceFlowOverHttpTests` and `§ DeviceFlowThroughTheSdkTests` run both
+against the real host. What neither test is: a person in a browser — the device page and the
+invitation page are pinned by their Jest specs and by the HTTP suites against their APIs, and the
+rehearsal on a dev run by hand is what remains; the portal has no page that sends an invitation
+(#22), so on a dev run the invite is `cyc rest` or `curl` against the gateway; and "all of it again"
+is only as whole as the steps before it, which still need a cluster somebody prepared (#24/#95).
+
 Plus: three design-partner tenants running for four weeks with no cross-tenant incident; the chaos
 invariants green; the load suite meeting the [00](00-vision-and-principles.md) budgets at 10 % of
 target scale.

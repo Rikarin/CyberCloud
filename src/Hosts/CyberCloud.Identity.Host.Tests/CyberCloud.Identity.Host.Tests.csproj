@@ -20,6 +20,11 @@
                                           code, /authorize, /token with PKCE, the refresh cookie and
                                           its Origin rule, the replay, /logout, and a restart on the
                                           same key directory
+        DeviceFlowOverHttpTests         — RFC 8628 (#43): /device, the device page's API, every
+                                          answer /token gives a poll, the refresh and /revoke
+        DeviceFlowThroughTheSdkTests    — the SDK's device credential, refresh and sign-out, the
+                                          protocol half of `cyc login` and `cyc logout`, against
+                                          this host
 
       ⚠ NO TestServer AND NO WebApplicationFactory, AND THAT IS A DELIBERATE CHOICE RATHER THAN A
       MISSING PACKAGE. Both would need Microsoft.AspNetCore.Mvc.Testing, which docs/plan/02's
@@ -41,6 +46,8 @@
         <PackageReference Include="Shouldly"/>
         <PackageReference Include="Microsoft.Orleans.TestingHost"/>
         <PackageReference Include="Orleans.Multitenant"/>
+        <!-- #43: the invitation suite's Mailpit — the generic builder, as CyberCloud.Communication.Tests uses, because there is no Testcontainers.Mailpit. -->
+        <PackageReference Include="Testcontainers"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -57,6 +64,10 @@
         <ProjectReference Include="../../CyberCloud.Identity/CyberCloud.Identity.csproj"/>
         <ProjectReference Include="../../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
         <ProjectReference Include="../../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+        <!-- #43: cyc login's protocol half, run against this host rather than a scripted server — DeviceFlowThroughTheSdkTests says what the scripted one had agreed to that this host did not. -->
+        <ProjectReference Include="../../CyberCloud.Sdk/CyberCloud.Sdk.csproj"/>
+        <!-- #43: the mail path the invitation suite runs for real — the communication module and its SMTP carrier, in the silo. -->
+        <ProjectReference Include="../../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
     </ItemGroup>
 
 </Project>

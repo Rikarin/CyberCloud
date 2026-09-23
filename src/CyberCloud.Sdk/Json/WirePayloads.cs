@@ -38,6 +38,12 @@ public sealed class OpenIdConfiguration {
     [JsonPropertyName("userinfo_endpoint")]
     public string? UserInfoEndpoint { get; init; }
 
+    /// <summary>
+    ///     The revocation endpoint — RFC 7009, refresh tokens only on this platform. <c>cyc logout</c>.
+    /// </summary>
+    [JsonPropertyName("revocation_endpoint")]
+    public string? RevocationEndpoint { get; init; }
+
     /// <summary>The grants the server advertises. Checked before a credential attempts one.</summary>
     [JsonPropertyName("grant_types_supported")]
     public IReadOnlyList<string>? GrantTypesSupported { get; init; }

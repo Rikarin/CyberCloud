@@ -70,6 +70,10 @@ public interface IUserGrain : IGrainWithStringKey {
     /// <param name="email">The new address, normalized.</param>
     Task<Result<UserProfile>> ChangeEmailAsync(string email);
 
+    /// <summary>Renames the user — the name an invited person chose on accepting (#43).</summary>
+    /// <param name="displayName">The name, trimmed. Empty is refused: the id_token and the portal show it.</param>
+    Task<Result<UserProfile>> SetDisplayNameAsync(string displayName);
+
     // ── Credentials ────────────────────────────────────────────────────────────────────────────
 
     /// <summary>

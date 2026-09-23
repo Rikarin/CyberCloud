@@ -1055,6 +1055,25 @@ public sealed class HostCompositionTests {
             .ShouldBeOfType<CyberCloud.Identity.Seams.DevelopmentOtpDelivery>()
             .AlsoMails.ShouldBeTrue("the code goes to Mailpit's inbox as well as the console");
 
+        // #43: invitation mail goes the same way once the page its link opens is named — and not
+        // before, because a link to nowhere is worse than a refusal that names the setting.
+        withRelay.Services.GetRequiredService<CyberCloud.Identity.Contracts.IInvitationDeliverySeam>()
+            .ShouldBeOfType<CyberCloud.Identity.Seams.UnavailableInvitationDelivery>("no page is named yet");
+
+        await using var withRelayAndPage = await SiloComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                $"--{SiloIdentityComposition.InvitationPageKey}=http://localhost:4201",
+                .. SmtpRelayArguments
+            ]
+        );
+
+        withRelayAndPage.Services.GetRequiredService<CyberCloud.Identity.Contracts.IInvitationDeliverySeam>()
+            .ShouldBeOfType<CyberCloud.Identity.Seams.CommunicationInvitationDelivery>();
+
         await using var staging = await SiloComposition.BuildAsync(
             [
                 "--environment", "Staging",
@@ -1074,6 +1093,13 @@ public sealed class HostCompositionTests {
         staging.Services.GetRequiredService<CyberCloud.Identity.Contracts.IOtpDeliverySeam>()
             .ShouldBeOfType<CyberCloud.Identity.Seams.UnavailableOtpDelivery>(
                 "a relay is not a route — CyberCloud:Identity:OtpDelivery is the operator's to set"
+            );
+
+        bare.Services.GetRequiredService<CyberCloud.Identity.Contracts.IInvitationDeliverySeam>()
+            .ShouldBeOfType<CyberCloud.Identity.Seams.UnavailableInvitationDelivery>("no relay, no invitation mail");
+        staging.Services.GetRequiredService<CyberCloud.Identity.Contracts.IInvitationDeliverySeam>()
+            .ShouldBeOfType<CyberCloud.Identity.Seams.UnavailableInvitationDelivery>(
+                "the codes' rule: a relay is not a route outside Development"
             );
     }
 

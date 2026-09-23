@@ -83,5 +83,21 @@ public static class CyberCloudScopes {
     ///     caller's permissions outside the token — <i>"Roles and permissions are not in the token"</i>
     ///     — so there is one scope rather than one per permission.
     /// </summary>
-    public const string Default = "https://api.cybercloud.io/.default";
+    /// <remarks>
+    ///     ⚠ <c>cyc.api</c>, the name the identity host registers (<c>IdentityHostOpenIddict.Scopes.Api</c>),
+    ///     and not the Azure-shaped <c>https://api.cybercloud.io/.default</c> it was: OpenIddict
+    ///     refuses a scope it was not told about with <c>invalid_scope</c>, in degraded mode too, so
+    ///     every grant this SDK asked for against the real host was refused. #43.
+    /// </remarks>
+    public const string Default = "cyc.api";
+
+    /// <summary>
+    ///     The scope that makes the identity server issue a refresh token — OIDC's
+    ///     <c>offline_access</c>. The two interactive credentials add it on their own.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Without it there is no refresh token, so nothing reaches the token cache and the next
+    ///     process signs in again — which is <c>cyc login</c> doing nothing at all.
+    /// </remarks>
+    public const string OfflineAccess = "offline_access";
 }

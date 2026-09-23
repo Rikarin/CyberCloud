@@ -552,13 +552,23 @@ public sealed record SignInOutcome {
 }
 
 /// <summary>
-///     An invitation of an email address into a tenant. docs/plan/11 § Sign-up and tenant creation,
-///     the invited path.
+///     An invitation of an email address into a tenant, as <see cref="IInvitationGrain" /> holds it.
+///     docs/plan/11 § Sign-up and tenant creation, the invited path.
 /// </summary>
+/// <remarks>
+///     ⚠ <b>No role, and the member that carried one is gone (#43).</b> This record had a
+///     <c>Relation</c> — "the ReBAC relation to grant on acceptance" — written before anything used
+///     it. An invitation makes a <i>member</i>: a user in the tenant, and no tuple. What they may do
+///     is a role assignment, the separate request docs/plan/07 § Azure RBAC has and
+///     <c>IRoleAssignmentManager</c> serves, so there is one way to grant a role and it is checked,
+///     audited and revoked in one place. <c>[Id(3)]</c> stays out of circulation; nothing was ever
+///     written under it — no release exists — which is the argument the top of this file makes for
+///     retiring a shape before the first one.
+/// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Identity.Invitation")]
 public sealed record Invitation {
-    /// <summary>The user object created for the invitee, in <see cref="UserStatus.Invited" />.</summary>
+    /// <summary>The user object created for the invitee, in <see cref="UserStatus.Invited" /> until they accept.</summary>
     [Id(0)]
     public Guid UserId { get; init; }
 
@@ -570,13 +580,29 @@ public sealed record Invitation {
     [Id(2)]
     public string Email { get; init; } = string.Empty;
 
-    /// <summary>The ReBAC relation to grant on acceptance — <c>owner</c>, <c>contributor</c>.</summary>
-    [Id(3)]
-    public string Relation { get; init; } = string.Empty;
-
     /// <summary>When the invitation stops being redeemable.</summary>
     [Id(4)]
     public DateTimeOffset ExpiresAt { get; init; }
+
+    /// <summary>The invitation's own id — the grain key, and what its link carries beside the secret.</summary>
+    [Id(5)]
+    public Guid InvitationId { get; init; }
+
+    /// <summary>Where it stands. One past <see cref="ExpiresAt" /> reads <see cref="InvitationStatus.Expired" />.</summary>
+    [Id(6)]
+    public InvitationStatus Status { get; init; }
+
+    /// <summary>The user who sent it.</summary>
+    [Id(7)]
+    public Guid InvitedBy { get; init; }
+
+    /// <summary>The tenant's name as the mail and the page show it — its slug.</summary>
+    [Id(8)]
+    public string TenantName { get; init; } = string.Empty;
+
+    /// <summary>When it was accepted, or <see langword="null" />.</summary>
+    [Id(9)]
+    public DateTimeOffset? AcceptedAt { get; init; }
 }
 
 /// <summary>

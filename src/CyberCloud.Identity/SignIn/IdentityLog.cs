@@ -429,4 +429,40 @@ public static partial class IdentityLog {
         Guid subjectId,
         string grantType
     );
+
+    /// <summary>An invitation was created and its link mailed (#43).</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">The tenant invited into.</param>
+    /// <param name="invitationId">The invitation — its id, never its link.</param>
+    /// <param name="invitedBy">Who sent it.</param>
+    [LoggerMessage(
+        EventId = 1125,
+        Level = LogLevel.Information,
+        Message = "Invitation {InvitationId} into tenant {TenantId} sent by {InvitedBy}."
+    )]
+    public static partial void InvitationSent(ILogger logger, Guid tenantId, Guid invitationId, Guid invitedBy);
+
+    /// <summary>An invitation was recorded and its mail refused — the sender's retry re-sends.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">The tenant.</param>
+    /// <param name="invitationId">The invitation.</param>
+    /// <param name="reason">The seam's refusal, which names what is missing.</param>
+    [LoggerMessage(
+        EventId = 1126,
+        Level = LogLevel.Warning,
+        Message = "Invitation {InvitationId} into tenant {TenantId} was not delivered: {Reason}"
+    )]
+    public static partial void InvitationNotDelivered(ILogger logger, Guid tenantId, Guid invitationId, string reason);
+
+    /// <summary>An invitation was accepted: the invited user is an active member.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">The tenant.</param>
+    /// <param name="invitationId">The invitation.</param>
+    /// <param name="userId">The member it made.</param>
+    [LoggerMessage(
+        EventId = 1127,
+        Level = LogLevel.Information,
+        Message = "Invitation {InvitationId} into tenant {TenantId} accepted by user {UserId}."
+    )]
+    public static partial void InvitationAccepted(ILogger logger, Guid tenantId, Guid invitationId, Guid userId);
 }
