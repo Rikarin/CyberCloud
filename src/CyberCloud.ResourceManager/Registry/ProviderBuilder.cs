@@ -152,10 +152,26 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         ResourceSchema? request = null,
         ResourceSchema? response = null,
         bool longRunning = false,
-        Type? handler = null
+        Type? handler = null,
+        string entryPoint = ""
     ) {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(permission);
+        ArgumentNullException.ThrowIfNull(entryPoint);
+
+        // ⚠ One server per action. An entry point is what serves an action that has to run as the
+        // caller (ActionRegistration.EntryPoint); a handler beside it would be a second answer to
+        // "what runs this", and a long-running entry-point action would advertise an operation that
+        // the operation grain would drive through the type's reconciler instead.
+        if (entryPoint.Length > 0 && (handler is not null || longRunning)) {
+            throw new ArgumentException(
+                $"'{name}' names the entry point '{entryPoint}' and also "
+                + (handler is not null ? $"the handler '{handler.FullName}'" : "longRunning: true")
+                + ". An entry-point action is synchronous and has no handler: the gateway routes it to "
+                + "the entry point and nothing else runs it.",
+                nameof(entryPoint)
+            );
+        }
 
         // ⚠ Checked here rather than where the handler is resolved, and the difference is when you
         // find out. A Type that does not implement the interface is a typo in a declaration, and a
@@ -230,7 +246,11 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         // would make declaring the shape a prerequisite for having the action at all.
         draft.Actions.Add(
             new(name, kind, permission, secret) {
-                Request = request, Response = response, LongRunning = longRunning, HandlerType = handler
+                Request = request,
+                Response = response,
+                LongRunning = longRunning,
+                HandlerType = handler,
+                EntryPoint = entryPoint
             }
         );
 

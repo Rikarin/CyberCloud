@@ -112,6 +112,9 @@ import type {
   RecoveryServicesVaultsRecoverResult,
   RecoveryServicesVaultsResource,
   ResourceGroupCreateContent,
+  ResourcesDeploymentsData,
+  ResourcesDeploymentsResource,
+  ResourcesDeploymentsWhatIfContent,
   SampleWidgetsData,
   SampleWidgetsPingContent,
   SampleWidgetsPingResult,
@@ -1243,6 +1246,36 @@ export class CyberCloudApi {
   /** recover — permission 'write'. */
   recoverBackupVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: RecoveryServicesVaultsRecoverContent): Promise<ApiResponse<RecoveryServicesVaultsRecoverResult>> {
     return this.transport.send<RecoveryServicesVaultsRecoverResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.RecoveryServices/vaults/${CyberCloudApi.segment(resourceName)}/recover`, body: content });
+  }
+
+  /** Reads one Deployment. */
+  getDeployment(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<ResourcesDeploymentsResource>> {
+    return this.transport.send<ResourcesDeploymentsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Resources/deployments/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Deployment. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateDeployment(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: ResourcesDeploymentsData): Promise<ApiResponse<ResourcesDeploymentsResource>> {
+    return this.transport.send<ResourcesDeploymentsResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Resources/deployments/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Deployment. A merge patch: what is not set is not changed. */
+  updateDeployment(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: Partial<ResourcesDeploymentsData>): Promise<ApiResponse<ResourcesDeploymentsResource>> {
+    return this.transport.send<ResourcesDeploymentsResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Resources/deployments/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Deployment. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteDeployment(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Resources/deployments/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Deployments in a resource group. ⚠ A short page never means "that is all there is". */
+  listDeployment(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<ResourcesDeploymentsResource>>> {
+    return this.transport.send<Page<ResourcesDeploymentsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Resources/deployments`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** whatIf — permission 'write'. */
+  whatIfDeployment(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: ResourcesDeploymentsWhatIfContent): Promise<ApiResponse<unknown>> {
+    return this.transport.send<unknown>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Resources/deployments/${CyberCloudApi.segment(resourceName)}/whatIf`, body: content });
   }
 
   /** Reads one Widget. */

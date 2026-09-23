@@ -374,6 +374,52 @@ public sealed class ResourceGrain(
     }
 
     /// <inheritdoc />
+    public async Task<Result> RecordReadOnlyAsync(ImmutableDictionary<string, string> values) {
+        ArgumentNullException.ThrowIfNull(values);
+
+        if (!state.State.Exists) {
+            return NotFound();
+        }
+
+        var superset = Parse(state.State.Superset).GetValueOrThrow();
+
+        foreach (var (pointer, json) in values.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
+            JsonNode? value;
+
+            try {
+                value = JsonNode.Parse(json);
+            } catch (JsonException exception) {
+                return Result.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    $"The value recorded at '{pointer}' is not JSON: {exception.Message}",
+                    pointer
+                );
+            }
+
+            if (value is null) {
+                JsonPointer.Remove(superset, pointer);
+            } else {
+                JsonPointer.Write(superset, pointer, value);
+            }
+        }
+
+        var next = JsonCanonical.Of(superset).ToJsonString();
+
+        if (string.Equals(next, state.State.Superset, StringComparison.Ordinal)) {
+            return Result.Success;
+        }
+
+        // ⚠ The body changed, so the etag and the version move — a client holding the etag from the
+        // PUT that started the run is holding a representation that no longer exists. ModifiedBy
+        // stays: the platform recording a run is not somebody modifying the resource.
+        state.State.Superset = next;
+        state.State.Version++;
+        state.State.Etag = NextEtag();
+        await state.WriteStateAsync();
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
     public async Task<Result> SetLockAsync(LockLevel level) {
         if (!state.State.Exists) {
             return NotFound();

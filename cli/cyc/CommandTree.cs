@@ -54,7 +54,8 @@ static class CommandTree {
     ///     generator can refuse the provider name instead.
     /// </remarks>
     static readonly string[] ReservedGroups = [
-        "login", "logout", "account", "rest", "config", "completion", "complete", "extension", "version", "graph"
+        "login", "logout", "account", "rest", "config", "completion", "complete", "extension", "version", "graph",
+        "deployment"
     ];
 
     /// <summary>

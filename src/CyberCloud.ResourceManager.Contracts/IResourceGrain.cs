@@ -291,6 +291,40 @@ public interface IResourceGrain : IGrainWithStringKey {
     /// </param>
     Task<Result> ReportObservedAsync(ObservedState observed);
 
+    /// <summary>
+    ///     Writes server-owned values into the resource's body — the read-only properties a caller
+    ///     may not send and the resource's own operation fills in.
+    /// </summary>
+    /// <param name="values">
+    ///     Each read-only property's JSON Pointer, against its value as JSON text. A pointer the body
+    ///     already holds is overwritten.
+    /// </param>
+    /// <returns>
+    ///     Success, <see cref="ErrorCode.ResourceNotFound" /> for a resource that does not exist, or
+    ///     <see cref="ErrorCode.InvalidRequestBody" /> for a value that is not JSON.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The one writer of a read-only property, and it is the operation that owns the
+    ///         resource.</b> The write path refuses a body carrying one (<c>ResourceSchema.Validate</c>),
+    ///         so without this nothing could ever set one; <c>CyberCloud.Resources/deployments</c>' run
+    ///         record is the first type to declare any. The caller passes only pointers its type
+    ///         declares <c>ReadOnly</c> — the grain cannot tell, because it holds pointers and not a
+    ///         schema.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A later <c>PUT</c> removes them</b>, because every declared pointer is replaced by a
+    ///         <c>PUT</c> and a read-only one is declared. For a deployment that is the right answer —
+    ///         a new run replaces the old one's record — and the new run writes its own when it ends.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Not refused by a lock.</b> A lock refuses a tenant's writes; this is the platform
+    ///         recording what it did, and a <c>ReadOnly</c> lock that froze the record of a deployment
+    ///         that ran before it was set would make the record lie.
+    ///     </para>
+    /// </remarks>
+    Task<Result> RecordReadOnlyAsync(ImmutableDictionary<string, string> values);
+
     /// <summary>Sets or clears the lock at this scope.</summary>
     /// <param name="level">The lock. <see cref="LockLevel.None" /> clears it.</param>
     /// <remarks>

@@ -7986,6 +7986,139 @@
         }
       ]
     },
+    "CyberCloud.Resources/deployments": {
+      "resourceType": "CyberCloud.Resources/deployments",
+      "apiVersion": "2026-08-01",
+      "title": "Deployment",
+      "plural": "Deployments",
+      "summary": "A template of resources deployed in dependency order, each through the write path as its creator.",
+      "overrideKey": "CyberCloud.Resources/deployments@2026-08-01",
+      "coveredPointers": [
+        "/properties",
+        "/properties/error",
+        "/properties/outputResources",
+        "/properties/parameters",
+        "/properties/rollback",
+        "/properties/steps",
+        "/properties/template"
+      ],
+      "supportsTags": false,
+      "requiresCluster": false,
+      "clusterIdPointer": "",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The template, its parameters, and the record of the last run."
+        },
+        {
+          "jsonPointer": "/properties/error",
+          "name": "error",
+          "label": "Error",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "Why the last run failed, naming the resource that stopped it. Empty when it did not.",
+          "readOnly": true
+        },
+        {
+          "jsonPointer": "/properties/outputResources",
+          "name": "outputResources",
+          "label": "Output resources",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "Every resource the last run created or updated, in the order it did.",
+          "readOnly": true
+        },
+        {
+          "jsonPointer": "/properties/parameters",
+          "name": "parameters",
+          "label": "Parameters",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "The parameter values, as JSON text: { \"name\": { \"value\": … } }.",
+          "maxLength": 262144
+        },
+        {
+          "jsonPointer": "/properties/rollback",
+          "name": "rollback",
+          "label": "Rollback",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "What a rollback would remove. Rollback is recorded and never performed.",
+          "readOnly": true
+        },
+        {
+          "jsonPointer": "/properties/steps",
+          "name": "steps",
+          "label": "Steps",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "One line per template resource, in dependency order: its state, its id and the operation that drove it.",
+          "readOnly": true
+        },
+        {
+          "jsonPointer": "/properties/template",
+          "name": "template",
+          "label": "Template",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The template, as JSON text: parameters, variables and resources, each with type, name, apiVersion, properties and dependsOn. Expressions are parameters(), variables(), resourceId() and concat(); anything else is refused with that list.",
+          "maxLength": 1048576
+        }
+      ],
+      "actions": [
+        {
+          "name": "whatIf",
+          "label": "What if",
+          "permission": "write",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/properties",
+              "name": "properties",
+              "label": "Properties",
+              "control": "xui-group",
+              "required": true
+            },
+            {
+              "jsonPointer": "/properties/parameters",
+              "name": "parameters",
+              "label": "Parameters",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/properties/template",
+              "name": "template",
+              "label": "Template",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        }
+      ]
+    },
     "CyberCloud.Sample/widgets": {
       "resourceType": "CyberCloud.Sample/widgets",
       "apiVersion": "2026-08-01",

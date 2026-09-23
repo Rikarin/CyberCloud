@@ -3338,6 +3338,68 @@ type BackupVaultRecoverResult struct {
 	Source string `json:"source"`
 }
 
+// DeploymentData is Deployment: the body a caller writes. A template of resources deployed in dependency order, each through the write path as its creator.
+type DeploymentData struct {
+	// The template, its parameters, and the record of the last run.
+	Properties *DeploymentProperties `json:"properties,omitempty"`
+}
+
+// DeploymentProperties is The template, its parameters, and the record of the last run.
+type DeploymentProperties struct {
+	// Why the last run failed, naming the resource that stopped it. Empty when it did not.
+	Error *string `json:"error,omitempty"`
+	// Every resource the last run created or updated, in the order it did.
+	OutputResources []string `json:"outputResources,omitempty"`
+	// The parameter values, as JSON text: { "name": { "value": … } }.
+	Parameters *string `json:"parameters,omitempty"`
+	// What a rollback would remove. Rollback is recorded and never performed.
+	Rollback *string `json:"rollback,omitempty"`
+	// One line per template resource, in dependency order: its state, its id and the operation that drove it.
+	Steps []string `json:"steps,omitempty"`
+	// The template, as JSON text: parameters, variables and resources, each with type, name, apiVersion, properties and dependsOn. Expressions are parameters(), variables(), resourceId() and concat(); anything else is refused with that list.
+	Template string `json:"template"`
+}
+
+// MarshalJSON writes the struct with its read-only members cleared: Error, OutputResources, Rollback, Steps. The write path refuses a read-only member rather than ignoring it.
+func (v DeploymentProperties) MarshalJSON() ([]byte, error) {
+	type plain DeploymentProperties
+	stripped := plain(v)
+	stripped.Error = nil
+	stripped.OutputResources = nil
+	stripped.Rollback = nil
+	stripped.Steps = nil
+	return json.Marshal(stripped)
+}
+
+// DeploymentResource is one Deployment, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type DeploymentResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data DeploymentData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *DeploymentResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// DeploymentWhatIfContent is the parameters of whatIf.
+type DeploymentWhatIfContent struct {
+	// The template to evaluate and its parameters.
+	Properties DeploymentWhatIfContentProperties `json:"properties"`
+}
+
+// DeploymentWhatIfContentProperties is The template to evaluate and its parameters.
+type DeploymentWhatIfContentProperties struct {
+	// The parameter values, as JSON text.
+	Parameters *string `json:"parameters,omitempty"`
+	// The template, as JSON text — the same shape a PUT takes.
+	Template string `json:"template"`
+}
+
 // WidgetTier is the values /properties/tier accepts. ⚠ Closed: the write path refuses anything else.
 type WidgetTier string
 

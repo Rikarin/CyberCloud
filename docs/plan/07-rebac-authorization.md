@@ -422,6 +422,15 @@ the user's next request is served from a cache and succeeds. Without a token, th
 cache" or "hope". With one, the revoke returns a token, the portal shows the new state as of that
 token, and the *enforcement* path for anything destructive is `FullyConsistent` regardless.
 
+⚠ **The same class runs the other way, and a deployment is where it was measured (#39).** A write's
+step 3 checks `MinimizeLatency`, and `CheckGrain` answers that mode from any cached entry with no TTL —
+so a *deny* is cached exactly as an allow is. A deployment child refused because its creator held
+nothing on its group, and retried after an owner granted the missing role, met the cached refusal again
+in `test/CyberCloud.Isolation`'s `DeploymentAuthorizationTests`; an ordinary `PUT` retried after a
+grant does the same. The portal's `AtLeastAsFresh` token is the fix on its own path; a write path that
+carried the caller's latest token, or a grant that dropped cached denies, is owed — recorded in
+[08 § Long-running operations](08-resource-manager.md) beside the deployment that found it.
+
 ## The Leopard index — and why it is not optional
 
 The naive `Check` walks group membership at request time. For `group:eng#member@group:platform#member`

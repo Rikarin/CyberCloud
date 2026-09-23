@@ -47,7 +47,7 @@ namespace CyberCloud.Hosts.Tests;
 /// </remarks>
 public sealed class HostCompositionTests {
     /// <summary>
-    ///     The seventeen provider namespaces both hosts must serve, spelled out rather than counted.
+    ///     The twenty provider namespaces both hosts must serve, spelled out rather than counted.
     /// </summary>
     /// <remarks>
     ///     ⚠
@@ -55,7 +55,8 @@ public sealed class HostCompositionTests {
     ///         The prose said "twelve" over a list of fourteen until <c>CyberCloud.Mail</c> made it
     ///         fifteen, <c>CyberCloud.Communication</c> made it sixteen, <c>CyberCloud.RecoveryServices</c>
     ///         seventeen, and <c>CyberCloud.Dashboard</c> eighteen — from seventeen modules, because
-    ///         the Monitor module registers two.
+    ///         the Monitor module registers two. The summary then said "seventeen" over nineteen until
+    ///         <c>CyberCloud.Resources</c> (#39) made it twenty, from nineteen modules.
     ///     </b> The list is what the test reads and the list was right; the number beside it
     ///     was three behind, which is the ordinary fate of a count written next to the thing it
     ///     counts. It is corrected rather than deleted because a reader who sees a number can tell at
@@ -87,6 +88,8 @@ public sealed class HostCompositionTests {
         "CyberCloud.Monitor",
         "CyberCloud.Network",
         "CyberCloud.RecoveryServices",
+        // #39: deployments. It renders nothing, and is the one provider the reserved namespace admits.
+        "CyberCloud.Resources",
         "CyberCloud.Sample",
         "CyberCloud.Search",
         "CyberCloud.Storage",

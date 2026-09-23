@@ -41,6 +41,14 @@ PUT /tenants/{t}/subscriptions/{s}/resourceGroups/{rg}
 Steps 3–7 are the entire reason this is one component rather than a shared library each provider calls.
 A provider that could skip step 3 is a provider that eventually will.
 
+**Step 2 has a second half for one type, and the path has a second door that runs all twelve steps.**
+A deployment's body is a template — a program the schema vocabulary cannot describe — so once the schema
+passes, `IResourceBodyValidator` evaluates it, and a template that does not deploy is a `400` at the
+same step as any schema failure. And the twelve steps are also entered through
+`IResourceManager.WriteChildAsync`, by a deployment's parent operation writing one of its resources as
+the deployment's creator; nothing is skipped on that door, and the one difference is that step 10's
+operation records its parent. § Long-running operations, *Nested operations*, has both.
+
 **Step 1 checks two things the caller supplied and does it before anything else.** The tenant in the
 path must be the caller's, and the subscription must be one that tenant has. Both refuse with `404`
 and with the same message a missing resource gets — a subscription is exactly as enumerable as a
@@ -262,24 +270,122 @@ dispute waiting to happen, so cancellation *completes* rather than abandoning.
 **Nested operations.** Deleting a resource group is one operation with N child operations, ordered by
 the dependency graph. The parent's progress is the children's. Deployments ([01](01-azure-parity-catalogue.md) § A, M2) use the same machinery.
 
-⚠ **Nested operations are not built, and that is why `CyberCloud.Resources/deployments` did not land
-with #39 — recorded here so the next reader of that issue does not re-derive it.** A resource group's
-delete refuses while the group holds anything rather than cascading (`IScopeManager.DeleteAsync`), so
-no operation has ever had a child. A deployment is exactly the thing that needs one: a template of
-resources with `dependsOn`, evaluated into an ordered set of `PUT`s through *this* write path, each of
-which is itself a `202` and an operation to wait on, as one parent operation with a step per resource,
-a what-if that is the same evaluation with no write, and rollback on a failed step recorded rather than
-performed. Two things stand in front of it. First, the machinery above: a durable parent that holds the
-template, the caller and a step cursor, re-registers its reminder after a silo loss and drives child
-operations to a terminal state in dependency order — an `IDeploymentGrain` with the shape
-`IOperationGrain` has, and the first grain of its kind. Second, **the write path needs a caller and a
-reconcile pass carries none**: `ReconcileContext` and `ActionContext` have no `CallerContext`, because
-a provider acts as the platform against the cluster and never as a tenant against this API, so a
-deployment cannot be an ordinary provider whose reconciler issues `PUT`s — it would have nothing to put
-in step 3's check. The deployment is therefore a fourth entry point beside `IScopeManager` and
-`IRoleAssignmentManager` (their remarks carry the "beside, not inside" argument), driven by a grain that
-persists the creator's identity, and that is the shape to build — not a provider, and not a stub of
-one. It stays at M2 in [24](24-roadmap.md)'s `Platform` row, priced there.
+⚠ **Nested operations are built, for deployments (#39, 2026-09-23), and a resource group's delete is
+not yet their second user.** Until then no operation had ever had a child — the group's delete refuses
+while the group holds anything (`IScopeManager.DeleteAsync`) rather than cascading — and this paragraph
+recorded why `CyberCloud.Resources/deployments` could not land without them. What exists now, and the
+places the paragraph it replaces said otherwise:
+
+- **The parent is the deployment's own operation grain, not an `IDeploymentGrain`.** The paragraph
+  asked for "a durable parent that holds the template, the caller and a step cursor, re-registers its
+  reminder after a silo loss and drives child operations to a terminal state in dependency order — an
+  `IDeploymentGrain` with the shape `IOperationGrain` has". `IOperationGrain` *is* that shape and
+  already had the slots (`OperationSpec.ParentOperationId`, `OperationStatus.Children`, both on the wire
+  and empty since they were published). A deployment is an ordinary resource created by an ordinary
+  `PUT` through the twelve steps; its operation's `Desired` is the template and its `Caller` the
+  creator, and `OperationGrainState.Deployment` is the cursor. A second grain would have been a second
+  resume path, reminder, cancel flag and id to poll, each able to disagree with the first — and
+  `/operations/{id}` polls the parent with no change to the gateway. The grain-key count is unchanged.
+- **Its pass is `DeploymentDriver`, not a reconciler.** `OperationGrain.DriveAsync` branches for a
+  deployment's create or update and hands back the same `ReconcilePass` a reconciler produces, so every
+  ending — quota, member stamp, change event, reminder — is the ordinary one. The branch sits *after*
+  `ConfirmClaimAsync`, so batch 3's ghost-resource fix (issue #44) holds for the parent:
+  `DeploymentTests.ADeploymentWhoseOwnClaimIsGoneCancelsBeforeWritingAnyChild` pins it, and each child
+  is an ordinary create that runs the same confirmation on its own first pass. A deployment's delete
+  falls through to the ordinary driver and converges at once — deleting a deployment deletes its
+  record, not what it deployed, which is Azure's rule.
+- **One child at a time, in dependency order.** The plan is Kahn's order with the template's own order
+  breaking ties; a child is written only when every step before it has succeeded. Status rolls up —
+  finished steps count whole, the step in flight counts for its child's percentage — and a child that
+  ends tells its parent through `IOperationGrain.NotifyChildTerminalAsync`, which is **one-way** because
+  the parent's pass calls the child and a child awaiting its parent would be two non-reentrant grains
+  waiting on each other. The ceiling is per step: a child carries sixty minutes from its own start and
+  fails through it; the parent times only a step the write path never accepts.
+- **A child's failure is the parent's, named.** A child that fails, or is cancelled by its own
+  confirmation, fails the deployment with `ProvisioningFailed` whose message carries the child's path,
+  its operation id and its own reason, and whose `target` is the child's path; a child the write path
+  refuses — `404`, `403`, `409`, `429` — does the same with the refusal's code. Nothing after it is
+  written. `DeploymentTests.AChildsFailureIsVisibleOnTheParentAndWhatWasCreatedBeforeItIsLeftAndRecorded`.
+- **Cancellation reaches the child in flight and stops there.** `CancelAsync` on the parent tells the
+  running child at once and again on the next pass; the child's cancellation completes rather than
+  abandons, as a single resource's does; nothing further starts; the parent reports `Canceled` only
+  once nothing is running. Steps already finished are not torn down — that would be a rollback.
+- **Rollback is recorded, not performed.** Deleting what a failed deployment created would be a second
+  set of writes made as the caller after the caller's deployment failed, each able to fail in turn. The
+  deployment's body says what was left and that nobody removed it (`/properties/rollback`), and a rerun
+  of the same deployment leaves every child that already matches unchanged — a no-op write, recorded as
+  `no change`.
+
+**The caller-bearing entry point is `IResourceManager.WriteChildAsync`, and its argument is on the
+interface.** A child is written long after the request that asked for it has returned, from a
+reminder, with no token anywhere; what the parent carries is the `CallerContext` the gateway built
+when the deployment's own `PUT` passed step 3, persisted in `OperationSpec.Caller` and never
+re-derived. Writing as that caller is safe for three reasons that are properties of the method: every
+child runs the whole write path, so step 3 checks that subject *at the child's own address, at the
+moment it is written* — a deployment grants nothing its creator lacks at each child, and a revocation
+between two children is honoured at the second; the platform has no system principal to fall back to
+and the method refuses an empty subject rather than letting step 3 deny it as a `404`; and the gateway
+cannot reach it — `GatewayIsolationTests.NoGatewaySourceFileWritesAsARecordedCaller` reads the
+gateway's source for it. `test/CyberCloud.Isolation`'s `DeploymentAuthorizationTests` drives the
+refusal through the real engine: a contributor on one group deploys a template whose second resource
+names a group of the same subscription where they hold nothing, the first child is created as them, the
+second is refused with the engine's `404`, and the deployment fails naming it.
+
+**The deployment type.** `CyberCloud.Resources/deployments`, declared in
+`CyberCloud.ResourceManager.Contracts` (`Deployments.Describe`) so the manager can reach it and
+published through the thinnest provider family in the tree, `CyberCloud.Providers.Resources`, because
+`Build.Generate` reads `src/Providers` and nowhere else. Its template and parameters are JSON *text* —
+`SchemaKind` has no free-form object and refuses an array of objects — checked at step 2 by
+`IResourceBodyValidator`, the one validator a type's schema cannot express, so a template that does not
+evaluate is a `400` naming what and where. The template's resources carry `type`, `name`, `apiVersion`,
+`location`, `tags`, `properties` and `dependsOn`, and may name another resource group of the same
+subscription (`resourceGroup`); the expression set is closed — `parameters()`, `variables()`,
+`resourceId()` and `concat()`, whole-string only — and anything else is refused with that list. A
+cycle is refused with the cycle walked. `whatIf` answers per resource `Create`, `Modify` or `NoChange`
+with a property diff against the resource read *as the caller* — so a resource they cannot read is a
+`Create`, which says nothing about it — and is served by `IDeploymentManager`, the entry point the
+registry names on the action (`ActionRegistration.EntryPoint`), because it answers for a deployment
+that need not exist and runs as the caller, neither of which an action handler can. The history is the
+body: the parent writes `outputResources`, `steps`, `error` and `rollback` into the resource's
+read-only properties as it ends (`IResourceGrain.RecordReadOnlyAsync`), and the group's deployments are
+its deployment history. `CyberCloud.Resources` was a reserved provider namespace; it now admits a
+provider whose every type renders nothing, which keeps the property the reservation protected
+(`ProviderRegistryTests.TheReservedNamespaceAdmitsATypeThatRendersNothingAndStillRefusesOneThatCould`).
+`cyc deployment create --template-file` and `cyc deployment what-if` read the files; the generated
+`cyc resources deployments` takes the same body as flags.
+
+⚠ **Owed, and recorded here rather than only in a commit message.**
+
+- **A resource group's delete still refuses rather than cascading.** The machinery the cascade needs now
+  exists; the cascade is a per-resource delete with each resource's own lock, authorization,
+  soft-delete window and failable teardown, ordered by children before parents, and it is not built.
+- **ARM's shape beyond the closed set**: `outputs`, `condition`, `copy`, user functions, `reference()`,
+  secure parameters (refused — the template and its parameters are the body, in plain text), nested
+  deployments (refused at evaluation and again by `WriteChildAsync`), and `Complete` mode, which would
+  delete what the template no longer names.
+- **A performed rollback** — Azure's `onErrorDeployment` — and **parallel children** for independent
+  resources; both change what "stopped at the first failure" means and neither is started.
+- **The what-if does not compare secret properties.** A read withholds them, so the current side never
+  has them; they are left out on both sides rather than reported as a change on every run.
+- ⚠ **A child refused and retried after a grant can meet the cached refusal — found by
+  `DeploymentAuthorizationTests`.** Step 3 checks `MinimizeLatency`, which `CheckGrain` answers from any
+  cached entry with no TTL ([07 § Consistency](07-rebac-authorization.md)); the refusal caches a deny,
+  and a grant written after it does not reach the rerun's check. That is the existing
+  revoke-then-stale-read class in the grant direction and is as true of an ordinary `PUT` retried after
+  a grant; it is recorded here because a failed deployment is the case that invites the retry.
+- **The first pass waits for the reminder**, as every operation's does (the timer the class remarks on
+  `OperationGrain` owe), and a child's end moves its parent through the one-way notification; a
+  twenty-resource deployment is therefore bounded by its children's reminders, not by its parent's.
+- ⚠ **Across the real hosts it is one story, not a sweep.** `CyberCloud.AppHost.Tests.DeploymentOverHttpTests`
+  runs it through the nine stages against two silo processes, Redis reminders and the AppHost's k3s:
+  the owner deploys a two-widget template with a `dependsOn`, a what-if of it answers `NoChange` twice,
+  and a contributor on one group deploys a template whose second widget names a group they hold
+  nothing on, and it fails naming that widget — nothing drives an operation but the reminders and the
+  one-way notification, which is what makes the new wire members (`OperationStatus.ParentOperationId`
+  at 14, `OperationGrainState.Deployment` at 16) and `NotifyChildTerminalAsync` cross a process the way
+  `17313ed`'s confirmation did. The branches — cancellation, a child's own failure, the lost claim, the
+  re-drive — are in-process only (`CyberCloud.ResourceManager.Tests.DeploymentTests`), and a silo killed
+  mid-deployment is the chaos suite's to add.
 
 ### Deleting a parent resource that has children
 

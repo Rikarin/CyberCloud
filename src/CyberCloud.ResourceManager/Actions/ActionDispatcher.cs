@@ -85,6 +85,19 @@ public sealed class ActionDispatcher(
         ArgumentNullException.ThrowIfNull(registration);
         ArgumentNullException.ThrowIfNull(input);
 
+        if (action.EntryPoint.Length > 0) {
+            // ⚠ Not a gap, and said so rather than reported as one. The gateway routes this action
+            // to its entry point, which runs it as the caller; reaching the dispatcher means
+            // something called IResourceManager.ActionAsync directly, and a handler-less 500 naming
+            // "no handler" would send that caller looking for code that is deliberately not there.
+            return Result<string>.Failure(
+                ErrorCode.InternalError,
+                $"'{id.Type}/{action.Name}' is served by {action.EntryPoint}, which runs it as the "
+                + "caller, and not by an action handler. Call the entry point; the gateway routes "
+                + "the action there."
+            );
+        }
+
         if (action.HandlerType is null) {
             // ⚠ InternalError, a 500, and not a 404 or a 400. The caller did nothing wrong: they
             // POSTed an action this platform publishes in its own OpenAPI document. The gap is ours,

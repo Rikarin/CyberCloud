@@ -126,6 +126,31 @@ public sealed class GatewayIsolationTests {
     }
 
     /// <summary>
+    ///     ⚠ <b>A test that fails the day the gateway names the child entry point.</b>
+    ///     <c>IResourceManager.WriteChildAsync</c> writes as a caller the platform RECORDED rather than as
+    ///     the one the current request's token carries; its argument (on the interface) rests on the
+    ///     gateway never reaching it, because a request's caller is always the token's. The interface is
+    ///     one the gateway legitimately holds, so no reference rule can see a call — only the source can.
+    /// </summary>
+    [Fact]
+    public void NoGatewaySourceFileWritesAsARecordedCaller() {
+        var offenders = new List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(SourceRoot, "*.cs", SearchOption.AllDirectories)) {
+            var code = Regex.Replace(File.ReadAllText(file), @"^s*(///|//).*$", "", RegexOptions.Multiline);
+
+            if (code.Contains("WriteChildAsync", StringComparison.Ordinal)) {
+                offenders.Add(Path.GetFileName(file));
+            }
+        }
+
+        offenders.ShouldBeEmpty(
+            "IResourceManager.WriteChildAsync writes as a caller that is not the request's. A gateway "
+            + "that called it could put any recorded identity on a write it was handed by somebody else."
+        );
+    }
+
+    /// <summary>
     ///     The gateway keeps no per-request state across pods, and holds no store handle.
     /// </summary>
     [Fact]

@@ -253,6 +253,101 @@ public sealed class OperationGrainState {
     /// </remarks>
     [Id(15)]
     public bool IndexConfirmed { get; set; }
+
+    /// <summary>
+    ///     The run of a deployment — its plan, its cursor and its children — or <see langword="null" />
+    ///     for every operation that is not a deployment's.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The step cursor docs/plan/08 § Long-running operations names, for the first operation
+    ///     with steps.</b> A re-drive after a silo loss resumes at the step this records rather than
+    ///     re-planning, so a child already accepted is polled rather than written a second time.
+    ///     Appended at 16; <see langword="null" /> is "as before" for every operation a peer that
+    ///     predates it started, and the durable tier is JSON, so the property name is the contract.
+    /// </remarks>
+    [Id(16)]
+    public DeploymentRunState? Deployment { get; set; }
+}
+
+/// <summary>
+///     A deployment's run, held by its parent operation — docs/plan/08 § Long-running operations,
+///     "Nested operations".
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Everything a re-drive needs and cannot recompute.</b> The plan could be recomputed from the
+///     desired body, and is not, because the child operation ids and each step's outcome could not:
+///     a re-plan that forgot a child was accepted would write it again. The collections are
+///     <c>{ get; set; }</c> for the reason given on <see cref="ResourceState" />.
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.ResourceManager.State.DeploymentRun")]
+public sealed class DeploymentRunState {
+    /// <summary>The template's resources, in dependency order.</summary>
+    [Id(0)]
+    public List<DeploymentStepState> Steps { get; set; } = [];
+
+    /// <summary>The step being driven; equal to the step count once every step has succeeded.</summary>
+    [Id(1)]
+    public int Cursor { get; set; }
+
+    /// <summary>
+    ///     When the step at <see cref="Cursor" /> began — the start the sixty-minute ceiling counts
+    ///     from for a step whose child has not been accepted yet.
+    /// </summary>
+    [Id(2)]
+    public DateTimeOffset StepStartedAt { get; set; }
+}
+
+/// <summary>One template resource as its parent operation tracks it.</summary>
+[GenerateSerializer]
+[Alias("CyberCloud.ResourceManager.State.DeploymentStep")]
+public sealed class DeploymentStepState {
+    /// <summary>The resource's address.</summary>
+    [Id(0)]
+    public string ResourcePath { get; set; } = string.Empty;
+
+    /// <summary>The api-version the template writes it at.</summary>
+    [Id(1)]
+    public string ApiVersion { get; set; } = string.Empty;
+
+    /// <summary>The evaluated body the <c>PUT</c> carries, as JSON text.</summary>
+    [Id(2)]
+    public string Body { get; set; } = "{}";
+
+    /// <summary>Where the step is.</summary>
+    [Id(3)]
+    public DeploymentStepStatus Status { get; set; } = DeploymentStepStatus.Pending;
+
+    /// <summary>The child operation, once the write path accepted the <c>PUT</c>; empty before and for a no-op.</summary>
+    [Id(4)]
+    public Guid ChildOperationId { get; set; }
+
+    /// <summary>Whether the child created the resource rather than updating one that was there.</summary>
+    [Id(5)]
+    public bool Created { get; set; }
+
+    /// <summary>What happened, for the history line: a refusal, a child's failure, or "no change".</summary>
+    [Id(6)]
+    public string Detail { get; set; } = string.Empty;
+}
+
+/// <summary>Where one deployment step is.</summary>
+[Alias("CyberCloud.ResourceManager.State.DeploymentStepStatus")]
+public enum DeploymentStepStatus {
+    /// <summary>Not written yet.</summary>
+    Pending = 0,
+
+    /// <summary>Its child operation was accepted and has not ended.</summary>
+    Running = 1,
+
+    /// <summary>Its child succeeded, or the write changed nothing.</summary>
+    Succeeded = 2,
+
+    /// <summary>The write path refused it, or its child failed.</summary>
+    Failed = 3,
+
+    /// <summary>Its child was cancelled — by the deployment's own cancellation or by the child itself.</summary>
+    Canceled = 4
 }
 
 /// <summary>

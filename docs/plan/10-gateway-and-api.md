@@ -162,6 +162,21 @@ generated client are silent about it and `cyc graph query` — hand-written besi
 non-registry source the role assignment API waits on, one path rather than a sub-path of every
 scope, and it is owed with that one because it touches the same five surfaces.
 
+**A deployment's `whatIf` is a fifth component behind the same door, and unlike the last two it is in
+the generated document (#39).** `CyberCloud.Resources/deployments` is a registered type, so its `PUT`,
+`GET`, `DELETE` and collection are the ordinary resource routes to `IResourceManager` and its
+`whatIf` is declared like any action — but the declaration names an entry point instead of a handler
+(`ActionRegistration.EntryPoint`), and stage 8 sends `POST …/deployments/{name}/whatIf` to
+`IDeploymentManager` rather than to `IResourceManager.ActionAsync`. Two properties force it: a what-if
+answers for a deployment that need not exist, and `ActionAsync` refuses an action on an absent
+resource because `POST` never creates; and it reads every resource the template names *as the
+caller*, which an action handler — handed an `ActionContext` with no caller, by design — cannot. It
+answers `200` with `{ "status", "changes": [ … ] }` and no `Azure-AsyncOperation`. Routing is still
+not a decision: the entry point runs step 1's ownership checks and the action's permission check
+itself, behind the same seam. ⚠ The gateway never names `IResourceManager.WriteChildAsync`, the
+door a deployment's children go through as their recorded caller —
+`GatewayIsolationTests.NoGatewaySourceFileWritesAsARecordedCaller` reads this project's source for it.
+
 ## Request pipeline
 
 Order matters and each step is here for a named reason.

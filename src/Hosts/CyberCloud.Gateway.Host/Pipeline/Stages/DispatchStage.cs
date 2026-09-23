@@ -39,6 +39,7 @@ sealed class DispatchStage(
     IScopeManager scopes,
     IRoleAssignmentManager roles,
     IResourceGraphQuery graph,
+    IDeploymentManager deployments,
     IOperationReader operations,
     IHubTicketStore tickets,
     GatewayOptions options
@@ -618,11 +619,35 @@ sealed class DispatchStage(
         };
     }
 
+    /// <summary>
+    ///     A <c>POST</c> action — to <c>IResourceManager.ActionAsync</c>, or, for an action the
+    ///     registry says an entry point serves, to that entry point.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>One such action today — a deployment's <c>whatIf</c> — and it is routed by name rather
+    ///     than by reading the registry here.</b> It runs as the caller against every resource its
+    ///     template names, which a handler cannot, and it answers for a deployment that may not exist,
+    ///     which <c>ActionAsync</c> refuses by design (<c>ActionRegistration.EntryPoint</c> carries the
+    ///     argument). Routing is not a decision: <c>IDeploymentManager.WhatIfAsync</c> runs the
+    ///     ownership checks and the permission check itself, behind the same seam, and this stage
+    ///     renders whatever it answers.
+    /// </remarks>
     async Task<GatewayOutcome> ActionAsync(
         GatewayRequestContext context,
         string path,
         CancellationToken cancellationToken
     ) {
+        if (Deployments.Is(context.Route.Resource.Type)
+            && string.Equals(context.Route.Action, Deployments.WhatIfAction, StringComparison.OrdinalIgnoreCase)) {
+            var answered = await deployments.WhatIfAsync(Build(context, WriteVerb.Post), cancellationToken);
+
+            return answered.TryGetError(out var whatIfError)
+                ? ResultShaper.Shape(whatIfError, path)
+                : new GatewayOutcome {
+                    StatusCode = StatusCodes.Status200OK, Json = answered.GetValueOrThrow().ToJson()
+                };
+        }
+
         var accepted = await manager.ActionAsync(Build(context, WriteVerb.Post), cancellationToken);
 
         if (accepted.TryGetError(out var error)) {

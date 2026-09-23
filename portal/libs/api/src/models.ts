@@ -2434,6 +2434,41 @@ export interface RecoveryServicesVaultsRecoverResult {
   source: string;
 }
 
+/** Deployment. A template of resources deployed in dependency order, each through the write path as its creator. */
+export interface ResourcesDeploymentsData {
+  /** The template, its parameters, and the record of the last run. */
+  properties?: {
+    /** Why the last run failed, naming the resource that stopped it. Empty when it did not. */
+    readonly error?: string;
+    /** Every resource the last run created or updated, in the order it did. */
+    readonly outputResources?: string[];
+    /** The parameter values, as JSON text: { "name": { "value": … } }. */
+    parameters?: string;
+    /** What a rollback would remove. Rollback is recorded and never performed. */
+    readonly rollback?: string;
+    /** One line per template resource, in dependency order: its state, its id and the operation that drove it. */
+    readonly steps?: string[];
+    /** The template, as JSON text: parameters, variables and resources, each with type, name, apiVersion, properties and dependsOn. Expressions are parameters(), variables(), resourceId() and concat(); anything else is refused with that list. */
+    template: string;
+  };
+}
+
+/** One Deployment, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface ResourcesDeploymentsResource extends Resource, ResourcesDeploymentsData {
+  readonly type: 'CyberCloud.Resources/deployments';
+}
+
+/** The parameters of whatIf. */
+export interface ResourcesDeploymentsWhatIfContent {
+  /** The template to evaluate and its parameters. */
+  properties: {
+    /** The parameter values, as JSON text. */
+    parameters?: string;
+    /** The template, as JSON text — the same shape a PUT takes. */
+    template: string;
+  };
+}
+
 /** The values /properties/tier accepts. ⚠ Closed: the write path refuses anything else. */
 export type SampleWidgetsTier =
   | 'free'

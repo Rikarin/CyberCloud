@@ -6,6 +6,7 @@ using CyberCloud.Core.Time;
 using CyberCloud.Gateway.Host.Principals;
 using CyberCloud.Identity;
 using CyberCloud.Identity.Contracts;
+using CyberCloud.Providers.Resources;
 using CyberCloud.Providers.Sample;
 using CyberCloud.Providers.Sample.Contracts;
 using CyberCloud.Providers.Storage;
@@ -615,7 +616,12 @@ public sealed class IsolationCluster : IAsyncLifetime {
         // resource type this platform serves" from whichever half was forgotten, which is a clear
         // enough message that a third copy to diff them would cost more than it catches.
         Registry = ProviderRegistry.Build(
-            [new SampleProvider(), new Conformance.Reference.ReferenceProvider(), new StorageProvider()]
+            [
+                new SampleProvider(),
+                new Conformance.Reference.ReferenceProvider(),
+                new StorageProvider(),
+                new ResourcesProvider()
+            ]
         );
 
         Manager = new ResourceManagerService(
@@ -828,6 +834,7 @@ public sealed class IsolationCluster : IAsyncLifetime {
                     // the child onto the parent — and each type still needs its own reconciler
                     // singleton, because ProviderRegistry stores them by CONCRETE TYPE.
                     services.AddSingleton<IResourceProvider, StorageProvider>();
+                    services.AddSingleton<IResourceProvider, ResourcesProvider>();
                     services.AddSingleton<StorageAccountReconciler>();
                     services.AddSingleton<StorageBucketReconciler>();
                     // ⚠ The third type, and the failure that reported its absence is worth keeping:

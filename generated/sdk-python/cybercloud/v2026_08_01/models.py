@@ -7386,6 +7386,141 @@ class BackupVaultRecoverResult:
         return wire
 
 
+@dataclass
+class DeploymentData:
+    """Deployment. A template of resources deployed in dependency order, each through the write path as its creator. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The template, its parameters, and the record of the last run."""
+
+        # The template, as JSON text: parameters, variables and resources, each with type, name, apiVersion, properties and dependsOn. Expressions are parameters(), variables(), resourceId() and concat(); anything else is refused with that list.
+        template: str
+        # Why the last run failed, naming the resource that stopped it. Empty when it did not.
+        error: Optional[str] = None
+        # Every resource the last run created or updated, in the order it did.
+        output_resources: Optional[List[str]] = None
+        # The parameter values, as JSON text: { "name": { "value": … } }.
+        parameters: Optional[str] = None
+        # What a rollback would remove. Rollback is recorded and never performed.
+        rollback: Optional[str] = None
+        # One line per template resource, in dependency order: its state, its id and the operation that drove it.
+        steps: Optional[List[str]] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> DeploymentData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                template=wire["template"],
+                error=wire.get("error"),
+                output_resources=wire.get("outputResources"),
+                parameters=wire.get("parameters"),
+                rollback=wire.get("rollback"),
+                steps=wire.get("steps"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["template"] = self.template
+            if self.parameters is not None:
+                wire["parameters"] = self.parameters
+            return wire
+
+    # The template, its parameters, and the record of the last run.
+    properties: Optional[DeploymentData.Properties] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> DeploymentData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            properties=_opt(wire, "properties", DeploymentData.Properties.from_wire),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        return wire
+
+
+@dataclass
+class DeploymentResource:
+    """One Deployment, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: DeploymentData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> DeploymentResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=DeploymentData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class DeploymentWhatIfContent:
+    """The parameters of whatIf."""
+
+    @dataclass
+    class Properties:
+        """The template to evaluate and its parameters."""
+
+        # The template, as JSON text — the same shape a PUT takes.
+        template: str
+        # The parameter values, as JSON text.
+        parameters: Optional[str] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> DeploymentWhatIfContent.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                template=wire["template"],
+                parameters=wire.get("parameters"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["template"] = self.template
+            if self.parameters is not None:
+                wire["parameters"] = self.parameters
+            return wire
+
+    # The template to evaluate and its parameters.
+    properties: DeploymentWhatIfContent.Properties
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> DeploymentWhatIfContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            properties=DeploymentWhatIfContent.Properties.from_wire(wire["properties"]),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["properties"] = self.properties.to_wire()
+        return wire
+
+
 WidgetTier = Literal["free", "basic", "standard", "premium"]
 """The values /properties/tier accepts. ⚠ Closed: the write path refuses anything else."""
 
@@ -8845,6 +8980,9 @@ __all__ = [
     "BackupVaultListRecoveryPointsResult",
     "BackupVaultRecoverContent",
     "BackupVaultRecoverResult",
+    "DeploymentData",
+    "DeploymentResource",
+    "DeploymentWhatIfContent",
     "WidgetTier",
     "WidgetData",
     "WidgetResource",
