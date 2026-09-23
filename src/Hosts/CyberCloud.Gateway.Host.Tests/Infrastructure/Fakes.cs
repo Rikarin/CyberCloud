@@ -738,3 +738,71 @@ sealed class RecordingResourceGraphQuery : IResourceGraphQuery {
         return Task.FromResult(OnQuery(request));
     }
 }
+
+/// <summary>
+///     An <see cref="IPolicyManager" /> that records what stage 8 handed it — issue #46's routing
+///     suite asserts the address, the caller and the body, and never a decision.
+/// </summary>
+sealed class RecordingPolicyManager : IPolicyManager {
+    /// <summary>Every item request, in order.</summary>
+    public ConcurrentQueue<(string Verb, PolicyRequest Request)> Requests { get; } = new();
+
+    /// <summary>Every collection request, in order.</summary>
+    public ConcurrentQueue<PolicyListRequest> Listings { get; } = new();
+
+    /// <summary>What <see cref="PutAsync" /> answers. Default: an object that was created.</summary>
+    public Func<PolicyRequest, Result<PolicyObjectSnapshot>> OnPut { get; set; } =
+        static request => Result<PolicyObjectSnapshot>.Success(Snapshot(request.Path, true));
+
+    /// <summary>What <see cref="ReadAsync" /> answers. Default: an object that exists.</summary>
+    public Func<PolicyRequest, Result<PolicyObjectSnapshot>> OnRead { get; set; } =
+        static request => Result<PolicyObjectSnapshot>.Success(Snapshot(request.Path, false));
+
+    /// <summary>What <see cref="DeleteAsync" /> answers. Default: it went.</summary>
+    public Func<PolicyRequest, Result> OnDelete { get; set; } = static _ => Result.Success;
+
+    /// <summary>What <see cref="ListAsync" /> answers. Default: an empty last page.</summary>
+    public Func<PolicyListRequest, Result<PolicyListPage>> OnList { get; set; } =
+        static _ => Result<PolicyListPage>.Success(new());
+
+    /// <inheritdoc />
+    public Task<Result<PolicyObjectSnapshot>> PutAsync(PolicyRequest request, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(request);
+        Requests.Enqueue(("PUT", request));
+        return Task.FromResult(OnPut(request));
+    }
+
+    /// <inheritdoc />
+    public Task<Result<PolicyObjectSnapshot>> ReadAsync(PolicyRequest request, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(request);
+        Requests.Enqueue(("GET", request));
+        return Task.FromResult(OnRead(request));
+    }
+
+    /// <inheritdoc />
+    public Task<Result> DeleteAsync(PolicyRequest request, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(request);
+        Requests.Enqueue(("DELETE", request));
+        return Task.FromResult(OnDelete(request));
+    }
+
+    /// <inheritdoc />
+    public Task<Result<PolicyListPage>> ListAsync(PolicyListRequest request, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(request);
+        Listings.Enqueue(request);
+        return Task.FromResult(OnList(request));
+    }
+
+    static PolicyObjectSnapshot Snapshot(string path, bool created) {
+        var address = PolicyAddress.ParsePath(path).GetValueOrThrow();
+
+        return new() {
+            Path = address.Path,
+            Name = address.Name,
+            Type = address.Kind == PolicyObjectKind.Definition ? PolicyAddress.DefinitionTypeName : PolicyAddress.AssignmentTypeName,
+            Scope = address.Scope.Path,
+            Properties = """{"displayName":"recorded"}""",
+            Created = created
+        };
+    }
+}

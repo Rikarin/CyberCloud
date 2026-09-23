@@ -267,7 +267,7 @@ the design was never as absent as the line made it look.
 
 | Item | Issue | EM | Landed |
 |---|---|---|---|
-| Policy engine | #46 | ⚠ none | |
+| Policy engine | #46 | ⚠ none | ◐ **The engine landed 2026-09-23, in the write path, and what keeps this row from ✅ is the same gap as the resource graph's: its addresses are not in the generated document.** Definitions, assignments at a management group, a subscription or a resource group, and `policyStates` are scope extensions under `CyberCloud.Policy` — not registry types, for the two reasons [08 § Policy](08-resource-manager.md) gives — and step 5 of every `PUT`, `PATCH`, `DELETE` and action asks the tenant's policy catalog: modify, then deny, then audit, inherited down the tree with exclusions, one grain call a write. What stays owed — the generated document, a compliance scan of resources that existed before an assignment, policy on scope writes, restore and purge, parameters and `enforcementMode` — is recorded in that section |
 | Private endpoints | #47 | 1.5 | |
 | Conditional access | #48 | 1.0 | |
 | JIT roles | #49 | 0.5 | |
@@ -462,6 +462,13 @@ row in the catalogue and is not in the 39 — because tenants, subscriptions and
 published as *scope paths* (`/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/…`) and
 not as typed resources under a provider (#63). Counting it as missing would have been the easy error in
 this recount, and it is written down here so the next recount does not make it.
+
+⚠ **The policy engine (#46) is the same case, and the command above was re-run for it on 2026-09-23 and
+still answers 39.** `CyberCloud.Policy/policyDefinitions` is the namespace [01](01-azure-parity-catalogue.md)
+gave it, and it landed as a scope extension — `{scope}/providers/CyberCloud.Policy/…`, served beside role
+assignments and outside the registry — because an assignment sits above a resource group and a rule is a
+tree the registry's schema cannot express ([08 § Policy](08-resource-manager.md)). So it adds no row to the
+published-types table and moves no count; its phase-4 row says what it did land.
 
 ## Running total
 

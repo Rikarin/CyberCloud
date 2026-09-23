@@ -165,6 +165,18 @@ public sealed class ProviderRegistryTests {
             .Message.ShouldContain(ResourceGraphAddress.ProviderNamespace);
     }
 
+    [Theory]
+    [InlineData(PolicyAddress.ProviderNamespace)]
+    [InlineData("cybercloud.policy")]
+    public void AProviderMayNotDeclareThePolicyNamespace(string spelling) {
+        // ⚠ THE FOURTH RESERVATION (#46), FOR THE FIRST ROUTING REASON AGAIN. A policy assignment on a
+        // resource group is a well-formed ten-segment resource path of type
+        // CyberCloud.Policy/policyAssignments, and the gateway routes the whole namespace to the policy
+        // manager BEFORE it looks at the registry — PolicyAddress's remarks. Case-insensitive, as above.
+        Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new NamespacedProvider(spelling)]))
+            .Message.ShouldContain(PolicyAddress.ProviderNamespace);
+    }
+
     [Fact]
     public void AProviderThatDeclaresNothingIsABuildFailure() {
         Should.Throw<InvalidOperationException>(static () => ProviderRegistry.Build([new SilentProvider()]))
@@ -617,14 +629,13 @@ public sealed class DriftScannerTests {
 /// <summary>The seams that are stubbed, asserted to fail loudly rather than quietly.</summary>
 public sealed class StubbedSeamTests {
     [Fact]
-    public async Task TheDefaultPolicyEvaluatorSaysNoEngineRanRatherThanAllowing() {
+    public async Task TheStubPolicyEvaluatorSaysNoEngineRanRatherThanAllowing() {
         // ⚠ An Allow is indistinguishable from a policy engine that evaluated and permitted;
-        // NotSupported says no engine ran, which is what an audit log has to be able to state.
+        // NotSupported says no engine ran, which is what an audit log has to be able to state. It is
+        // no longer what a host gets — CatalogPolicyEvaluator is, since #46 — and stays for the
+        // hand-built harnesses whose subject is not policy.
         var decision = await new NotSupportedPolicyEvaluator().EvaluateAsync(
-            ResourceManagerCluster.Address("x"),
-            TestingProvider.V2026,
-            "{}",
-            ResourceManagerCluster.Caller(),
+            new() { Id = ResourceManagerCluster.Address("x"), Operation = "create", Caller = ResourceManagerCluster.Caller() },
             TestContext.Current.CancellationToken
         );
 

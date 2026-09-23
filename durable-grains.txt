@@ -117,6 +117,14 @@ CyberCloud.ResourceManager.Grains.ParkedResourceRegistryGrain
 # fan-out reading an empty set after a silo restart delivers nothing and reports nothing wrong. A
 # vault that missed the change to a share it protects is a backup that silently stopped covering it.
 CyberCloud.ResourceManager.Grains.ResourceWatchGrain
+#
+# PolicyCatalogGrain is a tenant's policy definitions, assignments and audit verdicts — docs/plan/08
+# § Policy, issue #46. The test answers no, and the failure is the worst kind: a catalog that came
+# back empty is not an error anywhere. Every write succeeds, every deny rule a tenant's compliance
+# depends on has silently stopped applying, and nothing says so until an auditor asks why a
+# resource the policy forbids exists. The definitions and assignments are configuration a person
+# wrote and there is no second copy of them to rebuild from.
+CyberCloud.ResourceManager.Grains.PolicyCatalogGrain
 
 # ── Metering — docs/plan/22 ────────────────────────────────────────────────────────────────────
 # The two halves of "a usage record, once emitted, is never lost and never double-counted"

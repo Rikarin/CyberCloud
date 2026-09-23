@@ -173,7 +173,14 @@ public enum GrainKeyKind {
     ///     by a GUID; see <see cref="GrainKeys.ManagementGroup" /> for why, and for why the name is
     ///     unique within the tenant by construction.
     /// </summary>
-    ManagementGroup
+    ManagementGroup,
+
+    /// <summary>
+    ///     <c>IPolicyCatalogGrain</c> — <c>policy/{tenantId:N}</c>, the tenant's policy definitions,
+    ///     assignments and compliance states (issue #46). See <see cref="GrainKeys.PolicyCatalog" />
+    ///     for why one activation per tenant is the right cardinality for a grain on the write path.
+    /// </summary>
+    PolicyCatalog
 }
 
 /// <summary>
@@ -233,6 +240,12 @@ public enum GrainKeyKind {
 ///                 <see cref="GrainKeyKind.ClusterConnection" />
 ///             </term>
 ///             <description><see cref="Id" /> = the cluster.</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="GrainKeyKind.PolicyCatalog" />
+///             </term>
+///             <description><see cref="Id" /> = the tenant, repeated inside its own qualification.</description>
 ///         </item>
 ///         <item>
 ///             <term>
@@ -339,6 +352,7 @@ public readonly record struct GrainKey {
             GrainKeyKind.ListObjects => GrainKeys.ListObjects(ObjectType, ObjectId),
             GrainKeyKind.MembershipIndex => GrainKeys.MembershipIndex(ObjectType, ObjectId),
             GrainKeyKind.ManagementGroup => GrainKeys.ManagementGroup(Name),
+            GrainKeyKind.PolicyCatalog => GrainKeys.PolicyCatalog(Id),
             _ => string.Empty
         };
 }
@@ -355,7 +369,7 @@ public readonly record struct GrainKey {
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The twenty-nine shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
+///         <b>The thirty shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
 ///         two more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
 ///         table is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
 ///         Platform rows; four are docs/plan/07 § Storage's authorization grains; five are
@@ -381,10 +395,12 @@ public readonly record struct GrainKey {
 ///         <see cref="AuthorizationCode" /> and <see cref="ConsentGrant" />, the hot-tier code store
 ///         RFC 6749 § 4.1.2's one-time use needs and the record of a person's consent to a
 ///         tenant-registered client, both of which docs/plan/11 § Protocol carried as owed until
-///         #94; the twenty-eighth is <see cref="WatchIndex" />, #90's; and the twenty-ninth is
+///         #94; the twenty-eighth is <see cref="WatchIndex" />, #90's; the twenty-ninth is
 ///         <see cref="ManagementGroup" />, the scope above the subscription that docs/plan/06 § The
 ///         hierarchy drew from the first day and docs/plan/06 § Grain keys carried no row for until
-///         issue #39 put a grain behind it. See the remarks on each. Every one of them is formatted <i>and</i> parsed —
+///         issue #39 put a grain behind it; and the thirtieth is <see cref="PolicyCatalog" />, the
+///         tenant's policy definitions, assignments and compliance states, #46's. See the remarks on
+///         each. Every one of them is formatted <i>and</i> parsed —
 ///         a key that can
 ///         be built but not decoded is half a type, and routing a physical key back to a grain type
 ///         (in a log, in a repair tool, in a dead-letter handler) needs the other half.
@@ -392,12 +408,13 @@ public readonly record struct GrainKey {
 ///     <para>
 ///         ⚠
 ///         <b>
-///             Twenty-eight was twenty-seven, was twenty-five, was twenty-four, was twenty-three, was twenty-two, was
+///             Thirty was twenty-nine, was twenty-eight, was twenty-seven, was twenty-five, was twenty-four, was twenty-three, was twenty-two, was
 ///             twenty-one, was twenty, was nineteen, and was eight before that, and the count is
 ///             re-derived rather than incremented.
-///         </b> Counted on 2026-09-18 off
+///         </b> Counted on 2026-09-23 off
 ///         <see cref="GrainKeyKind" />'s members, excluding <see cref="GrainKeyKind.None" />, which
-///         is not a key — twenty-nine members: <see cref="ManagementGroup" /> is #39's and
+///         is not a key — thirty members, <see cref="PolicyCatalog" /> (#46) being the thirtieth on a
+///         tree whose previous count was taken on 2026-09-18 — twenty-nine: <see cref="ManagementGroup" /> is #39's and
 ///         <see cref="WatchIndex" /> #90's, both merged on this date beside #94's <see cref="AuthorizationCode" /> and
 ///         <see cref="ConsentGrant" />, the two added on top of the twenty-five #88's
 ///         <see cref="SignUp" /> had made of the twenty-four the same day's merge of three branches
@@ -406,7 +423,7 @@ public readonly record struct GrainKey {
 ///         and #88 before this. It goes stale the moment a
 ///         member is added without this sentence being reread, which is exactly how issue #71 came to
 ///         describe this type as covering "eight key shapes today": eight is the size of
-///         docs/plan/06's <i>table</i>, and it stopped being the size of this type twenty-one shapes ago (twenty-nine less
+///         docs/plan/06's <i>table</i>, and it stopped being the size of this type twenty-two shapes ago (thirty less
 ///         eight — re-derived, as #39's review of this sentence
 ///         asked; #39's own task text had called its kind "the 25th", a count from an older tree).
 ///     </para>
@@ -590,6 +607,12 @@ public readonly record struct GrainKey {
 ///             </term>
 ///             <description><c>mg/{name}</c> — docs/plan/06 § Grain keys, since issue #39</description>
 ///         </item>
+///         <item>
+///             <term>
+///                 <see cref="PolicyCatalog" />
+///             </term>
+///             <description><c>policy/{tenantId:N}</c> — docs/plan/06 § Grain keys, since issue #46</description>
+///         </item>
 ///     </list>
 ///     <para>
 ///         The six <c>rel/</c> shapes are docs/plan/07 § Storage's three indexes, plus the three
@@ -647,7 +670,7 @@ public readonly record struct GrainKey {
 ///         <b>The shapes cannot collide, and that is a property rather than a coincidence.</b> Each
 ///         shape is fixed by its first segment (<c>sub</c>, <c>res</c>, <c>user</c>, <c>op</c>,
 ///         <c>cluster</c>, <c>group</c>, <c>app</c>, <c>sp</c>, <c>session</c>, <c>mi</c>,
-///         <c>signup</c>, <c>code</c>, <c>consent</c>, <c>mg</c>, <c>parked</c>, <c>sweep</c>, <c>idx</c>, <c>rel</c>,
+///         <c>signup</c>, <c>code</c>, <c>consent</c>, <c>mg</c>, <c>policy</c>, <c>parked</c>, <c>sweep</c>, <c>idx</c>, <c>rel</c>,
 ///         <c>tenant</c>,
 ///         <c>platform</c>) and
 ///         its segment count, and the only caller-controlled components
@@ -699,6 +722,9 @@ public static class GrainKeys {
 
     /// <summary><c>mg/</c> — a management group, keyed by its name within the tenant.</summary>
     public const string ManagementGroupPrefix = "mg/";
+
+    /// <summary><c>policy/</c> — the tenant's policy catalog, docs/plan/08 § Policy.</summary>
+    public const string PolicyCatalogPrefix = "policy/";
 
     /// <summary><c>cluster/</c> — a cluster connection. Null tenant.</summary>
     public const string ClusterConnectionPrefix = "cluster/";
@@ -1446,6 +1472,47 @@ public static class GrainKeys {
     }
 
     /// <summary>
+    ///     <c>policy/{tenantId:N}</c> — <c>IPolicyCatalogGrain</c>, the tenant's policy definitions,
+    ///     assignments and compliance states (docs/plan/08 § Policy, issue #46).
+    /// </summary>
+    /// <param name="tenantId">The tenant.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             ONE ACTIVATION PER TENANT, ON THE WRITE PATH — WHICH IS THE SHAPE docs/plan/04
+    ///             § Grain taxonomy WARNS ABOUT, AND THE REASON IT IS ACCEPTABLE HERE IS THE READ/WRITE
+    ///             SPLIT.
+    ///         </b> That warning is about an index grain keyed by a low-cardinality value
+    ///         <i>serialising</i> every create. Step 5 asks this grain once per write, and the ask is
+    ///         <c>[ReadOnly]</c>: evaluations interleave with each other and queue only behind a
+    ///         definition or assignment write, which docs/plan/07 § Caching across requests would call
+    ///         rare for the same reason it calls role assignments rare. The one write on the hot path —
+    ///         an audit's compliance state — persists only when a state <i>changes</i>, so a tenant
+    ///         re-applying the same body does not turn every write into a durable write here.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             Per tenant and not per scope, because inheritance is the question and a per-scope
+    ///             grain cannot answer it alone.
+    ///         </b> An assignment at a management group applies to every
+    ///         resource group beneath it, so a per-scope key would make evaluation a call per ancestor
+    ///         — up to <c>IManagementGroupGrain.MaxDepth</c> plus two — on every write. One grain holds
+    ///         every scope's assignments and caches the compiled set per scope, which is what keeps the
+    ///         cost of step 5 one grain call whatever the depth. The tenant boundary is the key's
+    ///         qualification, so tenant A's assignments are not in the activation tenant B's writes
+    ///         reach — by construction rather than by a comparison.
+    ///     </para>
+    ///     <para>
+    ///         <b>The tenant id is repeated inside the tenant-qualified key</b> for the reason
+    ///         <see cref="TupleStore" /> and <see cref="Tenant" /> repeat it: a key read outside its
+    ///         qualification still says whose it is.
+    ///     </para>
+    /// </remarks>
+    public static string PolicyCatalog(Guid tenantId) => PolicyCatalogPrefix + N(tenantId);
+
+    /// <summary>
     ///     <c>cluster/{clusterId:N}</c> — <c>IClusterConnectionGrain</c>, docs/plan/06 § Grain keys.
     /// </summary>
     /// <remarks>
@@ -1843,6 +1910,7 @@ public static class GrainKeys {
                 + "'res/{id}', 'user/{id}', "
                 + "'op/{id}', 'cluster/{id}', "
                 + "'tenant/{id}', 'group/{id}', 'app/{id}', 'sp/{id}', 'session/{id}', 'mi/{id}', 'signup/{id}', "
+                + "'policy/{tenantId}', "
                 + "'code/{id}', 'consent/{digest}', 'platform/{singleton}', 'idx/path/{digest}', "
                 + "'idx/email/{digest}', 'idx/client/{digest}', 'idx/watch/{digest}', "
                 + "'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
@@ -1970,6 +2038,7 @@ public static class GrainKeys {
             "mi" => GrainKeyKind.ManagedIdentity,
             "signup" => GrainKeyKind.SignUp,
             "code" => GrainKeyKind.AuthorizationCode,
+            "policy" => GrainKeyKind.PolicyCatalog,
             _ => GrainKeyKind.None
         };
 
@@ -1977,7 +2046,7 @@ public static class GrainKeys {
             return Invalid(
                 $"'{key}' is not a grain key: '{segments[0]}' is not one of 'sub', 'res', 'user', "
                 + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session', 'mi', 'signup', 'code', "
-                + "'consent' or 'platform'. "
+                + "'policy', 'consent' or 'platform'. "
                 + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session', 'mi', 'signup', 'mg' or "
                 + "'platform'. "
                 + "The prefix is matched case-sensitively — see docs/plan/06 § Grain keys and "

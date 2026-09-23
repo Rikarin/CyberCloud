@@ -350,53 +350,128 @@ public interface ILockResolver {
     Task<Result<LockLevel>> ResolveAsync(ResourceId id, CancellationToken cancellationToken = default);
 }
 
-/// <summary>What policy evaluation decided about one write. Step 5.</summary>
-/// <param name="Effect">Allow, deny, modify, audit — or <see cref="PolicyEffect.NotSupported" />.</param>
-/// <param name="Error">
-///     Why, for <see cref="PolicyEffect.Deny" />. ⚠ Carries <see cref="ErrorCode.PolicyViolation" />
-///     and a <c>target</c> pointing at the offending field.
-/// </param>
-/// <param name="ModifiedBody">
-///     The rewritten body, for <see cref="PolicyEffect.Modify" />, as JSON text. ⚠ Re-validated
-///     against the schema before step 6 — a policy that produced an invalid body would otherwise reach
-///     the provider unchecked.
-/// </param>
-public readonly record struct PolicyDecision(
-    PolicyEffect Effect,
-    Error? Error = null,
-    string? ModifiedBody = null
-) {
+/// <summary>What policy evaluation decided about one request. Step 5.</summary>
+/// <remarks>
+///     ⚠ <b>Not a wire type.</b> It lives in the process that runs the write path — the gateway — and
+///     is built from the <see cref="PolicyEvaluation" /> the catalog grain returned, which is.
+/// </remarks>
+public sealed record PolicyDecision {
     /// <summary>The decision a platform with no policy engine makes.</summary>
-    public static PolicyDecision NotSupported { get; } = new(PolicyEffect.NotSupported);
+    public static PolicyDecision NotSupported { get; } = new() { Effect = PolicyEffect.NotSupported };
+
+    /// <summary>
+    ///     The strongest thing that happened: <see cref="PolicyEffect.Deny" />, else
+    ///     <see cref="PolicyEffect.Modify" /> when a rewrite was made, else
+    ///     <see cref="PolicyEffect.Audit" /> when an audit recorded a non-compliant verdict, else
+    ///     <see cref="PolicyEffect.Allow" /> — or <see cref="PolicyEffect.NotSupported" /> when no engine
+    ///     ran.
+    /// </summary>
+    public PolicyEffect Effect { get; init; } = PolicyEffect.NotSupported;
+
+    /// <summary>
+    ///     Why, for <see cref="PolicyEffect.Deny" />. ⚠ <see cref="ErrorCode.PolicyViolation" />, naming
+    ///     the assignment and the definition in its message and again in its two details, with the
+    ///     rule's first body pointer as its <c>target</c>.
+    /// </summary>
+    public Error? Error { get; init; }
+
+    /// <summary>
+    ///     The rewrites to make on the body the write sends, in order. ⚠ The write path makes them and
+    ///     then validates the result against the schema again — a policy that produced an invalid body
+    ///     would otherwise reach the provider unchecked.
+    /// </summary>
+    public ImmutableArray<PolicyModificationRecord> Modifications { get; init; } = [];
+
+    /// <summary>What the write's trace records at step 5 — every assignment that applied.</summary>
+    public ImmutableArray<PolicyTraceEntry> Trace { get; init; } = [];
+
+    /// <summary>The audit verdicts, to record once the write is accepted.</summary>
+    public ImmutableArray<PolicyStateRecord> States { get; init; } = [];
+
+    /// <summary>
+    ///     Whether <see cref="IPolicyEvaluator.RecordComplianceAsync" /> has anything to do: verdicts to
+    ///     record, or old ones an empty set must clear.
+    /// </summary>
+    public bool RecordsCompliance { get; init; }
 
     /// <summary>Whether the write may proceed.</summary>
     public bool Permits => Effect != PolicyEffect.Deny;
+}
+
+/// <summary>One request, as step 5 hands it to <see cref="IPolicyEvaluator" />.</summary>
+/// <remarks>
+///     ⚠ <b><see cref="Document" /> is the body as the write would leave the resource</b> — a
+///     <c>PUT</c>'s body, a <c>PATCH</c> merged onto what is stored, the stored body for a
+///     <c>DELETE</c> or an action — with the type's secret properties removed. A condition over a
+///     password would be an oracle for it: an audit's verdict is readable by anyone with
+///     <c>read</c> on the scope, one bit per rule, and the rule is the owner's to write.
+/// </remarks>
+public sealed record PolicyEvaluationRequest {
+    /// <summary>The resource, with its GUID once it has one.</summary>
+    public ResourceId Id { get; init; }
+
+    /// <summary>One of <c>create</c>, <c>update</c>, <c>delete</c>, <c>action</c> — <c>PolicyOperations</c>.</summary>
+    public string Operation { get; init; } = string.Empty;
+
+    /// <summary>The action's name, for an action.</summary>
+    public string Action { get; init; } = string.Empty;
+
+    /// <summary>The body as the write would leave it, secrets removed, as JSON text — see the remarks.</summary>
+    public string Document { get; init; } = "{}";
+
+    /// <summary>The subscription's management group as step 1 read it, or empty.</summary>
+    public string ManagementGroup { get; init; } = string.Empty;
+
+    /// <summary>Who is asking.</summary>
+    public CallerContext Caller { get; init; } = new();
 }
 
 /// <summary>
 ///     Step 5 of docs/plan/08 § The write path, end to end — deny, modify, audit.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The seam exists and the engine does not.</b> Policy is M3. The step is in the write path,
-///     in the right place, from the start, and the registered default returns
-///     <see cref="PolicyEffect.NotSupported" /> — which the write path treats as "carry on" and
-///     records in the trace. That way the day a real evaluator lands, nothing about the ordering has
-///     to move, and the ordering is the thing that must not move.
+///     <para>
+///         ⚠ <b>The seam that stood here from the start now has an engine behind it</b> — the tenant's
+///         <see cref="IPolicyCatalogGrain" />, through <c>CatalogPolicyEvaluator</c> (issue #46). The
+///         step did not move to receive it: it was placed between the locks and the quota when it did
+///         nothing, precisely so that the day it did something the order would already be right.
+///     </para>
+///     <para>
+///         ⚠ <b>Every write kind enters it</b> — a <c>PUT</c>, a <c>PATCH</c>, a <c>DELETE</c> and an
+///         action — and a provider cannot skip it, because no provider is reached before it: the
+///         reconciler runs from the operation grain, which step 10 starts, and a synchronous action's
+///         handler runs after it. <c>PolicyEnforcementTests.EveryWriteKindEntersStepFiveAndADenyStopsEachOne</c>
+///         drives all five shapes through real grains.
+///     </para>
 /// </remarks>
 public interface IPolicyEvaluator {
-    /// <summary>Evaluates policy for one write.</summary>
-    /// <param name="id">The resource being written.</param>
-    /// <param name="apiVersion">The api-version the body is at.</param>
-    /// <param name="body">The body, as JSON text.</param>
-    /// <param name="caller">Who is asking.</param>
+    /// <summary>Evaluates every assignment that applies to one request.</summary>
+    /// <param name="request">The request and the body it would leave.</param>
     /// <param name="cancellationToken">Cancels the evaluation.</param>
-    Task<PolicyDecision> EvaluateAsync(
-        ResourceId id,
-        string apiVersion,
-        string body,
-        CallerContext caller,
-        CancellationToken cancellationToken = default
-    );
+    /// <returns>
+    ///     The decision. ⚠ An evaluator that <i>cannot</i> answer — the catalog unreachable — denies,
+    ///     naming the reason: a write that slipped past a deny rule because the rule's store was down
+    ///     is the enforcement failing open.
+    /// </returns>
+    Task<PolicyDecision> EvaluateAsync(PolicyEvaluationRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Records the audit verdicts of a write that was accepted. Called after step 9 and only when
+    ///     <see cref="PolicyDecision.RecordsCompliance" /> is set.
+    /// </summary>
+    /// <param name="id">The resource, with its GUID.</param>
+    /// <param name="decision">The decision step 5 returned for this write.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <returns>
+    ///     Success or the failure. ⚠ The write path logs a failure and does not fail the request: the
+    ///     resource is already durable, and a <c>500</c> for a create that succeeded is the worse lie.
+    /// </returns>
+    Task<Result> RecordComplianceAsync(ResourceId id, PolicyDecision decision, CancellationToken cancellationToken = default);
+
+    /// <summary>Forgets a resource's verdicts. Called when its delete is accepted.</summary>
+    /// <param name="id">The resource.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    Task<Result> ForgetAsync(ResourceId id, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

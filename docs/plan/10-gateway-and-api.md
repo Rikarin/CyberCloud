@@ -162,6 +162,21 @@ generated client are silent about it and `cyc graph query` — hand-written besi
 non-registry source the role assignment API waits on, one path rather than a sub-path of every
 scope, and it is owed with that one because it touches the same five surfaces.
 
+**Policy is a fifth component behind the same door, under the fourth reserved namespace (#46):**
+`{scope}/providers/CyberCloud.Policy/policyDefinitions/{name}` on a tenant, a management group or a
+subscription, `…/policyAssignments/{name}` on a management group, a subscription or a resource group,
+and `…/policyStates` on the latter three reach `IPolicyManager` ([08 § Policy](08-resource-manager.md)).
+Routed as `RouteKind.Policy` for an object and `RouteKind.PolicyCollection` for a collection, and asked
+before the scope and resource grammars for the role assignment's reason: an assignment on a resource
+group is a well-formed ten-segment resource path. Under the namespace only `PolicyAddress`'s grammar
+answers, so a definition on a resource group, a named state or an unknown type is a `400`, never a
+fall-through to a `404`. `PUT` answers `201` or `200`, `DELETE` `204`, `PATCH` and `POST` `405` with
+`Allow: GET, PUT, DELETE`; a collection is `GET` only and a write to one is a `400` naming the item
+address. The gateway enforces nothing here either — the deny a policy produces is decided at step 5 of a
+resource write inside the resource manager and arrives at the gateway as a `403 PolicyViolation` to render.
+⚠ **Not in the generated document**, for the reason the two namespaces above are not — #63's question
+asked a fifth time.
+
 ## Request pipeline
 
 Order matters and each step is here for a named reason.

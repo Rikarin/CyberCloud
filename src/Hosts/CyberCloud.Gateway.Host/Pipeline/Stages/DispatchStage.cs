@@ -39,6 +39,7 @@ sealed class DispatchStage(
     IScopeManager scopes,
     IRoleAssignmentManager roles,
     IResourceGraphQuery graph,
+    IPolicyManager policies,
     IOperationReader operations,
     IHubTicketStore tickets,
     GatewayOptions options
@@ -64,6 +65,8 @@ sealed class DispatchStage(
             RouteKind.RoleAssignment => await RoleAssignmentAsync(context, path, cancellationToken),
             RouteKind.RoleAssignmentCollection => await RoleAssignmentCollectionAsync(context, path, cancellationToken),
             RouteKind.ResourceGraphQuery => await ResourceGraphQueryAsync(context, path, cancellationToken),
+            RouteKind.Policy => await PolicyAsync(context, path, cancellationToken),
+            RouteKind.PolicyCollection => await PolicyCollectionAsync(context, path, cancellationToken),
             RouteKind.Collection => await CollectionAsync(context, path, cancellationToken),
             RouteKind.Action => await ActionAsync(context, path, cancellationToken),
             // A hub request leaves the pipeline here and is served by SignalR's own middleware; the
@@ -437,6 +440,132 @@ sealed class DispatchStage(
         return new() {
             StatusCode = StatusCodes.Status200OK,
             Json = ResponseBodies.RoleAssignments(
+                page,
+                GatewayRouterPaths.NextLink(
+                    options.PublicBaseUri,
+                    context.Route.CollectionPath,
+                    context.ApiVersion.Value,
+                    top,
+                    page.Continuation
+                )
+            )
+        };
+    }
+
+    /// <summary>
+    ///     A policy definition or assignment — docs/plan/08 § Policy, issue #46.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             <c>201</c> on a create, <c>200</c> on a replace or a repeat, <c>204</c> on a delete,
+    ///             and no <c>202</c> anywhere
+    ///         </b> — one catalog write converges before the call returns, the argument
+    ///         <see cref="RoleAssignmentAsync" /> makes for a grant.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>No authorization here, exactly as for a role assignment.</b> The <c>assignRole</c>
+    ///         check is <c>IPolicyManager</c>'s, behind the one seam; <c>GatewayIsolationTests</c> reads
+    ///         this project's source to keep it out of it. And nothing here <i>enforces</i> a policy —
+    ///         that is step 5 of every resource write, inside the resource manager.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>PATCH</c> and <c>POST</c> are <c>405</c>.</b> A definition is replaced whole — a
+    ///         merge patch into a condition tree has no sensible reading — and there is no action on
+    ///         either object.
+    ///     </para>
+    /// </remarks>
+    async Task<GatewayOutcome> PolicyAsync(
+        GatewayRequestContext context,
+        string path,
+        CancellationToken cancellationToken
+    ) {
+        var method = context.Http.Request.Method;
+
+        var request = new PolicyRequest {
+            // ⚠ The rebuilt path, carrying the TOKEN's tenant. Never context.Http.Request.Path.
+            Path = context.Route.ResourcePath, Body = context.Body, Caller = context.Caller
+        };
+
+        if (HttpMethods.IsGet(method)) {
+            var read = await policies.ReadAsync(request, cancellationToken);
+
+            return read.TryGetError(out var readError)
+                ? ResultShaper.Shape(readError, path)
+                : new() { StatusCode = StatusCodes.Status200OK, Json = ResponseBodies.PolicyObject(read.GetValueOrThrow()) };
+        }
+
+        if (HttpMethods.IsDelete(method)) {
+            var deleted = await policies.DeleteAsync(request, cancellationToken);
+
+            return deleted.TryGetError(out var deleteError)
+                ? ResultShaper.Shape(deleteError, path)
+                : new GatewayOutcome { StatusCode = StatusCodes.Status204NoContent };
+        }
+
+        if (!HttpMethods.IsPut(method)) {
+            return new GatewayOutcome {
+                StatusCode = StatusCodes.Status405MethodNotAllowed,
+                Error = new(
+                    ErrorCode.InvalidRequestBody,
+                    $"{method} is not supported on a policy definition or assignment. It is read with GET, "
+                    + "written whole with PUT and deleted with DELETE — docs/plan/08 § Policy."
+                )
+            }.WithHeader(GatewayHeaders.Allow, "GET, PUT, DELETE");
+        }
+
+        var written = await policies.PutAsync(request, cancellationToken);
+
+        if (written.TryGetError(out var error)) {
+            return ResultShaper.Shape(error, path);
+        }
+
+        var snapshot = written.GetValueOrThrow();
+
+        return new() {
+            StatusCode = snapshot.Created ? StatusCodes.Status201Created : StatusCodes.Status200OK,
+            Json = ResponseBodies.PolicyObject(snapshot)
+        };
+    }
+
+    /// <summary>
+    ///     A policy collection <c>GET</c> — the definitions or assignments on a scope, or the compliance
+    ///     states beneath it — paged like every collection of this API.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <c>$top</c> parsed leniently and used twice, <c>$skipToken</c> passed through verbatim —
+    ///     <see cref="CollectionAsync" />'s rules, so a client pages this one with no branch. No check and
+    ///     no filter here; the one check on the scope is the manager's.
+    /// </remarks>
+    async Task<GatewayOutcome> PolicyCollectionAsync(
+        GatewayRequestContext context,
+        string path,
+        CancellationToken cancellationToken
+    ) {
+        var query = context.Http.Request.Query;
+        var top = int.TryParse(query["$top"], CultureInfo.InvariantCulture, out var asked) ? asked : 0;
+
+        var listed = await policies.ListAsync(
+            new() {
+                // ⚠ The rebuilt path, carrying the TOKEN's tenant. Never context.Http.Request.Path.
+                Path = context.Route.CollectionPath,
+                Caller = context.Caller,
+                Top = top,
+                Continuation = query["$skipToken"].ToString()
+            },
+            cancellationToken
+        );
+
+        if (listed.TryGetError(out var error)) {
+            return ResultShaper.Shape(error, path);
+        }
+
+        var page = listed.GetValueOrThrow();
+
+        return new() {
+            StatusCode = StatusCodes.Status200OK,
+            Json = ResponseBodies.PolicyPage(
                 page,
                 GatewayRouterPaths.NextLink(
                     options.PublicBaseUri,

@@ -137,6 +137,38 @@ enum RouteKind {
     /// </remarks>
     ResourceGraphQuery,
 
+    /// <summary>
+    ///     A policy definition or assignment —
+    ///     <c>{scope}/providers/CyberCloud.Policy/{policyDefinitions|policyAssignments}/{name}</c>.
+    ///     <c>GET</c>, <c>PUT</c> and <c>DELETE</c>. docs/plan/08 § Policy, issue #46.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Under the fourth reserved namespace, and asked before the scope and resource grammars
+    ///     for the role assignment's reason.</b> On a resource group an assignment's address is a
+    ///     well-formed ten-segment resource path; tried after <see cref="Resource" /> it would reach
+    ///     the resource manager as a type no provider serves. Under the namespace only
+    ///     <c>PolicyAddress.ParsePath</c>'s answer counts. <c>PolicyRoutingTests</c> pins the shapes,
+    ///     the precedence and the <c>400</c>s.
+    ///     <para>
+    ///         ⚠ <b>Separate from <see cref="Resource" /> because the dispatch target differs</b>: a
+    ///         policy object goes to <c>IPolicyManager</c>, which owns the <c>assignRole</c> check and
+    ///         the catalog write. What <i>enforces</i> a policy is step 5 of a resource write, and
+    ///         that is <see cref="Resource" />'s route, not this one.
+    ///     </para>
+    /// </remarks>
+    Policy,
+
+    /// <summary>
+    ///     A collection of policy objects on a scope — definitions, assignments, or the compliance
+    ///     states of the resources beneath it (<c>policyStates</c>). <c>GET</c> only.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Separate from <see cref="Policy" /> for the reason <see cref="Collection" /> is
+    ///     separate from <see cref="Resource" /></b>: which one a path is, is decided by the path —
+    ///     a type with no name after it — and never by the method.
+    /// </remarks>
+    PolicyCollection,
+
     /// <summary>A <c>POST</c> action on an existing resource — <c>restart</c>, <c>rotateKeys</c>.</summary>
     Action,
 
@@ -256,6 +288,11 @@ enum RouteKind {
 ///     The query address, for <see cref="RouteKind.ResourceGraphQuery" />. ⚠ Its tenant is the
 ///     <i>token's</i> too — the address carries nothing but a tenant, and that one is rebuilt.
 /// </param>
+/// <param name="Policy">
+///     The policy address, for <see cref="RouteKind.Policy" /> and
+///     <see cref="RouteKind.PolicyCollection" />. ⚠ Its tenant is the <i>token's</i> too —
+///     <c>PolicyAddress.WithTenant</c> rebuilds its scope.
+/// </param>
 readonly record struct GatewayRoute(
     RouteKind Kind,
     ResourceId Resource,
@@ -267,7 +304,8 @@ readonly record struct GatewayRoute(
     RoleAssignmentId RoleAssignment = default,
     RoleAssignmentCollectionId RoleAssignments = default,
     ScopeCollectionId Scopes = default,
-    ResourceGraphAddress ResourceGraph = default
+    ResourceGraphAddress ResourceGraph = default,
+    PolicyAddress Policy = default
 ) {
     /// <summary>Nothing matched.</summary>
     public static GatewayRoute None { get; } = new(RouteKind.Unknown, default, "", Guid.Empty, "");
@@ -284,6 +322,7 @@ readonly record struct GatewayRoute(
             RouteKind.Resource or RouteKind.Action => Resource.Path,
             RouteKind.Scope => Scope.Path,
             RouteKind.RoleAssignment => RoleAssignment.Path,
+            RouteKind.Policy => Policy.Path,
             _ => ""
         };
 
@@ -300,6 +339,7 @@ readonly record struct GatewayRoute(
             RouteKind.ScopeCollection => Scopes.Path,
             // The query answers a collection envelope and pages with a nextLink built from this.
             RouteKind.ResourceGraphQuery => ResourceGraph.Path,
+            RouteKind.PolicyCollection => Policy.Path,
             _ => ""
         };
 }
@@ -514,6 +554,50 @@ static class GatewayRouter {
                     "",
                     // NAMED, for the reason the other optional address kinds are; the token's tenant.
                     ResourceGraph: new(tenantId)
+                )
+            );
+        }
+
+        // ── Policy, under the fourth reserved namespace (#46). ─────────────────────────────────
+        //
+        // ⚠ THE ROLE ASSIGNMENT'S ARRANGEMENT, FOR THE ROLE ASSIGNMENT'S REASON. An assignment on a
+        // resource group is a well-formed ten-segment resource path, so this is asked before the scope
+        // and resource grammars, and under /providers/CyberCloud.Policy/ only PolicyAddress.ParsePath
+        // counts: a malformed policy path is a 400 that names the grammar, never a fall-through to the
+        // canonical 404 of a type no provider serves. The order against the two namespaces above is
+        // free — a path names one namespace or it names none.
+        //
+        // ⚠ AN ITEM OR A COLLECTION, DECIDED BY THE PATH. A collection is read with GET only, and a
+        // write to one is a 400 that names the item address, as for role assignments — a PUT that lost
+        // its name segment most needs to be told where the name goes.
+        if (PolicyAddress.IsUnderNamespace(path)) {
+            var policy = PolicyAddress.ParsePath(path);
+
+            if (policy.TryGetError(out var policyError)) {
+                return Result<GatewayRoute>.Failure(policyError);
+            }
+
+            var address = policy.GetValueOrThrow().WithTenant(tenantId);
+
+            if (address.IsCollection && !HttpMethods.IsGet(method)) {
+                return Result<GatewayRoute>.Failure(
+                    ErrorCode.InvalidResourceId,
+                    $"'{path}' is a policy collection, which is read with GET only. A definition or an "
+                    + "assignment is written with PUT and deleted with DELETE at "
+                    + "'{scope}/providers/CyberCloud.Policy/{policyDefinitions|policyAssignments}/{name}', and "
+                    + "the compliance states are only ever read — docs/plan/08 § Policy."
+                );
+            }
+
+            return Result<GatewayRoute>.Success(
+                new(
+                    address.IsCollection ? RouteKind.PolicyCollection : RouteKind.Policy,
+                    default,
+                    "",
+                    Guid.Empty,
+                    "",
+                    // NAMED, for the reason every other optional address kind is; the token's tenant.
+                    Policy: address
                 )
             );
         }
