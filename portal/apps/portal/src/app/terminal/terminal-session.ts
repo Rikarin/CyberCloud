@@ -32,10 +32,13 @@ export interface TerminalSink {
  *
  * `refused` and `failed` are different states because they are different answers: `failed` is the
  * platform refusing `connect` or the ticket over HTTP — a 403, a console that has not converged —
- * and `refused` is the hub accepting the socket and then declining the session, which is what
- * every hub method does today (docs/plan/19's session grain is owed, and `TerminalHub` says so by
- * name). Neither is retried on its own: a refusal is deterministic, and a retry loop against one
- * would be a pane that flickers.
+ * and `refused` is the hub accepting the socket and the session grain then declining — a session
+ * that belongs to someone else, a `connect` permission since revoked. Neither is retried on its
+ * own: a refusal is deterministic, and a retry loop against one would be a pane that flickers.
+ *
+ * `ended` is the hub saying the shell itself is over — it exited, sat idle past its timeout, or was
+ * terminated. It is not a dropped socket and is not reconnected: a reconnect is `connect`, and after
+ * an idle reclaim that would start the very pod the reclaim stopped, for a tab nobody is looking at.
  */
 export type SessionState =
   | { readonly kind: 'idle' }
@@ -48,6 +51,7 @@ export type SessionState =
       readonly inMs: number;
     }
   | { readonly kind: 'refused'; readonly message: string }
+  | { readonly kind: 'ended'; readonly message: string }
   | { readonly kind: 'failed'; readonly status: number; readonly code: string; readonly message: string }
   | { readonly kind: 'closed'; readonly reason: 'person' | 'exhausted' };
 
@@ -206,6 +210,7 @@ export class TerminalSession {
     hub.on(terminalProtocol.output, data => {
       if (!this.stale(generation) && typeof data === 'string') sink.output(fromBase64(data));
     });
+    hub.on(terminalProtocol.ended, reason => this.end(generation, typeof reason === 'string' ? reason : ''));
     hub.onclose(() => this.dropped(generation, session));
 
     try {
@@ -244,6 +249,22 @@ export class TerminalSession {
 
     this.previous = session;
     this.state.set({ kind: 'attached', session });
+  }
+
+  /**
+   * The hub said the shell is over. Bumps the generation first, so the close that follows is stale
+   * and `dropped` does not turn it into a reconnect.
+   */
+  private end(generation: number, reason: string): void {
+    if (this.stale(generation)) return;
+    this.generation++;
+
+    const hub = this.hub;
+    this.hub = null;
+    if (hub !== null) void hub.stop().catch(() => undefined);
+
+    this.sink?.notice(reason);
+    this.state.set({ kind: 'ended', message: reason });
   }
 
   /** The hub said no to a method. Deterministic — the pane shows it, and the person decides. */

@@ -1,5 +1,6 @@
 using CyberCloud.Core.Contracts;
 using CyberCloud.ResourceManager;
+using Microsoft.Extensions.DependencyInjection;
 using Volo.Abp.Application;
 using Volo.Abp.Modularity;
 
@@ -53,5 +54,9 @@ public sealed class TerminalApplicationModule : AbpModule {
         ArgumentNullException.ThrowIfNull(context);
 
         context.Services.AddCyberCloudProvider(new TerminalProvider());
+
+        // ⚠ In both hosts, because connect runs wherever the manager does — the gateway for a request.
+        // A silo configured with the image and a gateway without it would start the placeholder.
+        context.Services.AddOptions<CloudShellImageOptions>().BindConfiguration(CloudShellImageOptions.SectionName);
     }
 }

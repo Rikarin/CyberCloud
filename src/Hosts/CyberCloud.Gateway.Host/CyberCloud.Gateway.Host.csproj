@@ -211,6 +211,16 @@
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Application/CyberCloud.Providers.Terminal.Application.csproj"/>
     </ItemGroup>
 
+    <ItemGroup Label="The cluster-backed lane's view of the pipeline">
+        <!--
+          ⚠ The second test project that composes this host's internal stages, beside the sibling
+          .Tests one Directory.Build.targets already names. CyberCloud.Gateway.Host.Cluster.Conformance
+          drives the real TerminalHub over a real silo and a real k3s (issue #22), and it has to
+          compose the real pipeline to do it — which is internal here for the reason the header gives.
+        -->
+        <InternalsVisibleTo Include="CyberCloud.Gateway.Host.Cluster.Conformance"/>
+    </ItemGroup>
+
     <ItemGroup Label="RFC 9116 security.txt — embedded so the build can see it expire">
         <!--
           Embedded rather than copied to the output directory or read from a ConfigMap, because the

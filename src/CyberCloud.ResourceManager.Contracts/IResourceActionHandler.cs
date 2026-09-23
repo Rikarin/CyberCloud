@@ -62,6 +62,38 @@ public readonly record struct ActionContext(
     ///     for the same reason; <c>ActionDispatcher</c> supplies the host's.
     /// </summary>
     public IAgentTunnels Agents { get; init; } = new UnavailableAgentTunnels();
+
+    /// <summary>
+    ///     The terminal-session seam — where <c>connect</c> registers the shell it started. Defaults to
+    ///     <see cref="UnavailableTerminalSessions" />; <c>ActionDispatcher</c> supplies the host's.
+    /// </summary>
+    public ITerminalSessions Terminals { get; init; } = new UnavailableTerminalSessions();
+
+    /// <summary>
+    ///     Who invoked the action, as the gateway built it from the token — or <see langword="null" />
+    ///     when the dispatcher was not handed one.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             A FACT TO BIND SOMETHING TO, NEVER AN INPUT TO AN ALLOW-OR-DENY.
+    ///         </b> The manager has already decided: step 3 checked the action's permission on this
+    ///         resource through ReBAC before the handler was reached, and docs/plan/07 § The
+    ///         enforcement seam keeps that decision there. A handler that compared this against
+    ///         something and refused would be a second authorization engine, in a provider.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It exists for the cloud terminal's <c>connect</c>, and the reason is ownership.</b>
+    ///         A shell is a session that belongs to the person who opened it, and until this property
+    ///         existed a handler could not name that person: the omission this record's remarks used
+    ///         to defend — "a synchronous action has no operation" — was right about the log and left
+    ///         <c>charts/managed/cloud-shell/conformance.yaml § owed</c>,
+    ///         <c>connect-cannot-see-its-caller</c>, with no route to closing. <c>connect</c> binds its
+    ///         session to this caller, and the session grain then refuses every other person.
+    ///     </para>
+    /// </remarks>
+    public CallerContext? Caller { get; init; }
 }
 
 /// <summary>

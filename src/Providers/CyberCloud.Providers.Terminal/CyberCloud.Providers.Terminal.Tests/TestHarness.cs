@@ -218,3 +218,22 @@ sealed class ReconcilerWithAReadonlyCache : IResourceReconciler {
     ) =>
         Task.FromResult(ObservedState.Absent);
 }
+
+/// <summary>A session registry that records what <c>connect</c> registered, and can refuse.</summary>
+/// <remarks>
+///     The handler's seam, not the grain's: what the session grain does with a registration is
+///     proven against a real grain and a real kubelet in
+///     <c>CyberCloud.Providers.Terminal.Cluster.Conformance</c>.
+/// </remarks>
+sealed class RecordingSessions : ITerminalSessions {
+    /// <summary>Every registration, in order.</summary>
+    public List<(TerminalSessionSpec Spec, CallerContext Owner)> Opened { get; } = [];
+
+    /// <summary>What every registration answers — success unless a test says otherwise.</summary>
+    public Result Answer { get; init; } = Result.Success;
+
+    public Task<Result> OpenAsync(TerminalSessionSpec spec, CallerContext owner, CancellationToken cancellationToken = default) {
+        Opened.Add((spec, owner));
+        return Task.FromResult(Answer);
+    }
+}

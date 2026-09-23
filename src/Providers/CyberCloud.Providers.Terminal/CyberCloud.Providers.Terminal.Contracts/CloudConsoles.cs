@@ -107,18 +107,14 @@ namespace CyberCloud.Providers.Terminal.Contracts;
 ///         <b>
 ///             no user dimension at
 ///             all
-///         </b> — docs/plan/06 § The hierarchy — and an action handler cannot see who invoked it,
-///         because <see cref="ActionContext" /> carries no <c>CallerContext</c>. So the identity is a
-///         <i>property of the console</i>, <see cref="PrincipalIdPointer" />, immutable after create,
-///         and the home volume is the console's own. What that buys is that "the shell runs as you" is
-///         true by construction for a console you created; what it does not buy is enforcement that
-///         the caller of <c>connect</c> is that principal, which is
-///         <c>conformance.yaml § owed</c>, <c>connect-cannot-see-its-caller</c>. ⚠ Until that closes,
-///         the honest description of the ReBAC posture is:
-///         <b>
-///             anyone who may <c>connect</c> to a
-///             console gets a shell holding that console's identity.
-///         </b> One console per user is a
+///         </b> — docs/plan/06 § The hierarchy. So the identity is a <i>property of the console</i>,
+///         <see cref="PrincipalIdPointer" />, immutable after create, and the home volume is the
+///         console's own. What that buys is that "the shell runs as you" is true by construction for a
+///         console you created. ⚠ What binds a SESSION to a person is <c>connect</c>'s caller
+///         (<see cref="ActionContext.Caller" />): the person who opened a shell owns it and nobody
+///         else can type into it — but whoever holds <c>connect</c> on the console may be the one who
+///         opens it, and then holds its identity. <c>conformance.yaml § owed</c>,
+///         <c>connect-cannot-see-its-caller</c>, says what that leaves. One console per user is a
 ///         convention the portal follows, not a fact the schema enforces.
 ///     </para>
 ///     <para>
@@ -131,9 +127,9 @@ namespace CyberCloud.Providers.Terminal.Contracts;
 ///         <c>POST …/connect</c> → the five fields of <see cref="ConnectResponse" />, then
 ///         <c>/hubs/terminal</c> with the returned <see cref="SessionIdField" /> — opened with a
 ///         ticket the gateway mints (<c>POST /hubs/terminal/ticket</c>), never with the bearer token
-///         in the URL. The portal's terminal blade does exactly that now. The hub is mapped and
-///         refuses every method by name (<c>TerminalHub.Attach</c>, <c>Send</c>, <c>Resize</c>); the
-///         byte path behind it is docs/plan/19's session grain and is owed.
+///         in the URL. The portal's terminal blade does exactly that. The hub's <c>Attach</c>,
+///         <c>Send</c> and <c>Resize</c> reach <see cref="ITerminalSessionGrain" />, docs/plan/19's
+///         session grain, which attaches to the pod and streams its output back.
 ///     </para>
 /// </remarks>
 public static class CloudConsoles {
@@ -201,15 +197,12 @@ public static class CloudConsoles {
 
     /// <summary><c>POST …/consoles/{name}/terminate</c> — end the session now.</summary>
     /// <remarks>
-    ///     ⚠
-    ///     <b>
-    ///         The manual half of the idle policy, and it exists because the automatic half is
-    ///         owed.
-    ///     </b> docs/plan/19 gives the pod a 20-minute idle timeout enforced by the session
-    ///     grain, and that grain is not built. Until it is, this action is the only thing in the
-    ///     platform that can stop a console's pod on purpose — <see cref="MaxDurationHoursPointer" />
-    ///     is the only one that can stop it by accident. Both are named on this type rather than left
-    ///     to a sweeper nobody has written.
+    ///     ⚠ <b>The manual half of the idle policy.</b> docs/plan/19 gives the pod a 20-minute idle
+    ///     timeout, and <see cref="ITerminalSessionGrain" /> enforces it while the session's
+    ///     activation lives; this action is the stop button a person has either way, and the only
+    ///     way to stop paying early for a shell whose grain was lost with its silo —
+    ///     <c>conformance.yaml § owed</c>, <c>no-idle-sweep-without-an-activation</c>.
+    ///     <see cref="MaxDurationHoursPointer" /> is the stop nobody has to press.
     /// </remarks>
     public const string TerminateAction = "terminate";
 
@@ -367,6 +360,24 @@ public static class CloudConsoles {
     /// <param name="desired">The desired body.</param>
     public static string Image(JsonElement desired) => ImageRepository + "@" + ImageDigests[ImageVariant(desired)];
 
+    /// <summary>Whether an image reference names its content by digest.</summary>
+    /// <param name="image">A reference such as <c>registry/cloud-shell:1.0@sha256:…</c>.</param>
+    /// <returns>
+    ///     <c>true</c> when it ends in <c>@sha256:</c> and 64 lower-case hex digits. ⚠ A tag alone is
+    ///     refused: docs/plan/18 § Platform security's "a pinned digest, never a tag", and a shell
+    ///     resolved by tag is one a registry can change between two attaches of one session.
+    /// </returns>
+    public static bool IsPinned(string? image) {
+        if (string.IsNullOrWhiteSpace(image)) {
+            return false;
+        }
+
+        var at = image.LastIndexOf("@sha256:", StringComparison.Ordinal);
+        var digest = at < 1 ? string.Empty : image[(at + "@sha256:".Length)..];
+
+        return digest.Length == 64 && digest.All(static c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
+    }
+
     // ── Sizing ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>The Kubernetes quantity grammar. Pointed at, never copied.</summary>
@@ -418,14 +429,16 @@ public static class CloudConsoles {
     public const string MaxDurationHoursPointer = "/properties/session/maxDurationHours";
 
     /// <summary>
-    ///     The annotation the idle reaper reads the timeout from.
+    ///     The annotation an activation-independent idle sweep would read the timeout from.
     /// </summary>
     /// <remarks>
     ///     ⚠
     ///     <b>
-    ///         AN ANNOTATION ON THE POD RATHER THAN A NUMBER THE REAPER LOOKS UP, BECAUSE THE REAPER
-    ///         DOES NOT EXIST YET AND SOMETHING HAD TO OUTLIVE THAT.
-    ///     </b> A sweeper that had to resolve
+    ///         AN ANNOTATION ON THE POD RATHER THAN A NUMBER A SWEEPER LOOKS UP, BECAUSE THE SESSION
+    ///         GRAIN'S CLOCK DIES WITH ITS ACTIVATION AND SOMETHING HAS TO OUTLIVE THAT.
+    ///     </b> The live session's reclaim is <see cref="ITerminalSessionGrain" />'s and reads the
+    ///     number from the session it was registered with; this copy is for the sweeper
+    ///     <c>conformance.yaml § owed</c>, <c>no-idle-sweep-without-an-activation</c>, names. A sweeper that had to resolve
     ///     every pod back to a resource body to learn its timeout would be a sweeper that cannot run
     ///     without the resource manager; carrying the number on the object makes the reclaim decision
     ///     a property of the cluster, readable by <c>kubectl</c> and by whatever eventually sweeps.
@@ -1058,8 +1071,18 @@ public static class CloudConsoles {
     ///         pod is meant to end.
     ///     </para>
     /// </remarks>
-    public static string PodJson(string name, JsonElement desired) {
+    public static string PodJson(string name, JsonElement desired) => PodJson(name, desired, Image(desired));
+
+    /// <summary>The shell pod, running an image the deployment chose.</summary>
+    /// <param name="name">The console's name.</param>
+    /// <param name="desired">The desired body.</param>
+    /// <param name="image">
+    ///     The image reference, by digest — see <see cref="IsPinned" />. ⚠ Never a tenant's value:
+    ///     <see cref="ImageRepository" /> says why a tenant choosing what runs here is the whole attack.
+    /// </param>
+    public static string PodJson(string name, JsonElement desired, string image) {
         ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(image);
 
         var (cpu, memory) = Resources(desired);
 
@@ -1095,8 +1118,8 @@ public static class CloudConsoles {
                 },
                 ["containers"] = new JsonArray {
                     new JsonObject {
-                        ["name"] = "shell",
-                        ["image"] = Image(desired),
+                        ["name"] = ShellContainer,
+                        ["image"] = image,
                         // ⚠ A login shell and nothing else. There is no command a tenant may put here
                         // — see Schema2026's remarks — because a console's product is the interactive
                         // session and a `command` property would make it a job runner with an
@@ -1142,6 +1165,12 @@ public static class CloudConsoles {
 
     /// <summary>Where <c>$HOME</c> is mounted.</summary>
     public const string HomePath = "/home/cloudshell";
+
+    /// <summary>
+    ///     The pod's one container — the shell a session attaches to. Named once, because the pod spec
+    ///     and the session grain's attach have to agree on it.
+    /// </summary>
+    public const string ShellContainer = "shell";
 
     /// <summary>The uid and gid the shell runs as.</summary>
     /// <remarks>

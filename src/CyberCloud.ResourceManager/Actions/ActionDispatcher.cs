@@ -60,11 +60,16 @@ namespace CyberCloud.ResourceManager.Actions;
 ///     the refusing default — every dispatcher built by a test, and the right answer for a host that
 ///     serves no connected cluster.
 /// </param>
+/// <param name="terminals">
+///     Where <c>connect</c> registers the terminal session it starts, or <see langword="null" /> for
+///     the refusing default. <c>AddCyberCloudResourceManager</c> registers the grain-backed one.
+/// </param>
 public sealed class ActionDispatcher(
     IServiceProvider services,
     IClusterConnectionFactory clusters,
     ISecretResolver secrets,
-    IAgentTunnels? agents = null
+    IAgentTunnels? agents = null,
+    ITerminalSessions? terminals = null
 ) {
     /// <summary>Runs one action and returns its response body.</summary>
     /// <param name="id">The resource, with its GUID resolved.</param>
@@ -72,6 +77,11 @@ public sealed class ActionDispatcher(
     /// <param name="action">The action, which names the handler and the response shape.</param>
     /// <param name="input">The resource as stored — its desired body, api-version and cluster.</param>
     /// <param name="body">The validated <c>POST</c> body.</param>
+    /// <param name="caller">
+    ///     Who asked, handed to the handler as <see cref="ActionContext.Caller" /> — a fact to bind a
+    ///     session to, never a second authorization. <see langword="null" /> when the caller of this
+    ///     dispatcher has none to give.
+    /// </param>
     /// <param name="cancellationToken">Cancels the invocation.</param>
     /// <returns>The response JSON, or a failure.</returns>
     public async Task<Result<string>> InvokeAsync(
@@ -80,6 +90,7 @@ public sealed class ActionDispatcher(
         ActionRegistration action,
         ReconcileInput input,
         JsonElement body,
+        CallerContext? caller = null,
         CancellationToken cancellationToken = default
     ) {
         ArgumentNullException.ThrowIfNull(registration);
@@ -153,7 +164,9 @@ public sealed class ActionDispatcher(
                 // ⚠ The host's seam, or the refusing default when a caller built this dispatcher
                 // without one — which every test double does, and which is the right answer for a
                 // dispatcher that serves no connected cluster.
-                Agents = agents ?? new UnavailableAgentTunnels()
+                Agents = agents ?? new UnavailableAgentTunnels(),
+                Terminals = terminals ?? new UnavailableTerminalSessions(),
+                Caller = caller
             };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

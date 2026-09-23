@@ -7,6 +7,7 @@ using CyberCloud.ResourceManager.Expiry;
 using CyberCloud.ResourceManager.Grains;
 using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Registry;
+using CyberCloud.ResourceManager.Terminals;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -178,6 +179,11 @@ public static class ResourceManagerSiloBuilderExtensions {
         // it is actually used there. IResourceManager is "a service held by the gateway"
         // (docs/plan/08 § The write path, end to end), a synchronous action runs inside ActionAsync,
         // so a `listKeys` executes in the gateway's process and reads the gateway's ISecretResolver.
+        // ⚠ THE TERMINAL SEAM IS REAL IN BOTH HOSTS, unlike the agent tunnel's: registering a session
+        // is one grain call, and a gateway's Orleans client makes it as well as a silo does. connect
+        // runs in the gateway for a request, so a gateway left with the refusing default would start
+        // a pod and hand back a session id no grain knows.
+        services.TryAddSingleton<ITerminalSessions, GrainTerminalSessions>();
         services.TryAddSingleton<ActionDispatcher>();
         services.TryAddSingleton<IResourceManager, ResourceManagerService>();
 

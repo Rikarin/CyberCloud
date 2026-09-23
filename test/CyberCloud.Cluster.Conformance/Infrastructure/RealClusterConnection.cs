@@ -124,6 +124,20 @@ public sealed class RealClusterConnection(IKubeApiClient api, Guid clusterId) : 
         CancellationToken cancellationToken = default
     ) =>
         api.SetOwnerAsync(target, owner, cancellationToken);
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ Straight onto the real API server's <c>pods/attach</c>, with no connection grain in
+    ///     between — the same shortcut every other member here takes. The grain's half of an attach
+    ///     (its tenancy check) is <c>ClusterConnectionTenancyTests</c>'; what this harness proves is the
+    ///     stream itself, against a real kubelet.
+    /// </remarks>
+    public Task<Result<IKubeTerminal>> AttachAsync(
+        ObjectRef pod,
+        string container,
+        CancellationToken cancellationToken = default
+    ) =>
+        api.AttachAsync(pod, container, cancellationToken);
 }
 
 /// <summary>Hands the reconcile driver the one real connection a harness owns.</summary>

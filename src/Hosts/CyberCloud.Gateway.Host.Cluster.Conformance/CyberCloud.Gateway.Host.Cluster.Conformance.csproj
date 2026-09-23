@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The gateway's cluster-backed lane: the real /hubs/terminal, the real pipeline and the real
+      resource manager, over a real silo and a real k3s — issue #22's cloud terminal, end to end.
+
+      ⚠ WHY A PROJECT OF ITS OWN AND NOT A CLASS IN CyberCloud.Gateway.Host.Tests. That suite is the
+      Fast lane and every one of its 261 cases runs with no cluster; this one starts k3s, PostgreSQL
+      and Redis and waits for a shell pod to pull its image. build/Build.Test.cs § TestLane partitions
+      by the `.Cluster.Conformance` suffix and nothing else, so the suffix is what puts it on main.yml
+      rather than on every PR — the same argument every provider's `.Cluster.Conformance` makes.
+
+      ⚠ WHY IT IS UNDER src/Hosts AND NOT UNDER THE PROVIDER. What it proves is a GATEWAY property —
+      a ticket opens the hub, the hub reaches a silo's grain, the grain's observer reaches back — and
+      the provider is only the thing on the far side. A provider test project referencing a host would
+      be the one reference in the tree that points up the graph.
+
+      ⚠ IT SEES THE GATEWAY'S INTERNALS through an InternalsVisibleTo in CyberCloud.Gateway.Host's own
+      project file, for the reason the sibling .Tests project does: the pipeline stages, the ticket
+      store and the dev token issuer are internal, and composing the real ones is the point.
+    -->
+
+    <PropertyGroup>
+        <!-- The harness is generic on the case source; see test/CyberCloud.Cluster.Conformance. -->
+        <NoWarn>$(NoWarn);CA1000</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="NSubstitute"/>
+        <PackageReference Include="KubernetesClient"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
+        <ProjectReference Include="../../../test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
+        <!-- The one CloudConsoleCase, rather than a second description of the same provider. -->
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Conformance/CyberCloud.Providers.Terminal.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

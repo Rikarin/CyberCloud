@@ -1850,6 +1850,7 @@ public sealed class ResourceManagerService(
             action,
             input.GetValueOrThrow(),
             body.RootElement,
+            request.Caller,
             cancellationToken
         );
 

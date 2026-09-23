@@ -241,6 +241,97 @@ public sealed class ConsoleSessionTests {
             .ShouldBe(CloudConsoles.TerminateResponse.Properties.Select(static x => x.JsonPointer[1..]));
     }
 
+    [Fact]
+    public async Task ConnectBindsTheSessionItStartedToItsCaller() {
+        // ⚠ THE OWNERSHIP HALF OF ISSUE #22. The session grain refuses every person but the one bound
+        // here, so what is registered — the console, the pod, the idle timeout and the caller — is the
+        // whole of what the grain will ever know about who may type into this shell.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions();
+        var caller = new CallerContext {
+            TenantId = ConsoleReconcilerTests.TenantA, SubjectType = "user", SubjectId = "person-a"
+        };
+
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        var connected = await ConsoleReconcilerTests.Connect(
+            connection,
+            desired.RootElement,
+            sessions: sessions,
+            caller: caller
+        );
+
+        var (spec, owner) = sessions.Opened.ShouldHaveSingleItem();
+
+        owner.ShouldBe(caller);
+        spec.PodUid.ShouldBe(Session(connected));
+        spec.Resource.Name.ShouldBe("observed");
+        spec.Resource.TenantId.ShouldBe(ConsoleReconcilerTests.TenantA);
+        spec.Container.ShouldBe(CloudConsoles.ShellContainer);
+        spec.Permission.ShouldBe(CloudConsoles.ConnectPermission);
+        spec.ClusterId.ShouldBe(connection.ClusterId);
+        spec.IdleTimeoutSeconds.ShouldBe(1200);
+        spec.Pod.ShouldBe(CloudConsoles.PodRef(ConsoleReconcilerTests.Namespace, "observed"));
+    }
+
+    [Fact]
+    public async Task ConnectWithNoCallerStartsNoSession() {
+        // A session with no owner is a shell anybody holding its id could type into. The manager
+        // always hands the caller over; a dispatcher composed without one is refused by name.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions();
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        var connected = await ConsoleReconcilerTests.Connect(
+            connection,
+            desired.RootElement,
+            sessions: sessions,
+            withoutCaller: true
+        );
+
+        connected.IsSuccess.ShouldBeFalse();
+        connected.Error!.Message.ShouldContain("no caller");
+        sessions.Opened.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ASessionAnotherPersonHoldsIsAConflictAndNoSessionId() {
+        // The second person holds `connect` on the console — the manager checked — so the console is
+        // no secret to them; the session is. They get the grain's 409 and never the id.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions {
+            Answer = Result.Failure(ErrorCode.Conflict, "The shell is open for another person.")
+        };
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        var connected = await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions);
+
+        connected.IsSuccess.ShouldBeFalse();
+        connected.Error!.Code.ShouldBe(ErrorCode.Conflict);
+    }
+
+    [Fact]
+    public async Task AFinishedShellIsDeletedAndStartedAgainRatherThanReportedStartingForever() {
+        // ⚠ restartPolicy: Never leaves a pod whose shell exited in Succeeded, and an apply of the same
+        // spec over it changes nothing. Without the delete, `exit` would make a console answer
+        // "Starting" to every connect until the pod's hard cap.
+        var connection = new RecordingConnection { PodPhase = "Succeeded" };
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        await ConsoleReconcilerTests.Connect(connection, desired.RootElement);
+
+        connection.Deleted.ShouldContain(x => x.Kind.Kind == "Pod");
+        connection.Applied.Count(static x => x.Target.Kind.Kind == "Pod").ShouldBe(2);
+    }
+
     static string Session(Result<string> connected) =>
         JsonNode.Parse(connected.GetValueOrThrow())![CloudConsoles.SessionIdField]!.GetValue<string>();
 }

@@ -607,6 +607,12 @@
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj" />
         <Project Path="src/Hosts/CyberCloud.Gateway.Host.Tests/CyberCloud.Gateway.Host.Tests.csproj" />
+        <!--
+          #22. The gateway's cluster-backed lane: the real /hubs/terminal over a real silo and a real
+          k3s — the cloud shell end to end. Its own project for the suffix build/Build.Test.cs § TestLane
+          reads, so it runs on every merge and not on every PR.
+        -->
+        <Project Path="src/Hosts/CyberCloud.Gateway.Host.Cluster.Conformance/CyberCloud.Gateway.Host.Cluster.Conformance.csproj" />
         <Project Path="src/Hosts/CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj" />
         <Project Path="src/Hosts/CyberCloud.Silo.Host.Tests/CyberCloud.Silo.Host.Tests.csproj" />
         <Project Path="src/Hosts/CyberCloud.AppHost/CyberCloud.AppHost.csproj" />
