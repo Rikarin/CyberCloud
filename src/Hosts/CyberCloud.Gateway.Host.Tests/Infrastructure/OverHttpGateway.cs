@@ -60,8 +60,12 @@ sealed class OverHttpGateway : IAsyncDisposable {
     public HttpClient Http { get; }
 
     /// <summary>Starts the listener.</summary>
-    public static async Task<OverHttpGateway> StartAsync() {
-        var harness = new GatewayHarness();
+    public static Task<OverHttpGateway> StartAsync() => StartAsync(new GatewayHarness());
+
+    /// <summary>Starts the listener over a harness the caller composed — one over a real manager, for instance.</summary>
+    /// <param name="harness">The stages to put behind the socket.</param>
+    public static async Task<OverHttpGateway> StartAsync(GatewayHarness harness) {
+        ArgumentNullException.ThrowIfNull(harness);
 
         var builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:0");

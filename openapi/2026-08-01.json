@@ -12748,6 +12748,907 @@
       "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces/collectors",
       "x-cybercloud-action": "listEndpoints"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "workspacesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Monitor_workspaces_components_List",
+        "summary": "List the CyberCloud.Monitor/workspaces/components in a resource group.",
+        "description": "Returns one page of the resources of this type in the resource group the path names, including any that are being deleted — docs/plan/06 § Two-phase create keeps a resource whose teardown has not converged visible with that state, because its pods still run and its meter still ticks.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces/components",
+      "x-cybercloud-collection": true
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "workspacesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Monitor_workspaces_components_Get",
+        "summary": "Read a CyberCloud.Monitor/workspaces/components.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Monitor_workspaces_components_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Monitor/workspaces/components.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Monitor_workspaces_components_Update",
+        "summary": "Merge-patch a CyberCloud.Monitor/workspaces/components.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Monitor_workspaces_components_Delete",
+        "summary": "Delete a CyberCloud.Monitor/workspaces/components.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces/components",
+      "x-cybercloud-display": {
+        "name": "Application component",
+        "plural": "Application components",
+        "alias": "component",
+        "summary": "An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": [
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}/applicationMap": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "workspacesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Monitor_workspaces_components_ApplicationMap",
+        "summary": "applicationMap a CyberCloud.Monitor/workspaces/components.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components.ApplicationMapRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components.ApplicationMapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces/components",
+      "x-cybercloud-action": "applicationMap"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}/dependencies": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "workspacesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Monitor_workspaces_components_Dependencies",
+        "summary": "dependencies a CyberCloud.Monitor/workspaces/components.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components.DependenciesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components.DependenciesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces/components",
+      "x-cybercloud-action": "dependencies"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}/exceptions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "workspacesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Monitor_workspaces_components_Exceptions",
+        "summary": "exceptions a CyberCloud.Monitor/workspaces/components.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components.ExceptionsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components.ExceptionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces/components",
+      "x-cybercloud-action": "exceptions"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}/listConnectionString": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "workspacesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Monitor_workspaces_components_ListConnectionString",
+        "summary": "listConnectionString a CyberCloud.Monitor/workspaces/components.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components.ListConnectionStringResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces/components",
+      "x-cybercloud-action": "listConnectionString"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}/requests": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "workspacesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Monitor_workspaces_components_Requests",
+        "summary": "requests a CyberCloud.Monitor/workspaces/components.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components.RequestsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components.RequestsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces/components",
+      "x-cybercloud-action": "requests"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}/transaction": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "workspacesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Monitor_workspaces_components_Transaction",
+        "summary": "transaction a CyberCloud.Monitor/workspaces/components.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components.TransactionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components.TransactionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces/components",
+      "x-cybercloud-action": "transaction"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/publicIpAddresses": {
       "parameters": [
         {
@@ -25519,6 +26420,758 @@
         "title": "CyberCloud.Monitor.workspaces.collectors.ListEndpointsResponse",
         "type": "object"
       },
+      "CyberCloud.Monitor.workspaces.components": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Monitor/workspaces/components: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
+          "location": {
+            "description": "The region the component is billed in — its workspace's.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The component's own settings.",
+            "properties": {
+              "clusterId": {
+                "description": "The cluster the connection string is published in — the one its collector runs in, because the endpoint is that collector's in-cluster address.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "collector": {
+                "default": "gateway",
+                "description": "The name of the collector under the same workspace that the application's SDKs send to. The views read the workspace whichever collector carried the telemetry; this only decides the endpoint the connection string names.",
+                "example": "gateway",
+                "maxLength": 63,
+                "pattern": "^(?:[a-z0-9]([-a-z0-9]*[a-z0-9])?)$",
+                "type": "string"
+              },
+              "protocol": {
+                "default": "http/protobuf",
+                "description": "Which OTLP protocol the connection string names. The collector must have that receiver on.",
+                "enum": [
+                  "grpc",
+                  "http/protobuf"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "clusterId",
+              "collector"
+            ],
+            "type": "object"
+          },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Monitor/workspaces/components",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.components.ApplicationMapRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Monitor/workspaces/components/applicationMap.",
+        "properties": {
+          "timespanMinutes": {
+            "default": 60,
+            "description": "How far back to read, in minutes, ending now.",
+            "maximum": 1440,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "top": {
+            "default": 20,
+            "description": "The most rows to return, busiest first.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "title": "CyberCloud.Monitor.workspaces.components.ApplicationMapRequest",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.components.ApplicationMapResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Monitor/workspaces/components/applicationMap returns.",
+        "properties": {
+          "edgeCalls": {
+            "description": "Per edge: spans in the target whose parent span is in the source, in the window.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "edgeFailures": {
+            "description": "Per edge: those whose status is Error.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "edgeP95Ms": {
+            "description": "Per edge: the target span's 95th percentile duration, in milliseconds.",
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "edgeSources": {
+            "description": "Per edge: the calling service.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "edgeTargets": {
+            "description": "Per edge: the called service.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "nodeFailures": {
+            "description": "Per node: requests it failed.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "nodeRequests": {
+            "description": "Per node: requests it served in the window.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "nodes": {
+            "description": "Per node: a service in the component.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "timespanMinutes": {
+            "description": "The window the view read, in minutes, ending when it was asked.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "edgeCalls",
+          "edgeFailures",
+          "edgeP95Ms",
+          "edgeSources",
+          "edgeTargets",
+          "nodeFailures",
+          "nodeRequests",
+          "nodes",
+          "timespanMinutes"
+        ],
+        "title": "CyberCloud.Monitor.workspaces.components.ApplicationMapResponse",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.components.DependenciesRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Monitor/workspaces/components/dependencies.",
+        "properties": {
+          "timespanMinutes": {
+            "default": 60,
+            "description": "How far back to read, in minutes, ending now.",
+            "maximum": 1440,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "top": {
+            "default": 20,
+            "description": "The most rows to return, busiest first.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "title": "CyberCloud.Monitor.workspaces.components.DependenciesRequest",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.components.DependenciesResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Monitor/workspaces/components/dependencies returns.",
+        "properties": {
+          "counts": {
+            "description": "Per row: calls in the window.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "failed": {
+            "description": "How many of them failed.",
+            "type": "integer"
+          },
+          "failureRate": {
+            "description": "Per row: failures over calls, 0 to 1.",
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "failures": {
+            "description": "Per row: failed calls.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "names": {
+            "description": "Per row: the client span's name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "p50Ms": {
+            "description": "Per row: the median duration, in milliseconds.",
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "p95Ms": {
+            "description": "Per row: the 95th percentile duration, in milliseconds.",
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "p99Ms": {
+            "description": "Per row: the 99th percentile duration, in milliseconds.",
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "services": {
+            "description": "Per row: the service that made the call.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "targets": {
+            "description": "Per row: what was called — peer.service, else server.address, else the database or messaging system; empty when the span names none.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "timespanMinutes": {
+            "description": "The window the view read, in minutes, ending when it was asked.",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Every outgoing call in the window, not only the rows below.",
+            "type": "integer"
+          },
+          "types": {
+            "description": "Per row: db, http, messaging, rpc or other, from the span's attributes.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "counts",
+          "failed",
+          "failureRate",
+          "failures",
+          "names",
+          "p50Ms",
+          "p95Ms",
+          "p99Ms",
+          "services",
+          "targets",
+          "timespanMinutes",
+          "total",
+          "types"
+        ],
+        "title": "CyberCloud.Monitor.workspaces.components.DependenciesResponse",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.components.ExceptionsRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Monitor/workspaces/components/exceptions.",
+        "properties": {
+          "timespanMinutes": {
+            "default": 60,
+            "description": "How far back to read, in minutes, ending now.",
+            "maximum": 1440,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "top": {
+            "default": 20,
+            "description": "The most rows to return, busiest first.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "title": "CyberCloud.Monitor.workspaces.components.ExceptionsRequest",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.components.ExceptionsResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Monitor/workspaces/components/exceptions returns.",
+        "properties": {
+          "counts": {
+            "description": "Per row: occurrences in the window.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "fromSpans": {
+            "description": "Per row: how many were an `exception` event on a span; the rest were log records carrying exception.type.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "lastSeen": {
+            "description": "Per row: the latest occurrence.",
+            "items": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "messages": {
+            "description": "Per row: the most recent exception.message of that type.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "services": {
+            "description": "Per row: the service that raised it.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "timespanMinutes": {
+            "description": "The window the view read, in minutes, ending when it was asked.",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Every exception in the window, from spans and from logs, not only the rows below.",
+            "type": "integer"
+          },
+          "types": {
+            "description": "Per row: exception.type.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "counts",
+          "fromSpans",
+          "lastSeen",
+          "messages",
+          "services",
+          "timespanMinutes",
+          "total",
+          "types"
+        ],
+        "title": "CyberCloud.Monitor.workspaces.components.ExceptionsResponse",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.components.List": {
+        "type": "object",
+        "title": "CyberCloud.Monitor.workspaces.components.List",
+        "description": "One page of CyberCloud.Monitor/workspaces/components. ⚠ The page holds what the caller may read: a listing runs a permission check per member (docs/plan/07 § The enforcement seam), so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page — there is no empty-string form, because an empty URL is one a polite client requests."
+          },
+          "value": {
+            "type": "array",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
+            "items": {
+              "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.components"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "CyberCloud.Monitor.workspaces.components.ListConnectionStringResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Monitor/workspaces/components/listConnectionString returns.",
+        "properties": {
+          "configMap": {
+            "description": "The ConfigMap in the component's namespace carrying the three variables, for a pod's envFrom.",
+            "type": "string"
+          },
+          "connectionString": {
+            "description": "The three variables as one Key=Value;… line, for a configuration that takes a single string.",
+            "type": "string"
+          },
+          "otlpEndpoint": {
+            "description": "OTEL_EXPORTER_OTLP_ENDPOINT: the collector's in-cluster URL.",
+            "type": "string"
+          },
+          "otlpProtocol": {
+            "description": "OTEL_EXPORTER_OTLP_PROTOCOL.",
+            "enum": [
+              "grpc",
+              "http/protobuf"
+            ],
+            "type": "string"
+          },
+          "resourceAttributes": {
+            "description": "OTEL_RESOURCE_ATTRIBUTES: the service.namespace the views filter on.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "configMap",
+          "connectionString",
+          "otlpEndpoint",
+          "otlpProtocol",
+          "resourceAttributes"
+        ],
+        "title": "CyberCloud.Monitor.workspaces.components.ListConnectionStringResponse",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.components.RequestsRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Monitor/workspaces/components/requests.",
+        "properties": {
+          "timespanMinutes": {
+            "default": 60,
+            "description": "How far back to read, in minutes, ending now.",
+            "maximum": 1440,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "top": {
+            "default": 20,
+            "description": "The most rows to return, busiest first.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "title": "CyberCloud.Monitor.workspaces.components.RequestsRequest",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.components.RequestsResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Monitor/workspaces/components/requests returns.",
+        "properties": {
+          "counts": {
+            "description": "Per row: requests in the window.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "failed": {
+            "description": "How many of them failed — a span whose status is Error.",
+            "type": "integer"
+          },
+          "failureRate": {
+            "description": "Per row: failures over requests, 0 to 1.",
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "failures": {
+            "description": "Per row: failed requests.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "operations": {
+            "description": "Per row: the operation — the server span's name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "p50Ms": {
+            "description": "Per row: the median duration, in milliseconds.",
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "p95Ms": {
+            "description": "Per row: the 95th percentile duration, in milliseconds.",
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "p99Ms": {
+            "description": "Per row: the 99th percentile duration, in milliseconds.",
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "ratePerMinute": {
+            "description": "Per row: requests per minute over the window.",
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "services": {
+            "description": "Per row: the service that served the operation.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "timespanMinutes": {
+            "description": "The window the view read, in minutes, ending when it was asked.",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Every request in the window, across every operation, not only the rows below.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "counts",
+          "failed",
+          "failureRate",
+          "failures",
+          "operations",
+          "p50Ms",
+          "p95Ms",
+          "p99Ms",
+          "ratePerMinute",
+          "services",
+          "timespanMinutes",
+          "total"
+        ],
+        "title": "CyberCloud.Monitor.workspaces.components.RequestsResponse",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.components.TransactionRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Monitor/workspaces/components/transaction.",
+        "properties": {
+          "timespanMinutes": {
+            "default": 1440,
+            "description": "How far back to read, in minutes, ending now.",
+            "maximum": 10080,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "traceId": {
+            "description": "The W3C trace id: 32 lower-case hex digits, as the SDKs and every log line of the trace carry it.",
+            "example": "4bf92f3577b34da6a3ce929d0e0e4736",
+            "pattern": "^(?:[0-9a-f]{32})$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "traceId"
+        ],
+        "title": "CyberCloud.Monitor.workspaces.components.TransactionRequest",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.components.TransactionResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Monitor/workspaces/components/transaction returns.",
+        "properties": {
+          "durationsMs": {
+            "description": "Per span: how long it took, in milliseconds.",
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "kinds": {
+            "description": "Per span: Server, Client, Internal, Producer or Consumer.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "logBodies": {
+            "description": "Per log record: its body, cut at 2048 characters.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "logCount": {
+            "description": "How many log records of the trace are returned.",
+            "type": "integer"
+          },
+          "logSeverities": {
+            "description": "Per log record: its severity text.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "logSpanIds": {
+            "description": "Per log record: the span it was written under.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "logTimes": {
+            "description": "Per log record: when, oldest first.",
+            "items": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "names": {
+            "description": "Per span: its name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "parentSpanIds": {
+            "description": "Per span: its parent's id, empty for the root.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "services": {
+            "description": "Per span: the service that recorded it.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "spanCount": {
+            "description": "How many spans are returned.",
+            "type": "integer"
+          },
+          "spanIds": {
+            "description": "Per span: its id.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "starts": {
+            "description": "Per span: when it started, oldest first.",
+            "items": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "statuses": {
+            "description": "Per span: Unset, Ok or Error.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "traceId": {
+            "description": "The trace that was read.",
+            "type": "string"
+          },
+          "truncated": {
+            "description": "Whether the trace has more spans or log records than a transaction returns.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "durationsMs",
+          "kinds",
+          "logBodies",
+          "logCount",
+          "logSeverities",
+          "logSpanIds",
+          "logTimes",
+          "names",
+          "parentSpanIds",
+          "services",
+          "spanCount",
+          "spanIds",
+          "starts",
+          "statuses",
+          "traceId",
+          "truncated"
+        ],
+        "title": "CyberCloud.Monitor.workspaces.components.TransactionResponse",
+        "type": "object"
+      },
       "CyberCloud.Network.publicIpAddresses": {
         "additionalProperties": false,
         "allOf": [
@@ -28824,5 +30477,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 39
+  "x-cybercloud-resource-type-count": 40
 }

@@ -1474,6 +1474,7 @@ type MonitorProvider struct {
 	Workspaces           *MonitorWorkspaceClient
 	WorkspacesAlertRules *AlertRuleClient
 	WorkspacesCollectors *OpenTelemetryCollectorClient
+	WorkspacesComponents *ApplicationComponentClient
 }
 
 // newMonitorProvider builds the group's clients over one transport.
@@ -1482,6 +1483,7 @@ func newMonitorProvider(transport Transport) *MonitorProvider {
 		Workspaces:           &MonitorWorkspaceClient{transport: transport},
 		WorkspacesAlertRules: &AlertRuleClient{transport: transport},
 		WorkspacesCollectors: &OpenTelemetryCollectorClient{transport: transport},
+		WorkspacesComponents: &ApplicationComponentClient{transport: transport},
 	}
 }
 
@@ -1639,6 +1641,105 @@ func (c *OpenTelemetryCollectorClient) ListEndpoints(ctx context.Context, tenant
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/collectors/" + segment(resourceName) + "/listEndpoints"
 	var result OpenTelemetryCollectorListEndpointsResult
 	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ApplicationComponentClient is application components — CyberCloud.Monitor/workspaces/components. An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs.
+type ApplicationComponentClient struct {
+	transport Transport
+}
+
+// Get reads one Application component.
+func (c *ApplicationComponentClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string) (*ApplicationComponentResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName)
+	var result ApplicationComponentResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Application component. ⚠ Long-running: Wait on the result.
+func (c *ApplicationComponentClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, data ApplicationComponentData) (*Operation[ApplicationComponentResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName)
+	return begin[ApplicationComponentResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Application component. A merge patch: what is not set is not changed.
+func (c *ApplicationComponentClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, data ApplicationComponentData) (*Operation[ApplicationComponentResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName)
+	return begin[ApplicationComponentResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Application component. ⚠ Permanent: this type declares no soft-delete window.
+func (c *ApplicationComponentClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Application components in a resource group. ⚠ A short page never means "that is all there is".
+func (c *ApplicationComponentClient) List(tenantID, subscriptionID, resourceGroupName, workspacesName string, options *ListOptions) *Pager[ApplicationComponentResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components"
+	return newPager[ApplicationComponentResource](c.transport, path, options)
+}
+
+// ApplicationMap runs applicationMap — permission 'read'.
+func (c *ApplicationComponentClient) ApplicationMap(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, content ApplicationComponentApplicationMapContent) (*ApplicationComponentApplicationMapResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName) + "/applicationMap"
+	var result ApplicationComponentApplicationMapResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Dependencies runs dependencies — permission 'read'.
+func (c *ApplicationComponentClient) Dependencies(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, content ApplicationComponentDependenciesContent) (*ApplicationComponentDependenciesResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName) + "/dependencies"
+	var result ApplicationComponentDependenciesResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Exceptions runs exceptions — permission 'read'.
+func (c *ApplicationComponentClient) Exceptions(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, content ApplicationComponentExceptionsContent) (*ApplicationComponentExceptionsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName) + "/exceptions"
+	var result ApplicationComponentExceptionsResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListConnectionString runs listConnectionString — permission 'read'.
+func (c *ApplicationComponentClient) ListConnectionString(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string) (*ApplicationComponentListConnectionStringResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName) + "/listConnectionString"
+	var result ApplicationComponentListConnectionStringResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Requests runs requests — permission 'read'.
+func (c *ApplicationComponentClient) Requests(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, content ApplicationComponentRequestsContent) (*ApplicationComponentRequestsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName) + "/requests"
+	var result ApplicationComponentRequestsResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Transaction runs transaction — permission 'read'.
+func (c *ApplicationComponentClient) Transaction(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, content ApplicationComponentTransactionContent) (*ApplicationComponentTransactionResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName) + "/transaction"
+	var result ApplicationComponentTransactionResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil

@@ -72,6 +72,10 @@ public sealed class ActionDispatcher(
     /// <param name="action">The action, which names the handler and the response shape.</param>
     /// <param name="input">The resource as stored — its desired body, api-version and cluster.</param>
     /// <param name="body">The validated <c>POST</c> body.</param>
+    /// <param name="parent">
+    ///     The resource's parent with its GUID resolved, or <see langword="null" /> — see
+    ///     <see cref="ActionContext.Parent" />.
+    /// </param>
     /// <param name="cancellationToken">Cancels the invocation.</param>
     /// <returns>The response JSON, or a failure.</returns>
     public async Task<Result<string>> InvokeAsync(
@@ -80,6 +84,7 @@ public sealed class ActionDispatcher(
         ActionRegistration action,
         ReconcileInput input,
         JsonElement body,
+        ResourceId? parent = null,
         CancellationToken cancellationToken = default
     ) {
         ArgumentNullException.ThrowIfNull(registration);
@@ -153,7 +158,8 @@ public sealed class ActionDispatcher(
                 // ⚠ The host's seam, or the refusing default when a caller built this dispatcher
                 // without one — which every test double does, and which is the right answer for a
                 // dispatcher that serves no connected cluster.
-                Agents = agents ?? new UnavailableAgentTunnels()
+                Agents = agents ?? new UnavailableAgentTunnels(),
+                Parent = parent
             };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

@@ -81,6 +81,19 @@ import type {
   MonitorWorkspacesCollectorsData,
   MonitorWorkspacesCollectorsListEndpointsResult,
   MonitorWorkspacesCollectorsResource,
+  MonitorWorkspacesComponentsApplicationMapContent,
+  MonitorWorkspacesComponentsApplicationMapResult,
+  MonitorWorkspacesComponentsData,
+  MonitorWorkspacesComponentsDependenciesContent,
+  MonitorWorkspacesComponentsDependenciesResult,
+  MonitorWorkspacesComponentsExceptionsContent,
+  MonitorWorkspacesComponentsExceptionsResult,
+  MonitorWorkspacesComponentsListConnectionStringResult,
+  MonitorWorkspacesComponentsRequestsContent,
+  MonitorWorkspacesComponentsRequestsResult,
+  MonitorWorkspacesComponentsResource,
+  MonitorWorkspacesComponentsTransactionContent,
+  MonitorWorkspacesComponentsTransactionResult,
   MonitorWorkspacesData,
   MonitorWorkspacesListKeysResult,
   MonitorWorkspacesResource,
@@ -998,6 +1011,61 @@ export class CyberCloudApi {
   /** listEndpoints — permission 'read'. */
   listEndpointsOpenTelemetryCollector(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string): Promise<ApiResponse<MonitorWorkspacesCollectorsListEndpointsResult>> {
     return this.transport.send<MonitorWorkspacesCollectorsListEndpointsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/collectors/${CyberCloudApi.segment(resourceName)}/listEndpoints` });
+  }
+
+  /** Reads one Application component. */
+  getApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string): Promise<ApiResponse<MonitorWorkspacesComponentsResource>> {
+    return this.transport.send<MonitorWorkspacesComponentsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Application component. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, data: MonitorWorkspacesComponentsData): Promise<ApiResponse<MonitorWorkspacesComponentsResource>> {
+    return this.transport.send<MonitorWorkspacesComponentsResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Application component. A merge patch: what is not set is not changed. */
+  updateApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, data: Partial<MonitorWorkspacesComponentsData>): Promise<ApiResponse<MonitorWorkspacesComponentsResource>> {
+    return this.transport.send<MonitorWorkspacesComponentsResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Application component. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Application components in a resource group. ⚠ A short page never means "that is all there is". */
+  listApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, page: PageRequest = {}): Promise<ApiResponse<Page<MonitorWorkspacesComponentsResource>>> {
+    return this.transport.send<Page<MonitorWorkspacesComponentsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** applicationMap — permission 'read'. */
+  applicationMapApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, content: MonitorWorkspacesComponentsApplicationMapContent): Promise<ApiResponse<MonitorWorkspacesComponentsApplicationMapResult>> {
+    return this.transport.send<MonitorWorkspacesComponentsApplicationMapResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}/applicationMap`, body: content });
+  }
+
+  /** dependencies — permission 'read'. */
+  dependenciesApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, content: MonitorWorkspacesComponentsDependenciesContent): Promise<ApiResponse<MonitorWorkspacesComponentsDependenciesResult>> {
+    return this.transport.send<MonitorWorkspacesComponentsDependenciesResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}/dependencies`, body: content });
+  }
+
+  /** exceptions — permission 'read'. */
+  exceptionsApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, content: MonitorWorkspacesComponentsExceptionsContent): Promise<ApiResponse<MonitorWorkspacesComponentsExceptionsResult>> {
+    return this.transport.send<MonitorWorkspacesComponentsExceptionsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}/exceptions`, body: content });
+  }
+
+  /** listConnectionString — permission 'read'. */
+  listConnectionStringApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string): Promise<ApiResponse<MonitorWorkspacesComponentsListConnectionStringResult>> {
+    return this.transport.send<MonitorWorkspacesComponentsListConnectionStringResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}/listConnectionString` });
+  }
+
+  /** requests — permission 'read'. */
+  requestsApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, content: MonitorWorkspacesComponentsRequestsContent): Promise<ApiResponse<MonitorWorkspacesComponentsRequestsResult>> {
+    return this.transport.send<MonitorWorkspacesComponentsRequestsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}/requests`, body: content });
+  }
+
+  /** transaction — permission 'read'. */
+  transactionApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, content: MonitorWorkspacesComponentsTransactionContent): Promise<ApiResponse<MonitorWorkspacesComponentsTransactionResult>> {
+    return this.transport.send<MonitorWorkspacesComponentsTransactionResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}/transaction`, body: content });
   }
 
   /** Reads one Public IP address. */

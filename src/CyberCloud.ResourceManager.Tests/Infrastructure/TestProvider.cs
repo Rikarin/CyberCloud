@@ -533,6 +533,11 @@ public sealed class TestingProvider : IResourceProvider {
             .ApiVersion(V2026, ChildSchema)
             .Meters(QuotaMeter.Resources)
             .Permissions("read", "write", "delete")
+            // ⚠ THE ONE ACTION ON A CHILD, AND IT EXISTS TO SAY WHAT ActionContext.Parent CARRIED.
+            // CyberCloud.Monitor/workspaces/components derives its workspace's database from the
+            // parent's GUID, so the manager resolving it — and resolving the RIGHT one — is a platform
+            // property with a platform test: ActionParentTests.
+            .Action(ParentEchoHandler.ActionName, ActionKind.Post, "read", handler: typeof(ParentEchoHandler))
             .Display("Gadget", "Gadgets", "gadget")
             // ── The fourth type: the only SOFT-DELETABLE one ─────────────────────────────────────
             //

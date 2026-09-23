@@ -37,6 +37,8 @@
       suite in CyberCloud.ResourceGraph.Tests and not a second thing worth proving. Like
       CyberCloud.ObjectStorage.Tests' SeaweedFS suite it needs a Docker daemon and fails without
       one rather than skipping: a gate that goes green when the store is absent is not a gate.
+      ⚠ A SECOND ClickHouse SUITE SINCE #32, MonitorComponentViewsOverHttpTests, on the same terms and
+      on a real socket (OverHttpGateway) — the reference that carries it is explained further down.
     -->
 
     <ItemGroup>
@@ -63,6 +65,19 @@
 
     <ItemGroup>
         <ProjectReference Include="../CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
+    </ItemGroup>
+
+    <!--
+      ⚠ A SECOND SUITE WITH A REAL MANAGER BEHIND THE STAGES, AND IT BRINGS THE PROVIDER HARNESS WITH
+      IT. MonitorComponentViewsOverHttpTests (#32) asks whether another tenant's caller can read a
+      component's telemetry over HTTP, and a recording manager cannot answer that: the refusal it must
+      prove is the real manager's step 1 and the real handler never asking the store. The component's
+      Docker-free conformance project carries ProviderTestCluster and the case — real grains, the real
+      ResourceManagerService, the real action dispatcher — so it is referenced rather than rebuilt here.
+      It needs a Docker daemon for its ClickHouse, like ResourceGraphQueryEndToEndTests.
+    -->
+    <ItemGroup Label="The component views' end-to-end suite — see the comment">
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.Conformance/CyberCloud.Providers.Monitor.Conformance.csproj"/>
     </ItemGroup>
 
 </Project>

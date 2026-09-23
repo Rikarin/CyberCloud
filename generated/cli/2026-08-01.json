@@ -13200,6 +13200,747 @@
             }
           },
           "alias": "collector"
+        },
+        "workspaces-components": {
+          "name": "workspaces-components",
+          "resourceType": "CyberCloud.Monitor/workspaces/components",
+          "title": "Application component",
+          "plural": "Application components",
+          "summary": "An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs.",
+          "verbs": {
+            "application-map": {
+              "name": "application-map",
+              "summary": "applicationMap a Application component.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}/applicationMap",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--timespan-minutes",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How far back to read, in minutes, ending now.",
+                  "jsonPointer": "/timespanMinutes",
+                  "default": 60
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The most rows to return, busiest first.",
+                  "jsonPointer": "/top",
+                  "default": 20
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application component lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "action": "applicationMap",
+              "permission": "read"
+            },
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Application component.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster the connection string is published in — the one its collector runs in, because the endpoint is that collector's in-cluster address.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--collector",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the collector under the same workspace that the application's SDKs send to. The views read the workspace whichever collector carried the telemetry; this only decides the endpoint the connection string names.",
+                  "jsonPointer": "/properties/collector",
+                  "default": "gateway",
+                  "example": "gateway"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the component is billed in — its workspace's.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--protocol",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Which OTLP protocol the connection string names. The collector must have that receiver on.",
+                  "jsonPointer": "/properties/protocol",
+                  "choices": [
+                    "grpc",
+                    "http/protobuf"
+                  ],
+                  "default": "http/protobuf"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application component lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Application component. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application component lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "dependencies": {
+              "name": "dependencies",
+              "summary": "dependencies a Application component.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}/dependencies",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--timespan-minutes",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How far back to read, in minutes, ending now.",
+                  "jsonPointer": "/timespanMinutes",
+                  "default": 60
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The most rows to return, busiest first.",
+                  "jsonPointer": "/top",
+                  "default": 20
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application component lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "action": "dependencies",
+              "permission": "read"
+            },
+            "exceptions": {
+              "name": "exceptions",
+              "summary": "exceptions a Application component.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}/exceptions",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--timespan-minutes",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How far back to read, in minutes, ending now.",
+                  "jsonPointer": "/timespanMinutes",
+                  "default": 60
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The most rows to return, busiest first.",
+                  "jsonPointer": "/top",
+                  "default": 20
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application component lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "action": "exceptions",
+              "permission": "read"
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the Application components in a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application component lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "list-connection-string": {
+              "name": "list-connection-string",
+              "summary": "listConnectionString a Application component.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}/listConnectionString",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application component lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "action": "listConnectionString",
+              "permission": "read",
+              "rawBody": true
+            },
+            "requests": {
+              "name": "requests",
+              "summary": "requests a Application component.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}/requests",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--timespan-minutes",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How far back to read, in minutes, ending now.",
+                  "jsonPointer": "/timespanMinutes",
+                  "default": 60
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The most rows to return, busiest first.",
+                  "jsonPointer": "/top",
+                  "default": 20
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application component lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "action": "requests",
+              "permission": "read"
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Application component.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application component lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ]
+            },
+            "transaction": {
+              "name": "transaction",
+              "summary": "transaction a Application component.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}/transaction",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--timespan-minutes",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How far back to read, in minutes, ending now.",
+                  "jsonPointer": "/timespanMinutes",
+                  "default": 1440
+                },
+                {
+                  "name": "--trace-id",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The W3C trace id: 32 lower-case hex digits, as the SDKs and every log line of the trace carry it.",
+                  "jsonPointer": "/traceId",
+                  "example": "4bf92f3577b34da6a3ce929d0e0e4736"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application component lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "action": "transaction",
+              "permission": "read"
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Application component. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster the connection string is published in — the one its collector runs in, because the endpoint is that collector's in-cluster address.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--collector",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The name of the collector under the same workspace that the application's SDKs send to. The views read the workspace whichever collector carried the telemetry; this only decides the endpoint the connection string names.",
+                  "jsonPointer": "/properties/collector",
+                  "default": "gateway",
+                  "example": "gateway"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the component is billed in — its workspace's.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--protocol",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Which OTLP protocol the connection string names. The collector must have that receiver on.",
+                  "jsonPointer": "/properties/protocol",
+                  "choices": [
+                    "grpc",
+                    "http/protobuf"
+                  ],
+                  "default": "http/protobuf"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application component lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "component"
         }
       }
     },

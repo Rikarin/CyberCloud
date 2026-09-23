@@ -297,6 +297,9 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
         // this harness's client. See IConvergedModule.ConfigureHandlers.
         Module?.ConfigureHandlers(services, Grains);
 
+        // ⚠ And what a cluster-backed case's handlers hold — IProviderCaseSource.ConfigureHandlers.
+        TSource.ConfigureHandlers(services);
+
         foreach (var handler in Registry.Types
                      .SelectMany(static x => x.Actions)
                      .Select(static x => x.HandlerType)

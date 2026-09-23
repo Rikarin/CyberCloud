@@ -1,0 +1,23 @@
+{{/*
+The connection string — docs/plan/16 § Application views.
+
+⚠ THE DATA KEYS ARE THE SDKs' OWN VARIABLE NAMES, so `envFrom: [{configMapRef: {name: …}}]` wires a
+pod with no mapping. `OTEL_RESOURCE_ATTRIBUTES` carries `service.namespace={component}`: the views read
+the workspace's traces and logs where that attribute is the component's name, so an application sending
+with this connection string lands in its own component's views and in no other's. ⚠ The attribute is
+the client's assertion and separates applications, not tenants; the tenant boundary is the workspace's
+database, which the view path reads from the platform's index.
+
+⚠ NOT SECRET. The collector's ingress is unauthenticated by record (charts/managed/monitor-collector
+conformance.yaml § owed, collector-ingress-is-unauthenticated), so there is no key to put here.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "monitorComponent.objectName" . }}
+  labels:
+    {{- include "monitorComponent.platformLabels" . | nindent 4 }}
+data:
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ include "monitorComponent.endpoint" . | quote }}
+  OTEL_EXPORTER_OTLP_PROTOCOL: {{ .Values.protocol | quote }}
+  OTEL_RESOURCE_ATTRIBUTES: {{ printf "service.namespace=%s" (include "monitorComponent.name" .) | quote }}

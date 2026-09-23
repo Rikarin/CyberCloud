@@ -330,18 +330,6 @@ owed:
       A webhook ChannelKind in the sending module with signed delivery and a receipt, which is that
       module's design to make; and a portal inbox surface reading the instance history, which is a
       portal page and an unread marker on the instance, at the api-version that grows the tree.
-  - id: observability-app-insights-views-not-landed
-    says: >
-      Issue #32 names four tenant-facing surfaces — "application-insights-shaped views; an OTel
-      collector as a managed service; managed Grafana; alerts" — and three are published: the alerts
-      (2026-09-15), and on 2026-09-17 CyberCloud.Monitor/workspaces/collectors with
-      charts/managed/monitor-collector and CyberCloud.Dashboard/grafanas with charts/managed/grafana,
-      each with its own conformance.yaml § owed. The App Insights-shaped views are the noun left:
-      not a resource type, not a chart, not a portal page, and docs/plan/16 neither designs nor
-      prices them, so there is nothing to build until the document says what an "App Insights-shaped
-      view" over a workspace's stores is. (This row used to be
-      `observability-three-of-four-nouns-not-landed`; two of the three landed and the id follows.)
-    closes: docs/plan/16 designing the views first — which store they read, what they show, whether they are a resource or a portal surface — and then the landing.
 
 # Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
 #

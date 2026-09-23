@@ -13,6 +13,19 @@ from .models import (
     AlertRuleData,
     AlertRuleListInstancesResult,
     AlertRuleResource,
+    ApplicationComponentApplicationMapContent,
+    ApplicationComponentApplicationMapResult,
+    ApplicationComponentData,
+    ApplicationComponentDependenciesContent,
+    ApplicationComponentDependenciesResult,
+    ApplicationComponentExceptionsContent,
+    ApplicationComponentExceptionsResult,
+    ApplicationComponentListConnectionStringResult,
+    ApplicationComponentRequestsContent,
+    ApplicationComponentRequestsResult,
+    ApplicationComponentResource,
+    ApplicationComponentTransactionContent,
+    ApplicationComponentTransactionResult,
     ArtifactFeedData,
     ArtifactFeedResource,
     BackupVaultData,
@@ -1464,6 +1477,79 @@ class OpenTelemetryCollectorClient:
         return OpenTelemetryCollectorListEndpointsResult.from_wire(wire_of(response))
 
 
+class ApplicationComponentClient:
+    """Application components — CyberCloud.Monitor/workspaces/components. An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str) -> ApplicationComponentResource:
+        """Reads one Application component."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return ApplicationComponentResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, data: ApplicationComponentData) -> Operation[ApplicationComponentResource]:
+        """Creates or replaces one Application component. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ApplicationComponentResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, data: ApplicationComponentData) -> Operation[ApplicationComponentResource]:
+        """Amends one Application component. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ApplicationComponentResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Application component. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, *, top: Optional[int] = None) -> Pager[ApplicationComponentResource]:
+        """Lists the Application components in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components", top, ApplicationComponentResource.from_wire)
+
+    def application_map(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, content: ApplicationComponentApplicationMapContent) -> ApplicationComponentApplicationMapResult:
+        """applicationMap — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}/applicationMap", body=content.to_wire()))
+        raise_for_status(response)
+        return ApplicationComponentApplicationMapResult.from_wire(wire_of(response))
+
+    def dependencies(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, content: ApplicationComponentDependenciesContent) -> ApplicationComponentDependenciesResult:
+        """dependencies — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}/dependencies", body=content.to_wire()))
+        raise_for_status(response)
+        return ApplicationComponentDependenciesResult.from_wire(wire_of(response))
+
+    def exceptions(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, content: ApplicationComponentExceptionsContent) -> ApplicationComponentExceptionsResult:
+        """exceptions — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}/exceptions", body=content.to_wire()))
+        raise_for_status(response)
+        return ApplicationComponentExceptionsResult.from_wire(wire_of(response))
+
+    def list_connection_string(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str) -> ApplicationComponentListConnectionStringResult:
+        """listConnectionString — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}/listConnectionString"))
+        raise_for_status(response)
+        return ApplicationComponentListConnectionStringResult.from_wire(wire_of(response))
+
+    def requests(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, content: ApplicationComponentRequestsContent) -> ApplicationComponentRequestsResult:
+        """requests — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}/requests", body=content.to_wire()))
+        raise_for_status(response)
+        return ApplicationComponentRequestsResult.from_wire(wire_of(response))
+
+    def transaction(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, content: ApplicationComponentTransactionContent) -> ApplicationComponentTransactionResult:
+        """transaction — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}/transaction", body=content.to_wire()))
+        raise_for_status(response)
+        return ApplicationComponentTransactionResult.from_wire(wire_of(response))
+
+
 class MonitorProvider:
     """The resource types of CyberCloud.Monitor."""
 
@@ -1471,6 +1557,7 @@ class MonitorProvider:
         self.workspaces = MonitorWorkspaceClient(transport)
         self.workspaces_alert_rules = AlertRuleClient(transport)
         self.workspaces_collectors = OpenTelemetryCollectorClient(transport)
+        self.workspaces_components = ApplicationComponentClient(transport)
 
 
 class PublicIPAddressClient:

@@ -2005,6 +2005,228 @@ export interface MonitorWorkspacesCollectorsListEndpointsResult {
   workspace: string;
 }
 
+/** The values /properties/protocol accepts. ⚠ Closed: the write path refuses anything else. */
+export type MonitorWorkspacesComponentsProtocol =
+  | 'grpc'
+  | 'http/protobuf';
+
+/** Application component. An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs. */
+export interface MonitorWorkspacesComponentsData {
+  /** The region the component is billed in — its workspace's. */
+  location: string;
+  /** The component's own settings. */
+  properties?: {
+    /** The cluster the connection string is published in — the one its collector runs in, because the endpoint is that collector's in-cluster address. */
+    clusterId: string;
+    /** The name of the collector under the same workspace that the application's SDKs send to. The views read the workspace whichever collector carried the telemetry; this only decides the endpoint the connection string names. */
+    collector: string;
+    /** Which OTLP protocol the connection string names. The collector must have that receiver on. */
+    protocol?: MonitorWorkspacesComponentsProtocol;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Application component, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface MonitorWorkspacesComponentsResource extends Resource, MonitorWorkspacesComponentsData {
+  readonly type: 'CyberCloud.Monitor/workspaces/components';
+}
+
+/** The parameters of applicationMap. */
+export interface MonitorWorkspacesComponentsApplicationMapContent {
+  /** How far back to read, in minutes, ending now. */
+  timespanMinutes?: number;
+  /** The most rows to return, busiest first. */
+  top?: number;
+}
+
+/** What applicationMap returns. */
+export interface MonitorWorkspacesComponentsApplicationMapResult {
+  /** Per edge: spans in the target whose parent span is in the source, in the window. */
+  edgeCalls: number[];
+  /** Per edge: those whose status is Error. */
+  edgeFailures: number[];
+  /** Per edge: the target span's 95th percentile duration, in milliseconds. */
+  edgeP95Ms: number[];
+  /** Per edge: the calling service. */
+  edgeSources: string[];
+  /** Per edge: the called service. */
+  edgeTargets: string[];
+  /** Per node: requests it failed. */
+  nodeFailures: number[];
+  /** Per node: requests it served in the window. */
+  nodeRequests: number[];
+  /** Per node: a service in the component. */
+  nodes: string[];
+  /** The window the view read, in minutes, ending when it was asked. */
+  timespanMinutes: number;
+}
+
+/** The parameters of dependencies. */
+export interface MonitorWorkspacesComponentsDependenciesContent {
+  /** How far back to read, in minutes, ending now. */
+  timespanMinutes?: number;
+  /** The most rows to return, busiest first. */
+  top?: number;
+}
+
+/** What dependencies returns. */
+export interface MonitorWorkspacesComponentsDependenciesResult {
+  /** Per row: calls in the window. */
+  counts: number[];
+  /** How many of them failed. */
+  failed: number;
+  /** Per row: failures over calls, 0 to 1. */
+  failureRate: number[];
+  /** Per row: failed calls. */
+  failures: number[];
+  /** Per row: the client span's name. */
+  names: string[];
+  /** Per row: the median duration, in milliseconds. */
+  p50Ms: number[];
+  /** Per row: the 95th percentile duration, in milliseconds. */
+  p95Ms: number[];
+  /** Per row: the 99th percentile duration, in milliseconds. */
+  p99Ms: number[];
+  /** Per row: the service that made the call. */
+  services: string[];
+  /** Per row: what was called — peer.service, else server.address, else the database or messaging system; empty when the span names none. */
+  targets: string[];
+  /** The window the view read, in minutes, ending when it was asked. */
+  timespanMinutes: number;
+  /** Every outgoing call in the window, not only the rows below. */
+  total: number;
+  /** Per row: db, http, messaging, rpc or other, from the span's attributes. */
+  types: string[];
+}
+
+/** The parameters of exceptions. */
+export interface MonitorWorkspacesComponentsExceptionsContent {
+  /** How far back to read, in minutes, ending now. */
+  timespanMinutes?: number;
+  /** The most rows to return, busiest first. */
+  top?: number;
+}
+
+/** What exceptions returns. */
+export interface MonitorWorkspacesComponentsExceptionsResult {
+  /** Per row: occurrences in the window. */
+  counts: number[];
+  /** Per row: how many were an `exception` event on a span; the rest were log records carrying exception.type. */
+  fromSpans: number[];
+  /** Per row: the latest occurrence. */
+  lastSeen: string[];
+  /** Per row: the most recent exception.message of that type. */
+  messages: string[];
+  /** Per row: the service that raised it. */
+  services: string[];
+  /** The window the view read, in minutes, ending when it was asked. */
+  timespanMinutes: number;
+  /** Every exception in the window, from spans and from logs, not only the rows below. */
+  total: number;
+  /** Per row: exception.type. */
+  types: string[];
+}
+
+/** The values /otlpProtocol accepts. ⚠ Closed: the write path refuses anything else. */
+export type MonitorWorkspacesComponentsListConnectionStringResultOtlpProtocol =
+  | 'grpc'
+  | 'http/protobuf';
+
+/** What listConnectionString returns. */
+export interface MonitorWorkspacesComponentsListConnectionStringResult {
+  /** The ConfigMap in the component's namespace carrying the three variables, for a pod's envFrom. */
+  configMap: string;
+  /** The three variables as one Key=Value;… line, for a configuration that takes a single string. */
+  connectionString: string;
+  /** OTEL_EXPORTER_OTLP_ENDPOINT: the collector's in-cluster URL. */
+  otlpEndpoint: string;
+  /** OTEL_EXPORTER_OTLP_PROTOCOL. */
+  otlpProtocol: MonitorWorkspacesComponentsListConnectionStringResultOtlpProtocol;
+  /** OTEL_RESOURCE_ATTRIBUTES: the service.namespace the views filter on. */
+  resourceAttributes: string;
+}
+
+/** The parameters of requests. */
+export interface MonitorWorkspacesComponentsRequestsContent {
+  /** How far back to read, in minutes, ending now. */
+  timespanMinutes?: number;
+  /** The most rows to return, busiest first. */
+  top?: number;
+}
+
+/** What requests returns. */
+export interface MonitorWorkspacesComponentsRequestsResult {
+  /** Per row: requests in the window. */
+  counts: number[];
+  /** How many of them failed — a span whose status is Error. */
+  failed: number;
+  /** Per row: failures over requests, 0 to 1. */
+  failureRate: number[];
+  /** Per row: failed requests. */
+  failures: number[];
+  /** Per row: the operation — the server span's name. */
+  operations: string[];
+  /** Per row: the median duration, in milliseconds. */
+  p50Ms: number[];
+  /** Per row: the 95th percentile duration, in milliseconds. */
+  p95Ms: number[];
+  /** Per row: the 99th percentile duration, in milliseconds. */
+  p99Ms: number[];
+  /** Per row: requests per minute over the window. */
+  ratePerMinute: number[];
+  /** Per row: the service that served the operation. */
+  services: string[];
+  /** The window the view read, in minutes, ending when it was asked. */
+  timespanMinutes: number;
+  /** Every request in the window, across every operation, not only the rows below. */
+  total: number;
+}
+
+/** The parameters of transaction. */
+export interface MonitorWorkspacesComponentsTransactionContent {
+  /** How far back to read, in minutes, ending now. */
+  timespanMinutes?: number;
+  /** The W3C trace id: 32 lower-case hex digits, as the SDKs and every log line of the trace carry it. */
+  traceId: string;
+}
+
+/** What transaction returns. */
+export interface MonitorWorkspacesComponentsTransactionResult {
+  /** Per span: how long it took, in milliseconds. */
+  durationsMs: number[];
+  /** Per span: Server, Client, Internal, Producer or Consumer. */
+  kinds: string[];
+  /** Per log record: its body, cut at 2048 characters. */
+  logBodies: string[];
+  /** How many log records of the trace are returned. */
+  logCount: number;
+  /** Per log record: its severity text. */
+  logSeverities: string[];
+  /** Per log record: the span it was written under. */
+  logSpanIds: string[];
+  /** Per log record: when, oldest first. */
+  logTimes: string[];
+  /** Per span: its name. */
+  names: string[];
+  /** Per span: its parent's id, empty for the root. */
+  parentSpanIds: string[];
+  /** Per span: the service that recorded it. */
+  services: string[];
+  /** How many spans are returned. */
+  spanCount: number;
+  /** Per span: its id. */
+  spanIds: string[];
+  /** Per span: when it started, oldest first. */
+  starts: string[];
+  /** Per span: Unset, Ok or Error. */
+  statuses: string[];
+  /** The trace that was read. */
+  traceId: string;
+  /** Whether the trace has more spans or log records than a transaction returns. */
+  truncated: boolean;
+}
+
 /** Public IP address. A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic. */
 export interface NetworkPublicIpAddressesData {
   /** The region the address is allocated in. ⚠ It must be a region whose operator has an external pool — nothing checks that, and an address in a region with none never becomes ready. */

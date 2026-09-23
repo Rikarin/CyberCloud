@@ -19,8 +19,14 @@ public sealed class RestartHandler : IResourceActionHandler {
     /// </remarks>
     public static int Invocations { get; private set; }
 
+    /// <summary>The parent the last invocation carried — <see langword="null" /> for a top-level widget.</summary>
+    public static ResourceId? LastParent { get; private set; }
+
     /// <summary>Puts the counter back.</summary>
-    public static void Reset() => Invocations = 0;
+    public static void Reset() {
+        Invocations = 0;
+        LastParent = null;
+    }
 
     /// <inheritdoc />
     public ResourceTypeName Type => new("CyberCloud.Testing", "widgets");
@@ -34,9 +40,35 @@ public sealed class RestartHandler : IResourceActionHandler {
         CancellationToken cancellationToken = default
     ) {
         Invocations++;
+        LastParent = context.Parent;
 
         return Task.FromResult(Result<string>.Success("""{"restarted":true}"""));
     }
+}
+
+/// <summary>
+///     The handler behind the gadget's one action: answers with the parent its context carried.
+/// </summary>
+public sealed class ParentEchoHandler : IResourceActionHandler {
+    /// <summary>The action's name.</summary>
+    public const string ActionName = "whereIsMyParent";
+
+    /// <inheritdoc />
+    public ResourceTypeName Type => TestingProvider.ChildTypeName;
+
+    /// <inheritdoc />
+    public string Action => ActionName;
+
+    /// <inheritdoc />
+    public Task<Result<string>> InvokeAsync(ActionContext context, CancellationToken cancellationToken = default) =>
+        Task.FromResult(
+            Result<string>.Success(
+                new JsonObject {
+                    ["parentId"] = context.Parent?.Id.ToString("D", System.Globalization.CultureInfo.InvariantCulture),
+                    ["parentPath"] = context.Parent?.Path
+                }.ToJsonString()
+            )
+        );
 }
 
 /// <summary>

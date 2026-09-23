@@ -1,5 +1,7 @@
 using CyberCloud.Core.Contracts;
 using CyberCloud.Providers.Monitor.Alerting;
+using CyberCloud.Providers.Monitor.Telemetry;
+using Microsoft.Extensions.DependencyInjection;
 using CyberCloud.ResourceManager;
 using Volo.Abp.Application;
 using Volo.Abp.Modularity;
@@ -68,5 +70,11 @@ public sealed class MonitorApplicationModule : AbpModule {
         // the gateway needs it as much as the silo does. The query seam is the refusing default
         // until a host registers a real one; TryAdd keeps a real one registered first.
         context.Services.AddCyberCloudMonitorAlerting();
+
+        // ⚠ THE COMPONENT VIEWS' STORE, IN BOTH HOSTS, AND THE GATEWAY IS THE ONE THAT QUERIES. A
+        // view is a synchronous action and runs in ResourceManagerService, in the gateway's process,
+        // so the gateway reads CyberCloud:Monitor:Telemetry and reaches ClickHouse. Unset, it is the
+        // refusing default and every view says which keys to set.
+        context.Services.AddCyberCloudMonitorTelemetry(context.Services.GetConfiguration());
     }
 }

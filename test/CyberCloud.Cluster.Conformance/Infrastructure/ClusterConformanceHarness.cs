@@ -182,6 +182,10 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         services.AddSingleton<ISecretResolver>(ClusterConformanceState<TSource>.Vault);
         services.AddSingleton<ISecretWriter>(ClusterConformanceState<TSource>.Vault);
 
+        // ⚠ And what a case's synchronous handlers hold — IProviderCaseSource.ConfigureHandlers, the
+        // Docker-free harness's line, kept in step for the reason above.
+        TSource.ConfigureHandlers(services);
+
         foreach (var handler in Registry.Types
                      .SelectMany(static x => x.Actions)
                      .Select(static x => x.HandlerType)

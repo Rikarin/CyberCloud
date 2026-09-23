@@ -756,6 +756,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
 
         services.AddSingleton<RestartHandler>();
         services.AddSingleton<ListKeysHandler>();
+        services.AddSingleton<ParentEchoHandler>();
 
         return services.BuildServiceProvider();
     }
