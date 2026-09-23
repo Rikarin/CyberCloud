@@ -486,6 +486,44 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
             [HttpStatusCode.OK, HttpStatusCode.Accepted],
             "the first widget's re-PUT, which the rule does not match, was refused: " + unaffected.Body
         );
+
+        // ── Step 8: a deleted management group takes its policy with it (#46's review). ─────────
+        //
+        // ⚠ THE FORGET RUNS IN THE GATEWAY PROCESS AND THE CATALOG IN THE SILO, so this is the new
+        // IPolicyCatalogGrain.ForgetScopeAsync crossing the boundary. The group's path is its name, so
+        // an assignment the delete left behind would be readable, and in force, on the group
+        // re-created under that name.
+        var managementGroup = ScopeId.ManagementGroupOf(Tenant, "policy-residue");
+        var madeGroup = await PutAsync(managementGroup.Path, "{}", cancellationToken);
+        madeGroup.Status.ShouldBe(HttpStatusCode.Created, madeGroup.Body);
+
+        var groupDefinition = PolicyAddress.Definition(managementGroup, "residue");
+        var madeDefinition = await PutAsync(
+            groupDefinition.Path,
+            """{ "properties": { "policyRule": { "if": { "field": "type", "like": "*" }, "then": { "effect": "deny" } } } }""",
+            cancellationToken
+        );
+        madeDefinition.Status.ShouldBe(HttpStatusCode.Created, madeDefinition.Body);
+
+        var groupAssignment = PolicyAddress.Assignment(managementGroup, "residue");
+        var madeAssignment = await PutAsync(
+            groupAssignment.Path,
+            $$"""{ "properties": { "policyDefinitionId": "{{groupDefinition.Path}}" } }""",
+            cancellationToken
+        );
+        madeAssignment.Status.ShouldBe(HttpStatusCode.Created, madeAssignment.Body);
+
+        var deleted = await DeleteAsync(managementGroup.Path, cancellationToken);
+        deleted.Status.ShouldBe(HttpStatusCode.NoContent, "the empty group's delete: " + deleted.Body);
+
+        var remade = await PutAsync(managementGroup.Path, "{}", cancellationToken);
+        remade.Status.ShouldBe(HttpStatusCode.Created, remade.Body);
+
+        var residue = await GetAsync(groupAssignment.Path, cancellationToken);
+        residue.Status.ShouldBe(
+            HttpStatusCode.NotFound,
+            "the deleted group's assignment is back on the group re-created under its name: " + residue.Body
+        );
     }
 
     // ── Polling ──────────────────────────────────────────────────────────────────────────────────
@@ -542,6 +580,15 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
             new Uri(path + Version, UriKind.Relative)
         );
         request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+
+        return await SendAsync(request, cancellationToken);
+    }
+
+    async Task<Answer> DeleteAsync(string path, CancellationToken cancellationToken) {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            new Uri(path + Version, UriKind.Relative)
+        );
 
         return await SendAsync(request, cancellationToken);
     }

@@ -174,9 +174,10 @@ public sealed record WriteTrace {
     /// <remarks>
     ///     ⚠ <b>Inside step 5's span and not a step of its own.</b> The closed twelve are the
     ///     document's numbers and <see cref="Canonical" /> is asserted ordinally; a modify is something
-    ///     that happens <i>at</i> step 5, the way a membership record happens at step 7. Recording it
-    ///     here is what makes a rewritten body visible to the caller who sent the original — docs/plan/08
-    ///     § Policy — rather than something they discover by reading the resource back.
+    ///     that happens <i>at</i> step 5, the way a membership record happens at step 7.
+    ///     ⚠ <b>Visible to an in-process caller of <c>IResourceManager</c> only.</b> The gateway renders no
+    ///     part of <see cref="WriteTrace" />, so an HTTP caller still finds a rewrite by reading the
+    ///     resource back — docs/plan/08 § Policy lists it as owed.
     /// </remarks>
     [Id(1)]
     public ImmutableArray<PolicyTraceEntry> Policy { get; init; } = [];

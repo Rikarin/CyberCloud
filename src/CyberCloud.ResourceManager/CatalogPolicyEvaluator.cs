@@ -23,7 +23,13 @@ namespace CyberCloud.ResourceManager;
 ///         ⚠ <b>It fails closed.</b> A catalog that cannot be reached is a refusal naming the reason,
 ///         not an allow: a write that passed a deny rule because the rule's store was down is the
 ///         enforcement failing open, and the steps around this one — the quota grain, the index grain —
-///         would refuse the same write for the same outage a moment later anyway.
+///         would refuse the same write for the same outage a moment later anyway. So does a management
+///         group in the walk that fails to answer, and a PATCH or an action whose stored body can't be
+///         read. ⚠ Two absences don't refuse, and both are a record that is gone rather than a store
+///         that failed: a management group deleted under a subscription ends the walk (the groups above
+///         it can't be named), and a DELETE whose resource has no record judges an empty body.
+///         <c>PolicyCatalogGrain.ScopesAboveAsync</c> and <c>ResourceManagerService.DeleteAsync</c> say
+///         why at each.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Every grain reference goes through <c>ForTenant</c></b>, with the tenant from the

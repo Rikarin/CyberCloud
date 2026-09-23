@@ -590,6 +590,11 @@ public sealed class ResourceManagerService(
         // request — "deny delete where /tags/env is prod". The body it judges is the stored one, read
         // a few lines up for the single-writer refusal, because a DELETE carries none.
         //
+        // ⚠ AN EMPTY BODY WHEN THAT READ FAILED, AND UNLIKE A PATCH OR AN ACTION THIS DOESN'T REFUSE.
+        // The read fails only with NotFound: the grain holds no record, so the resource has no fields
+        // for a rule to protect, and a rule about the type or the operation still judges. Refusing
+        // here would stop the index release below for a name whose record is already gone.
+        //
         // ⚠ AFTER THE SINGLE-WRITER REFUSAL AND BEFORE THE INDEX RELEASE, which is the order the
         // write path has: a refusal here must leave the name held and the resource untouched, and the
         // release below is the irreversible step.
@@ -1807,16 +1812,22 @@ public sealed class ResourceManagerService(
         // operation grain; either placed after the fork would be a handler a policy could not stop.
         trace.Enter(WriteStep.Policy);
 
+        // ⚠ A failed read refuses rather than judging an empty body, which would let the action past
+        // every rule about the resource's fields. It fails only with NotFound, a delete racing this
+        // action, and an action on a resource that is gone is the 404 the check above gives.
         var current = await Resource(target).GetAsync(string.Empty, []);
+        if (current.TryGetError(out var currentError)) {
+            return currentError.Code == ErrorCode.ResourceNotFound
+                ? NotFound<WriteAccepted>(request.Path)
+                : Result<WriteAccepted>.Failure(currentError);
+        }
+
         var refused = await policy.EvaluateAsync(
             new() {
                 Id = target.Id,
                 Operation = PolicyOperations.Action,
                 Action = action.Name,
-                Document = PolicyDocuments.Evaluated(
-                    current.IsSuccess ? PolicyDocuments.Stored(current.GetValueOrThrow()) : new JsonObject(),
-                    target.Schema
-                ),
+                Document = PolicyDocuments.Evaluated(PolicyDocuments.Stored(current.GetValueOrThrow()), target.Schema),
                 ManagementGroup = target.ManagementGroup,
                 Caller = request.Caller
             },
@@ -2124,11 +2135,18 @@ public sealed class ResourceManagerService(
         var prospective = sent;
 
         if (request.Verb == WriteVerb.Patch && target.Exists) {
+            // ⚠ A failed read refuses: the patch alone is exactly the body the paragraph above says
+            // lets writes past rules about fields it doesn't repeat. The read fails only with NotFound
+            // — the resource was deleted after step 1 saw it — and a PATCH of a resource that is gone
+            // is the canonical 404 anyway. Found by the review of issue #46.
             var stored = await Resource(target).GetAsync(string.Empty, []);
-            prospective = PolicyDocuments.MergePatch(
-                stored.IsSuccess ? PolicyDocuments.Stored(stored.GetValueOrThrow()) : new JsonObject(),
-                sent
-            );
+            if (stored.TryGetError(out var storedError)) {
+                return storedError.Code == ErrorCode.ResourceNotFound
+                    ? NotFound<WriteAccepted>(request.Path)
+                    : Result<WriteAccepted>.Failure(storedError);
+            }
+
+            prospective = PolicyDocuments.MergePatch(PolicyDocuments.Stored(stored.GetValueOrThrow()), sent);
         }
 
         var decision = await policy.EvaluateAsync(

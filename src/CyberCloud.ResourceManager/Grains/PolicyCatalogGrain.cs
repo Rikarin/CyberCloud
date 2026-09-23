@@ -359,7 +359,9 @@ public sealed class PolicyCatalogGrain(
                     AssignmentPath = candidate.Assignment.Path,
                     DefinitionPath = candidate.Definition.Path,
                     State = matched ? PolicyComplianceState.NonCompliant : PolicyComplianceState.Compliant,
-                    Since = now
+                    Since = now,
+                    AssignmentVersion = candidate.Assignment.Version,
+                    DefinitionVersion = candidate.Definition.Version
                 }
             );
         }
@@ -380,7 +382,14 @@ public sealed class PolicyCatalogGrain(
     public async Task<Result> RecordStatesAsync(string resourcePath, ImmutableArray<PolicyStateRecord> states) {
         ArgumentNullException.ThrowIfNull(resourcePath);
 
-        var incoming = states.IsDefault ? [] : states;
+        // ⚠ ONLY VERDICTS ABOUT WHAT IS IN FORCE NOW. This call arrives after the write's step 9, a
+        // different turn from the evaluation, and a policy write can land between the two — the
+        // interface's remarks. A verdict whose assignment is gone, or whose assignment or rule has a
+        // newer version than the one it was evaluated under, is dropped here rather than written back.
+        var incoming = (states.IsDefault ? [] : states)
+            .Where(x => string.Equals(x.ResourcePath, resourcePath, StringComparison.Ordinal) && InForce(x))
+            .ToImmutableArray();
+
         state.State.States.TryGetValue(resourcePath, out var existing);
 
         if (incoming.IsEmpty) {
@@ -396,8 +405,7 @@ public sealed class PolicyCatalogGrain(
         // ⚠ A verdict that did not change keeps the time it last changed — PolicyStateRecord.Since —
         // so an unchanged set compares equal and is not written at all.
         var merged = incoming
-            .Where(x => string.Equals(x.ResourcePath, resourcePath, StringComparison.Ordinal))
-            .Select(x => existing?.FirstOrDefault(y => SameVerdict(x, y)) ?? x)
+            .Select(x => existing?.FirstOrDefault(y => SameVerdict(x, y)) is { } kept ? x with { Since = kept.Since } : x)
             .OrderBy(static x => x.AssignmentPath, StringComparer.Ordinal)
             .ToList();
 
@@ -414,6 +422,77 @@ public sealed class PolicyCatalogGrain(
     public async Task<Result> ForgetResourceAsync(string resourcePath) {
         if (!state.State.States.Remove(resourcePath ?? "")) {
             return Result.Success;
+        }
+
+        await state.WriteStateAsync();
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> ForgetScopeAsync(string scopePath) {
+        var parsed = ScopeId.ParsePath(scopePath ?? "");
+        if (parsed.TryGetError(out var parseError)) {
+            return Result.Failure(parseError);
+        }
+
+        var scope = parsed.GetValueOrThrow();
+
+        // ⚠ The two kinds a delete reaches today, and only in this tenant. A tenant's scope is every
+        // path here and a subscription's delete isn't built; either would be a far wider forget than a
+        // caller of this method means, so it's refused by name rather than done.
+        if (scope.TenantId != tenantId || scope.Kind is not (ScopeKind.ManagementGroup or ScopeKind.ResourceGroup)) {
+            return Result.Failure(
+                ErrorCode.InvalidResourceId,
+                $"'{scope.Path}' is not a management group or a resource group in tenant {tenantId:D}, so the "
+                + "policy catalog forgets nothing for it."
+            );
+        }
+
+        var path = scope.Path;
+
+        var definitions = state.State.Definitions.Values
+            .Where(x => string.Equals(x.Scope, path, StringComparison.Ordinal))
+            .Select(static x => x.Path)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var assignments = state.State.Assignments.Values
+            .Where(x => string.Equals(x.Scope, path, StringComparison.Ordinal) || definitions.Contains(x.DefinitionPath))
+            .ToArray();
+
+        var beneath = path + "/";
+        var hasStates = state.State.States.Keys.Any(x => x.StartsWith(beneath, StringComparison.Ordinal));
+
+        if (definitions.Count == 0 && assignments.Length == 0 && !hasStates) {
+            return Result.Success;
+        }
+
+        foreach (var assignment in assignments) {
+            if (!string.Equals(assignment.Scope, path, StringComparison.Ordinal)) {
+                // IPolicyCatalogGrain.ForgetScopeAsync's remarks: an assignment elsewhere of a definition
+                // that went with its scope. Warning, because an enforcement nobody at that scope lifted
+                // has just been lifted.
+                logger.LogWarning(
+                    "Policy assignment '{Assignment}' is removed with the deleted scope '{Scope}' because it "
+                    + "names '{Definition}', a definition that scope held.",
+                    assignment.Path,
+                    path,
+                    assignment.DefinitionPath
+                );
+            }
+
+            state.State.Assignments.Remove(assignment.Path);
+            compiled.Remove(assignment.Scope);
+        }
+
+        foreach (var definition in definitions) {
+            state.State.Definitions.Remove(definition);
+        }
+
+        var removed = assignments.Select(static x => x.Path).ToHashSet(StringComparer.Ordinal);
+        DropStates(x => removed.Contains(x.AssignmentPath));
+
+        foreach (var resource in state.State.States.Keys.Where(x => x.StartsWith(beneath, StringComparison.Ordinal)).ToArray()) {
+            state.State.States.Remove(resource);
         }
 
         await state.WriteStateAsync();
@@ -484,10 +563,23 @@ public sealed class PolicyCatalogGrain(
 
                 var group = await tenant.GetGrain<IManagementGroupGrain>(GrainKeys.ManagementGroup(name)).GetAsync();
 
-                // ⚠ A group that does not answer ends the walk rather than failing the write: the
-                // subscription names a group that was deleted under it, which #39's delete refuses
-                // while it has subscriptions, so this is a race with a delete and there is nothing
-                // above a group that is gone. What was already on the chain is still applied.
+                // ⚠ A GROUP THAT IS GONE ENDS THE WALK; ANY OTHER FAILURE REFUSES THE WRITE. NotFound
+                // means the subscription names a group deleted under it — #39's delete refuses while
+                // the group holds a subscription, so this is a race with that delete, the group's own
+                // policy went with it (ForgetScopeAsync), and its parent can't be read off a record
+                // that no longer exists. Refusing would stop every write in the subscription for as
+                // long as the dangling name lasted. So the groups ABOVE a deleted group are skipped
+                // for the length of that race, and that is the one place step 5 does not fail closed.
+                // A failure of any other kind is a group that exists and didn't answer, and skipping
+                // it would skip every assignment above it for as long as it kept failing.
+                if (group.TryGetError(out var groupError) && groupError.Code != ErrorCode.ResourceNotFound) {
+                    return Result<ImmutableArray<string>>.Failure(
+                        ErrorCode.InternalError,
+                        $"Management group '{name}' above '{subject.ResourcePath}' could not be read for policy "
+                        + $"evaluation, so the request is refused rather than let past its assignments: {groupError.Message}"
+                    );
+                }
+
                 if (group.IsFailure) {
                     logger.LogWarning(
                         "Management group '{Group}' above {Resource} did not answer the policy walk: {Message}",
@@ -609,6 +701,14 @@ public sealed class PolicyCatalogGrain(
             )
             : Result<PolicyAddress>.Success(address);
     }
+
+    /// <summary>Whether the assignment and the definition a verdict was evaluated under are the ones stored now.</summary>
+    bool InForce(PolicyStateRecord verdict) =>
+        state.State.Assignments.TryGetValue(verdict.AssignmentPath, out var assignment)
+        && assignment.Version == verdict.AssignmentVersion
+        && string.Equals(assignment.DefinitionPath, verdict.DefinitionPath, StringComparison.Ordinal)
+        && state.State.Definitions.TryGetValue(verdict.DefinitionPath, out var definition)
+        && definition.Version == verdict.DefinitionVersion;
 
     static bool SameVerdict(PolicyStateRecord incoming, PolicyStateRecord existing) =>
         string.Equals(incoming.AssignmentPath, existing.AssignmentPath, StringComparison.Ordinal)

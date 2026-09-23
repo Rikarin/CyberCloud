@@ -2,6 +2,7 @@ using CyberCloud.ResourceManager.Actions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Orleans.Multitenant;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -332,6 +333,113 @@ public sealed class PolicyEnforcementTests(ResourceManagerCluster cluster) : IAs
     }
 
     [Fact]
+    public async Task AVerdictEvaluatedBeforeItsAssignmentOrRuleChangedIsNotRecordedAfterIt() {
+        // ⚠ Evaluation (step 5) and recording (after step 9) are two turns of the catalog, and a policy
+        // write can land between them. The review of issue #46 found such a verdict written back; each
+        // one now carries the versions it was judged under, and RecordStatesAsync drops a stale one.
+        ResourceManagerCluster.ResetDoubles();
+
+        var group = await GroupAsync("stale");
+        var scope = ScopeId.Group(ResourceManagerCluster.Tenant, PolicySubscription, group);
+        const string Rule = """{ "if": { "field": "/properties/label", "equals": "unlabelled" }, "then": { "effect": "audit" } }""";
+        await DefineAsync(group, "stale-audit", Rule);
+        await AssignAsync(group, "stale-audit", "stale-audit");
+
+        var address = Widget(group, "v");
+        var catalog = Catalog();
+
+        // ── The rule changed between evaluation and recording ──
+        var before = await EvaluateDirectlyAsync(address);
+        before.ShouldHaveSingleItem().State.ShouldBe(PolicyComplianceState.NonCompliant);
+        await DefineAsync(group, "stale-audit", Rule.Replace("unlabelled", "blank", StringComparison.Ordinal));
+
+        (await catalog.RecordStatesAsync(address.CanonicalPath, before)).IsSuccess.ShouldBeTrue();
+        (await StatesAsync(scope)).ShouldBeEmpty("a verdict about the old rule was recorded after the rule changed");
+
+        // ── The assignment went between evaluation and recording ──
+        var current = await EvaluateDirectlyAsync(address);
+        await UnassignAsync(group, "stale-audit");
+
+        (await catalog.RecordStatesAsync(address.CanonicalPath, current)).IsSuccess.ShouldBeTrue();
+        (await StatesAsync(scope)).ShouldBeEmpty("a verdict of a deleted assignment was recorded after it went");
+
+        // ── And a verdict about what is in force is recorded, so the check isn't dropping everything ──
+        await AssignAsync(group, "stale-audit", "stale-audit");
+        var fresh = await EvaluateDirectlyAsync(address);
+        (await catalog.RecordStatesAsync(address.CanonicalPath, fresh)).IsSuccess.ShouldBeTrue();
+        (await StatesAsync(scope)).ShouldHaveSingleItem().ResourcePath.ShouldBe(address.CanonicalPath);
+
+        await UnassignAsync(group, "stale-audit");
+    }
+
+    [Fact]
+    public async Task ForgettingADeletedScopeTakesItsPolicyAndEveryAssignmentOfItsDefinitionsAndNothingElse() {
+        // ⚠ The catalog half of the scope delete — ScopeManagerService calls it beside the tuple sweep,
+        // and ManagementGroupTests in test/CyberCloud.Isolation drives that through the real scope
+        // manager. Here: exactly what goes, including an assignment elsewhere of a definition the
+        // deleted group held (a subscription that moved out of the group after assigning it).
+        ResourceManagerCluster.ResetDoubles();
+
+        var catalog = Catalog();
+        var gone = ScopeId.ManagementGroupOf(ResourceManagerCluster.Tenant, "policy-forgotten");
+        var subscription = ScopeId.Subscription(ResourceManagerCluster.Tenant, PolicySubscription);
+        const string Audit = """{ "if": { "field": "/properties/label", "equals": "unlabelled" }, "then": { "effect": "audit" } }""";
+
+        var groupDefinition = PolicyAddress.Definition(gone, "forgotten").Path;
+        (await catalog.PutDefinitionAsync(new() { Path = groupDefinition, Rule = Audit })).IsSuccess.ShouldBeTrue();
+        (await catalog.PutAssignmentAsync(new() { Path = PolicyAddress.Assignment(gone, "at-group").Path, DefinitionPath = groupDefinition }))
+            .IsSuccess.ShouldBeTrue();
+
+        var movedOut = PolicyAddress.Assignment(subscription, "moved-out").Path;
+        (await catalog.PutAssignmentAsync(new() { Path = movedOut, DefinitionPath = groupDefinition })).IsSuccess.ShouldBeTrue();
+
+        // A subscription definition assigned at the subscription and at a resource group, with a verdict.
+        var kept = await DefineAsync("kept", "kept", Audit);
+        var keptAtSubscription = PolicyAddress.Assignment(subscription, "kept").Path;
+        (await catalog.PutAssignmentAsync(new() { Path = keptAtSubscription, DefinitionPath = kept })).IsSuccess.ShouldBeTrue();
+
+        var group = await GroupAsync("forgotten-rg");
+        var atGroup = await AssignAsync(group, "kept", "kept");
+        var address = Widget(group, "f");
+        (await catalog.RecordStatesAsync(address.CanonicalPath, await EvaluateDirectlyAsync(address))).IsSuccess.ShouldBeTrue();
+
+        try {
+            // ── The management group ──
+            (await catalog.ForgetScopeAsync(gone.Path)).IsSuccess.ShouldBeTrue();
+
+            (await catalog.GetDefinitionAsync(groupDefinition)).Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+            (await catalog.ListAssignmentsAsync(gone.Path)).GetValueOrThrow().ShouldBeEmpty();
+            (await catalog.GetAssignmentAsync(movedOut)).Error!.Code.ShouldBe(
+                ErrorCode.ResourceNotFound,
+                "an assignment of a deleted group's definition outlived it, and would name a definition that no longer exists"
+            );
+            (await catalog.GetAssignmentAsync(keptAtSubscription)).IsSuccess.ShouldBeTrue("an unrelated assignment went with the group");
+            (await catalog.ForgetScopeAsync(gone.Path)).IsSuccess.ShouldBeTrue("a re-driven delete forgets again");
+
+            // ── The resource group ──
+            var groupScope = ScopeId.Group(ResourceManagerCluster.Tenant, PolicySubscription, group);
+            (await StatesAsync(groupScope)).ShouldNotBeEmpty();
+            (await catalog.ForgetScopeAsync(groupScope.Path)).IsSuccess.ShouldBeTrue();
+
+            (await catalog.GetAssignmentAsync(atGroup)).Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+            (await StatesAsync(groupScope)).ShouldBeEmpty("the verdicts beneath a deleted group outlived it");
+            (await catalog.GetDefinitionAsync(kept)).IsSuccess.ShouldBeTrue("the subscription's definition is not the group's to take");
+            (await catalog.GetAssignmentAsync(keptAtSubscription)).IsSuccess.ShouldBeTrue();
+
+            // ── Refused by name: a subscription, whose delete isn't built, and another tenant's group ──
+            (await catalog.ForgetScopeAsync(subscription.Path)).Error!.Code.ShouldBe(ErrorCode.InvalidResourceId);
+            (await catalog.ForgetScopeAsync(ScopeId.ManagementGroupOf(ResourceManagerCluster.OtherTenant, "policy-forgotten").Path))
+                .Error!.Code.ShouldBe(ErrorCode.InvalidResourceId);
+        } finally {
+            await catalog.DeleteAssignmentAsync(keptAtSubscription);
+            await catalog.DeleteAssignmentAsync(atGroup);
+            await catalog.DeleteAssignmentAsync(movedOut);
+            await catalog.DeleteDefinitionAsync(kept);
+            await catalog.DeleteDefinitionAsync(groupDefinition);
+        }
+    }
+
+    [Fact]
     public async Task ASecretPropertyIsNotVisibleToACondition() {
         // ⚠ An audit verdict is readable by anyone with read on the scope, one bit per rule, and the
         // rule is the scope owner's to write — so a condition over a password would be an oracle for
@@ -628,6 +736,27 @@ public sealed class PolicyEnforcementTests(ResourceManagerCluster cluster) : IAs
 
         listed.IsSuccess.ShouldBeTrue(listed.Error?.Message);
         return listed.GetValueOrThrow().States;
+    }
+
+    IPolicyCatalogGrain Catalog() =>
+        cluster.For(ResourceManagerCluster.Tenant).GetGrain<IPolicyCatalogGrain>(GrainKeys.PolicyCatalog(ResourceManagerCluster.Tenant));
+
+    /// <summary>Step 5's evaluation of a create, asked of the catalog directly, returning the verdicts it would record.</summary>
+    async Task<ImmutableArray<PolicyStateRecord>> EvaluateDirectlyAsync(ResourceId address) {
+        var evaluated = await Catalog().EvaluateAsync(
+            new() {
+                ResourcePath = address.CanonicalPath,
+                SubscriptionId = address.SubscriptionId,
+                ResourceGroup = address.ResourceGroup,
+                ResourceType = address.Type.ToString(),
+                ResourceName = address.Name,
+                Operation = "create",
+                Document = """{"properties":{"label":"unlabelled"}}"""
+            }
+        );
+
+        evaluated.IsSuccess.ShouldBeTrue(evaluated.Error?.Message);
+        return evaluated.GetValueOrThrow().States;
     }
 
     static PolicyRequest Request(string path, string body = "{}") =>

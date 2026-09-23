@@ -101,12 +101,49 @@ public interface IPolicyCatalogGrain : IGrainWithStringKey {
     ///     ⚠ <b>A state that has not changed is not written</b> — see
     ///     <see cref="PolicyStateRecord.Since" /> — so re-applying the same body does not make every
     ///     write a durable write here.
+    ///     ⚠ <b>A state whose assignment or definition changed since it was evaluated is dropped.</b>
+    ///     Evaluation and recording are two turns with the write's steps 6 to 9 between them; an
+    ///     assignment deleted or replaced, or a rule changed, in that window would otherwise be written
+    ///     back by a verdict about something that no longer applies. It returns on the resource's next
+    ///     write.
     /// </remarks>
     Task<Result> RecordStatesAsync(string resourcePath, ImmutableArray<PolicyStateRecord> states);
 
     /// <summary>Forgets every state one resource recorded. Called when its delete is accepted.</summary>
     /// <param name="resourcePath">The resource's canonical path.</param>
     Task<Result> ForgetResourceAsync(string resourcePath);
+
+    /// <summary>
+    ///     Forgets everything a deleted scope held: its definitions, its assignments, every assignment
+    ///     elsewhere that names one of its definitions, and the states of every resource beneath it.
+    ///     Success when there's nothing to forget, so a re-driven delete can call it again.
+    /// </summary>
+    /// <param name="scopePath">
+    ///     A management group or a resource group path in this tenant, after its record is deleted.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Keyed by path, so what a deleted scope leaves here governs the next scope of its name.</b>
+    ///         A management group's path is its bare name and a resource group's is its subscription and
+    ///         name, so a group re-created under the same name would find the old owner's deny, modify
+    ///         and audit rules already in force, and could neither see them go nor delete them while the
+    ///         scope was gone. The review of issue #46 found exactly that; it's the same residue the review
+    ///         of issue #39 found for role tuples, and <c>ScopeManagerService</c> calls this beside
+    ///         <c>IScopeRelationWriter.ClearAsync</c> for the same reason.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>An assignment elsewhere that names a deleted definition goes too</b>, and it's logged.
+    ///         A definition is usable at its scope and beneath it, so one at a management group can be
+    ///         assigned at a subscription that later moved out. Kept, it would be a rule whose author is
+    ///         whoever next creates a group under that name. Kept without its definition, it would break
+    ///         the invariant that every assignment names one that exists.
+    ///     </para>
+    ///     <para>
+    ///         An exclusion naming the deleted scope in an assignment above it is left alone: it was
+    ///         written by the owner of a scope that still exists and still governs whatever takes the name.
+    ///     </para>
+    /// </remarks>
+    Task<Result> ForgetScopeAsync(string scopePath);
 
     /// <summary>
     ///     The states of every resource at or beneath one scope, ordered by resource then assignment.
@@ -280,6 +317,18 @@ public sealed record PolicyStateRecord {
     /// </remarks>
     [Id(5)]
     public DateTimeOffset Since { get; init; }
+
+    /// <summary>The <see cref="PolicyAssignmentRecord.Version" /> the verdict was evaluated under.</summary>
+    /// <remarks>
+    ///     ⚠ With <see cref="DefinitionVersion" />, what lets <c>RecordStatesAsync</c> refuse a verdict
+    ///     that was evaluated before its assignment or rule changed and arrived after. Not rendered.
+    /// </remarks>
+    [Id(6)]
+    public long AssignmentVersion { get; init; }
+
+    /// <summary>The <see cref="PolicyDefinitionRecord.Version" /> the verdict was evaluated under.</summary>
+    [Id(7)]
+    public long DefinitionVersion { get; init; }
 }
 
 /// <summary>What step 5 evaluates: one request against one resource.</summary>

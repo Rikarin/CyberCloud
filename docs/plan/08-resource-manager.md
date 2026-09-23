@@ -251,15 +251,18 @@ step 10 starts, and a synchronous action's handler runs after the fork step 5 pr
 - **A modify rewrites the document the request sends** and the result is validated against the schema
   again before anything below step 5 reads it; everything below — quota amounts, tags, location, cluster,
   desired state — reads the rewritten body. `WriteTrace.Policy` records, inside step 5's span, every
-  assignment that applied and every rewrite it made (`replace /properties/label = "enforced"`), so a caller
-  sees what was done to their request in the response to it.
+  assignment that applied and every rewrite it made (`replace /properties/label = "enforced"`). ⚠ An
+  in-process caller of `IResourceManager` reads it off the `WriteAccepted` it gets back; an HTTP caller
+  doesn't, because the gateway renders no part of `WriteTrace` — until it does (owed, below), what a modify
+  made is found by reading the resource back.
 - **A deny is `403 PolicyViolation`**, naming the assignment and the definition in the message and again
   as two details, with the rule's first body pointer as the target.
 - **An audit's verdict is recorded after step 9 succeeds**, never at step 5 — a verdict for a body that
   step 6 or 7 then refused would describe a resource that is not so. It is not allowed to fail the write.
   A verdict records when it last *changed*, so re-applying the same body writes nothing durable. A delete
   forgets the resource's verdicts when it is accepted; a replaced assignment and a changed rule drop the
-  verdicts they no longer vouch for.
+  verdicts they no longer vouch for, and a verdict evaluated before either and recorded after it is dropped
+  on arrival — each verdict carries the assignment's and the definition's versions it was judged under.
 
 **Inheritance and exclusion.** A write is judged by the assignments on its resource group, its
 subscription and every management group above the subscription, top down — so where two modify rules
@@ -274,11 +277,27 @@ tenant's definitions, assignments and verdicts, and evaluates. Step 5 is one gra
 the catalog caches each scope's assignments with their rules already parsed, drops a scope's entry when an
 assignment there is written and every entry naming a definition when that definition is, and walks the
 management groups — one `IManagementGroupGrain` read per level, at most six — only when the tenant has an
-assignment at one. The evaluation is `[ReadOnly]`, so evaluations interleave and queue only behind a policy
-write. The tenant boundary is the grain key's qualification: tenant A's assignments are not in the
-activation tenant B's writes reach, even at an identical path
+assignment at one. The evaluation is `[ReadOnly]`, so evaluations interleave with each other; they queue
+behind the catalog's non-read-only turns — a policy write, the verdicts recorded after every write an audit
+reached, and the forget every accepted `DELETE` sends, which runs in every tenant, including one with no
+policy at all (it writes nothing when there's nothing to forget, and the turn is still a turn). The tenant
+boundary is the grain key's qualification: tenant A's assignments are not in the activation tenant B's
+writes reach, even at an identical path
 (`PolicyEnforcementTests.TenantAsAssignmentNeverAppliesToTenantBEvenAtTheSamePath`). ⚠ **It fails
-closed**: a catalog that cannot answer is a refusal, not an allow.
+closed**: a catalog that cannot answer is a refusal, not an allow, and so is a management group in the walk
+that fails to answer, and a `PATCH` or an action whose stored body can't be read. Two absences don't refuse,
+because each is a record that is gone rather than a store that failed: a management group deleted under a
+subscription ends the walk, since the groups above it can't be named, and a `DELETE` of a resource with no
+record judges an empty body, since there are no fields left to protect.
+
+**A deleted scope takes its policy with it.** The catalog keys everything by path, and a management group's
+path is its name, so a group re-created under a deleted one's name used to find the old owner's rules in
+force — undeletable over the API, which answers 404 for a scope that doesn't exist. Deleting a management
+group or a resource group now forgets, beside #39's tuple sweep, the definitions and assignments on it,
+every assignment elsewhere that names one of its definitions (logged: a definition at a group can be
+assigned at a subscription that later moved out), and the verdicts beneath it; a re-driven `DELETE` forgets
+again. `ManagementGroupTests.ADeletedGroupRecreatedUnderTheSameNameCarriesNoneOfItsOldPolicy` drives it
+through the real scope manager.
 
 **Who may write it.** `assignRole` on the scope, which `CyberCloudSchema` defines as
 `Rel(owner) & !Rel(suspended)` — Azure keeps `policyAssignments/write` out of Contributor for the reason it
@@ -290,6 +309,8 @@ contributor's writes. Reading is `read` on the scope. 404, never 403, for a call
 
 - **The addresses are not in the generated document**, so no generated SDK, CLI verb or portal form knows
   them — the gap [24](24-roadmap.md)'s resource-graph row records for its own address.
+- **The gateway doesn't render `WriteTrace.Policy`**, so an HTTP caller learns what a modify rewrote only by
+  reading the resource back. Azure answers with the stored body; ours is the `202`'s operation.
 - **No compliance scan.** A verdict is produced by a write; an assignment made today says nothing about the
   resources that already exist until each is written again. Azure re-evaluates on a cycle; the reminder
   that would do it, walking a scope's membership, is not built.
