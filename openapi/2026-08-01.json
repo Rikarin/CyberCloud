@@ -9517,6 +9517,395 @@
       "x-cybercloud-resource-type": "CyberCloud.Mail/domains",
       "x-cybercloud-collection": true
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains/{domainsName}/mailboxes": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "domainsName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Mail_domains_mailboxes_List",
+        "summary": "List the CyberCloud.Mail/domains/mailboxes in a resource group.",
+        "description": "Returns one page of the resources of this type in the resource group the path names, including any that are being deleted — docs/plan/06 § Two-phase create keeps a resource whose teardown has not converged visible with that state, because its pods still run and its meter still ticks.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Mail.domains.mailboxes.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Mail/domains/mailboxes",
+      "x-cybercloud-collection": true
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains/{domainsName}/mailboxes/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "domainsName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Mail_domains_mailboxes_Get",
+        "summary": "Read a CyberCloud.Mail/domains/mailboxes.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Mail.domains.mailboxes"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Mail_domains_mailboxes_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Mail/domains/mailboxes.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Mail.domains.mailboxes"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Mail.domains.mailboxes"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Mail_domains_mailboxes_Update",
+        "summary": "Merge-patch a CyberCloud.Mail/domains/mailboxes.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Mail.domains.mailboxes"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Mail.domains.mailboxes"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Mail_domains_mailboxes_Delete",
+        "summary": "Delete a CyberCloud.Mail/domains/mailboxes.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Mail.domains.mailboxes"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Mail/domains/mailboxes",
+      "x-cybercloud-display": {
+        "name": "Mailbox",
+        "plural": "Mailboxes",
+        "alias": "mailbox",
+        "summary": "One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": [
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        }
+      ]
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains/{resourceName}": {
       "parameters": [
         {
@@ -9831,6 +10220,136 @@
           ]
         }
       ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains/{resourceName}/dnsRecords": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Mail_domains_DnsRecords",
+        "summary": "dnsRecords a CyberCloud.Mail/domains.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Mail.domains.DnsRecordsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Mail/domains",
+      "x-cybercloud-action": "dnsRecords"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains/{resourceName}/verify": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Mail_domains_Verify",
+        "summary": "verify a CyberCloud.Mail/domains.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Mail.domains.VerifyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Mail/domains",
+      "x-cybercloud-action": "verify"
     },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/kafkaClusters": {
       "parameters": [
@@ -23887,6 +24406,286 @@
         "title": "CyberCloud.Mail/domains",
         "type": "object"
       },
+      "CyberCloud.Mail.domains.DnsRecordsResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Mail/domains/dnsRecords returns.",
+        "properties": {
+          "domain": {
+            "description": "The mail domain the records are for.",
+            "type": "string"
+          },
+          "mtaStsPolicy": {
+            "description": "The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve.",
+            "type": "string"
+          },
+          "records": {
+            "additionalProperties": false,
+            "description": "One member per record the domain must publish.",
+            "properties": {
+              "dkim": {
+                "additionalProperties": false,
+                "description": "The DKIM public key. Gates sending.",
+                "properties": {
+                  "gatesSending": {
+                    "description": "Whether sending is held until this record verifies.",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "The owner name, fully qualified.",
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "MX, TXT or CNAME.",
+                    "enum": [
+                      "MX",
+                      "TXT",
+                      "CNAME"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "The value to publish, exactly.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "gatesSending",
+                  "name",
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "dmarc": {
+                "additionalProperties": false,
+                "description": "The DMARC policy. Gates sending.",
+                "properties": {
+                  "gatesSending": {
+                    "description": "Whether sending is held until this record verifies.",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "The owner name, fully qualified.",
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "MX, TXT or CNAME.",
+                    "enum": [
+                      "MX",
+                      "TXT",
+                      "CNAME"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "The value to publish, exactly.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "gatesSending",
+                  "name",
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "mtaSts": {
+                "additionalProperties": false,
+                "description": "The MTA-STS policy announcement.",
+                "properties": {
+                  "gatesSending": {
+                    "description": "Whether sending is held until this record verifies.",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "The owner name, fully qualified.",
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "MX, TXT or CNAME.",
+                    "enum": [
+                      "MX",
+                      "TXT",
+                      "CNAME"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "The value to publish, exactly.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "gatesSending",
+                  "name",
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "mtaStsHost": {
+                "additionalProperties": false,
+                "description": "The MTA-STS policy host.",
+                "properties": {
+                  "gatesSending": {
+                    "description": "Whether sending is held until this record verifies.",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "The owner name, fully qualified.",
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "MX, TXT or CNAME.",
+                    "enum": [
+                      "MX",
+                      "TXT",
+                      "CNAME"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "The value to publish, exactly.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "gatesSending",
+                  "name",
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "mx": {
+                "additionalProperties": false,
+                "description": "The MX record — where mail for the domain is delivered.",
+                "properties": {
+                  "gatesSending": {
+                    "description": "Whether sending is held until this record verifies.",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "The owner name, fully qualified.",
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "MX, TXT or CNAME.",
+                    "enum": [
+                      "MX",
+                      "TXT",
+                      "CNAME"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "The value to publish, exactly.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "gatesSending",
+                  "name",
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "spf": {
+                "additionalProperties": false,
+                "description": "The SPF record. Gates sending.",
+                "properties": {
+                  "gatesSending": {
+                    "description": "Whether sending is held until this record verifies.",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "The owner name, fully qualified.",
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "MX, TXT or CNAME.",
+                    "enum": [
+                      "MX",
+                      "TXT",
+                      "CNAME"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "The value to publish, exactly.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "gatesSending",
+                  "name",
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "tlsRpt": {
+                "additionalProperties": false,
+                "description": "The TLS-RPT reporting address.",
+                "properties": {
+                  "gatesSending": {
+                    "description": "Whether sending is held until this record verifies.",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "The owner name, fully qualified.",
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "MX, TXT or CNAME.",
+                    "enum": [
+                      "MX",
+                      "TXT",
+                      "CNAME"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "The value to publish, exactly.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "gatesSending",
+                  "name",
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "dkim",
+              "dmarc",
+              "mtaSts",
+              "mtaStsHost",
+              "mx",
+              "spf",
+              "tlsRpt"
+            ],
+            "type": "object"
+          },
+          "zoneFile": {
+            "description": "Every record as a zone-file line, ready to paste into a zone.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "mtaStsPolicy",
+          "records",
+          "zoneFile"
+        ],
+        "title": "CyberCloud.Mail.domains.DnsRecordsResponse",
+        "type": "object"
+      },
       "CyberCloud.Mail.domains.List": {
         "type": "object",
         "title": "CyberCloud.Mail.domains.List",
@@ -23901,6 +24700,619 @@
             "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Mail.domains"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "CyberCloud.Mail.domains.VerifyResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Mail/domains/verify returns.",
+        "properties": {
+          "domain": {
+            "description": "The mail domain the records are for.",
+            "type": "string"
+          },
+          "mtaStsPolicy": {
+            "description": "The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve.",
+            "type": "string"
+          },
+          "records": {
+            "additionalProperties": false,
+            "description": "One member per record the domain must publish.",
+            "properties": {
+              "dkim": {
+                "additionalProperties": false,
+                "description": "The DKIM public key. Gates sending.",
+                "properties": {
+                  "detail": {
+                    "description": "Why, in a sentence.",
+                    "type": "string"
+                  },
+                  "found": {
+                    "description": "What the DNS answered for the name.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "gatesSending": {
+                    "description": "Whether sending is held until this record verifies.",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "The owner name, fully qualified.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "What resolving it found.",
+                    "enum": [
+                      "verified",
+                      "missing",
+                      "mismatch",
+                      "unresolvable"
+                    ],
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "MX, TXT or CNAME.",
+                    "enum": [
+                      "MX",
+                      "TXT",
+                      "CNAME"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "The value to publish, exactly.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "detail",
+                  "found",
+                  "gatesSending",
+                  "name",
+                  "status",
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "dmarc": {
+                "additionalProperties": false,
+                "description": "The DMARC policy. Gates sending.",
+                "properties": {
+                  "detail": {
+                    "description": "Why, in a sentence.",
+                    "type": "string"
+                  },
+                  "found": {
+                    "description": "What the DNS answered for the name.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "gatesSending": {
+                    "description": "Whether sending is held until this record verifies.",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "The owner name, fully qualified.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "What resolving it found.",
+                    "enum": [
+                      "verified",
+                      "missing",
+                      "mismatch",
+                      "unresolvable"
+                    ],
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "MX, TXT or CNAME.",
+                    "enum": [
+                      "MX",
+                      "TXT",
+                      "CNAME"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "The value to publish, exactly.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "detail",
+                  "found",
+                  "gatesSending",
+                  "name",
+                  "status",
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "mtaSts": {
+                "additionalProperties": false,
+                "description": "The MTA-STS policy announcement.",
+                "properties": {
+                  "detail": {
+                    "description": "Why, in a sentence.",
+                    "type": "string"
+                  },
+                  "found": {
+                    "description": "What the DNS answered for the name.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "gatesSending": {
+                    "description": "Whether sending is held until this record verifies.",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "The owner name, fully qualified.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "What resolving it found.",
+                    "enum": [
+                      "verified",
+                      "missing",
+                      "mismatch",
+                      "unresolvable"
+                    ],
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "MX, TXT or CNAME.",
+                    "enum": [
+                      "MX",
+                      "TXT",
+                      "CNAME"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "The value to publish, exactly.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "detail",
+                  "found",
+                  "gatesSending",
+                  "name",
+                  "status",
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "mtaStsHost": {
+                "additionalProperties": false,
+                "description": "The MTA-STS policy host.",
+                "properties": {
+                  "detail": {
+                    "description": "Why, in a sentence.",
+                    "type": "string"
+                  },
+                  "found": {
+                    "description": "What the DNS answered for the name.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "gatesSending": {
+                    "description": "Whether sending is held until this record verifies.",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "The owner name, fully qualified.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "What resolving it found.",
+                    "enum": [
+                      "verified",
+                      "missing",
+                      "mismatch",
+                      "unresolvable"
+                    ],
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "MX, TXT or CNAME.",
+                    "enum": [
+                      "MX",
+                      "TXT",
+                      "CNAME"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "The value to publish, exactly.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "detail",
+                  "found",
+                  "gatesSending",
+                  "name",
+                  "status",
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "mx": {
+                "additionalProperties": false,
+                "description": "The MX record — where mail for the domain is delivered.",
+                "properties": {
+                  "detail": {
+                    "description": "Why, in a sentence.",
+                    "type": "string"
+                  },
+                  "found": {
+                    "description": "What the DNS answered for the name.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "gatesSending": {
+                    "description": "Whether sending is held until this record verifies.",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "The owner name, fully qualified.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "What resolving it found.",
+                    "enum": [
+                      "verified",
+                      "missing",
+                      "mismatch",
+                      "unresolvable"
+                    ],
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "MX, TXT or CNAME.",
+                    "enum": [
+                      "MX",
+                      "TXT",
+                      "CNAME"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "The value to publish, exactly.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "detail",
+                  "found",
+                  "gatesSending",
+                  "name",
+                  "status",
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "spf": {
+                "additionalProperties": false,
+                "description": "The SPF record. Gates sending.",
+                "properties": {
+                  "detail": {
+                    "description": "Why, in a sentence.",
+                    "type": "string"
+                  },
+                  "found": {
+                    "description": "What the DNS answered for the name.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "gatesSending": {
+                    "description": "Whether sending is held until this record verifies.",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "The owner name, fully qualified.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "What resolving it found.",
+                    "enum": [
+                      "verified",
+                      "missing",
+                      "mismatch",
+                      "unresolvable"
+                    ],
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "MX, TXT or CNAME.",
+                    "enum": [
+                      "MX",
+                      "TXT",
+                      "CNAME"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "The value to publish, exactly.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "detail",
+                  "found",
+                  "gatesSending",
+                  "name",
+                  "status",
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "tlsRpt": {
+                "additionalProperties": false,
+                "description": "The TLS-RPT reporting address.",
+                "properties": {
+                  "detail": {
+                    "description": "Why, in a sentence.",
+                    "type": "string"
+                  },
+                  "found": {
+                    "description": "What the DNS answered for the name.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "gatesSending": {
+                    "description": "Whether sending is held until this record verifies.",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "The owner name, fully qualified.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "What resolving it found.",
+                    "enum": [
+                      "verified",
+                      "missing",
+                      "mismatch",
+                      "unresolvable"
+                    ],
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "MX, TXT or CNAME.",
+                    "enum": [
+                      "MX",
+                      "TXT",
+                      "CNAME"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "The value to publish, exactly.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "detail",
+                  "found",
+                  "gatesSending",
+                  "name",
+                  "status",
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "dkim",
+              "dmarc",
+              "mtaSts",
+              "mtaStsHost",
+              "mx",
+              "spf",
+              "tlsRpt"
+            ],
+            "type": "object"
+          },
+          "sending": {
+            "description": "held, open or suspended — why sendingEnabled is what it is.",
+            "enum": [
+              "held",
+              "open",
+              "suspended"
+            ],
+            "type": "string"
+          },
+          "sendingEnabled": {
+            "description": "Whether mail may leave the domain: SPF, DKIM and DMARC verify and the platform has not suspended it. Held mail is refused at RCPT TO, not queued.",
+            "type": "boolean"
+          },
+          "zoneFile": {
+            "description": "Every record as a zone-file line, ready to paste into a zone.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "mtaStsPolicy",
+          "records",
+          "sending",
+          "sendingEnabled",
+          "zoneFile"
+        ],
+        "title": "CyberCloud.Mail.domains.VerifyResponse",
+        "type": "object"
+      },
+      "CyberCloud.Mail.domains.mailboxes": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Mail/domains/mailboxes: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
+          "location": {
+            "description": "The region the mailbox is billed in. The domain's.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The mailbox's own settings.",
+            "properties": {
+              "aliases": {
+                "default": [],
+                "description": "Other local parts of the same domain that deliver here. An alias another mailbox already answers for is refused by name.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "clusterId": {
+                "description": "The cluster the domain's back end runs in. Must be the domain's.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "forwardTo": {
+                "default": [],
+                "description": "Addresses every message is also sent on to. Forwarding leaves the domain, so it is held with the rest of the domain's outbound mail until its DNS records verify.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "keepCopy": {
+                "default": true,
+                "description": "With forwardTo set, whether this mailbox keeps a copy as well. Without forwardTo it has no effect.",
+                "type": "boolean"
+              },
+              "localPart": {
+                "default": "postmaster",
+                "description": "The part of the address before the @, for example alice. The domain supplies the rest. Lower case letters, digits, dots, hyphens and underscores.",
+                "example": "alice",
+                "maxLength": 64,
+                "pattern": "^(?:^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$)$",
+                "type": "string",
+                "x-cybercloud-immutable": true
+              },
+              "passwordRef": {
+                "default": "",
+                "description": "A vault handle — path#field, optionally @version — whose value is the password this mailbox signs in to IMAP and submission with. Resolved and hashed when the mailbox is applied; the value never enters this body. The path must be under your tenant's vault prefix, tenants/<tenantId>/. Empty means the mailbox receives mail and nobody can sign in to it.",
+                "maxLength": 512,
+                "pattern": "^(?:([^#@\\s]+#[^#@\\s]+(@[^#@\\s]+)?)?)$",
+                "type": "string",
+                "x-cybercloud-widget": "secret-ref"
+              },
+              "quota": {
+                "default": "",
+                "description": "The most this mailbox may store, in Kubernetes quantity form, for example 5Gi. Empty means the domain's storage.mailboxQuota.",
+                "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "clusterId",
+              "localPart"
+            ],
+            "type": "object"
+          },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Mail/domains/mailboxes",
+        "type": "object"
+      },
+      "CyberCloud.Mail.domains.mailboxes.List": {
+        "type": "object",
+        "title": "CyberCloud.Mail.domains.mailboxes.List",
+        "description": "One page of CyberCloud.Mail/domains/mailboxes. ⚠ The page holds what the caller may read: a listing runs a permission check per member (docs/plan/07 § The enforcement seam), so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page — there is no empty-string form, because an empty URL is one a polite client requests."
+          },
+          "value": {
+            "type": "array",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
+            "items": {
+              "$ref": "#/components/schemas/CyberCloud.Mail.domains.mailboxes"
             }
           }
         },
@@ -28824,5 +30236,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 39
+  "x-cybercloud-resource-type-count": 40
 }

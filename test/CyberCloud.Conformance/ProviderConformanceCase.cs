@@ -1,4 +1,5 @@
 using CyberCloud.ResourceManager.Conformance;
+using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Immutable;
 
 namespace CyberCloud.Conformance;
@@ -643,6 +644,37 @@ public interface IProviderCaseSource {
     ///     </para>
     /// </remarks>
     static virtual void ConfigureSilo(ISiloBuilder silo) { }
+
+    /// <summary>
+    ///     What the harness's action-handler container must hold beyond its own doubles for this
+    ///     case's handlers to be constructible — the handler-side twin of <see cref="ConfigureSilo" />.
+    ///     Nothing, for every case before <c>CyberCloud.Mail/domains</c>.
+    /// </summary>
+    /// <param name="services">The container <c>ActionDispatcher</c> resolves handlers from.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             WHY <see cref="ConfigureSilo" /> COULD NOT CARRY IT, AND WHY
+    ///             <see cref="ConvergedModule" /> COULD NOT EITHER.
+    ///         </b> A synchronous action is dispatched from a container each harness builds for the
+    ///         purpose — the clock, the vault and the cluster factory, then the handlers — not from the
+    ///         silo's. <see cref="ConfigureSilo" /> reaches the silo, where the reconcilers live; a
+    ///         module's <c>ConfigureHandlers</c> reaches this container but a module is refused to a
+    ///         cluster-backed case by name. So the first cluster-backed family whose handler took a
+    ///         seam of its own — mail's <c>dnsRecords</c>, which needs the platform's mail hosts —
+    ///         failed its POST assertion with <i>"Unable to resolve service for type
+    ///         'MailPlatformOptions'"</i>: the harness quietly agreeing with every provider so far,
+    ///         the third time this suite has found that shape.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Both harnesses call it</b> — <c>ProviderTestCluster</c> and
+    ///         <c>ClusterConformanceHarness</c> — for the reason their handler containers were fixed
+    ///         together once already: a fix in one leaves the other failing later, on a Docker-backed
+    ///         run, for a reason the Docker-free run had solved.
+    ///     </para>
+    /// </remarks>
+    static virtual void ConfigureHandlers(IServiceCollection services) { }
 
     /// <summary>
     ///     Resources of <b>other</b> providers that must exist before this case's own resource can

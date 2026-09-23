@@ -1257,13 +1257,15 @@ func (c *DocumentDatabaseAccountClient) ListKeys(ctx context.Context, tenantID, 
 
 // MailProvider holds the resource types of CyberCloud.Mail.
 type MailProvider struct {
-	Domains *MailDomainClient
+	Domains          *MailDomainClient
+	DomainsMailboxes *MailboxClient
 }
 
 // newMailProvider builds the group's clients over one transport.
 func newMailProvider(transport Transport) *MailProvider {
 	return &MailProvider{
-		Domains: &MailDomainClient{transport: transport},
+		Domains:          &MailDomainClient{transport: transport},
+		DomainsMailboxes: &MailboxClient{transport: transport},
 	}
 }
 
@@ -1304,6 +1306,65 @@ func (c *MailDomainClient) BeginDelete(ctx context.Context, tenantID, subscripti
 func (c *MailDomainClient) List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[MailDomainResource] {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains"
 	return newPager[MailDomainResource](c.transport, path, options)
+}
+
+// DnsRecords runs dnsRecords — permission 'read'.
+func (c *MailDomainClient) DnsRecords(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*MailDomainDnsRecordsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains/" + segment(resourceName) + "/dnsRecords"
+	var result MailDomainDnsRecordsResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Verify runs verify — permission 'write'.
+func (c *MailDomainClient) Verify(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*MailDomainVerifyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains/" + segment(resourceName) + "/verify"
+	var result MailDomainVerifyResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// MailboxClient is mailboxes — CyberCloud.Mail/domains/mailboxes. One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP.
+type MailboxClient struct {
+	transport Transport
+}
+
+// Get reads one Mailbox.
+func (c *MailboxClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, domainsName, resourceName string) (*MailboxResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains/" + segment(domainsName) + "/mailboxes/" + segment(resourceName)
+	var result MailboxResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Mailbox. ⚠ Long-running: Wait on the result.
+func (c *MailboxClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, domainsName, resourceName string, data MailboxData) (*Operation[MailboxResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains/" + segment(domainsName) + "/mailboxes/" + segment(resourceName)
+	return begin[MailboxResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Mailbox. A merge patch: what is not set is not changed.
+func (c *MailboxClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, domainsName, resourceName string, data MailboxData) (*Operation[MailboxResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains/" + segment(domainsName) + "/mailboxes/" + segment(resourceName)
+	return begin[MailboxResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Mailbox. ⚠ Permanent: this type declares no soft-delete window.
+func (c *MailboxClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, domainsName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains/" + segment(domainsName) + "/mailboxes/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Mailboxes in a resource group. ⚠ A short page never means "that is all there is".
+func (c *MailboxClient) List(tenantID, subscriptionID, resourceGroupName, domainsName string, options *ListOptions) *Pager[MailboxResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains/" + segment(domainsName) + "/mailboxes"
+	return newPager[MailboxResource](c.transport, path, options)
 }
 
 // MessagingProvider holds the resource types of CyberCloud.Messaging.

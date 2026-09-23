@@ -1,0 +1,145 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/mail-mailbox/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the mail-mailbox chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "aliases": {
+      "default": [],
+      "description": "Other local parts of the same domain that deliver here. An alias another mailbox already answers for is refused by name.",
+      "items": {},
+      "type": "array",
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/aliases"
+    },
+    "forwardTo": {
+      "default": [],
+      "description": "Addresses every message is also sent on to. Forwarding leaves the domain, so it is held with the rest of the domain's outbound mail until its DNS records verify.",
+      "items": {},
+      "type": "array",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/forwardTo"
+    },
+    "keepCopy": {
+      "default": true,
+      "description": "With forwardTo set, whether this mailbox keeps a copy as well. Without forwardTo it has no effect.",
+      "type": "boolean",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/keepCopy"
+    },
+    "localPart": {
+      "default": "postmaster",
+      "description": "The part of the address before the @, for example alice. The domain supplies the rest. Lower case letters, digits, dots, hyphens and underscores.",
+      "examples": [
+        "alice"
+      ],
+      "maxLength": 64,
+      "pattern": "^(?:^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$)$",
+      "type": "string",
+      "x-cybercloud-immutable": true,
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/localPart"
+    },
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 7,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "passwordRef": {
+      "default": "",
+      "description": "A vault handle — path#field, optionally @version — whose value is the password this mailbox signs in to IMAP and submission with. Resolved and hashed when the mailbox is applied; the value never enters this body. The path must be under your tenant's vault prefix, tenants/<tenantId>/. Empty means the mailbox receives mail and nobody can sign in to it.",
+      "maxLength": 512,
+      "pattern": "^(?:([^#@\\s]+#[^#@\\s]+(@[^#@\\s]+)?)?)$",
+      "type": "string",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/passwordRef",
+      "x-cybercloud-widget": "secret-ref"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity injected by the reconciler. Not a tenant-facing setting.",
+      "properties": {
+        "apiVersion": {
+          "default": "2026-08-01",
+          "description": "The api-version the resource was last written at. Not rendered, for the labels' reason.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "domainSecret": {
+          "default": "",
+          "description": "The domain's mailbox Secret — MailDomains.UsersSecretName of the parent read off the ADDRESS.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/platform/domainSecret"
+        },
+        "mailDomain": {
+          "default": "",
+          "description": "The mail domain, read off that Secret's cybercloud.io/mail-domain annotation — a mailbox's address carries only the domain resource's name.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/platform/mailDomain"
+        },
+        "resourceId": {
+          "default": "",
+          "description": "Resource GUID. Keys the three per-fragment annotations on the domain's Secret, and is the value of every `.claim` key this mailbox writes.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/resourceId"
+        },
+        "resourceType": {
+          "default": "CyberCloud.Mail/domains/mailboxes",
+          "description": "Fully qualified resource type. Not rendered as a label; recorded here so the surface says what it is the surface of.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "tenantId": {
+          "default": "",
+          "description": "Tenant GUID. ⚠ CHECKED rather than rendered: a co-writer writes no labels, and the co-owned apply refuses an object whose cybercloud.io/tenant-id is not this one.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tenantId"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 6,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "quota": {
+      "default": "",
+      "description": "The most this mailbox may store, in Kubernetes quantity form, for example 5Gi. Empty means the domain's storage.mailboxQuota.",
+      "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+      "type": "string",
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/quota"
+    }
+  },
+  "required": [
+    "localPart"
+  ],
+  "title": "mail-mailbox chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "mail-mailbox",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.Mail/domains/mailboxes"
+}

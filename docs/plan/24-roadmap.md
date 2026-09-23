@@ -91,7 +91,7 @@ Architecture`'s **Generated surfaces** gate regenerates every surface from the p
 compares bytes, which is what makes "and drift fails the build" a fact rather than an intention:
 
 ```text
-✔ Generated surfaces  Enforced  39 resource type(s) over 2 OpenAPI document(s), 14 derived file(s) —
+✔ Generated surfaces  Enforced  40 resource type(s) over 2 OpenAPI document(s), 14 derived file(s) —
   the cyc verb tree, the .NET SDK, the portal forms, and the Python and Go SDKs (#40) — and 6 file(s)
   of the portal's TypeScript client, all regenerated and compared byte-for-byte
 ✔ Generated SDK compiles  Enforced  1 api-version file(s) declaring 251 type(s), each compiled on its
@@ -202,7 +202,7 @@ target scale.
 | Network | Application gateway + WAF, NAT, peering, flow logs | 3.6 | #31 | ◐ `Network/virtualNetworks/natGateways` published (#31, 2026-09-15), on the router's own `OvnSnatRule` naming the address `publicIpAddresses` already renders rather than on the `VpcNatGateway` pod [14](14-networking.md) names — and it is the first thing on the platform that attaches a public address to anything. ⚠ **`Network/virtualNetworks/peerings` published (#31, 2026-09-18), on #89's co-owned apply — the first type in the tree that owns no object.** A Kube-OVN peering is two entries on two `Vpc` specs, both atomic lists (the `routeTables` refusal, twice over), and the type writes each network's half as a fragment under one manager named for that network ([09 § A second writer on an object](09-kubernetes-fabric.md)): the networks' labels stay, teardown withdraws and both networks stand, the live `resourceVersion` makes two peerings racing onto one `Vpc` lose loudly. The body is the remote network's name — in the same resource group, for an authorization reason rather than a schema one — and three ranges the reconciler refuses terminally when any two overlap. The shared Docker-free suite grew the co-writer's reading of its ownership assertions (a fake that models the second manager, a world put back after every reset, drift as a slice stripped by hand) and runs the peering at the network's exact count; the cluster-backed half runs a dedicated class on the real k3s, where the co-writer manager reads back off `managedFields`. ⚠ **What is proven is the write and not the routing**: no harness here has a Kube-OVN controller, so the peer ports and the routes wait for the VM lane (#95) — `charts/managed/kube-ovn-vpc-peering/conformance.yaml § owed`, `routing-is-unproven-until-the-vm-lane`, with the rest of what is still owed about peering beside it. ⚠ **#31 stays open: two nouns of four landed, and the other two are owed rows rather than a sentence.** Application gateway + WAF is measured and owed at `charts/managed/haproxy/conformance.yaml § owed`, `application-gateway-is-not-an-http-mode-of-this-proxy` — the L7 controller is not in `charts/bundle` at all, so its first deliverable is a bundle component and [ADR-019](02-technology-decisions.md)'s comparison, not a chart. Flow logs are measured and owed at `charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `flow-logs-have-nothing-to-render` — the bundle installs no Cilium and so no Hubble, the substrate's CRDs export no flow, and [01](01-azure-parity-catalogue.md) files the deliverable under `CyberCloud.Monitor` at M3 rather than here. ⚠ The 3.6 is [14 § Effort](14-networking.md)'s 2.0 + 0.8 + 0.8; what landed is the whole of the 0.8 `NAT gateways, peering` line, and that 0.8 is claimed below — the other two lines are not |
 | Observability | App Insights views, OTel collector service, managed Grafana, alerts | 3.0 | #32 | ◐ `Monitor/workspaces/alertRules` published 2026-09-15 (#32, the alerts half): a condition over the workspace's metrics or logs, a severity and an action group naming a `Communication/services` resource, evaluated by one grain per workspace on a reminder — [16 § Alerts](16-observability.md). ⚠ **The fourth noun of four**; App Insights views, the collector service and managed Grafana are not resource types yet, so the type list confirms nothing about the other three, and the debt has an id — `charts/managed/monitor-workspace/conformance.yaml § owed`, `observability-three-of-four-nouns-not-landed` — rather than only this sentence (the #32 review asked for all four; the three are each a type with a chart or a portal surface, priced at 1.0 and 0.8 EM for the two doc 16 prices, and are not a follow-up commit's size). ⚠ **What ◐ does not mean**: no host registers a real query seam, so every evaluation in this tree runs against the refusing default and moves nothing — same file, `alert-rules-query-seam-is-refusing` — a notification reaches a carrier only where one is registered, which is the `Communication` row's own caveat one row down, and the action group offers the sending module's five channels and not doc 16's five: webhook and the portal inbox are `alert-rules-webhook-and-inbox-not-landed`. ⚠ **Reviewed the same day** (#32 review): a seam that throws no longer ends the pass, the pass stops asking at a budget under Orleans' response timeout with the reads interleaved, and the reconciler judges an enabled rule converged on its spec *and* its reminder row — [16 § Alerts](16-observability.md) |
 | Communication | Channels, templates, suppression, delivery receipts | 2.0 | #33 | ✅ **SHIPPED 2026-09-15 (#33)**: `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions` — the tenant-facing face of the module that had carried the platform's OTPs since before any provider existed. ⚠ **Three of the four nouns are types and the fourth is not, deliberately**: a delivery receipt is per send, a send is an event rather than desired state, and the receipts come back on the `services` type's `status` action — [17 § `CyberCloud.Communication/services`](17-communication-and-email.md) says why a `messages` type would have had a PUT nothing could apply. ⚠ **The first clusterless family in the catalogue**, and the shared conformance suite grew a clusterless half to say what a green run over it proves. ⚠ **What ✅ does not mean here, and it is to be read literally**: one carrier *client* ships — email over SMTP to a configured relay, since 2026-09-18 (#93), with Mailpit as the AppHost's relay so a sign-up code lands in an inbox — and the other four channels resolve to the module's refusing seam, so an SMS `send` refuses honestly; the relay itself (the warmed pool, PTR, feedback loops, the separate sending IPs) is not deployed and **#93 stays open for it**, for the SMS/WhatsApp/voice carriers and for the receipt ingress — the client was the part of that issue a repository can hold; doc 17's sender-id registration flow has its grain and no resource surface; and the fourth noun has its read half only: `status` renders receipts and no HTTP ingress exists for a carrier to deliver one through, which lands with the first deployed relay because its signature is the callback's only authentication — [17 § The outbound carrier](17-communication-and-email.md) has the email-specific design; `charts/bundle/bundle.yaml § owed` carries all three |
-| **Mail** | Postfix/Dovecot/Rspamd, domains, mailboxes, deliverability, minimal webmail | 3.5 | #34 | ◐ `Mail/domains` published (#34, 2026-09-12) with the chart under `charts/managed/mail`. ⚠ The first noun of five; mailboxes, deliverability and the webmail are not resource types yet, so the type list confirms nothing about the other four |
+| **Mail** | Postfix/Dovecot/Rspamd, domains, mailboxes, deliverability, minimal webmail | 3.5 | #34 | ◐ `Mail/domains` published (#34, 2026-09-12) with the chart under `charts/managed/mail`, and `Mail/domains/mailboxes` (#34, 2026-09-23) under `charts/managed/mail-mailbox`, with the domain's `dnsRecords` and `verify` actions and the sending gate they decide. ⚠ Four nouns of five, and the fifth — webmail — is the one the type list could never show. What keeps the row ◐ is not in the list either: the shared front doors, the outbound pool and its warm-up, and a Postfix image nothing publishes — `charts/managed/mail/conformance.yaml § owed` |
 | Security | Malware scanning | 1.5 | #35 | |
 | Fabric | ⚠ Agent-initiated cluster connections (BYO behind NAT) | 1.5 | #36 | ◐ `ContainerService/connectedClusters` published (#36, 2026-09-15): the agent (`charts/agent`, `CyberCloud.Agent.Host`), the gateway's tunnel endpoint, the tunnel grain and the connection grain's route through it, with the attach flow — create, `listInstallCommand`, first heartbeat → `Succeeded` — pinned end to end in-process. ⚠ **Two halves are not landed and the row stays ◐ for both:** informers do not cross the tunnel (a watch is a stream, a frame has one answer), and **no suite crosses a real NAT** — the M2 exit criterion this row exists for is unproved until the "deliberately hostile BYO cluster" of [09 § Testing the fabric](09-kubernetes-fabric.md) exists. `charts/agent/conformance.yaml § owed` holds both |
 | ReBAC | `ListObjects`, Leopard index | 2.2 | #37 | ✅ `ListObjects` landed 2026-09-15 as `IListObjectsGrain` — a scoped reverse walk the resource list now intersects with instead of a `Check` per member. The Leopard index landed the same day as `IMembershipIndexGrain`, keyed by subject object and holding both directions, written by the tuple store as a step of every write and delete; `Check` tests membership against it and the walk reads a subject's closed usersets from it in one read. ⚠ **Owed, and recorded in [07 § The Leopard index](07-rebac-authorization.md)**: the materialization threshold, the roaring bitmap, a tenant-wide rebuild after a schema bump, and the resource-graph access column |
@@ -240,8 +240,8 @@ other — see [§ Running total](#running-total), which is where the consequence
 production behind NAT; the first managed mail domain sending with a clean reputation for 30 days;
 median time-to-add-a-managed-service measured and ≤ 2 engineer-weeks.
 
-⚠ **On "28 resource types": there are 39 today**, and twenty-one of them are this phase's — the `Data`
-row's four, `Mail/domains`, the `Communication` row's four, `Monitor/workspaces/alertRules`, the
+⚠ **On "28 resource types": there are 40 today**, and twenty-two of them are this phase's — the `Data`
+row's four, `Mail/domains` and `Mail/domains/mailboxes`, the `Communication` row's four, `Monitor/workspaces/alertRules`, the
 four that merged on 2026-09-15 from four branches that each counted only itself
 (`Storage/accounts/fileShares`, `Network/virtualNetworks/natGateways`,
 `ContainerService/connectedClusters` and `ContainerRegistry/feeds`), and the seven that merged on
@@ -249,9 +249,9 @@ four that merged on 2026-09-15 from four branches that each counted only itself
 `RecoveryServices/vaults`, `Monitor/workspaces/collectors`, `Dashboard/grafanas`,
 `Compute/virtualMachines`, `Compute/disks`, `Compute/images`). The other
 eighteen are counted, phase by phase, in [§ What has landed](#what-has-landed--recounted-2026-09-18) —
-which is also where to see that two of the 39 belong to phase 4 and one is phase 1's deliberately
+which is also where to see that two of the 40 belong to phase 4 and one is phase 1's deliberately
 trivial sample. ⚠ **The count passed the criterion and the criterion is not met**: "28 resource
-types" was written as a proxy for a catalogue, fourteen of the 39 are children of families, and the
+types" was written as a proxy for a catalogue, fifteen of the 40 are children of families, and the
 rows that reached the number are each one noun of several. Read the exit off the rows, not the
 total.
 
@@ -363,7 +363,8 @@ more from four branches (#30, #31, #36, #29), each of which had recounted itself
 master that had 23 — the merge took none of their numbers and re-ran the command; 32 was right until
 the merge of 2026-09-18 landed seven more from five branches (#31, #30, #32, #28 — Compute's three
 on one branch), each of which had recounted itself against a master that had 32 — the merge took
-none of their numbers and re-ran the command a second time; 39 is right. That is worth *establishing* rather than
+none of their numbers and re-ran the command a second time; 39 was right until #34 published
+`Mail/domains/mailboxes` on 2026-09-23, recounting in the same change; 40 is right. That is worth *establishing* rather than
 assuming, and it is cheap to establish twice because two independent producers can be asked for it.
 
 ⚠ **Four branches recounted to 24 on the same day from the same 23, and none of them was right
@@ -383,7 +384,7 @@ The document, read directly:
 ```console
 $ grep -o '"x-cybercloud-resource-type": "[^"]*"' openapi/2026-08-01.json \
     | sed 's/.*: "//;s/"$//' | sort -u | wc -l
-39
+40
 ```
 
 and the build, from the other end — `./build.sh Architecture`'s **Generated surfaces** gate regenerates
@@ -391,7 +392,7 @@ every surface from `src/CyberCloud.ResourceManager/Registry/` and compares bytes
 registry's rather than the document's:
 
 ```text
-✔ Generated surfaces  Enforced  39 resource type(s) over 2 OpenAPI document(s), …
+✔ Generated surfaces  Enforced  40 resource type(s) over 2 OpenAPI document(s), …
 ```
 
 ⚠ **What would make this stale, said plainly so it can be checked rather than trusted:** any provider's
@@ -419,7 +420,7 @@ only.** No EM figure anywhere in this document is machine-checked — not a phas
 the 69.6–89.1 — and the test cannot see the `Landed` column's *judgement* at all. The date in this
 heading is still what says when a person last read the rest.
 
-All 39, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
+All 40, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
 prefix dropped, because this table is machine-checked** — `RoadmapReconciliationTests` reads it and the
 published document and asserts the two sets are equal, so an abbreviated `…/subnets` would be a name no
 test could match and the check would quietly become a check of nothing.
@@ -428,9 +429,9 @@ test could match and the check would quietly become a check of nothing.
 |---|---|---|
 | 1 — the deliberately trivial provider of exit criterion 1 | `Sample/widgets` | 1 |
 | 2 — M1 | `ContainerService/managedClusters`, `ContainerService/managedClusters/agentPools`, `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`, `ContainerRegistry/registries`, `Network/virtualNetworks`, `Network/virtualNetworks/subnets`, `Network/virtualNetworks/securityGroups`, `Network/virtualNetworks/loadBalancers`, `Network/publicIpAddresses`, `Storage/accounts`, `Storage/accounts/buckets`, `Monitor/workspaces`, `Terminal/consoles` | 15 |
-| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains`, `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions`, `Monitor/workspaces/alertRules`, `Storage/accounts/fileShares`, `Network/virtualNetworks/natGateways`, `ContainerService/connectedClusters`, `ContainerRegistry/feeds`, `Network/virtualNetworks/peerings`, `RecoveryServices/vaults`, `Monitor/workspaces/collectors`, `Dashboard/grafanas`, `Compute/virtualMachines`, `Compute/disks`, `Compute/images` | 21 |
+| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains`, `Mail/domains/mailboxes`, `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions`, `Monitor/workspaces/alertRules`, `Storage/accounts/fileShares`, `Network/virtualNetworks/natGateways`, `ContainerService/connectedClusters`, `ContainerRegistry/feeds`, `Network/virtualNetworks/peerings`, `RecoveryServices/vaults`, `Monitor/workspaces/collectors`, `Dashboard/grafanas`, `Compute/virtualMachines`, `Compute/disks`, `Compute/images` | 22 |
 | 4 — M3 | `DBforMySQL/servers`, `Search/services` | 2 |
-| **Total** | | **39** |
+| **Total** | | **40** |
 
 ⚠ **`agentPools` is itself an ahead-of-phase landing that this table cannot show twice.** Phase 2's row
 names node pools, so it is counted as phase 2 here — but [01](01-azure-parity-catalogue.md) verdicts
@@ -458,7 +459,7 @@ Where an issue tracks one of these rows it is named on the row; where none does,
 the finding.
 
 ⚠ **Tenancy is the case that looks like a gap and is not.** `CyberCloud.Platform/subscriptions` is an M1
-row in the catalogue and is not in the 39 — because tenants, subscriptions and resource groups are
+row in the catalogue and is not in the 40 — because tenants, subscriptions and resource groups are
 published as *scope paths* (`/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/…`) and
 not as typed resources under a provider (#63). Counting it as missing would have been the easy error in
 this recount, and it is written down here so the next recount does not make it.
@@ -470,7 +471,7 @@ this recount, and it is written down here so the next recount does not make it.
 | 0 — Prerequisites | ~~1.5~~ **1.1** | 1.1 | **0.4 ⊘** | Exact. Phase 0's heading *is* its row sum, so the dropped ADR-005 bump comes straight off |
 | 1 — Spine | 14 | 14.0 | — | Not reconciled here; only exit criterion 4 was checked |
 | 2 — M1 | 26 | 44.0 | **≥ 11.3 ✅** | 3.0 + 1.5 + 2.0 + 1.5 fully shipped rows, plus 3.3 of the `Network` row's split. Conservative: the partly-landed Managed Kubernetes (4.0) and Monitor (2.5) rows have no defensible split and are counted as zero. ⚠ Not conservative enough — the 3.0 row's ✅ means *published*, and #69 is open inside it; see below |
-| 3 — M2 | 28 | 38.4 | **7.2 ✅** | The whole `Data` row (4.4), the whole `Communication` row (2.0, 2026-09-15), and the `NAT gateways, peering` line of the `Network` row (0.8, 2026-09-18) — the one line of [14 § Effort](14-networking.md) that row has a per-noun split for, and both nouns are published. ⚠ `Mail`'s ◐ is counted as zero: one noun of five is published and the row has no defensible split. `Observability`'s ◐ is counted as zero for the same reason — alerts are one noun of four, and the 3.0 has no per-noun split to read |
+| 3 — M2 | 28 | 38.4 | **7.2 ✅** | The whole `Data` row (4.4), the whole `Communication` row (2.0, 2026-09-15), and the `NAT gateways, peering` line of the `Network` row (0.8, 2026-09-18) — the one line of [14 § Effort](14-networking.md) that row has a per-noun split for, and both nouns are published. ⚠ `Mail`'s ◐ is counted as zero: four nouns of five are published and the row has no defensible split — [17 § Effort](17-communication-and-email.md) prices the pieces by work, not by noun, and its largest open piece (outbound pools, 0.8) is no noun at all. `Observability`'s ◐ is counted as zero for the same reason — alerts are one noun of four, and the 3.0 has no per-noun split to read |
 | 4 — M3 | 20 | 16.9 priced, 4 items unpriced | **1.8 ✅, 0.6 ⊘** | MariaDB 0.8 + OpenSearch 1.0 shipped; Qdrant's 0.6 void |
 
 **Between 68.8 and 89.1 EM to M3** — where this section said **69.6–89.1** from 2026-09-15 to

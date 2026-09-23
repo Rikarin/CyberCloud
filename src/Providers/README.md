@@ -2016,15 +2016,16 @@ M2 · 3.5 EM. Dovecot, Postfix and Rspamd, per tenant, on five core kinds.
   published in DNS now matches nothing, so every message the domain sends fails DKIM at every
   receiver. There is no observation *inside* this system that would catch it. That is why
   `MailDkimTests` exists, and why it was sabotage-tested rather than trusted.
-- **⚠ It is the first type in the catalogue that declares NO ACTION, and the rule made that choice
-  rather than the schedule.** doc 17 names `verify`, `sendTest` and `exportMailbox`.
+- **⚠ It was the first type in the catalogue that declared NO ACTION, and the rule made that choice
+  rather than the schedule** — until issue #34's second pass; see the correction below. doc 17 names `verify`, `sendTest` and `exportMailbox`.
   `actions-without-handlers.txt` permits a handler-less action **only on an already-published
   api-version**; `2026-08-01` of this type is published by the same change that would declare one, so
   its own words apply — *"it is a reason to write the handler or not declare the action"*. `verify`
   cannot be written: it asks whether a domain's records resolve, and **this repository has no DNS
   resolution seam at all**. ⚠ The half that is derivable was derived and put somewhere an action is
   not needed to reach it: `MailDomains.TryRequiredRecords` is a pure function of the domain and the
-  resolved key, so doc 17's *"with the exact records to add"* is answerable today.
+  resolved key, so doc 17's *"with the exact records to add"* is answerable today. (Since renamed
+  `MailDnsRecords.TryRequired`, and seven records rather than four.)
 - **The platform's own coherence checks caught two schema defects at static construction**, which is
   the earliest either could have been caught: a `DefaultJson` of `""` on a property whose pattern
   rejects `""` — a default no body could ever have set — and an array with no `ElementKind`, which
@@ -2039,6 +2040,21 @@ M2 · 3.5 EM. Dovecot, Postfix and Rspamd, per tenant, on five core kinds.
   server stores a `StatefulSet` whose images are imaginary quite happily — so every suite passes over
   a mail domain that cannot start. It is `charts/managed/mail/conformance.yaml § owed`,
   `the-images-do-not-exist`, and it is the reason no green here may be read as "managed mail works".
+- **⚠ CORRECTED 2026-09-23, issue #34's second pass — the two bullets above that said "cannot" were
+  true of the repository and not of the problem.** `verify` needed a DNS seam, so one was written:
+  `IMailDnsResolver`, a hand-written RFC 1035 stub resolver proven against CoreDNS, behind which
+  `dnsRecords` and `verify` are declared with handlers and the sending gate doc 17 requires is
+  rendered into `main.cf` on every pass. And the images: Dovecot and Rspamd publish their own, which
+  the pod now runs by verified tag, and Postfix, which publishes none, is `deploy/images/mail-postfix`
+  — built by the test that needs it and published by nothing, which is the owed row that replaced
+  `the-images-do-not-exist`. ⚠ **Running the pod for the first time found four defects every
+  document-level suite had passed**: the milter on Rspamd's HTTP worker (11333) rather than its proxy
+  (11332), a catch-all in a map a virtual domain never reads, an antivirus socket nothing served, and
+  a DKIM key mounted where Rspamd's user could not read it. And the one trap no document would show:
+  a key *path* that is valid base64 is read by Rspamd as an inline key, so `/etc/mail/secrets/dkimPrivateKey`
+  signed every message `ed25519` under the path's own bytes while reporting `DKIM_SIGNED`.
+  `MailDeliveryOnK3sTests` is the suite that makes "managed mail works" a readable green now; the
+  mailbox type beside it (`domains/mailboxes`) is the second co-writer in the tree, after peerings.
 
 ### What the fifteenth provider measured
 

@@ -1,0 +1,59 @@
+# A mailbox — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from MailMailboxes.Schema2026 by `./build.sh
+# Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+#
+# ⚠ `localPart` IS A PROPERTY AND NOT THE RESOURCE NAME, which is not what docs/plan/17 specifies, for
+# the reason `domain` is not the domain's name: `john.doe` is a local part and not a DNS-1123 label.
+#
+# ⚠ NONE OF THIS IS RENDERED INTO AN OBJECT THIS CHART INSTALLS. The reconciler turns it into four
+# keys of the domain's mailbox Secret — templates/fragments.yaml shows them — and `passwordRef` is a
+# vault handle whose value is hashed and never enters a body, a values file or an annotation.
+
+## @param localPart {string} The part of the address before the @, for example alice. The domain supplies the rest. Lower case letters, digits, dots, hyphens and underscores.
+## @required
+## @immutable
+## @length ..64
+## @pattern ^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$
+## @example "alice"
+localPart: postmaster
+
+## @param quota {string} The most this mailbox may store, in Kubernetes quantity form, for example 5Gi. Empty means the domain's storage.mailboxQuota.
+## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+quota: ""
+
+## @param passwordRef {string} A vault handle — path#field, optionally @version — whose value is the password this mailbox signs in to IMAP and submission with. Resolved and hashed when the mailbox is applied; the value never enters this body. The path must be under your tenant's vault prefix, tenants/<tenantId>/. Empty means the mailbox receives mail and nobody can sign in to it.
+## @length ..512
+## @pattern ([^#@\s]+#[^#@\s]+(@[^#@\s]+)?)?
+## @widget secret-ref
+passwordRef: ""
+
+## @param aliases {array} Other local parts of the same domain that deliver here. An alias another mailbox already answers for is refused by name.
+aliases: []
+
+## @param forwardTo {array} Addresses every message is also sent on to. Forwarding leaves the domain, so it is held with the rest of the domain's outbound mail until its DNS records verify.
+forwardTo: []
+
+## @param keepCopy {boolean} With forwardTo set, whether this mailbox keeps a copy as well. Without forwardTo it has no effect.
+keepCopy: true
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID. ⚠ CHECKED rather than rendered: a co-writer writes no labels, and the co-owned apply refuses an object whose cybercloud.io/tenant-id is not this one.
+  tenantId: ""
+  ## @param resourceId {string} Resource GUID. Keys the three per-fragment annotations on the domain's Secret, and is the value of every `.claim` key this mailbox writes.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type. Not rendered as a label; recorded here so the surface says what it is the surface of.
+  resourceType: CyberCloud.Mail/domains/mailboxes
+  ## @param apiVersion {string} The api-version the resource was last written at. Not rendered, for the labels' reason.
+  apiVersion: "2026-08-01"
+  ## @param domainSecret {string} The domain's mailbox Secret — MailDomains.UsersSecretName of the parent read off the ADDRESS.
+  domainSecret: ""
+  ## @param mailDomain {string} The mail domain, read off that Secret's cybercloud.io/mail-domain annotation — a mailbox's address carries only the domain resource's name.
+  mailDomain: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

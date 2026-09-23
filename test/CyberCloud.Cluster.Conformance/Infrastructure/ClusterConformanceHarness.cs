@@ -182,6 +182,9 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         services.AddSingleton<ISecretResolver>(ClusterConformanceState<TSource>.Vault);
         services.AddSingleton<ISecretWriter>(ClusterConformanceState<TSource>.Vault);
 
+        // ⚠ The case's own handler seams — IProviderCaseSource.ConfigureHandlers.
+        TSource.ConfigureHandlers(services);
+
         foreach (var handler in Registry.Types
                      .SelectMany(static x => x.Actions)
                      .Select(static x => x.HandlerType)

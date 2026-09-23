@@ -1,0 +1,41 @@
+{{/*
+The slice a mailbox IS — docs/plan/17 § Resource model, `mailboxes/{local}`.
+
+⚠ THIS TEMPLATE RENDERS NOTHING, ON PURPOSE, AND THE REASON IS THE TYPE. Dovecot opens one password
+file per login and Postfix builds one map of every address, and both run in the DOMAIN's pod — so a
+mailbox is four keys of the domain's `{domain}-mail-users` Secret, written by the reconciler through
+the co-owned apply (docs/plan/09 § A second writer on an object) under the domain's shared
+co-writer manager, beside the domain's own labels, with the fragment recorded under
+`cybercloud.io/fragment.{resourceId}` so every other mailbox of the domain carries it forward. A
+chart that rendered that Secret with only these keys would REPLACE the domain's object. So this
+file documents the slice and installs nothing; charts/managed/mail renders the Secret, empty.
+
+What lands in `data` of {{ .Values.platform.domainSecret | default "<domain>-mail-users" }} for
+`localPart: alice`, `aliases: [info]` — MailMailboxes.FragmentJson, each value base64:
+
+    alice.passwd:   alice@example.com:{SHA512-CRYPT}$6$rounds=100000$<salt>$<hash>::::::[quota fields]
+    alice.virtual:  alice@example.com alice@example.com
+                    info@example.com alice@example.com
+    alice.claim:    <resourceId>
+    info.claim:     <resourceId>
+
+⚠ `{local}.passwd` IS WHAT DOVECOT OPENS FOR A LOGIN, by the login's local part — both majors'
+passdb and userdb point at /etc/mail/users/{local}.passwd — and its first field is the WHOLE address,
+so `alice@other.example` with alice's password is a different, unknown user.
+
+⚠ A MAILBOX WITH NO passwordRef IS `{CRYPT}!` AND `nologin=y`, NEVER AN EMPTY FIELD. Dovecot reads an
+empty password field as "no password check": any password would sign in.
+
+⚠ THE HASH'S SALT IS DERIVED FROM THE MAILBOX'S GUID (Sha512Crypt.SaltFor), so the fragment is the
+same on every pass — a random salt would make the co-owned apply report Updated forever and the
+Postfix start script reload for nothing.
+
+⚠ `{address}.claim` IS READ BY NOTHING AND IS WHY TWO MAILBOXES CANNOT CLAIM ONE ADDRESS: both would
+write one key with two values, which the co-writer's merge refuses by name, atomically under the
+Secret's resourceVersion.
+
+⚠ `{local}.virtual` ALWAYS HAS THE MAILBOX'S OWN LINE, even with no forwarding, so a domain catch-all
+(`@example.com catchall@example.com`, which the start script appends last) never swallows mail for a
+mailbox that exists. With `forwardTo`, the own line becomes `alice@example.com alice@example.com,
+bob@elsewhere.example` (keepCopy) or `alice@example.com bob@elsewhere.example`.
+*/}}

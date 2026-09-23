@@ -64,7 +64,11 @@ import type {
   DocumentDBAccountsListKeysResult,
   DocumentDBAccountsResource,
   MailDomainsData,
+  MailDomainsDnsRecordsResult,
+  MailDomainsMailboxesData,
+  MailDomainsMailboxesResource,
   MailDomainsResource,
+  MailDomainsVerifyResult,
   ManagementGroupCreateContent,
   MessagingKafkaClustersData,
   MessagingKafkaClustersListKeysResult,
@@ -808,6 +812,41 @@ export class CyberCloudApi {
   /** One page of the Mail domains in a resource group. ⚠ A short page never means "that is all there is". */
   listMailDomain(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<MailDomainsResource>>> {
     return this.transport.send<Page<MailDomainsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** dnsRecords — permission 'read'. */
+  dnsRecordsMailDomain(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<MailDomainsDnsRecordsResult>> {
+    return this.transport.send<MailDomainsDnsRecordsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(resourceName)}/dnsRecords` });
+  }
+
+  /** verify — permission 'write'. */
+  verifyMailDomain(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<MailDomainsVerifyResult>> {
+    return this.transport.send<MailDomainsVerifyResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(resourceName)}/verify` });
+  }
+
+  /** Reads one Mailbox. */
+  getMailbox(tenantId: string, subscriptionId: string, resourceGroupName: string, domainsName: string, resourceName: string): Promise<ApiResponse<MailDomainsMailboxesResource>> {
+    return this.transport.send<MailDomainsMailboxesResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(domainsName)}/mailboxes/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Mailbox. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateMailbox(tenantId: string, subscriptionId: string, resourceGroupName: string, domainsName: string, resourceName: string, data: MailDomainsMailboxesData): Promise<ApiResponse<MailDomainsMailboxesResource>> {
+    return this.transport.send<MailDomainsMailboxesResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(domainsName)}/mailboxes/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Mailbox. A merge patch: what is not set is not changed. */
+  updateMailbox(tenantId: string, subscriptionId: string, resourceGroupName: string, domainsName: string, resourceName: string, data: Partial<MailDomainsMailboxesData>): Promise<ApiResponse<MailDomainsMailboxesResource>> {
+    return this.transport.send<MailDomainsMailboxesResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(domainsName)}/mailboxes/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Mailbox. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteMailbox(tenantId: string, subscriptionId: string, resourceGroupName: string, domainsName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(domainsName)}/mailboxes/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Mailboxes in a resource group. ⚠ A short page never means "that is all there is". */
+  listMailbox(tenantId: string, subscriptionId: string, resourceGroupName: string, domainsName: string, page: PageRequest = {}): Promise<ApiResponse<Page<MailDomainsMailboxesResource>>> {
+    return this.transport.send<Page<MailDomainsMailboxesResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(domainsName)}/mailboxes`, query: CyberCloudApi.pageQuery(page) });
   }
 
   /** Reads one Kafka cluster. */

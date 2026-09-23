@@ -8,6 +8,11 @@
 #
 # ⚠ replicas IS NOT A PARAMETER, for the same reason. Scaling a mail back end is a Dovecot director
 # and a shared filesystem, which is a different design rather than a larger number here.
+#
+# ⚠ THE IMAGES ARE THE PROJECTS' OWN FOR DOVECOT AND RSPAMD AND OURS FOR POSTFIX. The first cut of
+# this chart named docker.io/cybercloud/{dovecot,postfix,rspamd}, three images nothing built — a pod
+# the API server accepted and the kubelet could never start. MailDomains.DovecotImage, RspamdImage
+# and PostfixImage carry the tags and why; MailChartTests holds this file to them.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -27,49 +32,87 @@ spec:
         {{- include "mail.platformLabels" . | nindent 8 }}
         {{- include "mail.selectorLabels" . | nindent 8 }}
     spec:
+      # ⚠ 1000 is vmail in both Dovecot images. The kubelet adds it to every container as a
+      # supplementary group, which is how Rspamd (uid 11333) reads a DKIM key mounted 0440 and how
+      # Dovecot's mail processes write a volume they do not own.
+      securityContext:
+        fsGroup: 1000
       containers:
         - name: dovecot
-          image: "docker.io/cybercloud/dovecot:{{ .Values.version }}"
+          image: {{ include "mail.dovecotImage" . | quote }}
+          # ⚠ args, not command: both images start through tini, and replacing the entrypoint would
+          # make Dovecot PID 1 with nobody reaping its children.
+          args: ["dovecot", "-F", "-c", "/etc/mail/config/dovecot.conf"]
+          ports:
+            - name: lmtp
+              containerPort: 31024
+            - name: imap
+              containerPort: 31143
+            - name: sieve
+              containerPort: 34190
           resources:
             {{- include "mail.resources" . | nindent 12 }}
           volumeMounts:
             - name: config
-              mountPath: /etc/mail
-            - name: credentials
-              mountPath: /etc/mail/secrets
+              mountPath: /etc/mail/config
+            - name: users
+              mountPath: /etc/mail/users
+            - name: dovecot-run
+              mountPath: /run/dovecot
             - name: mail
               mountPath: /srv/mail
         - name: postfix
-          image: "docker.io/cybercloud/postfix:{{ .Values.version }}"
+          image: "docker.io/cybercloud/postfix:1.0.0"
+          command: ["sh", "/etc/mail/config/postfix-start.sh"]
+          ports:
+            - name: submission
+              containerPort: 587
           volumeMounts:
             - name: config
-              mountPath: /etc/mail
-            - name: credentials
-              mountPath: /etc/mail/secrets
-            - name: mail
-              mountPath: /srv/mail
+              mountPath: /etc/mail/config
+            - name: users
+              mountPath: /etc/mail/users
         - name: rspamd
-          image: "docker.io/cybercloud/rspamd:{{ .Values.version }}"
+          image: "docker.io/rspamd/rspamd:4.1.5"
           ports:
             - name: metrics
               containerPort: 11334
           volumeMounts:
-            - name: config
-              mountPath: /etc/mail
-            - name: credentials
-              mountPath: /etc/mail/secrets
-            - name: mail
-              mountPath: /srv/mail
+            - name: rspamd-config
+              mountPath: /etc/rspamd/local.d
+            - name: dkim
+              mountPath: /etc/mail/dkim
       volumes:
         - name: config
           configMap:
             name: {{ include "mail.name" . }}-mail-config
-        - name: credentials
+        - name: rspamd-config
+          configMap:
+            name: {{ include "mail.name" . }}-mail-config
+            items:
+              - key: rspamd-worker-proxy.inc
+                path: worker-proxy.inc
+              - key: rspamd-dkim-signing.conf
+                path: dkim_signing.conf
+              - key: rspamd-actions.conf
+                path: actions.conf
+        - name: users
+          secret:
+            secretName: {{ include "mail.name" . }}-mail-users
+            # 0440, readable by the vmail group.
+            defaultMode: 288
+        # ⚠ THE DKIM KEY IS MOUNTED INTO RSPAMD AND NOWHERE ELSE, UNDER A NAME WITH A DOT IN IT. A
+        # path Rspamd can decode as base64 — /etc/mail/secrets/dkimPrivateKey is one — is taken for an
+        # inline key, and every message is signed ed25519 under nonsense. MailDomains.DkimKeyFile.
+        - name: dkim
           secret:
             secretName: {{ include "mail.name" . }}-mail-credentials
-            # ⚠ 0400. A DKIM private key readable by the whole pod is readable by the Postfix and
-            # Rspamd containers that do not need it, and by anything that later joins them.
-            defaultMode: 256
+            items:
+              - key: dkimPrivateKey
+                path: cc.key
+            defaultMode: 288
+        - name: dovecot-run
+          emptyDir: {}
   volumeClaimTemplates:
     # ⚠ NO storageClassName, SO THIS BINDS THROUGH THE CLUSTER DEFAULT. Naming a class the bundle
     # does not install is a claim that stays Pending forever with no error anybody sees — the defect

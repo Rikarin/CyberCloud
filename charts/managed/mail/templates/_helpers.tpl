@@ -95,3 +95,35 @@ limits:
   memory: {{ $memory | quote }}
 {{- end }}
 {{- end -}}
+
+{{/*
+The Dovecot image for the body's version — MailDomains.DovecotImage.
+
+⚠ The projects' own tags, read off Docker Hub on 2026-09-23 and pulled the same day: 2.4.5, and
+2.3.21.1, the last 2.3 release. The two images differ in shape — 2.4's runs as vmail from
+/dovecot/sbin, 2.3's as root from /usr/sbin — and both put dovecot on PATH, which is what lets one
+pod spec serve either.
+*/}}
+{{- define "mail.dovecotImage" -}}
+{{- if eq .Values.version "2.3" -}}
+docker.io/dovecot/dovecot:2.3.21.1
+{{- else -}}
+docker.io/dovecot/dovecot:2.4.5
+{{- end -}}
+{{- end -}}
+
+{{/*
+A Kubernetes quantity as a Dovecot size: whole mebibytes — MailDomains.DovecotSize, for the binary
+suffixes a tenant writes. ⚠ Only Mi and Gi are translated here; MailDomains handles every suffix the
+schema admits, and this is the chart's approximation of it.
+*/}}
+{{- define "mail.dovecotSize" -}}
+{{- $q := . -}}
+{{- if hasSuffix "Gi" $q -}}
+{{- mul (trimSuffix "Gi" $q | int) 1024 }}M
+{{- else if hasSuffix "Mi" $q -}}
+{{- trimSuffix "Mi" $q }}M
+{{- else -}}
+{{- $q -}}
+{{- end -}}
+{{- end -}}

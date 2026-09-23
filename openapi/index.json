@@ -515,6 +515,19 @@
       }
     },
     {
+      "type": "CyberCloud.Mail/domains/mailboxes",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Mailbox",
+        "plural": "Mailboxes",
+        "alias": "mailbox",
+        "summary": "One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.Messaging/kafkaClusters",
       "apiVersions": [
         "2026-08-01"

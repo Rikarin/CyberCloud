@@ -1480,6 +1480,401 @@ export interface MailDomainsResource extends Resource, MailDomainsData {
   readonly type: 'CyberCloud.Mail/domains';
 }
 
+/** The values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsDnsRecordsResultRecordsDkimType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsDnsRecordsResultRecordsDmarcType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsDnsRecordsResultRecordsMtaStsType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsDnsRecordsResultRecordsMtaStsHostType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsDnsRecordsResultRecordsMxType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsDnsRecordsResultRecordsSpfType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsDnsRecordsResultRecordsTlsRptType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** What dnsRecords returns. */
+export interface MailDomainsDnsRecordsResult {
+  /** The mail domain the records are for. */
+  domain: string;
+  /** The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve. */
+  mtaStsPolicy: string;
+  /** One member per record the domain must publish. */
+  records: {
+    /** The DKIM public key. Gates sending. */
+    dkim: {
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsDnsRecordsResultRecordsDkimType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The DMARC policy. Gates sending. */
+    dmarc: {
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsDnsRecordsResultRecordsDmarcType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The MTA-STS policy announcement. */
+    mtaSts: {
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsDnsRecordsResultRecordsMtaStsType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The MTA-STS policy host. */
+    mtaStsHost: {
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsDnsRecordsResultRecordsMtaStsHostType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The MX record — where mail for the domain is delivered. */
+    mx: {
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsDnsRecordsResultRecordsMxType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The SPF record. Gates sending. */
+    spf: {
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsDnsRecordsResultRecordsSpfType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The TLS-RPT reporting address. */
+    tlsRpt: {
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsDnsRecordsResultRecordsTlsRptType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+  };
+  /** Every record as a zone-file line, ready to paste into a zone. */
+  zoneFile: string;
+}
+
+/** The values /records/dkim/status accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsDkimStatus =
+  | 'verified'
+  | 'missing'
+  | 'mismatch'
+  | 'unresolvable';
+
+/** The values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsDkimType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/dmarc/status accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsDmarcStatus =
+  | 'verified'
+  | 'missing'
+  | 'mismatch'
+  | 'unresolvable';
+
+/** The values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsDmarcType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/mtaSts/status accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsMtaStsStatus =
+  | 'verified'
+  | 'missing'
+  | 'mismatch'
+  | 'unresolvable';
+
+/** The values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsMtaStsType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/mtaStsHost/status accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsMtaStsHostStatus =
+  | 'verified'
+  | 'missing'
+  | 'mismatch'
+  | 'unresolvable';
+
+/** The values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsMtaStsHostType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/mx/status accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsMxStatus =
+  | 'verified'
+  | 'missing'
+  | 'mismatch'
+  | 'unresolvable';
+
+/** The values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsMxType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/spf/status accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsSpfStatus =
+  | 'verified'
+  | 'missing'
+  | 'mismatch'
+  | 'unresolvable';
+
+/** The values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsSpfType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/tlsRpt/status accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsTlsRptStatus =
+  | 'verified'
+  | 'missing'
+  | 'mismatch'
+  | 'unresolvable';
+
+/** The values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsTlsRptType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /sending accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultSending =
+  | 'held'
+  | 'open'
+  | 'suspended';
+
+/** What verify returns. */
+export interface MailDomainsVerifyResult {
+  /** The mail domain the records are for. */
+  domain: string;
+  /** The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve. */
+  mtaStsPolicy: string;
+  /** One member per record the domain must publish. */
+  records: {
+    /** The DKIM public key. Gates sending. */
+    dkim: {
+      /** Why, in a sentence. */
+      detail: string;
+      /** What the DNS answered for the name. */
+      found: string[];
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** What resolving it found. */
+      status: MailDomainsVerifyResultRecordsDkimStatus;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsVerifyResultRecordsDkimType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The DMARC policy. Gates sending. */
+    dmarc: {
+      /** Why, in a sentence. */
+      detail: string;
+      /** What the DNS answered for the name. */
+      found: string[];
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** What resolving it found. */
+      status: MailDomainsVerifyResultRecordsDmarcStatus;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsVerifyResultRecordsDmarcType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The MTA-STS policy announcement. */
+    mtaSts: {
+      /** Why, in a sentence. */
+      detail: string;
+      /** What the DNS answered for the name. */
+      found: string[];
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** What resolving it found. */
+      status: MailDomainsVerifyResultRecordsMtaStsStatus;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsVerifyResultRecordsMtaStsType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The MTA-STS policy host. */
+    mtaStsHost: {
+      /** Why, in a sentence. */
+      detail: string;
+      /** What the DNS answered for the name. */
+      found: string[];
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** What resolving it found. */
+      status: MailDomainsVerifyResultRecordsMtaStsHostStatus;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsVerifyResultRecordsMtaStsHostType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The MX record — where mail for the domain is delivered. */
+    mx: {
+      /** Why, in a sentence. */
+      detail: string;
+      /** What the DNS answered for the name. */
+      found: string[];
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** What resolving it found. */
+      status: MailDomainsVerifyResultRecordsMxStatus;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsVerifyResultRecordsMxType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The SPF record. Gates sending. */
+    spf: {
+      /** Why, in a sentence. */
+      detail: string;
+      /** What the DNS answered for the name. */
+      found: string[];
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** What resolving it found. */
+      status: MailDomainsVerifyResultRecordsSpfStatus;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsVerifyResultRecordsSpfType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The TLS-RPT reporting address. */
+    tlsRpt: {
+      /** Why, in a sentence. */
+      detail: string;
+      /** What the DNS answered for the name. */
+      found: string[];
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** What resolving it found. */
+      status: MailDomainsVerifyResultRecordsTlsRptStatus;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsVerifyResultRecordsTlsRptType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+  };
+  /** held, open or suspended — why sendingEnabled is what it is. */
+  sending: MailDomainsVerifyResultSending;
+  /** Whether mail may leave the domain: SPF, DKIM and DMARC verify and the platform has not suspended it. Held mail is refused at RCPT TO, not queued. */
+  sendingEnabled: boolean;
+  /** Every record as a zone-file line, ready to paste into a zone. */
+  zoneFile: string;
+}
+
+/** Mailbox. One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP. */
+export interface MailDomainsMailboxesData {
+  /** The region the mailbox is billed in. The domain's. */
+  location: string;
+  /** The mailbox's own settings. */
+  properties?: {
+    /** Other local parts of the same domain that deliver here. An alias another mailbox already answers for is refused by name. */
+    aliases?: string[];
+    /** The cluster the domain's back end runs in. Must be the domain's. */
+    clusterId: string;
+    /** Addresses every message is also sent on to. Forwarding leaves the domain, so it is held with the rest of the domain's outbound mail until its DNS records verify. */
+    forwardTo?: string[];
+    /** With forwardTo set, whether this mailbox keeps a copy as well. Without forwardTo it has no effect. */
+    keepCopy?: boolean;
+    /** The part of the address before the @, for example alice. The domain supplies the rest. Lower case letters, digits, dots, hyphens and underscores. */
+    localPart: string;
+    /** A vault handle — path#field, optionally @version — whose value is the password this mailbox signs in to IMAP and submission with. Resolved and hashed when the mailbox is applied; the value never enters this body. The path must be under your tenant's vault prefix, tenants/<tenantId>/. Empty means the mailbox receives mail and nobody can sign in to it. */
+    passwordRef?: string;
+    /** The most this mailbox may store, in Kubernetes quantity form, for example 5Gi. Empty means the domain's storage.mailboxQuota. */
+    quota?: string;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Mailbox, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface MailDomainsMailboxesResource extends Resource, MailDomainsMailboxesData {
+  readonly type: 'CyberCloud.Mail/domains/mailboxes';
+}
+
 /** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
 export type MessagingKafkaClustersPreset =
   | 'c1.nano'

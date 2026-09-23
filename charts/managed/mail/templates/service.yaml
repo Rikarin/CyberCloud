@@ -5,6 +5,14 @@
 # § Topology puts the front doors in shared pools. A tenant-addressable LoadBalancer here would be a
 # second, unauthenticated way into the mail store that bypasses the pool doing the rate limiting and
 # the reputation management — which is the entire product.
+#
+# ⚠ TWO NUMBERS PER PROTOCOL. Dovecot 2.4 runs unprivileged and cannot bind below 1024, so it listens
+# on the 31xxx ports its own image uses; the Service maps the conventional port onto each, and a
+# pool dials 24 and 143 without knowing.
+#
+# ⚠ SUBMISSION IS PLAINTEXT AUTH ON A ClusterIP, WHICH IS ONLY ACCEPTABLE BECAUSE OF WHERE IT IS. The
+# shared submission pool terminates TLS and relays here; until it exists the port is reachable from
+# inside the cluster only. MailDomains.SubmissionPort.
 apiVersion: v1
 kind: Service
 metadata:
@@ -19,12 +27,15 @@ spec:
   ports:
     - name: lmtp
       port: 24
-      targetPort: 24
+      targetPort: 31024
     - name: imap
       port: 143
-      targetPort: 143
+      targetPort: 31143
+    - name: submission
+      port: 587
+      targetPort: 587
     {{- if .Values.sieve }}
     - name: sieve
       port: 4190
-      targetPort: 4190
+      targetPort: 34190
     {{- end }}

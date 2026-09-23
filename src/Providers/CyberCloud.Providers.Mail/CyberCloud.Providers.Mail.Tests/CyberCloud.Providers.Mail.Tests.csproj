@@ -13,6 +13,12 @@
     <ItemGroup>
         <PackageReference Include="xunit.v3"/>
         <PackageReference Include="Shouldly"/>
+        <!--
+          ⚠ The generic ContainerBuilder, for the images the domain's pod runs and a CoreDNS serving a
+          zone file: MailDataPlaneTests hands each rendering to the daemon that reads it, and
+          MailDnsResolverTests asks a real DNS server. Both need Docker; neither needs a cluster.
+        -->
+        <PackageReference Include="Testcontainers"/>
     </ItemGroup>
 
     <ItemGroup Label="Global usings">
@@ -30,6 +36,19 @@
         -->
         <EmbeddedResource Include="../../../../charts/managed/mail/templates/_helpers.tpl"
                           LogicalName="mail.helpers.tpl"/>
+        <!--
+          ⚠ And the four templates that carry the pod, since issue #34's second pass: the first cut's
+          chart repeated every defect its C# had, because nothing held the two copies together.
+          MailChartTests does now.
+        -->
+        <EmbeddedResource Include="../../../../charts/managed/mail/templates/statefulset.yaml"
+                          LogicalName="mail.statefulset.yaml"/>
+        <EmbeddedResource Include="../../../../charts/managed/mail/templates/service.yaml"
+                          LogicalName="mail.service.yaml"/>
+        <EmbeddedResource Include="../../../../charts/managed/mail/templates/configmap.yaml"
+                          LogicalName="mail.configmap.yaml"/>
+        <EmbeddedResource Include="../../../../charts/managed/mail/templates/secret-users.yaml"
+                          LogicalName="mail.secret-users.yaml"/>
     </ItemGroup>
 
     <ItemGroup>

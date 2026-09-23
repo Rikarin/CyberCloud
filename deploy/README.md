@@ -3,6 +3,7 @@
 ```
 deploy/
 ├── bootstrap/          # what you run on the FIRST cluster, by hand, once   ← exists
+├── images/             # container images nothing upstream publishes        ← mail-postfix only
 ├── platform/           # helmfile/kustomize for the platform chart per environment
 └── managed-cluster/    # the bundle applied to a cluster the platform adopts or creates
 ```
@@ -329,6 +330,18 @@ annotations:
    silo identity precisely so that a rolling update's SIGTERM is a graceful `StopAsync` with grain
    migration rather than a 60-second membership gap; a grace period shorter than that shutdown throws
    the benefit away.
+
+## `images/` — what nobody upstream publishes
+
+A managed service runs its project's own image wherever one exists. `images/` holds the Dockerfiles
+for the ones that do not, and today that is one: **`mail-postfix`**, because Postfix publishes no
+image and every third-party one rewrites `main.cf` from its environment at start, which would fight
+the configuration `CyberCloud.Mail/domains` renders. It is Debian's postfix package and nothing else.
+
+⚠ **Built by the test that needs it and published by nothing.** `MailDeliveryOnK3sTests` builds it
+and imports it into its own k3s; no pipeline pushes `docker.io/cybercloud/postfix`, so a real cluster
+pulling the tag the pod spec names fails on one container of three —
+`charts/managed/mail/conformance.yaml § owed`, `the-postfix-image-is-not-published`.
 
 ## What does not live here
 

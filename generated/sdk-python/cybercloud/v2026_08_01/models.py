@@ -4173,6 +4173,898 @@ class MailDomainResource:
         )
 
 
+MailDomainDnsRecordsResultRecordsDkimType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainDnsRecordsResultRecordsDmarcType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainDnsRecordsResultRecordsMtaStsType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainDnsRecordsResultRecordsMtaStsHostType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainDnsRecordsResultRecordsMxType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainDnsRecordsResultRecordsSpfType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainDnsRecordsResultRecordsTlsRptType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class MailDomainDnsRecordsResult:
+    """What dnsRecords returns."""
+
+    @dataclass
+    class Records:
+        """One member per record the domain must publish."""
+
+        @dataclass
+        class Dkim:
+            """The DKIM public key. Gates sending."""
+
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # MX, TXT or CNAME.
+            type: MailDomainDnsRecordsResultRecordsDkimType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records.Dkim:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class Dmarc:
+            """The DMARC policy. Gates sending."""
+
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # MX, TXT or CNAME.
+            type: MailDomainDnsRecordsResultRecordsDmarcType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records.Dmarc:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class MtaSts:
+            """The MTA-STS policy announcement."""
+
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # MX, TXT or CNAME.
+            type: MailDomainDnsRecordsResultRecordsMtaStsType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records.MtaSts:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class MtaStsHost:
+            """The MTA-STS policy host."""
+
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # MX, TXT or CNAME.
+            type: MailDomainDnsRecordsResultRecordsMtaStsHostType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records.MtaStsHost:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class Mx:
+            """The MX record — where mail for the domain is delivered."""
+
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # MX, TXT or CNAME.
+            type: MailDomainDnsRecordsResultRecordsMxType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records.Mx:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class Spf:
+            """The SPF record. Gates sending."""
+
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # MX, TXT or CNAME.
+            type: MailDomainDnsRecordsResultRecordsSpfType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records.Spf:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class TlsRpt:
+            """The TLS-RPT reporting address."""
+
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # MX, TXT or CNAME.
+            type: MailDomainDnsRecordsResultRecordsTlsRptType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records.TlsRpt:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        # The DKIM public key. Gates sending.
+        dkim: MailDomainDnsRecordsResult.Records.Dkim
+        # The DMARC policy. Gates sending.
+        dmarc: MailDomainDnsRecordsResult.Records.Dmarc
+        # The MTA-STS policy announcement.
+        mta_sts: MailDomainDnsRecordsResult.Records.MtaSts
+        # The MTA-STS policy host.
+        mta_sts_host: MailDomainDnsRecordsResult.Records.MtaStsHost
+        # The MX record — where mail for the domain is delivered.
+        mx: MailDomainDnsRecordsResult.Records.Mx
+        # The SPF record. Gates sending.
+        spf: MailDomainDnsRecordsResult.Records.Spf
+        # The TLS-RPT reporting address.
+        tls_rpt: MailDomainDnsRecordsResult.Records.TlsRpt
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                dkim=MailDomainDnsRecordsResult.Records.Dkim.from_wire(wire["dkim"]),
+                dmarc=MailDomainDnsRecordsResult.Records.Dmarc.from_wire(wire["dmarc"]),
+                mta_sts=MailDomainDnsRecordsResult.Records.MtaSts.from_wire(wire["mtaSts"]),
+                mta_sts_host=MailDomainDnsRecordsResult.Records.MtaStsHost.from_wire(wire["mtaStsHost"]),
+                mx=MailDomainDnsRecordsResult.Records.Mx.from_wire(wire["mx"]),
+                spf=MailDomainDnsRecordsResult.Records.Spf.from_wire(wire["spf"]),
+                tls_rpt=MailDomainDnsRecordsResult.Records.TlsRpt.from_wire(wire["tlsRpt"]),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["dkim"] = self.dkim.to_wire()
+            wire["dmarc"] = self.dmarc.to_wire()
+            wire["mtaSts"] = self.mta_sts.to_wire()
+            wire["mtaStsHost"] = self.mta_sts_host.to_wire()
+            wire["mx"] = self.mx.to_wire()
+            wire["spf"] = self.spf.to_wire()
+            wire["tlsRpt"] = self.tls_rpt.to_wire()
+            return wire
+
+    # The mail domain the records are for.
+    domain: str
+    # The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve.
+    mta_sts_policy: str
+    # One member per record the domain must publish.
+    records: MailDomainDnsRecordsResult.Records
+    # Every record as a zone-file line, ready to paste into a zone.
+    zone_file: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            domain=wire["domain"],
+            mta_sts_policy=wire["mtaStsPolicy"],
+            records=MailDomainDnsRecordsResult.Records.from_wire(wire["records"]),
+            zone_file=wire["zoneFile"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["domain"] = self.domain
+        wire["mtaStsPolicy"] = self.mta_sts_policy
+        wire["records"] = self.records.to_wire()
+        wire["zoneFile"] = self.zone_file
+        return wire
+
+
+MailDomainVerifyResultRecordsDkimStatus = Literal["verified", "missing", "mismatch", "unresolvable"]
+"""The values /records/dkim/status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsDkimType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsDmarcStatus = Literal["verified", "missing", "mismatch", "unresolvable"]
+"""The values /records/dmarc/status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsDmarcType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsMtaStsStatus = Literal["verified", "missing", "mismatch", "unresolvable"]
+"""The values /records/mtaSts/status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsMtaStsType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsMtaStsHostStatus = Literal["verified", "missing", "mismatch", "unresolvable"]
+"""The values /records/mtaStsHost/status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsMtaStsHostType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsMxStatus = Literal["verified", "missing", "mismatch", "unresolvable"]
+"""The values /records/mx/status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsMxType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsSpfStatus = Literal["verified", "missing", "mismatch", "unresolvable"]
+"""The values /records/spf/status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsSpfType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsTlsRptStatus = Literal["verified", "missing", "mismatch", "unresolvable"]
+"""The values /records/tlsRpt/status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsTlsRptType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultSending = Literal["held", "open", "suspended"]
+"""The values /sending accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class MailDomainVerifyResult:
+    """What verify returns."""
+
+    @dataclass
+    class Records:
+        """One member per record the domain must publish."""
+
+        @dataclass
+        class Dkim:
+            """The DKIM public key. Gates sending."""
+
+            # Why, in a sentence.
+            detail: str
+            # What the DNS answered for the name.
+            found: List[str]
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # What resolving it found.
+            status: MailDomainVerifyResultRecordsDkimStatus
+            # MX, TXT or CNAME.
+            type: MailDomainVerifyResultRecordsDkimType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records.Dkim:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    detail=wire["detail"],
+                    found=wire["found"],
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    status=wire["status"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["detail"] = self.detail
+                wire["found"] = self.found
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["status"] = self.status
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class Dmarc:
+            """The DMARC policy. Gates sending."""
+
+            # Why, in a sentence.
+            detail: str
+            # What the DNS answered for the name.
+            found: List[str]
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # What resolving it found.
+            status: MailDomainVerifyResultRecordsDmarcStatus
+            # MX, TXT or CNAME.
+            type: MailDomainVerifyResultRecordsDmarcType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records.Dmarc:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    detail=wire["detail"],
+                    found=wire["found"],
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    status=wire["status"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["detail"] = self.detail
+                wire["found"] = self.found
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["status"] = self.status
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class MtaSts:
+            """The MTA-STS policy announcement."""
+
+            # Why, in a sentence.
+            detail: str
+            # What the DNS answered for the name.
+            found: List[str]
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # What resolving it found.
+            status: MailDomainVerifyResultRecordsMtaStsStatus
+            # MX, TXT or CNAME.
+            type: MailDomainVerifyResultRecordsMtaStsType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records.MtaSts:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    detail=wire["detail"],
+                    found=wire["found"],
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    status=wire["status"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["detail"] = self.detail
+                wire["found"] = self.found
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["status"] = self.status
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class MtaStsHost:
+            """The MTA-STS policy host."""
+
+            # Why, in a sentence.
+            detail: str
+            # What the DNS answered for the name.
+            found: List[str]
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # What resolving it found.
+            status: MailDomainVerifyResultRecordsMtaStsHostStatus
+            # MX, TXT or CNAME.
+            type: MailDomainVerifyResultRecordsMtaStsHostType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records.MtaStsHost:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    detail=wire["detail"],
+                    found=wire["found"],
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    status=wire["status"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["detail"] = self.detail
+                wire["found"] = self.found
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["status"] = self.status
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class Mx:
+            """The MX record — where mail for the domain is delivered."""
+
+            # Why, in a sentence.
+            detail: str
+            # What the DNS answered for the name.
+            found: List[str]
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # What resolving it found.
+            status: MailDomainVerifyResultRecordsMxStatus
+            # MX, TXT or CNAME.
+            type: MailDomainVerifyResultRecordsMxType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records.Mx:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    detail=wire["detail"],
+                    found=wire["found"],
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    status=wire["status"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["detail"] = self.detail
+                wire["found"] = self.found
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["status"] = self.status
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class Spf:
+            """The SPF record. Gates sending."""
+
+            # Why, in a sentence.
+            detail: str
+            # What the DNS answered for the name.
+            found: List[str]
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # What resolving it found.
+            status: MailDomainVerifyResultRecordsSpfStatus
+            # MX, TXT or CNAME.
+            type: MailDomainVerifyResultRecordsSpfType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records.Spf:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    detail=wire["detail"],
+                    found=wire["found"],
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    status=wire["status"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["detail"] = self.detail
+                wire["found"] = self.found
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["status"] = self.status
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class TlsRpt:
+            """The TLS-RPT reporting address."""
+
+            # Why, in a sentence.
+            detail: str
+            # What the DNS answered for the name.
+            found: List[str]
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # What resolving it found.
+            status: MailDomainVerifyResultRecordsTlsRptStatus
+            # MX, TXT or CNAME.
+            type: MailDomainVerifyResultRecordsTlsRptType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records.TlsRpt:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    detail=wire["detail"],
+                    found=wire["found"],
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    status=wire["status"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["detail"] = self.detail
+                wire["found"] = self.found
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["status"] = self.status
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        # The DKIM public key. Gates sending.
+        dkim: MailDomainVerifyResult.Records.Dkim
+        # The DMARC policy. Gates sending.
+        dmarc: MailDomainVerifyResult.Records.Dmarc
+        # The MTA-STS policy announcement.
+        mta_sts: MailDomainVerifyResult.Records.MtaSts
+        # The MTA-STS policy host.
+        mta_sts_host: MailDomainVerifyResult.Records.MtaStsHost
+        # The MX record — where mail for the domain is delivered.
+        mx: MailDomainVerifyResult.Records.Mx
+        # The SPF record. Gates sending.
+        spf: MailDomainVerifyResult.Records.Spf
+        # The TLS-RPT reporting address.
+        tls_rpt: MailDomainVerifyResult.Records.TlsRpt
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                dkim=MailDomainVerifyResult.Records.Dkim.from_wire(wire["dkim"]),
+                dmarc=MailDomainVerifyResult.Records.Dmarc.from_wire(wire["dmarc"]),
+                mta_sts=MailDomainVerifyResult.Records.MtaSts.from_wire(wire["mtaSts"]),
+                mta_sts_host=MailDomainVerifyResult.Records.MtaStsHost.from_wire(wire["mtaStsHost"]),
+                mx=MailDomainVerifyResult.Records.Mx.from_wire(wire["mx"]),
+                spf=MailDomainVerifyResult.Records.Spf.from_wire(wire["spf"]),
+                tls_rpt=MailDomainVerifyResult.Records.TlsRpt.from_wire(wire["tlsRpt"]),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["dkim"] = self.dkim.to_wire()
+            wire["dmarc"] = self.dmarc.to_wire()
+            wire["mtaSts"] = self.mta_sts.to_wire()
+            wire["mtaStsHost"] = self.mta_sts_host.to_wire()
+            wire["mx"] = self.mx.to_wire()
+            wire["spf"] = self.spf.to_wire()
+            wire["tlsRpt"] = self.tls_rpt.to_wire()
+            return wire
+
+    # The mail domain the records are for.
+    domain: str
+    # The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve.
+    mta_sts_policy: str
+    # One member per record the domain must publish.
+    records: MailDomainVerifyResult.Records
+    # held, open or suspended — why sendingEnabled is what it is.
+    sending: MailDomainVerifyResultSending
+    # Whether mail may leave the domain: SPF, DKIM and DMARC verify and the platform has not suspended it. Held mail is refused at RCPT TO, not queued.
+    sending_enabled: bool
+    # Every record as a zone-file line, ready to paste into a zone.
+    zone_file: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MailDomainVerifyResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            domain=wire["domain"],
+            mta_sts_policy=wire["mtaStsPolicy"],
+            records=MailDomainVerifyResult.Records.from_wire(wire["records"]),
+            sending=wire["sending"],
+            sending_enabled=wire["sendingEnabled"],
+            zone_file=wire["zoneFile"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["domain"] = self.domain
+        wire["mtaStsPolicy"] = self.mta_sts_policy
+        wire["records"] = self.records.to_wire()
+        wire["sending"] = self.sending
+        wire["sendingEnabled"] = self.sending_enabled
+        wire["zoneFile"] = self.zone_file
+        return wire
+
+
+@dataclass
+class MailboxData:
+    """Mailbox. One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The mailbox's own settings."""
+
+        # The cluster the domain's back end runs in. Must be the domain's.
+        cluster_id: str
+        # The part of the address before the @, for example alice. The domain supplies the rest. Lower case letters, digits, dots, hyphens and underscores.
+        local_part: str
+        # Other local parts of the same domain that deliver here. An alias another mailbox already answers for is refused by name.
+        aliases: Optional[List[str]] = None
+        # Addresses every message is also sent on to. Forwarding leaves the domain, so it is held with the rest of the domain's outbound mail until its DNS records verify.
+        forward_to: Optional[List[str]] = None
+        # With forwardTo set, whether this mailbox keeps a copy as well. Without forwardTo it has no effect.
+        keep_copy: Optional[bool] = None
+        # A vault handle — path#field, optionally @version — whose value is the password this mailbox signs in to IMAP and submission with. Resolved and hashed when the mailbox is applied; the value never enters this body. The path must be under your tenant's vault prefix, tenants/<tenantId>/. Empty means the mailbox receives mail and nobody can sign in to it.
+        password_ref: Optional[str] = None
+        # The most this mailbox may store, in Kubernetes quantity form, for example 5Gi. Empty means the domain's storage.mailboxQuota.
+        quota: Optional[str] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> MailboxData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                cluster_id=wire["clusterId"],
+                local_part=wire["localPart"],
+                aliases=wire.get("aliases"),
+                forward_to=wire.get("forwardTo"),
+                keep_copy=wire.get("keepCopy"),
+                password_ref=wire.get("passwordRef"),
+                quota=wire.get("quota"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["clusterId"] = self.cluster_id
+            wire["localPart"] = self.local_part
+            if self.aliases is not None:
+                wire["aliases"] = self.aliases
+            if self.forward_to is not None:
+                wire["forwardTo"] = self.forward_to
+            if self.keep_copy is not None:
+                wire["keepCopy"] = self.keep_copy
+            if self.password_ref is not None:
+                wire["passwordRef"] = self.password_ref
+            if self.quota is not None:
+                wire["quota"] = self.quota
+            return wire
+
+    # The region the mailbox is billed in. The domain's.
+    location: str
+    # The mailbox's own settings.
+    properties: Optional[MailboxData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MailboxData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", MailboxData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class MailboxResource:
+    """One Mailbox, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: MailboxData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MailboxResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=MailboxData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
 KafkaClusterPreset = Literal["c1.nano", "c1.micro", "c1.small", "c1.medium", "c1.large", "c1.xlarge", "c1.2xlarge", "c1.4xlarge"]
 """The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else."""
 
@@ -8782,6 +9674,32 @@ __all__ = [
     "MailDomainVersion",
     "MailDomainData",
     "MailDomainResource",
+    "MailDomainDnsRecordsResultRecordsDkimType",
+    "MailDomainDnsRecordsResultRecordsDmarcType",
+    "MailDomainDnsRecordsResultRecordsMtaStsType",
+    "MailDomainDnsRecordsResultRecordsMtaStsHostType",
+    "MailDomainDnsRecordsResultRecordsMxType",
+    "MailDomainDnsRecordsResultRecordsSpfType",
+    "MailDomainDnsRecordsResultRecordsTlsRptType",
+    "MailDomainDnsRecordsResult",
+    "MailDomainVerifyResultRecordsDkimStatus",
+    "MailDomainVerifyResultRecordsDkimType",
+    "MailDomainVerifyResultRecordsDmarcStatus",
+    "MailDomainVerifyResultRecordsDmarcType",
+    "MailDomainVerifyResultRecordsMtaStsStatus",
+    "MailDomainVerifyResultRecordsMtaStsType",
+    "MailDomainVerifyResultRecordsMtaStsHostStatus",
+    "MailDomainVerifyResultRecordsMtaStsHostType",
+    "MailDomainVerifyResultRecordsMxStatus",
+    "MailDomainVerifyResultRecordsMxType",
+    "MailDomainVerifyResultRecordsSpfStatus",
+    "MailDomainVerifyResultRecordsSpfType",
+    "MailDomainVerifyResultRecordsTlsRptStatus",
+    "MailDomainVerifyResultRecordsTlsRptType",
+    "MailDomainVerifyResultSending",
+    "MailDomainVerifyResult",
+    "MailboxData",
+    "MailboxResource",
     "KafkaClusterPreset",
     "KafkaClusterVersion",
     "KafkaClusterData",

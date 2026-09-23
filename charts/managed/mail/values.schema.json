@@ -244,6 +244,6 @@
   "type": "object",
   "x-cybercloud-api-version": "2026-08-01",
   "x-cybercloud-chart": "mail",
-  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-chart-version": "0.2.0",
   "x-cybercloud-resource-type": "CyberCloud.Mail/domains"
 }
