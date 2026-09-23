@@ -845,7 +845,7 @@ public static class DegradedModeHandlers {
         public ValueTask HandleAsync(GenerateTokenContext context) {
             ArgumentNullException.ThrowIfNull(context);
 
-            if (context.TokenType is not null
+            if (context.TokenType is OpenIddictConstants.TokenTypeIdentifiers.Private.AuthorizationCode
                 && context.Principal is { } principal
                 && string.IsNullOrEmpty(principal.GetTokenId())) {
                 principal.SetTokenId(Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture));
