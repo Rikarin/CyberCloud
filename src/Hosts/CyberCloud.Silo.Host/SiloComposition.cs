@@ -1,10 +1,12 @@
 using CyberCloud.Authorization;
+using CyberCloud.Billing;
 using CyberCloud.Communication;
 using CyberCloud.Communication.Providers.Smtp;
 using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes;
 using CyberCloud.Kubernetes.Connections;
 using CyberCloud.Kubernetes.Contracts.Tunnel;
+using CyberCloud.Metering;
 using CyberCloud.ObjectStorage;
 using CyberCloud.ResourceGraph;
 using CyberCloud.ResourceManager;
@@ -254,6 +256,21 @@ public static class SiloComposition {
                     }
                 )
                 .AddCyberCloudResourceManager()
+                // ── Metering and billing — docs/plan/22, issue #38 ──────────────────────────────────
+                //
+                // ⚠ METERING WAS NEVER IN THIS SILO, AND BILLING IS WHAT FOUND IT. The usage ledger,
+                // rollup and sampler shipped in M1 with a TestCluster behind every test and no host
+                // line, so no production silo could activate a ledger grain — and billing rates the
+                // ledger, so its first cost query here would have been a grain type the manifest did
+                // not hold. Both are wired now. The sampler still reads the refusing
+                // IMeteredResourceSource until the resource-graph projection is its source
+                // (docs/plan/22 § What is owed), so nothing is sampled yet; what this line buys is
+                // that an emitted usage record lands and a cost query answers.
+                //
+                // ⚠ The issuer is bound from CyberCloud:Billing:Issuer and has no default: a silo
+                // without it serves drafts, costs and budgets and refuses to finalize — BillingOptions.
+                .AddCyberCloudMetering()
+                .AddCyberCloudBilling(BillingOptions.Bind(silo.Configuration))
                 // ── The first tenant's prerequisites — docs/plan/05 § The shard map, docs/plan/06 ─────
                 //
                 // ⚠ A STARTUP TASK AND NOT A GRAIN CALL SOMEBODY REMEMBERS TO MAKE. On a fresh run the

@@ -1,3 +1,4 @@
+using CyberCloud.Billing.Contracts;
 using CyberCloud.Gateway.Host.Http;
 using CyberCloud.Gateway.Host.Hubs;
 using CyberCloud.Gateway.Host.Operations;
@@ -39,6 +40,7 @@ sealed class DispatchStage(
     IScopeManager scopes,
     IRoleAssignmentManager roles,
     IResourceGraphQuery graph,
+    ICostQuery costs,
     IOperationReader operations,
     IHubTicketStore tickets,
     GatewayOptions options
@@ -64,6 +66,7 @@ sealed class DispatchStage(
             RouteKind.RoleAssignment => await RoleAssignmentAsync(context, path, cancellationToken),
             RouteKind.RoleAssignmentCollection => await RoleAssignmentCollectionAsync(context, path, cancellationToken),
             RouteKind.ResourceGraphQuery => await ResourceGraphQueryAsync(context, path, cancellationToken),
+            RouteKind.CostQuery => await CostQueryAsync(context, path, cancellationToken),
             RouteKind.Collection => await CollectionAsync(context, path, cancellationToken),
             RouteKind.Action => await ActionAsync(context, path, cancellationToken),
             // A hub request leaves the pipeline here and is served by SignalR's own middleware; the
@@ -538,6 +541,66 @@ sealed class DispatchStage(
                 )
             )
         };
+    }
+
+    /// <summary>
+    ///     The cost query <c>POST</c> — a period and a grouping to <see cref="ICostQuery" />, for the
+    ///     subscription or group the address names. docs/plan/22 § Cost visibility, issue #38.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>No check and no filter here</b>, for the reason the resource graph's query has
+    ///         none: the cost grain prices the scope and removes every row the caller may not read,
+    ///         behind the one seam. This stage copies the caller's subject across — the only two
+    ///         fields of it the grain needs — and renders what comes back; a caller who may read
+    ///         nothing gets the grain's <c>404</c>, which is the absent subscription's.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The tenant is the token's, twice.</b> The address was rebuilt with it at stage 6,
+    ///         and the grain call is qualified with it here; the request itself carries no tenant.
+    ///     </para>
+    /// </remarks>
+    async Task<GatewayOutcome> CostQueryAsync(
+        GatewayRequestContext context,
+        string path,
+        CancellationToken cancellationToken
+    ) {
+        if (!HttpMethods.IsPost(context.Http.Request.Method)) {
+            return new GatewayOutcome {
+                StatusCode = StatusCodes.Status405MethodNotAllowed,
+                Error = new(
+                    ErrorCode.InvalidRequestBody,
+                    $"{context.Http.Request.Method} is not supported on the cost query. A query is a POST with "
+                    + """{ "from": "…", "to": "…", "groupBy": "…" } as the body — docs/plan/22 § Cost visibility."""
+                )
+            }.WithHeader(GatewayHeaders.Allow, "POST");
+        }
+
+        var parsed = CostQueryBody.Parse(context.Body);
+
+        if (parsed.TryGetError(out var bodyError)) {
+            return ResultShaper.Shape(bodyError, path);
+        }
+
+        var body = parsed.GetValueOrThrow();
+        var scope = context.Route.CostQuery.Scope;
+
+        var answered = await costs.QueryAsync(
+            context.Caller.TenantId,
+            new() {
+                Caller = new() { SubjectType = context.Caller.SubjectType, SubjectId = context.Caller.SubjectId },
+                SubscriptionId = scope.SubscriptionId,
+                ResourceGroup = scope.Kind == ScopeKind.ResourceGroup ? scope.ResourceGroup : string.Empty,
+                From = body.From,
+                To = body.To,
+                Grouping = body.Grouping
+            },
+            cancellationToken
+        );
+
+        return answered.TryGetError(out var error)
+            ? ResultShaper.Shape(error, path)
+            : new() { StatusCode = StatusCodes.Status200OK, Json = CostQueryBody.Render(answered.GetValueOrThrow()) };
     }
 
     /// <summary>

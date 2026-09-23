@@ -1,3 +1,4 @@
+using CyberCloud.Billing.Contracts;
 using CyberCloud.Core.Time;
 using CyberCloud.Gateway.Host.Operations;
 using CyberCloud.ResourceManager;
@@ -735,6 +736,42 @@ sealed class RecordingResourceGraphQuery : IResourceGraphQuery {
     ) {
         ArgumentNullException.ThrowIfNull(request);
         Requests.Enqueue(request);
+        return Task.FromResult(OnQuery(request));
+    }
+}
+
+/// <summary>A cost query that records what stage 8 asked and answers from a script.</summary>
+/// <remarks>
+///     ⚠ It stands in for <c>GrainCostQuery</c>, whose grain — pricing and the ReBAC filter — is driven
+///     against the real engine in <c>CyberCloud.Billing.Tests</c> and across the real hosts in
+///     <c>CyberCloud.Hosts.Tests</c>. Here the assertion is about the gateway: the address, the verb,
+///     the body, the caller copied across and the tenant qualified with.
+/// </remarks>
+sealed class RecordingCostQuery : ICostQuery {
+    /// <summary>Every call, in order, with the tenant it was qualified with.</summary>
+    public ConcurrentQueue<(Guid Tenant, CostQueryRequest Request)> Calls { get; } = new();
+
+    /// <summary>What <see cref="QueryAsync" /> answers. Default: two groups and a total.</summary>
+    public Func<CostQueryRequest, Result<CostQueryResult>> OnQuery { get; set; } =
+        request => Result<CostQueryResult>.Success(
+            new() {
+                Currency = "EUR",
+                From = request.From,
+                To = request.To,
+                Grouping = request.Grouping,
+                Rows = [new() { Name = "prod", Amount = 2.50m }, new() { Name = "dev", Amount = 0.25m }],
+                Total = 2.75m
+            }
+        );
+
+    /// <inheritdoc />
+    public Task<Result<CostQueryResult>> QueryAsync(
+        Guid tenantId,
+        CostQueryRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+        Calls.Enqueue((tenantId, request));
         return Task.FromResult(OnQuery(request));
     }
 }

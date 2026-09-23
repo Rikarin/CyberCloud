@@ -63,6 +63,15 @@
         -->
         <ProjectReference Include="../../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
         <!--
+          docs/plan/22's metering and billing (#38). The same two-part arrangement: these lines put the
+          usage ledger, rollup and sampler, and the billing account, numbering, budget and cost query
+          grains in the silo; AddCyberCloudMetering and AddCyberCloudBilling in SiloComposition register
+          what their constructors ask for. Metering had the grains and no line here until billing needed
+          its ledger — SiloComposition says what that meant.
+        -->
+        <ProjectReference Include="../../CyberCloud.Metering/CyberCloud.Metering.csproj"/>
+        <ProjectReference Include="../../CyberCloud.Billing/CyberCloud.Billing.csproj"/>
+        <!--
           docs/plan/11's identity module. The same two-part arrangement as the line above and for the
           same reason: Orleans DISCOVERS grains by scanning referenced assemblies, so this line is
           what puts IUserGrain, IGroupGrain, ISessionGrain, IApplicationGrain,
@@ -152,6 +161,7 @@
     -->
     <ItemGroup Label="The provider modules — docs/plan/03 § Providers">
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Application/CyberCloud.Providers.Analytics.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.Application/CyberCloud.Providers.Billing.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Application/CyberCloud.Providers.Cache.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Application/CyberCloud.Providers.Communication.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Application/CyberCloud.Providers.Compute.Application.csproj"/>

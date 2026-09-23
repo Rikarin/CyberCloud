@@ -764,6 +764,22 @@ public static class GrainKeys {
     /// <summary><c>platform/tenant-directory</c> — <c>ITenantDirectoryGrain</c>'s singleton name.</summary>
     public const string TenantDirectorySingleton = "tenant-directory";
 
+    /// <summary>
+    ///     <c>platform/invoice-numbering</c> — <c>IInvoiceNumberingGrain</c>, docs/plan/22 § Invoicing
+    ///     and payment. Reach it through <see cref="PlatformSingleton" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The third singleton, and the first whose traffic is not O(new tenants per day).</b> An
+    ///     invoice or a credit note asks it for a number once, at finalization, so its write rate is
+    ///     O(tenants per month) and arrives in the 48 hours after the 1st. That is still far inside
+    ///     one activation's reach, and it has to be one activation: a gap-free sequence per issuer is
+    ///     a single counter, and two counters for one issuer are two invoices with one number.
+    ///     ⚠ No formatter of its own, deliberately — CC1006's null-tenant allowance recognises
+    ///     <see cref="PlatformSingleton" /> by name, and a new formatter would be flagged at every
+    ///     correct call site until the analyzer learned it.
+    /// </remarks>
+    public const string InvoiceNumberingSingleton = "invoice-numbering";
+
     /// <summary>The <c>rg</c> literal in <c>sub/{subscriptionId:N}/rg/{name}</c>.</summary>
     public const string ResourceGroupSegment = "rg";
 
@@ -800,7 +816,9 @@ public static class GrainKeys {
     const int DigestBytes = DigestLength / 2;
 
     /// <summary>The closed set of platform-singleton names.</summary>
-    public static IReadOnlyList<string> PlatformSingletons { get; } = [ShardMapSingleton, TenantDirectorySingleton];
+    public static IReadOnlyList<string> PlatformSingletons { get; } = [
+        ShardMapSingleton, TenantDirectorySingleton, InvoiceNumberingSingleton
+    ];
 
     // ── Formatting ─────────────────────────────────────────────────────────────────────────────
 

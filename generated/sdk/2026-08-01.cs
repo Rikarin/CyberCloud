@@ -314,6 +314,222 @@ public sealed partial class ClickHouseClusterCollection {
     public partial AsyncPageable<ClickHouseClusterResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The values /properties/notification/channel accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum BudgetChannel {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>sms</summary>
+    [JsonStringEnumMemberName("sms")]
+    Sms = 1,
+
+    /// <summary>whatsapp</summary>
+    [JsonStringEnumMemberName("whatsapp")]
+    Whatsapp = 2,
+
+    /// <summary>email</summary>
+    [JsonStringEnumMemberName("email")]
+    Email = 3,
+
+    /// <summary>push</summary>
+    [JsonStringEnumMemberName("push")]
+    Push = 4,
+
+    /// <summary>voice</summary>
+    [JsonStringEnumMemberName("voice")]
+    Voice = 5
+}
+
+/// <summary>The values /properties/period accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum BudgetPeriod {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>monthly</summary>
+    [JsonStringEnumMemberName("monthly")]
+    Monthly = 1,
+
+    /// <summary>quarterly</summary>
+    [JsonStringEnumMemberName("quarterly")]
+    Quarterly = 2,
+
+    /// <summary>annually</summary>
+    [JsonStringEnumMemberName("annually")]
+    Annually = 3
+}
+
+/// <summary>The values /properties/scope accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum BudgetScope {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>resourceGroup</summary>
+    [JsonStringEnumMemberName("resourceGroup")]
+    ResourceGroup = 1,
+
+    /// <summary>subscription</summary>
+    [JsonStringEnumMemberName("subscription")]
+    Subscription = 2
+}
+
+/// <summary>The body of a CyberCloud.Billing/budgets.</summary>
+/// <remarks>A spending limit for a resource group or a subscription, per month, quarter or year, with thresholds on the actual cost and on the forecast that alert through a sending service.</remarks>
+public sealed partial class BudgetData {
+
+    /// <summary>The region the budget is evaluated in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The budget's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The budget's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The amount for one period, in the billing account's currency.</summary>
+        /// <remarks>Required on a create.</remarks>
+        [JsonPropertyName("amount")]
+        public required double Amount { get; set; }
+
+        /// <summary>Whether the budget is evaluated. Off keeps its history and stops the clock.</summary>
+        /// <remarks>Defaults to true when left unset.</remarks>
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; set; }
+
+        /// <summary>Who is told, and how.</summary>
+        [JsonPropertyName("notification")]
+        public NotificationData? Notification { get; set; }
+
+        /// <summary>How long a period is. Periods are calendar-aligned in UTC: a month, a quarter from January, April, July or October, or a year.</summary>
+        /// <remarks>Defaults to "monthly" when left unset.</remarks>
+        [JsonPropertyName("period")]
+        public BudgetPeriod? Period { get; set; }
+
+        /// <summary>What the figure covers: this resource group, or the whole subscription. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make.</summary>
+        /// <remarks>Defaults to "resourceGroup" when left unset.</remarks>
+        [JsonPropertyName("scope")]
+        public BudgetScope? Scope { get; set; }
+
+        /// <summary>Percentages of the amount that alert, each at most once per period.</summary>
+        [JsonPropertyName("thresholds")]
+        public ThresholdsData? Thresholds { get; set; }
+
+        /// <summary>Who is told, and how.</summary>
+        public sealed partial class NotificationData {
+
+            /// <summary>Which of that service's channels carries it. The service must have the channel configured and enabled, or every alert is refused by name.</summary>
+            /// <remarks>Required on a create.</remarks>
+            [JsonPropertyName("channel")]
+            public required BudgetChannel Channel { get; set; }
+
+            /// <summary>Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list. At least one and at most 20.</summary>
+            /// <remarks>Required on a create.</remarks>
+            [JsonPropertyName("recipients")]
+            public IList<string> Recipients { get; set; } = new List<string>();
+
+            /// <summary>The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this tenant.</summary>
+            /// <remarks>Required on a create.</remarks>
+            [JsonPropertyName("service")]
+            public required string Service { get; set; }
+        }
+
+        /// <summary>Percentages of the amount that alert, each at most once per period.</summary>
+        public sealed partial class ThresholdsData {
+
+            /// <summary>Percentages of the amount the period's cost so far is compared with — 50, 80 and 100 is the usual set. At least one threshold across both lists and at most 10; a body outside that is refused when the budget is reconciled.</summary>
+            [JsonPropertyName("actual")]
+            public IList<double> Actual { get; set; } = new List<double>();
+
+            /// <summary>Percentages of the amount the forecast is compared with. The forecast is linear on the trailing seven days, and an alert on it says it is an estimate.</summary>
+            [JsonPropertyName("forecast")]
+            public IList<double> Forecast { get; set; } = new List<double>();
+        }
+    }
+}
+
+/// <summary>One Budget, as the API returns it, and the operations on it.</summary>
+public sealed partial class BudgetResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required BudgetData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<BudgetResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<BudgetResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        BudgetData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Budgets in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class BudgetCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Billing/budgets";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Billing/budgets/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Billing/budgets";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Budget.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<BudgetResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        BudgetData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Budget by name.</summary>
+    public partial Task<Response<BudgetResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Budgets in this group, paged.</summary>
+    public partial AsyncPageable<BudgetResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/maxmemoryPolicy accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum ValkeyCacheMaxmemoryPolicy {
     /// <summary>Never assigned. Not a value the API accepts.</summary>

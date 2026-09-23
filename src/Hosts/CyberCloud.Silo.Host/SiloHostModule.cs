@@ -1,4 +1,5 @@
 using CyberCloud.Providers.Analytics.Application;
+using CyberCloud.Providers.Billing.Application;
 using CyberCloud.Providers.Cache.Application;
 using CyberCloud.Providers.Communication.Application;
 using CyberCloud.Providers.Compute.Application;
@@ -53,6 +54,7 @@ namespace CyberCloud.Silo.Host;
 /// </remarks>
 [DependsOn(typeof(AbpAutofacModule))]
 [DependsOn(typeof(AnalyticsApplicationModule))]
+[DependsOn(typeof(BillingApplicationModule))]
 [DependsOn(typeof(ValkeyCacheApplicationModule))]
 [DependsOn(typeof(CommunicationApplicationModule))]
 [DependsOn(typeof(ComputeApplicationModule))]

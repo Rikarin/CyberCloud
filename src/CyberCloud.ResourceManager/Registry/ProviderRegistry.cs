@@ -158,6 +158,24 @@ public sealed class ProviderRegistry : IProviderRegistry {
                 );
             }
 
+            // ⚠ THE FOURTH RESERVATION, FOR THE SAME ROUTING REASON (#38). The cost query is served at
+            // {scope}/providers/CyberCloud.CostManagement/query (CostQueryAddress), which on a
+            // resource group is a nine-segment resource collection path, and the gateway routes the
+            // whole namespace to the cost query before it looks at the registry.
+            if (string.Equals(
+                    provider.ProviderNamespace,
+                    CostQueryAddress.ProviderNamespace,
+                    StringComparison.OrdinalIgnoreCase
+                )) {
+                throw new InvalidOperationException(
+                    $"Provider '{provider.ProviderNamespace}' declares the reserved namespace "
+                    + $"'{CostQueryAddress.ProviderNamespace}'. The one address under it is the cost query "
+                    + "— docs/plan/22 § Cost visibility — and the gateway routes it before it looks at the "
+                    + "registry, so no type this provider declared could ever be reached. See "
+                    + "CostQueryAddress.ProviderNamespace."
+                );
+            }
+
             if (!seenNamespaces.Add(provider.ProviderNamespace)) {
                 throw new InvalidOperationException(
                     $"Two providers declare the namespace '{provider.ProviderNamespace}'. A namespace names "

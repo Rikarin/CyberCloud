@@ -69,6 +69,8 @@ public sealed class HostCompositionTests {
     /// </remarks>
     static readonly string[] EveryProviderNamespace = [
         "CyberCloud.Analytics",
+        // #38, CyberCloud.Billing/budgets — the twentieth namespace from the nineteenth module.
+        "CyberCloud.Billing",
         "CyberCloud.Cache",
         "CyberCloud.Communication",
         "CyberCloud.Compute",
@@ -176,6 +178,59 @@ public sealed class HostCompositionTests {
         // gateway reaches as a client — the grain activates on the silo only.
         silo.Services.GetService<CyberCloud.Communication.Contracts.IMessageSender>()
             .ShouldNotBeNull("the silo has no IMessageSender, so an alert evaluator cannot be activated");
+    }
+
+    /// <summary>
+    ///     ⚠ Both hosts hold the two billing seams, and the silo holds what the billing grains take.
+    /// </summary>
+    /// <remarks>
+    ///     The gateway dispatches the cost query to <c>ICostQuery</c> and builds the budget reconciler in
+    ///     its registry's container; the silo activates the grains behind both, which take the rating
+    ///     path, the tax service and the sending module. A host that lost
+    ///     <c>AddCyberCloudBillingClient</c> or <c>AddCyberCloudBilling</c> would fail on the first
+    ///     request rather than at start, which is what this file exists to prevent.
+    /// </remarks>
+    [Fact]
+    public async Task BothHostsResolveTheBillingSeamsAndTheSiloWhatTheGrainsTake() {
+        await using var gateway = await BuildGatewayAsync();
+        await using var silo = await BuildSiloAsync();
+
+        foreach (var host in new[] { gateway.Services, silo.Services }) {
+            host.GetService<CyberCloud.Billing.Contracts.ICostQuery>().ShouldNotBeNull("a host with no ICostQuery cannot answer a cost query");
+            host.GetService<CyberCloud.Billing.Contracts.IBudgetControlPlane>()
+                .ShouldNotBeNull("a host with no IBudgetControlPlane cannot construct the budget reconciler");
+        }
+
+        silo.Services.GetService<CyberCloud.Billing.Pricing.UsagePricing>().ShouldNotBeNull();
+        silo.Services.GetService<CyberCloud.Billing.Contracts.ITaxService>().ShouldBeOfType<CyberCloud.Billing.Tax.EuVatTaxService>();
+        silo.Services.GetRequiredService<CyberCloud.Billing.BillingOptions>()
+            .HasIssuer.ShouldBeFalse("no issuer is configured here, and a silo without one refuses to finalize rather than inventing one");
+    }
+
+    /// <summary>
+    ///     ⚠ The billing grains — and the metering grains they rate — are in the silo's manifest.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The metering half was never true before #38.</b> The usage ledger shipped in M1 with a
+    ///     <c>TestCluster</c> behind every test and no line in this host, so no production silo could
+    ///     activate one; billing rates the ledger, and that is how it was found.
+    /// </remarks>
+    [Fact]
+    public async Task TheBillingAndMeteringGrainsAreInTheSilosManifest() {
+        await using var silo = await BuildSiloAsync();
+
+        var classes = silo.Services.GetRequiredService<IOptions<GrainTypeOptions>>().Value.Classes;
+
+        foreach (var grain in new[] {
+                     typeof(CyberCloud.Billing.Grains.BillingAccountGrain),
+                     typeof(CyberCloud.Billing.Grains.InvoiceNumberingGrain),
+                     typeof(CyberCloud.Billing.Grains.BudgetGrain),
+                     typeof(CyberCloud.Billing.Grains.CostQueryGrain),
+                     typeof(CyberCloud.Metering.Grains.UsageLedgerGrain),
+                     typeof(CyberCloud.Metering.Grains.UsageRollupGrain)
+                 }) {
+            classes.ShouldContain(grain, $"{grain.Name} is not in the silo's grain manifest");
+        }
     }
 
     /// <summary>

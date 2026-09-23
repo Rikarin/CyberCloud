@@ -294,6 +294,250 @@
         }
       ]
     },
+    "CyberCloud.Billing/budgets": {
+      "resourceType": "CyberCloud.Billing/budgets",
+      "apiVersion": "2026-08-01",
+      "title": "Budget",
+      "plural": "Budgets",
+      "summary": "A spending limit for a resource group or a subscription, per month, quarter or year, with thresholds on the actual cost and on the forecast that alert through a sending service.",
+      "overrideKey": "CyberCloud.Billing/budgets@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/amount",
+        "/properties/enabled",
+        "/properties/notification",
+        "/properties/notification/channel",
+        "/properties/notification/recipients",
+        "/properties/notification/service",
+        "/properties/period",
+        "/properties/scope",
+        "/properties/thresholds",
+        "/properties/thresholds/actual",
+        "/properties/thresholds/forecast",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": false,
+      "clusterIdPointer": "",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the budget is evaluated in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Budget to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The budget's own settings."
+        },
+        {
+          "jsonPointer": "/properties/amount",
+          "name": "amount",
+          "label": "Amount",
+          "control": "xui-numeric-input",
+          "type": "number",
+          "required": true,
+          "section": "general",
+          "hint": "The amount for one period, in the billing account's currency.",
+          "minimum": 0.01,
+          "placeholder": 500
+        },
+        {
+          "jsonPointer": "/properties/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "general",
+          "hint": "Whether the budget is evaluated. Off keeps its history and stops the clock.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/notification",
+          "name": "notification",
+          "label": "Notification",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Who is told, and how."
+        },
+        {
+          "jsonPointer": "/properties/notification/channel",
+          "name": "channel",
+          "label": "Channel",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "notification",
+          "hint": "Which of that service's channels carries it. The service must have the channel configured and enabled, or every alert is refused by name.",
+          "choices": [
+            {
+              "value": "sms",
+              "label": "Sms"
+            },
+            {
+              "value": "whatsapp",
+              "label": "Whatsapp"
+            },
+            {
+              "value": "email",
+              "label": "Email"
+            },
+            {
+              "value": "push",
+              "label": "Push"
+            },
+            {
+              "value": "voice",
+              "label": "Voice"
+            }
+          ],
+          "placeholder": "email"
+        },
+        {
+          "jsonPointer": "/properties/notification/recipients",
+          "name": "recipients",
+          "label": "Recipients",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": true,
+          "section": "notification",
+          "hint": "Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list. At least one and at most 20.",
+          "placeholder": [
+            "finance@example.com"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/notification/service",
+          "name": "service",
+          "label": "Service",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "notification",
+          "hint": "The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this tenant.",
+          "maxLength": 512,
+          "format": "cybercloud-resource-id",
+          "placeholder": "/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.Communication/services/alerts"
+        },
+        {
+          "jsonPointer": "/properties/period",
+          "name": "period",
+          "label": "Period",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "How long a period is. Periods are calendar-aligned in UTC: a month, a quarter from January, April, July or October, or a year.",
+          "choices": [
+            {
+              "value": "monthly",
+              "label": "Monthly"
+            },
+            {
+              "value": "quarterly",
+              "label": "Quarterly"
+            },
+            {
+              "value": "annually",
+              "label": "Annually"
+            }
+          ],
+          "default": "monthly"
+        },
+        {
+          "jsonPointer": "/properties/scope",
+          "name": "scope",
+          "label": "Scope",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "What the figure covers: this resource group, or the whole subscription. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make.",
+          "choices": [
+            {
+              "value": "resourceGroup",
+              "label": "Resource group"
+            },
+            {
+              "value": "subscription",
+              "label": "Subscription"
+            }
+          ],
+          "default": "resourceGroup"
+        },
+        {
+          "jsonPointer": "/properties/thresholds",
+          "name": "thresholds",
+          "label": "Thresholds",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Percentages of the amount that alert, each at most once per period."
+        },
+        {
+          "jsonPointer": "/properties/thresholds/actual",
+          "name": "actual",
+          "label": "Actual",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "thresholds",
+          "hint": "Percentages of the amount the period's cost so far is compared with — 50, 80 and 100 is the usual set. At least one threshold across both lists and at most 10; a body outside that is refused when the budget is reconciled.",
+          "placeholder": [
+            50,
+            80,
+            100
+          ]
+        },
+        {
+          "jsonPointer": "/properties/thresholds/forecast",
+          "name": "forecast",
+          "label": "Forecast",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "thresholds",
+          "hint": "Percentages of the amount the forecast is compared with. The forecast is linear on the trailing seven days, and an alert on it says it is an estimate.",
+          "placeholder": [
+            100
+          ]
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": []
+    },
     "CyberCloud.Cache/redis": {
       "resourceType": "CyberCloud.Cache/redis",
       "apiVersion": "2026-08-01",

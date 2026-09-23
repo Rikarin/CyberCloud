@@ -154,6 +154,18 @@ a portal's list page. The page parameters are read from the body and, for a `nex
 query string, because the link is the whole next request; a client follows it by `POST`ing the same
 body.
 
+**The cost query is a fifth, under the third reserved namespace (#38):** `POST
+{scope}/providers/CyberCloud.CostManagement/query` on a subscription or a resource group, with `{ "from":
+"…", "to": "…", "groupBy": "resource" | "resourceGroup" | "resourceType" | "meter" | "day" }`, reaches
+`ICostQuery` — one grain call to the subscription's cost grain, which rates the usage ledger and removes
+every row the caller may not read ([22 § Cost visibility](22-billing-metering-and-quota.md)). Routed as
+`RouteKind.CostQuery`, arranged exactly as the resource graph's is, with one difference that makes the
+namespace test load-bearing rather than tidy: on a resource group the address is a well-formed
+nine-segment **collection** path, so asked after the resource grammar it would be a listing of a type
+called `query`. `CostQueryRoutingTests` pins the precedence, the `405` on a `GET` and the `400` per
+body member; stage 5 counts it as a read, like the graph's. ⚠ **It is not in the generated document
+either** — #63's question a fifth time, and the same answer as the paragraph below gives the graph's.
+
 ⚠ **The resource graph's address is not in the generated document either, and that is #63's
 question asked a fourth time.** The reserved namespace keeps it out of the registry the emitters
 read, exactly as `CyberCloud.Authorization`'s does, so `openapi/`, the three SDKs and the portal's

@@ -211,6 +211,65 @@ export interface AnalyticsClickhouseClustersListKeysResult {
   username: string;
 }
 
+/** The values /properties/notification/channel accepts. ⚠ Closed: the write path refuses anything else. */
+export type BillingBudgetsChannel =
+  | 'sms'
+  | 'whatsapp'
+  | 'email'
+  | 'push'
+  | 'voice';
+
+/** The values /properties/period accepts. ⚠ Closed: the write path refuses anything else. */
+export type BillingBudgetsPeriod =
+  | 'monthly'
+  | 'quarterly'
+  | 'annually';
+
+/** The values /properties/scope accepts. ⚠ Closed: the write path refuses anything else. */
+export type BillingBudgetsScope =
+  | 'resourceGroup'
+  | 'subscription';
+
+/** Budget. A spending limit for a resource group or a subscription, per month, quarter or year, with thresholds on the actual cost and on the forecast that alert through a sending service. */
+export interface BillingBudgetsData {
+  /** The region the budget is evaluated in. */
+  location: string;
+  /** The budget's own settings. */
+  properties?: {
+    /** The amount for one period, in the billing account's currency. */
+    amount: number;
+    /** Whether the budget is evaluated. Off keeps its history and stops the clock. */
+    enabled?: boolean;
+    /** Who is told, and how. */
+    notification?: {
+      /** Which of that service's channels carries it. The service must have the channel configured and enabled, or every alert is refused by name. */
+      channel: BillingBudgetsChannel;
+      /** Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list. At least one and at most 20. */
+      recipients: string[];
+      /** The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this tenant. */
+      service: string;
+    };
+    /** How long a period is. Periods are calendar-aligned in UTC: a month, a quarter from January, April, July or October, or a year. */
+    period?: BillingBudgetsPeriod;
+    /** What the figure covers: this resource group, or the whole subscription. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make. */
+    scope?: BillingBudgetsScope;
+    /** Percentages of the amount that alert, each at most once per period. */
+    thresholds?: {
+      /** Percentages of the amount the period's cost so far is compared with — 50, 80 and 100 is the usual set. At least one threshold across both lists and at most 10; a body outside that is refused when the budget is reconciled. */
+      actual?: number[];
+      /** Percentages of the amount the forecast is compared with. The forecast is linear on the trailing seven days, and an alert on it says it is an estimate. */
+      forecast?: number[];
+    };
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Budget, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface BillingBudgetsResource extends Resource, BillingBudgetsData {
+  readonly type: 'CyberCloud.Billing/budgets';
+}
+
 /** The values /properties/maxmemoryPolicy accepts. ⚠ Closed: the write path refuses anything else. */
 export type CacheRedisMaxmemoryPolicy =
   | 'noeviction'

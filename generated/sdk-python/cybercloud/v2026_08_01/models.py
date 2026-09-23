@@ -444,6 +444,178 @@ class ClickHouseClusterListKeysResult:
         return wire
 
 
+BudgetChannel = Literal["sms", "whatsapp", "email", "push", "voice"]
+"""The values /properties/notification/channel accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+BudgetPeriod = Literal["monthly", "quarterly", "annually"]
+"""The values /properties/period accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+BudgetScope = Literal["resourceGroup", "subscription"]
+"""The values /properties/scope accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class BudgetData:
+    """Budget. A spending limit for a resource group or a subscription, per month, quarter or year, with thresholds on the actual cost and on the forecast that alert through a sending service. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The budget's own settings."""
+
+        @dataclass
+        class Notification:
+            """Who is told, and how."""
+
+            # Which of that service's channels carries it. The service must have the channel configured and enabled, or every alert is refused by name.
+            channel: BudgetChannel
+            # Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list. At least one and at most 20.
+            recipients: List[str]
+            # The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this tenant.
+            service: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> BudgetData.Properties.Notification:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    channel=wire["channel"],
+                    recipients=wire["recipients"],
+                    service=wire["service"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["channel"] = self.channel
+                wire["recipients"] = self.recipients
+                wire["service"] = self.service
+                return wire
+
+        @dataclass
+        class Thresholds:
+            """Percentages of the amount that alert, each at most once per period."""
+
+            # Percentages of the amount the period's cost so far is compared with — 50, 80 and 100 is the usual set. At least one threshold across both lists and at most 10; a body outside that is refused when the budget is reconciled.
+            actual: Optional[List[float]] = None
+            # Percentages of the amount the forecast is compared with. The forecast is linear on the trailing seven days, and an alert on it says it is an estimate.
+            forecast: Optional[List[float]] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> BudgetData.Properties.Thresholds:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    actual=wire.get("actual"),
+                    forecast=wire.get("forecast"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.actual is not None:
+                    wire["actual"] = self.actual
+                if self.forecast is not None:
+                    wire["forecast"] = self.forecast
+                return wire
+
+        # The amount for one period, in the billing account's currency.
+        amount: float
+        # Whether the budget is evaluated. Off keeps its history and stops the clock.
+        enabled: Optional[bool] = None
+        # Who is told, and how.
+        notification: Optional[BudgetData.Properties.Notification] = None
+        # How long a period is. Periods are calendar-aligned in UTC: a month, a quarter from January, April, July or October, or a year.
+        period: Optional[BudgetPeriod] = None
+        # What the figure covers: this resource group, or the whole subscription. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make.
+        scope: Optional[BudgetScope] = None
+        # Percentages of the amount that alert, each at most once per period.
+        thresholds: Optional[BudgetData.Properties.Thresholds] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> BudgetData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                amount=wire["amount"],
+                enabled=wire.get("enabled"),
+                notification=_opt(wire, "notification", BudgetData.Properties.Notification.from_wire),
+                period=wire.get("period"),
+                scope=wire.get("scope"),
+                thresholds=_opt(wire, "thresholds", BudgetData.Properties.Thresholds.from_wire),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["amount"] = self.amount
+            if self.enabled is not None:
+                wire["enabled"] = self.enabled
+            if self.notification is not None:
+                wire["notification"] = self.notification.to_wire()
+            if self.period is not None:
+                wire["period"] = self.period
+            if self.scope is not None:
+                wire["scope"] = self.scope
+            if self.thresholds is not None:
+                wire["thresholds"] = self.thresholds.to_wire()
+            return wire
+
+    # The region the budget is evaluated in.
+    location: str
+    # The budget's own settings.
+    properties: Optional[BudgetData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> BudgetData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", BudgetData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class BudgetResource:
+    """One Budget, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: BudgetData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> BudgetResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=BudgetData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
 ValkeyCacheMaxmemoryPolicy = Literal["noeviction", "allkeys-lru", "allkeys-lfu", "allkeys-random", "volatile-lru", "volatile-lfu", "volatile-random", "volatile-ttl"]
 """The values /properties/maxmemoryPolicy accepts. ⚠ Closed: the write path refuses anything else."""
 
@@ -8679,6 +8851,11 @@ __all__ = [
     "ClickHouseClusterData",
     "ClickHouseClusterResource",
     "ClickHouseClusterListKeysResult",
+    "BudgetChannel",
+    "BudgetPeriod",
+    "BudgetScope",
+    "BudgetData",
+    "BudgetResource",
     "ValkeyCacheMaxmemoryPolicy",
     "ValkeyCacheMode",
     "ValkeyCacheFsync",

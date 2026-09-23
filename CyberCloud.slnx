@@ -81,6 +81,10 @@
         <Project Path="src/CyberCloud.Metering.Contracts.Tests/CyberCloud.Metering.Contracts.Tests.csproj" />
         <Project Path="src/CyberCloud.Metering/CyberCloud.Metering.csproj" />
         <Project Path="src/CyberCloud.Metering.Tests/CyberCloud.Metering.Tests.csproj" />
+        <!-- docs/plan/22's M2 rows, issue #38: rating, invoicing, budgets, cost views, the PSP and tax seams. -->
+        <Project Path="src/CyberCloud.Billing.Contracts/CyberCloud.Billing.Contracts.csproj" />
+        <Project Path="src/CyberCloud.Billing/CyberCloud.Billing.csproj" />
+        <Project Path="src/CyberCloud.Billing.Tests/CyberCloud.Billing.Tests.csproj" />
         <Project Path="src/CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj" />
         <Project Path="src/CyberCloud.ResourceManager.Contracts.Tests/CyberCloud.ResourceManager.Contracts.Tests.csproj" />
         <Project Path="src/CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj" />
@@ -541,6 +545,18 @@
         <Project Path="src/Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Application/CyberCloud.Providers.Communication.Application.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Tests/CyberCloud.Providers.Communication.Tests.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Conformance/CyberCloud.Providers.Communication.Conformance.csproj" />
+
+        <!--
+          The eighteenth provider family — CyberCloud.Billing/budgets, docs/plan/22 § Cost visibility,
+          issue #38. The second clusterless family, and the second whose type is a module's grain: the
+          budget is evaluated by CyberCloud.Billing, reached through IBudgetControlPlane, the way the
+          Communication family reaches its module.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.Contracts/CyberCloud.Providers.Billing.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Billing/CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.Application/CyberCloud.Providers.Billing.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.Tests/CyberCloud.Providers.Billing.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.Conformance/CyberCloud.Providers.Billing.Conformance.csproj" />
 
         <!--
           The seventeenth provider family — CyberCloud.RecoveryServices/vaults, docs/plan/15 § Backup as
