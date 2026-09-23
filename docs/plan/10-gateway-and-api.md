@@ -154,7 +154,7 @@ a portal's list page. The page parameters are read from the body and, for a `nex
 query string, because the link is the whole next request; a client follows it by `POST`ing the same
 body.
 
-**The cost query is a fifth, under the third reserved namespace (#38):** `POST
+**The cost query is a fifth, under its own reserved namespace (#38):** `POST
 {scope}/providers/CyberCloud.CostManagement/query` on a subscription or a resource group, with `{ "from":
 "…", "to": "…", "groupBy": "resource" | "resourceGroup" | "resourceType" | "meter" | "day" }`, reaches
 `ICostQuery` — one grain call to the subscription's cost grain, which rates the usage ledger and removes

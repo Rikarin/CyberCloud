@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+
 namespace CyberCloud.Billing.Tests;
 
 /// <summary>
@@ -213,6 +215,45 @@ public sealed class InvoicingTests(BillingCluster cluster) : IAsyncLifetime {
         (await account.IssueCreditNoteAsync(Credit(invoice, 1.00m, "three"))).IsSuccess.ShouldBeTrue("exactly what is left is allowed");
     }
 
+    /// <summary>
+    ///     ⚠ The review's case: 0.06 at 21 % is taxed 0.01, and two credits of 0.03 each rounded their
+    ///     own 0.0063 up to 0.01—0.02 of tax returned on 0.01 charged, and 0.08 credited against a
+    ///     0.07 total.
+    /// </summary>
+    [Fact]
+    public async Task PartialCreditNotesNeverReturnMoreTaxThanTheInvoiceCharged() {
+        var invoice = await InvoicedAsync(0.06m);
+        var account = cluster.Account(invoice.TenantId);
+        invoice.Tax.Amount.ShouldBe(0.01m);
+
+        var first = (await account.IssueCreditNoteAsync(Credit(invoice, 0.03m, "half-1"))).GetValueOrThrow();
+        var second = (await account.IssueCreditNoteAsync(Credit(invoice, 0.03m, "half-2"))).GetValueOrThrow();
+
+        first.Tax.Amount.ShouldBe(-0.01m, "0.03 credited so far, whose tax rounds to 0.01");
+        second.Tax.Amount.ShouldBe(0m, "0.06 credited so far is still 0.01 of tax, and the first note carried it");
+        (first.Tax.Amount + second.Tax.Amount).ShouldBe(-invoice.Tax.Amount);
+        (first.Total + second.Total).ShouldBe(-invoice.Total);
+    }
+
+    /// <summary>
+    ///     The other direction of the same error: twenty notes of 0.05 each rounded 0.0105 down to 0.01,
+    ///     and crediting a whole 1.00 invoice returned 0.20 of its 0.21.
+    /// </summary>
+    [Fact]
+    public async Task CreditingAWholeInvoiceInTwentyNotesReturnsExactlyTheTaxItCharged() {
+        var invoice = await InvoicedAsync(1.00m);
+        var account = cluster.Account(invoice.TenantId);
+        var notes = new List<CreditNote>();
+
+        for (var i = 0; i < 20; i++) {
+            notes.Add((await account.IssueCreditNoteAsync(Credit(invoice, 0.05m, $"twentieth-{i}"))).GetValueOrThrow());
+        }
+
+        notes.ShouldAllBe(x => x.Tax.Amount <= 0m, "a credit note never charges tax");
+        notes.Sum(static x => x.Tax.Amount).ShouldBe(-0.21m);
+        notes.Sum(static x => x.Total).ShouldBe(-invoice.Total);
+    }
+
     [Fact]
     public async Task ACreditNoteWithoutAReasonOrAnApproverIsRefused() {
         var invoice = await InvoicedAsync(4.00m);
@@ -243,6 +284,69 @@ public sealed class InvoicingTests(BillingCluster cluster) : IAsyncLifetime {
         );
 
         refused.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+    }
+
+    // ── The month close ───────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AttachingASubscriptionArmsTheMonthClose() {
+        var (tenant, _) = await ConfiguredAsync(Czech);
+
+        var row = await cluster.SiloServices.GetRequiredService<IReminderTable>()
+            .ReadRow(cluster.Account(tenant).GetGrainId(), CyberCloud.Billing.Grains.BillingAccountGrain.MonthCloseReminder);
+
+        row.ShouldNotBeNull("nothing else closes a month, so an account that carries a subscription arms it");
+        row.Period.ShouldBe(IBillingAccountGrain.MonthCloseTick);
+    }
+
+    [Fact]
+    public async Task TheMonthCloseFinalizesEveryDueMonthOldestFirstAndThenNothing() {
+        // Attached on 2026-09-10, so September is the first month the close owns and August is not.
+        var (tenant, subscription) = await ConfiguredAsync(Czech);
+        var widget = Guid.NewGuid();
+        var path = BillingCluster.PathOf(tenant, subscription, "prod", "w");
+        var october = September.AddMonths(1);
+
+        await cluster.UseHoursAsync(tenant, subscription, widget, path, BillingMeter.VCpuHours, September.AddDays(10), 10, 4m);
+        await cluster.UseHoursAsync(tenant, subscription, widget, path, BillingMeter.VCpuHours, october, 20, 4m);
+        var account = cluster.Account(tenant);
+
+        // One tick before September's window ends: nothing is due.
+        TestClock.Instance.Set(october + IBillingAccountGrain.LateUsageWindow - TimeSpan.FromTicks(1));
+        (await account.CloseMonthsAsync()).GetValueOrThrow().ShouldBeEmpty();
+
+        // The moment October's window ends, both are.
+        TestClock.Instance.Set(october.AddMonths(1) + IBillingAccountGrain.LateUsageWindow);
+        var closed = (await account.CloseMonthsAsync()).GetValueOrThrow();
+        var again = (await account.CloseMonthsAsync()).GetValueOrThrow();
+        var listed = (await account.ListInvoicesAsync()).GetValueOrThrow();
+
+        closed.Select(static x => x.PeriodStart).ShouldBe([September, october]);
+        closed.Select(static x => x.Subtotal).ShouldBe([1.00m, 2.00m]);
+        Sequence(closed[1].Number).ShouldBe(Sequence(closed[0].Number) + 1, "the earlier month takes the earlier number");
+        again.ShouldBeEmpty("a closed month is not closed twice");
+        listed.Select(static x => x.PeriodStart).ShouldBe([September, october], "August predates the first attach");
+    }
+
+    [Fact]
+    public async Task TheMonthCloseOfAnAccountWithNoProfileSaysSo() {
+        var (tenant, subscription) = await cluster.NewSubscriptionAsync("prod");
+        (await cluster.Account(tenant).AttachSubscriptionAsync(subscription)).IsSuccess.ShouldBeTrue();
+
+        TestClock.Instance.Set(September.AddMonths(1) + IBillingAccountGrain.LateUsageWindow);
+        var refused = await cluster.Account(tenant).CloseMonthsAsync();
+
+        refused.Error!.Message.ShouldContain("no profile");
+    }
+
+    [Fact]
+    public async Task AnAccountWithNoSubscriptionHasNoMonthToClose() {
+        var (tenant, _) = await cluster.NewSubscriptionAsync("prod");
+        (await cluster.Account(tenant).ConfigureAsync(Czech)).IsSuccess.ShouldBeTrue();
+
+        TestClock.Instance.Set(September.AddYears(1));
+
+        (await cluster.Account(tenant).CloseMonthsAsync()).GetValueOrThrow().ShouldBeEmpty();
     }
 
     // ── The account ───────────────────────────────────────────────────────────────────────────────

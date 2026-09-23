@@ -5,7 +5,7 @@ namespace CyberCloud.Core.Tests;
 
 /// <summary>
 ///     <see cref="CostQueryAddress" /> — the cost query's address, docs/plan/22 § Cost visibility, and
-///     the third reserved namespace a path can name.
+///     one of the reserved namespaces a path can name.
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>The overlap sweep is the point, as it is for <c>ResourceGraphAddressTests</c>.</b> On a

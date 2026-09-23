@@ -108,7 +108,7 @@ src/
 ├── CyberCloud.ResourceManager.Contracts/
 ├── CyberCloud.ResourceManager.Generator/ # ⚠ Exe, never deployed — ADR-012's generation step
 ├── CyberCloud.Metering/                 # usage events, aggregation, quota enforcement (22)
-├── CyberCloud.Billing/                  # rating, ledger, invoices (22)
+├── CyberCloud.Billing/                  # rating the usage ledger, invoices, budgets, cost query (22)
 ├── CyberCloud.Telemetry/                # our own OTel wiring + the ingest path for tenants (16)
 ├── CyberCloud.ServiceDefaults/          # AddServiceDefaults, health checks, Orleans host builders
 ├── CyberCloud.Sdk/                      # ⚠ the .NET SDK — the one IsPackable project under src/ (21)

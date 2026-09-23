@@ -2,6 +2,7 @@ using CyberCloud.Billing.Pricing;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Time;
 using CyberCloud.Tenancy.Contracts;
+using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
 using System.Collections.Immutable;
 using System.Globalization;
@@ -24,9 +25,13 @@ public sealed class BillingAccountGrain(
     UsagePricing pricing,
     ITaxService tax,
     BillingOptions options,
-    IClock clock
+    IClock clock,
+    ILogger<BillingAccountGrain> logger
 )
-    : Grain, IBillingAccountGrain {
+    : Grain, IBillingAccountGrain, IRemindable {
+    /// <summary>The month-close reminder's name.</summary>
+    public const string MonthCloseReminder = "close-months";
+
     Guid tenantId;
 
     /// <inheritdoc />
@@ -80,6 +85,7 @@ public sealed class BillingAccountGrain(
         }
 
         if (state.State.Subscriptions.Contains(subscriptionId)) {
+            await ArmMonthCloseAsync();
             return Result<BillingAccountSnapshot>.Success(Snapshot());
         }
 
@@ -97,7 +103,10 @@ public sealed class BillingAccountGrain(
         }
 
         state.State.Subscriptions.Add(subscriptionId);
+        state.State.FirstMonth ??= Rating.MonthOf(clock.UtcNow);
         await state.WriteStateAsync();
+
+        await ArmMonthCloseAsync();
 
         return Result<BillingAccountSnapshot>.Success(Snapshot());
     }
@@ -181,6 +190,51 @@ public sealed class BillingAccountGrain(
         _ = await numbering.ConfirmAsync(options.Issuer.Code, DocumentSeries.Invoice, invoice.Number);
 
         return Result<Invoice>.Success(invoice);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<ImmutableArray<Invoice>>> CloseMonthsAsync() {
+        if (state.State.FirstMonth is not { } month) {
+            return Result<ImmutableArray<Invoice>>.Success([]);
+        }
+
+        var closed = ImmutableArray.CreateBuilder<Invoice>();
+        var now = clock.UtcNow;
+
+        for (; month.AddMonths(1) + IBillingAccountGrain.LateUsageWindow <= now; month = month.AddMonths(1)) {
+            if (Finalized(month) is not null) {
+                continue;
+            }
+
+            // ⚠ STOPS AT THE FIRST REFUSAL rather than skipping to the next month. Every refusal
+            // FinalizeAsync has—no profile, no issuer, a currency—holds for the next month too, and
+            // finalizing past a gap would number a later month before an earlier one.
+            var finalized = await FinalizeAsync(month);
+            if (finalized.TryGetError(out var error)) {
+                return Result<ImmutableArray<Invoice>>.Failure(error);
+            }
+
+            closed.Add(finalized.GetValueOrThrow());
+        }
+
+        return Result<ImmutableArray<Invoice>>.Success(closed.ToImmutable());
+    }
+
+    /// <inheritdoc />
+    public async Task ReceiveReminder(string reminderName, TickStatus status) {
+        if (!string.Equals(reminderName, MonthCloseReminder, StringComparison.Ordinal)) {
+            return;
+        }
+
+        var closed = await CloseMonthsAsync();
+
+        if (closed.TryGetError(out var error)) {
+            logger.LogWarning(
+                "Tenant {Tenant}'s billing account could not close a month: {Reason}",
+                tenantId,
+                error.Message
+            );
+        }
     }
 
     /// <inheritdoc />
@@ -314,7 +368,11 @@ public sealed class BillingAccountGrain(
         }
 
         var subtotal = lines.Sum(static x => x.Amount);
-        var credited = InvoiceBuilder.CreditTax(invoice, subtotal);
+        var earlier = state.State.CreditNotes
+            .Where(x => string.Equals(x.InvoiceNumber, invoice.Number, StringComparison.Ordinal))
+            .ToList();
+
+        var credited = InvoiceBuilder.CreditTax(invoice, subtotal, earlier);
         if (credited.TryGetError(out var taxError)) {
             return Result<CreditNote>.Failure(taxError);
         }
@@ -413,6 +471,29 @@ public sealed class BillingAccountGrain(
         }
 
         return InvoiceBuilder.Draft(tenantId, periodStart, options.Issuer, profile, lines.ToImmutable(), [.. versions], tax);
+    }
+
+    // ── The month close ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Registers the month-close reminder unless it's already registered.</summary>
+    /// <remarks>
+    ///     ⚠ Registered only when <c>GetReminder</c> answers null, for the reason <c>BudgetGrain</c>
+    ///     gives: re-registering on every attach would push the tick out by an hour each time. A
+    ///     failure is logged and not returned—the subscription is attached either way, and attaching
+    ///     it again re-arms.
+    /// </remarks>
+    async Task ArmMonthCloseAsync() {
+        try {
+            if (await this.GetReminder(MonthCloseReminder) is null) {
+                _ = await this.RegisterOrUpdateReminder(
+                    MonthCloseReminder,
+                    IBillingAccountGrain.MonthCloseTick,
+                    IBillingAccountGrain.MonthCloseTick
+                );
+            }
+        } catch (Exception error) when (error is not OperationCanceledException) {
+            logger.LogWarning(error, "Tenant {Tenant}'s billing account could not arm its month close", tenantId);
+        }
     }
 
     // ── Reads over state ─────────────────────────────────────────────────────────────────────────

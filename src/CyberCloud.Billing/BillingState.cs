@@ -32,6 +32,14 @@ public sealed class BillingAccountState {
     /// <summary>Every credit note, in issue order. Append-only.</summary>
     [Id(4)]
     public List<CreditNote> CreditNotes { get; set; } = [];
+
+    /// <summary>
+    ///     The month the first subscription was attached in, and the first month the month close
+    ///     finalizes. Null until a subscription is attached. An earlier month is finalized only when
+    ///     someone asks for it by name.
+    /// </summary>
+    [Id(5)]
+    public DateTimeOffset? FirstMonth { get; set; }
 }
 
 /// <summary>What <c>InvoiceNumberingGrain</c> persists: one counter per issuer and series.</summary>

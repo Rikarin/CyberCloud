@@ -81,41 +81,12 @@ public sealed class BillingAcrossTheHostsTests : IAsyncLifetime {
         await Task.WhenAll(redis.DisposeAsync().AsTask(), tenantShard.DisposeAsync().AsTask(), platformShard.DisposeAsync().AsTask());
 
     [Fact]
-    public async Task ACostQueryABudgetAndAnInvoiceDraftCrossFromTheGatewayToTheSilo() {
+    public async Task ACostQueryABudgetAndAnInvoiceCrossFromTheGatewayToTheSiloAndSurviveARestart() {
         var ct = TestContext.Current.CancellationToken;
         var gatewayPort = FreePort();
-        const string storage = ServiceDefaults.Storage.CyberCloudStorageOptions.SectionName;
 
-        await using var silo = await SiloComposition.BuildAsync(
-            [
-                "--environment", "Development",
-                "--urls", "http://127.0.0.1:0",
-                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
-                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={gatewayPort}",
-                $"--{storage}:Hot:ConnectionString={redis.GetConnectionString()}",
-                $"--{storage}:Durable:Shards:{TenantShard}={tenantShard.GetConnectionString()}",
-                $"--{storage}:Durable:Shards:{PlatformShard}={platformShard.GetConnectionString()}",
-                $"--{storage}:Durable:NullTenantShard={PlatformShard}",
-                $"--{storage}:Durable:BootstrapShard={TenantShard}",
-                // The issuer a deployment configures — no default exists, by design (BillingOptions).
-                "--CyberCloud:Billing:Issuer:Code=cc-hosts-test",
-                "--CyberCloud:Billing:Issuer:LegalName=Cyber Cloud Hosts Test s.r.o.",
-                "--CyberCloud:Billing:Issuer:Country=CZ",
-                "--CyberCloud:Billing:Issuer:VatId=CZ00000001",
-                "--CyberCloud:Billing:Issuer:NumberPrefix=HT"
-            ]
-        );
-        await silo.StartAsync(ct);
-
-        await using var gateway = await GatewayComposition.BuildAsync(
-            [
-                "--environment", "Development",
-                "--urls", "http://127.0.0.1:0",
-                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={gatewayPort}",
-                "--CyberCloud:Gateway:Identity:Issuer=http://127.0.0.1:1"
-            ]
-        );
-        await gateway.StartAsync(ct);
+        var silo = await StartSiloAsync(gatewayPort, ct);
+        var gateway = await StartGatewayAsync(gatewayPort, ct);
 
         // ── A tenant with a subscription, usage and a reader, set up over the gateway's client ────────
         var client = gateway.Services.GetRequiredService<IGrainFactory>();
@@ -126,8 +97,13 @@ public sealed class BillingAcrossTheHostsTests : IAsyncLifetime {
         (await grains.GetGrain<Tenancy.Contracts.ISubscriptionGrain>(GrainKeys.Subscription(subscription)).CreateAsync("billing"))
             .IsSuccess.ShouldBeTrue();
 
-        var hour = new DateTimeOffset(DateTimeOffset.UtcNow.Year, DateTimeOffset.UtcNow.Month, DateTimeOffset.UtcNow.Day, DateTimeOffset.UtcNow.Hour, 0, 0, TimeSpan.Zero)
-            .AddHours(-1);
+        // ⚠ THE MONTH'S FIRST HOUR, and the first version took the hour before now. In the first UTC hour
+        // of a month that was last month's, which the monthly budget below doesn't count, so the test
+        // failed for an hour every month. The month's first hour is this month's whenever the test runs,
+        // and while it's still under way the budget and the cost view count it all the same.
+        var now = DateTimeOffset.UtcNow;
+        var month = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
+        var hour = month;
         var path = $"/tenants/{tenant:D}/subscriptions/{subscription:D}/resourceGroups/prod/providers/CyberCloud.Compute/virtualMachines/web";
 
         var appended = await grains.GetGrain<IUsageLedgerGrain>(GrainKeys.Subscription(subscription))
@@ -223,7 +199,7 @@ public sealed class BillingAcrossTheHostsTests : IAsyncLifetime {
         (await account.ConfigureAsync(new() { LegalName = "Firma s.r.o.", Country = "CZ", Currency = "EUR" })).IsSuccess.ShouldBeTrue();
         (await account.AttachSubscriptionAsync(subscription)).IsSuccess.ShouldBeTrue();
 
-        var draft = (await account.PreviewAsync(new(hour.Year, hour.Month, 1, 0, 0, 0, TimeSpan.Zero))).GetValueOrThrow();
+        var draft = (await account.PreviewAsync(month)).GetValueOrThrow();
         draft.Status.ShouldBe(InvoiceStatus.Draft);
         draft.Lines.ShouldHaveSingleItem().Amount.ShouldBe(1.00m);
         draft.Tax.RatePercent.ShouldBe(21m);
@@ -232,26 +208,105 @@ public sealed class BillingAcrossTheHostsTests : IAsyncLifetime {
         //
         // Two months back, so the 48-hour window has passed whatever day this runs. No usage then: a
         // zero invoice is still a document and still takes the next number.
-        var closed = new DateTimeOffset(hour.Year, hour.Month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(-2);
+        var closed = month.AddMonths(-2);
         var finalized = (await account.FinalizeAsync(closed)).GetValueOrThrow();
 
         finalized.Number.ShouldStartWith("HT-INV-");
         finalized.Lines.ShouldBeEmpty();
 
-        // ⚠ Deactivated first, so the read below is a new activation loading its state from PostgreSQL
-        // through the durable tier's JSON serializer — the round trip in-memory storage cannot make.
-        await account.DeactivateAsync();
+        // ── 5. The month close: armed in the silo's Redis reminder table, and callable across ────────
+        //
+        // The account was attached this month, so the close owns no month yet and answers an empty
+        // array. What crosses here is the new invokable and its result, not a finalization.
+        (await account.CloseMonthsAsync()).GetValueOrThrow().ShouldBeEmpty();
 
-        var reread = (await account.GetInvoiceAsync(finalized.Number)).GetValueOrThrow();
-        reread.InvoiceId.ShouldBe(finalized.InvoiceId);
-        reread.Issuer.ShouldBe(finalized.Issuer);
-        reread.Customer.ShouldBe(finalized.Customer);
-        reread.Tax.ShouldBe(finalized.Tax);
-        reread.PeriodStart.ShouldBe(closed);
+        var armed = await silo.Services.GetRequiredService<IReminderTable>().ReadRow(account.GetGrainId(), "close-months");
+        armed.ShouldNotBeNull("attaching a subscription arms the month close, in the table the production silo uses");
+        armed.Period.ShouldBe(IBillingAccountGrain.MonthCloseTick);
+
+        // ── 6. A new silo over the same storage ──────────────────────────────────────────────────────
+        //
+        // ⚠ A RESTART, NOT A DEACTIVATION. The first version deactivated the account alone and re-read an
+        // invoice with no lines. Below, every activation is gone: the account, the budget, the ledger and
+        // the numbering singleton each load their state from PostgreSQL through the durable tier's JSON
+        // serializer, the round trip CyberCloud.Billing.Tests' in-memory storage can't make.
+        await gateway.StopAsync(ct);
+        await silo.StopAsync(ct);
+        await gateway.DisposeAsync();
+        await silo.DisposeAsync();
+
+        gatewayPort = FreePort();
+        silo = await StartSiloAsync(gatewayPort, ct);
+        gateway = await StartGatewayAsync(gatewayPort, ct);
+
+        client = gateway.Services.GetRequiredService<IGrainFactory>();
+        account = client.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture)).GetGrain<IBillingAccountGrain>(GrainKeys.Tenant(tenant));
+
+        (await account.GetInvoiceAsync(finalized.Number)).GetValueOrThrow().ShouldBeEquivalentTo(finalized);
         (await account.GetAsync()).GetValueOrThrow().Subscriptions.ShouldBe([subscription]);
+        (await account.PreviewAsync(month)).GetValueOrThrow().Lines.ShouldHaveSingleItem().Amount.ShouldBe(1.00m, "the ledger survived too");
+
+        var budget = (await gateway.Services.GetRequiredService<IBudgetControlPlane>().GetAsync(tenant, budgetId, ct)).GetValueOrThrow();
+        budget.Actual.ShouldBe(1.00m);
+        budget.Spec.Thresholds.ShouldHaveSingleItem().Percent.ShouldBe(50m);
+        budget.Alerts.ShouldHaveSingleItem().ShouldBeEquivalentTo(held.Alerts.Single());
+
+        var numbering = client.GetGrain<IInvoiceNumberingGrain>(GrainKeys.PlatformSingleton(GrainKeys.InvoiceNumberingSingleton));
+        var audit = (await numbering.AuditAsync("cc-hosts-test", DocumentSeries.Invoice)).GetValueOrThrow();
+        audit.Allocated.ShouldBe(1, "one invoice, one number, and the counter kept it");
+        audit.Unconfirmed.ShouldBeEmpty();
 
         await gateway.StopAsync(ct);
         await silo.StopAsync(ct);
+        await gateway.DisposeAsync();
+        await silo.DisposeAsync();
+    }
+
+    /// <summary>Starts the real silo host over this test's Redis and its two PostgreSQL shards.</summary>
+    /// <param name="gatewayPort">The port the silo's gateway listens on, and the gateway host dials.</param>
+    /// <param name="ct">The test's token.</param>
+    async Task<WebApplication> StartSiloAsync(int gatewayPort, CancellationToken ct) {
+        const string storage = ServiceDefaults.Storage.CyberCloudStorageOptions.SectionName;
+
+        var silo = await SiloComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={gatewayPort}",
+                $"--{storage}:Hot:ConnectionString={redis.GetConnectionString()}",
+                $"--{storage}:Durable:Shards:{TenantShard}={tenantShard.GetConnectionString()}",
+                $"--{storage}:Durable:Shards:{PlatformShard}={platformShard.GetConnectionString()}",
+                $"--{storage}:Durable:NullTenantShard={PlatformShard}",
+                $"--{storage}:Durable:BootstrapShard={TenantShard}",
+                // The issuer a deployment configures — no default exists, by design (BillingOptions).
+                "--CyberCloud:Billing:Issuer:Code=cc-hosts-test",
+                "--CyberCloud:Billing:Issuer:LegalName=Cyber Cloud Hosts Test s.r.o.",
+                "--CyberCloud:Billing:Issuer:Country=CZ",
+                "--CyberCloud:Billing:Issuer:VatId=CZ00000001",
+                "--CyberCloud:Billing:Issuer:NumberPrefix=HT"
+            ]
+        );
+
+        await silo.StartAsync(ct);
+        return silo;
+    }
+
+    /// <summary>Starts the real gateway host, its cluster client dialing <paramref name="gatewayPort" />.</summary>
+    /// <param name="gatewayPort">The silo's gateway port.</param>
+    /// <param name="ct">The test's token.</param>
+    static async Task<WebApplication> StartGatewayAsync(int gatewayPort, CancellationToken ct) {
+        var gateway = await GatewayComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={gatewayPort}",
+                "--CyberCloud:Gateway:Identity:Issuer=http://127.0.0.1:1"
+            ]
+        );
+
+        await gateway.StartAsync(ct);
+        return gateway;
     }
 
     static PostgreSqlContainer Shard() =>

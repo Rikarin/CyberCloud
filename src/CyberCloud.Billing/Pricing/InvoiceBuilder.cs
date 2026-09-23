@@ -143,18 +143,43 @@ public static class InvoiceBuilder {
     /// <summary>The tax a credit note carries: the invoice's treatment and rate, on the credit's subtotal.</summary>
     /// <param name="invoice">The invoice credited.</param>
     /// <param name="subtotal">The credit's subtotal, negative.</param>
+    /// <param name="earlier">Every credit note already issued against <paramref name="invoice" />.</param>
     /// <remarks>
-    ///     ⚠ <b>Not a fresh quote.</b> A credit note corrects a document; it takes the treatment that
-    ///     document had, even if the customer's country or the rate has changed since. Re-quoting
-    ///     would credit tax at a rate that was never charged.
+    ///     <para>
+    ///         ⚠ <b>Not a fresh quote.</b> A credit note corrects a document; it takes the treatment
+    ///         that document had, even if the customer's country or the rate has changed since.
+    ///         Re-quoting would credit tax at a rate that was never charged.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             Rounded on everything credited so far, not on this note alone—the first version did
+    ///             the second, and it moved money.
+    ///         </b> The invoice's tax is rounded once, on its subtotal. Rounding each note's share again
+    ///         gains up to half a cent per note: two credits of 0.03 against a 0.06 subtotal at 21 %
+    ///         returned 0.02 of tax on an invoice that charged 0.01. So this note's tax is the tax on
+    ///         every credit so far, rounded once, less what the earlier notes already carried, and the
+    ///         total never exceeds the invoice's own. Crediting a whole invoice in any number of notes
+    ///         returns exactly the tax it charged.
+    ///     </para>
     /// </remarks>
-    public static Result<TaxQuote> CreditTax(Invoice invoice, decimal subtotal) {
+    public static Result<TaxQuote> CreditTax(Invoice invoice, decimal subtotal, IReadOnlyCollection<CreditNote> earlier) {
         ArgumentNullException.ThrowIfNull(invoice);
+        ArgumentNullException.ThrowIfNull(earlier);
 
-        var amount = MoneyRounding.Round(subtotal * invoice.Tax.RatePercent / 100m, invoice.Currency);
+        var creditedBase = earlier.Sum(static x => x.Subtotal);
+        var creditedTax = earlier.Sum(static x => x.Tax.Amount);
 
-        return amount.TryGetError(out var error)
-            ? Result<TaxQuote>.Failure(error)
-            : Result<TaxQuote>.Success(invoice.Tax with { Base = subtotal, Amount = amount.GetValueOrThrow() });
+        var cumulative = MoneyRounding.Round((creditedBase + subtotal) * invoice.Tax.RatePercent / 100m, invoice.Currency);
+        if (cumulative.TryGetError(out var error)) {
+            return Result<TaxQuote>.Failure(error);
+        }
+
+        // Every figure here is negative, so Max is the smaller credit. The cap binds only when the
+        // invoice's tax isn't this rate on its subtotal; the Min keeps a note from ever charging tax.
+        var total = Math.Max(cumulative.GetValueOrThrow(), -invoice.Tax.Amount);
+        var amount = Math.Min(total - creditedTax, 0m);
+
+        return Result<TaxQuote>.Success(invoice.Tax with { Base = subtotal, Amount = amount });
     }
 }

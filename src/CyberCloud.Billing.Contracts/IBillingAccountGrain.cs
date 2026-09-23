@@ -56,8 +56,14 @@ public interface IBillingAccountGrain : IGrainWithStringKey {
     /// </remarks>
     Task<Result<BillingAccountSnapshot>> ConfigureAsync(BillingProfile profile);
 
-    /// <summary>Attaches a subscription, so its usage lands on this account's invoices.</summary>
-    /// <param name="subscriptionId">A subscription in this tenant. Attaching twice is a no-op.</param>
+    /// <summary>
+    ///     Attaches a subscription, so its usage lands on this account's invoices, and arms the month
+    ///     close—<see cref="CloseMonthsAsync" />.
+    /// </summary>
+    /// <param name="subscriptionId">
+    ///     A subscription in this tenant. Attaching twice changes nothing but re-arms a month close
+    ///     that failed to arm the first time.
+    /// </param>
     Task<Result<BillingAccountSnapshot>> AttachSubscriptionAsync(Guid subscriptionId);
 
     /// <summary>The account as it stands.</summary>
@@ -80,6 +86,28 @@ public interface IBillingAccountGrain : IGrainWithStringKey {
     ///     late-usage window has passed.
     /// </returns>
     Task<Result<Invoice>> FinalizeAsync(DateTimeOffset periodStart);
+
+    /// <summary>
+    ///     Closes the months that are due: finalizes, oldest first, every month since the first
+    ///     subscription was attached whose late-usage window has passed and that has no invoice yet.
+    /// </summary>
+    /// <returns>
+    ///     The invoices this call finalized, oldest first, or an empty array when nothing was due. On
+    ///     the first month that can't be finalized—no profile, no issuer, a currency no meter is priced
+    ///     in—the call stops and returns that refusal. The months before it stay finalized and
+    ///     <see cref="ListInvoicesAsync" /> lists them.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>This is the month close, and the account runs it itself.</b> Attaching a subscription
+    ///     arms a reminder that calls this every <see cref="MonthCloseTick" />, so an account that
+    ///     carries a subscription and has a profile is invoiced on the 3rd of each month with nobody
+    ///     asking. Calling it directly is safe at any time: a finalized month answers its stored
+    ///     invoice, and a month inside its window is left alone.
+    /// </remarks>
+    Task<Result<ImmutableArray<Invoice>>> CloseMonthsAsync();
+
+    /// <summary>How often the month-close reminder runs <see cref="CloseMonthsAsync" />.</summary>
+    static readonly TimeSpan MonthCloseTick = TimeSpan.FromHours(1);
 
     /// <summary>Every finalized invoice, in the order they were finalized.</summary>
     Task<Result<ImmutableArray<Invoice>>> ListInvoicesAsync();
@@ -141,8 +169,9 @@ public interface IInvoiceNumberingGrain : IGrainWithStringKey {
     /// <param name="issuer">The issuer. Its <see cref="InvoiceIssuer.Code" /> keys the sequence and its prefix spells the number.</param>
     /// <param name="series">Invoice or credit note — two independent sequences per issuer.</param>
     /// <param name="documentKey">
-    ///     What the number is for — <c>{tenant:N}/{yyyy-MM}</c> for an invoice, the credit note's id for
-    ///     a credit note. The same key always answers the same number.
+    ///     What the number is for — <c>{tenant:N}/{yyyy-MM}</c> for an invoice, and
+    ///     <c>{tenant:N}/{request id}</c> for a credit note, so a retried request gets the number its
+    ///     first attempt was given. The same key always answers the same number.
     /// </param>
     Task<Result<string>> AllocateAsync(InvoiceIssuer issuer, DocumentSeries series, string documentKey);
 

@@ -169,7 +169,7 @@ public sealed class ProviderRegistryTests {
     [InlineData(CostQueryAddress.ProviderNamespace)]
     [InlineData("cybercloud.costmanagement")]
     public void AProviderMayNotDeclareTheCostManagementNamespace(string spelling) {
-        // ⚠ THE FOURTH RESERVATION (#38). {scope}/providers/CyberCloud.CostManagement/query on a
+        // ⚠ RESERVED FOR THE COST QUERY (#38). {scope}/providers/CyberCloud.CostManagement/query on a
         // resource group is a nine-segment resource collection path, and the gateway routes the whole
         // namespace to the cost query BEFORE it looks at the registry — CostQueryAddress's remarks.
         Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new NamespacedProvider(spelling)]))

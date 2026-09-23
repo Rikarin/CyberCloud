@@ -64,6 +64,9 @@ public sealed class BillingCluster : IAsyncLifetime {
         NumberPrefix = "CCT"
     };
 
+    /// <summary>The silo's own container — where its <c>IReminderTable</c> is a singleton.</summary>
+    public IServiceProvider SiloServices => ((InProcessSiloHandle)cluster.Primary).SiloHost.Services;
+
     /// <summary>The cluster's grain factory. ⚠ Tenant-unaware — a client.</summary>
     public IGrainFactory Grains => cluster.GrainFactory;
 
@@ -183,6 +186,19 @@ public sealed class BillingCluster : IAsyncLifetime {
 
         var written = await For(tenant).GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(tenant)).WriteAsync(tuple.GetValueOrThrow());
         written.IsSuccess.ShouldBeTrue(written.Error?.Message);
+    }
+
+    /// <summary>Deletes one ReBAC tuple <see cref="GrantAsync" /> wrote.</summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="on">The object.</param>
+    /// <param name="relation">The relation.</param>
+    /// <param name="subject">The subject.</param>
+    public async Task RevokeAsync(Guid tenant, ObjectRef on, string relation, SubjectRef subject) {
+        var tuple = RelationTuple.Create(on, relation, subject);
+        tuple.IsSuccess.ShouldBeTrue(tuple.Error?.Message);
+
+        var deleted = await For(tenant).GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(tenant)).DeleteAsync(tuple.GetValueOrThrow());
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
     }
 
     /// <summary>A sending service with an email channel on the in-memory carrier, as a tenant's Communication resources would configure it.</summary>

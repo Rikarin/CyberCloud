@@ -142,8 +142,8 @@ enum RouteKind {
     ///     subscription or a resource group. docs/plan/22 § Cost visibility, issue #38.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The eleventh kind, and the second <c>POST</c> that is not an action</b> — arranged
-    ///     exactly as <see cref="ResourceGraphQuery" /> is, under the third reserved namespace
+    ///     ⚠ <b>A kind of its own, and the second <c>POST</c> that is not an action</b> — arranged
+    ///     exactly as <see cref="ResourceGraphQuery" /> is, under its own reserved namespace
     ///     (<c>CostQueryAddress.ProviderNamespace</c>): asked before the scope, resource and action
     ///     grammars, one grammar under the namespace and a <c>400</c> naming it for anything else.
     ///     On a resource group the address is also a nine-segment resource collection path, so the
@@ -542,7 +542,7 @@ static class GatewayRouter {
             );
         }
 
-        // ── The cost query, under the third reserved namespace (#38). ─────────────────────────
+        // ── The cost query, under its own reserved namespace (#38). ───────────────────────────
         //
         // ⚠ THE RESOURCE GRAPH'S ARRANGEMENT, AND HERE THE ORDER AGAINST THE GRAMMARS BELOW IS NOT
         // FREE. On a resource group, {rg}/providers/CyberCloud.CostManagement/query is a well-formed

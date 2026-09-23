@@ -158,7 +158,7 @@ public sealed class ProviderRegistry : IProviderRegistry {
                 );
             }
 
-            // ⚠ THE FOURTH RESERVATION, FOR THE SAME ROUTING REASON (#38). The cost query is served at
+            // ⚠ RESERVED FOR THE COST QUERY, FOR THE RESOURCE GRAPH'S ROUTING REASON (#38). It is served at
             // {scope}/providers/CyberCloud.CostManagement/query (CostQueryAddress), which on a
             // resource group is a nine-segment resource collection path, and the gateway routes the
             // whole namespace to the cost query before it looks at the registry.

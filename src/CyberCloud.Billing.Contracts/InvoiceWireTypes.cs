@@ -293,7 +293,10 @@ public sealed record CreditNoteLine {
 [GenerateSerializer]
 [Alias("CyberCloud.Billing.CreditNote")]
 public sealed record CreditNote {
-    /// <summary>This credit note's identity — the key its number is allocated under.</summary>
+    /// <summary>
+    ///     This credit note's identity. ⚠ Not the key its number is allocated under: that is
+    ///     <c>{tenant:N}/{request id}</c>, because a retry mints a new id and must get the same number.
+    /// </summary>
     [Id(0)]
     public Guid CreditNoteId { get; init; }
 

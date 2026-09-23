@@ -77,6 +77,13 @@ public sealed class CostQueryGrain(IGrainFactory grains, UsagePricing pricing) :
         var wholeSubscription = await MayReadAsync(ObjectTypes.Subscription, SubscriptionObjectId(), caller);
 
         // ── 2. The priced usage in scope. ─────────────────────────────────────────────────────
+        //
+        // ⚠ BEFORE THE NO IS KNOWN, AND A STRANGER PAYS FOR THE READ. A caller who may read nothing still
+        // makes this grain read the ledger and rate up to CostQueryRequest.MaxDays before the 404. It
+        // can't be decided earlier: a reader of one resource is found only by the resource ids the rows
+        // carry, since no list of a subscription's resources exists here, and ListObjects' reverse index
+        // may miss (IListObjectsGrain's remarks), which would turn that reader's answer into a 404. The
+        // bound is the one every caller has: one ledger read, one period cap.
         var rated = await pricing.RateAsync(tenantId, subscriptionId, from, to);
         if (rated.TryGetError(out var rateError)) {
             return Result<CostQueryResult>.Failure(rateError);

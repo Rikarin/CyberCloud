@@ -7,7 +7,7 @@ namespace CyberCloud.Core.Resources;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The third reserved namespace, reserved for the reason the other two are.</b>
+///         ⚠ <b>A reserved namespace, reserved for the reason its siblings are.</b>
 ///         <see cref="ResourceGraphAddress" /> and <see cref="RoleAssignmentId" /> each claim a
 ///         namespace a provider may not register, because the path they serve has the shape of a
 ///         provider's collection: on a resource group this address is nine segments with

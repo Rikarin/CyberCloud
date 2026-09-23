@@ -37,6 +37,27 @@ public sealed class WebhookSignatureTests {
         verified.ObjectId.ShouldBe("pi_1");
     }
 
+    /// <summary>
+    ///     ⚠ A known answer, computed outside this code: every other test here signs with
+    ///     <see cref="StripePaymentServiceProvider.Sign" /> and verifies with the same method, so a
+    ///     wrong scheme—the <c>{t}.{body}</c> payload, the secret's bytes—would pass them all.
+    /// </summary>
+    /// <remarks>
+    ///     The expected value is OpenSSL's, not .NET's:
+    ///     <c>printf '%s' '1789041600.{Payload}' | openssl dgst -sha256 -hmac 'cc-known-answer-not-a-stripe-secret'</c>.
+    ///     That's Stripe's documented scheme—HMAC-SHA256 keyed by the whole signing secret as text,
+    ///     over the timestamp, a dot, and the raw body. The secret doesn't start with <c>whsec_</c>, so
+    ///     it's plainly not a key, and the scheme doesn't care about the prefix.
+    /// </remarks>
+    [Fact]
+    public void TheSignatureMatchesAnIndependentlyComputedStripeSignature() {
+        const string knownSecret = "cc-known-answer-not-a-stripe-secret";
+        const string expected = "b9c0f89c574934fb4270511587c3312561af6953bb7ee24bea19961351309c13";
+
+        Convert.ToHexStringLower(StripePaymentServiceProvider.Sign(knownSecret, 1789041600, Payload)).ShouldBe(expected);
+        Stripe(knownSecret).VerifyWebhook(Payload, $"t=1789041600,v1={expected}", Now).IsSuccess.ShouldBeTrue();
+    }
+
     [Fact]
     public void AnAlteredPayloadIsRefused() {
         var header = Header(Now.ToUnixTimeSeconds(), Payload);

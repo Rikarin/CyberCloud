@@ -268,7 +268,7 @@ public static class SiloComposition {
                 // that an emitted usage record lands and a cost query answers.
                 //
                 // ⚠ The issuer is bound from CyberCloud:Billing:Issuer and has no default: a silo
-                // without it serves drafts, costs and budgets and refuses to finalize — BillingOptions.
+                // without it prices costs and budgets and refuses an invoice, draft or final — BillingOptions.
                 .AddCyberCloudMetering()
                 .AddCyberCloudBilling(BillingOptions.Bind(silo.Configuration))
                 // ── The first tenant's prerequisites — docs/plan/05 § The shard map, docs/plan/06 ─────

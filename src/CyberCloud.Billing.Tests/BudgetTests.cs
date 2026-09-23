@@ -125,6 +125,37 @@ public sealed class BudgetTests(BillingCluster cluster) : IAsyncLifetime {
         budget.Sent().ShouldHaveSingleItem().Body.ShouldContain($"subscription {budget.Subscription:D}");
     }
 
+    /// <summary>
+    ///     The same disclosure the other way round: once the grant is revoked, the budget stops showing
+    ///     the subscription's spend it read while it held one—and doesn't re-alert when it's back.
+    /// </summary>
+    [Fact]
+    public async Task ARevokedGrantTakesTheSubscriptionsFiguresWithIt() {
+        TestClock.Instance.Reset();
+        var budget = await BudgetAsync(10m, [Actual(50m)], BudgetScope.Subscription);
+        var subscription = ObjectRef.Of(ObjectTypes.Subscription, budget.Subscription);
+        var itself = SubjectRef.Of(ObjectTypes.Resource, budget.Id);
+
+        await budget.UseAsync("dev", 400m);
+        await cluster.GrantAsync(budget.Tenant, subscription, Relations.Reader, itself);
+        (await budget.EvaluateAsync()).Fired.ShouldBe(1);
+
+        await cluster.RevokeAsync(budget.Tenant, subscription, Relations.Reader, itself);
+        (await budget.EvaluateAsync()).Evaluated.ShouldBeFalse();
+
+        var held = await budget.HeldAsync();
+        held.Actual.ShouldBe(0m);
+        held.Forecast.ShouldBe(0m);
+        held.Alerts.ShouldHaveSingleItem().Figure.ShouldBe(0m, "the alert stays, and the figure it carried goes");
+
+        await cluster.GrantAsync(budget.Tenant, subscription, Relations.Reader, itself);
+        var back = await budget.EvaluateAsync();
+
+        back.Actual.ShouldBe(10.00m);
+        back.Fired.ShouldBe(0, "the 50 % threshold already fired this period");
+        budget.Sent().ShouldHaveSingleItem();
+    }
+
     [Fact]
     public async Task TheNextPeriodFiresAgain() {
         TestClock.Instance.Reset();

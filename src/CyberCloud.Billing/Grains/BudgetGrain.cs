@@ -125,6 +125,21 @@ public sealed class BudgetGrain(
         if (figures.TryGetError(out var error)) {
             state.State.LastEvaluatedAt = now;
             state.State.LastError = error.Message;
+
+            // ⚠ A REVOKED GRANT TAKES THE FIGURES WITH IT. The last evaluation's actual, forecast and
+            // alert figures were the subscription's spend, and a budget that may no longer read the
+            // subscription must not keep showing it to whoever reads the budget. The alerts themselves
+            // stay, without their figure, so a threshold that already fired this period doesn't fire
+            // again when the grant comes back.
+            if (error.Code == ErrorCode.AuthorizationFailed) {
+                state.State.Actual = 0m;
+                state.State.Forecast = 0m;
+
+                for (var i = 0; i < state.State.Alerts.Count; i++) {
+                    state.State.Alerts[i] = state.State.Alerts[i] with { Figure = 0m };
+                }
+            }
+
             await state.WriteStateAsync();
 
             return Result<BudgetEvaluationReport>.Success(new() { Evaluated = false, Error = error.Message });
@@ -281,6 +296,8 @@ public sealed class BudgetGrain(
     ///     revoked grant would keep disclosing the subscription's spend until the entry expired.
     ///     <c>BudgetTests.ASubscriptionBudgetSeesNothingUntilItIsGrantedReaderOnTheSubscription</c> is the
     ///     first case — it failed on the cached deny before this read was changed.
+    ///     <c>BudgetTests.ARevokedGrantTakesTheSubscriptionsFiguresWithIt</c> is the second, and
+    ///     <see cref="EvaluateAsync" /> clears the figures the revoked grant had let it read.
     /// </remarks>
     async Task<bool> BudgetMayReadSubscriptionAsync(BudgetSpec spec) {
         var checkedRead = await grains
