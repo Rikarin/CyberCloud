@@ -312,6 +312,18 @@ public sealed class IsolationCluster : IAsyncLifetime {
     public IRoleAssignmentManager Roles { get; private set; } = null!;
 
     /// <summary>
+    ///     The one clock the silo's grains and <see cref="Roles" /> both read, so a test that moves it
+    ///     moves "now" for the tuple store, the object grains, the check cache and the manager's
+    ///     <c>expiresOn</c> check at once. Issue #49.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Shared across the collection, like every other piece of this fixture. A test that
+    ///     advances it leaves it advanced; nothing else in the suite reads a duration off it that a
+    ///     few minutes could cross.
+    /// </remarks>
+    public ConformanceClock Clock { get; } = new();
+
+    /// <summary>
     ///     The cross-resource seam of docs/plan/08 § What the resource manager deliberately does not
     ///     do, over the real authorizer. <c>Views.For(owner)</c> is what a reconcile pass for
     ///     <c>owner</c> receives; <c>CrossResourceViewTests</c> and <c>ResourceWatchTests</c> attack
@@ -704,6 +716,8 @@ public sealed class IsolationCluster : IAsyncLifetime {
             // RoleAssignmentTests makes about it.
             new GrainPrincipalDirectory(cluster.GrainFactory),
             cluster.GrainFactory,
+            // The silo's own clock, so an expiresOn the manager accepts is one the store accepts.
+            Clock,
             NullLogger<RoleAssignmentService>.Instance
         );
 
@@ -809,7 +823,7 @@ public sealed class IsolationCluster : IAsyncLifetime {
             silo.UseInMemoryReminderService();
 
             silo.ConfigureServices(static services => {
-                    services.AddSingleton<IClock>(new ConformanceClock());
+                    services.AddSingleton<IClock>(Instance.Clock);
                     services.AddSingleton<IClusterConnectionFactory>(new FakeClusterConnectionFactory(Instance.World));
 
                     services.AddSingleton<IResourceProvider, SampleProvider>();

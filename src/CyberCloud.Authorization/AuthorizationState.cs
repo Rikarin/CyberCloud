@@ -32,6 +32,19 @@ public sealed class ObjectRelationsState {
     /// <summary>Relation → the subjects that hold it directly.</summary>
     [Id(0)]
     public Dictionary<string, List<SubjectRef>> ByRelation { get; set; } = [];
+
+    /// <summary>
+    ///     <c>relation@subject</c> (<c>TupleExpiry.Key</c>) → when that tuple stops granting. A tuple
+    ///     with no entry is permanent.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A second dictionary beside <see cref="ByRelation" /> rather than a richer element in
+    ///     it, so a row written before issue #49 reads back unchanged — every tuple in it permanent —
+    ///     with no migration. An expired tuple stays here until the store's sweep deletes it; the
+    ///     grain hides it from every read from the instant it expires.
+    /// </remarks>
+    [Id(1)]
+    public Dictionary<string, DateTimeOffset> Expiries { get; set; } = [];
 }
 
 /// <summary><c>ISubjectRelationsGrain</c>'s durable record — the reverse index.</summary>
@@ -86,6 +99,21 @@ public sealed class TupleStoreState {
     /// <summary>The next journal sequence number.</summary>
     [Id(2)]
     public long NextSequence { get; set; }
+
+    /// <summary>
+    ///     Every tuple the store last wrote with an expiry and hasn't since deleted or rewritten
+    ///     without one — what the expiry sweep walks. docs/plan/07 § Time-bounded relations.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Complete because the store is the tenant's one writer.</b> Grains can't be scanned,
+    ///     so a sweep that searched the forward index for expired tuples would need an enumeration
+    ///     that doesn't exist; the register is that enumeration, kept by the only component that
+    ///     writes tuples, in the same durable write that clears the journal entry. A tuple written
+    ///     straight into <c>IObjectRelationsGrain</c> is missing here — which is one more reason
+    ///     that interface's remarks forbid doing it.
+    /// </remarks>
+    [Id(3)]
+    public List<RelationTuple> Expiring { get; set; } = [];
 }
 
 /// <summary>One cached check answer.</summary>
@@ -107,6 +135,19 @@ public sealed class CheckCacheEntry {
     /// <summary>The schema version it was computed under.</summary>
     [Id(2)]
     public int SchemaVersion { get; set; }
+
+    /// <summary>
+    ///     The instant the answer stops being served, or <see langword="null" /> when no expiring
+    ///     tuple bears on it — <c>CheckResult.ValidUntil</c> as it was computed.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A memoised allow must never outlive the earliest expiry among the tuples that proved
+    ///     it</b> — docs/plan/07 § Time-bounded relations. The relation version can't enforce that,
+    ///     because an expiry moves no version, so the entry carries the instant itself and the cache
+    ///     compares it against the clock on every hit, in every mode.
+    /// </remarks>
+    [Id(3)]
+    public DateTimeOffset? ValidUntil { get; set; }
 }
 
 /// <summary><c>ICheckGrain</c>'s hot-tier record — the check cache for one object.</summary>
@@ -154,4 +195,11 @@ public sealed class MembershipIndexState {
     /// </summary>
     [Id(2)]
     public Dictionary<string, List<SubjectRef>> Usersets { get; set; } = [];
+
+    /// <summary>
+    ///     The relations whose closure leaves out an expiring edge. See
+    ///     <see cref="MembershipIndexSnapshot.Unclosed" />.
+    /// </summary>
+    [Id(3)]
+    public List<string> Unclosed { get; set; } = [];
 }

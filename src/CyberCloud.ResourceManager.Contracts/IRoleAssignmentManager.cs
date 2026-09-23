@@ -174,8 +174,17 @@ public interface IRoleAssignmentManager {
 public interface IRoleAssignmentStore {
     /// <summary>Writes the tuple. Idempotent: a tuple already present is a success.</summary>
     /// <param name="assignment">The assignment. A resource scope must carry its resolved id.</param>
+    /// <param name="expiresOn">
+    ///     When the grant ends, or <see langword="null" /> for a permanent one. A tuple already
+    ///     present takes this expiry, whatever it had — so a grant is extended, shortened, or made
+    ///     permanent by writing it again. docs/plan/07 § Time-bounded relations.
+    /// </param>
     /// <param name="cancellationToken">Cancels the write.</param>
-    Task<Result> GrantAsync(RoleAssignmentId assignment, CancellationToken cancellationToken = default);
+    Task<Result> GrantAsync(
+        RoleAssignmentId assignment,
+        DateTimeOffset? expiresOn,
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>Removes the tuple. Idempotent: a tuple already absent is a success.</summary>
     /// <param name="assignment">The assignment.</param>
@@ -183,13 +192,16 @@ public interface IRoleAssignmentStore {
     Task<Result> RevokeAsync(RoleAssignmentId assignment, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Whether the tuple is written <b>at this scope</b>. Direct only — an inherited grant
-    ///     answers <c>false</c>.
+    ///     Whether the tuple is written <b>at this scope</b>, and until when. Direct only — an
+    ///     inherited grant reads as absent.
     /// </summary>
     /// <param name="assignment">The assignment.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
-    /// <returns><c>true</c> if the exact tuple is in the object's forward index.</returns>
-    Task<Result<bool>> IsGrantedAsync(RoleAssignmentId assignment, CancellationToken cancellationToken = default);
+    /// <returns>
+    ///     The grant as it stands in the object's forward index. A tuple whose expiry has passed
+    ///     reads as absent, from that instant, whether or not the sweep has removed it yet.
+    /// </returns>
+    Task<Result<RoleAssignmentGrant>> FindAsync(RoleAssignmentId assignment, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Every assignment visible at a scope — the tuples written on it and the ones inherited
@@ -212,6 +224,20 @@ public interface IRoleAssignmentStore {
         RoleAssignmentCollectionId collection,
         CancellationToken cancellationToken = default
     );
+}
+
+/// <summary>
+///     One assignment's tuple as the store found it — <see cref="IRoleAssignmentStore.FindAsync" />.
+/// </summary>
+/// <param name="Granted">Whether the tuple is written, and live, at the scope.</param>
+/// <param name="ExpiresOn">When it stops granting, or <see langword="null" /> for a permanent grant or none.</param>
+/// <remarks>
+///     Not a wire type: the store is a service beside the manager, in the gateway, and nothing
+///     carries this across a grain call.
+/// </remarks>
+public readonly record struct RoleAssignmentGrant(bool Granted, DateTimeOffset? ExpiresOn) {
+    /// <summary>No tuple at the scope.</summary>
+    public static RoleAssignmentGrant Absent { get; } = new(false, null);
 }
 
 /// <summary>
@@ -352,6 +378,18 @@ public sealed record RoleAssignmentSnapshot {
     /// </remarks>
     [Id(7)]
     public bool Inherited { get; init; }
+
+    /// <summary>
+    ///     When the grant ends, or <see langword="null" /> for a permanent one — the body's
+    ///     <c>expiresOn</c>, docs/plan/07 § Time-bounded relations.
+    /// </summary>
+    /// <remarks>
+    ///     An assignment past this instant isn't rendered at all: a <c>GET</c> answers <c>404</c>, a
+    ///     listing leaves it out, and every check denies it — whether or not the sweep has removed
+    ///     the tuple yet.
+    /// </remarks>
+    [Id(8)]
+    public DateTimeOffset? ExpiresOn { get; init; }
 }
 
 /// <summary>
@@ -451,11 +489,13 @@ public sealed record RoleAssignmentPage {
 ///         </b>
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every property is optional, because the address already says everything.</b>
+///         ⚠ <b>Every property is optional, because the address already says everything but when.</b>
 ///         <c>RoleAssignmentName</c> is <c>{role}-{principalType}-{principalId}</c>, so a body of
-///         <c>{}</c> is a complete request. A property that is present must agree with the address,
-///         and a disagreement is a <c>400</c> naming both — trusting either one silently would grant
-///         something the caller did not spell.
+///         <c>{}</c> is a complete request for a permanent grant. Of the three properties that name
+///         the tuple, one that is present must agree with the address, and a disagreement is a
+///         <c>400</c> naming both — trusting either one silently would grant something the caller
+///         did not spell. <see cref="ExpiresOn" /> is the fourth and names nothing; its remarks say
+///         what it does instead.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -481,4 +521,24 @@ public static class RoleAssignmentBodyProperties {
 
     /// <summary>The role — <c>roleDefinitionId</c>. <c>owner</c>, <c>contributor</c> or <c>reader</c>.</summary>
     public const string RoleDefinitionId = "roleDefinitionId";
+
+    /// <summary>
+    ///     When the grant ends — <c>expiresOn</c>, an ISO 8601 instant with an offset, or
+    ///     <c>null</c>. Issue #49's just-in-time roles.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Unlike the other three, this one isn't in the address and doesn't have to
+    ///         agree with anything.</b> The name is the tuple and an expiry is a property of the
+    ///         tuple rather than part of it, so a <c>PUT</c> carrying it sets it and a <c>PUT</c>
+    ///         without it makes the assignment permanent — a <c>PUT</c> states the whole assignment,
+    ///         and one that silently kept an old expiry would leave a grant ending at a time the
+    ///         caller never sent.
+    ///     </para>
+    ///     <para>
+    ///         It must be later than now, and it needs an explicit offset: a local time with none
+    ///         would end the grant at an instant that depends on which host parsed it.
+    ///     </para>
+    /// </remarks>
+    public const string ExpiresOn = "expiresOn";
 }

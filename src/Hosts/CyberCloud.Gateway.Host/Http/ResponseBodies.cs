@@ -186,14 +186,14 @@ static class ResponseBodies {
 
     /// <summary>
     ///     A role assignment, in Azure's envelope: <c>id</c>, <c>name</c>, <c>type</c> and a
-    ///     <c>properties</c> object carrying <c>scope</c>, <c>principalId</c>, <c>principalType</c>
-    ///     and <c>roleDefinitionId</c>.
+    ///     <c>properties</c> object carrying <c>scope</c>, <c>principalId</c>, <c>principalType</c>,
+    ///     <c>roleDefinitionId</c> and <c>expiresOn</c>.
     /// </summary>
     /// <param name="assignment">The assignment as the manager rendered it.</param>
     /// <remarks>
-    ///     ⚠ The property names are <c>RoleAssignmentBodyProperties</c>' — the same three a
+    ///     ⚠ The property names are <c>RoleAssignmentBodyProperties</c>' — the same four a
     ///     <c>PUT</c> body may carry — so a client can read a <c>GET</c> back and send it as a
-    ///     <c>PUT</c> unchanged. <c>roleDefinitionId</c> is a role <i>name</i>; there are no role
+    ///     <c>PUT</c> unchanged, a just-in-time grant's end included. <c>roleDefinitionId</c> is a role <i>name</i>; there are no role
     ///     definitions to address, and that class's remarks say why.
     /// </remarks>
     public static string RoleAssignment(RoleAssignmentSnapshot assignment) {
@@ -267,6 +267,16 @@ static class ResponseBodies {
         writer.WriteString(RoleAssignmentBodyProperties.PrincipalType, assignment.PrincipalType);
         writer.WriteString(RoleAssignmentBodyProperties.RoleDefinitionId, assignment.RoleDefinitionId);
         writer.WriteBoolean("inherited", assignment.Inherited);
+
+        // Written on every row, null included, for the reason `inherited` is: one shape for a
+        // generated client. UTC and round-trippable, so a GET sent back as a PUT sets the same
+        // instant — issue #49.
+        if (assignment.ExpiresOn is { } expiresOn) {
+            writer.WriteString(RoleAssignmentBodyProperties.ExpiresOn, expiresOn.ToUniversalTime());
+        } else {
+            writer.WriteNull(RoleAssignmentBodyProperties.ExpiresOn);
+        }
+
         writer.WriteEndObject();
         writer.WriteEndObject();
     }

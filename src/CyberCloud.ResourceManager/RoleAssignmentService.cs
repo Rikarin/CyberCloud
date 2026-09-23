@@ -1,4 +1,5 @@
 using CyberCloud.Authorization.Contracts;
+using CyberCloud.Core.Time;
 using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
 using System.Collections.Frozen;
@@ -89,6 +90,20 @@ namespace CyberCloud.ResourceManager;
 ///         ⚠ <b>Every grain reference goes through <c>ForTenant</c>.</b> Held by the gateway, which
 ///         is an Orleans <i>client</i>; <c>CC1006</c> keeps that true after the next edit.
 ///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             A just-in-time role is an assignment with an <c>expiresOn</c>, and nothing more is
+///             built (issue #49).
+///         </b> The expiry rides on the tuple, the engine stops honouring it at that instant with no
+///         write, and the store's sweep removes it and audits the end — docs/plan/07
+///         § Time-bounded relations. Azure's PIM has more around it: an <i>eligible</i> assignment
+///         that a principal <i>activates</i> for a bounded time, with a justification, a maximum
+///         duration, and an approval. docs/plan/01's catalogue row calls the tuple with an expiry
+///         "the whole feature" and describes none of that, so the eligible-to-active flow is
+///         recorded as owed in the same section rather than invented here. What a tenant has
+///         today is an owner granting a role that ends on its own.
+///     </para>
 /// </remarks>
 public sealed class RoleAssignmentService(
     IScopeAuthorizer scopes,
@@ -96,6 +111,7 @@ public sealed class RoleAssignmentService(
     IRoleAssignmentStore store,
     IPrincipalDirectory directory,
     IGrainFactory grains,
+    IClock clock,
     ILogger<RoleAssignmentService> logger
 )
     : IRoleAssignmentManager {
@@ -158,10 +174,12 @@ public sealed class RoleAssignmentService(
 
         var assignment = resolved.GetValueOrThrow();
 
-        var agreed = BodyAgrees(request.Body, assignment);
+        var agreed = BodyAgrees(request.Body, assignment, clock.UtcNow);
         if (agreed.TryGetError(out var bodyError)) {
             return Result<RoleAssignmentSnapshot>.Failure(bodyError);
         }
+
+        var expiresOn = agreed.GetValueOrThrow().ExpiresOn;
 
         var permitted = await AuthorizeAsync(
             assignment,
@@ -208,26 +226,40 @@ public sealed class RoleAssignmentService(
             );
         }
 
-        var existed = await store.IsGrantedAsync(assignment, cancellationToken);
+        var existed = await store.FindAsync(assignment, cancellationToken);
         if (existed.TryGetError(out var readError)) {
             return Result<RoleAssignmentSnapshot>.Failure(readError);
         }
 
-        var granted = await store.GrantAsync(assignment, cancellationToken);
+        var granted = await store.GrantAsync(assignment, expiresOn, cancellationToken);
         if (granted.TryGetError(out var grantError)) {
             return Result<RoleAssignmentSnapshot>.Failure(grantError);
         }
 
-        logger.LogInformation(
-            "{Caller} granted '{Role}' on '{Scope}' to {PrincipalType}:{PrincipalId}.",
-            request.Caller,
-            assignment.Name.Role,
-            assignment.ScopePath,
-            assignment.Name.PrincipalType,
-            assignment.Name.PrincipalId
-        );
+        if (expiresOn is { } until) {
+            logger.LogInformation(
+                "{Caller} granted '{Role}' on '{Scope}' to {PrincipalType}:{PrincipalId} until {ExpiresOn:O}.",
+                request.Caller,
+                assignment.Name.Role,
+                assignment.ScopePath,
+                assignment.Name.PrincipalType,
+                assignment.Name.PrincipalId,
+                until
+            );
+        } else {
+            logger.LogInformation(
+                "{Caller} granted '{Role}' on '{Scope}' to {PrincipalType}:{PrincipalId}.",
+                request.Caller,
+                assignment.Name.Role,
+                assignment.ScopePath,
+                assignment.Name.PrincipalType,
+                assignment.Name.PrincipalId
+            );
+        }
 
-        return Result<RoleAssignmentSnapshot>.Success(Snapshot(assignment, !existed.GetValueOrThrow()));
+        return Result<RoleAssignmentSnapshot>.Success(
+            Snapshot(assignment, !existed.GetValueOrThrow().Granted, expiresOn)
+        );
     }
 
     /// <inheritdoc />
@@ -249,13 +281,15 @@ public sealed class RoleAssignmentService(
             return Result<RoleAssignmentSnapshot>.Failure(denied);
         }
 
-        var granted = await store.IsGrantedAsync(assignment, cancellationToken);
-        if (granted.TryGetError(out var readError)) {
+        var found = await store.FindAsync(assignment, cancellationToken);
+        if (found.TryGetError(out var readError)) {
             return Result<RoleAssignmentSnapshot>.Failure(readError);
         }
 
-        return granted.GetValueOrThrow()
-            ? Result<RoleAssignmentSnapshot>.Success(Snapshot(assignment, false))
+        var grant = found.GetValueOrThrow();
+
+        return grant.Granted
+            ? Result<RoleAssignmentSnapshot>.Success(Snapshot(assignment, false, grant.ExpiresOn))
             : NotFound<RoleAssignmentSnapshot>(assignment.Path);
     }
 
@@ -337,7 +371,7 @@ public sealed class RoleAssignmentService(
         // between two pages moves only its own row.
         var rows = listed.GetValueOrThrow()
             .OrderBy(static x => x.Path, StringComparer.Ordinal)
-            .OrderBy(x => x.Path, StringComparer.Ordinal)
+            .Where(x => request.Continuation.Length == 0 || string.CompareOrdinal(x.Path, request.Continuation) > 0)
             .Take(request.PageSize + 1)
             .ToList();
 
@@ -581,7 +615,7 @@ public sealed class RoleAssignmentService(
     ///     <c>Reader</c> for an address that said <c>reader</c> is a client that has two spellings
     ///     of one thing and is about to have a worse day elsewhere.
     /// </remarks>
-    static Result BodyAgrees(string body, RoleAssignmentId assignment) {
+    static Result<AssignmentBody> BodyAgrees(string body, RoleAssignmentId assignment, DateTimeOffset now) {
         JsonDocument document;
 
         try {
@@ -589,7 +623,7 @@ public sealed class RoleAssignmentService(
         } catch (JsonException exception) {
             // The parser's message describes the caller's own input, not our stack —
             // docs/plan/08 § Errors bans exception detail, and this is not any.
-            return Result.Failure(
+            return Result<AssignmentBody>.Failure(
                 ErrorCode.InvalidRequestBody,
                 $"The request body is not valid JSON: {exception.Message}"
             );
@@ -597,7 +631,7 @@ public sealed class RoleAssignmentService(
 
         using (document) {
             if (document.RootElement.ValueKind != JsonValueKind.Object) {
-                return Result.Failure(
+                return Result<AssignmentBody>.Failure(
                     ErrorCode.InvalidRequestBody,
                     $"The request body is a JSON {document.RootElement.ValueKind.ToString().ToLowerInvariant()}. "
                     + "A role assignment body is a JSON object, and '{}' is a complete one — the "
@@ -607,12 +641,83 @@ public sealed class RoleAssignmentService(
 
             var name = assignment.Name;
 
-            return Agree(document.RootElement, RoleAssignmentBodyProperties.RoleDefinitionId, name.Role)
+            var disagreement = Agree(document.RootElement, RoleAssignmentBodyProperties.RoleDefinitionId, name.Role)
                 ?? Agree(document.RootElement, RoleAssignmentBodyProperties.PrincipalType, name.PrincipalType)
-                ?? Agree(document.RootElement, RoleAssignmentBodyProperties.PrincipalId, name.PrincipalId)
-                ?? Result.Success;
+                ?? Agree(document.RootElement, RoleAssignmentBodyProperties.PrincipalId, name.PrincipalId);
+
+            if (disagreement is { } refused) {
+                return Result<AssignmentBody>.Failure(refused.Error!);
+            }
+
+            return ExpiresOn(document.RootElement, now);
         }
     }
+
+    /// <summary>
+    ///     The body's <c>expiresOn</c>: absent or <c>null</c> for a permanent grant, otherwise an ISO
+    ///     8601 instant with an explicit offset that is later than now.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The offset is required, not assumed.</b> <c>System.Text.Json</c> reads a timestamp
+    ///     with no offset as the parsing host's local time, so <c>2026-09-24T09:00:00</c> would end
+    ///     a grant at an instant that depends on which gateway replica took the request. Refusing it
+    ///     costs a client one character; accepting it costs an owner a grant that ends an hour early
+    ///     or late with nothing in the response to say so. The stored instant is UTC, which is what
+    ///     every read renders.
+    /// </remarks>
+    static Result<AssignmentBody> ExpiresOn(JsonElement body, DateTimeOffset now) {
+        if (!body.TryGetProperty(RoleAssignmentBodyProperties.ExpiresOn, out var value)
+            || value.ValueKind == JsonValueKind.Null) {
+            return Result<AssignmentBody>.Success(new(null));
+        }
+
+        var text = value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
+
+        if (value.ValueKind != JsonValueKind.String
+            || !value.TryGetDateTimeOffset(out var parsed)
+            || !HasExplicitOffset(text)) {
+            return Result<AssignmentBody>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"The body's '{RoleAssignmentBodyProperties.ExpiresOn}' is "
+                + $"'{(value.ValueKind == JsonValueKind.String ? text : value.ValueKind.ToString().ToLowerInvariant())}', "
+                + "which is not an ISO 8601 instant with an offset — for example '2026-09-24T09:00:00Z'. "
+                + "It is when the grant ends, and it needs the offset so that the instant does not "
+                + "depend on where it was parsed. Leave it out, or send null, for a permanent grant."
+            );
+        }
+
+        var expiresOn = parsed.ToUniversalTime();
+
+        if (expiresOn <= now) {
+            return Result<AssignmentBody>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"The body's '{RoleAssignmentBodyProperties.ExpiresOn}' is {expiresOn:O}, which is not later "
+                + $"than now ({now.ToUniversalTime():O}). A grant that has already ended grants nothing — "
+                + "docs/plan/07 § Time-bounded relations. To end a grant now, DELETE it."
+            );
+        }
+
+        return Result<AssignmentBody>.Success(new(expiresOn));
+    }
+
+    static bool HasExplicitOffset(string text) {
+        // The shapes ISO 8601 allows for an offset: 'Z', or ±hh:mm / ±hhmm / ±hh after the time.
+        var time = text.IndexOf('T', StringComparison.OrdinalIgnoreCase);
+        if (time < 0) {
+            return false;
+        }
+
+        if (text.EndsWith('Z') || text.EndsWith('z')) {
+            return true;
+        }
+
+        var tail = text[(time + 1)..];
+        return tail.Contains('+', StringComparison.Ordinal) || tail.Contains('-', StringComparison.Ordinal);
+    }
+
+    /// <summary>What a <c>PUT</c> body says beyond what the address already does.</summary>
+    /// <param name="ExpiresOn">When the grant ends, in UTC, or <see langword="null" /> for a permanent grant.</param>
+    readonly record struct AssignmentBody(DateTimeOffset? ExpiresOn);
 
     static Result? Agree(JsonElement body, string property, string expected) {
         if (!body.TryGetProperty(property, out var value)) {
@@ -633,7 +738,7 @@ public sealed class RoleAssignmentService(
             );
     }
 
-    static RoleAssignmentSnapshot Snapshot(RoleAssignmentId assignment, bool created) =>
+    static RoleAssignmentSnapshot Snapshot(RoleAssignmentId assignment, bool created, DateTimeOffset? expiresOn) =>
         new() {
             Path = assignment.Path,
             Name = assignment.Name.Render(),
@@ -641,7 +746,8 @@ public sealed class RoleAssignmentService(
             RoleDefinitionId = assignment.Name.Role,
             PrincipalType = assignment.Name.PrincipalType,
             PrincipalId = assignment.Name.PrincipalId,
-            Created = created
+            Created = created,
+            ExpiresOn = expiresOn
         };
 
     static Result<T> NotFound<T>(string path) where T : notnull =>

@@ -1071,7 +1071,147 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         }
     }
 
+    // ── Just-in-time roles (issue #49) ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AJustInTimeGrantReadsBackItsExpiryAndEndsOnItsOwnWithNoRevoke() {
+        var subscription = Guid.Parse("88888888-0000-4000-8000-0000000000a5");
+        var resource = await SeedAsync(subscription);
+        var jane = await UserAsync("jane");
+        var group = ScopeId.Group(Grant, subscription, Group);
+        var assignment = RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, jane));
+        var expiresOn = cluster.Clock.UtcNow.AddHours(1);
+
+        try {
+            // ── The grant: the same PUT as any other, with the one property the address lacks ──
+            var granted = await AssignWithBody(
+                assignment,
+                $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":"{{{expiresOn.ToString("O", CultureInfo.InvariantCulture)}}}"}"""
+            );
+
+            granted.IsSuccess.ShouldBeTrue(granted.Error?.Message);
+            granted.GetValueOrThrow().Created.ShouldBeTrue();
+            granted.GetValueOrThrow().ExpiresOn.ShouldBe(expiresOn);
+
+            var read = await ReadAsync(assignment);
+            read.IsSuccess.ShouldBeTrue(read.Error?.Message);
+            read.GetValueOrThrow().ExpiresOn.ShouldBe(expiresOn, "a GET must say when the grant ends");
+
+            (await ListAsync(RoleAssignmentCollectionId.OnScope(group), Owner)).GetValueOrThrow()
+                .Assignments.ShouldContain(
+                    x => x.Path == assignment.Path && x.ExpiresOn == expiresOn,
+                    "the collection must say when the grant ends"
+                );
+
+            // Two hops below the tuple, as the M1 exit story asks — a time-bounded Reader reads.
+            (await AllowedAsync(resource, Permissions.Read, jane)).ShouldBeTrue();
+
+            // ── The hour passes. Nobody revokes. ──────────────────────────────────────────────
+            cluster.Clock.Advance(TimeSpan.FromHours(1));
+
+            (await AllowedAsync(resource, Permissions.Read, jane)).ShouldBeFalse(
+                "a just-in-time Reader still reads after the grant's expiry"
+            );
+
+            var gone = await ReadAsync(assignment);
+            gone.IsFailure.ShouldBeTrue("an expired assignment still reads back");
+            gone.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+            (await ListAsync(RoleAssignmentCollectionId.OnScope(group), Owner)).GetValueOrThrow()
+                .Assignments.ShouldNotContain(x => x.Path == assignment.Path, "an expired assignment is still listed");
+
+            // A revoke of an expired grant is the absence it asks for — a success, as ever.
+            (await cluster.Roles.RevokeAsync(
+                    new() { Path = assignment.Path, Caller = IsolationCluster.Caller(Grant, Owner) },
+                    TestContext.Current.CancellationToken
+                )).IsSuccess.ShouldBeTrue();
+        } finally {
+            cluster.Clock.Reset();
+        }
+    }
+
+    [Fact]
+    public async Task APutWithoutExpiresOnMakesAJustInTimeGrantPermanent() {
+        var subscription = Guid.Parse("88888888-0000-4000-8000-0000000000a6");
+        var resource = await SeedAsync(subscription);
+        var perry = await UserAsync("perry");
+        var assignment = RoleAssignmentId.OnScope(
+            ScopeId.Group(Grant, subscription, Group),
+            new(Relations.Reader, SubjectTypes.User, perry)
+        );
+
+        try {
+            var expiresOn = cluster.Clock.UtcNow.AddHours(1).ToString("O", CultureInfo.InvariantCulture);
+            (await AssignWithBody(assignment, $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":"{{{expiresOn}}}"}"""))
+                .IsSuccess.ShouldBeTrue();
+
+            // ⚠ A PUT states the whole assignment. One that kept the old expiry because the body
+            // didn't mention it would end a grant at a time this caller never sent.
+            var permanent = await Assign(assignment, Owner);
+            permanent.IsSuccess.ShouldBeTrue(permanent.Error?.Message);
+            permanent.GetValueOrThrow().Created.ShouldBeFalse("the tuple was already there");
+            permanent.GetValueOrThrow().ExpiresOn.ShouldBeNull();
+
+            cluster.Clock.Advance(TimeSpan.FromDays(2));
+
+            (await AllowedAsync(resource, Permissions.Read, perry)).ShouldBeTrue(
+                "a PUT without expiresOn left the earlier expiry in place"
+            );
+            (await ReadAsync(assignment)).GetValueOrThrow().ExpiresOn.ShouldBeNull();
+        } finally {
+            cluster.Clock.Reset();
+        }
+    }
+
+    [Theory]
+    [InlineData("past")]
+    [InlineData("now")]
+    [InlineData("no-offset")]
+    [InlineData("number")]
+    [InlineData("not-a-date")]
+    public async Task AnExpiresOnThatIsNotAFutureInstantWithAnOffsetIsRefusedAndNothingIsGranted(string shape) {
+        var subscription = Guid.Parse("88888888-0000-4000-8000-0000000000a7");
+        await SeedAsync(subscription);
+        var nora = await UserAsync("nora-" + shape);
+        var assignment = RoleAssignmentId.OnScope(
+            ScopeId.Group(Grant, subscription, Group),
+            new(Relations.Reader, SubjectTypes.User, nora)
+        );
+
+        var now = cluster.Clock.UtcNow;
+        var value = shape switch {
+            "past" => $"\"{now.AddMinutes(-1).ToString("O", CultureInfo.InvariantCulture)}\"",
+            "now" => $"\"{now.ToString("O", CultureInfo.InvariantCulture)}\"",
+            "no-offset" => $"\"{now.AddHours(1).UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture)}\"",
+            "number" => "1758628800",
+            _ => "\"tomorrow\""
+        };
+
+        var refused = await AssignWithBody(
+            assignment,
+            $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":{{{value}}}}"""
+        );
+
+        refused.IsFailure.ShouldBeTrue($"an expiresOn of {value} was accepted");
+        refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+
+        var subjects = await SubjectsOfAsync(ScopeId.Group(Grant, subscription, Group), Relations.Reader);
+        subjects.ShouldNotContain(x => x.Id == nora, "a refused grant wrote its tuple anyway");
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
+
+    Task<Result<RoleAssignmentSnapshot>> AssignWithBody(RoleAssignmentId assignment, string body) =>
+        cluster.Roles.AssignAsync(
+            new() { Path = assignment.Path, Body = body, Caller = IsolationCluster.Caller(Grant, Owner) },
+            TestContext.Current.CancellationToken
+        );
+
+    Task<Result<RoleAssignmentSnapshot>> ReadAsync(RoleAssignmentId assignment) =>
+        cluster.Roles.ReadAsync(
+            new() { Path = assignment.Path, Caller = IsolationCluster.Caller(Grant, Owner) },
+            TestContext.Current.CancellationToken
+        );
 
     Task<Result<RoleAssignmentSnapshot>> Assign(RoleAssignmentId assignment, string caller) =>
         cluster.Roles.AssignAsync(

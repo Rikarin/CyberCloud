@@ -27,11 +27,15 @@ namespace CyberCloud.Authorization.Contracts;
 /// </remarks>
 [Alias("CyberCloud.Authorization.IObjectRelationsGrain")]
 public interface IObjectRelationsGrain : IGrainWithStringKey {
-    /// <summary>Records <c>this#relation@subject</c>. Idempotent.</summary>
+    /// <summary>Records <c>this#relation@subject</c>, with its expiry. Idempotent.</summary>
     /// <param name="relation">The relation.</param>
     /// <param name="subject">The subject.</param>
-    /// <returns>Whether the tuple was new.</returns>
-    Task<Result<bool>> WriteAsync(string relation, SubjectRef subject);
+    /// <param name="expiresOn">
+    ///     When the tuple stops granting, or <see langword="null" /> for a permanent one. A tuple
+    ///     already present takes this expiry, whatever it had before — including losing one.
+    /// </param>
+    /// <returns>Whether anything stored changed: the tuple was new, or its expiry moved.</returns>
+    Task<Result<bool>> WriteAsync(string relation, SubjectRef subject, DateTimeOffset? expiresOn);
 
     /// <summary>Removes <c>this#relation@subject</c>. Idempotent.</summary>
     /// <param name="relation">The relation.</param>
@@ -39,7 +43,14 @@ public interface IObjectRelationsGrain : IGrainWithStringKey {
     /// <returns>Whether a tuple was removed.</returns>
     Task<Result<bool>> DeleteAsync(string relation, SubjectRef subject);
 
-    /// <summary>Every tuple on this object.</summary>
+    /// <summary>Every live tuple on this object, with the expiry of each one that has one.</summary>
+    /// <remarks>
+    ///     ⚠ <b>A tuple whose expiry has passed isn't returned</b>, by this method or by any other
+    ///     read here, from the instant it expires — whether or not the sweep has deleted it yet.
+    ///     This is the one place the check path applies the clock, which is what lets
+    ///     <c>Check</c> deny an expired grant with no write having happened. docs/plan/07
+    ///     § Time-bounded relations.
+    /// </remarks>
     Task<Result<ObjectRelationsSnapshot>> ReadAsync();
 
     /// <summary>
@@ -115,7 +126,11 @@ public interface ISubjectRelationsGrain : IGrainWithStringKey {
     /// <returns>Whether an entry was removed.</returns>
     Task<Result<bool>> RemoveAsync(SubjectIndexEntry entry);
 
-    /// <summary>Every entry.</summary>
+    /// <summary>Every entry whose tuple is still live.</summary>
+    /// <remarks>
+    ///     An entry whose <see cref="SubjectIndexEntry.ExpiresOn" /> has passed is left out, so a
+    ///     listing drops an expired grant at the same instant a check does.
+    /// </remarks>
     Task<Result<IReadOnlyList<SubjectIndexEntry>>> ListAsync();
 
     /// <summary>Drops this activation — the seam the interruption test uses.</summary>
@@ -158,12 +173,21 @@ public interface ITupleStoreGrain : IGrainWithStringKey {
     /// <summary>
     ///     Writes a tuple to both grains, in order, and bumps the tenant's relation version.
     /// </summary>
-    /// <param name="tuple">The tuple.</param>
+    /// <param name="tuple">
+    ///     The tuple. A <see cref="RelationTuple.ExpiresOn" /> must be later than now; writing a
+    ///     tuple that's already present replaces its expiry, so a repeated write is how a grant is
+    ///     extended, shortened, or made permanent.
+    /// </param>
     /// <returns>The token that covers the write — docs/plan/07 § Consistency.</returns>
+    /// <remarks>
+    ///     ⚠ A write with an expiry arms the store's sweep reminder before anything is journalled,
+    ///     and fails if it can't: an expiring grant nothing will ever sweep or audit is refused
+    ///     rather than written. docs/plan/07 § Time-bounded relations.
+    /// </remarks>
     Task<Result<ConsistencyToken>> WriteAsync(RelationTuple tuple);
 
     /// <summary>Removes a tuple from both grains, in the same order, and bumps the version.</summary>
-    /// <param name="tuple">The tuple.</param>
+    /// <param name="tuple">The tuple. Its <see cref="RelationTuple.ExpiresOn" /> is ignored: a delete removes the tuple whatever expiry it has.</param>
     /// <returns>The token that covers the revoke.</returns>
     Task<Result<ConsistencyToken>> DeleteAsync(RelationTuple tuple);
 
@@ -178,6 +202,26 @@ public interface ITupleStoreGrain : IGrainWithStringKey {
 
     /// <summary>How many writes are journalled but not yet reconciled.</summary>
     Task<Result<int>> PendingCountAsync();
+
+    /// <summary>
+    ///     Replays the journal, then deletes every registered tuple whose expiry has passed and
+    ///     audits each deletion — what the store's reminder does on every tick, run by hand.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Housekeeping, not enforcement.</b> An expired tuple has granted nothing since the
+    ///         instant it expired, because every read drops it. The sweep takes it out of storage,
+    ///         out of the reverse index and out of the membership index's unclosed marks, bumps the
+    ///         relation version as any delete does, and writes the audit event that says when the
+    ///         grant ended. A sweep that runs an hour late changes no check's answer.
+    ///     </para>
+    ///     <para>
+    ///         The store registers every tuple written with an expiry — it's the tenant's single
+    ///         writer, so the register is complete by construction — and holds a reminder while the
+    ///         register or the journal is non-empty. docs/plan/07 § Time-bounded relations.
+    ///     </para>
+    /// </remarks>
+    Task<Result<ExpirySweepReport>> SweepExpiredAsync();
 
     /// <summary>Drops this activation.</summary>
     Task DeactivateAsync();

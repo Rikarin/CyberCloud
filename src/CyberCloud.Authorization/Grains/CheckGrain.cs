@@ -3,6 +3,7 @@ using CyberCloud.Authorization.Evaluation;
 using CyberCloud.Core;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Resources;
+using CyberCloud.Core.Time;
 using Orleans.Multitenant;
 using System.Globalization;
 
@@ -74,12 +75,25 @@ namespace CyberCloud.Authorization.Grains;
 ///         permission becomes untraceable. The bound on staleness is the caller's choice of mode,
 ///         not a clock.
 ///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             The one clock an entry does answer to is the grant's own, and it binds every mode,
+///             <c>MinimizeLatency</c> included.
+///         </b> An entry carries <c>CheckCacheEntry.ValidUntil</c> — the earliest expiry among the
+///         tuples that proved it (<see cref="CheckEvaluator" />'s remarks) — and from that instant
+///         it isn't served. That's not a TTL: it's a fact about the answer, not a guess about how
+///         stale is too stale, and it's needed because an expiry moves no relation version, so
+///         nothing else would ever retire the entry. A memoised allow that outlived its grant would
+///         be the JIT feature's whole failure mode; docs/plan/07 § Time-bounded relations.
+///     </para>
 /// </remarks>
 public sealed class CheckGrain(
     [PersistentState("check", StorageTiers.Hot)]
     IPersistentState<CheckCacheState> cache,
     AuthorizationSchema schema,
-    AuthorizationLimits limits
+    AuthorizationLimits limits,
+    IClock clock
 )
     : Grain, ICheckGrain {
     Guid tenantId;
@@ -131,6 +145,7 @@ public sealed class CheckGrain(
         if (mode.Mode != ConsistencyMode.FullyConsistent
             && cache.State.Entries.TryGetValue(key, out var cached)
             && cached.SchemaVersion == schema.Version
+            && TupleExpiry.IsLive(cached.ValidUntil, clock.UtcNow)
             && (mode.Mode == ConsistencyMode.MinimizeLatency
                 || cached.Version >= mode.Token!.Version)) {
             AuthorizationMetrics.RecordCacheHit();
@@ -140,7 +155,8 @@ public sealed class CheckGrain(
                     Allowed = cached.Allowed,
                     Outcome = cached.Allowed ? CheckOutcome.Allowed : CheckOutcome.Denied,
                     Token = new() { TenantId = tenantId, Version = cached.Version },
-                    FromCache = true
+                    FromCache = true,
+                    ValidUntil = cached.ValidUntil
                 }
             );
         }
@@ -174,7 +190,10 @@ public sealed class CheckGrain(
 
         if (evaluation.IsCacheable) {
             cache.State.Entries[key] = new() {
-                Allowed = evaluation.Allowed, Version = current.Version, SchemaVersion = schema.Version
+                Allowed = evaluation.Allowed,
+                Version = current.Version,
+                SchemaVersion = schema.Version,
+                ValidUntil = evaluation.ValidUntil
             };
 
             dirty = true;
@@ -192,7 +211,8 @@ public sealed class CheckGrain(
                 FromCache = false,
                 TriplesVisited = evaluation.TriplesVisited,
                 MaxDepthReached = evaluation.MaxDepthReached,
-                CapDetail = evaluation.CapDetail
+                CapDetail = evaluation.CapDetail,
+                ValidUntil = evaluation.ValidUntil
             }
         );
     }
@@ -326,9 +346,13 @@ public sealed class CheckGrain(
     bool DropEntriesOlderThan(long version) {
         // docs/plan/07 § Caching across requests: "a write invalidates the tenant's whole check
         // cache. That is crude and it is right." Crude, at the granularity one grain can be crude
-        // at: everything this object has cached under an older version goes.
+        // at: everything this object has cached under an older version goes — and so does every
+        // entry whose grant has expired, which no version will ever retire.
+        var now = clock.UtcNow;
         var stale = cache.State.Entries
-            .Where(x => x.Value.Version < version || x.Value.SchemaVersion != schema.Version)
+            .Where(x => x.Value.Version < version
+                || x.Value.SchemaVersion != schema.Version
+                || !TupleExpiry.IsLive(x.Value.ValidUntil, now))
             .Select(static x => x.Key)
             .ToList();
 
