@@ -37,7 +37,7 @@ public static class StorageTiers {
 
     /// <summary>
     ///     PostgreSQL, sharded by tenant, synchronous replica. Tenants, subscriptions, resource
-    ///     desired state, users, ReBAC tuples, operations, the billing ledger. Loss tolerance is
+    ///     desired state, users, ReBAC tuples, operations, usage ledgers and invoices. Loss tolerance is
     ///     <b>zero</b> (docs/plan/02 § ADR-003).
     /// </summary>
     public const string Durable = "Durable";

@@ -270,6 +270,93 @@ type ClickHouseClusterListKeysResult struct {
 	Username string `json:"username"`
 }
 
+// BudgetChannel is the values /properties/notification/channel accepts. ⚠ Closed: the write path refuses anything else.
+type BudgetChannel string
+
+const (
+	BudgetChannelSms      BudgetChannel = "sms"
+	BudgetChannelWhatsapp BudgetChannel = "whatsapp"
+	BudgetChannelEmail    BudgetChannel = "email"
+	BudgetChannelPush     BudgetChannel = "push"
+	BudgetChannelVoice    BudgetChannel = "voice"
+)
+
+// BudgetPeriod is the values /properties/period accepts. ⚠ Closed: the write path refuses anything else.
+type BudgetPeriod string
+
+const (
+	BudgetPeriodMonthly   BudgetPeriod = "monthly"
+	BudgetPeriodQuarterly BudgetPeriod = "quarterly"
+	BudgetPeriodAnnually  BudgetPeriod = "annually"
+)
+
+// BudgetScope is the values /properties/scope accepts. ⚠ Closed: the write path refuses anything else.
+type BudgetScope string
+
+const (
+	BudgetScopeResourceGroup BudgetScope = "resourceGroup"
+	BudgetScopeSubscription  BudgetScope = "subscription"
+)
+
+// BudgetData is Budget: the body a caller writes. A spending limit for a resource group or a subscription, per month, quarter or year, with thresholds on the actual cost and on the forecast that alert through a sending service.
+type BudgetData struct {
+	// The region the budget is evaluated in.
+	Location string `json:"location"`
+	// The budget's own settings.
+	Properties *BudgetProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// BudgetProperties is The budget's own settings.
+type BudgetProperties struct {
+	// The amount for one period, in the billing account's currency.
+	Amount float64 `json:"amount"`
+	// Whether the budget is evaluated. Off keeps its history and stops the clock.
+	Enabled *bool `json:"enabled,omitempty"`
+	// Who is told, and how.
+	Notification *BudgetPropertiesNotification `json:"notification,omitempty"`
+	// How long a period is. Periods are calendar-aligned in UTC: a month, a quarter from January, April, July or October, or a year.
+	Period *BudgetPeriod `json:"period,omitempty"`
+	// What the figure covers: this resource group, or the whole subscription. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make.
+	Scope *BudgetScope `json:"scope,omitempty"`
+	// Percentages of the amount that alert, each at most once per period.
+	Thresholds *BudgetPropertiesThresholds `json:"thresholds,omitempty"`
+}
+
+// BudgetPropertiesNotification is Who is told, and how.
+type BudgetPropertiesNotification struct {
+	// Which of that service's channels carries it. The service must have the channel configured and enabled, or every alert is refused by name.
+	Channel BudgetChannel `json:"channel"`
+	// Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list. At least one and at most 20.
+	Recipients []string `json:"recipients"`
+	// The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this budget's resource group.
+	Service string `json:"service"`
+}
+
+// BudgetPropertiesThresholds is Percentages of the amount that alert, each at most once per period.
+type BudgetPropertiesThresholds struct {
+	// Percentages of the amount the period's cost so far is compared with — 50, 80 and 100 is the usual set. At least one threshold across both lists and at most 10; a body outside that is refused when the budget is reconciled.
+	Actual []float64 `json:"actual,omitempty"`
+	// Percentages of the amount the forecast is compared with. The forecast is linear on the trailing seven days, and an alert on it says it is an estimate.
+	Forecast []float64 `json:"forecast,omitempty"`
+}
+
+// BudgetResource is one Budget, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type BudgetResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data BudgetData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *BudgetResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
 // ValkeyCacheMaxmemoryPolicy is the values /properties/maxmemoryPolicy accepts. ⚠ Closed: the write path refuses anything else.
 type ValkeyCacheMaxmemoryPolicy string
 

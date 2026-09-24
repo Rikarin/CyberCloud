@@ -100,6 +100,9 @@ sealed class GatewayHarness {
     /// <summary>The recording identity administration stage 8 dispatches every other identity address to (#41).</summary>
     public RecordingIdentityAdministration Identity { get; } = new();
 
+    /// <summary>The recording cost query stage 8 dispatches a cost route to.</summary>
+    public RecordingCostQuery Costs { get; } = new();
+
     /// <summary>The operation reader, scripted so an LRO poll needs no cluster.</summary>
     public ScriptedOperationReader Operations { get; } = new();
 
@@ -174,7 +177,7 @@ sealed class GatewayHarness {
             new RateLimitStage(new GatewayRateLimiter(Counters)),
             new RouteStage(new OneTypeRegistry(), Options),
             new ValidateStage(Options),
-            new DispatchStage(Manager, Scopes, Roles, graph ?? Graph, Deployments, Invitations, Identity, Operations, Tickets, Options)
+            new DispatchStage(Manager, Scopes, Roles, graph ?? Graph, Deployments, Invitations, Identity, Costs, Operations, Tickets, Options)
         ];
 
         pipeline = new(Stages, NullLogger<GatewayPipeline>.Instance);

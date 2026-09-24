@@ -249,7 +249,7 @@ target scale.
 | Security | Malware scanning | 1.5 | #35 | |
 | Fabric | ⚠ Agent-initiated cluster connections (BYO behind NAT) | 1.5 | #36 | ◐ `ContainerService/connectedClusters` published (#36, 2026-09-15): the agent (`charts/agent`, `CyberCloud.Agent.Host`), the gateway's tunnel endpoint, the tunnel grain and the connection grain's route through it, with the attach flow — create, `listInstallCommand`, first heartbeat → `Succeeded` — pinned end to end in-process. ⚠ **Two halves are not landed and the row stays ◐ for both:** informers do not cross the tunnel (a watch is a stream, a frame has one answer), and **no suite crosses a real NAT** — the M2 exit criterion this row exists for is unproved until the "deliberately hostile BYO cluster" of [09 § Testing the fabric](09-kubernetes-fabric.md) exists. `charts/agent/conformance.yaml § owed` holds both |
 | ReBAC | `ListObjects`, Leopard index | 2.2 | #37 | ✅ `ListObjects` landed 2026-09-15 as `IListObjectsGrain` — a scoped reverse walk the resource list now intersects with instead of a `Check` per member. The Leopard index landed the same day as `IMembershipIndexGrain`, keyed by subject object and holding both directions, written by the tuple store as a step of every write and delete; `Check` tests membership against it and the walk reads a subject's closed usersets from it in one read. ⚠ **Owed, and recorded in [07 § The Leopard index](07-rebac-authorization.md)**: the materialization threshold, the roaring bitmap, a tenant-wide rebuild after a schema bump, and the resource-graph access column |
-| Billing | Rating, invoicing, PSP, tax service, cost views, budgets | 3.6 | #38 | |
+| Billing | Rating, invoicing, PSP, tax service, cost views, budgets | 3.6 | #38 | ◐ `Billing/budgets` published (#38, 2026-09-23) — an amount per month, quarter or year over a resource group or, once the budget itself is granted reader, a subscription, with thresholds on the actual cost and on the linear seven-day forecast that alert through a `Communication/services` resource. Behind it, in `CyberCloud.Billing`: **rating** over a committed, date-versioned price sheet with tiers per subscription per month and free tiers as zero-priced tiers; the **monthly invoice** per tenant billing account — a draft rated from the usage ledger on every read, finalized after the 48-hour late-usage window into an immutable document numbered gap-free per issuer, corrected only by credit note; the **cost query** at `{scope}/providers/CyberCloud.CostManagement/query` by resource, group, type, meter or day, every row filtered by ReBAC behind the one seam; **EU VAT** behind the tax seam; and a **Stripe adapter** behind the PSP seam, tested against `stripe/stripe-mock`. ⚠ **What is not landed, and the row stays ◐ for it** — [22 § What is owed](22-billing-metering-and-quota.md) lists each: nothing yet creates a billing account or attaches a subscription, so the month close — built, and armed by the first attach — closes nothing in production, and no deployment configures the invoice issuer it would need; dunning, the invoice PDF, cost by tag and the export, the PSP's host wiring and webhook endpoint, VIES validation, a debit note for late usage, the portal's cost page (#41), and storage rated on the declared size rather than a measurement. ⚠ The 0.4 claimed below is [22 § Effort](22-billing-metering-and-quota.md)'s *Budgets, alerts, forecast* line, the one line of the four whose every noun shipped |
 | Platform | Management groups, deployments (templates), shard pinning | 1.5 | #39 | ◐ **All three nouns have landed; the type list can show one of them.** *Deployments* landed 2026-09-23 as `Resources/deployments` — the one noun of the three that is a resource type — on nested operations built for it: the deployment's own `PUT` is an ordinary write whose operation is the parent, `DeploymentDriver` writes one child per template resource in dependency order through `IResourceManager.WriteChildAsync` *as the deployment's creator*, a child's failure fails the parent naming it, cancellation reaches the child in flight, rollback is recorded and not performed, and `whatIf` diffs a template against current state read as the caller — [08 § Long-running operations](08-resource-manager.md), with what is still owed about it recorded there. The other two landed 2026-09-18 and the type list cannot show either — both are scopes and platform operations, not resource types. *Management groups*: `/tenants/{t}/managementGroups/{name}` and its flat collection, the 26th grain-key shape (`mg/{name}`), `IManagementGroupGrain`, a `managementGroup` ReBAC type at `SchemaVersion` 3, subscriptions assigned by `PUT` with the `parent` edge *relinked* so the chain stays a chain, role assignments and their collection at the new scope, and the generated surfaces through `OpenApiEmitter.ScopePathItems` — [06 § The hierarchy](06-tenancy-and-resource-model.md), with the group move, the group-level lock and policy recorded there as owed. *Shard pinning*: `IShardMapGrain.PinAsync`'s placement half — `TenantCreateRequest.DurableShard` pins before the assignment — with the move refused by name; [05 § The shard map](05-state-and-storage.md) records the move as M3. ⚠ **The row stays ◐ for what each noun still owes, not for a missing noun**: the management-group move, group-level locks and policy; the shard move (M3); and deployments' outputs, conditions and copy loops, nested deployments, a performed rollback, and a what-if for a secret property — each recorded where its noun's section is. The 1.5 is not claimed |
 | SDKs | Python, Go | 1.0 | #40 | ◐ both generated from the published document 2026-09-15 into `generated/sdk-python` and `generated/sdk-go`, byte-compared by **Generated surfaces** and each handed to its own toolchain by a gate that reports ○ when that toolchain is absent. ⚠ Generated is not packaged, and neither has a credential type or a retry — [21 § Python and Go](21-cli-and-sdks.md) lists what is owed |
 | Portal | Cost analysis, metrics explorer, log search, identity admin | 2.3 | #41 | ◐ **Identity admin, three of its five nouns (#41, 2026-09-24)** — no resource type, so the type list can't show it: members, invitations and registered applications for a tenant owner, and the signed-in person's own sessions, over an identity administration API at the gateway under the reserved `CyberCloud.Identity` namespace ([10 § Shape](10-gateway-and-api.md), [11 § Sign-up and tenant creation](11-identity.md)) and a per-tenant directory index, the 32nd grain-key shape. A confidential client's secret is now minted by the platform and kept as a digest, so a client registered from the portal signs people in end to end. ⚠ Groups, MFA administration and sign-in logs are not landed — [20 § The pages that are not generated](20-portal.md) lists each with the rest of what is owed. The other three surfaces of this row are separate branches of #41 |
@@ -283,15 +283,15 @@ other — see [§ Running total](#running-total), which is where the consequence
 production behind NAT; the first managed mail domain sending with a clean reputation for 30 days;
 median time-to-add-a-managed-service measured and ≤ 2 engineer-weeks.
 
-⚠ **On "28 resource types": there are 41 today**, and twenty-two of them are this phase's — the `Data`
+⚠ **On "28 resource types": there are 42 today**, and twenty-two of them are this phase's — the `Data`
 row's four, `Mail/domains`, the `Communication` row's four, `Monitor/workspaces/alertRules`, the
 four that merged on 2026-09-15 from four branches that each counted only itself
 (`Storage/accounts/fileShares`, `Network/virtualNetworks/natGateways`,
 `ContainerService/connectedClusters` and `ContainerRegistry/feeds`), and the seven that merged on
 2026-09-18 from five branches that each counted only itself again (`Network/virtualNetworks/peerings`,
 `RecoveryServices/vaults`, `Monitor/workspaces/collectors`, `Dashboard/grafanas`,
-`Compute/virtualMachines`, `Compute/disks`, `Compute/images`), and `Resources/deployments` on 2026-09-23 (#39),
-which recounted in the same change. The other
+`Compute/virtualMachines`, `Compute/disks`, `Compute/images`), and `Resources/deployments` (#39) and `Billing/budgets` (#38) on 2026-09-23,
+each recounted in the same change. The other
 eighteen are counted, phase by phase, in [§ What has landed](#what-has-landed--recounted-2026-09-23) —
 which is also where to see that two of the 40 belong to phase 4 and one is phase 1's deliberately
 trivial sample. ⚠ **The count passed the criterion and the criterion is not met**: "28 resource
@@ -411,6 +411,14 @@ none of their numbers and re-ran the command a second time; 39 was right until #
 `Resources/deployments` on 2026-09-23, recounting in the same change; 40 is right. That is worth *establishing* rather than
 assuming, and it is cheap to establish twice because two independent producers can be asked for it.
 
+⚠ **#38 and #46 (`issue-46-policy`) conflict textually in seven files when merged**, counted by
+`git merge-tree` on 2026-09-24: this file, `ProviderRegistry` and `RegistryAndDriftTests` (both
+branches reserve a namespace at the same place in `ProviderRegistry.Build`), `GatewayRoute`,
+`DispatchStage`, and the gateway tests' `Fakes` and `GatewayHarness` (both add a constructor parameter
+and a route kind at the same line). The hunks read so far are two insertions at one place, so the
+resolution keeps both sides, the gateway's route tests say whether it was right, and the count above
+is re-run rather than taken from either branch.
+
 ⚠ **Four branches recounted to 24 on the same day from the same 23, and none of them was right
 after the others merged.** #30 counted `Storage/accounts/fileShares`, #31 `Network/virtualNetworks/natGateways`,
 #36 `ContainerService/connectedClusters` and #29 `ContainerRegistry/feeds`, each in its own phase-3
@@ -473,7 +481,7 @@ test could match and the check would quietly become a check of nothing.
 |---|---|---|
 | 1 — the deliberately trivial provider of exit criterion 1 | `Sample/widgets` | 1 |
 | 2 — M1 | `ContainerService/managedClusters`, `ContainerService/managedClusters/agentPools`, `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`, `ContainerRegistry/registries`, `Network/virtualNetworks`, `Network/virtualNetworks/subnets`, `Network/virtualNetworks/securityGroups`, `Network/virtualNetworks/loadBalancers`, `Network/publicIpAddresses`, `Storage/accounts`, `Storage/accounts/buckets`, `Monitor/workspaces`, `Terminal/consoles`, `KeyVault/vaults` | 16 |
-| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains`, `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions`, `Monitor/workspaces/alertRules`, `Storage/accounts/fileShares`, `Network/virtualNetworks/natGateways`, `ContainerService/connectedClusters`, `ContainerRegistry/feeds`, `Network/virtualNetworks/peerings`, `RecoveryServices/vaults`, `Monitor/workspaces/collectors`, `Dashboard/grafanas`, `Compute/virtualMachines`, `Compute/disks`, `Compute/images`, `Resources/deployments` | 22 |
+| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains`, `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions`, `Monitor/workspaces/alertRules`, `Storage/accounts/fileShares`, `Network/virtualNetworks/natGateways`, `ContainerService/connectedClusters`, `ContainerRegistry/feeds`, `Network/virtualNetworks/peerings`, `RecoveryServices/vaults`, `Monitor/workspaces/collectors`, `Dashboard/grafanas`, `Compute/virtualMachines`, `Compute/disks`, `Compute/images`, `Resources/deployments`, `Billing/budgets` | 23 |
 | 4 — M3 | `DBforMySQL/servers`, `Search/services` | 2 |
 | **Total** | | **40** |
 
@@ -516,21 +524,22 @@ this recount, and it is written down here so the next recount does not make it.
 | 0 — Prerequisites | ~~1.5~~ **1.1** | 1.1 | **0.4 ⊘** | Exact. Phase 0's heading *is* its row sum, so the dropped ADR-005 bump comes straight off |
 | 1 — Spine | 14 | 14.0 | — | Not reconciled here; only exit criterion 4 was checked |
 | 2 — M1 | 26 | 44.0 | **≥ 11.3 ✅** | 3.0 + 1.5 + 2.0 + 1.5 fully shipped rows, plus 3.3 of the `Network` row's split. Conservative: the partly-landed Managed Kubernetes (4.0) and Monitor (2.5) rows have no defensible split and are counted as zero. ⚠ Not conservative enough — the 3.0 row's ✅ means *published*, and #69 is open inside it; see below |
-| 3 — M2 | 28 | 38.4 | **7.2 ✅** | The whole `Data` row (4.4), the whole `Communication` row (2.0, 2026-09-15), and the `NAT gateways, peering` line of the `Network` row (0.8, 2026-09-18) — the one line of [14 § Effort](14-networking.md) that row has a per-noun split for, and both nouns are published. ⚠ `Mail`'s ◐ is counted as zero: one noun of five is published and the row has no defensible split. `Observability`'s ◐ is counted as zero for the same reason — alerts are one noun of four, and the 3.0 has no per-noun split to read |
+| 3 — M2 | 28 | 38.4 | **7.6 ✅** | The whole `Data` row (4.4), the whole `Communication` row (2.0, 2026-09-15), the `NAT gateways, peering` line of the `Network` row (0.8, 2026-09-18) — the one line of [14 § Effort](14-networking.md) that row has a per-noun split for, and both nouns are published — and the `Budgets, alerts, forecast` line of the `Billing` row (0.4, 2026-09-23), the one line of [22 § Effort](22-billing-metering-and-quota.md)'s four whose every noun shipped. ⚠ `Billing`'s other 3.2 is counted as zero: rating and invoicing landed without dunning, the PDF or tag views, and no line of them is whole. ⚠ `Mail`'s ◐ is counted as zero: one noun of five is published and the row has no defensible split. `Observability`'s ◐ is counted as zero for the same reason — alerts are one noun of four, and the 3.0 has no per-noun split to read |
 | 4 — M3 | 20 | 16.9 priced, 4 items unpriced | **1.8 ✅, 0.6 ⊘** | MariaDB 0.8 + OpenSearch 1.0 shipped; Qdrant's 0.6 void |
 
-**Between 68.8 and 89.1 EM to M3** — where this section said **69.6–89.1** from 2026-09-15 to
-2026-09-18, **71.6–89.1** from 2026-09-06 to 2026-09-15, and **~90** before that. ⚠ **The range is the finding, not a hedge**, and it is narrower
+**Between 68.4 and 89.1 EM to M3** — where this section said **68.8–89.1** from 2026-09-18 to
+2026-09-23, **69.6–89.1** from 2026-09-15 to 2026-09-18, **71.6–89.1** from 2026-09-06 to 2026-09-15,
+and **~90** before that. ⚠ **The range is the finding, not a hedge**, and it is narrower
 than the old single number was honest.
 
 The arithmetic, once, so it can be checked: the plan's own 89.5 loses phase 0's dropped 0.4 outright,
-which gives **89.1**. Against that sit 11.3 + 7.2 + 1.8 = **20.3 EM of rows whose every named type is
+which gives **89.1**. Against that sit 11.3 + 7.6 + 1.8 = **20.7 EM of rows whose every named type is
 published**. Work that is finished takes zero time on *any* path, so it can only make the remaining
 critical path shorter — but by **at most** its own size, and by **at least** nothing, and this document
-does not say which of its rows were on the critical path in the first place. 89.1 − 20.3 = **68.8** is
+does not say which of its rows were on the critical path in the first place. 89.1 − 20.7 = **68.4** is
 therefore the floor and 89.1 the ceiling.
 
-⚠ **That figure — 17.5 until 2026-09-15, 19.5 until 2026-09-18, 20.3 since — said "rows that are finished" until 2026-09-06, and this document's own annotations do not
+⚠ **That figure — 17.5 until 2026-09-15, 19.5 until 2026-09-18, 20.3 until 2026-09-23, 20.7 since — said "rows that are finished" until 2026-09-06, and this document's own annotations do not
 support the word.** [§ How to read the `Landed` column](#how-to-read-the-landed-column) defines ✅ as no
 more than *a published resource type in `openapi/2026-08-01.json` for every type the row names* — and
 one ✅ row inside it carries a live defect three tables above: **Postgres · Valkey · NATS**, 3.0 EM,
@@ -538,7 +547,7 @@ where #69 is open against the first because the seven-day recovery window return
 published type is not a working restore, and the same caution that counted Managed Kubernetes (4.0) and
 Monitor (2.5) as **zero** should not have skipped a row this page had already qualified. ⚠ **The floor
 survives and it is worth saying why rather than leaving it to be re-derived:** subtracting *more* than
-is truly finished can only push the result *down*, so 68.8 remains a valid lower bound — it is simply a
+is truly finished can only push the result *down*, so 68.4 remains a valid lower bound — it is simply a
 weaker one than it looked, and the ✅ column is a claim about the published document rather than about
 the feature.
 
@@ -549,7 +558,7 @@ headings rather than a fact about them** — [§ Phase 3](#phase-3--m2-a-catalog
 now records the competing one: 28 and 20 are [01 § Summary of scope](01-azure-parity-catalogue.md)'s M2
 and M3 milestone totals exactly, so the headings may be a top-down budget that the bottom-up rows were
 never inside. Either way the gap was invisible while nothing had shipped and is load-bearing the moment
-anything does, and either way it is the reason 20.3 EM of completed work cannot simply be subtracted.
+anything does, and either way it is the reason 20.7 EM of completed work cannot simply be subtracted.
 **Closing the range is a scheduling exercise on the first reading — say which rows are on the path — and
 a re-estimate on the second.**
 
@@ -571,7 +580,7 @@ names, and four more phase-4 items — the policy engine, the resource graph API
 policies — carry no estimate at all. So the figure is wrong in **both** directions at once, which is the
 state a total reaches when it is only ever corrected downward.
 
-At 4–5 engineers that is **roughly 14–22 months** — 68.8 ÷ 5 = 13.8 at the fast end, 89.1 ÷ 4 = 22.3 at
+At 4–5 engineers that is **roughly 14–22 months** — 68.4 ÷ 5 = 13.7 at the fast end, 89.1 ÷ 4 = 22.3 at
 the slow one. ⚠ The old line said *"roughly 18–20 months"* for 89.5 EM, and 89.5 ÷ 4 is 22.4: **the
 upper end was already understated by more than two months before any of this reconciliation**, because
 it was carried over rather than divided. That is the same failure as the stale phase rows above, in the

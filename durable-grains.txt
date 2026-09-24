@@ -154,6 +154,32 @@ CyberCloud.Metering.Grains.UsageLedgerGrain
 # honest answer is 'this can be rebuilt', the tier is Hot") answers cleanly, and it answers that way
 # only because the dedup above is durable.
 
+# ── Billing — docs/plan/22, issue #38 ──────────────────────────────────────────────────────────
+# ⚠ WHAT THE ENTRY ABOVE CALLED "A SECOND LEDGER DERIVED FROM THIS ONE" DID NOT SHIP AS A LEDGER.
+# Charges are not stored: a draft invoice, a cost row and a budget's figure are all the usage ledger
+# rated on the day they are asked for (CyberCloud.Billing.Pricing.UsagePricing), so there is nothing
+# about money that could disagree with the usage it was derived from. What IS stored is what cannot
+# be derived again, and that is three grains:
+#
+# BillingAccountGrain holds the finalized invoices and the credit notes — documents a customer has
+# been sent, whose integrity must be kept for the whole storage period (Council Directive
+# 2006/112/EC, Articles 233 and 247) and which no re-rating reproduces once the price sheet or the ledger has
+# moved on. Loss tolerance is legal, not operational, as the usage ledger's is.
+CyberCloud.Billing.Grains.BillingAccountGrain
+#
+# InvoiceNumberingGrain holds the gap-free sequences. Losing it restarts numbering at 1: every new
+# invoice then carries a number an existing one already has, which is the defect a sequential
+# invoice number exists to make impossible.
+CyberCloud.Billing.Grains.InvoiceNumberingGrain
+#
+# BudgetGrain holds which thresholds have fired this period. A forgotten one fires again on the
+# next tick, and the sending module's idempotency key is the only thing between that and a second
+# page to finance — a second defence is not a reason to lose the first.
+CyberCloud.Billing.Grains.BudgetGrain
+#
+# ⚠ NOT CostQueryGrain, which holds nothing: it is a stateless worker over the ledger and the check
+# grains, and has no [PersistentState] to bind.
+
 # ── Providers — docs/plan/03 § Providers ───────────────────────────────────────────────────────
 # THREE, since #32, #29 and the key vault — and for fifteen families before them NOTHING, an absence that was the
 # reviewed decision rather than an omission.

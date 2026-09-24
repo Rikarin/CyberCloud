@@ -48,7 +48,7 @@ Versions verified against `api.nuget.org` on 2026-08-08. These go verbatim into
 | `Volo.Abp.AspNetCore.SignalR` | 10.6.0 | gateway |
 | `Volo.Abp.Ddd.Domain` / `.Application` | 10.6.0 | providers |
 | `Volo.Abp.Authorization` | 10.6.0 | ⚠ **the attribute plumbing only** — the policy source is ours, ADR-007 |
-| `Volo.Abp.EntityFrameworkCore.PostgreSql` | 10.6.0 | durable tier, billing ledger, identity |
+| `Volo.Abp.EntityFrameworkCore.PostgreSql` | 10.6.0 | durable tier, identity. ⚠ The billing ledger it was also listed for was never built (#38): billing reads the usage ledger, which is grain state |
 | `Volo.Abp.AspNetCore.Serilog` | 10.6.0 | all hosts |
 | `Volo.Abp.TestBase` | 10.6.0 | tests |
 
@@ -280,7 +280,7 @@ breach. Two tenancy systems in one codebase is worse than either, so ABP's is of
 | Tier | Store | For | Loss tolerance |
 |---|---|---|---|
 | **Hot** | Redis Cluster, AOF `everysec`, 1 replica per shard | Sessions, live status, observed cluster state, caches, rate counters, ReBAC check cache, terminal sessions, metric aggregates | Rebuildable. Losing it costs a warm-up |
-| **Durable** | PostgreSQL, sharded by tenant, synchronous replica | Tenants, subscriptions, resource desired state, users and credentials, ReBAC tuples, operations, billing ledger, audit cursors, cluster connections | **Zero.** An acknowledged write survives the loss of any single node |
+| **Durable** | PostgreSQL, sharded by tenant, synchronous replica | Tenants, subscriptions, resource desired state, users and credentials, ReBAC tuples, operations, usage ledgers and invoices, audit cursors, cluster connections | **Zero.** An acknowledged write survives the loss of any single node |
 
 **Why not Redis for everything, as the brief suggested.** Redis with `appendfsync everysec` can lose
 up to one second of acknowledged writes when a primary dies uncleanly, and `WAIT` does not make it
@@ -358,7 +358,8 @@ assumption. If it slips past M1, the fallback is `Microsoft.Orleans.Streaming.Me
 streams plus direct `NATS.Client.JetStream` for the event log — which is where the value is anyway.
 
 **Ordering guarantee, stated once.** Per-subject ordering only. Anything needing global order (the
-billing ledger) uses the durable tier and a per-tenant sequence, not the stream.
+usage ledger, per subscription, and invoice numbers, per issuer — #38 built no separate billing
+ledger) uses the durable tier and a sequence one grain holds, not the stream.
 
 ### ADR-006 — ABP is a module system, not a framework we live inside
 

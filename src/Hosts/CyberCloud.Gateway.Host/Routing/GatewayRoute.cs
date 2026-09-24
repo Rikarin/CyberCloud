@@ -153,6 +153,25 @@ enum RouteKind {
     /// </remarks>
     Identity,
 
+    /// <summary>
+    ///     The cost query — <c>POST {scope}/providers/CyberCloud.CostManagement/query</c> on a
+    ///     subscription or a resource group. docs/plan/22 § Cost visibility, issue #38.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A kind of its own, and the second <c>POST</c> that is not an action</b> — arranged
+    ///     exactly as <see cref="ResourceGraphQuery" /> is, under its own reserved namespace
+    ///     (<c>CostQueryAddress.ProviderNamespace</c>): asked before the scope, resource and action
+    ///     grammars, one grammar under the namespace and a <c>400</c> naming it for anything else.
+    ///     On a resource group the address is also a nine-segment resource collection path, so the
+    ///     order against <see cref="Collection" /> is not free here and the namespace test is what
+    ///     decides it. <c>CostQueryRoutingTests</c> pins the shapes, the verb and the precedence.
+    ///     <para>
+    ///         ⚠ <b>Dispatched to <c>ICostQuery</c></b>, one grain call; the ReBAC filter is inside the
+    ///         grain, behind the one seam.
+    ///     </para>
+    /// </remarks>
+    CostQuery,
+
     /// <summary>A <c>POST</c> action on an existing resource — <c>restart</c>, <c>rotateKeys</c>.</summary>
     Action,
 
@@ -276,6 +295,10 @@ enum RouteKind {
 ///     The identity address, for <see cref="RouteKind.Identity" />. ⚠ The token's tenant, rebuilt,
 ///     as for <paramref name="ResourceGraph" />.
 /// </param>
+/// <param name="CostQuery">
+///     The cost query's address, for <see cref="RouteKind.CostQuery" />. ⚠ Its tenant is the
+///     <i>token's</i> too — <c>CostQueryAddress.WithTenant</c> rebuilds it.
+/// </param>
 readonly record struct GatewayRoute(
     RouteKind Kind,
     ResourceId Resource,
@@ -288,7 +311,8 @@ readonly record struct GatewayRoute(
     RoleAssignmentCollectionId RoleAssignments = default,
     ScopeCollectionId Scopes = default,
     ResourceGraphAddress ResourceGraph = default,
-    IdentityAddress Identity = default
+    IdentityAddress Identity = default,
+    CostQueryAddress CostQuery = default
 ) {
     /// <summary>Nothing matched.</summary>
     public static GatewayRoute None { get; } = new(RouteKind.Unknown, default, "", Guid.Empty, "");
@@ -566,6 +590,34 @@ static class GatewayRouter {
             );
         }
 
+        // ── The cost query, under its own reserved namespace (#38). ───────────────────────────
+        //
+        // ⚠ THE RESOURCE GRAPH'S ARRANGEMENT, AND HERE THE ORDER AGAINST THE GRAMMARS BELOW IS NOT
+        // FREE. On a resource group, {rg}/providers/CyberCloud.CostManagement/query is a well-formed
+        // nine-segment resource collection path, so asked after ResolveResource it would be a listing
+        // of a type no provider serves. The namespace test decides it, ProviderRegistry.Build refuses
+        // a provider that claims the namespace, and CostQueryAddressTests sweeps the other direction.
+        // POST only; a GET is the 405 dispatch answers, for the reason the graph's is.
+        if (CostQueryAddress.IsUnderNamespace(path)) {
+            var costs = CostQueryAddress.ParsePath(path);
+
+            if (costs.TryGetError(out var costsError)) {
+                return Result<GatewayRoute>.Failure(costsError);
+            }
+
+            return Result<GatewayRoute>.Success(
+                new(
+                    RouteKind.CostQuery,
+                    default,
+                    "",
+                    Guid.Empty,
+                    "",
+                    // NAMED, for the reason every other optional address kind is; the token's tenant.
+                    CostQuery: costs.GetValueOrThrow().WithTenant(tenantId)
+                )
+            );
+        }
+
         // ── A scope, before the resource/action split. docs/plan/06 § The hierarchy. ────────────
         //
         // ⚠ THE TWO GRAMMARS ARE DISJOINT AND THE ORDER IS THEREFORE FREE — which is worth stating,
@@ -803,7 +855,9 @@ static class GatewayRouter {
         // ⚠ A resource graph query is a POST and a read. Counted as a write it would spend the
         // subscription-write bucket — the smaller one, sized for creates — on a portal's list page.
         // A suffix test, for the reason the two above are prefix tests: no registry on this path.
-        if (path.EndsWith(ResourceGraphAddress.Suffix, StringComparison.OrdinalIgnoreCase)) {
+        if (path.EndsWith(ResourceGraphAddress.Suffix, StringComparison.OrdinalIgnoreCase)
+            // The cost query is a POST and a read for the same reason.
+            || path.EndsWith(CostQueryAddress.Suffix, StringComparison.OrdinalIgnoreCase)) {
             return RequestClass.Read;
         }
 

@@ -247,6 +247,7 @@
   },
   "x-cybercloud-providers": [
     "CyberCloud.Analytics",
+    "CyberCloud.Billing",
     "CyberCloud.Cache",
     "CyberCloud.Communication",
     "CyberCloud.Compute",
@@ -279,6 +280,19 @@
         "plural": "ClickHouse clusters",
         "alias": "clickhouse",
         "summary": "A managed ClickHouse cluster on the Altinity operator, with declared shards and replicas and a ClickHouse Keeper quorum. The schema is the tenant's.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Billing/budgets",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Budget",
+        "plural": "Budgets",
+        "alias": "budget",
+        "summary": "A spending limit for a resource group or a subscription, per month, quarter or year, with thresholds on the actual cost and on the forecast that alert through a sending service.",
         "declared": true
       }
     },

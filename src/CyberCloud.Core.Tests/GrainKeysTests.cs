@@ -1076,11 +1076,13 @@ public class GrainKeysTests {
     }
 
     [Fact]
-    public void ThePlatformSingletonsAreAClosedSetOfTwo() {
+    public void ThePlatformSingletonsAreAClosedSetOfThree() {
         GrainKeys.ShardMap().ShouldBe("platform/shard-map");
         GrainKeys.TenantDirectory().ShouldBe("platform/tenant-directory");
+        // #38: the gap-free invoice sequence, one counter per issuer, and so one activation.
+        GrainKeys.PlatformSingleton(GrainKeys.InvoiceNumberingSingleton).ShouldBe("platform/invoice-numbering");
 
-        GrainKeys.PlatformSingletons.ShouldBe(["shard-map", "tenant-directory"]);
+        GrainKeys.PlatformSingletons.ShouldBe(["shard-map", "tenant-directory", "invoice-numbering"]);
 
         foreach (var name in GrainKeys.PlatformSingletons) {
             var key = GrainKeys.PlatformSingleton(name);

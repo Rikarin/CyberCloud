@@ -25,6 +25,8 @@ from .models import (
     BucketData,
     BucketResource,
     BucketStatsResult,
+    BudgetData,
+    BudgetResource,
     ClickHouseClusterData,
     ClickHouseClusterListKeysResult,
     ClickHouseClusterResource,
@@ -355,6 +357,50 @@ class AnalyticsProvider:
 
     def __init__(self, transport: Transport) -> None:
         self.clickhouse_clusters = ClickHouseClusterClient(transport)
+
+
+class BudgetClient:
+    """Budgets — CyberCloud.Billing/budgets. A spending limit for a resource group or a subscription, per month, quarter or year, with thresholds on the actual cost and on the forecast that alert through a sending service."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> BudgetResource:
+        """Reads one Budget."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Billing/budgets/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return BudgetResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: BudgetData) -> Operation[BudgetResource]:
+        """Creates or replaces one Budget. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Billing/budgets/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, BudgetResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: BudgetData) -> Operation[BudgetResource]:
+        """Amends one Budget. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Billing/budgets/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, BudgetResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Budget. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Billing/budgets/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[BudgetResource]:
+        """Lists the Budgets in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Billing/budgets", top, BudgetResource.from_wire)
+
+
+class BillingProvider:
+    """The resource types of CyberCloud.Billing."""
+
+    def __init__(self, transport: Transport) -> None:
+        self.budgets = BudgetClient(transport)
 
 
 class ValkeyCacheClient:
@@ -2481,6 +2527,7 @@ class CyberCloudClient:
         self.subscriptions = SubscriptionsClient(transport)
         self.resource_groups = ResourceGroupsClient(transport)
         self.analytics = AnalyticsProvider(transport)
+        self.billing = BillingProvider(transport)
         self.cache = CacheProvider(transport)
         self.communication = CommunicationProvider(transport)
         self.compute = ComputeProvider(transport)

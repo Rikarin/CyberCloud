@@ -173,6 +173,14 @@
           registers them over this host's cluster client; nothing here hosts a grain.
         -->
         <ProjectReference Include="../../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
+        <!--
+          docs/plan/22 § Cost visibility (#38). The cost query's route dispatches to ICostQuery, whose
+          one implementation — GrainCostQuery, over this host's cluster client — lives in the module;
+          AddCyberCloudBillingClient registers it. The same arrangement as the line above: a module, not
+          a provider implementation, so rule 5 is not in play, and the grains it names activate on the
+          silo only.
+        -->
+        <ProjectReference Include="../../CyberCloud.Billing/CyberCloud.Billing.csproj"/>
     </ItemGroup>
 
     <!--
@@ -193,6 +201,7 @@
     -->
     <ItemGroup Label="The provider modules — docs/plan/03 § Assembly graph rules, rule 5">
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Application/CyberCloud.Providers.Analytics.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.Application/CyberCloud.Providers.Billing.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Application/CyberCloud.Providers.Cache.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Application/CyberCloud.Providers.Communication.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Application/CyberCloud.Providers.Compute.Application.csproj"/>

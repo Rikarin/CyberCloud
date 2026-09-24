@@ -29,6 +29,7 @@ type Client struct {
 	Subscriptions     *SubscriptionsClient
 	ResourceGroups    *ResourceGroupsClient
 	Analytics         *AnalyticsProvider
+	Billing           *BillingProvider
 	Cache             *CacheProvider
 	Communication     *CommunicationProvider
 	Compute           *ComputeProvider
@@ -60,6 +61,7 @@ func NewClient(transport Transport) *Client {
 		Subscriptions:     &SubscriptionsClient{transport: transport},
 		ResourceGroups:    &ResourceGroupsClient{transport: transport},
 		Analytics:         newAnalyticsProvider(transport),
+		Billing:           newBillingProvider(transport),
 		Cache:             newCacheProvider(transport),
 		Communication:     newCommunicationProvider(transport),
 		Compute:           newComputeProvider(transport),
@@ -268,6 +270,57 @@ func (c *ClickHouseClusterClient) ListKeys(ctx context.Context, tenantID, subscr
 		return nil, err
 	}
 	return &result, nil
+}
+
+// BillingProvider holds the resource types of CyberCloud.Billing.
+type BillingProvider struct {
+	Budgets *BudgetClient
+}
+
+// newBillingProvider builds the group's clients over one transport.
+func newBillingProvider(transport Transport) *BillingProvider {
+	return &BillingProvider{
+		Budgets: &BudgetClient{transport: transport},
+	}
+}
+
+// BudgetClient is budgets — CyberCloud.Billing/budgets. A spending limit for a resource group or a subscription, per month, quarter or year, with thresholds on the actual cost and on the forecast that alert through a sending service.
+type BudgetClient struct {
+	transport Transport
+}
+
+// Get reads one Budget.
+func (c *BudgetClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*BudgetResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Billing/budgets/" + segment(resourceName)
+	var result BudgetResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Budget. ⚠ Long-running: Wait on the result.
+func (c *BudgetClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data BudgetData) (*Operation[BudgetResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Billing/budgets/" + segment(resourceName)
+	return begin[BudgetResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Budget. A merge patch: what is not set is not changed.
+func (c *BudgetClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data BudgetData) (*Operation[BudgetResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Billing/budgets/" + segment(resourceName)
+	return begin[BudgetResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Budget. ⚠ Permanent: this type declares no soft-delete window.
+func (c *BudgetClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Billing/budgets/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Budgets in a resource group. ⚠ A short page never means "that is all there is".
+func (c *BudgetClient) List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[BudgetResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Billing/budgets"
+	return newPager[BudgetResource](c.transport, path, options)
 }
 
 // CacheProvider holds the resource types of CyberCloud.Cache.

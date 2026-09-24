@@ -8,6 +8,8 @@ import type {
   AnalyticsClickhouseClustersData,
   AnalyticsClickhouseClustersListKeysResult,
   AnalyticsClickhouseClustersResource,
+  BillingBudgetsData,
+  BillingBudgetsResource,
   CacheRedisData,
   CacheRedisListKeysResult,
   CacheRedisResource,
@@ -297,6 +299,31 @@ export class CyberCloudApi {
   /** listKeys — permission 'listKeys'. ⚠ The response carries secret material. */
   listKeysClickHouseCluster(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<AnalyticsClickhouseClustersListKeysResult>> {
     return this.transport.send<AnalyticsClickhouseClustersListKeysResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Analytics/clickhouseClusters/${CyberCloudApi.segment(resourceName)}/listKeys` });
+  }
+
+  /** Reads one Budget. */
+  getBudget(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<BillingBudgetsResource>> {
+    return this.transport.send<BillingBudgetsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Billing/budgets/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Budget. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateBudget(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: BillingBudgetsData): Promise<ApiResponse<BillingBudgetsResource>> {
+    return this.transport.send<BillingBudgetsResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Billing/budgets/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Budget. A merge patch: what is not set is not changed. */
+  updateBudget(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: Partial<BillingBudgetsData>): Promise<ApiResponse<BillingBudgetsResource>> {
+    return this.transport.send<BillingBudgetsResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Billing/budgets/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Budget. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteBudget(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Billing/budgets/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Budgets in a resource group. ⚠ A short page never means "that is all there is". */
+  listBudget(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<BillingBudgetsResource>>> {
+    return this.transport.send<Page<BillingBudgetsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Billing/budgets`, query: CyberCloudApi.pageQuery(page) });
   }
 
   /** Reads one Valkey cache. */
