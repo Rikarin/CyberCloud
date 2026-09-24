@@ -4,6 +4,7 @@ using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Expiry;
 using CyberCloud.ResourceManager.Reconcile;
+using CyberCloud.ResourceManager.Orchestration;
 using CyberCloud.ResourceManager.Registry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -94,10 +95,25 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
     public static ConcurrentQueue<(Guid Parent, int Candidates)> CollectionsAsked { get; } = new();
 
     /// <summary>Lets everything through again.</summary>
+    /// <summary>
+    ///     Every check, as the address it was asked at, the caller it was asked for and the permission
+    ///     — so a test can see WHO a write was authorized as, which is the whole question for a
+    ///     deployment's children.
+    /// </summary>
+    public static ConcurrentQueue<(string Path, string Caller, string Permission)> Checks { get; } = new();
+
+    /// <summary>
+    ///     Resource groups the caller holds nothing on: every check at an address inside one answers the
+    ///     canonical 404, as the real engine does for a scope the caller cannot read.
+    /// </summary>
+    public static ConcurrentDictionary<string, bool> DeniedGroups { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public static void Reset() {
         Granted.Clear();
         Asked.Clear();
         AskedOn.Clear();
+        Checks.Clear();
+        DeniedGroups.Clear();
         Hidden.Clear();
         CollectionsAsked.Clear();
         Restricted = false;
@@ -126,6 +142,11 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
     ) {
         Asked.Enqueue(actionPermission);
         AskedOn.Enqueue(On(id.Type, actionPermission));
+        Checks.Enqueue((id.Path, caller.ToString(), actionPermission));
+
+        if (DeniedGroups.ContainsKey(id.ResourceGroup)) {
+            return Task.FromResult(Result.Failure(ErrorCode.ResourceNotFound, $"'{id.Path}' does not exist."));
+        }
 
         // ⚠ Before the permission set, and it answers the canonical 404 without consulting it. A
         // resource the caller cannot see is not a resource they hold no permission on — it is one
@@ -708,7 +729,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
         cluster = builder.Build();
         await cluster.DeployAsync();
 
-        Registry = ProviderRegistry.Build([new TestingProvider()]);
+        Registry = ProviderRegistry.Build([new TestingProvider(), new DeploymentsProvider()]);
 
         // ⚠ Step 1 of the write path reads ISubscriptionGrain and answers 404 for a subscription
         // this tenant does not have, so the suite's subscriptions are created before anything is
@@ -767,7 +788,8 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                 new NoClusterConnectionFactory(),
                 new UnavailableSecretResolver()
             ),
-            NullLogger<ResourceManagerService>.Instance
+            NullLogger<ResourceManagerService>.Instance,
+            validators: [new DeploymentBodyValidator()]
         );
     }
 
@@ -888,6 +910,9 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     services.AddSingleton<SoftDeletableReconciler>();
                     services.AddSingleton<PeriodicReconciler>();
                     services.AddSingleton<IResourceProvider, TestingProvider>();
+                    // The deployment type, so the silo's own write path — the one a parent operation
+                    // writes its children through — knows it, as a real silo does.
+                    services.AddSingleton<IResourceProvider, DeploymentsProvider>();
                     services.TryAddSingleton<ILoggerFactory>(static _ => NullLoggerFactory.Instance);
                 }
             );

@@ -43,6 +43,16 @@ the same query with the link's `$skipToken` — not with a `GET`, which is what 
 with the nine host-owned names, so a provider called `CyberCloud.Graph` fails the build of the
 tree rather than meaning two things by `cyc graph`.
 
+⚠ **`cyc deployment create --template-file` and `cyc deployment what-if` are hand-written too (#39),
+and for a different reason: the address is generated and the body is not typable.** The registry
+publishes `CyberCloud.Resources/deployments`, so `cyc resources deployments create` exists — but a
+template is a JSON document the schema vocabulary carries as a string, and `--template '{…}'` is a
+whole program on a command line. The hand-written pair reads `--template-file` and
+`--parameters-file`, refuses a file that is not a JSON object before a request leaves (exit `2`), and
+names the file when the refusal's `target` points into it; the wait and its streamed progress are the
+generated verbs' own code (`ResourceVerb.WaitForResourceAsync`). `deployment` joins `graph` on
+`CommandTree.ReservedGroups`.
+
 ### Decisions
 
 | Decision | Rationale |

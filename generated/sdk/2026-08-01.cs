@@ -7953,6 +7953,170 @@ public sealed partial class BackupVaultCollection {
     public partial AsyncPageable<BackupVaultResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The body of a CyberCloud.Resources/deployments.</summary>
+/// <remarks>A template of resources deployed in dependency order, each through the write path as its creator.</remarks>
+public sealed partial class DeploymentData {
+
+    /// <summary>The template, its parameters, and the record of the last run.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>The template, its parameters, and the record of the last run.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>Why the last run failed, naming the resource that stopped it. Empty when it did not.</summary>
+        /// <remarks>⚠ The server owns this: a body that sets it is refused rather than ignored.</remarks>
+        [JsonPropertyName("error")]
+        public string? Error { get; set; }
+
+        /// <summary>Every resource the last run created or updated, in the order it did.</summary>
+        /// <remarks>⚠ The server owns this: a body that sets it is refused rather than ignored.</remarks>
+        [JsonPropertyName("outputResources")]
+        public IList<string> OutputResources { get; set; } = new List<string>();
+
+        /// <summary>The parameter values, as JSON text: { "name": { "value": … } }.</summary>
+        [JsonPropertyName("parameters")]
+        public string? Parameters { get; set; }
+
+        /// <summary>What a rollback would remove. Rollback is recorded and never performed.</summary>
+        /// <remarks>⚠ The server owns this: a body that sets it is refused rather than ignored.</remarks>
+        [JsonPropertyName("rollback")]
+        public string? Rollback { get; set; }
+
+        /// <summary>One line per template resource, in dependency order: its state, its id and the operation that drove it.</summary>
+        /// <remarks>⚠ The server owns this: a body that sets it is refused rather than ignored.</remarks>
+        [JsonPropertyName("steps")]
+        public IList<string> Steps { get; set; } = new List<string>();
+
+        /// <summary>The template, as JSON text: parameters, variables and resources, each with type, name, apiVersion, properties and dependsOn. Expressions are parameters(), variables(), resourceId() and concat(); anything else is refused with that list.</summary>
+        /// <remarks>Required on a create.</remarks>
+        [JsonPropertyName("template")]
+        public required string Template { get; set; }
+    }
+}
+
+/// <summary>One Deployment, as the API returns it, and the operations on it.</summary>
+public sealed partial class DeploymentResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required DeploymentData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<DeploymentResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<DeploymentResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        DeploymentData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of whatIf.</summary>
+    public sealed partial class WhatIfContent {
+
+        /// <summary>The template to evaluate and its parameters.</summary>
+        [JsonPropertyName("properties")]
+        public required PropertiesData Properties { get; set; }
+
+        /// <summary>The template to evaluate and its parameters.</summary>
+        public sealed partial class PropertiesData {
+
+            /// <summary>The parameter values, as JSON text.</summary>
+            [JsonPropertyName("parameters")]
+            public string? Parameters { get; set; }
+
+            /// <summary>The template, as JSON text — the same shape a PUT takes.</summary>
+            [JsonPropertyName("template")]
+            public required string Template { get; set; }
+        }
+    }
+
+    /// <summary>What whatIf returns.</summary>
+    public sealed partial class WhatIfResult {
+
+        /// <summary>The resources a deployment would create, in deployment order. A resource the caller cannot read is listed here, because that is the one answer that says nothing about it.</summary>
+        [JsonPropertyName("creates")]
+        public IList<string> Creates { get; set; } = new List<string>();
+
+        /// <summary>The resources a deployment would change, in deployment order. Each one's property delta is in 'changes'.</summary>
+        [JsonPropertyName("modifies")]
+        public IList<string> Modifies { get; set; } = new List<string>();
+
+        /// <summary>The resources a deployment would leave as they are, in deployment order.</summary>
+        [JsonPropertyName("noChanges")]
+        public IList<string> NoChanges { get; set; } = new List<string>();
+
+        /// <summary>Succeeded: the template evaluated and every resource was compared.</summary>
+        [JsonPropertyName("status")]
+        public required string Status { get; set; }
+    }
+
+    /// <summary>WhatIf. ⚠ An action never creates. This one runs as the caller and answers for a name that does not exist yet.</summary>
+    public partial Task<Response<WhatIfResult>> WhatIfAsync(
+        WhatIfContent content,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Deployments in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class DeploymentCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Resources/deployments";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Resources/deployments/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Resources/deployments";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Deployment.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<DeploymentResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        DeploymentData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Deployment by name.</summary>
+    public partial Task<Response<DeploymentResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Deployments in this group, paged.</summary>
+    public partial AsyncPageable<DeploymentResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/tier accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum WidgetTier {
     /// <summary>Never assigned. Not a value the API accepts.</summary>

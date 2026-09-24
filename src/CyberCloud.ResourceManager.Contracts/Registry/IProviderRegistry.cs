@@ -102,6 +102,31 @@ public readonly record struct ActionRegistration(
     ///     </para>
     /// </remarks>
     public Type? HandlerType { get; init; }
+
+    /// <summary>
+    ///     The entry point beside the resource manager that serves this action, or empty when an
+    ///     <see cref="IResourceActionHandler" /> (or the operation grain) does.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>For an action that has to run as the caller, which a handler cannot.</b>
+    ///         <c>ActionContext</c> carries no <see cref="CallerContext" /> on purpose — a provider
+    ///         acts as the platform against a cluster and never as a tenant against this API — so an
+    ///         action whose whole job is to read other resources the way the caller would see them
+    ///         has no handler to be. <c>CyberCloud.Resources/deployments</c>' <c>whatIf</c> is the
+    ///         first: it reads every resource a template names through
+    ///         <see cref="IResourceManager.ReadAsync" /> with the caller's own subject, and the
+    ///         gateway routes it to <see cref="IDeploymentManager" /> rather than to
+    ///         <see cref="IResourceManager.ActionAsync" />.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Carried on the declaration so the Action handlers gate can tell it from a gap.</b>
+    ///         Without it the gate reads a synchronous action with no handler as one that answers
+    ///         <c>500</c>, which is true of the dispatcher and false of the route. <c>ActionDispatcher</c>
+    ///         still refuses it by name if anything ever sends it there.
+    ///     </para>
+    /// </remarks>
+    public string EntryPoint { get; init; } = string.Empty;
 }
 
 /// <summary>

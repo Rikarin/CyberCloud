@@ -50,6 +50,10 @@ from .models import (
     ContainerRegistryData,
     ContainerRegistryListCredentialsResult,
     ContainerRegistryResource,
+    DeploymentData,
+    DeploymentResource,
+    DeploymentWhatIfContent,
+    DeploymentWhatIfResult,
     DocumentDatabaseAccountData,
     DocumentDatabaseAccountListKeysResult,
     DocumentDatabaseAccountResource,
@@ -1851,6 +1855,56 @@ class RecoveryServicesProvider:
         self.vaults = BackupVaultClient(transport)
 
 
+class DeploymentClient:
+    """Deployments — CyberCloud.Resources/deployments. A template of resources deployed in dependency order, each through the write path as its creator."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> DeploymentResource:
+        """Reads one Deployment."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Resources/deployments/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return DeploymentResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: DeploymentData) -> Operation[DeploymentResource]:
+        """Creates or replaces one Deployment. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Resources/deployments/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, DeploymentResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: DeploymentData) -> Operation[DeploymentResource]:
+        """Amends one Deployment. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Resources/deployments/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, DeploymentResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Deployment. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Resources/deployments/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[DeploymentResource]:
+        """Lists the Deployments in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Resources/deployments", top, DeploymentResource.from_wire)
+
+    def what_if(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: DeploymentWhatIfContent) -> DeploymentWhatIfResult:
+        """whatIf — permission 'write'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Resources/deployments/{_segment(resource_name)}/whatIf", body=content.to_wire()))
+        raise_for_status(response)
+        return DeploymentWhatIfResult.from_wire(wire_of(response))
+
+
+class ResourcesProvider:
+    """The resource types of CyberCloud.Resources."""
+
+    def __init__(self, transport: Transport) -> None:
+        self.deployments = DeploymentClient(transport)
+
+
 class WidgetClient:
     """Widgets — CyberCloud.Sample/widgets. A ConfigMap with two fields in it."""
 
@@ -2187,6 +2241,7 @@ class CyberCloudClient:
         self.monitor = MonitorProvider(transport)
         self.network = NetworkProvider(transport)
         self.recoveryservices = RecoveryServicesProvider(transport)
+        self.resources = ResourcesProvider(transport)
         self.sample = SampleProvider(transport)
         self.search = SearchProvider(transport)
         self.storage = StorageProvider(transport)

@@ -423,6 +423,23 @@ public sealed class RecordingReconcileLog : IReconcileLog {
 }
 
 /// <summary>
+///     The real <c>CyberCloud.Resources/deployments</c> declaration, handed a builder the way
+///     <c>CyberCloud.Providers.Resources</c>' provider hands it one.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Not a double of the declaration.</b> The provider class lives under src/Providers, which this
+///     suite does not reference; the declaration it forwards to is <see cref="Deployments.Describe" />,
+///     and that is what this calls — so the type these tests drive is the type the platform publishes.
+/// </remarks>
+public sealed class DeploymentsProvider : IResourceProvider {
+    /// <inheritdoc />
+    public string ProviderNamespace => Deployments.ProviderNamespace;
+
+    /// <inheritdoc />
+    public void Describe(IProviderBuilder builder) => Deployments.Describe(builder);
+}
+
+/// <summary>
 ///     The one provider the suite registers. Two api-versions, so the projection can be tested.
 /// </summary>
 /// <remarks>

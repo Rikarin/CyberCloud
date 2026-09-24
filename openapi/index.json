@@ -261,6 +261,7 @@
     "CyberCloud.Monitor",
     "CyberCloud.Network",
     "CyberCloud.RecoveryServices",
+    "CyberCloud.Resources",
     "CyberCloud.Sample",
     "CyberCloud.Search",
     "CyberCloud.Storage",
@@ -693,6 +694,19 @@
         "plural": "Backup vaults",
         "alias": "backupvault",
         "summary": "A backup policy — a schedule and a retention — over the PostgreSQL servers in a resource group, with the recovery points it produces and a restore into a new cluster.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Resources/deployments",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Deployment",
+        "plural": "Deployments",
+        "alias": "deployment",
+        "summary": "A template of resources deployed in dependency order, each through the write path as its creator.",
         "declared": true
       }
     },

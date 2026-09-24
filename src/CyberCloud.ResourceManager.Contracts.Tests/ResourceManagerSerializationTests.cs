@@ -149,17 +149,22 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
             CancelReason = "the user changed their mind",
             Attempts = 3,
             Activations = 2,
-            Children = [Guid.NewGuid()]
+            Children = [Guid.NewGuid(), Guid.NewGuid()],
+            ParentOperationId = Guid.NewGuid()
         };
 
         var round = RoundTrip(value);
 
+        // ⚠ Both directions of #39's nesting. ParentOperationId is appended at [Id(14)] and Children
+        // was on the wire empty until a deployment filled it; a child whose status came back with an
+        // empty parent would be a child nothing can walk back from.
+        round.ParentOperationId.ShouldBe(value.ParentOperationId);
+        round.Children.ShouldBe(value.Children);
         round.State.ShouldBe(OperationState.Running);
         round.CancelRequested.ShouldBeTrue();
         round.CancelReason.ShouldBe(value.CancelReason);
         round.Attempts.ShouldBe(3);
         round.Activations.ShouldBe(2);
-        round.Children.Length.ShouldBe(1);
         round.Progress.Length.ShouldBe(2);
         round.Progress[0].Step.ShouldBe("applying");
         round.LastProgress!.Detail.ShouldBe("2 of 3 replicas ready");

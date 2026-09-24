@@ -43,6 +43,7 @@ type Client struct {
 	Monitor           *MonitorProvider
 	Network           *NetworkProvider
 	RecoveryServices  *RecoveryServicesProvider
+	Resources         *ResourcesProvider
 	Sample            *SampleProvider
 	Search            *SearchProvider
 	Storage           *StorageProvider
@@ -72,6 +73,7 @@ func NewClient(transport Transport) *Client {
 		Monitor:           newMonitorProvider(transport),
 		Network:           newNetworkProvider(transport),
 		RecoveryServices:  newRecoveryServicesProvider(transport),
+		Resources:         newResourcesProvider(transport),
 		Sample:            newSampleProvider(transport),
 		Search:            newSearchProvider(transport),
 		Storage:           newStorageProvider(transport),
@@ -2086,6 +2088,67 @@ func (c *BackupVaultClient) ListRecoveryPoints(ctx context.Context, tenantID, su
 func (c *BackupVaultClient) Recover(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content BackupVaultRecoverContent) (*BackupVaultRecoverResult, error) {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.RecoveryServices/vaults/" + segment(resourceName) + "/recover"
 	var result BackupVaultRecoverResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ResourcesProvider holds the resource types of CyberCloud.Resources.
+type ResourcesProvider struct {
+	Deployments *DeploymentClient
+}
+
+// newResourcesProvider builds the group's clients over one transport.
+func newResourcesProvider(transport Transport) *ResourcesProvider {
+	return &ResourcesProvider{
+		Deployments: &DeploymentClient{transport: transport},
+	}
+}
+
+// DeploymentClient is deployments — CyberCloud.Resources/deployments. A template of resources deployed in dependency order, each through the write path as its creator.
+type DeploymentClient struct {
+	transport Transport
+}
+
+// Get reads one Deployment.
+func (c *DeploymentClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*DeploymentResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Resources/deployments/" + segment(resourceName)
+	var result DeploymentResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Deployment. ⚠ Long-running: Wait on the result.
+func (c *DeploymentClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data DeploymentData) (*Operation[DeploymentResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Resources/deployments/" + segment(resourceName)
+	return begin[DeploymentResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Deployment. A merge patch: what is not set is not changed.
+func (c *DeploymentClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data DeploymentData) (*Operation[DeploymentResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Resources/deployments/" + segment(resourceName)
+	return begin[DeploymentResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Deployment. ⚠ Permanent: this type declares no soft-delete window.
+func (c *DeploymentClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Resources/deployments/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Deployments in a resource group. ⚠ A short page never means "that is all there is".
+func (c *DeploymentClient) List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[DeploymentResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Resources/deployments"
+	return newPager[DeploymentResource](c.transport, path, options)
+}
+
+// WhatIf runs whatIf — permission 'write'.
+func (c *DeploymentClient) WhatIf(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content DeploymentWhatIfContent) (*DeploymentWhatIfResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Resources/deployments/" + segment(resourceName) + "/whatIf"
+	var result DeploymentWhatIfResult
 	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
 		return nil, err
 	}

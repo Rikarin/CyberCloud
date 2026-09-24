@@ -215,6 +215,13 @@ public interface IResourceTypeBuilder : IProviderBuilder {
     ///     Refused unless it implements the interface, at declaration time, because a typo caught at
     ///     silo start beats a <c>500</c> on the first call.
     /// </param>
+    /// <param name="entryPoint">
+    ///     The entry point that serves the action instead of a handler — the name of an interface
+    ///     beside <see cref="IResourceManager" /> that the gateway routes the action to — or empty.
+    ///     ⚠ For an action that must run as the caller, which a handler cannot; see
+    ///     <see cref="ActionRegistration.EntryPoint" />. Refused together with a handler or with
+    ///     <paramref name="longRunning" />.
+    /// </param>
     /// <returns>The same builder.</returns>
     /// <remarks>
     ///     ⚠ An action never creates — docs/plan/08 § The write path, end to end. A <c>POST</c> to a
@@ -235,7 +242,8 @@ public interface IResourceTypeBuilder : IProviderBuilder {
         ResourceSchema? request = null,
         ResourceSchema? response = null,
         bool longRunning = false,
-        Type? handler = null
+        Type? handler = null,
+        string entryPoint = ""
     );
 
     /// <summary>

@@ -1,4 +1,5 @@
 using CyberCloud.Core.Time;
+using CyberCloud.ResourceManager.Orchestration;
 using CyberCloud.ResourceManager.Reconcile;
 using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
@@ -38,6 +39,7 @@ public sealed class OperationGrain(
     [PersistentState("operation", StorageTiers.Durable)]
     IPersistentState<OperationGrainState> state,
     ReconcileDriver driver,
+    DeploymentDriver deployments,
     IResourceRelationWriter relations,
     IResourceChangedSink changes,
     IGrainFactory grains,
@@ -176,6 +178,28 @@ public sealed class OperationGrain(
 
         await state.WriteStateAsync();
 
+        // ⚠ A DEPLOYMENT'S CANCELLATION REACHES ITS CHILD NOW, AND AGAIN ON THE NEXT PASS. The child
+        // in flight is told here so it starts tearing down without waiting a reminder period for the
+        // parent's pass, which tells it again — CancelAsync on an operation that is already cancelling
+        // succeeds and on one that has ended is a Conflict, so the repeat is harmless. Best effort:
+        // a child that cannot be reached now is reached by the pass.
+        if (state.State.Deployment is { } run
+            && run.Cursor < run.Steps.Count
+            && run.Steps[run.Cursor] is { Status: DeploymentStepStatus.Running, ChildOperationId: var child }) {
+            try {
+                _ = await Tenant(state.State.Spec!)
+                    .GetGrain<IOperationGrain>(GrainKeys.Operation(child))
+                    .CancelAsync($"Its deployment's operation {operationId:D} was cancelled: {state.State.CancelReason}");
+            } catch (Exception error) when (error is not OperationCanceledException) {
+                logger.LogWarning(
+                    error,
+                    "Operation {Operation} could not pass its cancellation to child {Child} yet; its next pass will.",
+                    operationId,
+                    child
+                );
+            }
+        }
+
         // Not awaited to completion here: CancelAsync returns as soon as the flag is set, and the
         // teardown runs on the next drive. A caller wanting "it has stopped" polls for
         // OperationState.Canceled.
@@ -204,7 +228,13 @@ public sealed class OperationGrain(
         // failed, because a failure is actionable." Checking first means the ceiling holds even if
         // every pass hangs for its full budget; checking after would let one more 30-second pass run
         // past the hour every time.
-        if (ReconcileSchedule.HasTimedOut(state.State.StartedAt, now)) {
+        // ⚠ NOT FOR A DEPLOYMENT, WHOSE CEILING IS PER STEP. Its children each carry this ceiling from
+        // their own start and fail through it, which fails the deployment naming them; the one stall
+        // that is the parent's own — a step the write path never accepts — is timed by
+        // DeploymentDriver from when that step began. A deployment of twenty resources is not a
+        // sixty-minute operation, and a parent ceiling would also fire while a child it is waiting on
+        // was still inside its own.
+        if (!IsDeploymentRun(spec) && ReconcileSchedule.HasTimedOut(state.State.StartedAt, now)) {
             var timeout = ReconcileSchedule.TimedOut(operationId, spec.ResourcePath, LastProgress());
             await FailAsync(timeout);
             return Result<OperationStatus>.Success(Status());
@@ -284,7 +314,16 @@ public sealed class OperationGrain(
         var tearingDown = spec.Kind is OperationKind.Delete or OperationKind.Purge
             || state.State.CancelRequested;
 
-        var pass = await driver.RunAsync(spec, tearingDown);
+        // ── A DEPLOYMENT'S PASS IS ITS CHILDREN ──────────────────────────────────────────────────
+        //
+        // ⚠ docs/plan/08 § Long-running operations, "Nested operations". A deployment's create or
+        // update has no reconciler to run — its work is PUTs made as its creator — so DeploymentDriver
+        // runs the pass instead and hands back the same shape, and every ending below applies to it
+        // unchanged. Its delete falls through to the ordinary driver, which converges a type with no
+        // reconciler at once: deleting a deployment deletes its record and not what it deployed.
+        var pass = IsDeploymentRun(spec)
+            ? await DriveDeploymentAsync(spec)
+            : await driver.RunAsync(spec, tearingDown);
 
         foreach (var entry in pass.Progress) {
             Append(entry);
@@ -348,9 +387,74 @@ public sealed class OperationGrain(
     }
 
     /// <inheritdoc />
+    public async Task NotifyChildTerminalAsync(Guid childOperationId) {
+        // A hint and never the state: the pass reads every child itself. See the interface remarks.
+        if (state.State.Spec is null || IsTerminal(state.State.Status) || state.State.Deployment is null) {
+            return;
+        }
+
+        _ = await DriveAsync();
+    }
+
+    /// <inheritdoc />
     public Task DeactivateAsync() {
         DeactivateOnIdle();
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    ///     Whether this operation is a deployment's create or update — the one kind of operation whose
+    ///     pass is its children rather than a reconciler.
+    /// </summary>
+    static bool IsDeploymentRun(OperationSpec spec) =>
+        spec.Kind is OperationKind.Create or OperationKind.Update && Deployments.IsPath(spec.ResourcePath);
+
+    /// <summary>One deployment pass, and the child list brought up to date with it.</summary>
+    async Task<ReconcilePass> DriveDeploymentAsync(OperationSpec spec) {
+        var run = state.State.Deployment ??= new();
+
+        var pass = await deployments.RunAsync(
+            spec,
+            run,
+            state.State.CancelRequested ? state.State.CancelReason : null
+        );
+
+        // ⚠ OperationStatus.Children IS THIS LIST, and it is rebuilt from the steps rather than
+        // appended to, so a pass that re-reads a child it already knew cannot list it twice.
+        state.State.Children = [
+            .. run.Steps.Where(static x => x.ChildOperationId != Guid.Empty).Select(static x => x.ChildOperationId)
+        ];
+
+        return pass;
+    }
+
+    /// <summary>
+    ///     Writes a deployment's run record into its body as the operation ends. Nothing for any other
+    ///     operation.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Before the resource's terminal state is stamped, so the snapshot the change event carries
+    ///     is the one with the record in it. Best effort, for <see cref="StampMemberAsync" />'s reason:
+    ///     the operation's own status carries the same facts, and an ending that could not converge a
+    ///     bookkeeping write would keep a finished deployment Running over its own history.
+    /// </remarks>
+    async Task RecordDeploymentAsync(OperationSpec spec, OperationState ending, Error? error) {
+        if (!IsDeploymentRun(spec)) {
+            return;
+        }
+
+        var recorded = await Resource(spec)
+            .RecordReadOnlyAsync(DeploymentDriver.History(state.State.Deployment, ending, error));
+
+        if (recorded.TryGetError(out var recordError) && recordError.Code != ErrorCode.ResourceNotFound) {
+            Append(
+                Progress(
+                    "history",
+                    $"The deployment's record could not be written to '{spec.ResourcePath}': {recordError.Message}. "
+                    + "This operation's progress carries the same facts."
+                )
+            );
+        }
     }
 
     // ── The three endings ──────────────────────────────────────────────────────────────────────
@@ -372,6 +476,7 @@ public sealed class OperationGrain(
             // billing dispute waiting to happen."
             state.State.CancelTeardownDone = true;
             await ReleaseAsync(spec);
+            await RecordDeploymentAsync(spec, OperationState.Canceled, null);
             await FinishResourceAsync(spec, ProvisioningState.Canceled, null);
 
             // ⚠ AND THE MEMBER IS STAMPED Canceled RATHER THAN REMOVED. A cancelled create leaves a
@@ -580,6 +685,7 @@ public sealed class OperationGrain(
         }
 
         await CommitAsync(spec);
+        await RecordDeploymentAsync(spec, OperationState.Succeeded, null);
         await FinishResourceAsync(spec, ProvisioningState.Succeeded, null);
 
         // ⚠ THE MEMBER REACHES THE SAME TERMINAL STATE THE RESOURCE JUST DID, AND THIS IS WHAT KEEPS
@@ -834,6 +940,7 @@ public sealed class OperationGrain(
         }
 
         await ReleaseAsync(spec);
+        await RecordDeploymentAsync(spec, OperationState.Failed, error);
 
         // ⚠ A FAILED TEARDOWN LEAVES THE RESOURCE IN Deleting AND VISIBLE.
         // docs/plan/06 § Two-phase create: "A resource whose data plane teardown fails is left in
@@ -953,6 +1060,26 @@ public sealed class OperationGrain(
         var reminder = await this.GetReminder(ReminderName);
         if (reminder is not null) {
             await this.UnregisterReminder(reminder);
+        }
+
+        // ⚠ A CHILD TELLS ITS PARENT IT HAS ENDED, SO THE PARENT MOVES NOW RATHER THAN AT ITS NEXT
+        // REMINDER TICK. One-way — see IOperationGrain.NotifyChildTerminalAsync on why that is what
+        // keeps parent and child from deadlocking — and after this grain's own state is written, so a
+        // parent that reads this child next sees the ending. A notification lost here costs the parent
+        // one reminder period and nothing else.
+        if (state.State.Spec is { ParentOperationId: var parent } spec && parent != Guid.Empty) {
+            try {
+                await Tenant(spec)
+                    .GetGrain<IOperationGrain>(GrainKeys.Operation(parent))
+                    .NotifyChildTerminalAsync(operationId);
+            } catch (Exception notifyError) when (notifyError is not OperationCanceledException) {
+                logger.LogWarning(
+                    notifyError,
+                    "Operation {Operation} ended and could not tell its parent {Parent}; the parent's reminder will find it.",
+                    operationId,
+                    parent
+                );
+            }
         }
     }
 
@@ -1224,7 +1351,8 @@ public sealed class OperationGrain(
             CancelReason = state.State.CancelReason,
             Attempts = state.State.Attempts,
             Activations = state.State.Activations,
-            Children = [.. state.State.Children]
+            Children = [.. state.State.Children],
+            ParentOperationId = state.State.Spec?.ParentOperationId ?? Guid.Empty
         };
 
     IResourceGrain Resource(OperationSpec spec) =>

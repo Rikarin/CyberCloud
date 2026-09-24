@@ -16543,6 +16543,439 @@
       "x-cybercloud-resource-type": "CyberCloud.RecoveryServices/vaults",
       "x-cybercloud-action": "recover"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Resources/deployments": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Resources_deployments_List",
+        "summary": "List the CyberCloud.Resources/deployments in a resource group.",
+        "description": "Returns one page of the resources of this type in the resource group the path names, including any that are being deleted — docs/plan/06 § Two-phase create keeps a resource whose teardown has not converged visible with that state, because its pods still run and its meter still ticks.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Resources.deployments.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Resources/deployments",
+      "x-cybercloud-collection": true
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Resources/deployments/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Resources_deployments_Get",
+        "summary": "Read a CyberCloud.Resources/deployments.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Resources.deployments"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Resources_deployments_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Resources/deployments.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Resources.deployments"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Resources.deployments"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Resources_deployments_Update",
+        "summary": "Merge-patch a CyberCloud.Resources/deployments.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Resources.deployments"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Resources.deployments"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Resources_deployments_Delete",
+        "summary": "Delete a CyberCloud.Resources/deployments.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Resources.deployments"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Resources/deployments",
+      "x-cybercloud-display": {
+        "name": "Deployment",
+        "plural": "Deployments",
+        "alias": "deployment",
+        "summary": "A template of resources deployed in dependency order, each through the write path as its creator.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": false,
+      "x-cybercloud-requires-cluster": false,
+      "x-cybercloud-cluster-id-pointer": "",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": []
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Resources/deployments/{resourceName}/whatIf": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Resources_deployments_WhatIf",
+        "summary": "whatIf a CyberCloud.Resources/deployments.",
+        "description": "An action never creates. This one is served by the platform's IDeploymentManager rather than by a handler: it runs as the caller, and it answers for a name that does not exist yet rather than refusing it with a 404.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Resources.deployments.WhatIfRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Resources.deployments.WhatIfResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false,
+        "x-cybercloud-entry-point": "IDeploymentManager"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Resources/deployments",
+      "x-cybercloud-action": "whatIf"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Sample/widgets": {
       "parameters": [
         {
@@ -27327,6 +27760,190 @@
         "title": "CyberCloud.RecoveryServices.vaults.RecoverResponse",
         "type": "object"
       },
+      "CyberCloud.Resources.deployments": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Resources/deployments: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The template, its parameters, and the record of the last run.",
+            "properties": {
+              "error": {
+                "description": "Why the last run failed, naming the resource that stopped it. Empty when it did not.",
+                "readOnly": true,
+                "type": "string"
+              },
+              "outputResources": {
+                "description": "Every resource the last run created or updated, in the order it did.",
+                "items": {
+                  "type": "string"
+                },
+                "readOnly": true,
+                "type": "array"
+              },
+              "parameters": {
+                "description": "The parameter values, as JSON text: { \"name\": { \"value\": … } }.",
+                "maxLength": 262144,
+                "type": "string"
+              },
+              "rollback": {
+                "description": "What a rollback would remove. Rollback is recorded and never performed.",
+                "readOnly": true,
+                "type": "string"
+              },
+              "steps": {
+                "description": "One line per template resource, in dependency order: its state, its id and the operation that drove it.",
+                "items": {
+                  "type": "string"
+                },
+                "readOnly": true,
+                "type": "array"
+              },
+              "template": {
+                "description": "The template, as JSON text: parameters, variables and resources, each with type, name, apiVersion, properties and dependsOn. Expressions are parameters(), variables(), resourceId() and concat(); anything else is refused with that list.",
+                "maxLength": 1048576,
+                "type": "string"
+              }
+            },
+            "required": [
+              "template"
+            ],
+            "type": "object"
+          },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
+          }
+        },
+        "title": "CyberCloud.Resources/deployments",
+        "type": "object"
+      },
+      "CyberCloud.Resources.deployments.List": {
+        "type": "object",
+        "title": "CyberCloud.Resources.deployments.List",
+        "description": "One page of CyberCloud.Resources/deployments. ⚠ The page holds what the caller may read: a listing runs a permission check per member (docs/plan/07 § The enforcement seam), so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page — there is no empty-string form, because an empty URL is one a polite client requests."
+          },
+          "value": {
+            "type": "array",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
+            "items": {
+              "$ref": "#/components/schemas/CyberCloud.Resources.deployments"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "CyberCloud.Resources.deployments.WhatIfRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Resources/deployments/whatIf.",
+        "properties": {
+          "properties": {
+            "additionalProperties": false,
+            "description": "The template to evaluate and its parameters.",
+            "properties": {
+              "parameters": {
+                "description": "The parameter values, as JSON text.",
+                "maxLength": 262144,
+                "type": "string"
+              },
+              "template": {
+                "description": "The template, as JSON text — the same shape a PUT takes.",
+                "maxLength": 1048576,
+                "type": "string"
+              }
+            },
+            "required": [
+              "template"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "properties"
+        ],
+        "title": "CyberCloud.Resources.deployments.WhatIfRequest",
+        "type": "object"
+      },
+      "CyberCloud.Resources.deployments.WhatIfResponse": {
+        "additionalProperties": true,
+        "description": "What CyberCloud.Resources/deployments/whatIf returns.",
+        "properties": {
+          "creates": {
+            "description": "The resources a deployment would create, in deployment order. A resource the caller cannot read is listed here, because that is the one answer that says nothing about it.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "modifies": {
+            "description": "The resources a deployment would change, in deployment order. Each one's property delta is in 'changes'.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "noChanges": {
+            "description": "The resources a deployment would leave as they are, in deployment order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "description": "Succeeded: the template evaluated and every resource was compared.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "creates",
+          "modifies",
+          "noChanges",
+          "status"
+        ],
+        "title": "CyberCloud.Resources.deployments.WhatIfResponse",
+        "type": "object"
+      },
       "CyberCloud.Sample.widgets": {
         "additionalProperties": false,
         "allOf": [
@@ -28960,5 +29577,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 39
+  "x-cybercloud-resource-type-count": 40
 }

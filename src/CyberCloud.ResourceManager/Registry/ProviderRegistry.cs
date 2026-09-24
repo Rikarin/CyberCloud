@@ -47,6 +47,19 @@ public sealed class ProviderRegistry : IProviderRegistry {
         byType = types.ToFrozenDictionary(static x => Key(x.Type), StringComparer.Ordinal);
     }
 
+    /// <summary>The refusal of a provider in <see cref="KubeLabels.ReservedNamespace" />.</summary>
+    /// <param name="providerNamespace">The namespace, as the provider spelled it.</param>
+    /// <param name="why">Which condition it failed.</param>
+    static InvalidOperationException ReservedNamespaceRefusal(string providerNamespace, string why) =>
+        new(
+            $"Provider '{providerNamespace}' declares the reserved namespace '{KubeLabels.ReservedNamespace}'. "
+            + "The platform stamps that namespace on the cluster objects it owns on a resource group's "
+            + "behalf — the group's namespace — and the drift scan and the conformance suite both read it "
+            + "to mean 'not attributed to a resource'. A provider that rendered objects under it would "
+            + "have its output excluded from both, so the namespace admits only types that render nothing: "
+            + $"no reconciler, no action handler, no cluster. {why} See KubeLabels.ReservedNamespace."
+        );
+
     /// <summary>Builds the registry from every provider in the process.</summary>
     /// <param name="providers">
     ///     The providers, in any order. ⚠ Two providers declaring the same namespace is a build
@@ -102,20 +115,20 @@ public sealed class ProviderRegistry : IProviderRegistry {
             // three would then decline to check, which is a way for a reconciler to opt its output
             // out of orphan detection and out of the labels gate at once. The type label itself is
             // one of ADR-013's seven and cannot be set by a caller; this closes the other door.
-            if (string.Equals(
-                    provider.ProviderNamespace,
-                    KubeLabels.ReservedNamespace,
-                    StringComparison.OrdinalIgnoreCase
-                )) {
-                throw new InvalidOperationException(
-                    $"Provider '{provider.ProviderNamespace}' declares the reserved namespace "
-                    + $"'{KubeLabels.ReservedNamespace}'. The platform stamps that namespace on the "
-                    + "cluster objects it owns on a resource group's behalf — the group's namespace — "
-                    + "and the drift scan and the conformance suite both read it to mean 'not "
-                    + "attributed to a resource'. A provider that rendered objects under it would "
-                    + "have its output excluded from both. See KubeLabels.ReservedNamespace."
-                );
-            }
+            //
+            // ⚠ NARROWED FOR #39, AND THE NARROWING KEEPS THE PROPERTY RATHER THAN SPENDING IT. The
+            // platform's own CyberCloud.Resources/deployments lives here, as Azure's deployments live
+            // in Microsoft.Resources. What the reservation protects is that no object a provider
+            // RENDERS can carry a group-scoped label, so the namespace now admits a provider whose
+            // every type renders nothing — no reconciler, no action handler, no cluster, and not the
+            // group type itself — and refuses anything else exactly as before. A type that renders
+            // nothing emits no label at all, so there is nothing for the drift scan or the labels gate
+            // to decline to check. See ReservedNamespaceRefusal.
+            var reserved = string.Equals(
+                provider.ProviderNamespace,
+                KubeLabels.ReservedNamespace,
+                StringComparison.OrdinalIgnoreCase
+            );
 
             // ⚠ RESERVED TOO, AND FOR A ROUTING REASON RATHER THAN A LABELLING ONE. A role assignment
             // is addressed as {scope}/providers/CyberCloud.Authorization/roleAssignments/{name}
@@ -171,7 +184,31 @@ public sealed class ProviderRegistry : IProviderRegistry {
             var builder = new ProviderBuilder(provider.ProviderNamespace);
             provider.Describe(builder);
 
-            var declared = builder.Build();
+            ImmutableArray<ResourceTypeRegistration> declared;
+
+            try {
+                declared = builder.Build();
+            } catch (InvalidOperationException incomplete) when (reserved) {
+                throw ReservedNamespaceRefusal(provider.ProviderNamespace, incomplete.Message);
+            }
+
+            if (reserved) {
+                var rendering = declared.FirstOrDefault(static x => x.ReconcilerType is not null
+                    || x.RequiresCluster
+                    || x.Actions.Any(static a => a.HandlerType is not null)
+                    || string.Equals(x.Type.Type, KubeLabels.ResourceGroupType.Type, StringComparison.OrdinalIgnoreCase)
+                );
+
+                if (declared.Length == 0 || rendering is not null) {
+                    throw ReservedNamespaceRefusal(
+                        provider.ProviderNamespace,
+                        rendering is null
+                            ? "It declares no type."
+                            : $"'{rendering.Type}' declares a reconciler, an action handler or a cluster, or is the "
+                            + "group type itself, so it could render an object carrying the group's label."
+                    );
+                }
+            }
             if (declared.Length == 0) {
                 throw new InvalidOperationException(
                     $"Provider '{provider.ProviderNamespace}' declared no resource types. A provider with no "

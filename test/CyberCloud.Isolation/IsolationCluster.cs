@@ -6,6 +6,7 @@ using CyberCloud.Core.Time;
 using CyberCloud.Gateway.Host.Principals;
 using CyberCloud.Identity;
 using CyberCloud.Identity.Contracts;
+using CyberCloud.Providers.Resources;
 using CyberCloud.Providers.Sample;
 using CyberCloud.Providers.Sample.Contracts;
 using CyberCloud.Providers.Storage;
@@ -478,6 +479,27 @@ public sealed class IsolationCluster : IAsyncLifetime {
         written.IsSuccess.ShouldBeTrue(written.Error?.Message);
     }
 
+    /// <summary>Deletes one tuple from a tenant's store — a revocation, as the engine sees one.</summary>
+    /// <param name="tenant">Whose store.</param>
+    /// <param name="target">The object.</param>
+    /// <param name="relation">The relation.</param>
+    /// <param name="subject">The subject.</param>
+    public async Task DeleteTupleAsync(
+        Guid tenant,
+        Authorization.Contracts.ObjectRef target,
+        string relation,
+        SubjectRef subject
+    ) {
+        var tuple = RelationTuple.Create(target, relation, subject);
+        tuple.IsSuccess.ShouldBeTrue(tuple.Error?.Message);
+
+        var deleted = await For(tenant)
+            .GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(tenant))
+            .DeleteAsync(tuple.GetValueOrThrow());
+
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+    }
+
     // ── Principals — the directory objects a role assignment is checked against (issue #86) ────
 
     /// <summary>
@@ -615,7 +637,12 @@ public sealed class IsolationCluster : IAsyncLifetime {
         // resource type this platform serves" from whichever half was forgotten, which is a clear
         // enough message that a third copy to diff them would cost more than it catches.
         Registry = ProviderRegistry.Build(
-            [new SampleProvider(), new Conformance.Reference.ReferenceProvider(), new StorageProvider()]
+            [
+                new SampleProvider(),
+                new Conformance.Reference.ReferenceProvider(),
+                new StorageProvider(),
+                new ResourcesProvider()
+            ]
         );
 
         Manager = new ResourceManagerService(
@@ -828,6 +855,7 @@ public sealed class IsolationCluster : IAsyncLifetime {
                     // the child onto the parent — and each type still needs its own reconciler
                     // singleton, because ProviderRegistry stores them by CONCRETE TYPE.
                     services.AddSingleton<IResourceProvider, StorageProvider>();
+                    services.AddSingleton<IResourceProvider, ResourcesProvider>();
                     services.AddSingleton<StorageAccountReconciler>();
                     services.AddSingleton<StorageBucketReconciler>();
                     // ⚠ The third type, and the failure that reported its absence is worth keeping:

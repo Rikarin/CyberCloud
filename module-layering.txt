@@ -440,6 +440,12 @@ CyberCloud.Providers.RecoveryServices -> CyberCloud.Core
 CyberCloud.Providers.RecoveryServices -> CyberCloud.Kubernetes
 CyberCloud.Providers.RecoveryServices -> CyberCloud.ResourceManager
 CyberCloud.Providers.RecoveryServices -> CyberCloud.Tenancy
+# ⚠ TWO AND NOT FOUR, AND THE MISSING PAIR IS THE FAMILY'S WHOLE DESIGN. CyberCloud.Resources/deployments
+# renders nothing, so there is no Kubernetes edge; it declares no meter, so there is no Tenancy edge. Its
+# declaration lives in CyberCloud.ResourceManager.Contracts, where the manager that drives a deployment can
+# reach it, and its .Application names Core for OwningHost and the manager for its registration call.
+CyberCloud.Providers.Resources -> CyberCloud.Core
+CyberCloud.Providers.Resources -> CyberCloud.ResourceManager
 CyberCloud.Providers.Sample -> CyberCloud.Core
 CyberCloud.Providers.Sample -> CyberCloud.Kubernetes
 CyberCloud.Providers.Sample -> CyberCloud.ResourceManager

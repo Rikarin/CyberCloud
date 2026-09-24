@@ -12,6 +12,7 @@ using CyberCloud.Providers.Messaging.Application;
 using CyberCloud.Providers.Monitor.Application;
 using CyberCloud.Providers.Network.Application;
 using CyberCloud.Providers.RecoveryServices.Application;
+using CyberCloud.Providers.Resources.Application;
 using CyberCloud.Providers.Sample.Application;
 using CyberCloud.Providers.Search.Application;
 using CyberCloud.Providers.Storage.Application;
@@ -76,5 +77,6 @@ namespace CyberCloud.Gateway.Host;
 [DependsOn(typeof(SearchApplicationModule))]
 [DependsOn(typeof(StorageApplicationModule))]
 [DependsOn(typeof(RecoveryServicesApplicationModule))]
+[DependsOn(typeof(ResourcesApplicationModule))]
 [DependsOn(typeof(TerminalApplicationModule))]
 public sealed class GatewayHostModule : AbpModule;

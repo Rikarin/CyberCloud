@@ -302,6 +302,35 @@ static class ResourceVerb {
             return (int)ExitCode.Ok;
         }
 
+        return await WaitForResourceAsync(invocation, name, context, uri, accepted, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Streams a create's or an update's progress to stderr and renders the resource it produced —
+    ///     the half of <see cref="WaitAsync" /> a hand-written command that PUTs a resource shares.
+    /// </summary>
+    /// <param name="invocation">The resolved context.</param>
+    /// <param name="name">What the operation is called in progress and errors.</param>
+    /// <param name="context">The client context the PUT was sent through.</param>
+    /// <param name="uri">The resource's URI, which is read once the operation ends.</param>
+    /// <param name="accepted">The <c>202</c>, carrying the operation to poll.</param>
+    /// <param name="cancellationToken">The token, carrying <c>--timeout</c>.</param>
+    /// <remarks>
+    ///     ⚠ Shared rather than copied: <c>cyc deployment create</c> is a PUT whose body comes from files
+    ///     rather than flags, and a second waiting loop would be a second place <c>--timeout</c>, the
+    ///     progress format and the final read could drift.
+    /// </remarks>
+    public static async Task<int> WaitForResourceAsync(
+        CycInvocation invocation,
+        string name,
+        CyberCloudClientContext context,
+        Uri uri,
+        Response accepted,
+        CancellationToken cancellationToken
+    ) {
+        ArgumentNullException.ThrowIfNull(invocation);
+
         var operation = new Operation<ResponseBody>(new ResponseBodyOperationSource(), context, uri, accepted, name);
 
         await StreamAsync(invocation, operation.GetProgressAsync(cancellationToken), cancellationToken).ConfigureAwait(
@@ -315,6 +344,11 @@ static class ResourceVerb {
 
         return (int)ExitCode.Ok;
     }
+
+    /// <summary>What a <c>--no-wait</c> prints — see <see cref="WaitAsync" />.</summary>
+    /// <param name="response">The <c>202</c>.</param>
+    /// <returns>The status, the operation id and the URL to poll it at.</returns>
+    public static Payload AcceptedPayload(Response response) => Accepted(response);
 
     static async Task StreamAsync(
         CycInvocation invocation,

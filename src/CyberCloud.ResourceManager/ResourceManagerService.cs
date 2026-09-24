@@ -1,5 +1,6 @@
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Contracts.Registry;
+using CyberCloud.ResourceManager.Orchestration;
 using CyberCloud.ResourceManager.Reconcile;
 using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
@@ -81,15 +82,71 @@ public sealed class ResourceManagerService(
     IGrainFactory grains,
     ActionDispatcher actions,
     ILogger<ResourceManagerService> logger,
-    ResourceWatchFanout? watches = null
+    ResourceWatchFanout? watches = null,
+    IEnumerable<IResourceBodyValidator>? validators = null
 )
     : IResourceManager {
+    readonly ImmutableArray<IResourceBodyValidator> bodyValidators = [.. validators ?? []];
+
     /// <inheritdoc />
     public Task<Result<WriteAccepted>> WriteAsync(
         WriteRequest request,
         CancellationToken cancellationToken = default
     ) =>
-        WriteCoreAsync(request, false, cancellationToken);
+        WriteCoreAsync(request, false, Guid.Empty, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<Result<WriteAccepted>> WriteChildAsync(
+        Guid parentOperationId,
+        WriteRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // ⚠ THE THREE REFUSALS THAT MAKE THIS A NARROWER DOOR THAN WriteAsync, NOT A WIDER ONE. The
+        // remarks on IResourceManager.WriteChildAsync carry the argument; each line here is one of
+        // its premises, checked rather than assumed.
+        if (parentOperationId == Guid.Empty) {
+            return Result<WriteAccepted>.Failure(
+                ErrorCode.InternalError,
+                $"A child write to '{request.Path}' names no parent operation. WriteChildAsync exists "
+                + "to record one; a write with no parent is WriteAsync's."
+            );
+        }
+
+        // An empty subject is a spec that lost its caller. Step 3 would deny it anyway, and would say
+        // so as a 404 on the child — which reads as a permissions problem on a resource and hides the
+        // real one, that the parent is replaying nobody.
+        if (string.IsNullOrWhiteSpace(request.Caller.SubjectId) || request.Caller.TenantId == Guid.Empty) {
+            return Result<WriteAccepted>.Failure(
+                ErrorCode.InternalError,
+                $"Operation {parentOperationId:D} tried to write '{request.Path}' with no caller. A child "
+                + "is written as the subject that created its parent and never as the platform, which "
+                + "has no identity to lend — the parent's spec has lost the caller it was accepted with."
+            );
+        }
+
+        if (request.Verb != WriteVerb.Put) {
+            return Result<WriteAccepted>.Failure(
+                ErrorCode.InternalError,
+                $"A child write is a PUT, and operation {parentOperationId:D} asked for {request.Verb} on "
+                + $"'{request.Path}'. A deployment's resources are full replacements, which is what "
+                + "makes re-running one idempotent."
+            );
+        }
+
+        if (ResourceId.TryParsePath(request.Path, out var child) && Deployments.Is(child.Type)) {
+            return Result<WriteAccepted>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"'{request.Path}' is a deployment, and a deployment may not deploy one: nested "
+                + "deployments are not supported."
+            );
+        }
+
+        // ⚠ byAnAction is false: a deployment child is a tenant PUT replayed as its caller, and may
+        // set no property a type declared SetOnlyByAnAction — #30's restore bypass stays closed.
+        return await WriteCoreAsync(request, false, parentOperationId, cancellationToken);
+    }
 
     /// <summary>The write path, told whether the write came through an action's creator.</summary>
     /// <param name="request">The write.</param>
@@ -97,10 +154,12 @@ public sealed class ResourceManagerService(
     ///     Whether <see cref="CreateForActionAsync" /> sent it. Only then may the body set a property
     ///     the type declared <c>SetOnlyByAnAction</c>.
     /// </param>
+    /// <param name="parentOperationId">The parent operation of a child write, or empty.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
     async Task<Result<WriteAccepted>> WriteCoreAsync(
         WriteRequest request,
         bool byAnAction,
+        Guid parentOperationId,
         CancellationToken cancellationToken
     ) {
         ArgumentNullException.ThrowIfNull(request);
@@ -173,7 +232,21 @@ public sealed class ResourceManagerService(
                 }
             }
 
-            return await ContinueWriteAsync(request, target, body.RootElement, trace, cancellationToken);
+            // ⚠ WHAT THE SCHEMA CANNOT SAY, STILL AT STEP 2. A deployment's body is a program; the
+            // registry checks that the template is a string and IResourceBodyValidator checks that the
+            // string deploys. Same step, same refusal shape, same place in the order.
+            foreach (var validator in bodyValidators) {
+                if (!validator.Type.Equals(target.Registration.Type)) {
+                    continue;
+                }
+
+                var checkedBody = validator.Validate(target.Id, body.RootElement, request.Verb);
+                if (checkedBody.TryGetError(out var bodyError)) {
+                    return Result<WriteAccepted>.Failure(bodyError);
+                }
+            }
+
+            return await ContinueWriteAsync(request, target, body.RootElement, trace, parentOperationId, cancellationToken);
         }
     }
 
@@ -224,7 +297,7 @@ public sealed class ResourceManagerService(
             );
         }
 
-        var accepted = await WriteCoreAsync(request, true, cancellationToken);
+        var accepted = await WriteCoreAsync(request, true, Guid.Empty, cancellationToken);
 
         if (accepted.TryGetError(out var writeError)) {
             return Result<ResourceCreated>.Failure(writeError);
@@ -2104,6 +2177,7 @@ public sealed class ResourceManagerService(
         WriteTarget target,
         JsonElement body,
         WriteTraceBuilder trace,
+        Guid parentOperationId,
         CancellationToken cancellationToken
     ) {
         // ── 3. ReBAC Check — BEFORE quota, BEFORE the index claim, BEFORE any provider ──────────
@@ -2113,6 +2187,17 @@ public sealed class ResourceManagerService(
         // discover a customer's resource names by probing. 403 is returned only when the caller can
         // read the object but not perform the action." IResourceAuthorizer takes both permissions for
         // exactly that reason, and nothing below this line runs when it refuses.
+        //
+        // ⚠ FullyConsistent for a child, and MinimizeLatency for everything else. A child is written as
+        // a caller recorded when the parent was accepted, from a reminder, up to MaxResources steps
+        // later — and the deployment's own PUT has just cached an allow for that caller at the group.
+        // CheckGrain answers MinimizeLatency from any cached entry with no TTL, so at that mode a
+        // contributor revoked mid-deployment went on writing children as themselves until the end
+        // (the review of #39 ran exactly that and saw the second child created), and a deny cached
+        // by a refused child outlived the grant that should have cured it. docs/plan/07 § Consistency
+        // puts "anything where a stale allow is a real incident" on FullyConsistent; replaying a
+        // recorded identity with no token behind it is that case. It costs one durable walk per
+        // child, which the delete path already pays per request.
         trace.Enter(WriteStep.AuthorizationCheck);
 
         var authorized = await authorizer.AuthorizeAsync(
@@ -2120,7 +2205,7 @@ public sealed class ResourceManagerService(
             target.Registration.WritePermission,
             target.Registration.ReadPermission,
             request.Caller,
-            false,
+            parentOperationId != Guid.Empty,
             cancellationToken
         );
 
@@ -2470,7 +2555,10 @@ public sealed class ResourceManagerService(
                     // update, which is correct in both cases: the first has no parent resource, and
                     // the second did not write an edge to begin with.
                     ParentResourceId = resolvedTarget.ParentId,
-                    Caller = request.Caller
+                    Caller = request.Caller,
+                    // Empty for a request; a parent operation's id for a child written through
+                    // WriteChildAsync, which is what lets the child tell the parent when it ends.
+                    ParentOperationId = parentOperationId
                 }
             );
 
