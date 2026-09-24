@@ -857,7 +857,7 @@ public sealed class ResourceManagerService(
                 Operation = PolicyOperations.Delete,
                 Document = PolicyDocuments.Evaluated(
                     live.IsSuccess ? PolicyDocuments.Stored(live.GetValueOrThrow()) : new JsonObject(),
-                    target.Schema
+                    target.Registration
                 ),
                 ManagementGroup = target.ManagementGroup,
                 Caller = request.Caller
@@ -2144,7 +2144,7 @@ public sealed class ResourceManagerService(
                 Id = target.Id,
                 Operation = PolicyOperations.Action,
                 Action = action.Name,
-                Document = PolicyDocuments.Evaluated(PolicyDocuments.Stored(current.GetValueOrThrow()), target.Schema),
+                Document = PolicyDocuments.Evaluated(PolicyDocuments.Stored(current.GetValueOrThrow()), target.Registration),
                 ManagementGroup = target.ManagementGroup,
                 Caller = request.Caller
             },
@@ -2474,6 +2474,7 @@ public sealed class ResourceManagerService(
 
         var sent = PolicyDocuments.Parse(request.Body);
         var prospective = sent;
+        var judgedEtag = string.Empty;
 
         if (request.Verb == WriteVerb.Patch && target.Exists) {
             // ⚠ A failed read refuses: the patch alone is exactly the body the paragraph above says
@@ -2488,13 +2489,14 @@ public sealed class ResourceManagerService(
             }
 
             prospective = PolicyDocuments.MergePatch(PolicyDocuments.Stored(stored.GetValueOrThrow()), sent);
+            judgedEtag = stored.GetValueOrThrow().Etag;
         }
 
         var decision = await policy.EvaluateAsync(
             new() {
                 Id = target.Id,
                 Operation = target.Exists ? PolicyOperations.Update : PolicyOperations.Create,
-                Document = PolicyDocuments.Evaluated(prospective, target.Schema),
+                Document = PolicyDocuments.Evaluated(prospective, target.Registration),
                 ManagementGroup = target.ManagementGroup,
                 Caller = request.Caller
             },
@@ -2517,7 +2519,7 @@ public sealed class ResourceManagerService(
         var effectiveBody = request.Body;
 
         if (!decision.Modifications.IsDefaultOrEmpty) {
-            var rewritten = PolicyDocuments.Apply(decision.Modifications, sent, prospective, target.Schema);
+            var rewritten = PolicyDocuments.Apply(decision.Modifications, sent, prospective, target.Registration);
             if (rewritten.TryGetError(out var rewriteError)) {
                 return Result<WriteAccepted>.Failure(rewriteError);
             }
@@ -2718,7 +2720,12 @@ public sealed class ResourceManagerService(
                     Body = effectiveBody,
                     Verb = request.Verb,
                     OperationId = operationId,
-                    IfMatch = request.IfMatch,
+                    // ⚠ A PATCH WITHOUT AN If-Match IS STILL CONDITIONAL: on the copy step 5 judged.
+                    // The bag below is the merge of that copy and the patch, and the grain replaces
+                    // the stored bag with it; a write that landed between step 5's read and here would
+                    // lose its tags to this one, and this one would be stored under a judgement of a
+                    // body that is no longer there. Found by the third review of issue #46.
+                    IfMatch = request.IfMatch.Length > 0 ? request.IfMatch : judgedEtag,
                     Caller = request.Caller,
                     // ⚠ A PATCH sends the merged body's bag — the one step 5 judged — never the
                     // patch's own, which the grain would store in place of every tag it left out.
@@ -2752,6 +2759,17 @@ public sealed class ResourceManagerService(
             // resource away from its owner.
             if (!target.Exists) {
                 _ = await relations.UnlinkFromParentAsync(addressed, resolvedTarget.ParentId, cancellationToken);
+            }
+
+            // The caller sent no If-Match, so a 412 would name a precondition they never set. It's a
+            // concurrent write, and a retry judges the body that won.
+            if (submitError.Code == ErrorCode.PreconditionFailed && request.IfMatch.Length == 0) {
+                return Result<WriteAccepted>.Failure(
+                    ErrorCode.Conflict,
+                    $"'{request.Path}' changed while this PATCH was judged against it, so it was not applied. "
+                    + "Retry: the patch is merged onto, and policy judges, the body that is stored now.",
+                    submitError.Target
+                );
             }
 
             return Result<WriteAccepted>.Failure(submitError);

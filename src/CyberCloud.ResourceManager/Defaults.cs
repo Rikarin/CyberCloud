@@ -22,8 +22,10 @@ namespace CyberCloud.ResourceManager;
 ///     <para>
 ///         ⚠ <b>No longer the default a host gets.</b> <c>AddCyberCloudResourceManager</c> registers
 ///         <see cref="CatalogPolicyEvaluator" /> since issue #46; this remains for the hand-built
-///         harnesses — the conformance suites, the isolation suite — whose subject is not policy and
-///         which build <see cref="ResourceManagerService" /> without a catalog grain to ask.
+///         harnesses whose subject isn't policy — the two conformance suites'
+///         <c>ProviderTestCluster</c> and <c>ClusterConformanceHarness</c>. The isolation suite's
+///         <c>IsolationCluster</c> passes the real evaluator, because who may write a policy and whose
+///         writes it reaches are isolation questions.
 ///     </para>
 /// </remarks>
 public sealed class NotSupportedPolicyEvaluator : IPolicyEvaluator {
