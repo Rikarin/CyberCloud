@@ -16,9 +16,13 @@ namespace CyberCloud.Providers.Compute.Tests;
 ///     the <c>.csproj</c> so the comparison runs wherever the tests do.
 /// </remarks>
 public sealed partial class ComputeChartDriftTests {
-    [Fact]
-    public void TheChartsSizeTableIsTheCSharpOne() {
-        var helpers = Embedded("virtual-machine.helpers.tpl");
+    [Theory]
+    [InlineData("virtual-machine.helpers.tpl")]
+    [InlineData("virtual-machine-scale-set.helpers.tpl")]
+    public void TheChartsSizeTableIsTheCSharpOne(string chart) {
+        // ⚠ Two charts, one C# table: the scale set's helpers spell the machine's sizes a third time,
+        // because a Helm chart cannot include another chart's helpers without a dependency.
+        var helpers = Embedded(chart);
 
         var cores = Dictionary(helpers, "$cores");
         var memory = Dictionary(helpers, "$memory");

@@ -1,0 +1,20 @@
+{{/*
+Kube-OVN `OvnFip` — a public address translated one-to-one onto the group's own. Rendered only when the
+body names a CyberCloud.Network/publicIpAddresses resource. ContainerGroups.FloatingIpJson.
+
+⚠ CLUSTER-SCOPED, so the name folds the namespace in, as the OvnEip it names does
+(PublicIpAddresses.ObjectNameOf). `ipName` is the IP object Kube-OVN allocates for the pod,
+`{pod}.{namespace}`.
+*/}}
+{{- if .Values.network.publicIpAddress }}
+{{- $name := include "container-group.objectName" . }}
+apiVersion: kubeovn.io/v1
+kind: OvnFip
+metadata:
+  name: {{ printf "%s-%s" .Release.Namespace $name }}
+  labels:
+    {{- include "container-group.platformLabels" . | nindent 4 }}
+spec:
+  ovnEip: {{ printf "%s-%s" .Release.Namespace .Values.network.publicIpAddress | quote }}
+  ipName: {{ printf "%s.%s" $name .Release.Namespace | quote }}
+{{- end }}

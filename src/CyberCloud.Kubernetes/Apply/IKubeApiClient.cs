@@ -108,6 +108,35 @@ public interface IKubeApiClient : IDisposable {
         CancellationToken cancellationToken = default
     );
 
+    /// <summary>The last lines one container of a pod wrote — the pod's <c>log</c> subresource.</summary>
+    /// <param name="pod">The pod.</param>
+    /// <param name="container">The container, or empty for the pod's only one.</param>
+    /// <param name="tailLines">How many lines from the end.</param>
+    /// <param name="cancellationToken">The caller's token.</param>
+    /// <returns>
+    ///     The text; <see cref="ErrorCode.ResourceNotFound" /> for a pod that is not there;
+    ///     <see cref="ErrorCode.OperationInProgress" /> for a container that has not started.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ Fails by default, so a client that cannot reach a kubelet's log says so rather than
+    ///     answering an empty log. <c>KubeApiClient</c> reads the subresource; the agent tunnel carries
+    ///     the call as <c>TunnelOperations.ReadLogs</c>. <c>IKubeClusterConnection.ReadLogsAsync</c>.
+    /// </remarks>
+    Task<Result<string>> ReadLogsAsync(
+        ObjectRef pod,
+        string container,
+        int tailLines,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<string>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"This client ({GetType().Name}) cannot read a pod's log, so the logs of '{pod}' were not "
+                + "read. It fails rather than answering an empty log, which would say the container wrote "
+                + "nothing."
+            )
+        );
+
     /// <summary>
     ///     Every namespaced kind this cluster serves, one version per group — API discovery.
     /// </summary>

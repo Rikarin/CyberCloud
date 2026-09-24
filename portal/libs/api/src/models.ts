@@ -709,6 +709,94 @@ export interface ComputeImagesResource extends Resource, ComputeImagesData {
 }
 
 /** The values /properties/size accepts. ⚠ Closed: the write path refuses anything else. */
+export type ComputeVirtualMachineScaleSetsSize =
+  | 's1.large'
+  | 's1.medium'
+  | 's1.small'
+  | 's1.xlarge';
+
+/** The values /properties/upgradePolicy/mode accepts. ⚠ Closed: the write path refuses anything else. */
+export type ComputeVirtualMachineScaleSetsMode =
+  | 'Manual'
+  | 'OnRestart'
+  | 'Rolling';
+
+/** Virtual machine scale set. A set of identical virtual machines on KubeVirt: one size, one image, one subnet and one cloud-init, a capacity quota reserves, a scale action within it, and an upgrade policy that says how running machines take a changed template. */
+export interface ComputeVirtualMachineScaleSetsData {
+  /** The region the set is billed in. */
+  location: string;
+  /** The set's own settings. */
+  properties?: {
+    /** How many machines the set holds: the count a new set starts at, the most the scale action may run, and what quota reserves — capacity times one machine's size and root disk. Raise it with a PUT, which reserves the difference first. */
+    capacity: number;
+    /** First-boot configuration every machine gets, as cloud-init reads it. */
+    cloudInit?: {
+      /** A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other path is refused. Empty means no cloud-init at all. */
+      userData?: string;
+    };
+    /** The cluster the set's machines run in. Must be the one its image is in. */
+    clusterId: string;
+    /** The CyberCloud.Compute/images resource every machine's root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the set waits for it and says so. */
+    image: string;
+    /** The tenant network every machine's interface joins. Both empty means the cluster's pod network. */
+    network?: {
+      /** The subnet of that network the interface takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the machine never starts. */
+      subnet?: string;
+      /** The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty. */
+      virtualNetwork?: string;
+    };
+    /** Each machine's root disk, in Kubernetes quantity form. At least the image's own size. ⚠ Immutable. */
+    osDiskSize: string;
+    /** Every machine's size, from the platform's sizing catalogue: s1.small is 1 vCPU and 4 GiB, and each rung doubles both. A change reaches running machines as the upgrade policy says. */
+    size: ComputeVirtualMachineScaleSetsSize;
+    /** What happens to running machines when the template changes. */
+    upgradePolicy?: {
+      /** For a Rolling upgrade, how many machines may be restarting at once. */
+      maxUnavailable?: number;
+      /** Manual: only machines created afterwards get the new template. OnRestart: every machine's spec is updated and each guest takes it at its next restart. Rolling: the platform restarts machines onto the new template, at most maxUnavailable at a time. */
+      mode?: ComputeVirtualMachineScaleSetsMode;
+    };
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Virtual machine scale set, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface ComputeVirtualMachineScaleSetsResource extends Resource, ComputeVirtualMachineScaleSetsData {
+  readonly type: 'CyberCloud.Compute/virtualMachineScaleSets';
+}
+
+/** What listInstances returns. */
+export interface ComputeVirtualMachineScaleSetsListInstancesResult {
+  /** The ceiling the body sets and quota reserves. */
+  capacity: number;
+  /** The machines the pool runs, by name, in index order. */
+  instances: string[];
+  /** How many machines KubeVirt reports ready. ⚠ 0 with instances listed is a set whose machines exist and have not booted. */
+  readyReplicas: number;
+  /** The replica count the pool is asked for. */
+  replicas: number;
+  /** KubeVirt's word for each machine, in the same order — Running, Provisioning, Starting, ErrorUnschedulable and so on; empty for one it has not reported on. */
+  states: string[];
+}
+
+/** The parameters of scale. */
+export interface ComputeVirtualMachineScaleSetsScaleContent {
+  /** How many machines to run, from 0 to the set's capacity. ⚠ Above the capacity is refused: capacity is what quota reserved, and a PUT that raises it is how more is reserved. */
+  replicas: number;
+}
+
+/** What scale returns. */
+export interface ComputeVirtualMachineScaleSetsScaleResult {
+  /** The ceiling the body sets and quota reserves. */
+  capacity: number;
+  /** The replica count now. */
+  replicas: number;
+  /** The pool's replica count before the action. */
+  replicasBefore: number;
+}
+
+/** The values /properties/size accepts. ⚠ Closed: the write path refuses anything else. */
 export type ComputeVirtualMachinesSize =
   | 's1.large'
   | 's1.medium'
@@ -829,6 +917,98 @@ export interface ComputeVirtualMachinesStopResult {
   runStrategy: ComputeVirtualMachinesStopResultRunStrategy;
   /** The machine's KubeVirt run strategy before the action: Always for a machine that should be on, Halted for one that should be off. */
   runStrategyBefore: ComputeVirtualMachinesStopResultRunStrategyBefore;
+}
+
+/** The values /properties/restartPolicy accepts. ⚠ Closed: the write path refuses anything else. */
+export type ContainerInstanceContainerGroupsRestartPolicy =
+  | 'Always'
+  | 'OnFailure'
+  | 'Never';
+
+/** Container group. One or more containers run together as a pod in your resource group: public or private images, a CPU and memory budget they share, environment from vault handles, ports on a subnet and an optional public address, with logs and restart as actions. */
+export interface ContainerInstanceContainerGroupsData {
+  /** The region the group is billed in. */
+  location: string;
+  /** The group's own settings. */
+  properties?: {
+    /** The cluster the group runs in. */
+    clusterId: string;
+    /** The main container's command, replacing its image's entrypoint — for example ["sh", "-c", "echo hello; sleep 3600"]. Empty runs the image as built. */
+    command?: string[];
+    /** The containers, each name=image — for example web=nginx:1.27 or app=myregistry.example/team/app:2.1. One to ten; names are lower-case DNS labels and unique in the group. The first is the main container: the command and the ports are its. */
+    containers: string[];
+    /** The CPU the whole group may use, as a Kubernetes quantity — 500m is half a core. Reserved against your vCPU quota and enforced on the pod as one limit its containers share. */
+    cpu: string;
+    /** Environment variables every container sees, each NAME=value. ⚠ The value is stored in this body in plaintext — anything secret goes in secureEnvironment. */
+    environment?: string[];
+    /** The memory the whole group may use, as a Kubernetes quantity. Reserved against your memory quota and enforced on the pod as one limit. */
+    memory: string;
+    /** Where the group's ports are reached. All empty means the cluster's pod network, reachable from nothing a tenant owns. */
+    network?: {
+      /** The IPv4 address the group answers on, inside the subnet's range, or empty for one the fabric picks. ⚠ Only with a subnet. */
+      ipAddress?: string;
+      /** A CyberCloud.Network/publicIpAddresses resource in this resource group, by name, translated one-to-one onto the group's address — every port the group listens on is reachable at it. Empty for none. ⚠ Only with a subnet. */
+      publicIpAddress?: string;
+      /** The subnet of that network the group takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the group never starts. */
+      subnet?: string;
+      /** The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty. */
+      virtualNetwork?: string;
+    };
+    /** The ports the main container listens on, each a number with an optional /TCP, /UDP or /SCTP — for example 80 or 53/UDP. Reached at the group's address on its subnet, and at its public address when it has one. */
+    ports?: string[];
+    /** The credential a private registry's images are pulled with. All empty means every image is public. */
+    registry?: {
+      /** A vault handle — path#field, optionally @version — whose value is the password or token. For a CyberCloud.ContainerRegistry that is its own credential: tenants/<tenantId>/CyberCloud.ContainerRegistry/registries/<registryId>#adminPassword. ⚠ Under your own tenant's prefix, or refused. */
+      password?: string;
+      /** The registry's host, with a port when it is not 443 — for example registry.example.com. ⚠ The kubelet resolves it from the node, not from inside the cluster. */
+      server?: string;
+      /** The user the registry knows — admin for a CyberCloud.ContainerRegistry, as its listCredentials answers. */
+      username?: string;
+    };
+    /** Always restarts a container whenever it exits; OnFailure only when it exits non-zero; Never lets the group run once — a batch job — and the group stays Succeeded with its logs readable. */
+    restartPolicy?: ContainerInstanceContainerGroupsRestartPolicy;
+    /** Environment variables whose values are vault handles, each NAME=path#field, optionally @version. Resolved when the group is rendered into a Secret the containers read; the values never enter this body. ⚠ Every path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other is refused. */
+    secureEnvironment?: string[];
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Container group, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface ContainerInstanceContainerGroupsResource extends Resource, ContainerInstanceContainerGroupsData {
+  readonly type: 'CyberCloud.ContainerInstance/containerGroups';
+}
+
+/** The parameters of logs. */
+export interface ContainerInstanceContainerGroupsLogsContent {
+  /** The container whose output to read, by the name the containers property gives it. Empty means the first container. */
+  container?: string;
+  /** How many lines from the end. At most 5000; 100 when not given. */
+  tailLines?: number;
+}
+
+/** What logs returns. */
+export interface ContainerInstanceContainerGroupsLogsResult {
+  /** The container the lines are from. */
+  container: string;
+  /** The lines, newline-separated, as the kubelet kept them. ⚠ A tail and not a stream: the last tailLines lines, capped at a mebibyte. */
+  log: string;
+  /** When the platform read the log, RFC 3339. */
+  readAt: string;
+}
+
+/** The values /action accepts. ⚠ Closed: the write path refuses anything else. */
+export type ContainerInstanceContainerGroupsRestartResultAction =
+  | 'restart';
+
+/** What restart returns. */
+export interface ContainerInstanceContainerGroupsRestartResult {
+  /** restart. */
+  action: ContainerInstanceContainerGroupsRestartResultAction;
+  /** The uid of the pod that replaced it. */
+  podUid: string;
+  /** The uid of the pod that was replaced. */
+  podUidBefore: string;
 }
 
 /** The values /properties/kind accepts. ⚠ Closed: the write path refuses anything else. */

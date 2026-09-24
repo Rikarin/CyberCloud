@@ -63,3 +63,19 @@ public sealed class ImageLifecycleConformance(ClusterConformanceFixture<ImageCas
 
 /// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the image type.</summary>
 public sealed class ImageSiloKillConformance : SiloKillConformanceTests<ImageCase>;
+
+/// <summary>The same suite against the scale set type.</summary>
+/// <param name="fixture">The harness.</param>
+/// <remarks>
+///     ⚠ Against the committed <c>VirtualMachinePool</c> definition and no pool controller: the pool is
+///     admitted by its structural schema and never makes a machine, so what this proves is the apply,
+///     the labels and the read-back. The webhook and the controller are
+///     <c>KubeVirtOnAnEmptyCluster</c>'s, which applies charts/managed/virtual-machine-scale-set
+///     against a real KubeVirt.
+/// </remarks>
+public sealed class VirtualMachineScaleSetLifecycleConformance(ClusterConformanceFixture<VirtualMachineScaleSetCase> fixture)
+    : ClusterConformanceTests<VirtualMachineScaleSetCase>(fixture),
+    IClassFixture<ClusterConformanceFixture<VirtualMachineScaleSetCase>>;
+
+/// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the scale set type.</summary>
+public sealed class VirtualMachineScaleSetSiloKillConformance : SiloKillConformanceTests<VirtualMachineScaleSetCase>;

@@ -124,6 +124,15 @@ public sealed class RealClusterConnection(IKubeApiClient api, Guid clusterId) : 
         CancellationToken cancellationToken = default
     ) =>
         api.SetOwnerAsync(target, owner, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<Result<string>> ReadLogsAsync(
+        ObjectRef pod,
+        string container,
+        int tailLines,
+        CancellationToken cancellationToken = default
+    ) =>
+        api.ReadLogsAsync(pod, container, tailLines, cancellationToken);
 }
 
 /// <summary>Hands the reconcile driver the one real connection a harness owns.</summary>

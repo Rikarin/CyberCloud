@@ -21,20 +21,27 @@ public sealed class ComputeDeclarationTests {
         registry.TryGetType(Images.Type, out var image).ShouldBeTrue();
         image.ReconcilerType.ShouldBe(typeof(ImageReconciler));
 
-        registry.Types.Length.ShouldBe(3);
+        registry.TryGetType(VirtualMachineScaleSets.Type, out var set).ShouldBeTrue();
+        set.ReconcilerType.ShouldBe(typeof(VirtualMachineScaleSetReconciler));
+        set.ClusterIdPointer.ShouldBe(VirtualMachineScaleSets.ClusterIdPointer);
+
+        registry.Types.Length.ShouldBe(4);
     }
 
     [Fact]
-    public void ThreeRootTypesAndNoChild() {
+    public void FourRootTypesAndNoChild() {
         // ⚠ A disk looks like a machine's child and is not one: a managed disk outlives the machine,
-        // and a child shares its parent's lifetime by construction — ComputeProvider says so.
+        // and a child shares its parent's lifetime by construction — ComputeProvider says so. A scale
+        // set's machines are the pool's objects, never resources of their own.
         VirtualMachines.Type.Depth.ShouldBe(1);
         Disks.Type.Depth.ShouldBe(1);
         Images.Type.Depth.ShouldBe(1);
+        VirtualMachineScaleSets.Type.Depth.ShouldBe(1);
 
         VirtualMachines.Type.ToString().ShouldBe("CyberCloud.Compute/virtualMachines");
         Disks.Type.ToString().ShouldBe("CyberCloud.Compute/disks");
         Images.Type.ToString().ShouldBe("CyberCloud.Compute/images");
+        VirtualMachineScaleSets.Type.ToString().ShouldBe("CyberCloud.Compute/virtualMachineScaleSets");
     }
 
     [Fact]
@@ -49,6 +56,7 @@ public sealed class ComputeDeclarationTests {
             .ShouldBeEmpty();
 
         ComputeProvider.MachineShortName.ShouldBe("vm");
+        ComputeProvider.ScaleSetShortName.ShouldBe("vmss");
     }
 
     // ── The meters ──────────────────────────────────────────────────────────────────────────────
@@ -91,6 +99,58 @@ public sealed class ComputeDeclarationTests {
     }
 
     [Fact]
+    public void AScaleSetDrawsOneMachineTimesItsCapacityAndNeverTheLiveCount() {
+        // ⚠ The capacity and not the replica count: the count is on the pool and moves by action, a
+        // derivation is a pure function of the body, and the scale action refuses above the capacity —
+        // so what quota reserved always covers what runs. conformance.yaml § owed,
+        // `quota-is-reserved-at-capacity`, is the cost.
+        using var body = JsonDocument.Parse(
+            VirtualMachineScaleSets.Body(Compute.ClusterId, capacity: 3, size: "s1.medium", osDiskSize: "30Gi")
+        );
+
+        var drawn = Derived(VirtualMachineScaleSets.Type).ToDictionary(
+            static x => x.Meter,
+            x => x.Derivation!.Amount(body.RootElement).GetValueOrThrow()
+        );
+
+        drawn[QuotaMeter.Vcpu].ShouldBe(6);
+        drawn[QuotaMeter.MemoryGb].ShouldBe(24);
+        drawn[QuotaMeter.StorageGb].ShouldBe(90);
+
+        foreach (var meter in Derived(VirtualMachineScaleSets.Type)) {
+            meter.Derivation!.Reads.ShouldContain("/properties/capacity", meter.Meter.ToString());
+        }
+
+        Registration(VirtualMachineScaleSets.Type).Meters.Select(static x => x.Meter).ShouldContain(QuotaMeter.Resources);
+    }
+
+    [Fact]
+    public void TheScaleSetSchemaIsTheMachinesWithoutDataDisksPlusCapacityAndAnUpgradePolicy() {
+        // ⚠ Derived, not written twice — VirtualMachineScaleSets.Schema2026's remarks. Every pointer the
+        // two share carries the same kind, constraints and default; only descriptions are reworded.
+        var machine = VirtualMachines.Schema2026.Properties.ToDictionary(static x => x.JsonPointer);
+        var set = VirtualMachineScaleSets.Schema2026.Properties.ToDictionary(static x => x.JsonPointer);
+
+        set.Keys.Except(machine.Keys)
+            .OrderBy(static x => x, StringComparer.Ordinal)
+            .ShouldBe(
+                [
+                    "/properties/capacity", "/properties/upgradePolicy", "/properties/upgradePolicy/maxUnavailable",
+                    "/properties/upgradePolicy/mode"
+                ]
+            );
+        machine.Keys.Except(set.Keys)
+            .ShouldBe(["/properties/dataDisks"], "a managed disk is one claim and a set is N machines");
+
+        foreach (var pointer in set.Keys.Intersect(machine.Keys)) {
+            (set[pointer] with { Description = "" }).ShouldBe(machine[pointer] with { Description = "" }, pointer);
+        }
+
+        set["/properties/upgradePolicy/mode"].AllowedValues.ShouldBe(["Manual", "OnRestart", "Rolling"]);
+        set["/properties/capacity"].Maximum.ShouldBe(VirtualMachineScaleSets.MaxCapacity);
+    }
+
+    [Fact]
     public void EveryDerivedMeterSaysWhatItReads() {
         // MeterDerivation.Reads is what the generated document publishes as a meter's inputs, and the
         // derivation is a delegate, so no gate can infer them.
@@ -127,6 +187,14 @@ public sealed class ComputeDeclarationTests {
                      (VirtualMachines.Schema2026, VirtualMachines.Body(Compute.ClusterId)),
                      (Disks.Schema2026, Disks.Body(Compute.ClusterId)),
                      (Images.Schema2026, Images.Body(Compute.ClusterId)),
+                     (VirtualMachineScaleSets.Schema2026, VirtualMachineScaleSets.Body(Compute.ClusterId)),
+                     (VirtualMachineScaleSets.Schema2026,
+                         VirtualMachineScaleSets.Body(
+                             Compute.ClusterId,
+                             VirtualMachineScaleSets.MaxCapacity,
+                             upgradeMode: VirtualMachineScaleSets.ManualUpgrade,
+                             cloudInit: Compute.VaultPath("web") + "#userdata"
+                         )),
                      (Images.Schema2026,
                          Images.Body(
                              Compute.ClusterId,
@@ -155,6 +223,7 @@ public sealed class ComputeDeclarationTests {
         VirtualMachines.Schema2026.Properties.ShouldAllBe(x => !x.Secret);
         Disks.Schema2026.Properties.ShouldAllBe(x => !x.Secret);
         Images.Schema2026.Properties.ShouldAllBe(x => !x.Secret);
+        VirtualMachineScaleSets.Schema2026.Properties.ShouldAllBe(x => !x.Secret);
 
         var handle = VirtualMachines.Schema2026.Properties.Single(static x => x.JsonPointer
             == "/properties/cloudInit/userData"

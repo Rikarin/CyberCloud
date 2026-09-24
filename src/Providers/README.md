@@ -2249,9 +2249,12 @@ attached to and a child shares its parent's lifetime by construction.
   object before it renders and writes back what it found. Two other designs were built on paper and
   rejected in `VirtualMachines`' class remarks: a partial apply under the same manager prunes every
   other field, and a second manager conflicts on the reconcile-hash annotation `KubeCommandBuilder`
-  injects non-overridably. What it costs — a one-apply-wide window in which a power action landing
-  between a pass's read and its apply is overwritten — is
-  `charts/managed/virtual-machine/conformance.yaml § owed`, `power-state-can-lose-a-race`.
+  injects non-overridably. What it cost — a one-apply-wide window in which a power action landing
+  between a pass's read and its apply was overwritten, `power-state-can-lose-a-race` — was closed by
+  the scale sets' batch with a `resourceVersion` precondition on `KubeCommand`
+  (`IKubeCommandBuilder.IfResourceVersion`): the pass's apply carries the version it read and loses as
+  `Stale` to an action that moved the object; `charts/managed/virtual-machine/conformance.yaml`,
+  `the-power-state-cannot-lose-a-race`.
   `VirtualMachinePowerTests` drives stop → PUT → still halted → start; sabotaging the read turns three
   tests red.
 - **⚠ THE FIRST HANDLERS THAT WRITE A CLUSTER.** Every earlier `IResourceActionHandler` read — a
@@ -2318,11 +2321,60 @@ attached to and a child shares its parent's lifetime by construction.
   in `VirtualMachines.LogicalSwitchOf` because rule 2 forbids the reference that would spell it once.
   `ComputeNetworkJoinTests` is the first test project to cross a family boundary — legal, because
   rule 2 is over the shipped graph — and is the only thing holding the two spellings together.
-- **⚠ Three of doc 13's rows are deliberately not types, and each has an id.** Scale sets
-  (`scale-sets-are-not-landed`: KubeVirt's alpha `VirtualMachinePool`, or a fan-out that needs the
-  reader every family owes), container instances (`container-instances-are-not-landed`: a different
-  namespace, waiting for a log-streaming path), and `deallocate` (`deallocate-is-stop`: a halted
-  KubeVirt machine already holds no compute and keeps every disk).
+- **⚠ One of doc 13's rows is deliberately not a type, and it has an id:** `deallocate`
+  (`deallocate-is-stop`: a halted KubeVirt machine already holds no compute and keeps every disk).
+  Scale sets and container instances were the other two and are types now — the two sections below.
+
+### What the scale sets measured (#28, 2026-09-23)
+
+`CyberCloud.Compute/virtualMachineScaleSets`, [13 § Scale sets](../../docs/plan/13-compute-vm-containers.md)
+— the fourth type in the Compute family, on KubeVirt's own `VirtualMachinePool`.
+
+- **⚠ THE POOL IS `v1beta1`, AND THE ROW THAT OWED IT SAID `v1alpha1`.** The pinned v1.9.0 serves both
+  and stores `v1beta1`, read off the served definition on a cluster `install.sh` installed it onto;
+  `charts/bundle/kubevirt/component.yaml` claims the pair now, and the definition is committed by
+  `crds.sh --capture` beside the machine's — the fake validates every pool against it.
+- **⚠ THE POOL'S OWN CONTROLLER DOES THE FAN-OUT, SO NOTHING HERE LISTS TO CREATE.** Measured on the
+  same cluster: a pool of two made `web-0` and `web-1`, cloned `web-root-0` and `web-root-1` from the
+  template's one `web-root`, and reported `readyReplicas: 2` under KVM in 51 seconds. What the platform
+  lists is only what `listInstances` answers.
+- **⚠ THE REPLICA COUNT IS THE MACHINE'S POWER STATE AGAIN, AND IT WAS BORN WITH THE RACE CLOSED.** An
+  action cannot change a body, so `scale` writes `spec.replicas` on the pool and the reconciler reads
+  it back before every render, clamped to the body's `capacity` — the ceiling quota reserves. The
+  apply is conditional on the version read, which is the fix `power-state-can-lose-a-race` asked for,
+  and the machine's reconciler took it in the same commit.
+- **⚠ THE SCHEMA IS DERIVED FROM THE MACHINE'S.** `VirtualMachineScaleSets.Schema2026` is
+  `VirtualMachines.Schema2026` without `dataDisks` plus `capacity` and an upgrade policy, so every
+  reader and the render are the machine's own; `ComputeDeclarationTests` holds every shared pointer
+  identical but for its description.
+- **⚠ SCALE-IN IS NOT DONE WHEN `readyReplicas` SAYS SO.** Scaled from two to one, the pool read
+  `readyReplicas: 1, replicas: 2` for the minute the second machine took to stop, so a set converges
+  only when the current count equals the ask too.
+
+### What the nineteenth provider measured
+
+`CyberCloud.ContainerInstance/containerGroups`, [13 § Container Instances](../../docs/plan/13-compute-vm-containers.md),
+M2 · 0.8 EM, #28 — one or more containers as one pod, and a provider namespace of its own.
+
+- **⚠ THE FIRST CLUSTER-BACKED CASE A KUBELET RUNS.** Every earlier `.Cluster.Conformance` case is an
+  object an API server echoes; this one's pod is pulled and started, so the shared suite's harness met
+  two things no earlier case had: a deleted pod stays readable for its grace period (the harness's
+  two-second absence wait now extends to the `deletionGracePeriodSeconds` the object reports), and a
+  silo-kill successor converges on an image pull, not an echo (its drive loop is now
+  `ClusterConformanceTests.ConvergeAsync`'s, forty drives a second apart). And a busybox whose `sleep`
+  is PID 1 ignores `SIGTERM`, so the case's command traps it.
+- **⚠ THE LOG READ IS A MEMBER OF `IKubeClusterConnection`, ADDED BY THIS ROW.** Nothing in the tree
+  could read a line a workload wrote; `ReadLogsAsync` is the pod's `log` subresource as a bounded tail,
+  through the connection grain, failing by default on every double; the agent tunnel carries it as
+  its eighth operation, `readLogs`. The
+  cluster-backed `AGroupRunsOnTheNodeAndItsOutputComesBackThroughTheLogsAction` runs a group, reads its
+  line and a vault-resolved value back through the `logs` action, restarts it, and reads them again.
+- **⚠ POD-LEVEL RESOURCES.** A group's CPU and memory are one budget on the pod — beta and on by
+  default since Kubernetes 1.34 — so what quota reserves is what the kubelet enforces; the k3s lane
+  keeps the field and reports the pod `Guaranteed`.
+- **⚠ THREE RULES SPELLED A SECOND TIME, EACH HELD TO ITS OWNER.** The tenant vault prefix (Compute's
+  cloud-init), a subnet's object name and a public address's; `ContainerGroupSpellingTests` compares
+  them across the family boundary rule 2 forbids crossing in shipped code.
 
 ## Namespaces
 

@@ -3,10 +3,11 @@
 # What the conformance suite asserts about CyberCloud.Compute/virtualMachines. This file is data:
 # `Build.Charts` checks that it is present, non-empty, and names the same resource type as Chart.yaml.
 #
-# ⚠ THE FIRST MANIFEST FOR A TYPE WITH A POWER STATE, and the first whose owed section carries the
-# rest of an issue by name: #28 is "VMs + disks + images, scale sets, container instances", this
-# family is the first three nouns, and § owed says what the other two wait for rather than letting
-# the type list imply it.
+# ⚠ THE FIRST MANIFEST FOR A TYPE WITH A POWER STATE, and the first whose owed section carried the
+# rest of an issue by name: #28 is "VMs + disks + images, scale sets, container instances". The
+# first three nouns landed first; the scale set landed a batch later as its own type and chart
+# (charts/managed/virtual-machine-scale-set), and container groups as their own family
+# (charts/managed/container-group) — neither is owed from here any more.
 
 resourceType: CyberCloud.Compute/virtualMachines
 apiVersion: "2026-08-01"
@@ -107,6 +108,18 @@ assertions:
       {namespace}-{network}-{subnet}` on the pod template — the string NetworkSubnets.ObjectNameOf
       renders for that subnet — and a body naming neither renders no annotation. ComputeNetworkJoinTests
       compares the two spellings across the family boundary rule 2 forbids crossing in shipped code.
+  - id: the-power-state-cannot-lose-a-race
+    says: >
+      ⚠ WAS `power-state-can-lose-a-race` IN § owed, AND IS CLOSED. A reconcile pass reads
+      `spec.runStrategy` and applies it back a moment later; a start or stop landing between the two
+      used to be overwritten by the pass. The apply is now conditional on the resourceVersion the pass
+      read (IKubeCommandBuilder.IfResourceVersion, the platform change the row asked for), a moved
+      object refuses it as ApplyResult.Stale with nothing written, and the next pass reads what the
+      action left. The power handler's own apply carries the version it read too and reads again, up
+      to three times, when a pass landed first. VirtualMachinePowerTests
+      .AStopThatLandsBetweenAPassReadAndItsApplyIsNotOverwritten drives the race;
+      PreconditionAndLogTests.AnApplyCarryingAVersionTheObjectMovedPastIsStaleAndWritesNothing holds
+      the lock to a real API server.
   - id: converged-follows-kubevirts-verdict
     says: >
       A machine is Succeeded when KubeVirt reports Running, or Stopped on a halted machine; every other
@@ -155,43 +168,6 @@ owed:
       route (see `no-serial-console`), and a guest-agent condition on the instance is the cheaper
       first assertion once the catalogue image — which ships the agent — is the one the test imports,
       at the cost of a several-hundred-megabyte pull.
-  - id: scale-sets-are-not-landed
-    says: >
-      docs/plan/13 § Scale sets — "a replica count over one template", M2 — is the fourth noun of
-      #28 and is not a type. KubeVirt has a `VirtualMachinePool` (pool.kubevirt.io/v1alpha1) that is
-      exactly that shape, and it is alpha; the honest first step is deciding whether to render it or
-      to fan a count out into N VirtualMachines this provider owns, which needs the reconciler to
-      list its own objects — the reader charts/managed/kube-ovn-snat records under
-      `one-subnet-per-nat-gateway`. Not a follow-up commit's size, and not implied by this family.
-      ⚠ WHAT THE REVIEW OF #28 ADDED, MEASURED RATHER THAN ASSUMED: the bundle's KubeVirt pin DOES
-      serve the pool group — `kubectl api-resources --api-group=pool.kubevirt.io` on the k3s the
-      nightly class installs it onto answers `virtualmachinepools` (short names vmpool, vmpools),
-      read on 2026-09-18 — while charts/bundle/kubevirt/component.yaml claims `serves: kubevirt.io/v1`
-      alone, on purpose ("only the version this platform's dependants use is claimed"). So a
-      scale-set chart's first line is a `serves:` widening the Bundle gate would check, then the
-      render, the fourth type, the meters times replicas, and a nightly assertion that a pool of
-      one boots — a row of its own, and this row stays until it lands. Declined for this branch on
-      that arithmetic, with the review's finding recorded here rather than in a commit message.
-  - id: container-instances-are-not-landed
-    says: >
-      docs/plan/13 § Container Instances — `CyberCloud.ContainerInstance/containerGroups`, a Pod or a
-      Job in the tenant's namespace — is #28's fifth noun and a different provider namespace. It is
-      the cheapest provider in the catalogue and the one docs/plan/13 wants to prove the log-streaming
-      path with, which nothing in this tree has; it waits for that path rather than shipping a Pod
-      whose logs nobody can read. ⚠ The review of #28 counted it as half of the issue's scope not
-      delivered; docs/plan/13 prices it as its own row (`CyberCloud.ContainerInstance/containerGroups
-      · M2 · 0.8 EM`) beside the VM row's 3.0, docs/plan/03's layout gives a provider namespace a
-      family of its own, and docs/plan/24's roadmap row stays ◐ until both nouns land — so it is a
-      family this branch does not start, said here and in docs/plan/13 § Virtual Machines rather than
-      implied by the type list.
-  - id: power-state-can-lose-a-race
-    says: >
-      ⚠ THE COST OF KEEPING THE POWER STATE ON THE OBJECT. A reconcile pass reads `spec.runStrategy`
-      and applies it back moments later under one field manager; a start or stop that lands between
-      the two is overwritten by the pass. The window is one apply wide and opens only when a PUT on
-      the same machine is in flight. Closing it is a resourceVersion precondition on KubeCommand —
-      CyberCloud.Kubernetes surface — so that the apply fails on a moved object and the pass reads
-      again. Recorded rather than fixed because the seam is the platform's and not this provider's.
   - id: deallocate-is-stop
     says: >
       docs/plan/13 lists `deallocate` beside `stop` as "the billing-relevant one". On KubeVirt a
@@ -211,8 +187,8 @@ owed:
       `size` is mutable and KubeVirt applies a changed cpu/memory to the next instance, reporting
       RestartRequired until then. docs/plan/13 wants a resize to "require a stop"; this API accepts
       the PUT on a running machine and the machine keeps running at its old size until a restart. A
-      refusal on a running machine needs the write path to read the object's power state, which the
-      manager cannot do today — the same seam `power-state-can-lose-a-race` names.
+      refusal on a running machine needs the WRITE PATH to read the object's power state, which the
+      manager cannot do today: the reconciler reads it, after the 202, and nothing before.
   - id: images-are-per-resource-group
     says: >
       A machine clones an image in its own namespace, by name. CDI authorises a cross-namespace clone

@@ -6,10 +6,10 @@ namespace CyberCloud.Providers.Compute;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>THE ROW THAT MAKES THE PLATFORM A CLOUD RATHER THAN A MANAGED-DATABASE SERVICE</b>, in
-///         #28's words, and the core of it rather than the whole: docs/plan/13 § Virtual Machines' three
-///         nouns are here, and its scale sets and docs/plan/13 § Container Instances are not. Each
-///         absence is a row in <c>charts/managed/virtual-machine/conformance.yaml § owed</c> rather
-///         than an implication of the type list.
+///         #28's words: docs/plan/13 § Virtual Machines' three nouns and its scale sets are here, the
+///         fourth landed a batch after the first three as a <c>VirtualMachinePool</c>. docs/plan/13
+///         § Container Instances is a provider namespace of its own, <c>CyberCloud.ContainerInstance</c>,
+///         and is not in this family.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THE FIRST FAMILY WITH A POWER STATE, AND THE FIRST WHOSE ACTIONS WRITE THE CLUSTER.</b>
@@ -19,7 +19,7 @@ namespace CyberCloud.Providers.Compute;
 ///         <see cref="VirtualMachines" />' class remarks carry what that decides and what it costs.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Three types and no child</b>, although a disk and a machine look like a pair. A managed
+///         ⚠ <b>Four types and no child</b>, although a disk and a machine look like a pair. A managed
 ///         disk outlives the machine it is attached to — that is the point of the word <i>managed</i>
 ///         — and a child type shares its parent's lifetime by construction. The join is a name in the
 ///         machine's body, resolved to a claim in the same namespace, exactly as a machine's image is.
@@ -44,6 +44,9 @@ public sealed class ComputeProvider : IResourceProvider {
 
     /// <summary>The image type's CLI alias.</summary>
     public const string ImageShortName = "image";
+
+    /// <summary>The scale set type's CLI alias.</summary>
+    public const string ScaleSetShortName = "vmss";
 
     /// <inheritdoc />
     public string ProviderNamespace => VirtualMachines.ProviderNamespace;
@@ -153,6 +156,48 @@ public sealed class ComputeProvider : IResourceProvider {
             )
             .Chart(Images.ChartName)
             .SupportsTags()
+            .RequiresCluster()
+            // ── Scale sets ────────────────────────────────────────────────────────────────────────
+            //
+            // ⚠ EVERY METER IS ONE MACHINE'S TIMES THE CAPACITY, NOT TIMES THE LIVE REPLICA COUNT. The
+            // count is on the pool and moves by action; a derivation is a pure function of the body
+            // (the first ⚠ above) and the capacity is the only count the body holds. So a set scaled to
+            // two of five is reserved at five, which is conformance.yaml § owed,
+            // `quota-is-reserved-at-capacity` — and a scale-out never runs a machine quota did not
+            // reserve, because the scale action refuses above the capacity.
+            .ResourceType(VirtualMachineScaleSets.TypePath)
+            .ApiVersion(VirtualMachineScaleSets.V2026, VirtualMachineScaleSets.Schema2026)
+            .Reconciler<VirtualMachineScaleSetReconciler>()
+            .Meter(QuotaMeter.Vcpu, ScaleSetVcpuDrawn)
+            .Meter(QuotaMeter.MemoryGb, ScaleSetMemoryDrawn)
+            .Meter(QuotaMeter.StorageGb, ScaleSetStorageDrawn)
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .Action(
+                VirtualMachineScaleSets.ScaleAction,
+                ActionKind.Post,
+                VirtualMachineScaleSets.ScalePermission,
+                request: VirtualMachineScaleSets.ScaleRequest,
+                response: VirtualMachineScaleSets.ScaleResponse,
+                handler: typeof(VirtualMachineScaleSetActionHandler)
+            )
+            .Action(
+                VirtualMachineScaleSets.ListInstancesAction,
+                ActionKind.Post,
+                VirtualMachineScaleSets.ListInstancesPermission,
+                response: VirtualMachineScaleSets.InstancesResponse,
+                handler: typeof(VirtualMachineScaleSetActionHandler)
+            )
+            .Display(
+                "Virtual machine scale set",
+                "Virtual machine scale sets",
+                ScaleSetShortName,
+                "A set of identical virtual machines on KubeVirt: one size, one image, one subnet and "
+                + "one cloud-init, a capacity quota reserves, a scale action within it, and an upgrade "
+                + "policy that says how running machines take a changed template."
+            )
+            .Chart(VirtualMachineScaleSets.ChartName)
+            .SupportsTags()
             .RequiresCluster();
     }
 
@@ -206,6 +251,38 @@ public sealed class ComputeProvider : IResourceProvider {
             static body => KubeQuantity.TryGibibytes(Images.Size(body), out var gibibytes)
                 ? Result<decimal>.Success(gibibytes)
                 : Unresolvable("storage", "size")
+        );
+
+    // ── What a scale set draws: one machine's, times the capacity ────────────────────────────
+
+    /// <summary>vCPU: the size's cores, times the capacity.</summary>
+    static MeterDerivation ScaleSetVcpuDrawn { get; } =
+        MeterDerivation.Of(
+            "the size's cores, times capacity",
+            ["/properties/size", "/properties/capacity"],
+            static body => VirtualMachines.Resources(body) is { Cores: > 0 } size
+                ? Result<decimal>.Success(size.Cores * (decimal)VirtualMachineScaleSets.Capacity(body))
+                : Unresolvable("cpu", "the size catalogue")
+        );
+
+    /// <summary>Memory: the size's guest memory in gibibytes, times the capacity.</summary>
+    static MeterDerivation ScaleSetMemoryDrawn { get; } =
+        MeterDerivation.Of(
+            "the size's guest memory in GiB, times capacity",
+            ["/properties/size", "/properties/capacity"],
+            static body => KubeQuantity.TryGibibytes(VirtualMachines.Resources(body).Memory, out var gibibytes)
+                ? Result<decimal>.Success(gibibytes * VirtualMachineScaleSets.Capacity(body))
+                : Unresolvable("memory", "the size catalogue")
+        );
+
+    /// <summary>Storage: one root disk per machine, times the capacity.</summary>
+    static MeterDerivation ScaleSetStorageDrawn { get; } =
+        MeterDerivation.Of(
+            "osDiskSize in GiB, times capacity",
+            ["/properties/osDiskSize", "/properties/capacity"],
+            static body => KubeQuantity.TryGibibytes(VirtualMachines.OsDiskSize(body), out var gibibytes)
+                ? Result<decimal>.Success(gibibytes * VirtualMachineScaleSets.Capacity(body))
+                : Unresolvable("storage", "osDiskSize")
         );
 
     static Result<decimal> Unresolvable(string what, string where) =>

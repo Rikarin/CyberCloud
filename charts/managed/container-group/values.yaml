@@ -1,0 +1,105 @@
+# A container group — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from ContainerGroups.Schema2026 by `./build.sh Charts`,
+# and so is values.schema.json. Add a field in C#, never here.
+#
+# ⚠ `secureEnvironment` AND `registry.password` ARE VAULT HANDLES AND NEVER VALUES. The reconciler resolves
+# them into `{name}-env` and `{name}-pull`, which this chart names and does not render.
+
+## @param containers {array} The containers, each name=image — for example web=nginx:1.27 or app=myregistry.example/team/app:2.1. One to ten; names are lower-case DNS labels and unique in the group. The first is the main container: the command and the ports are its.
+## @required
+## @example ["web=nginx:1.27","log=busybox:1.37"]
+containers: []
+
+## @param command {array} The main container's command, replacing its image's entrypoint — for example ["sh", "-c", "echo hello; sleep 3600"]. Empty runs the image as built.
+## @example ["sh","-c","echo hello; sleep 3600"]
+command: []
+
+## @param cpu {string} The CPU the whole group may use, as a Kubernetes quantity — 500m is half a core. Reserved against your vCPU quota and enforced on the pod as one limit its containers share.
+## @required
+## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+## @example "1"
+cpu: "500m"
+
+## @param memory {string} The memory the whole group may use, as a Kubernetes quantity. Reserved against your memory quota and enforced on the pod as one limit.
+## @required
+## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+## @example "1Gi"
+memory: "256Mi"
+
+## @param restartPolicy {string} Always restarts a container whenever it exits; OnFailure only when it exits non-zero; Never lets the group run once — a batch job — and the group stays Succeeded with its logs readable.
+## @enum Always | OnFailure | Never
+restartPolicy: Always
+
+## @param environment {array} Environment variables every container sees, each NAME=value. ⚠ The value is stored in this body in plaintext — anything secret goes in secureEnvironment.
+## @example ["LOG_LEVEL=info"]
+environment: []
+
+## @param secureEnvironment {array} Environment variables whose values are vault handles, each NAME=path#field, optionally @version. Resolved when the group is rendered into a Secret the containers read; the values never enter this body. ⚠ Every path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other is refused.
+## @example ["DB_PASSWORD=tenants/00000000-0000-0000-0000-000000000000/db#password"]
+secureEnvironment: []
+
+## @param ports {array} The ports the main container listens on, each a number with an optional /TCP, /UDP or /SCTP — for example 80 or 53/UDP. Reached at the group's address on its subnet, and at its public address when it has one.
+## @example ["80","53/UDP"]
+ports: []
+
+## @param registry {object} The credential a private registry's images are pulled with. All empty means every image is public.
+registry:
+  ## @param server {string} The registry's host, with a port when it is not 443 — for example registry.example.com. ⚠ The kubelet resolves it from the node, not from inside the cluster.
+  ## @length ..253
+  ## @pattern ([a-z0-9]([-a-z0-9.]*[a-z0-9])?(:\d{1,5})?)?
+  server: ""
+  ## @param username {string} The user the registry knows — admin for a CyberCloud.ContainerRegistry, as its listCredentials answers.
+  ## @length ..256
+  username: ""
+  ## @param password {string} A vault handle — path#field, optionally @version — whose value is the password or token. For a CyberCloud.ContainerRegistry that is its own credential: tenants/<tenantId>/CyberCloud.ContainerRegistry/registries/<registryId>#adminPassword. ⚠ Under your own tenant's prefix, or refused.
+  ## @length ..512
+  ## @pattern ([^#@\s]+#[^#@\s]+(@[^#@\s]+)?)?
+  ## @widget secret-ref
+  password: ""
+
+## @param network {object} Where the group's ports are reached. All empty means the cluster's pod network, reachable from nothing a tenant owns.
+network:
+  ## @param virtualNetwork {string} The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.
+  ## @immutable
+  ## @length ..63
+  ## @pattern ([a-z0-9]([-a-z0-9]*[a-z0-9])?)?
+  virtualNetwork: ""
+  ## @param subnet {string} The subnet of that network the group takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the group never starts.
+  ## @immutable
+  ## @length ..63
+  ## @pattern ([a-z0-9]([-a-z0-9]*[a-z0-9])?)?
+  ## @widget subnet
+  subnet: ""
+  ## @param ipAddress {string} The IPv4 address the group answers on, inside the subnet's range, or empty for one the fabric picks. ⚠ Only with a subnet.
+  ## @immutable
+  ## @pattern ((\d{1,3}\.){3}\d{1,3})?
+  ## @widget cidr
+  ipAddress: ""
+  ## @param publicIpAddress {string} A CyberCloud.Network/publicIpAddresses resource in this resource group, by name, translated one-to-one onto the group's address — every port the group listens on is reachable at it. Empty for none. ⚠ Only with a subnet.
+  ## @immutable
+  ## @length ..63
+  ## @pattern ([a-z0-9]([-a-z0-9]*[a-z0-9])?)?
+  publicIpAddress: ""
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.ContainerInstance/containerGroups
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

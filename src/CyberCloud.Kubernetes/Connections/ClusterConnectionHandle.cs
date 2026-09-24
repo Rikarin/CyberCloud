@@ -77,4 +77,13 @@ public sealed class ClusterConnectionHandle(IGrainFactory grains, Guid clusterId
         CancellationToken cancellationToken = default
     ) =>
         Grain.SetOwnerAsync(target, owner);
+
+    /// <inheritdoc />
+    public Task<Result<string>> ReadLogsAsync(
+        ObjectRef pod,
+        string container,
+        int tailLines,
+        CancellationToken cancellationToken = default
+    ) =>
+        Grain.ReadLogsAsync(pod, container, tailLines);
 }

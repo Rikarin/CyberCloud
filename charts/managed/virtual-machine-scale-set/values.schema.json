@@ -1,0 +1,239 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/virtual-machine-scale-set/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the virtual-machine-scale-set chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "capacity": {
+      "default": 2,
+      "description": "How many machines the set holds: the count a new set starts at, the most the scale action may run, and what quota reserves — capacity times one machine's size and root disk. Raise it with a PUT, which reserves the difference first.",
+      "maximum": 20,
+      "minimum": 1,
+      "type": "integer",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/capacity"
+    },
+    "cloudInit": {
+      "additionalProperties": false,
+      "description": "First-boot configuration every machine gets, as cloud-init reads it.",
+      "properties": {
+        "userData": {
+          "default": "",
+          "description": "A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other path is refused. Empty means no cloud-init at all.",
+          "maxLength": 512,
+          "pattern": "^(?:([^#@\\s]+#[^#@\\s]+(@[^#@\\s]+)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/cloudInit/userData",
+          "x-cybercloud-widget": "secret-ref"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/cloudInit"
+    },
+    "image": {
+      "default": "ubuntu",
+      "description": "The CyberCloud.Compute/images resource every machine's root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the set waits for it and says so.",
+      "examples": [
+        "ubuntu"
+      ],
+      "maxLength": 63,
+      "pattern": "^(?:[a-z0-9]([-a-z0-9]*[a-z0-9])?)$",
+      "type": "string",
+      "x-cybercloud-immutable": true,
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/image"
+    },
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 9,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "network": {
+      "additionalProperties": false,
+      "description": "The tenant network every machine's interface joins. Both empty means the cluster's pod network.",
+      "properties": {
+        "subnet": {
+          "default": "",
+          "description": "The subnet of that network the interface takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the machine never starts.",
+          "maxLength": 63,
+          "pattern": "^(?:([a-z0-9]([-a-z0-9]*[a-z0-9])?)?)$",
+          "type": "string",
+          "x-cybercloud-immutable": true,
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/network/subnet",
+          "x-cybercloud-widget": "subnet"
+        },
+        "virtualNetwork": {
+          "default": "",
+          "description": "The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.",
+          "maxLength": 63,
+          "pattern": "^(?:([a-z0-9]([-a-z0-9]*[a-z0-9])?)?)$",
+          "type": "string",
+          "x-cybercloud-immutable": true,
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/network/virtualNetwork"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/network"
+    },
+    "osDiskSize": {
+      "default": "20Gi",
+      "description": "Each machine's root disk, in Kubernetes quantity form. At least the image's own size. ⚠ Immutable.",
+      "examples": [
+        "20Gi"
+      ],
+      "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+      "type": "string",
+      "x-cybercloud-immutable": true,
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/osDiskSize"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity injected by the reconciler. Not a tenant-facing setting.",
+      "properties": {
+        "apiVersion": {
+          "default": "2026-08-01",
+          "description": "The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "managedBy": {
+          "default": "cybercloud",
+          "description": "Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 6,
+          "x-cybercloud-pointer": "/properties/platform/managedBy"
+        },
+        "resourceGroup": {
+          "default": "",
+          "description": "Resource group name, rendered into the cybercloud.io/resource-group label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceGroup"
+        },
+        "resourceId": {
+          "default": "",
+          "description": "Resource GUID, rendered into the cybercloud.io/resource-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/resourceId"
+        },
+        "resourceType": {
+          "default": "CyberCloud.Compute/virtualMachineScaleSets",
+          "description": "Fully qualified resource type, rendered into the cybercloud.io/resource-type label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "subscriptionId": {
+          "default": "",
+          "description": "Subscription GUID, rendered into the cybercloud.io/subscription-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/subscriptionId"
+        },
+        "tenantId": {
+          "default": "",
+          "description": "Tenant GUID, rendered into the cybercloud.io/tenant-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tenantId"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 7,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "replicas": {
+      "default": -1,
+      "description": "The pool's replica count, or -1 for a set not yet created, which renders the capacity.",
+      "type": "integer",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "The scale. The reconciler reads it off the VirtualMachinePool before every render and writes back what it found, clamped to capacity; the scale action is what changes it. A tenant has no body property for it, which is why it is not generated from the schema.",
+      "x-cybercloud-order": 8,
+      "x-cybercloud-pointer": "/properties/replicas"
+    },
+    "size": {
+      "default": "s1.small",
+      "description": "Every machine's size, from the platform's sizing catalogue: s1.small is 1 vCPU and 4 GiB, and each rung doubles both. A change reaches running machines as the upgrade policy says.",
+      "enum": [
+        "s1.large",
+        "s1.medium",
+        "s1.small",
+        "s1.xlarge"
+      ],
+      "type": "string",
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/size",
+      "x-cybercloud-widget": "cozy-preset"
+    },
+    "upgradePolicy": {
+      "additionalProperties": false,
+      "description": "What happens to running machines when the template changes.",
+      "properties": {
+        "maxUnavailable": {
+          "default": 1,
+          "description": "For a Rolling upgrade, how many machines may be restarting at once.",
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/upgradePolicy/maxUnavailable"
+        },
+        "mode": {
+          "default": "Rolling",
+          "description": "Manual: only machines created afterwards get the new template. OnRestart: every machine's spec is updated and each guest takes it at its next restart. Rolling: the platform restarts machines onto the new template, at most maxUnavailable at a time.",
+          "enum": [
+            "Manual",
+            "OnRestart",
+            "Rolling"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/upgradePolicy/mode"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 6,
+      "x-cybercloud-pointer": "/properties/upgradePolicy"
+    }
+  },
+  "required": [
+    "capacity",
+    "image",
+    "osDiskSize",
+    "size"
+  ],
+  "title": "virtual-machine-scale-set chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "virtual-machine-scale-set",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.Compute/virtualMachineScaleSets"
+}

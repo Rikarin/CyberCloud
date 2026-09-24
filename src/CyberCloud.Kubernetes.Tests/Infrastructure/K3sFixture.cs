@@ -60,11 +60,26 @@ public sealed class K3sFixture : IAsyncLifetime {
     /// </summary>
     const string SharedVarRunScript = "mount --make-rshared /var/run && exec /bin/k3s \"$@\"";
 
+    /// <summary>
+    ///     Hard-eviction thresholds low enough that the node doesn't taint itself
+    ///     <c>disk-pressure</c> over a nearly full Docker host — the same lines as
+    ///     <c>ClusterInfrastructure.KubeletEvictionDropIn</c>, whose remarks carry the measurement.
+    ///     ⚠ <c>PreconditionAndLogTests</c>' pod stayed Pending for three minutes without it.
+    /// </summary>
+    const string KubeletEvictionDropIn =
+        "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nevictionHard:\n"
+        + "  memory.available: \"100Mi\"\n  nodefs.available: \"1%\"\n  nodefs.inodesFree: \"1%\"\n"
+        + "  imagefs.available: \"1%\"\n  imagefs.inodesFree: \"1%\"\n";
+
     readonly K3sContainer container = new K3sBuilder(Image)
         .WithEntrypoint("/bin/sh", "-c", SharedVarRunScript, "k3s")
         .WithResourceMapping(
             Encoding.UTF8.GetBytes(KubeletDropIn),
             "/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/99-cybercloud-cgroup-v1.conf"
+        )
+        .WithResourceMapping(
+            Encoding.UTF8.GetBytes(KubeletEvictionDropIn),
+            "/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/98-cybercloud-eviction.conf"
         )
         .Build();
 
@@ -100,7 +115,20 @@ public sealed class K3sFixture : IAsyncLifetime {
     /// <inheritdoc />
     public async ValueTask DisposeAsync() {
         Raw?.Dispose();
-        await container.DisposeAsync();
+
+        try {
+            await container.DisposeAsync();
+        } catch (Docker.DotNet.DockerApiException ex) when (ex.Message.Contains("is zombie", StringComparison.Ordinal)) {
+            // ⚠ THE NODE CAN OUTLIVE ONE REMOVE, AND THE REAPER TAKES IT. Since a kubelet runs this
+            // collection's pods, a full run of this assembly failed its last step twice in three
+            // (2026-09-24) — every test green, then "PID … is zombie and can not be killed" from Docker
+            // for the k3s container, which xunit reports against every test in the collection. The
+            // container is gone once the process ends: Testcontainers' Ryuk removes what this session
+            // labelled. The same catch is in EmptyClusterFixture, where KVM guests first showed it.
+            TestContext.Current.SendDiagnosticMessage(
+                $"The k3s container was not removed on the first attempt and is left to Testcontainers' reaper: {ex.Message}"
+            );
+        }
     }
 
     /// <summary>

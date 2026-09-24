@@ -88,6 +88,29 @@ public sealed class TunnelKubeApiClient(Guid clusterId, ITunnelRoute route) : IK
     }
 
     /// <inheritdoc />
+    public async Task<Result<string>> ReadLogsAsync(
+        ObjectRef pod,
+        string container,
+        int tailLines,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(pod);
+
+        var answer = await CallAsync<TunnelOperations.ReadLogsAnswer>(
+            TunnelOperations.ReadLogs,
+            TunnelCodec.Serialize(
+                new TunnelOperations.ReadLogsArguments { Pod = pod, Container = container ?? string.Empty, TailLines = tailLines }
+            ),
+            cancellationToken
+        )
+            .ConfigureAwait(false);
+
+        return answer.TryGetError(out var error)
+            ? Result<string>.Failure(error)
+            : Result<string>.Success(answer.GetValueOrThrow().Log);
+    }
+
+    /// <inheritdoc />
     public async Task<Result<IReadOnlyList<GroupVersionKind>>> DiscoverNamespacedKindsAsync(
         CancellationToken cancellationToken = default
     ) {

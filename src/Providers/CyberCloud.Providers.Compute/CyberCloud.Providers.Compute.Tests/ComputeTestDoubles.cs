@@ -79,7 +79,7 @@ static class Compute {
     public static void Report(RecordingConnection connection, ObjectRef target, JsonObject status) {
         var stored = JsonNode.Parse(connection.Objects[RecordingConnection.Key(target)])!.AsObject();
         stored["status"] = status;
-        connection.Objects[RecordingConnection.Key(target)] = stored.ToJsonString();
+        connection.Store(RecordingConnection.Key(target), stored.ToJsonString());
     }
 
     public static JsonObject Spec(string objectJson) => JsonNode.Parse(objectJson)!["spec"]!.AsObject();
@@ -152,8 +152,34 @@ sealed class RecordingConnection : IKubeClusterConnection {
             );
         }
 
+        // ⚠ The one write between a read and an apply that a test wants to land — an action racing a
+        // reconcile pass — runs here, before the precondition is checked, exactly once.
+        if (BeforeNextApply is { } racing) {
+            BeforeNextApply = null;
+            racing(command);
+        }
+
+        var key = Key(command.Target);
+        var body = JsonNode.Parse(command.Body)!.AsObject();
+
+        // IKubeCommandBuilder.IfResourceVersion, as the API server answers it: a version that moved is
+        // Stale with nothing written; an absent object is created regardless.
+        if ((body["metadata"] as JsonObject)?["resourceVersion"]?.GetValue<string>() is { Length: > 0 } carried) {
+            if (Objects.ContainsKey(key) && carried != VersionOf(key)) {
+                Stale.Add(command.Target);
+
+                return Task.FromResult(
+                    Result<ApplyOutcome>.Success(
+                        new() { Result = ApplyResult.Stale, Target = command.Target, Message = "moved" }
+                    )
+                );
+            }
+
+            ((JsonObject)body["metadata"]!).Remove("resourceVersion");
+        }
+
         if (!SwallowApplies) {
-            Objects[Key(command.Target)] = WithExistingStatus(Key(command.Target), command.Body);
+            Store(key, WithExistingStatus(key, body.ToJsonString()));
         }
 
         return Task.FromResult(
@@ -161,13 +187,33 @@ sealed class RecordingConnection : IKubeClusterConnection {
         );
     }
 
+    /// <summary>A write that lands between the next apply's read and the apply itself, once.</summary>
+    public Action<KubeCommand>? BeforeNextApply { get; set; }
+
+    /// <summary>Every apply refused because its precondition had moved.</summary>
+    public List<ObjectRef> Stale { get; } = [];
+
+    /// <summary>Stores a body and moves the object's version, as any write on a real API server does.</summary>
+    public void Store(string key, string json) {
+        if (!Objects.TryGetValue(key, out var previous) || previous != json) {
+            versions[key] = versions.GetValueOrDefault(key) + 1;
+        }
+
+        Objects[key] = json;
+    }
+
+    readonly ConcurrentDictionary<string, long> versions = new(StringComparer.Ordinal);
+
+    string VersionOf(string key) =>
+        versions.GetValueOrDefault(key, 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) {
         ArgumentNullException.ThrowIfNull(target);
         Read.Add(target);
 
         return Task.FromResult(
             Objects.TryGetValue(Key(target), out var json)
-                ? Result<KubeObject>.Success(new() { Ref = target, Json = json })
+                ? Result<KubeObject>.Success(new() { Ref = target, Json = json, ResourceVersion = VersionOf(Key(target)) })
                 : Result<KubeObject>.Failure(ErrorCode.ResourceNotFound, $"'{target}' is not here.")
         );
     }
@@ -190,6 +236,42 @@ sealed class RecordingConnection : IKubeClusterConnection {
                 ? Result.Success
                 : Result.Failure(ErrorCode.ResourceNotFound, $"'{command.Target}' is not here.")
         );
+    }
+
+    /// <summary>The objects of one kind in one namespace whose labels carry every pair of the selector.</summary>
+    /// <remarks>
+    ///     What a scale set's <c>listInstances</c> asks; the machines a pool controller would create are
+    ///     put here by the test, labelled as the pool's template labels them.
+    /// </remarks>
+    public Task<Result<IReadOnlyList<KubeObjectSummary>>> ListAsync(
+        GroupVersionKind kind,
+        string ns,
+        string labelSelector,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(kind);
+        ArgumentException.ThrowIfNullOrEmpty(labelSelector);
+
+        var wanted = labelSelector.Split(',').Select(static x => x.Split('=', 2)).ToList();
+        var found = new List<KubeObjectSummary>();
+
+        foreach (var (key, json) in Objects) {
+            var parts = key.Split('/');
+
+            if (parts[0] != kind.Kind || parts[1] != ns) {
+                continue;
+            }
+
+            var labels = (JsonNode.Parse(json)?["metadata"]?["labels"] as JsonObject)
+                ?.ToDictionary(static x => x.Key, static x => x.Value?.GetValue<string>() ?? string.Empty)
+                ?? [];
+
+            if (wanted.All(pair => labels.TryGetValue(pair[0], out var value) && value == pair[1])) {
+                found.Add(new() { Kind = kind, Namespace = ns, Name = parts[2], Labels = labels });
+            }
+        }
+
+        return Task.FromResult(Result<IReadOnlyList<KubeObjectSummary>>.Success(found));
     }
 
     /// <summary>Carries an existing object's <c>status</c> through an apply, as a real API server does.</summary>

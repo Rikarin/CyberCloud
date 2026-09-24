@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The cluster-backed half of the shared provider conformance suite, run against the container-group
+      type — and the one place in the tree where a tenant's container is run and its output read back.
+
+      ⚠ ITS k3s HAS A KUBELET, AND THIS IS THE FIRST SUITE WHOSE CASE NEEDS ONE. Every earlier
+      .Cluster.Conformance project renders a custom resource with no controller behind it, or built-in
+      objects nobody runs; a container group's pod is run by the node, pulled from a registry and
+      started, since the WSL2 kernel on the development host moved to cgroup v2 (2026-09-15). So the
+      shared suite's lifecycle here converges on a pod the kubelet reports Running, and
+      ContainerGroupLifecycleConformance adds the assertion #28 asked for: a group whose container
+      writes a line, the line read back through the `logs` action — manager, action dispatcher, handler,
+      IKubeClusterConnection.ReadLogsAsync, the kubelet — with a secure-environment value resolved from
+      the vault into the container, and a restart that replaces the pod and runs it again.
+
+      ⚠ IT IS NOT NAMED `.Conformance.Cluster`, for the reason every sibling gives: Directory.Build.props
+      § Project role detection and build/Build.Test.cs § SuiteOwning both classify by the SUFFIX.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- ⚠ The CASE comes from the Docker-free conformance project: one provider, one ProviderConformanceCase. -->
+        <ProjectReference Include="../CyberCloud.Providers.ContainerInstance.Conformance/CyberCloud.Providers.ContainerInstance.Conformance.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,115 @@
+{{/*
+KubeVirt `VirtualMachinePool` — docs/plan/13 § Scale sets.
+
+⚠ This renders a custom resource; it does not install KubeVirt. The pool is admitted by KubeVirt's own
+validating webhook, which checks the machine template the way it checks a VirtualMachine — and
+CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance § KubeVirtOnAnEmptyCluster applies this chart
+against it for real.
+
+⚠ THE MACHINE TEMPLATE IS charts/managed/virtual-machine's MACHINE, without data disks. A managed disk
+is one ReadWriteOnce claim and a template is N machines, so the set attaches none; the root disk is a
+`dataVolumeTemplates` entry the pool controller indexes per machine. VirtualMachineScaleSets.PoolJson
+builds the same object from VirtualMachines.VirtualMachineJson.
+*/}}
+apiVersion: pool.kubevirt.io/v1beta1
+kind: VirtualMachinePool
+metadata:
+  name: {{ include "virtual-machine-scale-set.objectName" . }}
+  labels:
+    {{- include "virtual-machine-scale-set.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ THE SCALE, AND IT IS @internal: what the pool already says, clamped to `capacity` by the
+    reconciler, or the capacity for a new set. The `scale` action is what moves it.
+  */}}
+  replicas: {{ include "virtual-machine-scale-set.replicas" . }}
+  selector:
+    matchLabels:
+      {{- include "virtual-machine-scale-set.selectorLabels" . | nindent 6 }}
+  {{/*
+    ⚠ THE UPGRADE POLICY IS THE POOL'S OWN, rendered rather than recorded: Manual is `unmanaged` (a
+    template change reaches new machines only), OnRestart is `opportunistic` (each machine's spec is
+    updated and its guest takes it at the next restart), Rolling is `proactive` bounded by
+    maxUnavailable. VirtualMachineScaleSets.UpdateStrategy.
+  */}}
+  updateStrategy:
+    {{- if eq .Values.upgradePolicy.mode "Manual" }}
+    unmanaged: {}
+    {{- else if eq .Values.upgradePolicy.mode "OnRestart" }}
+    opportunistic: {}
+    {{- else }}
+    proactive: {}
+    {{- end }}
+  {{- if eq .Values.upgradePolicy.mode "Rolling" }}
+  maxUnavailable: {{ .Values.upgradePolicy.maxUnavailable }}
+  {{- end }}
+  virtualMachineTemplate:
+    metadata:
+      labels:
+        {{- include "virtual-machine-scale-set.selectorLabels" . | nindent 8 }}
+        {{- include "virtual-machine-scale-set.platformLabels" . | nindent 8 }}
+    spec:
+      {{/* Every machine in a set runs; the replica count is the switch. */}}
+      runStrategy: Always
+      dataVolumeTemplates:
+        - metadata:
+            name: {{ include "virtual-machine-scale-set.rootDataVolume" . }}
+            labels:
+              {{- include "virtual-machine-scale-set.platformLabels" . | nindent 14 }}
+          spec:
+            storage:
+              {{/* ReadWriteOnce, for the reason charts/managed/disk gives: CDI has no profile for the bundle's class. */}}
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: {{ .Values.osDiskSize | quote }}
+            source:
+              {{/* A clone of the image's claim in this namespace, as a single machine's root disk is. */}}
+              pvc:
+                name: {{ .Values.image | quote }}
+                namespace: {{ .Release.Namespace | quote }}
+      template:
+        metadata:
+          labels:
+            {{- include "virtual-machine-scale-set.selectorLabels" . | nindent 12 }}
+            {{- include "virtual-machine-scale-set.platformLabels" . | nindent 12 }}
+          {{- $switch := include "virtual-machine-scale-set.logicalSwitch" . }}
+          {{- if $switch }}
+          annotations:
+            ovn.kubernetes.io/logical_switch: {{ $switch | quote }}
+          {{- end }}
+        spec:
+          domain:
+            cpu:
+              cores: {{ include "virtual-machine-scale-set.cores" . }}
+            memory:
+              guest: {{ include "virtual-machine-scale-set.memory" . | quote }}
+            devices:
+              disks:
+                - name: os
+                  disk:
+                    bus: virtio
+                  bootOrder: 1
+                {{- if .Values.cloudInit.userData }}
+                - name: cloudinit
+                  disk:
+                    bus: virtio
+                {{- end }}
+              interfaces:
+                - name: default
+                  bridge: {}
+          networks:
+            - name: default
+              pod: {}
+          volumes:
+            - name: os
+              dataVolume:
+                name: {{ include "virtual-machine-scale-set.rootDataVolume" . }}
+            {{- if .Values.cloudInit.userData }}
+            - name: cloudinit
+              cloudInitNoCloud:
+                secretRef:
+                  name: {{ include "virtual-machine-scale-set.cloudInitSecret" . }}
+            {{- end }}
+          terminationGracePeriodSeconds: 60

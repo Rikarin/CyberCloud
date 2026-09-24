@@ -83,7 +83,7 @@ public sealed class VirtualMachinePowerHandler : IResourceActionHandler {
                 return await SetRunStrategyAsync(
                     context,
                     cluster,
-                    current,
+                    read.GetValueOrThrow(),
                     VirtualMachines.RunAlways,
                     cancellationToken
                 );
@@ -92,7 +92,7 @@ public sealed class VirtualMachinePowerHandler : IResourceActionHandler {
                 return await SetRunStrategyAsync(
                     context,
                     cluster,
-                    current,
+                    read.GetValueOrThrow(),
                     VirtualMachines.RunHalted,
                     cancellationToken
                 );
@@ -109,15 +109,67 @@ public sealed class VirtualMachinePowerHandler : IResourceActionHandler {
         }
     }
 
+    /// <summary>How many read-then-apply attempts a power change makes before it answers that the machine keeps moving.</summary>
+    public const int MaxAttempts = KubeCoWriter.MaxAttempts;
+
     /// <summary>Applies the machine with its run strategy set, and answers with both states.</summary>
     /// <remarks>
-    ///     ⚠ <b>Idempotent: stopping a stopped machine is a <c>200</c> that changed nothing.</b> An
-    ///     apply of the same document is a no-op on the API server, and refusing would make the
-    ///     generated clients' retry into an error.
+    ///     <para>
+    ///         ⚠ <b>Idempotent: stopping a stopped machine is a <c>200</c> that changed nothing.</b> An
+    ///         apply of the same document is a no-op on the API server, and refusing would make the
+    ///         generated clients' retry into an error.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Conditional on the read, and read again when the machine moved</b> —
+    ///         <see cref="IKubeCommandBuilder.IfResourceVersion" />, the half of
+    ///         <c>power-state-can-lose-a-race</c>'s fix that sits on the action's side. A reconcile pass
+    ///         that applied between this handler's read and its apply is refused here as
+    ///         <see cref="ApplyResult.Stale" /> rather than overwritten; three attempts, as
+    ///         <see cref="KubeCoWriter" /> makes, then <see cref="ErrorCode.OperationInProgress" /> so the
+    ///         caller retries rather than reading the refusal as final.
+    ///     </para>
     /// </remarks>
     static async Task<Result<string>> SetRunStrategyAsync(
         ActionContext context,
         IKubeClusterConnection cluster,
+        KubeObject live,
+        string wanted,
+        CancellationToken cancellationToken
+    ) {
+        for (var attempt = 1;; attempt++) {
+            var current = VirtualMachines.RunStrategyOf(live.Json);
+            var answered = await ApplyRunStrategyAsync(context, cluster, live, current, wanted, cancellationToken);
+
+            if (answered is not null) {
+                return answered.Value;
+            }
+
+            if (attempt == MaxAttempts) {
+                return Result<string>.Failure(
+                    ErrorCode.OperationInProgress,
+                    $"'{context.Id.Path}' moved on every one of {MaxAttempts} read-then-apply attempts — its "
+                    + "reconciler is applying it — and its power state was not changed. Retry the action."
+                );
+            }
+
+            var reread = await cluster.GetAsync(
+                VirtualMachines.VirtualMachineRef(context.Namespace, context.Id.Name),
+                cancellationToken
+            );
+
+            if (reread.TryGetError(out var rereadError)) {
+                return Result<string>.Failure(rereadError);
+            }
+
+            live = reread.GetValueOrThrow();
+        }
+    }
+
+    /// <summary>One conditional apply: the answer, or <see langword="null" /> when the machine moved and must be read again.</summary>
+    static async Task<Result<string>?> ApplyRunStrategyAsync(
+        ActionContext context,
+        IKubeClusterConnection cluster,
+        KubeObject live,
         string current,
         string wanted,
         CancellationToken cancellationToken
@@ -129,6 +181,7 @@ public sealed class VirtualMachinePowerHandler : IResourceActionHandler {
             .WithKind(VirtualMachines.VirtualMachineKind)
             .WithApiVersion(context.ApiVersion)
             .WithTemplateLabels(VirtualMachineReconciler.PodTemplatePath, VirtualMachineReconciler.RootDiskTemplatePath)
+            .IfResourceVersion(live.ResourceVersion)
             .ObjectJson(VirtualMachines.VirtualMachineJson(context.Namespace, context.Id.Name, context.Desired, wanted))
             .ApplyAsync(cancellationToken);
 
@@ -137,6 +190,10 @@ public sealed class VirtualMachinePowerHandler : IResourceActionHandler {
         }
 
         var outcome = applied.GetValueOrThrow();
+
+        if (outcome.Result == ApplyResult.Stale) {
+            return null;
+        }
 
         if (outcome.Result == ApplyResult.Suspended) {
             return Result<string>.Failure(

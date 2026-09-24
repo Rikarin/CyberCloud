@@ -927,6 +927,122 @@ func (r *ImageResource) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &r.Data)
 }
 
+// VirtualMachineScaleSetSize is the values /properties/size accepts. ⚠ Closed: the write path refuses anything else.
+type VirtualMachineScaleSetSize string
+
+const (
+	VirtualMachineScaleSetSizeS1Large  VirtualMachineScaleSetSize = "s1.large"
+	VirtualMachineScaleSetSizeS1Medium VirtualMachineScaleSetSize = "s1.medium"
+	VirtualMachineScaleSetSizeS1Small  VirtualMachineScaleSetSize = "s1.small"
+	VirtualMachineScaleSetSizeS1Xlarge VirtualMachineScaleSetSize = "s1.xlarge"
+)
+
+// VirtualMachineScaleSetMode is the values /properties/upgradePolicy/mode accepts. ⚠ Closed: the write path refuses anything else.
+type VirtualMachineScaleSetMode string
+
+const (
+	VirtualMachineScaleSetModeManual    VirtualMachineScaleSetMode = "Manual"
+	VirtualMachineScaleSetModeOnRestart VirtualMachineScaleSetMode = "OnRestart"
+	VirtualMachineScaleSetModeRolling   VirtualMachineScaleSetMode = "Rolling"
+)
+
+// VirtualMachineScaleSetData is Virtual machine scale set: the body a caller writes. A set of identical virtual machines on KubeVirt: one size, one image, one subnet and one cloud-init, a capacity quota reserves, a scale action within it, and an upgrade policy that says how running machines take a changed template.
+type VirtualMachineScaleSetData struct {
+	// The region the set is billed in.
+	Location string `json:"location"`
+	// The set's own settings.
+	Properties *VirtualMachineScaleSetProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// VirtualMachineScaleSetProperties is The set's own settings.
+type VirtualMachineScaleSetProperties struct {
+	// How many machines the set holds: the count a new set starts at, the most the scale action may run, and what quota reserves — capacity times one machine's size and root disk. Raise it with a PUT, which reserves the difference first.
+	Capacity int64 `json:"capacity"`
+	// First-boot configuration every machine gets, as cloud-init reads it.
+	CloudInit *VirtualMachineScaleSetPropertiesCloudInit `json:"cloudInit,omitempty"`
+	// The cluster the set's machines run in. Must be the one its image is in.
+	ClusterID string `json:"clusterId"`
+	// The CyberCloud.Compute/images resource every machine's root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the set waits for it and says so.
+	Image string `json:"image"`
+	// The tenant network every machine's interface joins. Both empty means the cluster's pod network.
+	Network *VirtualMachineScaleSetPropertiesNetwork `json:"network,omitempty"`
+	// Each machine's root disk, in Kubernetes quantity form. At least the image's own size. ⚠ Immutable.
+	OsDiskSize string `json:"osDiskSize"`
+	// Every machine's size, from the platform's sizing catalogue: s1.small is 1 vCPU and 4 GiB, and each rung doubles both. A change reaches running machines as the upgrade policy says.
+	Size VirtualMachineScaleSetSize `json:"size"`
+	// What happens to running machines when the template changes.
+	UpgradePolicy *VirtualMachineScaleSetPropertiesUpgradePolicy `json:"upgradePolicy,omitempty"`
+}
+
+// VirtualMachineScaleSetPropertiesCloudInit is First-boot configuration every machine gets, as cloud-init reads it.
+type VirtualMachineScaleSetPropertiesCloudInit struct {
+	// A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other path is refused. Empty means no cloud-init at all.
+	UserData *string `json:"userData,omitempty"`
+}
+
+// VirtualMachineScaleSetPropertiesNetwork is The tenant network every machine's interface joins. Both empty means the cluster's pod network.
+type VirtualMachineScaleSetPropertiesNetwork struct {
+	// The subnet of that network the interface takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the machine never starts.
+	Subnet *string `json:"subnet,omitempty"`
+	// The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.
+	VirtualNetwork *string `json:"virtualNetwork,omitempty"`
+}
+
+// VirtualMachineScaleSetPropertiesUpgradePolicy is What happens to running machines when the template changes.
+type VirtualMachineScaleSetPropertiesUpgradePolicy struct {
+	// For a Rolling upgrade, how many machines may be restarting at once.
+	MaxUnavailable *int64 `json:"maxUnavailable,omitempty"`
+	// Manual: only machines created afterwards get the new template. OnRestart: every machine's spec is updated and each guest takes it at its next restart. Rolling: the platform restarts machines onto the new template, at most maxUnavailable at a time.
+	Mode *VirtualMachineScaleSetMode `json:"mode,omitempty"`
+}
+
+// VirtualMachineScaleSetResource is one Virtual machine scale set, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type VirtualMachineScaleSetResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data VirtualMachineScaleSetData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *VirtualMachineScaleSetResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// VirtualMachineScaleSetListInstancesResult is what listInstances returns.
+type VirtualMachineScaleSetListInstancesResult struct {
+	// The ceiling the body sets and quota reserves.
+	Capacity int64 `json:"capacity"`
+	// The machines the pool runs, by name, in index order.
+	Instances []string `json:"instances"`
+	// How many machines KubeVirt reports ready. ⚠ 0 with instances listed is a set whose machines exist and have not booted.
+	ReadyReplicas int64 `json:"readyReplicas"`
+	// The replica count the pool is asked for.
+	Replicas int64 `json:"replicas"`
+	// KubeVirt's word for each machine, in the same order — Running, Provisioning, Starting, ErrorUnschedulable and so on; empty for one it has not reported on.
+	States []string `json:"states"`
+}
+
+// VirtualMachineScaleSetScaleContent is the parameters of scale.
+type VirtualMachineScaleSetScaleContent struct {
+	// How many machines to run, from 0 to the set's capacity. ⚠ Above the capacity is refused: capacity is what quota reserved, and a PUT that raises it is how more is reserved.
+	Replicas int64 `json:"replicas"`
+}
+
+// VirtualMachineScaleSetScaleResult is what scale returns.
+type VirtualMachineScaleSetScaleResult struct {
+	// The ceiling the body sets and quota reserves.
+	Capacity int64 `json:"capacity"`
+	// The replica count now.
+	Replicas int64 `json:"replicas"`
+	// The pool's replica count before the action.
+	ReplicasBefore int64 `json:"replicasBefore"`
+}
+
 // VirtualMachineSize is the values /properties/size accepts. ⚠ Closed: the write path refuses anything else.
 type VirtualMachineSize string
 
@@ -1097,6 +1213,123 @@ type VirtualMachineStopResult struct {
 	RunStrategy VirtualMachineStopResultRunStrategy `json:"runStrategy"`
 	// The machine's KubeVirt run strategy before the action: Always for a machine that should be on, Halted for one that should be off.
 	RunStrategyBefore VirtualMachineStopResultRunStrategyBefore `json:"runStrategyBefore"`
+}
+
+// ContainerGroupRestartPolicy is the values /properties/restartPolicy accepts. ⚠ Closed: the write path refuses anything else.
+type ContainerGroupRestartPolicy string
+
+const (
+	ContainerGroupRestartPolicyAlways    ContainerGroupRestartPolicy = "Always"
+	ContainerGroupRestartPolicyOnFailure ContainerGroupRestartPolicy = "OnFailure"
+	ContainerGroupRestartPolicyNever     ContainerGroupRestartPolicy = "Never"
+)
+
+// ContainerGroupData is Container group: the body a caller writes. One or more containers run together as a pod in your resource group: public or private images, a CPU and memory budget they share, environment from vault handles, ports on a subnet and an optional public address, with logs and restart as actions.
+type ContainerGroupData struct {
+	// The region the group is billed in.
+	Location string `json:"location"`
+	// The group's own settings.
+	Properties *ContainerGroupProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// ContainerGroupProperties is The group's own settings.
+type ContainerGroupProperties struct {
+	// The cluster the group runs in.
+	ClusterID string `json:"clusterId"`
+	// The main container's command, replacing its image's entrypoint — for example ["sh", "-c", "echo hello; sleep 3600"]. Empty runs the image as built.
+	Command []string `json:"command,omitempty"`
+	// The containers, each name=image — for example web=nginx:1.27 or app=myregistry.example/team/app:2.1. One to ten; names are lower-case DNS labels and unique in the group. The first is the main container: the command and the ports are its.
+	Containers []string `json:"containers"`
+	// The CPU the whole group may use, as a Kubernetes quantity — 500m is half a core. Reserved against your vCPU quota and enforced on the pod as one limit its containers share.
+	Cpu string `json:"cpu"`
+	// Environment variables every container sees, each NAME=value. ⚠ The value is stored in this body in plaintext — anything secret goes in secureEnvironment.
+	Environment []string `json:"environment,omitempty"`
+	// The memory the whole group may use, as a Kubernetes quantity. Reserved against your memory quota and enforced on the pod as one limit.
+	Memory string `json:"memory"`
+	// Where the group's ports are reached. All empty means the cluster's pod network, reachable from nothing a tenant owns.
+	Network *ContainerGroupPropertiesNetwork `json:"network,omitempty"`
+	// The ports the main container listens on, each a number with an optional /TCP, /UDP or /SCTP — for example 80 or 53/UDP. Reached at the group's address on its subnet, and at its public address when it has one.
+	Ports []string `json:"ports,omitempty"`
+	// The credential a private registry's images are pulled with. All empty means every image is public.
+	Registry *ContainerGroupPropertiesRegistry `json:"registry,omitempty"`
+	// Always restarts a container whenever it exits; OnFailure only when it exits non-zero; Never lets the group run once — a batch job — and the group stays Succeeded with its logs readable.
+	RestartPolicy *ContainerGroupRestartPolicy `json:"restartPolicy,omitempty"`
+	// Environment variables whose values are vault handles, each NAME=path#field, optionally @version. Resolved when the group is rendered into a Secret the containers read; the values never enter this body. ⚠ Every path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other is refused.
+	SecureEnvironment []string `json:"secureEnvironment,omitempty"`
+}
+
+// ContainerGroupPropertiesNetwork is Where the group's ports are reached. All empty means the cluster's pod network, reachable from nothing a tenant owns.
+type ContainerGroupPropertiesNetwork struct {
+	// The IPv4 address the group answers on, inside the subnet's range, or empty for one the fabric picks. ⚠ Only with a subnet.
+	IpAddress *string `json:"ipAddress,omitempty"`
+	// A CyberCloud.Network/publicIpAddresses resource in this resource group, by name, translated one-to-one onto the group's address — every port the group listens on is reachable at it. Empty for none. ⚠ Only with a subnet.
+	PublicIpAddress *string `json:"publicIpAddress,omitempty"`
+	// The subnet of that network the group takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the group never starts.
+	Subnet *string `json:"subnet,omitempty"`
+	// The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.
+	VirtualNetwork *string `json:"virtualNetwork,omitempty"`
+}
+
+// ContainerGroupPropertiesRegistry is The credential a private registry's images are pulled with. All empty means every image is public.
+type ContainerGroupPropertiesRegistry struct {
+	// A vault handle — path#field, optionally @version — whose value is the password or token. For a CyberCloud.ContainerRegistry that is its own credential: tenants/<tenantId>/CyberCloud.ContainerRegistry/registries/<registryId>#adminPassword. ⚠ Under your own tenant's prefix, or refused.
+	Password *string `json:"password,omitempty"`
+	// The registry's host, with a port when it is not 443 — for example registry.example.com. ⚠ The kubelet resolves it from the node, not from inside the cluster.
+	Server *string `json:"server,omitempty"`
+	// The user the registry knows — admin for a CyberCloud.ContainerRegistry, as its listCredentials answers.
+	Username *string `json:"username,omitempty"`
+}
+
+// ContainerGroupResource is one Container group, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type ContainerGroupResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data ContainerGroupData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *ContainerGroupResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// ContainerGroupLogsContent is the parameters of logs.
+type ContainerGroupLogsContent struct {
+	// The container whose output to read, by the name the containers property gives it. Empty means the first container.
+	Container *string `json:"container,omitempty"`
+	// How many lines from the end. At most 5000; 100 when not given.
+	TailLines *int64 `json:"tailLines,omitempty"`
+}
+
+// ContainerGroupLogsResult is what logs returns.
+type ContainerGroupLogsResult struct {
+	// The container the lines are from.
+	Container string `json:"container"`
+	// The lines, newline-separated, as the kubelet kept them. ⚠ A tail and not a stream: the last tailLines lines, capped at a mebibyte.
+	Log string `json:"log"`
+	// When the platform read the log, RFC 3339.
+	ReadAt string `json:"readAt"`
+}
+
+// ContainerGroupRestartResultAction is the values /action accepts. ⚠ Closed: the write path refuses anything else.
+type ContainerGroupRestartResultAction string
+
+const (
+	ContainerGroupRestartResultActionRestart ContainerGroupRestartResultAction = "restart"
+)
+
+// ContainerGroupRestartResult is what restart returns.
+type ContainerGroupRestartResult struct {
+	// restart.
+	Action ContainerGroupRestartResultAction `json:"action"`
+	// The uid of the pod that replaced it.
+	PodUid string `json:"podUid"`
+	// The uid of the pod that was replaced.
+	PodUidBefore string `json:"podUidBefore"`
 }
 
 // ArtifactFeedKind is the values /properties/kind accepts. ⚠ Closed: the write path refuses anything else.

@@ -18,9 +18,10 @@ namespace CyberCloud.Kubernetes.Tunnel;
 ///         calls the agent "a reverse-tunnel client and a scoped proxy". A proxy that forwarded raw
 ///         HTTP would let a compromised platform — or a platform bug — send <i>any</i> request to
 ///         the tenant's API server with the agent's service account. A proxy that understands
-///         seven operations forwards seven operations: a get by reference, a server-side apply of
+///         eight operations forwards eight operations: a get by reference, a server-side apply of
 ///         a command the labels are checked on, a delete, an owner patch, discovery, a paged
-///         list, and a ping. Nothing else has a spelling on this wire.
+///         list, a ping, and — since #28's container groups — a bounded read of one pod's log.
+///         Nothing else has a spelling on this wire.
 ///     </para>
 ///     <para>
 ///         It is also what makes the whole thing testable in one process: the agent end dispatches
@@ -54,8 +55,18 @@ public static class TunnelOperations {
     /// <summary><see cref="IKubeApiClient.ListAsync" />.</summary>
     public const string List = "list";
 
+    /// <summary><see cref="IKubeApiClient.ReadLogsAsync" />.</summary>
+    /// <remarks>
+    ///     ⚠ One request and one bounded answer — the last lines, capped at
+    ///     <c>KubeApiClient.MaxLogBytes</c> by the agent's own client — so, unlike a watch, it needs no
+    ///     streaming frame. Without it a container group in a connected cluster ran and could not show
+    ///     its output; <c>TunnelEndToEndTests.TheWireHasASpellingForEveryUnaryMemberOfTheClient</c> is
+    ///     what refused the member until it had a spelling here.
+    /// </remarks>
+    public const string ReadLogs = "readLogs";
+
     /// <summary>Every operation the wire has a spelling for, so a test can prove the agent serves each.</summary>
-    public static IReadOnlyList<string> All { get; } = [Ping, Get, Apply, Delete, SetOwner, Discover, List];
+    public static IReadOnlyList<string> All { get; } = [Ping, Get, Apply, Delete, SetOwner, Discover, List, ReadLogs];
 
     // ── Payloads ───────────────────────────────────────────────────────────────────────────────
 
@@ -68,6 +79,28 @@ public static class TunnelOperations {
         /// <summary>How to cascade.</summary>
         [JsonPropertyName("policy")]
         public CascadePolicy Policy { get; init; } = CascadePolicy.Background;
+    }
+
+    /// <summary>The arguments of a <see cref="ReadLogs" />.</summary>
+    public sealed record ReadLogsArguments {
+        /// <summary>The pod.</summary>
+        [JsonPropertyName("pod")]
+        public ObjectRef Pod { get; init; } = new();
+
+        /// <summary>The container, or empty for the pod's only one.</summary>
+        [JsonPropertyName("container")]
+        public string Container { get; init; } = string.Empty;
+
+        /// <summary>How many lines from the end.</summary>
+        [JsonPropertyName("tailLines")]
+        public int TailLines { get; init; }
+    }
+
+    /// <summary>The answer of a <see cref="ReadLogs" />.</summary>
+    public sealed record ReadLogsAnswer {
+        /// <summary>The lines, as the kubelet kept them.</summary>
+        [JsonPropertyName("log")]
+        public string Log { get; init; } = string.Empty;
     }
 
     /// <summary>The arguments of a <see cref="SetOwner" />.</summary>

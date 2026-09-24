@@ -8,12 +8,13 @@ the built-ins around it. That is server-side apply, read, delete and owner-patch
 namespace, which is what the rules below grant. Narrower would be a role that has to be widened every
 time the catalogue gains a kind, silently, in a cluster the platform cannot see the RBAC of.
 
-⚠ WHAT BOUNDS IT IS THE WIRE, NOT THE ROLE. The agent serves seven operations — TunnelOperations in
+⚠ WHAT BOUNDS IT IS THE WIRE, NOT THE ROLE. The agent serves eight operations — TunnelOperations in
 src/CyberCloud.Kubernetes — and refuses anything else by name, so what the platform can do through this
 role is exactly what a reconciler can express: an apply of a command whose seven labels the agent checks
-again, a read by reference, a delete, an owner patch, discovery, a paged list, a version ping. There is
-no exec, no port-forward, no secret READ by arbitrary name from the platform's side — a get is a get of
-one object the platform names, which it does for objects it applied. See conformance.yaml § owed,
+again, a read by reference, a delete, an owner patch, discovery, a paged list, a version ping, and a
+bounded tail of one pod's log (a container group's `logs` action). There is no exec, no port-forward, no
+secret READ by arbitrary name from the platform's side — a get is a get of one object the platform
+names, which it does for objects it applied. See conformance.yaml § owed,
 `the-role-is-cluster-wide`, for the narrowing this still owes.
 
 The Role below is the other half: the agent's OWN credential Secret, in its own namespace, and no

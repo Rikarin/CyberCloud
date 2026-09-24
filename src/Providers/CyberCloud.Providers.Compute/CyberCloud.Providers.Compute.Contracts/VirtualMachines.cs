@@ -28,12 +28,14 @@ namespace CyberCloud.Providers.Compute.Contracts;
 ///         <c>stop</c> that had to reach the body could not.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What that costs, stated rather than glossed.</b> A reconcile pass reads the run strategy
-///         and applies it back a moment later under one field manager; a power action that lands
-///         between the two is overwritten by the pass. The window is one apply wide and needs a
-///         concurrent PUT on the same VM to open at all, and closing it wants a <c>resourceVersion</c>
-///         precondition on <c>KubeCommand</c>, which is a platform change rather than a provider one.
-///         <c>charts/managed/virtual-machine/conformance.yaml § owed</c>, <c>power-state-can-lose-a-race</c>.
+///         ⚠ <b>What that cost, and how it was paid.</b> A reconcile pass reads the run strategy and
+///         applies it back a moment later under one field manager, so a power action landing between
+///         the two used to be overwritten by the pass — <c>power-state-can-lose-a-race</c>, owed until
+///         #28's scale sets needed the same fix for a replica count. The apply is now conditional on the
+///         <c>resourceVersion</c> the pass read (<c>IKubeCommandBuilder.IfResourceVersion</c>): an object
+///         an action moved refuses it as <c>Stale</c> with nothing written, and the next pass renders
+///         what the action left. <c>charts/managed/virtual-machine/conformance.yaml</c>,
+///         <c>the-power-state-cannot-lose-a-race</c>.
 ///     </para>
 ///     <para>
 ///         ⚠

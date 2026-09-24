@@ -66,6 +66,77 @@ public sealed class VirtualMachinePowerTests {
             .ShouldBe(VirtualMachines.RunAlways);
     }
 
+    /// <summary>
+    ///     A stop that lands between a reconcile pass's read of the run strategy and its apply is not
+    ///     overwritten: the pass's apply is conditional on the version it read, loses, and the next pass
+    ///     renders what the stop left.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <c>power-state-can-lose-a-race</c>, closed. Before <c>IfResourceVersion</c> the pass wrote
+    ///     back <c>Always</c> over the stop's <c>Halted</c> and reported success, and the machine
+    ///     booted again with nobody having asked.
+    /// </remarks>
+    [Fact]
+    public async Task AStopThatLandsBetweenAPassReadAndItsApplyIsNotOverwritten() {
+        var (connection, address, body) = await Provisioned();
+        var reconciler = new VirtualMachineReconciler(new FixedClock());
+        var target = VirtualMachines.VirtualMachineRef(ReconcileDriver.NamespaceFor(address), "web");
+        var key = RecordingConnection.Key(target);
+
+        // The stop's own write, landing after the pass has read Always and before it applies.
+        connection.BeforeNextApply = command => {
+            if (command.Target.Kind.Kind != VirtualMachines.VirtualMachineKind.Kind) {
+                return;
+            }
+
+            var stopped = JsonNode.Parse(connection.Objects[key])!.AsObject();
+            stopped["spec"]!["runStrategy"] = VirtualMachines.RunHalted;
+            connection.Store(key, stopped.ToJsonString());
+        };
+
+        var raced = await reconciler.ReconcileAsync(
+            Compute.Context(connection, address, body.RootElement),
+            TestContext.Current.CancellationToken
+        );
+
+        connection.Stale.ShouldBe([target], "the pass's apply carried the version it read, and the stop had moved it");
+        raced.Kind.ShouldBe(ReconcileOutcomeKind.InProgress);
+        VirtualMachines.RunStrategyOf(connection.Objects[key])
+            .ShouldBe(VirtualMachines.RunHalted, "a reconcile pass wrote back the run strategy a stop had just replaced");
+
+        await reconciler.ReconcileAsync(
+            Compute.Context(connection, address, body.RootElement),
+            TestContext.Current.CancellationToken
+        );
+
+        VirtualMachines.RunStrategyOf(connection.Objects[key])
+            .ShouldBe(VirtualMachines.RunHalted, "the next pass read the stop and rendered it");
+    }
+
+    /// <summary>A power action whose apply meets a moved machine reads it again and applies once more.</summary>
+    [Fact]
+    public async Task AStopThatMeetsAMovedMachineReadsAgainAndStillStops() {
+        var (connection, address, body) = await Provisioned();
+        var target = VirtualMachines.VirtualMachineRef(ReconcileDriver.NamespaceFor(address), "web");
+        var key = RecordingConnection.Key(target);
+
+        // A reconcile pass's write — KubeVirt's status, say — between the handler's read and its apply.
+        connection.BeforeNextApply = _ => Compute.Report(
+            connection,
+            target,
+            new() { ["printableStatus"] = "Running" }
+        );
+
+        var stopped = await new VirtualMachinePowerHandler().InvokeAsync(
+            Compute.Action(connection, address, body.RootElement, VirtualMachines.StopAction),
+            TestContext.Current.CancellationToken
+        );
+
+        stopped.IsSuccess.ShouldBeTrue(stopped.Error?.Message);
+        connection.Stale.ShouldBe([target]);
+        VirtualMachines.RunStrategyOf(connection.Objects[key]).ShouldBe(VirtualMachines.RunHalted);
+    }
+
     [Fact]
     public async Task StoppingAStoppedMachineIsANoOpThatStillAnswers() {
         var (connection, address, body) = await Provisioned();

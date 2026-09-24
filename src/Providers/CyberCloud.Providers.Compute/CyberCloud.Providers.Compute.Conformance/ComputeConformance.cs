@@ -1,6 +1,7 @@
 using CyberCloud.Conformance;
 using CyberCloud.Conformance.Harness;
 using CyberCloud.Core.Resources;
+using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.Compute.Contracts;
 using Shouldly;
 using System.Collections.Immutable;
@@ -209,6 +210,111 @@ public sealed class ImageCase : IProviderCaseSource {
         };
 }
 
+/// <summary>
+///     <c>CyberCloud.Compute/virtualMachineScaleSets</c>, registered into the same shared suite.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>The action is <c>listInstances</c>, not <c>scale</c>, and the suite's shape decides
+///         it.</b> The shared POST carries no body, and <c>scale</c> declares a required
+///         <c>replicas</c>, so a body-less scale is a request the manager refuses before any handler —
+///         which is correct and asserts nothing about the handler. <c>listInstances</c> takes no body,
+///         reads the pool the reconciler applied, lists the machines by the pool's own selector and
+///         answers a body the suite validates against
+///         <see cref="VirtualMachineScaleSets.InstancesResponse" />. <c>scale</c> and the sequence the
+///         design exists for — scale, reconcile, still scaled — are <c>VirtualMachineScaleSetTests</c>'.
+///     </para>
+///     <para>
+///         ⚠ <b>The operator-written objects are one machine and its root disk</b>, as the pool
+///         controller writes them (<see cref="VirtualMachineScaleSets.InstanceJson" />). They make the
+///         k3s lane serve <c>VirtualMachine</c>, which the listing lists, and <c>DataVolume</c>, which
+///         the image gate reads — the same reason <see cref="VirtualMachineCase" /> declares its root
+///         disk — and they give the listing a machine to find.
+///     </para>
+/// </remarks>
+public sealed class VirtualMachineScaleSetCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase { get; } =
+        new() {
+            DisplayName = "CyberCloud.Compute/virtualMachineScaleSets",
+            CreateProvider = static () => new ComputeProvider(),
+            ReconcilerType = typeof(VirtualMachineScaleSetReconciler),
+            CreateReconciler = static clock => new VirtualMachineScaleSetReconciler(clock),
+            Type = VirtualMachineScaleSets.Type,
+            ApiVersion = VirtualMachineScaleSets.V2026,
+            Body = static cluster => VirtualMachineScaleSets.Body(cluster),
+            // ⚠ Changes `size`, which the pool carries in its machine template's cores and guest memory
+            // and which three meters read times the capacity.
+            ChangedBody = static cluster => VirtualMachineScaleSets.Body(cluster, size: "s1.medium"),
+            // Drops the required `/properties/image`.
+            InvalidBody = static cluster => VirtualMachineCase.Without(VirtualMachineScaleSets.Body(cluster), "image"),
+            InvalidBodyTarget = "/properties/image",
+            ActionName = VirtualMachineScaleSets.ListInstancesAction,
+            Objects = static (id, ns) => [VirtualMachineScaleSets.PoolRef(ns, id.Name)],
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
+            OperatorWritten = static (id, ns) => [
+                (
+                    VirtualMachines.VirtualMachineRef(ns, VirtualMachineScaleSets.InstanceName(id.Name, 0)),
+                    VirtualMachineScaleSets.InstanceJson(
+                        ns,
+                        id.Name,
+                        VirtualMachineCase.Desired(VirtualMachineScaleSets.Body(Guid.Empty)),
+                        0,
+                        "Running"
+                    )
+                ),
+                (
+                    Disks.DataVolumeRef(ns, VirtualMachineScaleSets.IndexedRootDataVolumeName(id.Name, 0)),
+                    RootDisk(ns, id.Name, 0)
+                )
+            ],
+            ObjectMatchesDesired = static match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return VirtualMachineScaleSets.Matches(
+                    match.ObjectJson,
+                    match.Namespace,
+                    desired.RootElement,
+                    VirtualMachineScaleSets.ReplicasOf(match.ObjectJson) ?? -1
+                );
+            }
+        };
+
+    /// <summary>The root disk the pool controller's machine at <paramref name="index" /> clones into, as CDI leaves it.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Owned by the pool here, and by the machine on a real cluster.</b> The harness resolves an
+    ///     operator-written object's owner only among objects the reconciler applied
+    ///     (<c>ProviderConformanceTests.PlantOperatorObjects</c>), and the reconciler applies the pool and
+    ///     not the machine. The collector's answer is the same either way — the chain is pool, machine,
+    ///     disk, so the disk goes when the pool does.
+    /// </remarks>
+    static string RootDisk(string ns, string name, int index) {
+        var disk = JsonNode.Parse(
+            VirtualMachines.RootDataVolumeJson(
+                ns,
+                VirtualMachineScaleSets.InstanceName(name, index),
+                VirtualMachineCase.Desired(VirtualMachineScaleSets.Body(Guid.Empty)),
+                Cdi.Succeeded
+            )
+        )!.AsObject();
+
+        disk["metadata"]!["name"] = VirtualMachineScaleSets.IndexedRootDataVolumeName(name, index);
+        disk["metadata"]!["ownerReferences"] = new JsonArray(
+            KubeJson.OwnerReference(
+                new() {
+                    ApiVersion = VirtualMachineScaleSets.PoolKind.ApiVersion,
+                    Kind = VirtualMachineScaleSets.PoolKind.Kind,
+                    Name = VirtualMachineScaleSets.ObjectNameOf(name),
+                    Uid = string.Empty
+                }
+            )
+        );
+
+        return disk.ToJsonString();
+    }
+}
+
 /// <summary>The shared suite, run against the virtual-machine type.</summary>
 /// <param name="cluster">The harness.</param>
 public sealed class VirtualMachineConformance(ProviderTestCluster<VirtualMachineCase> cluster)
@@ -224,6 +330,12 @@ public sealed class DiskConformance(ProviderTestCluster<DiskCase> cluster)
 public sealed class ImageConformance(ProviderTestCluster<ImageCase> cluster)
     : ProviderConformanceTests<ImageCase>(cluster), IClassFixture<ProviderTestCluster<ImageCase>>;
 
+/// <summary>The <b>same</b> suite, run against the scale set type.</summary>
+/// <param name="cluster">The harness.</param>
+public sealed class VirtualMachineScaleSetConformance(ProviderTestCluster<VirtualMachineScaleSetCase> cluster)
+    : ProviderConformanceTests<VirtualMachineScaleSetCase>(cluster),
+    IClassFixture<ProviderTestCluster<VirtualMachineScaleSetCase>>;
+
 /// <summary>The container-backed half, skipped loudly, against the virtual-machine type.</summary>
 public sealed class VirtualMachineClusterBackedConformance()
     : ClusterBackedConformanceTests(VirtualMachineCase.ProviderCase);
@@ -233,6 +345,10 @@ public sealed class DiskClusterBackedConformance() : ClusterBackedConformanceTes
 
 /// <summary>The container-backed half, skipped loudly, against the image type.</summary>
 public sealed class ImageClusterBackedConformance() : ClusterBackedConformanceTests(ImageCase.ProviderCase);
+
+/// <summary>The container-backed half, skipped loudly, against the scale set type.</summary>
+public sealed class VirtualMachineScaleSetClusterBackedConformance()
+    : ClusterBackedConformanceTests(VirtualMachineScaleSetCase.ProviderCase);
 
 /// <summary>
 ///     What this provider's three registrations into the shared suite are <b>shaped</b> like.
@@ -244,34 +360,39 @@ public sealed class ImageClusterBackedConformance() : ClusterBackedConformanceTe
 /// </remarks>
 public sealed class ComputeSuiteShapeTests {
     [Fact]
-    public void TheThreeTypesRunTheSameAssertions() {
-        // ⚠ "The three types run the same suite" is a claim about a COUNT, and a claim about a count
+    public void TheFourTypesRunTheSameAssertions() {
+        // ⚠ "The four types run the same suite" is a claim about a COUNT, and a claim about a count
         // that nothing counts is how a suite goes green by asking less.
         var machine = RunnableFactsOf(typeof(VirtualMachineConformance));
         var disk = RunnableFactsOf(typeof(DiskConformance));
         var image = RunnableFactsOf(typeof(ImageConformance));
+        var set = RunnableFactsOf(typeof(VirtualMachineScaleSetConformance));
 
         disk.ShouldBe(machine);
         image.ShouldBe(machine);
+        set.ShouldBe(machine);
         machine.Length.ShouldBeGreaterThan(20);
     }
 
     [Fact]
     public void NoCaseDescribesAnAncestorBecauseNoneIsAChild() {
         // ⚠ A disk looks like a machine's child and is not one — ComputeProvider says why — so the
-        // three cases are three roots, and the parent-existence assertion self-skips on each.
+        // four cases are four roots, and the parent-existence assertion self-skips on each.
         AncestorsOf<VirtualMachineCase>().ShouldBeEmpty();
         AncestorsOf<DiskCase>().ShouldBeEmpty();
         AncestorsOf<ImageCase>().ShouldBeEmpty();
+        AncestorsOf<VirtualMachineScaleSetCase>().ShouldBeEmpty();
 
         VirtualMachines.Type.Depth.ShouldBe(1);
         Disks.Type.Depth.ShouldBe(1);
         Images.Type.Depth.ShouldBe(1);
+        VirtualMachineScaleSets.Type.Depth.ShouldBe(1);
     }
 
     [Fact]
-    public void OnlyTheMachineDeclaresAnActionAndItIsTheOneThatWritesTheCluster() {
+    public void TheMachineAndTheSetDeclareActionsAndTheDiskAndImageDoNot() {
         VirtualMachineCase.ProviderCase.ActionName.ShouldBe(VirtualMachines.StopAction);
+        VirtualMachineScaleSetCase.ProviderCase.ActionName.ShouldBe(VirtualMachineScaleSets.ListInstancesAction);
         DiskCase.ProviderCase.ActionName.ShouldBeEmpty();
         ImageCase.ProviderCase.ActionName.ShouldBeEmpty();
     }
@@ -284,6 +405,7 @@ public sealed class ComputeSuiteShapeTests {
         VirtualMachineCase.ProviderCase.Objects(id, "ns")[0].Kind.Kind.ShouldBe("VirtualMachine");
         DiskCase.ProviderCase.Objects(id, "ns").Length.ShouldBe(1);
         ImageCase.ProviderCase.Objects(id, "ns").Length.ShouldBe(1);
+        VirtualMachineScaleSetCase.ProviderCase.Objects(id, "ns").Single().Kind.Kind.ShouldBe("VirtualMachinePool");
     }
 
     static ImmutableArray<ProviderConformanceCase> AncestorsOf<TSource>()

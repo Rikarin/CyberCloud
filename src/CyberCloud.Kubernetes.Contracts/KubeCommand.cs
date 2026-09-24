@@ -686,6 +686,46 @@ public interface IKubeCommandBuilder {
     /// </remarks>
     IKubeCommandBuilder CoWriting(KubeObject live);
 
+    /// <summary>
+    ///     Makes the apply conditional on the object still being at the version the caller read: the
+    ///     body carries <c>metadata.resourceVersion</c>, and an object that moved in between is
+    ///     refused as <see cref="ApplyResult.Stale" /> with nothing written.
+    /// </summary>
+    /// <param name="resourceVersion">
+    ///     The <see cref="KubeObject.ResourceVersion" /> of the read the body was computed from, or
+    ///     empty for no precondition — what a caller passes when its read found no object.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             For a render that carries a value it READ off the object, and for nothing
+    ///             else.
+    ///         </b> The ordinary apply is last-writer-wins by design, because a reconciler's
+    ///         document is a pure function of the desired body. A virtual machine's run strategy and
+    ///         a scale set's replica count are not: the reconciler reads them back and writes them
+    ///         again, and an action that moved them between the read and the write was silently
+    ///         undone — <c>charts/managed/virtual-machine/conformance.yaml</c>'s
+    ///         <c>power-state-can-lose-a-race</c>, closed by this member. With the precondition the
+    ///         pass loses loudly and reads again, as a co-writer does.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The version rides in the body, after the reconcile hash is taken</b>, so the hash
+    ///         still describes the desired document and two passes over one body still hash alike.
+    ///         <c>KubeApiClient</c> already reads an optimistic-lock <c>409</c> as
+    ///         <see cref="ApplyResult.Stale" /> rather than as drift. ⚠ Against an object that is
+    ///         absent the API server does not hold the lock — its create-on-update path clears the
+    ///         version and creates (<c>CoOwnedApplyTests</c> measured it) — so the precondition
+    ///         guards a read that found something, and an empty version is the honest spelling of
+    ///         one that did not.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Refused in the co-owned mode</b>, which carries the live object's version on its
+    ///         own; two sources for one field would be two answers to which read the apply is from.
+    ///     </para>
+    /// </remarks>
+    IKubeCommandBuilder IfResourceVersion(string resourceVersion);
+
     /// <summary>Overrides the field manager. Defaults to <c>cybercloud/{provider}</c>.</summary>
     /// <param name="manager">The field manager name.</param>
     IKubeCommandBuilder WithFieldManager(string manager);

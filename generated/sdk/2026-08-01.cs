@@ -1982,6 +1982,276 @@ public sealed partial class ImageCollection {
 }
 
 /// <summary>The values /properties/size accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum VirtualMachineScaleSetSize {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>s1.large</summary>
+    [JsonStringEnumMemberName("s1.large")]
+    S1Large = 1,
+
+    /// <summary>s1.medium</summary>
+    [JsonStringEnumMemberName("s1.medium")]
+    S1Medium = 2,
+
+    /// <summary>s1.small</summary>
+    [JsonStringEnumMemberName("s1.small")]
+    S1Small = 3,
+
+    /// <summary>s1.xlarge</summary>
+    [JsonStringEnumMemberName("s1.xlarge")]
+    S1Xlarge = 4
+}
+
+/// <summary>The values /properties/upgradePolicy/mode accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum VirtualMachineScaleSetMode {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>Manual</summary>
+    [JsonStringEnumMemberName("Manual")]
+    Manual = 1,
+
+    /// <summary>OnRestart</summary>
+    [JsonStringEnumMemberName("OnRestart")]
+    OnRestart = 2,
+
+    /// <summary>Rolling</summary>
+    [JsonStringEnumMemberName("Rolling")]
+    Rolling = 3
+}
+
+/// <summary>The body of a CyberCloud.Compute/virtualMachineScaleSets.</summary>
+/// <remarks>A set of identical virtual machines on KubeVirt: one size, one image, one subnet and one cloud-init, a capacity quota reserves, a scale action within it, and an upgrade policy that says how running machines take a changed template.</remarks>
+public sealed partial class VirtualMachineScaleSetData {
+
+    /// <summary>The region the set is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The set's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The set's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>How many machines the set holds: the count a new set starts at, the most the scale action may run, and what quota reserves — capacity times one machine's size and root disk. Raise it with a PUT, which reserves the difference first.</summary>
+        /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
+        [JsonPropertyName("capacity")]
+        public required long Capacity { get; set; }
+
+        /// <summary>First-boot configuration every machine gets, as cloud-init reads it.</summary>
+        [JsonPropertyName("cloudInit")]
+        public CloudInitData? CloudInit { get; set; }
+
+        /// <summary>The cluster the set's machines run in. Must be the one its image is in.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>The CyberCloud.Compute/images resource every machine's root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the set waits for it and says so.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "ubuntu" when left unset.</remarks>
+        [JsonPropertyName("image")]
+        public required string Image { get; set; }
+
+        /// <summary>The tenant network every machine's interface joins. Both empty means the cluster's pod network.</summary>
+        [JsonPropertyName("network")]
+        public NetworkData? Network { get; set; }
+
+        /// <summary>Each machine's root disk, in Kubernetes quantity form. At least the image's own size. ⚠ Immutable.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "20Gi" when left unset.</remarks>
+        [JsonPropertyName("osDiskSize")]
+        public required string OsDiskSize { get; set; }
+
+        /// <summary>Every machine's size, from the platform's sizing catalogue: s1.small is 1 vCPU and 4 GiB, and each rung doubles both. A change reaches running machines as the upgrade policy says.</summary>
+        /// <remarks>Required on a create. Defaults to "s1.small" when left unset.</remarks>
+        [JsonPropertyName("size")]
+        public required VirtualMachineScaleSetSize Size { get; set; }
+
+        /// <summary>What happens to running machines when the template changes.</summary>
+        [JsonPropertyName("upgradePolicy")]
+        public UpgradePolicyData? UpgradePolicy { get; set; }
+
+        /// <summary>First-boot configuration every machine gets, as cloud-init reads it.</summary>
+        public sealed partial class CloudInitData {
+
+            /// <summary>A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/&lt;tenantId&gt;/; any other path is refused. Empty means no cloud-init at all.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("userData")]
+            public string? UserData { get; set; }
+        }
+
+        /// <summary>The tenant network every machine's interface joins. Both empty means the cluster's pod network.</summary>
+        public sealed partial class NetworkData {
+
+            /// <summary>The subnet of that network the interface takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the machine never starts.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("subnet")]
+            public string? Subnet { get; set; }
+
+            /// <summary>The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("virtualNetwork")]
+            public string? VirtualNetwork { get; set; }
+        }
+
+        /// <summary>What happens to running machines when the template changes.</summary>
+        public sealed partial class UpgradePolicyData {
+
+            /// <summary>For a Rolling upgrade, how many machines may be restarting at once.</summary>
+            /// <remarks>Defaults to 1 when left unset.</remarks>
+            [JsonPropertyName("maxUnavailable")]
+            public long? MaxUnavailable { get; set; }
+
+            /// <summary>Manual: only machines created afterwards get the new template. OnRestart: every machine's spec is updated and each guest takes it at its next restart. Rolling: the platform restarts machines onto the new template, at most maxUnavailable at a time.</summary>
+            /// <remarks>Defaults to "Rolling" when left unset.</remarks>
+            [JsonPropertyName("mode")]
+            public VirtualMachineScaleSetMode? Mode { get; set; }
+        }
+    }
+}
+
+/// <summary>One Virtual machine scale set, as the API returns it, and the operations on it.</summary>
+public sealed partial class VirtualMachineScaleSetResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required VirtualMachineScaleSetData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<VirtualMachineScaleSetResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<VirtualMachineScaleSetResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        VirtualMachineScaleSetData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listInstances returns.</summary>
+    public sealed partial class ListInstancesResult {
+
+        /// <summary>The ceiling the body sets and quota reserves.</summary>
+        [JsonPropertyName("capacity")]
+        public required long Capacity { get; set; }
+
+        /// <summary>The machines the pool runs, by name, in index order.</summary>
+        [JsonPropertyName("instances")]
+        public IList<string> Instances { get; set; } = new List<string>();
+
+        /// <summary>How many machines KubeVirt reports ready. ⚠ 0 with instances listed is a set whose machines exist and have not booted.</summary>
+        [JsonPropertyName("readyReplicas")]
+        public required long ReadyReplicas { get; set; }
+
+        /// <summary>The replica count the pool is asked for.</summary>
+        [JsonPropertyName("replicas")]
+        public required long Replicas { get; set; }
+
+        /// <summary>KubeVirt's word for each machine, in the same order — Running, Provisioning, Starting, ErrorUnschedulable and so on; empty for one it has not reported on.</summary>
+        [JsonPropertyName("states")]
+        public IList<string> States { get; set; } = new List<string>();
+    }
+
+    /// <summary>ListInstances. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListInstancesResult>> ListInstancesAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of scale.</summary>
+    public sealed partial class ScaleContent {
+
+        /// <summary>How many machines to run, from 0 to the set's capacity. ⚠ Above the capacity is refused: capacity is what quota reserved, and a PUT that raises it is how more is reserved.</summary>
+        [JsonPropertyName("replicas")]
+        public required long Replicas { get; set; }
+    }
+
+    /// <summary>What scale returns.</summary>
+    public sealed partial class ScaleResult {
+
+        /// <summary>The ceiling the body sets and quota reserves.</summary>
+        [JsonPropertyName("capacity")]
+        public required long Capacity { get; set; }
+
+        /// <summary>The replica count now.</summary>
+        [JsonPropertyName("replicas")]
+        public required long Replicas { get; set; }
+
+        /// <summary>The pool's replica count before the action.</summary>
+        [JsonPropertyName("replicasBefore")]
+        public required long ReplicasBefore { get; set; }
+    }
+
+    /// <summary>Scale. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ScaleResult>> ScaleAsync(
+        ScaleContent content,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Virtual machine scale sets in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class VirtualMachineScaleSetCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Compute/virtualMachineScaleSets";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Compute/virtualMachineScaleSets/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Compute/virtualMachineScaleSets";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Virtual machine scale set.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<VirtualMachineScaleSetResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        VirtualMachineScaleSetData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Virtual machine scale set by name.</summary>
+    public partial Task<Response<VirtualMachineScaleSetResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Virtual machine scale sets in this group, paged.</summary>
+    public partial AsyncPageable<VirtualMachineScaleSetResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/size accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum VirtualMachineSize {
     /// <summary>Never assigned. Not a value the API accepts.</summary>
     Unknown = 0,
@@ -2354,6 +2624,282 @@ public sealed partial class VirtualMachineCollection {
 
     /// <summary>The Virtual machines in this group, paged.</summary>
     public partial AsyncPageable<VirtualMachineResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/restartPolicy accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ContainerGroupRestartPolicy {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>Always</summary>
+    [JsonStringEnumMemberName("Always")]
+    Always = 1,
+
+    /// <summary>OnFailure</summary>
+    [JsonStringEnumMemberName("OnFailure")]
+    OnFailure = 2,
+
+    /// <summary>Never</summary>
+    [JsonStringEnumMemberName("Never")]
+    Never = 3
+}
+
+/// <summary>The body of a CyberCloud.ContainerInstance/containerGroups.</summary>
+/// <remarks>One or more containers run together as a pod in your resource group: public or private images, a CPU and memory budget they share, environment from vault handles, ports on a subnet and an optional public address, with logs and restart as actions.</remarks>
+public sealed partial class ContainerGroupData {
+
+    /// <summary>The region the group is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The group's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The group's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster the group runs in.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>The main container's command, replacing its image's entrypoint — for example ["sh", "-c", "echo hello; sleep 3600"]. Empty runs the image as built.</summary>
+        /// <remarks>Defaults to [] when left unset.</remarks>
+        [JsonPropertyName("command")]
+        public IList<string> Command { get; set; } = new List<string>();
+
+        /// <summary>The containers, each name=image — for example web=nginx:1.27 or app=myregistry.example/team/app:2.1. One to ten; names are lower-case DNS labels and unique in the group. The first is the main container: the command and the ports are its.</summary>
+        /// <remarks>Required on a create. Defaults to [] when left unset.</remarks>
+        [JsonPropertyName("containers")]
+        public IList<string> Containers { get; set; } = new List<string>();
+
+        /// <summary>The CPU the whole group may use, as a Kubernetes quantity — 500m is half a core. Reserved against your vCPU quota and enforced on the pod as one limit its containers share.</summary>
+        /// <remarks>Required on a create. Defaults to "500m" when left unset.</remarks>
+        [JsonPropertyName("cpu")]
+        public required string Cpu { get; set; }
+
+        /// <summary>Environment variables every container sees, each NAME=value. ⚠ The value is stored in this body in plaintext — anything secret goes in secureEnvironment.</summary>
+        /// <remarks>Defaults to [] when left unset.</remarks>
+        [JsonPropertyName("environment")]
+        public IList<string> Environment { get; set; } = new List<string>();
+
+        /// <summary>The memory the whole group may use, as a Kubernetes quantity. Reserved against your memory quota and enforced on the pod as one limit.</summary>
+        /// <remarks>Required on a create. Defaults to "256Mi" when left unset.</remarks>
+        [JsonPropertyName("memory")]
+        public required string Memory { get; set; }
+
+        /// <summary>Where the group's ports are reached. All empty means the cluster's pod network, reachable from nothing a tenant owns.</summary>
+        [JsonPropertyName("network")]
+        public NetworkData? Network { get; set; }
+
+        /// <summary>The ports the main container listens on, each a number with an optional /TCP, /UDP or /SCTP — for example 80 or 53/UDP. Reached at the group's address on its subnet, and at its public address when it has one.</summary>
+        /// <remarks>Defaults to [] when left unset.</remarks>
+        [JsonPropertyName("ports")]
+        public IList<string> Ports { get; set; } = new List<string>();
+
+        /// <summary>The credential a private registry's images are pulled with. All empty means every image is public.</summary>
+        [JsonPropertyName("registry")]
+        public RegistryData? Registry { get; set; }
+
+        /// <summary>Always restarts a container whenever it exits; OnFailure only when it exits non-zero; Never lets the group run once — a batch job — and the group stays Succeeded with its logs readable.</summary>
+        /// <remarks>Defaults to "Always" when left unset.</remarks>
+        [JsonPropertyName("restartPolicy")]
+        public ContainerGroupRestartPolicy? RestartPolicy { get; set; }
+
+        /// <summary>Environment variables whose values are vault handles, each NAME=path#field, optionally @version. Resolved when the group is rendered into a Secret the containers read; the values never enter this body. ⚠ Every path must be under your own tenant's vault prefix, tenants/&lt;tenantId&gt;/; any other is refused.</summary>
+        /// <remarks>Defaults to [] when left unset.</remarks>
+        [JsonPropertyName("secureEnvironment")]
+        public IList<string> SecureEnvironment { get; set; } = new List<string>();
+
+        /// <summary>Where the group's ports are reached. All empty means the cluster's pod network, reachable from nothing a tenant owns.</summary>
+        public sealed partial class NetworkData {
+
+            /// <summary>The IPv4 address the group answers on, inside the subnet's range, or empty for one the fabric picks. ⚠ Only with a subnet.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("ipAddress")]
+            public string? IpAddress { get; set; }
+
+            /// <summary>A CyberCloud.Network/publicIpAddresses resource in this resource group, by name, translated one-to-one onto the group's address — every port the group listens on is reachable at it. Empty for none. ⚠ Only with a subnet.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("publicIpAddress")]
+            public string? PublicIpAddress { get; set; }
+
+            /// <summary>The subnet of that network the group takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the group never starts.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("subnet")]
+            public string? Subnet { get; set; }
+
+            /// <summary>The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("virtualNetwork")]
+            public string? VirtualNetwork { get; set; }
+        }
+
+        /// <summary>The credential a private registry's images are pulled with. All empty means every image is public.</summary>
+        public sealed partial class RegistryData {
+
+            /// <summary>A vault handle — path#field, optionally @version — whose value is the password or token. For a CyberCloud.ContainerRegistry that is its own credential: tenants/&lt;tenantId&gt;/CyberCloud.ContainerRegistry/registries/&lt;registryId&gt;#adminPassword. ⚠ Under your own tenant's prefix, or refused.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("password")]
+            public string? Password { get; set; }
+
+            /// <summary>The registry's host, with a port when it is not 443 — for example registry.example.com. ⚠ The kubelet resolves it from the node, not from inside the cluster.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("server")]
+            public string? Server { get; set; }
+
+            /// <summary>The user the registry knows — admin for a CyberCloud.ContainerRegistry, as its listCredentials answers.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("username")]
+            public string? Username { get; set; }
+        }
+    }
+}
+
+/// <summary>One Container group, as the API returns it, and the operations on it.</summary>
+public sealed partial class ContainerGroupResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required ContainerGroupData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<ContainerGroupResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<ContainerGroupResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        ContainerGroupData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of logs.</summary>
+    public sealed partial class LogsContent {
+
+        /// <summary>The container whose output to read, by the name the containers property gives it. Empty means the first container.</summary>
+        [JsonPropertyName("container")]
+        public string? Container { get; set; }
+
+        /// <summary>How many lines from the end. At most 5000; 100 when not given.</summary>
+        [JsonPropertyName("tailLines")]
+        public long? TailLines { get; set; }
+    }
+
+    /// <summary>What logs returns.</summary>
+    public sealed partial class LogsResult {
+
+        /// <summary>The container the lines are from.</summary>
+        [JsonPropertyName("container")]
+        public required string Container { get; set; }
+
+        /// <summary>The lines, newline-separated, as the kubelet kept them. ⚠ A tail and not a stream: the last tailLines lines, capped at a mebibyte.</summary>
+        [JsonPropertyName("log")]
+        public required string Log { get; set; }
+
+        /// <summary>When the platform read the log, RFC 3339.</summary>
+        [JsonPropertyName("readAt")]
+        public required DateTimeOffset ReadAt { get; set; }
+    }
+
+    /// <summary>Logs. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<LogsResult>> LogsAsync(
+        LogsContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /action accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum RestartResultAction {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>restart</summary>
+        [JsonStringEnumMemberName("restart")]
+        Restart = 1
+    }
+
+    /// <summary>What restart returns.</summary>
+    public sealed partial class RestartResult {
+
+        /// <summary>restart.</summary>
+        [JsonPropertyName("action")]
+        public required RestartResultAction Action { get; set; }
+
+        /// <summary>The uid of the pod that replaced it.</summary>
+        [JsonPropertyName("podUid")]
+        public required string PodUid { get; set; }
+
+        /// <summary>The uid of the pod that was replaced.</summary>
+        [JsonPropertyName("podUidBefore")]
+        public required string PodUidBefore { get; set; }
+    }
+
+    /// <summary>Restart. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<RestartResult>> RestartAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Container groups in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class ContainerGroupCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.ContainerInstance/containerGroups";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerInstance/containerGroups/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerInstance/containerGroups";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Container group.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<ContainerGroupResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        ContainerGroupData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Container group by name.</summary>
+    public partial Task<Response<ContainerGroupResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Container groups in this group, paged.</summary>
+    public partial AsyncPageable<ContainerGroupResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>The values /properties/kind accepts. ⚠ Closed: the write path refuses anything else.</summary>

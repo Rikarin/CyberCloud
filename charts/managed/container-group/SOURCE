@@ -1,0 +1,36 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+
+vendored: none
+upstream: https://github.com/kubernetes/kubernetes
+
+upstream-api: v1, kubeovn.io/v1
+
+kubernetes: https://github.com/kubernetes/kubernetes                     # v1.35 (k3s v1.35.7-k3s1)
+fabric: https://github.com/kubeovn/kube-ovn                             # v1.16.2
+
+reviewed: 2026-09-23
+
+# ── What the review established ─────────────────────────────────────────────────────────────────
+#
+# ⚠ POD-LEVEL `spec.resources` IS KEPT BY THE API SERVER THE CLUSTER LANE RUNS. PodLevelResources is
+# beta and on by default since 1.34; applied to rancher/k3s:v1.35.7-k3s1 the pod came back with
+# `spec.resources.limits` and `requests` as rendered, no container-level resources, and
+# `status.qosClass: Guaranteed` (2026-09-23, CyberCloud.Providers.ContainerInstance.Cluster.Conformance).
+#
+# ⚠ A POD'S LOG IS THE KUBELET'S AND IS READ THROUGH THE `log` SUBRESOURCE. A container that has not
+# started answers HTTP 400 "container … is waiting to start: ContainerCreating", which KubeApiClient
+# reads as OperationInProgress; a container name the pod does not have is a 400 of a different
+# sentence and is the caller's mistake. PreconditionAndLogTests reads both against k3s.
+#
+# ⚠ A DELETED POD WITH RUNNING CONTAINERS STAYS READABLE FOR ITS GRACE PERIOD, carrying
+# `deletionTimestamp` and `deletionGracePeriodSeconds`, and a process that is PID 1 ignores SIGTERM
+# unless it handles it — measured as a full ten-second drain for `exec sleep`. The replace path waits
+# for the pod to be gone because the new pod takes its name.
+#
+# ⚠ Kube-OVN names the IP object it allocates for a pod on the default provider `{pod}.{namespace}`
+# (pkg/util, PodNameToPortName), which is what an OvnFip's `ipName` names; an OvnFip's `ipType` is
+# left out, because the controller treats anything but `vip` as an IP object and the definition's
+# own description of the field ("ipv4, ipv6, dual") describes a different thing. Read at v1.16.2;
+# no lane runs Kube-OVN, so the translation itself is unmeasured — conformance.yaml § owed,
+# `the-public-address-is-rendered-and-not-routed`.
+upstream-webhook: none; a pod is admitted by the API server's own validation and the namespace's Pod Security level, and an OvnFip by its structural schema alone

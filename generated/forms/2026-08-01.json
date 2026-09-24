@@ -1706,6 +1706,299 @@
       ],
       "actions": []
     },
+    "CyberCloud.Compute/virtualMachineScaleSets": {
+      "resourceType": "CyberCloud.Compute/virtualMachineScaleSets",
+      "apiVersion": "2026-08-01",
+      "title": "Virtual machine scale set",
+      "plural": "Virtual machine scale sets",
+      "summary": "A set of identical virtual machines on KubeVirt: one size, one image, one subnet and one cloud-init, a capacity quota reserves, a scale action within it, and an upgrade policy that says how running machines take a changed template.",
+      "overrideKey": "CyberCloud.Compute/virtualMachineScaleSets@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/capacity",
+        "/properties/cloudInit",
+        "/properties/cloudInit/userData",
+        "/properties/clusterId",
+        "/properties/image",
+        "/properties/network",
+        "/properties/network/subnet",
+        "/properties/network/virtualNetwork",
+        "/properties/osDiskSize",
+        "/properties/size",
+        "/properties/upgradePolicy",
+        "/properties/upgradePolicy/maxUnavailable",
+        "/properties/upgradePolicy/mode",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the set is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual machine scale set to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The set's own settings."
+        },
+        {
+          "jsonPointer": "/properties/capacity",
+          "name": "capacity",
+          "label": "Capacity",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "general",
+          "hint": "How many machines the set holds: the count a new set starts at, the most the scale action may run, and what quota reserves — capacity times one machine's size and root disk. Raise it with a PUT, which reserves the difference first.",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 2
+        },
+        {
+          "jsonPointer": "/properties/cloudInit",
+          "name": "cloudInit",
+          "label": "Cloud init",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "First-boot configuration every machine gets, as cloud-init reads it."
+        },
+        {
+          "jsonPointer": "/properties/cloudInit/userData",
+          "name": "userData",
+          "label": "User data",
+          "control": "xui-secret-ref",
+          "type": "string",
+          "required": false,
+          "section": "cloudInit",
+          "hint": "A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other path is refused. Empty means no cloud-init at all.",
+          "maxLength": 512,
+          "pattern": "^(?:([^#@\\s]+#[^#@\\s]+(@[^#@\\s]+)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster the set's machines run in. Must be the one its image is in.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual machine scale set to change it."
+        },
+        {
+          "jsonPointer": "/properties/image",
+          "name": "image",
+          "label": "Image",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The CyberCloud.Compute/images resource every machine's root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the set waits for it and says so.",
+          "maxLength": 63,
+          "pattern": "^(?:[a-z0-9]([-a-z0-9]*[a-z0-9])?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual machine scale set to change it.",
+          "default": "ubuntu",
+          "placeholder": "ubuntu"
+        },
+        {
+          "jsonPointer": "/properties/network",
+          "name": "network",
+          "label": "Network",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The tenant network every machine's interface joins. Both empty means the cluster's pod network."
+        },
+        {
+          "jsonPointer": "/properties/network/subnet",
+          "name": "subnet",
+          "label": "Subnet",
+          "control": "xui-subnet",
+          "type": "string",
+          "required": false,
+          "section": "network",
+          "hint": "The subnet of that network the interface takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the machine never starts.",
+          "maxLength": 63,
+          "pattern": "^(?:([a-z0-9]([-a-z0-9]*[a-z0-9])?)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual machine scale set to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/network/virtualNetwork",
+          "name": "virtualNetwork",
+          "label": "Virtual network",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "network",
+          "hint": "The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.",
+          "maxLength": 63,
+          "pattern": "^(?:([a-z0-9]([-a-z0-9]*[a-z0-9])?)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual machine scale set to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/osDiskSize",
+          "name": "osDiskSize",
+          "label": "Os disk size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "Each machine's root disk, in Kubernetes quantity form. At least the image's own size. ⚠ Immutable.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual machine scale set to change it.",
+          "default": "20Gi",
+          "placeholder": "20Gi"
+        },
+        {
+          "jsonPointer": "/properties/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "Every machine's size, from the platform's sizing catalogue: s1.small is 1 vCPU and 4 GiB, and each rung doubles both. A change reaches running machines as the upgrade policy says.",
+          "choices": [
+            {
+              "value": "s1.large",
+              "label": "S1 large"
+            },
+            {
+              "value": "s1.medium",
+              "label": "S1 medium"
+            },
+            {
+              "value": "s1.small",
+              "label": "S1 small"
+            },
+            {
+              "value": "s1.xlarge",
+              "label": "S1 xlarge"
+            }
+          ],
+          "default": "s1.small"
+        },
+        {
+          "jsonPointer": "/properties/upgradePolicy",
+          "name": "upgradePolicy",
+          "label": "Upgrade policy",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What happens to running machines when the template changes."
+        },
+        {
+          "jsonPointer": "/properties/upgradePolicy/maxUnavailable",
+          "name": "maxUnavailable",
+          "label": "Max unavailable",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "upgradePolicy",
+          "hint": "For a Rolling upgrade, how many machines may be restarting at once.",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 1
+        },
+        {
+          "jsonPointer": "/properties/upgradePolicy/mode",
+          "name": "mode",
+          "label": "Mode",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "upgradePolicy",
+          "hint": "Manual: only machines created afterwards get the new template. OnRestart: every machine's spec is updated and each guest takes it at its next restart. Rolling: the platform restarts machines onto the new template, at most maxUnavailable at a time.",
+          "choices": [
+            {
+              "value": "Manual",
+              "label": "Manual"
+            },
+            {
+              "value": "OnRestart",
+              "label": "On restart"
+            },
+            {
+              "value": "Rolling",
+              "label": "Rolling"
+            }
+          ],
+          "default": "Rolling"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listInstances",
+          "label": "List instances",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "scale",
+          "label": "Scale",
+          "permission": "write",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/replicas",
+              "name": "replicas",
+              "label": "Replicas",
+              "control": "xui-slider",
+              "required": true
+            }
+          ]
+        }
+      ]
+    },
     "CyberCloud.Compute/virtualMachines": {
       "resourceType": "CyberCloud.Compute/virtualMachines",
       "apiVersion": "2026-08-01",
@@ -1943,6 +2236,369 @@
         {
           "name": "stop",
           "label": "Stop",
+          "permission": "write",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
+    "CyberCloud.ContainerInstance/containerGroups": {
+      "resourceType": "CyberCloud.ContainerInstance/containerGroups",
+      "apiVersion": "2026-08-01",
+      "title": "Container group",
+      "plural": "Container groups",
+      "summary": "One or more containers run together as a pod in your resource group: public or private images, a CPU and memory budget they share, environment from vault handles, ports on a subnet and an optional public address, with logs and restart as actions.",
+      "overrideKey": "CyberCloud.ContainerInstance/containerGroups@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/command",
+        "/properties/containers",
+        "/properties/cpu",
+        "/properties/environment",
+        "/properties/memory",
+        "/properties/network",
+        "/properties/network/ipAddress",
+        "/properties/network/publicIpAddress",
+        "/properties/network/subnet",
+        "/properties/network/virtualNetwork",
+        "/properties/ports",
+        "/properties/registry",
+        "/properties/registry/password",
+        "/properties/registry/server",
+        "/properties/registry/username",
+        "/properties/restartPolicy",
+        "/properties/secureEnvironment",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the group is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Container group to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The group's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster the group runs in.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Container group to change it."
+        },
+        {
+          "jsonPointer": "/properties/command",
+          "name": "command",
+          "label": "Command",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "The main container's command, replacing its image's entrypoint — for example [\"sh\", \"-c\", \"echo hello; sleep 3600\"]. Empty runs the image as built.",
+          "default": [],
+          "placeholder": [
+            "sh",
+            "-c",
+            "echo hello; sleep 3600"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/containers",
+          "name": "containers",
+          "label": "Containers",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": true,
+          "section": "general",
+          "hint": "The containers, each name=image — for example web=nginx:1.27 or app=myregistry.example/team/app:2.1. One to ten; names are lower-case DNS labels and unique in the group. The first is the main container: the command and the ports are its.",
+          "default": [],
+          "placeholder": [
+            "web=nginx:1.27",
+            "log=busybox:1.37"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/cpu",
+          "name": "cpu",
+          "label": "Cpu",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The CPU the whole group may use, as a Kubernetes quantity — 500m is half a core. Reserved against your vCPU quota and enforced on the pod as one limit its containers share.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "default": "500m",
+          "placeholder": "1"
+        },
+        {
+          "jsonPointer": "/properties/environment",
+          "name": "environment",
+          "label": "Environment",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "Environment variables every container sees, each NAME=value. ⚠ The value is stored in this body in plaintext — anything secret goes in secureEnvironment.",
+          "default": [],
+          "placeholder": [
+            "LOG_LEVEL=info"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/memory",
+          "name": "memory",
+          "label": "Memory",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The memory the whole group may use, as a Kubernetes quantity. Reserved against your memory quota and enforced on the pod as one limit.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "default": "256Mi",
+          "placeholder": "1Gi"
+        },
+        {
+          "jsonPointer": "/properties/network",
+          "name": "network",
+          "label": "Network",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Where the group's ports are reached. All empty means the cluster's pod network, reachable from nothing a tenant owns."
+        },
+        {
+          "jsonPointer": "/properties/network/ipAddress",
+          "name": "ipAddress",
+          "label": "Ip address",
+          "control": "xui-cidr",
+          "type": "string",
+          "required": false,
+          "section": "network",
+          "hint": "The IPv4 address the group answers on, inside the subnet's range, or empty for one the fabric picks. ⚠ Only with a subnet.",
+          "pattern": "^(?:((\\d{1,3}\\.){3}\\d{1,3})?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Container group to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/network/publicIpAddress",
+          "name": "publicIpAddress",
+          "label": "Public ip address",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "network",
+          "hint": "A CyberCloud.Network/publicIpAddresses resource in this resource group, by name, translated one-to-one onto the group's address — every port the group listens on is reachable at it. Empty for none. ⚠ Only with a subnet.",
+          "maxLength": 63,
+          "pattern": "^(?:([a-z0-9]([-a-z0-9]*[a-z0-9])?)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Container group to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/network/subnet",
+          "name": "subnet",
+          "label": "Subnet",
+          "control": "xui-subnet",
+          "type": "string",
+          "required": false,
+          "section": "network",
+          "hint": "The subnet of that network the group takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the group never starts.",
+          "maxLength": 63,
+          "pattern": "^(?:([a-z0-9]([-a-z0-9]*[a-z0-9])?)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Container group to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/network/virtualNetwork",
+          "name": "virtualNetwork",
+          "label": "Virtual network",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "network",
+          "hint": "The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.",
+          "maxLength": 63,
+          "pattern": "^(?:([a-z0-9]([-a-z0-9]*[a-z0-9])?)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Container group to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/ports",
+          "name": "ports",
+          "label": "Ports",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "The ports the main container listens on, each a number with an optional /TCP, /UDP or /SCTP — for example 80 or 53/UDP. Reached at the group's address on its subnet, and at its public address when it has one.",
+          "default": [],
+          "placeholder": [
+            "80",
+            "53/UDP"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/registry",
+          "name": "registry",
+          "label": "Registry",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The credential a private registry's images are pulled with. All empty means every image is public."
+        },
+        {
+          "jsonPointer": "/properties/registry/password",
+          "name": "password",
+          "label": "Password",
+          "control": "xui-secret-ref",
+          "type": "string",
+          "required": false,
+          "section": "registry",
+          "hint": "A vault handle — path#field, optionally @version — whose value is the password or token. For a CyberCloud.ContainerRegistry that is its own credential: tenants/<tenantId>/CyberCloud.ContainerRegistry/registries/<registryId>#adminPassword. ⚠ Under your own tenant's prefix, or refused.",
+          "maxLength": 512,
+          "pattern": "^(?:([^#@\\s]+#[^#@\\s]+(@[^#@\\s]+)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/registry/server",
+          "name": "server",
+          "label": "Server",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "registry",
+          "hint": "The registry's host, with a port when it is not 443 — for example registry.example.com. ⚠ The kubelet resolves it from the node, not from inside the cluster.",
+          "maxLength": 253,
+          "pattern": "^(?:([a-z0-9]([-a-z0-9.]*[a-z0-9])?(:\\d{1,5})?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/registry/username",
+          "name": "username",
+          "label": "Username",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "registry",
+          "hint": "The user the registry knows — admin for a CyberCloud.ContainerRegistry, as its listCredentials answers.",
+          "maxLength": 256,
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/restartPolicy",
+          "name": "restartPolicy",
+          "label": "Restart policy",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "Always restarts a container whenever it exits; OnFailure only when it exits non-zero; Never lets the group run once — a batch job — and the group stays Succeeded with its logs readable.",
+          "choices": [
+            {
+              "value": "Always",
+              "label": "Always"
+            },
+            {
+              "value": "OnFailure",
+              "label": "On failure"
+            },
+            {
+              "value": "Never",
+              "label": "Never"
+            }
+          ],
+          "default": "Always"
+        },
+        {
+          "jsonPointer": "/properties/secureEnvironment",
+          "name": "secureEnvironment",
+          "label": "Secure environment",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "Environment variables whose values are vault handles, each NAME=path#field, optionally @version. Resolved when the group is rendered into a Secret the containers read; the values never enter this body. ⚠ Every path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other is refused.",
+          "default": [],
+          "placeholder": [
+            "DB_PASSWORD=tenants/00000000-0000-0000-0000-000000000000/db#password"
+          ]
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "logs",
+          "label": "Logs",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/container",
+              "name": "container",
+              "label": "Container",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/tailLines",
+              "name": "tailLines",
+              "label": "Tail lines",
+              "control": "xui-slider",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "restart",
+          "label": "Restart",
           "permission": "write",
           "longRunning": false,
           "secret": false,

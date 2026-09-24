@@ -145,6 +145,18 @@ public interface IClusterConnectionGrain : IGrainWithStringKey {
     [Alias("SetOwner")]
     Task<Result> SetOwnerAsync(ObjectRef target, OwnerRef? owner);
 
+    /// <summary>The last lines one container of a pod wrote.</summary>
+    /// <param name="pod">The pod.</param>
+    /// <param name="container">The container, or empty for the pod's only one.</param>
+    /// <param name="tailLines">How many lines from the end.</param>
+    /// <remarks>
+    ///     The grain-side half of <c>IKubeClusterConnection.ReadLogsAsync</c>, which says why a tail
+    ///     and not a stream. On an agent-initiated cluster the read crosses the tunnel as its own
+    ///     operation, one request and one bounded answer.
+    /// </remarks>
+    [Alias("ReadLogs")]
+    Task<Result<string>> ReadLogsAsync(ObjectRef pod, string container, int tailLines);
+
     /// <summary>
     ///     Establishes (or joins) the shared informer for a kind, filtered by
     ///     <see cref="KubeLabels.ManagedBySelector" />.

@@ -271,7 +271,7 @@ owed:
     says: >
       rbac.yaml grants the agent every verb on every resource in every namespace, and its header
       says why: the platform applies whatever the catalogue renders, into namespaces it derives. What
-      bounds the platform is the seven operations on the wire, not the role, and a tenant reading
+      bounds the platform is the eight operations on the wire, not the role, and a tenant reading
       the ClusterRole sees cluster-admin. A narrower role would be one that lists the catalogue's
       kinds and is widened on every new chart — which needs the bundle's `serves:` list to be
       rendered into it, and a way for an old agent to learn a new kind. Not built.

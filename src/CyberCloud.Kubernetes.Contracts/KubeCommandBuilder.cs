@@ -59,6 +59,10 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
     // is instead read off this object's labels — see IKubeCommandBuilder.CoWriting.
     KubeObject? coWriting;
 
+    // The version the caller read, carried into metadata.resourceVersion after the hash is taken.
+    // Empty is no precondition — IKubeCommandBuilder.IfResourceVersion.
+    string precondition = string.Empty;
+
     // ── The build ──────────────────────────────────────────────────────────────────────────────
 
     static readonly JsonSerializerOptions ObjectJsonOptions = new(JsonSerializerDefaults.Web) {
@@ -226,6 +230,11 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
     IKubeCommandBuilder IKubeCommandBuilder.CoWriting(KubeObject live) {
         ArgumentNullException.ThrowIfNull(live);
         coWriting = live;
+        return this;
+    }
+
+    IKubeCommandBuilder IKubeCommandBuilder.IfResourceVersion(string resourceVersion) {
+        precondition = resourceVersion ?? string.Empty;
         return this;
     }
 
@@ -446,6 +455,11 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
         Inject(document, kind, ns, name, labels, annotations, ownerReferences);
         StampTemplates(document, templatePaths, labels);
 
+        if (precondition.Length > 0) {
+            // ⚠ After the hash, which describes the desired document and not the read it came from.
+            ((JsonObject)document["metadata"]!)["resourceVersion"] = precondition;
+        }
+
         return Result<KubeCommand>.Success(
             new() {
                 TenantId = tenantId,
@@ -489,6 +503,14 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
                 + "seven mandatory ones name the owner, and an extra one would ride under the co-writers' "
                 + "shared manager, where the next co-writer's apply prunes it. A co-writer adds only its "
                 + "fragment. IKubeCommandBuilder.CoWriting."
+            );
+        }
+
+        if (precondition.Length > 0) {
+            return Invalid(
+                "IfResourceVersion was called in the co-owned mode, which carries the live object's own "
+                + "metadata.resourceVersion as its lock. Two sources for one field would be two answers to "
+                + "which read the apply was computed from. IKubeCommandBuilder.CoWriting."
             );
         }
 

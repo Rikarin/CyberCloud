@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the implementation assembly: "grains, reconcilers, the chart
+      bindings". One reconciler, one action handler for logs and restart, one chart binding; no grain.
+
+      ⚠ ITS ENTIRE REFERENCE SET IS ITS OWN .Contracts, as every provider's is. Everything else —
+      IResourceReconciler, IResourceActionHandler, KubeCommand, IKubeClusterConnection.ReadLogsAsync —
+      arrives through it.
+
+      ⚠ NO KubernetesClient, although this is the first family whose main object is a plain Pod, where
+      V1Pod is one using away. docs/plan/03 § Assembly graph rules, rule 3: nothing above
+      CyberCloud.Kubernetes names a k8s.Models type. The pod is a JsonObject, as the cloud terminal's is.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.ContainerInstance.Contracts/CyberCloud.Providers.ContainerInstance.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

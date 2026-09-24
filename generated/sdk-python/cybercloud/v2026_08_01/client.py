@@ -45,6 +45,11 @@ from .models import (
     ConnectedKubernetesClusterData,
     ConnectedKubernetesClusterListInstallCommandResult,
     ConnectedKubernetesClusterResource,
+    ContainerGroupData,
+    ContainerGroupLogsContent,
+    ContainerGroupLogsResult,
+    ContainerGroupResource,
+    ContainerGroupRestartResult,
     ContainerRegistryData,
     ContainerRegistryListCredentialsResult,
     ContainerRegistryResource,
@@ -130,6 +135,11 @@ from .models import (
     VirtualMachineData,
     VirtualMachineResource,
     VirtualMachineRestartResult,
+    VirtualMachineScaleSetData,
+    VirtualMachineScaleSetListInstancesResult,
+    VirtualMachineScaleSetResource,
+    VirtualMachineScaleSetScaleContent,
+    VirtualMachineScaleSetScaleResult,
     VirtualMachineStartResult,
     VirtualMachineStopResult,
     VirtualNetworkData,
@@ -615,6 +625,55 @@ class ImageClient:
         return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/images", top, ImageResource.from_wire)
 
 
+class VirtualMachineScaleSetClient:
+    """Virtual machine scale sets — CyberCloud.Compute/virtualMachineScaleSets. A set of identical virtual machines on KubeVirt: one size, one image, one subnet and one cloud-init, a capacity quota reserves, a scale action within it, and an upgrade policy that says how running machines take a changed template."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> VirtualMachineScaleSetResource:
+        """Reads one Virtual machine scale set."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/virtualMachineScaleSets/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return VirtualMachineScaleSetResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: VirtualMachineScaleSetData) -> Operation[VirtualMachineScaleSetResource]:
+        """Creates or replaces one Virtual machine scale set. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/virtualMachineScaleSets/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, VirtualMachineScaleSetResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: VirtualMachineScaleSetData) -> Operation[VirtualMachineScaleSetResource]:
+        """Amends one Virtual machine scale set. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/virtualMachineScaleSets/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, VirtualMachineScaleSetResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Virtual machine scale set. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/virtualMachineScaleSets/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[VirtualMachineScaleSetResource]:
+        """Lists the Virtual machine scale sets in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/virtualMachineScaleSets", top, VirtualMachineScaleSetResource.from_wire)
+
+    def list_instances(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> VirtualMachineScaleSetListInstancesResult:
+        """listInstances — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/virtualMachineScaleSets/{_segment(resource_name)}/listInstances"))
+        raise_for_status(response)
+        return VirtualMachineScaleSetListInstancesResult.from_wire(wire_of(response))
+
+    def scale(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: VirtualMachineScaleSetScaleContent) -> VirtualMachineScaleSetScaleResult:
+        """scale — permission 'write'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Compute/virtualMachineScaleSets/{_segment(resource_name)}/scale", body=content.to_wire()))
+        raise_for_status(response)
+        return VirtualMachineScaleSetScaleResult.from_wire(wire_of(response))
+
+
 class VirtualMachineClient:
     """Virtual machines — CyberCloud.Compute/virtualMachines. A virtual machine on KubeVirt: a size from the platform catalogue, a root disk cloned from an image, managed disks by name, a tenant subnet, and cloud-init from a vault handle. Start, stop and restart are actions; stop releases compute and keeps every disk."""
 
@@ -676,7 +735,64 @@ class ComputeProvider:
     def __init__(self, transport: Transport) -> None:
         self.disks = ManagedDiskClient(transport)
         self.images = ImageClient(transport)
+        self.virtual_machine_scale_sets = VirtualMachineScaleSetClient(transport)
         self.virtual_machines = VirtualMachineClient(transport)
+
+
+class ContainerGroupClient:
+    """Container groups — CyberCloud.ContainerInstance/containerGroups. One or more containers run together as a pod in your resource group: public or private images, a CPU and memory budget they share, environment from vault handles, ports on a subnet and an optional public address, with logs and restart as actions."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> ContainerGroupResource:
+        """Reads one Container group."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerInstance/containerGroups/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return ContainerGroupResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: ContainerGroupData) -> Operation[ContainerGroupResource]:
+        """Creates or replaces one Container group. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerInstance/containerGroups/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ContainerGroupResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: ContainerGroupData) -> Operation[ContainerGroupResource]:
+        """Amends one Container group. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerInstance/containerGroups/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ContainerGroupResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Container group. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerInstance/containerGroups/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[ContainerGroupResource]:
+        """Lists the Container groups in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerInstance/containerGroups", top, ContainerGroupResource.from_wire)
+
+    def logs(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: ContainerGroupLogsContent) -> ContainerGroupLogsResult:
+        """logs — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerInstance/containerGroups/{_segment(resource_name)}/logs", body=content.to_wire()))
+        raise_for_status(response)
+        return ContainerGroupLogsResult.from_wire(wire_of(response))
+
+    def restart(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> ContainerGroupRestartResult:
+        """restart — permission 'write'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerInstance/containerGroups/{_segment(resource_name)}/restart"))
+        raise_for_status(response)
+        return ContainerGroupRestartResult.from_wire(wire_of(response))
+
+
+class ContainerInstanceProvider:
+    """The resource types of CyberCloud.ContainerInstance."""
+
+    def __init__(self, transport: Transport) -> None:
+        self.container_groups = ContainerGroupClient(transport)
 
 
 class ArtifactFeedClient:
@@ -2168,6 +2284,7 @@ class CyberCloudClient:
         self.cache = CacheProvider(transport)
         self.communication = CommunicationProvider(transport)
         self.compute = ComputeProvider(transport)
+        self.containerinstance = ContainerInstanceProvider(transport)
         self.containerregistry = ContainerRegistryProvider(transport)
         self.containerservice = ContainerServiceProvider(transport)
         self.dbformysql = DBforMySQLProvider(transport)
