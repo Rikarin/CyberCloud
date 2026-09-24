@@ -151,11 +151,10 @@ public readonly record struct NamespaceOccupant {
 ///     <para>
 ///         ⚠ <b>The rule is "completely empty", and not "empty of foreign objects".</b> The weaker
 ///         rule — delete when nothing lacks <c>managed-by</c> — is the one that destroys a tenant,
-///         three ways at once. It deletes the objects of a resource whose membership was never
-///         recorded (docs/plan/08 § Soft delete: nothing in the write path calls
-///         <c>IResourceGroupGrain.BeginCreateAsync</c>, so every group's member list is empty and
-///         "empty" is not evidence of anything). It deletes the objects of a resource that is live and
-///         simply not being deleted. And it deletes the volumes of every resource inside its recovery
+///         three ways at once. It deletes the objects of a resource the member list doesn't show:
+///         the list is the control plane's record of the group, and the namespace is what the delete
+///         actually removes, so only the namespace can say it's empty. It deletes the objects of a
+///         resource that is live and simply not being deleted. And it deletes the volumes of every resource inside its recovery
 ///         window, because a parked resource's data plane <i>is</i> torn down and its claims are what
 ///         a restore restores from — turning every restore in the group into a lie. Requiring the
 ///         namespace to hold nothing at all closes all three with one condition, and it is the
@@ -177,25 +176,28 @@ public readonly record struct NamespaceOccupant {
 ///     <para>
 ///         ⚠
 ///         <b>
-///             A cluster-scoped object is outside this verdict on purpose, and #96 decided it
-///             rather than leaving it unsaid.
+///             A cluster-scoped object is outside this verdict on purpose.
 ///         </b> Kube-OVN's <c>Vpc</c> and <c>Subnet</c> belong to a resource in
 ///         the group and aren't in its namespace, so the occupant listing never holds them. Counting
 ///         them would protect nothing: a namespace delete removes namespaced objects only, and the
 ///         garbage collector treats a namespaced owner on a cluster-scoped dependent as unresolvable
 ///         and never collects it, so the delete this verdict authorizes can't reach one. A live
 ///         resource of any scope is protected by the member half; a cluster-scoped object that
-///         outlived its resource is the drift scan's orphan, and refusing the namespace over it would
-///         keep an empty namespace forever without removing the leak.
+///         outlived its resource is an orphan for the drift scan to find, and refusing the namespace
+///         over it would keep an empty namespace forever without removing the leak. ⚠ Nothing finds
+///         that orphan yet: the shipped cluster inventory refuses, so the drift scan can't run
+///         against a real cluster (<c>DriftScanner</c>'s remarks).
 ///         <c>ClusterConformanceTests.ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt</c>
 ///         asserts both halves per family, from the scope of what the family renders.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What this rule does <i>not</i> close is the race, and it cannot from here.</b> A
-///         resource created between the listing and the delete has its objects destroyed. Closing that
-///         needs the group to stop accepting members before the evidence is read — a group-delete
-///         choreography that seals the group first, which docs/plan/06 § Two-phase create's reverse
-///         order describes and which no method on <c>IResourceGroupGrain</c> yet performs.
+///         ⚠ <b>What this rule does <i>not</i> close is the race, and it can't from here.</b> A
+///         resource created between the listing and the delete has its objects destroyed. The group
+///         has to stop accepting members before the evidence is read:
+///         <c>IResourceGroupGrain.BeginGroupDeleteAsync</c> seals it, and
+///         <c>ResourceGroupReclaimer</c> calls that before it reads anything, which is docs/plan/06
+///         § Two-phase create in reverse. A verdict reached without the seal first is open to the race
+///         again.
 ///     </para>
 /// </remarks>
 public readonly struct NamespaceReclaim : IEquatable<NamespaceReclaim> {

@@ -81,10 +81,11 @@ jobs:
   # § TheClaimsAStatefulSetLeavesBehindOutliveTheTeardownAndThePurgeRemovesThem for ContainerRegistry
   # (three claims survived, one expected) and § ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt
   # for both Network types — all three against a REAL kubelet, which the machine that wrote them did
-  # not have until 2026-09-15 (docs/plan/23 § The lane that needs a kubelet). This job is expected to
-  # be red on those until they are fixed, and that red is now attributable to a suite by name rather
-  # than buried in a 29-minute job that was red for other reasons. ⚠ The two Network failures are
-  # closed by #96: they were metrics-server coming up mid-suite, and the test k3s no longer runs one.
+  # not have until 2026-09-15 (docs/plan/23 § The lane that needs a kubelet). ⚠ #96 closed all three.
+  # The Network pair was metrics-server coming up mid-suite, and the test k3s no longer runs one. The
+  # ContainerRegistry one was a poll that returned on the first claim of three StatefulSets, and it
+  # now waits for ordinal 0's claims of every set and compares by containment. Any red here now is a
+  # new failure, attributable to a suite by name rather than buried in a 29-minute job.
   test-cluster:
     name: test-cluster
     runs-on: ubuntu-24.04

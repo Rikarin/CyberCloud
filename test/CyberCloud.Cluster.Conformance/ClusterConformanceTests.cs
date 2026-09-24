@@ -351,11 +351,13 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         }
 
         // ── The property the window is made of, observed rather than assumed ────────────────────
+        // ⚠ Contains, not equals. "claims" is a floor read while the controller was still working:
+        // ordinal 1's claim can appear between that read and the delete, and it's kept like the
+        // rest. What the window depends on is that nothing read before the delete is gone after it.
         var kept = await ClaimsOfResourceAsync(harness, accepted.Resource.Id, token);
 
-        kept.Keys.ShouldBe(
-            claims.Keys,
-            true,
+        claims.Keys.ShouldBeSubsetOf(
+            kept.Keys,
             "a soft delete removed a claim on a real API server. Deleting a StatefulSet is not "
             + "supposed to delete the claims its volumeClaimTemplate made, and that behaviour is the "
             + "whole of what this type's recovery window hands back."
@@ -422,16 +424,15 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     ///     <para>
     ///         ⚠
     ///         <b>
-    ///             "Some" meant "the first one", and a family with three sets raced its own
-    ///             controller (found running the #96 sweep).
-    ///         </b> <c>CyberCloud.ContainerRegistry/registries</c> renders
-    ///         three <c>StatefulSet</c>s, and the poll returned on the first read that held any
-    ///         claim — <c>data-real-claims-database-0</c> alone — so the soft delete's "kept" read,
-    ///         a second later, found three and failed as if the delete had <i>added</i> two. So the
-    ///         poll now waits for the claims the controller creates without waiting on a pod:
-    ///         ordinal 0's, one per <c>volumeClaimTemplate</c> of every set of this resource with a
-    ///         replica. That's a floor rather than a count — ordinal 1's claim waits for ordinal 0
-    ///         to be ready — and it's the one that doesn't depend on an image pull.
+    ///             The poll waits for a floor, and the claims can still grow past it.
+    ///         </b> The floor is what the controller creates without waiting on a pod: ordinal 0's
+    ///         claims, one per <c>volumeClaimTemplate</c> of every set of this resource with a
+    ///         replica. Ordinal 1's claim waits for ordinal 0 to be ready, which depends on an image
+    ///         pull, so no count past the floor is one a read can wait for. Returning on the first
+    ///         claim instead let <c>CyberCloud.ContainerRegistry/registries</c>, which renders three
+    ///         sets, read one claim before the delete and three after it. So a caller comparing two
+    ///         reads compares by containment, and a floor the controller never reaches fails here
+    ///         rather than coming back as a partial set.
     ///     </para>
     /// </remarks>
     static async Task<Dictionary<string, IDictionary<string, string>?>> ClaimsOfResourceAsync(
@@ -449,11 +450,10 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             cancellationToken: cancellationToken
         );
 
-        var floor = Math.Max(
-            1,
-            sets.Body.Items.Where(static x => (x.Spec.Replicas ?? 1) > 0)
-                .Sum(static x => x.Spec.VolumeClaimTemplates?.Count ?? 0)
-        );
+        var promised = sets.Body.Items.Where(static x => (x.Spec.Replicas ?? 1) > 0)
+            .Sum(static x => x.Spec.VolumeClaimTemplates?.Count ?? 0);
+
+        var floor = Math.Max(1, promised);
 
         for (var attempt = 0; attempt < 10; attempt++) {
             using var listed = await harness.Raw.CoreV1.ListNamespacedPersistentVolumeClaimWithHttpMessagesAsync(
@@ -473,6 +473,16 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             }
 
             await Task.Delay(BetweenDrives, cancellationToken);
+        }
+
+        if (expectSome && found.Count < promised) {
+            Assert.Fail(
+                $"the resource's StatefulSets declare {promised} volumeClaimTemplate(s) across the sets "
+                + $"with a replica, and after ten reads the API server holds {found.Count} claim(s) "
+                + $"carrying its resource-id ({string.Join(", ", found.Keys)}). Ordinal 0's claims "
+                + "don't wait on a pod, so the StatefulSet controller never made them, or they "
+                + "don't carry the label WithTemplateLabels puts in a template."
+            );
         }
 
         return found;
@@ -806,27 +816,25 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     ///     <para>
     ///         ⚠
     ///         <b>
-    ///             Rewritten for #96, because the version before it asserted whichever of two things
-    ///             the cluster's age picked, and neither was about the family under test.
-    ///         </b> It listed the
-    ///         shared namespace and branched: a refusal when <c>metrics.k8s.io</c> had not come up
-    ///         yet, and otherwise a verdict checked against the same listing it was computed from.
-    ///         The second arm could not fail — <see cref="NamespaceReclaim.Decide" /> weighed against
-    ///         its own input — and its first draft, <i>"the namespace holds its own resources, so a
-    ///         reclaim must refuse"</i>, was unsatisfiable for a family whose every object is
-    ///         cluster-scoped. <c>CyberCloud.Network</c>'s suite went green or red on the same tree
-    ///         depending on which arm a young k3s handed it. The recipe no longer installs
-    ///         metrics-server (<see cref="Infrastructure.ClusterInfrastructure.DisableMetricsServer" />),
-    ///         the listing waits for every <c>APIService</c> and must succeed, and the refusal is
-    ///         provoked on purpose where it can be (<c>NamespaceDiscoveryRefusalTests</c>).
+    ///             The listing has to succeed, or the cluster's age picks what's asserted.
+    ///         </b> An aggregated API that isn't answering yet makes discovery refuse the whole
+    ///         listing, and a test that accepted a refusal as an outcome asserts one thing on a young
+    ///         k3s and another on an old one — <c>CyberCloud.Network</c>'s suite went green or red on
+    ///         one tree that way. So the recipe installs no metrics-server
+    ///         (<see cref="Infrastructure.ClusterInfrastructure.DisableMetricsServer" />),
+    ///         <see cref="ListNamespaceAsync" /> waits for every <c>APIService</c> and fails on a
+    ///         refusal, and the refusal itself is asserted where it's provoked on purpose,
+    ///         <c>NamespaceDiscoveryRefusalTests</c>. ⚠ And a verdict is never checked against the
+    ///         listing it was computed from: <see cref="NamespaceReclaim.Decide" /> weighed against its
+    ///         own input can't fail, so each assertion below is about an object the test put there.
     ///     </para>
     ///     <para>
     ///         ⚠
     ///         <b>
     ///             Decided: the reclaim looks at the namespace and nothing else, and a cluster-scoped
     ///             object is not its business.
-    ///         </b> The alternative #96 raised — teach it to see
-    ///         cluster-scoped objects the group's resources own — protects nothing. A namespace delete
+    ///         </b> Teaching it to see the cluster-scoped objects the
+    ///         group's resources own would protect nothing. A namespace delete
     ///         removes namespaced objects only, and the garbage collector can't reach a cluster-scoped
     ///         object through a namespaced owner: Kubernetes treats that owner reference as
     ///         unresolvable and never collects the dependent. So the recursive delete the verdict
@@ -834,9 +842,11 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     ///         other half of the evidence — the group's members, which
     ///         <c>IResourceGroupGrain.BeginGroupDeleteAsync</c> refuses over — and what removes a
     ///         cluster-scoped object is its own resource's teardown. One that outlives its resource is
-    ///         the drift scan's orphan, and refusing a namespace over it would keep an empty namespace
-    ///         forever without removing the leak. docs/plan/08 § Reclaiming a resource group's
-    ///         namespace records the same decision.
+    ///         an orphan for the drift scan to find, and refusing a namespace over it would keep an
+    ///         empty namespace forever without removing the leak. ⚠ Nothing finds such an orphan
+    ///         today: the shipped cluster inventory refuses, so the scan can't run against a real
+    ///         cluster (<c>DriftScanner</c>'s remarks). docs/plan/08 § Reclaiming a resource group's
+    ///         namespace records the same decision and the same gap.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>So what's asserted follows from the scope of what the case renders.</b>
@@ -1103,7 +1113,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     /// <param name="harness">The harness.</param>
     /// <param name="cancellationToken">The test's token.</param>
     /// <remarks>
-    ///     ⚠ <b>A refusal here fails the test, and until #96 it was an accepted outcome.</b> A
+    ///     ⚠ <b>A refusal here fails the test.</b> A
     ///     discovery refusal on this harness means an <c>APIService</c> wasn't answering yet — the
     ///     fixture not waiting, not the platform misbehaving — so the wait comes first, and whatever
     ///     is still unavailable after it is named in the failure. The refusal itself is asserted

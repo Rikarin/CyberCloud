@@ -2643,10 +2643,17 @@ on the next pass; not forgetting when it was gone costs an hour of failed reconc
   `ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt` scopes its after-teardown check to
   the resource under test by that label, because every class in a provider's assembly shares one
   namespace with the harness's ancestors, siblings and companions. An object a controller made from
-  ours without copying the label — an operator's own `Secret`, a `Service`'s `EndpointSlice` — is
-  outside it. The limit is the test's and not the product's: the real reclaim weighs every occupant
+  ours without copying the label, such as a `Secret` an operator writes under its own labels, is
+  outside it. (A `Service`'s `EndpointSlice` isn't an example: the EndpointSlice controller copies the
+  `Service`'s labels onto it.) The limit is the test's and not the product's: the real reclaim weighs every occupant
   and refuses over such an object. Closing it needs `KubeObjectSummary` to carry `ownerReferences`, so
   the test can follow the chain rather than the label.
+- **A cluster-scoped object that outlives its resource is found by nothing yet (#96).** docs/plan/08
+  § Reclaiming a resource group's namespace leaves such an object out of the reclaim on purpose and
+  calls it an orphan for the drift scan. `DriftScanner`'s diff would name it, but the shipped
+  `IClusterObjectInventory` is `UnavailableClusterObjectInventory`, which refuses, so the scan can't run
+  against a real cluster. A leaked `Vpc` or `Subnet` stays unseen until the informer-backed inventory of
+  docs/plan/09 § Observing lands.
 
 ### Closed: the drift scan no longer calls a namespace an orphan
 

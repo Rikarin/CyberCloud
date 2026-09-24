@@ -908,9 +908,12 @@ because seeing them protects nothing: a namespace delete removes namespaced obje
 garbage collector treats a namespaced owner on a cluster-scoped dependent as unresolvable and never
 collects it — the recursive delete the verdict authorizes cannot reach a `Vpc`. What protects a live
 resource of *any* scope is the member half of the evidence, which the seal refuses over; what removes
-a cluster-scoped object is its own resource's teardown; and one that outlives its resource is the drift
-scan's orphan, which refusing the namespace would not remove — it would only keep an empty namespace
-for ever beside the leak. `ClusterConformanceTests.ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt`
+a cluster-scoped object is its own resource's teardown; and one that outlives its resource is an orphan
+for the drift scan to find, which refusing the namespace would not remove — it would only keep an empty
+namespace for ever beside the leak. ⚠ **Nothing finds that orphan today.** The drift scan's diff exists,
+but the shipped `IClusterObjectInventory` refuses rather than reporting an empty cluster
+(`DriftScanner`'s remarks), so a cluster-scoped leak stays unseen until the informer-backed inventory of
+docs/plan/09 § Observing lands; `src/Providers/README.md` carries it as owed. `ClusterConformanceTests.ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt`
 asserts it per family from the scope of what the family renders: the namespaced objects are in the
 listing and refuse a reclaim on their own, the cluster-scoped ones are in the cluster and nowhere in
 the namespace, the live resource is a member either way, and after the teardown nothing of it is left

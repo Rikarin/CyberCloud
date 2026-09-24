@@ -237,6 +237,7 @@ public static class ClusterInfrastructure {
     static readonly SemaphoreSlim Gate = new(1, 1);
 
     static ClusterEndpoints? started;
+    static ClusterContainers? running;
     static Exception? failure;
     static bool attempted;
 
@@ -303,19 +304,41 @@ public static class ClusterInfrastructure {
         ex is null ? "no exception was recorded." : ex.GetType().Name + ": " + ex.Message;
 
     static async Task<ClusterEndpoints> StartAsync(CancellationToken cancellationToken) {
-        var containers = await StartContainersAsync(cancellationToken).ConfigureAwait(false);
+        running = await StartContainersAsync(cancellationToken).ConfigureAwait(false);
 
-        // Testcontainers' resource reaper removes the containers when this process dies, including a
-        // process that was killed. This is the tidy path, not the guarantee.
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => {
-            try {
-                containers.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            } catch (Exception) {
-                // A container that will not stop at process exit is Ryuk's problem, not a test result.
-            }
-        };
+        return running.Endpoints;
+    }
 
-        return containers.Endpoints;
+    /// <summary>
+    ///     Stops the containers <see cref="TryStartAsync" /> started, if this process started any.
+    ///     <see cref="ClusterInfrastructureTeardown" /> calls it when the test run ends.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Swallows a container that won't stop. Testcontainers' resource reaper removes it when
+    ///     the process dies, a killed process included, so a failed stop isn't a test result. The
+    ///     reaper is the guarantee and this is the tidy path.
+    /// </remarks>
+    public static async ValueTask StopAsync() {
+        ClusterContainers? containers;
+
+        await Gate.WaitAsync().ConfigureAwait(false);
+
+        try {
+            containers = running;
+            running = null;
+        } finally {
+            Gate.Release();
+        }
+
+        if (containers is null) {
+            return;
+        }
+
+        try {
+            await containers.DisposeAsync().ConfigureAwait(false);
+        } catch (Exception) {
+            // The reaper's, as the remarks say.
+        }
     }
 
     /// <summary>
@@ -326,7 +349,7 @@ public static class ClusterInfrastructure {
     /// <remarks>
     ///     <para>
     ///         ⚠ <b>Public, and the one caller besides <see cref="TryStartAsync" /> is the reason.</b>
-    ///         The process-wide trio above lives until the process exits, which is right for the
+    ///         The process-wide trio above lives until the test run ends, which is right for the
     ///         provider suites — one cluster for every class in the assembly — and wrong for a test
     ///         whose subject is <i>what a fresh cluster becomes</i>: <c>CyberCloud.Bundle.Cluster.Conformance</c>
     ///         installs <c>charts/bundle/</c> components onto an API server that must hold none of
@@ -398,11 +421,17 @@ public sealed record ClusterContainers(
     ClusterEndpoints Endpoints
 ) : IAsyncDisposable {
     /// <inheritdoc />
-    public async ValueTask DisposeAsync() {
-        await K3s.DisposeAsync().ConfigureAwait(false);
-        await Postgres.DisposeAsync().ConfigureAwait(false);
-        await Redis.DisposeAsync().ConfigureAwait(false);
-    }
+    /// <remarks>
+    ///     All three at once, because nothing depends on the order and the stop is time the test
+    ///     runner is waiting on (see <see cref="ClusterInfrastructureTeardown" />).
+    /// </remarks>
+    public async ValueTask DisposeAsync() =>
+        await Task.WhenAll(
+                K3s.DisposeAsync().AsTask(),
+                Postgres.DisposeAsync().AsTask(),
+                Redis.DisposeAsync().AsTask()
+            )
+            .ConfigureAwait(false);
 }
 
 /// <summary>Where the three containers are.</summary>
