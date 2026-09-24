@@ -203,19 +203,34 @@ static class PolicyDocuments {
 
     /// <summary>
     ///     The document a condition is evaluated against: <paramref name="prospective" /> with every
-    ///     secret property of the schema removed. <see cref="PolicyEvaluationRequest" />'s remarks say why.
+    ///     secret property of the type removed. <see cref="PolicyEvaluationRequest" />'s remarks say why.
     /// </summary>
     /// <param name="prospective">The body as the write would leave the resource.</param>
-    /// <param name="schema">The type's schema at the request's api-version.</param>
-    public static string Evaluated(JsonObject prospective, ResourceSchema schema) {
+    /// <param name="registration">The type, whose every api-version's secrets are removed.</param>
+    /// <remarks>
+    ///     ⚠ <b>Every api-version's secrets, not the request's.</b> A <c>PATCH</c>, a <c>DELETE</c> and
+    ///     an action judge the stored superset, which holds what every version ever wrote — so a
+    ///     secret that only another version declares is in it, and the request's schema alone would
+    ///     leave it for a condition to probe through an audit's verdict. Found by the third review of
+    ///     issue #46; latent while the only type that declares a body secret declares it in both versions.
+    /// </remarks>
+    public static string Evaluated(JsonObject prospective, ResourceTypeRegistration registration) {
         var copy = (JsonObject)prospective.DeepClone();
 
-        foreach (var property in schema.Properties.Where(static x => x.Secret)) {
-            JsonPointer.Remove(copy, property.JsonPointer);
+        foreach (var secret in Secrets(registration)) {
+            JsonPointer.Remove(copy, secret);
         }
 
         return copy.ToJsonString();
     }
+
+    /// <summary>The pointer of every property any of the type's api-versions declares secret.</summary>
+    static IEnumerable<string> Secrets(ResourceTypeRegistration registration) =>
+        registration.ApiVersions
+            .SelectMany(static x => x.Schema.Properties)
+            .Where(static x => x.Secret)
+            .Select(static x => x.JsonPointer)
+            .Distinct(StringComparer.Ordinal);
 
     /// <summary>RFC 7386 JSON Merge Patch, as the resource grain applies it at step 9.</summary>
     /// <remarks>
@@ -275,7 +290,7 @@ static class PolicyDocuments {
         ImmutableArray<PolicyModificationRecord> modifications,
         JsonObject target,
         JsonObject prospective,
-        ResourceSchema schema
+        ResourceTypeRegistration registration
     ) {
         foreach (var record in modifications) {
             var field = Core.Policy.PolicyField.Parse(record.Field, "");
@@ -283,7 +298,7 @@ static class PolicyDocuments {
                 return Result.Failure(fieldError);
             }
 
-            if (SecretUnder(record.Field, schema) is { } secret) {
+            if (SecretUnder(record.Field, registration) is { } secret) {
                 return Result.Failure(
                     ErrorCode.PolicyViolation,
                     $"Policy assignment '{record.AssignmentPath}' rewrites '{record.Field}', which holds the "
@@ -313,12 +328,12 @@ static class PolicyDocuments {
 
     /// <summary>
     ///     The first secret property a rewrite of <paramref name="pointer" /> would write — the
-    ///     pointer itself, one beneath it, or one it sits beneath — or <see langword="null" />.
+    ///     pointer itself, one beneath it, or one it sits beneath — or <see langword="null" />. Any
+    ///     api-version's, for the reason <see cref="Evaluated" /> gives: the document the catalog
+    ///     rewrote had them all taken out.
     /// </summary>
-    static string? SecretUnder(string pointer, ResourceSchema schema) =>
-        schema.Properties
-            .Where(static x => x.Secret)
-            .Select(static x => x.JsonPointer)
+    static string? SecretUnder(string pointer, ResourceTypeRegistration registration) =>
+        Secrets(registration)
             .FirstOrDefault(secret => string.Equals(secret, pointer, StringComparison.Ordinal)
                 || secret.StartsWith(pointer + "/", StringComparison.Ordinal)
                 || pointer.StartsWith(secret + "/", StringComparison.Ordinal)

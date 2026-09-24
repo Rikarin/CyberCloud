@@ -487,7 +487,8 @@ public sealed record PolicyDecision {
 /// <remarks>
 ///     ⚠ <b><see cref="Document" /> is the body as the write would leave the resource</b> — a
 ///     <c>PUT</c>'s body, a <c>PATCH</c> merged onto what is stored, the stored body for a
-///     <c>DELETE</c> or an action — with the type's secret properties removed. A condition over a
+///     <c>DELETE</c> or an action — with the secret properties of every api-version of the type
+///     removed, since the stored superset holds what every version wrote. A condition over a
 ///     password would be an oracle for it: an audit's verdict is readable by anyone with
 ///     <c>read</c> on the scope, one bit per rule, and the rule is the owner's to write.
 /// </remarks>

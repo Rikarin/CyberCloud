@@ -20,8 +20,9 @@ namespace CyberCloud.Core.Policy;
 ///     <para>
 ///         ⚠ <b>The four facts are closed, like the operators.</b> <see cref="Type" /> and
 ///         <see cref="Name" /> are the resource's; <see cref="Operation" /> and <see cref="Action" />
-///         are the request's. A rule that mentions <see cref="Operation" /> is the one kind that
-///         reaches a <c>DELETE</c> or an action — <see cref="PolicyRule.AppliesTo" /> says why.
+///         are the request's. A deny rule that reads either request fact is the one kind that reaches
+///         a <c>DELETE</c> or an action, and an audit or modify rule may not test for one —
+///         <see cref="PolicyRule" />'s remarks say why.
 ///     </para>
 /// </remarks>
 public readonly record struct PolicyField {

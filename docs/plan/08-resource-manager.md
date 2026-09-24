@@ -243,7 +243,8 @@ owner to slow everybody else's writes.
 
 **Evaluation, in the write path, for every write kind.** A `PUT`, a `PATCH`, a `DELETE` and an action
 all enter step 5 (`PolicyEnforcementTests.EveryWriteKindEntersStepFiveAndADenyStopsEachOne` drives the
-five shapes through real grains). No provider is reached before it: a reconciler runs from the operation
+five shapes through real grains), and so does a deployment's child, which is a `PUT` replayed as the
+deployment's caller (`ADeploymentsChildWriteEntersStepFive`). No provider is reached before it: a reconciler runs from the operation
 step 10 starts, and a synchronous action's handler runs after the fork step 5 precedes. Within the step:
 
 - **Modify, then deny, then audit** — Azure's order. A deny judges the body the write will store, so a
@@ -252,7 +253,10 @@ step 10 starts, and a synchronous action's handler runs after the fork step 5 pr
   superset exactly as the resource grain will merge it (judging the patch alone would let a patch that
   does not repeat a field past every rule about it); the stored body for a `DELETE` or an action. ⚠ With
   the type's secret properties removed — an audit's verdict is readable by anyone who can read the scope,
-  and a rule over a password would be an oracle for it.
+  and a rule over a password would be an oracle for it. Every api-version's secrets, not the request's:
+  the stored superset holds what every version wrote, so a secret only another version declares is in it
+  (`PolicyEnforcementTests.ASecretOnlyAnotherApiVersionDeclaresIsNotVisibleToAConditionEither`; the
+  third review found it, latent while the one type with a body secret declares it in both versions).
 - ⚠ **"The one the write leaves" includes the tag bag, and it didn't at first.** The resource grain keeps
   the bag beside the body and replaces it with the one it is sent, and a `PATCH` sent the bag of the patch
   alone — empty for a patch that left `tags` out. So step 5 judged the stored tags and step 9 stripped
@@ -261,15 +265,30 @@ step 10 starts, and a synchronous action's handler runs after the fork step 5 pr
   object, which is also what `TagRules.MaxTags` said it did — and the stored bag, not the copy a `PATCH`
   leaves in the superset, is the one a condition reads. Step 2 refuses a `null` inside the bag as it
   refuses one anywhere, so a tag is removed by a `PUT`. Found by the review
-  (`PolicyEnforcementTests.APatchThatLeavesOutTheTagsKeepsTheTagsTheRuleWasJudgedOn`).
+  (`PolicyEnforcementTests.APatchThatLeavesOutTheTagsKeepsTheTagsTheRuleWasJudgedOn`). ⚠ And a `PATCH`
+  is conditional on the copy step 5 read, whether or not the caller sent `If-Match`: a write that landed
+  between that read and step 9 would otherwise lose its tags to the merged bag and leave a body stored
+  under a judgement of one that's gone. The caller who set no precondition gets `409 Conflict` and a
+  retry, not a `412` naming one they never sent
+  (`PolicyEnforcementTests.APatchIsNotStoredOverAWriteThatLandedAfterItWasJudged`, third review).
 - ⚠ **A modify can't write a secret property**, and one that tries refuses the write naming the assignment
   and the property. The catalog rewrites the document with the secrets taken out and the write path the
   real one, so over a secret they disagree: an `add` the trace recorded did nothing over a password the
   caller sent, and a `replace` overwrote it with a constant anyone who can read the definition can read.
 - ⚠ **A rule about a resource's shape applies to creates and updates only.** Only a deny rule whose
-  condition names `operation` reaches a `DELETE` or an action — "deny delete where `/tags/env` is `prod`".
-  The alternative is "deny sku premium" making every existing premium resource undeletable, which is the
-  one thing the author of that rule wants to be able to do.
+  condition reads `operation` or `action` reaches a `DELETE` or an action — "deny delete where `/tags/env`
+  is `prod`", "deny `rotateKeys`". The alternative is "deny sku premium" making every existing premium
+  resource undeletable, which is the one thing the author of that rule wants to be able to do.
+- ⚠ **So a test that can't hold where its effect runs is refused, not stored.** An audit or a modify that
+  names `delete` or `action`, or reads the `action` fact (empty on every create and update), and a test of
+  `operation` against a word outside the four, would each be accepted and never match — the rule that
+  "denies nothing and says nothing" one level above the operator set. Each is a `400` targeting the leaf;
+  whether a leaf can hold is decided by evaluating it on each of the four operations, so case-insensitive
+  `equals` and a glob are read exactly as they run. Found by the third review, which stored
+  `{ "field": "action", "equals": "restart" }` as a deny no action reached, because only a rule reading
+  `operation` went past creates
+  (`PolicyEnforcementTests.ADenyThatReadsOnlyTheActionFactStopsThatActionAndNoOther`,
+  `PolicyRuleTests.ATestThatCantHoldWhereItsEffectRunsIsRefusedRatherThanStored`).
 - **A modify rewrites the document the request sends** and the result is validated against the schema
   again before anything below step 5 reads it; everything below — quota amounts, tags, location, cluster,
   desired state — reads the rewritten body. `WriteTrace.Policy` records, inside step 5's span, every
