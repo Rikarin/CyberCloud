@@ -228,6 +228,18 @@ export interface InvitationPageResponse {
 
   /** What to render, verbatim. */
   message: string;
+
+  /**
+   * The address this browser is signed in as, or empty. The cookie's,
+   * never the link's — so the page can say whose account it would join with.
+   */
+  account: string;
+
+  /**
+   * Whether the person may join with that account: a complete, live sign-in whose address is the
+   * invited one. When false and `account` is empty, the page offers to sign in first.
+   */
+  canJoinWithAccount: boolean;
 }
 
 /**
@@ -384,6 +396,17 @@ export class IdentityApi {
    */
   acceptInvitation(link: InvitationLink, displayName: string, password: string): Observable<InvitationPageResponse> {
     return this.#http.post<InvitationPageResponse>('/api/invitations/accept', { ...link, displayName, password });
+  }
+
+  /**
+   * Accepts an invitation with the account this browser is signed into — no name, no password. The
+   * member signs in through that account from then on, and the session cookie stays that account's.
+   *
+   * ⚠ The host honours it only from this app's origin, and only when the account's address is the
+   * invited one; `describeInvitation`'s `canJoinWithAccount` says whether it will.
+   */
+  joinInvitationWithAccount(link: InvitationLink): Observable<InvitationPageResponse> {
+    return this.#http.post<InvitationPageResponse>('/api/invitations/accept', { ...link, withSignedInAccount: true });
   }
 
   /**

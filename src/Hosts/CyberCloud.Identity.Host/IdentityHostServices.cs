@@ -103,6 +103,7 @@ public static class IdentityHostServices {
         services.TryAddSingleton<TenantHint>();
         services.TryAddSingleton<FirstPartyClients>();
         services.TryAddSingleton<IClientResolver, ClientResolver>();
+        services.TryAddSingleton<HomeAccounts>();
         services.TryAddSingleton<AuthorizeApi>();
         services.TryAddSingleton<ConsentApi>();
         services.TryAddSingleton<DeviceApi>();

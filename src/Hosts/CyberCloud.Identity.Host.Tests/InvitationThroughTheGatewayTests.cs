@@ -19,7 +19,8 @@ namespace CyberCloud.Identity.Host.Tests;
 ///     Step 7 of the M1 exit story as a person performs it from <c>cyc</c>: an owner signs in with
 ///     the device flow, <c>POST</c>s an address to the real gateway, and the real
 ///     <c>InvitationService</c> and invitation grain behind it mail a link the colleague accepts —
-///     after which the colleague's own token is refused the same request. Issue #43, after review.
+///     after which the colleague's own token is refused the same request, and the owner's
+///     <c>PUT …/roleAssignments/{name}</c> gives them Reader on one group. Issue #43, after review.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -140,6 +141,39 @@ public sealed class InvitationThroughTheGatewayTests(MailpitIdentityHostFixture 
             + "tenant exists: "
             + await refused.Content.ReadAsStringAsync(Ct)
         );
+
+        // ── Reader on one group, granted over HTTP by the owner — the other half of step 7. ──────
+        // ⚠ The review of #43 found this half asserted only through IRoleAssignmentManager called in
+        // process. Here it is the PUT a person sends, through the same gateway, for the invited user.
+        var subscription = ScopeId.Subscription(Tenant, Guid.NewGuid());
+        var group = ScopeId.Group(Tenant, subscription.SubscriptionId, "invited-" + Guid.NewGuid().ToString("N")[..8]);
+
+        await PutAsync(http, ownerToken, subscription.Path, "{\"displayName\":\"Invited\"}");
+        await PutAsync(http, ownerToken, group.Path, "{\"location\":\"local\"}");
+
+        // ⚠ The member doesn't read the group before the grant, and that isn't an omission. A read
+        // then is a denial the check grain caches under MinimizeLatency with no TTL (docs/plan/07
+        // § Consistency), and the grant below doesn't evict it: measured here, the member read 404
+        // on the group after being made Reader. AtLeastAsFresh with the grant's token is the plan's
+        // answer, and nothing in the gateway carries one yet.
+        var reader = RoleAssignmentId.OnScope(
+            group,
+            new(Relations.Reader, SubjectTypes.User, userId.ToString("N", CultureInfo.InvariantCulture))
+        );
+
+        await PutAsync(http, ownerToken, reader.Path, "{}");
+
+        using (var read = await GetAsync(http, colleagueToken, group.Path)) {
+            read.StatusCode.ShouldBe(HttpStatusCode.OK, "Reader on the group did not let the member read it: " + await read.Content.ReadAsStringAsync(Ct));
+        }
+
+        using (var write = await SendAsync(http, HttpMethod.Put, colleagueToken, group.Path, "{\"location\":\"local\"}")) {
+            write.IsSuccessStatusCode.ShouldBeFalse("Reader wrote the group: " + await write.Content.ReadAsStringAsync(Ct));
+        }
+
+        using (var above = await GetAsync(http, colleagueToken, subscription.Path)) {
+            above.StatusCode.ShouldBe(HttpStatusCode.NotFound, "Reader on one group reached its subscription");
+        }
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
@@ -158,6 +192,27 @@ public sealed class InvitationThroughTheGatewayTests(MailpitIdentityHostFixture 
         await gateway.StartAsync(Ct);
 
         return gateway;
+    }
+
+    static async Task PutAsync(HttpClient http, string token, string path, string body) {
+        using var response = await SendAsync(http, HttpMethod.Put, token, path, body);
+
+        ((int)response.StatusCode).ShouldBeInRange(200, 201, $"PUT {path}: " + await response.Content.ReadAsStringAsync(Ct));
+    }
+
+    static Task<HttpResponseMessage> GetAsync(HttpClient http, string token, string path) =>
+        SendAsync(http, HttpMethod.Get, token, path, null);
+
+    static async Task<HttpResponseMessage> SendAsync(HttpClient http, HttpMethod method, string token, string path, string? body) {
+        using var request = new HttpRequestMessage(method, path + Version);
+
+        if (body is not null) {
+            request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+        }
+
+        request.Headers.Authorization = new("Bearer", token);
+
+        return await http.SendAsync(request, Ct);
     }
 
     static async Task<HttpResponseMessage> PostAsync(HttpClient http, string? token, string email) {

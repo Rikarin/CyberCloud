@@ -139,7 +139,33 @@ public sealed class InvitationGrain(
         Matches(secret) ? Result<Invitation>.Success(await ViewAsync()) : NotFound();
 
     /// <inheritdoc />
-    public async Task<Result<Invitation>> AcceptAsync(string secret, string displayName, string password) {
+    public Task<Result<Invitation>> AcceptAsync(string secret, string displayName, string password) =>
+        SpendAsync(
+            secret,
+            string.IsNullOrWhiteSpace(displayName) || string.IsNullOrEmpty(password) ? "Choose a name and a password." : null,
+            user => user.AcceptInvitationAsync(displayName, password)
+        );
+
+    /// <inheritdoc />
+    public Task<Result<Invitation>> AcceptWithHomeAccountAsync(string secret, string displayName, HomeAccount home) =>
+        SpendAsync(
+            secret,
+            string.IsNullOrWhiteSpace(displayName) || home is null ? "The account to join with has no name." : null,
+            user => user.JoinWithHomeAccountAsync(displayName, home!)
+        );
+
+    /// <summary>
+    ///     Both ways of accepting: checks the link, spends it, hands the user grain its half, and
+    ///     gives the link back when the user grain refused.
+    /// </summary>
+    /// <param name="secret">The secret from the link.</param>
+    /// <param name="invalid">What is wrong with the person's input, or <see langword="null" />. Asked after the link's status, so a used link says so first.</param>
+    /// <param name="join">The user grain call that makes the member.</param>
+    async Task<Result<Invitation>> SpendAsync(
+        string secret,
+        string? invalid,
+        Func<IUserGrain, Task<Result<UserProfile>>> join
+    ) {
         if (!Matches(secret)) {
             return NotFound();
         }
@@ -159,8 +185,8 @@ public sealed class InvitationGrain(
                 return Withdrawn();
         }
 
-        if (string.IsNullOrWhiteSpace(displayName) || string.IsNullOrEmpty(password)) {
-            return Result<Invitation>.Failure(ErrorCode.InvalidRequestBody, "Choose a name and a password.");
+        if (invalid is not null) {
+            return Result<Invitation>.Failure(ErrorCode.InvalidRequestBody, invalid);
         }
 
         // ── Spend the link first — see the type's remarks. ─────────────────────────────────────
@@ -168,9 +194,7 @@ public sealed class InvitationGrain(
         state.State.AcceptedAt = clock.UtcNow;
         await state.WriteStateAsync();
 
-        var accepted = await Tenant()
-            .GetGrain<IUserGrain>(GrainKeys.User(state.State.UserId))
-            .AcceptInvitationAsync(displayName, password);
+        var accepted = await join(Tenant().GetGrain<IUserGrain>(GrainKeys.User(state.State.UserId)));
 
         if (accepted.TryGetError(out var refused)) {
             // ⚠ The give-back: the user grain changed nothing, so the link is what it was before —

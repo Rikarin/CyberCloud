@@ -117,6 +117,13 @@ public sealed class UserGrainState {
     /// </remarks>
     [Id(11)]
     public List<DateTimeOffset> OtpIssuedAt { get; set; } = [];
+
+    /// <summary>
+    ///     The account in another tenant this member signs in through, or <see langword="null" />.
+    ///     <see cref="HomeAccount" />'s remarks; issue #43.
+    /// </summary>
+    [Id(12)]
+    public HomeAccount? HomeAccount { get; set; }
 }
 
 /// <summary>

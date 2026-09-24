@@ -9,7 +9,8 @@ namespace CyberCloud.Identity.Host.Tests;
 
 /// <summary>
 ///     #43's grain calls, made by the identity host running as its own process: the device flow's
-///     begin, answer, poll and redemption, and an invitation described and accepted.
+///     begin, answer, poll and redemption, an invitation described and accepted, and one joined with
+///     an account in another organisation.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -119,6 +120,67 @@ public sealed class IdentityHostInItsOwnProcessTests(MailpitIdentityHostFixture 
         // The other link names a member now, so it reads withdrawn: #43's new status, read off an
         // Invitation that came across the boundary.
         (await DescribeAsync(colleague, second, secondSecret)).GetProperty("status").GetString().ShouldBe("withdrawn");
+
+        // ── Joining with an account elsewhere: HomeAccount into the invitation grain, and back out
+        // of the user grain on a UserProfile when /authorize finds the member. ───────────────────
+        var homeEmail = $"process-home-{Guid.NewGuid():N}@grants.example";
+        var joining = Guid.NewGuid();
+        var joiningSecret = Secret();
+
+        await fixture.CreatePersonAsync(homeEmail, IdentityHostFixture.OtherTenant);
+        await InviteAsync(joining, homeEmail, joiningSecret);
+
+        using var home = await SignInElsewhereAsync(host, homeEmail);
+
+        (await DescribeAsync(home, joining, joiningSecret)).GetProperty("canJoinWithAccount").GetBoolean().ShouldBeTrue(host.Output);
+
+        using (var joined = await home.PostJsonAsync(
+                   "/api/invitations/accept",
+                   new { tenant = Tenant.ToString("N"), invitation = joining.ToString("N"), token = joiningSecret, withSignedInAccount = true },
+                   Ct
+               )) {
+            var body = await BrowserClient.JsonAsync(joined, Ct);
+
+            body.GetProperty("succeeded").GetBoolean().ShouldBeTrue(body.GetRawText() + host.Output);
+        }
+
+        using var authorized = await home.GetAsync(
+            IdentityHostOpenIddict.AuthorizationPath
+            + "?response_type=code&client_id="
+            + FirstPartyClients.Portal
+            + "&redirect_uri="
+            + Uri.EscapeDataString(IdentityHostFixture.PortalRedirectUri)
+            + "&scope="
+            + Uri.EscapeDataString(Scope)
+            + "&state=process&code_challenge="
+            + BrowserClient.Pkce().Challenge
+            + "&code_challenge_method=S256&nonce=n-process&tenant="
+            + IdentityHostFixture.Slug,
+            Ct
+        );
+
+        BrowserClient.Query(BrowserClient.Location(authorized))
+            .ShouldContainKey("code", "the home account's cookie opened no session for the member: " + host.Output);
+    }
+
+    /// <summary>A tab signed into the other organisation through <paramref name="host" />, with the password and the delivered code.</summary>
+    async Task<BrowserClient> SignInElsewhereAsync(IdentityHostProcess host, string email) {
+        var browser = new BrowserClient(host.BaseAddress, IdentityHostFixture.SignInPageBaseUri);
+
+        using var password = await browser.PostJsonAsync(
+            "/api/signin/password",
+            new { email, password = IdentityHostFixture.Password, returnUrl = "/", tenant = IdentityHostFixture.OtherSlug },
+            Ct
+        );
+
+        (await BrowserClient.JsonAsync(password, Ct)).GetProperty("succeeded").GetBoolean().ShouldBeTrue(host.Output);
+
+        using var send = await browser.PostJsonAsync("/api/signin/otp/send", new { returnUrl = "/" }, Ct);
+        using var otp = await browser.PostJsonAsync("/api/signin/otp", new { code = fixture.Otp.LastCode, returnUrl = "/" }, Ct);
+
+        (await BrowserClient.JsonAsync(otp, Ct)).GetProperty("secondFactorRequired").GetBoolean().ShouldBeFalse(host.Output);
+
+        return browser;
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────

@@ -37,10 +37,21 @@ public sealed class LoginTests {
 
         host.Browsed.ShouldContain(x => x.ToString().Contains("device", StringComparison.Ordinal));
 
+        // ⚠ The token's tenant, not the flag's: a device sign-in sends no tenant, and the person
+        // chose the organisation on the sign-in page. The review of #43 found `contoso` reported here.
+        host.Stderr.ShouldContain("--tenant is not sent with a device sign-in");
+
         using var document = host.StdoutAsJson();
-        document.RootElement.GetProperty("tenant").GetString().ShouldBe("contoso");
+        document.RootElement.GetProperty("tenant").GetString().ShouldBe(TokenTenant);
         document.RootElement.TryGetProperty("accessToken", out _).ShouldBeFalse();
     }
+
+    [Theory]
+    [InlineData("opaque-token")]
+    [InlineData("a.not-base64-json.c")]
+    [InlineData("a.e30.c")]
+    public void ATokenThatNamesNoTenantReportsNone(string token) =>
+        CyberCloud.Cli.Commands.LoginCommand.TenantOf(token).ShouldBeNull();
 
     [Fact]
     public async Task TheAccessTokenNeverReachesEitherStream() {
@@ -237,7 +248,20 @@ public sealed class LoginTests {
 
     static string Key() => TokenCache.KeyFor(new Uri("https://login.cybercloud.io/"), CyberCloudCliCredential.CliClientId, null);
 
-    const string SignedInToken = "signed-in-token-9a3f";
+    /// <summary>The tenant the scripted identity server's token is for — not the one any test names.</summary>
+    const string TokenTenant = "7e2a0c51d9b84f36a1e0c4d2b6f89a13";
+
+    /// <summary>
+    ///     A JWT-shaped access token naming <see cref="TokenTenant" />, with a marker for a signature
+    ///     so the leak checks can find it in any stream.
+    /// </summary>
+    static readonly string SignedInToken =
+        "eyJhbGciOiJub25lIn0."
+        + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("{\"tid\":\"" + TokenTenant + "\"}"))
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_')
+        + ".signed-in-token-9a3f";
 
     const string RefreshToken = "refresh-token-4b2e";
 

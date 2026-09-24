@@ -64,7 +64,10 @@ identity host, end to end since #43: the SDK's `DeviceCodeCredential` asks `/dev
 for `cyc.api offline_access`, prints the code and `verification_uri`, and polls `/token` at the
 server's `interval`, adding five seconds on every `slow_down`; the person opens the link, types or
 confirms the code on the identity app's device page, signs in there (the device named no tenant, so
-the sign-in page asks for the organisation), and allows or denies. The refresh token goes to the
+the sign-in page asks for the organisation), and allows or denies. ⚠ So `--tenant` is not sent on
+this path, and `cyc login` says so; the tenant it reports is the access token's `tid`, never the
+flag, because the organisation was chosen on the page and a cached sign-in is refreshed for
+whichever tenant it was for. The refresh token goes to the
 cache above, and every later command refreshes on use through #94's rotation. `cyc logout` revokes
 the refresh token at the host's `/revoke` (RFC 7009, refresh tokens only) and then forgets it — it
 used to forget it only, which left it valid on the server for fourteen days in any other copy.
