@@ -59,7 +59,7 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 ///         <see cref="DeterministicJson" /> owns the byte-level half.
 ///     </para>
 /// </remarks>
-public static class OpenApiEmitter {
+public static partial class OpenApiEmitter {
     /// <summary>The specification version the emitted documents declare.</summary>
     /// <remarks>
     ///     docs/plan/02 § ADR-012 says "OpenAPI 3.1 document". <c>3.1.1</c> is the current patch of
@@ -422,6 +422,12 @@ public static class OpenApiEmitter {
         // the decision and for the answer that was rejected.
         Move(ScopePathItems(), paths);
         Move(ScopeSchemas(), schemas);
+
+        // ⚠ THE THIRD NON-REGISTRY SOURCE — objects addressed ON a scope, issue #46's policy. The
+        // gateway has served them since #46 and until this line no generated surface knew them, the
+        // state #63 closed for the scopes themselves. See ScopeObjectPathItems.
+        Move(ScopeObjectPathItems(), paths);
+        Move(ScopeObjectSchemas(), schemas);
 
         return new JsonObject {
             ["openapi"] = SpecificationVersion,
@@ -2241,6 +2247,14 @@ public static class OpenApiEmitter {
                 "managementGroupName",
                 "The management group — the optional tree above the subscription, unique within the "
                 + "tenant. docs/plan/06 § The hierarchy."
+            ),
+            [PolicyAssignmentNameParameter] = NameParameter(
+                PolicyAssignmentPlaceholder,
+                "The policy assignment's name, unique on its scope. docs/plan/08 § Policy."
+            ),
+            [PolicyDefinitionNameParameter] = NameParameter(
+                PolicyDefinitionPlaceholder,
+                "The policy definition's name, unique on its scope. docs/plan/08 § Policy."
             ),
             ["ResourceGroupName"] = NameParameter(
                 "resourceGroupName",

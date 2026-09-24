@@ -86,6 +86,9 @@ public sealed class ResourceManagerService(
     ResourceWatchFanout? watches = null
 )
     : IResourceManager {
+    /// <summary>How step 2 reads a request body: a member named twice is malformed, not "the last one".</summary>
+    static readonly JsonDocumentOptions StrictJson = new() { AllowDuplicateProperties = false };
+
     /// <inheritdoc />
     public async Task<Result<WriteAccepted>> WriteAsync(
         WriteRequest request,
@@ -119,7 +122,10 @@ public sealed class ResourceManagerService(
 
         JsonDocument body;
         try {
-            body = JsonDocument.Parse(request.Body);
+            // ⚠ A duplicate member is refused here, as the 400 it is. JsonDocument keeps the last
+            // value and would pass it; step 5's JsonNode copy of the same body then threw an
+            // ArgumentException on it, a 500. Found by the review of issue #46.
+            body = JsonDocument.Parse(request.Body, StrictJson);
         } catch (JsonException exception) {
             return Result<WriteAccepted>.Failure(
                 ErrorCode.InvalidRequestBody,
@@ -2176,7 +2182,7 @@ public sealed class ResourceManagerService(
         var effectiveBody = request.Body;
 
         if (!decision.Modifications.IsDefaultOrEmpty) {
-            var rewritten = PolicyDocuments.Apply(decision.Modifications, sent, prospective);
+            var rewritten = PolicyDocuments.Apply(decision.Modifications, sent, prospective, target.Schema);
             if (rewritten.TryGetError(out var rewriteError)) {
                 return Result<WriteAccepted>.Failure(rewriteError);
             }
@@ -2379,7 +2385,11 @@ public sealed class ResourceManagerService(
                     OperationId = operationId,
                     IfMatch = request.IfMatch,
                     Caller = request.Caller,
-                    Tags = TagsFrom(body, resolvedTarget.Registration),
+                    // ⚠ A PATCH sends the merged body's bag — the one step 5 judged — never the
+                    // patch's own, which the grain would store in place of every tag it left out.
+                    Tags = request.Verb == WriteVerb.Patch && target.Exists
+                        ? TagsFrom(prospective, resolvedTarget.Registration)
+                        : TagsFrom(body, resolvedTarget.Registration),
                     Location = LocationFrom(body),
                     ClusterId = ClusterFrom(body, resolvedTarget.Registration),
                     DeclaredPointers = Pointers(resolvedTarget.Schema),
@@ -3169,6 +3179,36 @@ public sealed class ResourceManagerService(
         foreach (var member in tags.EnumerateObject()) {
             if (member.Value.ValueKind == JsonValueKind.String) {
                 built[member.Name] = member.Value.GetString() ?? string.Empty;
+            }
+        }
+
+        return built.ToImmutable();
+    }
+
+    /// <summary>
+    ///     The tag bag of the body a <c>PATCH</c> leaves — the stored bag with the patch's <c>tags</c>
+    ///     merged onto it — which is the bag step 5 judged.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Not the patch's own bag, and that was a policy bypass.</b> The resource grain replaces
+    ///     the stored bag with the one it's sent, so a <c>PATCH</c> that left <c>tags</c> out used to
+    ///     send an empty bag and strip every tag, after step 5 had judged the merged body with the
+    ///     tags still on it: "deny when <c>/tags/env</c> doesn't exist" refused a <c>PUT</c> without
+    ///     the tag and let that <c>PATCH</c> through. Found by the review of issue #46;
+    ///     <c>PolicyEnforcementTests.APatchThatLeavesOutTheTagsKeepsTheTagsTheRuleWasJudgedOn</c>
+    ///     drives it. Merging is also what <see cref="TagRules.MaxTags" /> already said a patch does.
+    /// </remarks>
+    /// <param name="prospective">Step 5's merged body, with any modify already applied to it.</param>
+    /// <param name="registration">The type, which says whether it carries tags at all.</param>
+    static ImmutableDictionary<string, string> TagsFrom(JsonObject prospective, ResourceTypeRegistration registration) {
+        if (!registration.SupportsTags || prospective[TagRules.Name] is not JsonObject tags) {
+            return ImmutableDictionary<string, string>.Empty;
+        }
+
+        var built = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in tags) {
+            if (value is JsonValue text && text.TryGetValue<string>(out var tag)) {
+                built[key] = tag;
             }
         }
 

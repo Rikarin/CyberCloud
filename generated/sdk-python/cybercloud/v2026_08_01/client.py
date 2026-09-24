@@ -101,6 +101,11 @@ from .models import (
     PeeringData,
     PeeringResource,
     PeeringShowRoutesResult,
+    PolicyAssignment,
+    PolicyAssignmentContent,
+    PolicyDefinition,
+    PolicyDefinitionContent,
+    PolicyState,
     PostgreSQLServerData,
     PostgreSQLServerListKeysResult,
     PostgreSQLServerResource,
@@ -251,6 +256,151 @@ class ResourceGroupsClient:
         response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}", body=content.to_wire()))
         raise_for_status(response)
         return ScopeResource.from_wire(wire_of(response))
+
+
+class PolicyClient:
+    """The objects under CyberCloud.Policy, on every scope that takes them — docs/plan/08 § Policy."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def list_policy_assignments_at_management_group(self, tenant_id: str, management_group_name: str, *, top: Optional[int] = None) -> Pager[PolicyAssignment]:
+        """Lists the policy assignments on a management group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyAssignments", top, PolicyAssignment.from_wire)
+
+    def get_policy_assignment_at_management_group(self, tenant_id: str, management_group_name: str, policy_assignment_name: str) -> PolicyAssignment:
+        """Reads one policy assignment on a management group."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}"))
+        raise_for_status(response)
+        return PolicyAssignment.from_wire(wire_of(response))
+
+    def create_or_update_policy_assignment_at_management_group(self, tenant_id: str, management_group_name: str, policy_assignment_name: str, content: PolicyAssignmentContent) -> PolicyAssignment:
+        """Creates or replaces one policy assignment on a management group, written whole. ⚠ 201 the first time and 200 after, and no operation to poll."""
+        response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}", body=content.to_wire()))
+        raise_for_status(response)
+        return PolicyAssignment.from_wire(wire_of(response))
+
+    def delete_policy_assignment_at_management_group(self, tenant_id: str, management_group_name: str, policy_assignment_name: str) -> None:
+        """Deletes one policy assignment on a management group. An object already gone is a success."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}"))
+        raise_for_status(response)
+
+    def list_policy_definitions_at_management_group(self, tenant_id: str, management_group_name: str, *, top: Optional[int] = None) -> Pager[PolicyDefinition]:
+        """Lists the policy definitions on a management group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyDefinitions", top, PolicyDefinition.from_wire)
+
+    def get_policy_definition_at_management_group(self, tenant_id: str, management_group_name: str, policy_definition_name: str) -> PolicyDefinition:
+        """Reads one policy definition on a management group."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}"))
+        raise_for_status(response)
+        return PolicyDefinition.from_wire(wire_of(response))
+
+    def create_or_update_policy_definition_at_management_group(self, tenant_id: str, management_group_name: str, policy_definition_name: str, content: PolicyDefinitionContent) -> PolicyDefinition:
+        """Creates or replaces one policy definition on a management group, written whole. ⚠ 201 the first time and 200 after, and no operation to poll."""
+        response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}", body=content.to_wire()))
+        raise_for_status(response)
+        return PolicyDefinition.from_wire(wire_of(response))
+
+    def delete_policy_definition_at_management_group(self, tenant_id: str, management_group_name: str, policy_definition_name: str) -> None:
+        """Deletes one policy definition on a management group. An object already gone is a success."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}"))
+        raise_for_status(response)
+
+    def list_policy_states_at_management_group(self, tenant_id: str, management_group_name: str, *, top: Optional[int] = None) -> Pager[PolicyState]:
+        """Lists the policy states on a management group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyStates", top, PolicyState.from_wire)
+
+    def list_policy_definitions_at_tenant(self, tenant_id: str, *, top: Optional[int] = None) -> Pager[PolicyDefinition]:
+        """Lists the policy definitions on a tenant, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/providers/CyberCloud.Policy/policyDefinitions", top, PolicyDefinition.from_wire)
+
+    def get_policy_definition_at_tenant(self, tenant_id: str, policy_definition_name: str) -> PolicyDefinition:
+        """Reads one policy definition on a tenant."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}"))
+        raise_for_status(response)
+        return PolicyDefinition.from_wire(wire_of(response))
+
+    def create_or_update_policy_definition_at_tenant(self, tenant_id: str, policy_definition_name: str, content: PolicyDefinitionContent) -> PolicyDefinition:
+        """Creates or replaces one policy definition on a tenant, written whole. ⚠ 201 the first time and 200 after, and no operation to poll."""
+        response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}", body=content.to_wire()))
+        raise_for_status(response)
+        return PolicyDefinition.from_wire(wire_of(response))
+
+    def delete_policy_definition_at_tenant(self, tenant_id: str, policy_definition_name: str) -> None:
+        """Deletes one policy definition on a tenant. An object already gone is a success."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}"))
+        raise_for_status(response)
+
+    def list_policy_assignments_at_subscription(self, tenant_id: str, subscription_id: str, *, top: Optional[int] = None) -> Pager[PolicyAssignment]:
+        """Lists the policy assignments on a subscription, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyAssignments", top, PolicyAssignment.from_wire)
+
+    def get_policy_assignment_at_subscription(self, tenant_id: str, subscription_id: str, policy_assignment_name: str) -> PolicyAssignment:
+        """Reads one policy assignment on a subscription."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}"))
+        raise_for_status(response)
+        return PolicyAssignment.from_wire(wire_of(response))
+
+    def create_or_update_policy_assignment_at_subscription(self, tenant_id: str, subscription_id: str, policy_assignment_name: str, content: PolicyAssignmentContent) -> PolicyAssignment:
+        """Creates or replaces one policy assignment on a subscription, written whole. ⚠ 201 the first time and 200 after, and no operation to poll."""
+        response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}", body=content.to_wire()))
+        raise_for_status(response)
+        return PolicyAssignment.from_wire(wire_of(response))
+
+    def delete_policy_assignment_at_subscription(self, tenant_id: str, subscription_id: str, policy_assignment_name: str) -> None:
+        """Deletes one policy assignment on a subscription. An object already gone is a success."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}"))
+        raise_for_status(response)
+
+    def list_policy_definitions_at_subscription(self, tenant_id: str, subscription_id: str, *, top: Optional[int] = None) -> Pager[PolicyDefinition]:
+        """Lists the policy definitions on a subscription, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyDefinitions", top, PolicyDefinition.from_wire)
+
+    def get_policy_definition_at_subscription(self, tenant_id: str, subscription_id: str, policy_definition_name: str) -> PolicyDefinition:
+        """Reads one policy definition on a subscription."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}"))
+        raise_for_status(response)
+        return PolicyDefinition.from_wire(wire_of(response))
+
+    def create_or_update_policy_definition_at_subscription(self, tenant_id: str, subscription_id: str, policy_definition_name: str, content: PolicyDefinitionContent) -> PolicyDefinition:
+        """Creates or replaces one policy definition on a subscription, written whole. ⚠ 201 the first time and 200 after, and no operation to poll."""
+        response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}", body=content.to_wire()))
+        raise_for_status(response)
+        return PolicyDefinition.from_wire(wire_of(response))
+
+    def delete_policy_definition_at_subscription(self, tenant_id: str, subscription_id: str, policy_definition_name: str) -> None:
+        """Deletes one policy definition on a subscription. An object already gone is a success."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}"))
+        raise_for_status(response)
+
+    def list_policy_states_at_subscription(self, tenant_id: str, subscription_id: str, *, top: Optional[int] = None) -> Pager[PolicyState]:
+        """Lists the policy states on a subscription, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyStates", top, PolicyState.from_wire)
+
+    def list_policy_assignments_at_resource_group(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[PolicyAssignment]:
+        """Lists the policy assignments on a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Policy/policyAssignments", top, PolicyAssignment.from_wire)
+
+    def get_policy_assignment_at_resource_group(self, tenant_id: str, subscription_id: str, resource_group_name: str, policy_assignment_name: str) -> PolicyAssignment:
+        """Reads one policy assignment on a resource group."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}"))
+        raise_for_status(response)
+        return PolicyAssignment.from_wire(wire_of(response))
+
+    def create_or_update_policy_assignment_at_resource_group(self, tenant_id: str, subscription_id: str, resource_group_name: str, policy_assignment_name: str, content: PolicyAssignmentContent) -> PolicyAssignment:
+        """Creates or replaces one policy assignment on a resource group, written whole. ⚠ 201 the first time and 200 after, and no operation to poll."""
+        response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}", body=content.to_wire()))
+        raise_for_status(response)
+        return PolicyAssignment.from_wire(wire_of(response))
+
+    def delete_policy_assignment_at_resource_group(self, tenant_id: str, subscription_id: str, resource_group_name: str, policy_assignment_name: str) -> None:
+        """Deletes one policy assignment on a resource group. An object already gone is a success."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}"))
+        raise_for_status(response)
+
+    def list_policy_states_at_resource_group(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[PolicyState]:
+        """Lists the policy states on a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Policy/policyStates", top, PolicyState.from_wire)
 
 
 class ClickHouseClusterClient:
@@ -2164,6 +2314,7 @@ class CyberCloudClient:
         self.managementGroups = ManagementGroupsClient(transport)
         self.subscriptions = SubscriptionsClient(transport)
         self.resource_groups = ResourceGroupsClient(transport)
+        self.policy = PolicyClient(transport)
         self.analytics = AnalyticsProvider(transport)
         self.cache = CacheProvider(transport)
         self.communication = CommunicationProvider(transport)

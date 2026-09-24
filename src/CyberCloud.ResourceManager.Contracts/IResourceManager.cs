@@ -443,6 +443,12 @@ public sealed record PolicyEvaluationRequest {
 ///         handler runs after it. <c>PolicyEnforcementTests.EveryWriteKindEntersStepFiveAndADenyStopsEachOne</c>
 ///         drives all five shapes through real grains.
 ///     </para>
+///     <para>
+///         ⚠ <b>Every write kind the issue names, not every write method.</b> <c>RestoreAsync</c>,
+///         <c>PurgeAsync</c> and <c>PurgeExpiredAsync</c> don't enter step 5, so a restore brings back
+///         a body that a deny assigned since would refuse. docs/plan/08 § Policy records that as a
+///         decision still owed rather than a default.
+///     </para>
 /// </remarks>
 public interface IPolicyEvaluator {
     /// <summary>Evaluates every assignment that applies to one request.</summary>

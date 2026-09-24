@@ -214,8 +214,9 @@ express — its schema is a flat pointer list whose arrays hold scalars, so the 
 string of JSON inside the body, validated by nobody at step 2 and opaque to every generated client. So
 the three are served by `IPolicyManager` beside `IRoleAssignmentManager`, under a fourth reserved
 namespace that `ProviderRegistry.Build` refuses to a provider and the gateway routes before the scope and
-resource grammars (`PolicyAddress`). The cost is the one [24](24-roadmap.md)'s resource-graph row already
-records for its own address: none of the three is in the generated document yet.
+resource grammars (`PolicyAddress`). The cost was the one [24](24-roadmap.md)'s resource-graph row records
+for its own address — no generated surface knew them — and the review of #46 paid it: § Policy on every
+generated surface, below.
 
 **The rule.** `{ "if": <condition>, "then": { "effect": "deny" | "audit" | "modify", "operations": […] } }`.
 A condition is `allOf`, `anyOf`, `not`, or a `field` with exactly one of `equals`, `in`, `like`,
@@ -244,6 +245,19 @@ step 10 starts, and a synchronous action's handler runs after the fork step 5 pr
   does not repeat a field past every rule about it); the stored body for a `DELETE` or an action. ⚠ With
   the type's secret properties removed — an audit's verdict is readable by anyone who can read the scope,
   and a rule over a password would be an oracle for it.
+- ⚠ **"The one the write leaves" includes the tag bag, and it didn't at first.** The resource grain keeps
+  the bag beside the body and replaces it with the one it is sent, and a `PATCH` sent the bag of the patch
+  alone — empty for a patch that left `tags` out. So step 5 judged the stored tags and step 9 stripped
+  them: "deny when `/tags/env` doesn't exist" refused a `PUT` without the tag and let that `PATCH`
+  through. The write now sends the merged body's bag — a `PATCH` merges `tags` as RFC 7386 merges any
+  object, which is also what `TagRules.MaxTags` said it did — and the stored bag, not the copy a `PATCH`
+  leaves in the superset, is the one a condition reads. Step 2 refuses a `null` inside the bag as it
+  refuses one anywhere, so a tag is removed by a `PUT`. Found by the review
+  (`PolicyEnforcementTests.APatchThatLeavesOutTheTagsKeepsTheTagsTheRuleWasJudgedOn`).
+- ⚠ **A modify can't write a secret property**, and one that tries refuses the write naming the assignment
+  and the property. The catalog rewrites the document with the secrets taken out and the write path the
+  real one, so over a secret they disagree: an `add` the trace recorded did nothing over a password the
+  caller sent, and a `replace` overwrote it with a constant anyone who can read the definition can read.
 - ⚠ **A rule about a resource's shape applies to creates and updates only.** Only a deny rule whose
   condition names `operation` reaches a `DELETE` or an action — "deny delete where `/tags/env` is `prod`".
   The alternative is "deny sku premium" making every existing premium resource undeletable, which is the
@@ -256,7 +270,11 @@ step 10 starts, and a synchronous action's handler runs after the fork step 5 pr
   doesn't, because the gateway renders no part of `WriteTrace` — until it does (owed, below), what a modify
   made is found by reading the resource back.
 - **A deny is `403 PolicyViolation`**, naming the assignment and the definition in the message and again
-  as two details, with the rule's first body pointer as the target.
+  as two details, with the rule's first body pointer as the target. ⚠ Those paths can name a scope the
+  caller can't read — a management group above a subscription where they hold only a resource group —
+  which departs from the 404-and-nothing rule for unreadable scopes. Deliberately, and as Azure does: a
+  refusal that won't say which rule refused is one nobody can act on, and it gives away the names, never
+  the rule.
 - **An audit's verdict is recorded after step 9 succeeds**, never at step 5 — a verdict for a body that
   step 6 or 7 then refused would describe a resource that is not so. It is not allowed to fail the write.
   A verdict records when it last *changed*, so re-applying the same body writes nothing durable. A delete
@@ -305,10 +323,32 @@ keeps role assignments out of it, and a contributor who could assign a deny coul
 contributor's writes. Reading is `read` on the scope. 404, never 403, for a caller who cannot read the scope
 (`PolicyIsolationTests`, through the real schema).
 
+**Policy on every generated surface — the third non-registry source.** The review of #46 found the
+addresses served and generated nowhere, #63's question a fifth time, and answered it the way #63 did: the
+document declares them, and every surface reads them out of the document. `OpenApiEmitter` emits the
+fifteen paths — an item and a collection per definition and assignment scope, a collection per state scope,
+the scopes read off `PolicyAddress.AllowsScope` so the document can't declare a pair the router refuses —
+with `Policy.Definition`, `Policy.Assignment`, `Policy.State`, their write bodies and their pages, and the
+rule language as `Policy.Rule` and `Policy.Condition` built from `CyberCloud.Core.Policy`'s closed sets.
+Each path item carries `x-cybercloud-scope-object` (the type), `x-cybercloud-scope-object-scope` and, on a
+collection, `x-cybercloud-scope-object-collection`: a third discriminator beside the resource type's and
+the scope's, so `DocumentReader.ScopeObjectsOf` finds them and neither older reader mistakes one for its
+own. From there `cyc policy {scope}-{definitions|assignments|states}` with `show`, `create`, `delete` and
+`list`; `PolicyClient` in the .NET, Python and Go SDKs and the `…At{Scope}` methods on the portal's
+`CyberCloudApi`, none of them long-running. ⚠ **The rule is a JSON value on every surface.** The member
+keeps its `$ref` to `Policy.Rule` so the document describes it exactly, and carries `x-cybercloud-json`,
+which every emitter reads first: a `JsonNode`, a Python `Any`, a Go `json.RawMessage`, a TypeScript
+`unknown`, and a `cyc` flag of type `json` that takes one JSON value — a rule in a file is
+`--policy-rule "$(cat rule.json)"`, because `System.CommandLine` already owns `@` for response files.
+Without the marker an untyped object reads as the tag bag's string map. `PolicySurfaceTests` holds the
+document to the router's grammar in both directions, `ServedShapesMatchTheDocumentTests` validates what the
+gateway serves at the addresses, rule included, against it, and
+`PolicyEnforcementTests.TheManagersRenderingIsTheDocumentsSchema` holds the real manager's member sets to
+the schema. ⚠ **No portal form:** the portal has no policy page yet, and a condition tree is not a form a
+generated field can hold.
+
 ⚠ **Owed, recorded here rather than implied:**
 
-- **The addresses are not in the generated document**, so no generated SDK, CLI verb or portal form knows
-  them — the gap [24](24-roadmap.md)'s resource-graph row records for its own address.
 - **The gateway doesn't render `WriteTrace.Policy`**, so an HTTP caller learns what a modify rewrote only by
   reading the resource back. Azure answers with the stored body; ours is the `202`'s operation.
 - **No compliance scan.** A verdict is produced by a write; an assignment made today says nothing about the

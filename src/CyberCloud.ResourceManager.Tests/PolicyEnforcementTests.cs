@@ -1,4 +1,5 @@
 using CyberCloud.ResourceManager.Actions;
+using CyberCloud.ResourceManager.Contracts.Generation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Orleans.Multitenant;
@@ -216,6 +217,82 @@ public sealed class PolicyEnforcementTests(ResourceManagerCluster cluster) : IAs
         allowed.IsSuccess.ShouldBeTrue(allowed.Error?.Message);
     }
 
+    [Fact]
+    public async Task APatchThatLeavesOutTheTagsKeepsTheTagsTheRuleWasJudgedOn() {
+        // ⚠ FOUND BY THE REVIEW OF #46, AS A BYPASS. Step 5 judged a PATCH on the stored superset with
+        // the stored tags put back, and step 9 then sent the tag bag of the PATCH ALONE — empty, for a
+        // patch that doesn't mention tags — which the resource grain stored in place of the old one. So
+        // "deny when /tags/env doesn't exist" refused a PUT without the tag and let a PATCH through
+        // that stripped it: the body judged was not the body the write left. The write now sends the
+        // tag bag of the merged body the rule judged, and a merge patch that omits `tags` leaves them.
+        ResourceManagerCluster.ResetDoubles();
+
+        var group = await GroupAsync("tagged");
+        var address = Widget(group, "t");
+
+        var created = await PutAsync(address, Tagged(TestingProvider.Body(2), ("env", "prod"), ("team", "a")));
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+        await ConvergeAsync(created.GetValueOrThrow());
+
+        await DefineAsync(group, "needs-env", """{ "if": { "field": "/tags/env", "exists": false }, "then": { "effect": "deny" } }""");
+        await AssignAsync(group, "needs-env", "needs-env");
+
+        (await PutAsync(address, TestingProvider.Body(2))).Error!.Code
+            .ShouldBe(ErrorCode.PolicyViolation, "a PUT without the tag leaves no tag");
+
+        var patched = await PatchAsync(address, """{"properties":{"label":"z"}}""");
+        patched.IsSuccess.ShouldBeTrue(patched.Error?.Message);
+        patched.GetValueOrThrow().Resource.Tags.OrderBy(static x => x.Key, StringComparer.Ordinal).Select(static x => x.Key + "=" + x.Value)
+            .ShouldBe(["env=prod", "team=a"], "a patch that leaves out `tags` leaves them as they were");
+        await ConvergeAsync(patched.GetValueOrThrow());
+
+        // A merge patch merges the bag, as RFC 7386 merges any object: a member adds or replaces one
+        // tag and leaves the rest. ⚠ Step 2 refuses a null here as it refuses one for every property,
+        // so a tag is removed by a PUT — which the rule judges like any other.
+        var merged = await PatchAsync(address, """{"tags":{"owner":"b","team":"c"}}""");
+        merged.IsSuccess.ShouldBeTrue(merged.Error?.Message);
+        merged.GetValueOrThrow().Resource.Tags.OrderBy(static x => x.Key, StringComparer.Ordinal).Select(static x => x.Key + "=" + x.Value)
+            .ShouldBe(["env=prod", "owner=b", "team=c"]);
+        await ConvergeAsync(merged.GetValueOrThrow());
+
+        (await PutAsync(address, Tagged(TestingProvider.Body(2), ("owner", "b")))).Error!.Code
+            .ShouldBe(ErrorCode.PolicyViolation, "a PUT that drops the tag is refused");
+
+        var read = await cluster.Resource(ResourceManagerCluster.Tenant, created.GetValueOrThrow().Resource.Id).GetAsync(string.Empty, []);
+        read.GetValueOrThrow().Tags.ShouldContainKeyAndValue("env", "prod", "nothing refused changed the bag");
+    }
+
+    [Fact]
+    public async Task TheManagersRenderingIsTheDocumentsSchema() {
+        // ⚠ The review of #46 put policy's addresses into the generated document, and every SDK now
+        // reads a definition and an assignment by the schema there. A member the manager renders that
+        // the schema doesn't name is one a generated client refuses (additionalProperties: false); a
+        // required member it doesn't render is one a generated client can't construct. So the member
+        // sets are held against the real manager's output, not against a copy of it.
+        ResourceManagerCluster.ResetDoubles();
+
+        var document = OpenApiEmitter.Emit(cluster.Registry, ApiVersion.Parse(TestingProvider.V2026));
+        var group = await GroupAsync("rendered");
+        var definitionPath = await DefineAsync(group, "rendered", """{ "if": { "field": "type", "like": "*" }, "then": { "effect": "audit" } }""");
+        var assignmentPath = await AssignAsync(group, "rendered", "rendered");
+
+        var definition = await policies.ReadAsync(Request(definitionPath), TestContext.Current.CancellationToken);
+        var assignment = await policies.ReadAsync(Request(assignmentPath), TestContext.Current.CancellationToken);
+
+        foreach (var (snapshot, component) in new[] {
+                     (definition.GetValueOrThrow(), OpenApiEmitter.PolicyDefinitionSchema),
+                     (assignment.GetValueOrThrow(), OpenApiEmitter.PolicyAssignmentSchema)
+                 }) {
+            var schema = document["components"]!["schemas"]![component]!["properties"]!["properties"]!;
+            var declared = schema["properties"]!.AsObject().Select(static x => x.Key).Order(StringComparer.Ordinal);
+            var required = schema["required"]!.AsArray().Select(static x => x!.GetValue<string>()).Order(StringComparer.Ordinal);
+            var rendered = JsonNode.Parse(snapshot.Properties)!.AsObject().Select(static x => x.Key).Order(StringComparer.Ordinal);
+
+            rendered.ShouldBe(declared, component + ": the manager renders exactly what the document declares");
+            rendered.ShouldBe(required, component + ": and every member, every time, as the document requires");
+        }
+    }
+
     // ── Modify ─────────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -273,6 +350,50 @@ public sealed class PolicyEnforcementTests(ResourceManagerCluster cluster) : IAs
         refused.Error.Target.ShouldBe("/properties/size");
         refused.Error.Message.ShouldContain("schema refuses");
         (await cluster.Index(address).GetAsync()).GetValueOrThrow().State.ShouldBe(IndexEntryState.Free);
+    }
+
+    [Fact]
+    public async Task AModifyOfASecretPropertyRefusesTheWriteRatherThanDisagreeWithItsTrace() {
+        // ⚠ Found by the review of #46. The catalog rewrites a body with the secrets taken out, and the
+        // write path rewrites the real one. Over a secret the caller sent, an `add` was traced as made
+        // and did nothing, and a `replace` overwrote the caller's password with the definition's
+        // constant. Neither is honest, so the write is refused, naming the property.
+        ResourceManagerCluster.ResetDoubles();
+
+        var group = await GroupAsync("secret-modify");
+        await DefineAsync(
+            group,
+            "password",
+            """{ "if": { "field": "type", "like": "*" }, "then": { "effect": "modify", "operations": [ { "operation": "replace", "field": "/properties/adminPassword", "value": "hunter2" } ] } }"""
+        );
+        var assignment = await AssignAsync(group, "password", "password");
+
+        var body = JsonNode.Parse(TestingProvider.Body())!.AsObject();
+        body["properties"]!["adminPassword"] = "the-callers-own";
+        var address = Widget(group, "s");
+
+        var refused = await PutAsync(address, body.ToJsonString());
+
+        refused.Error!.Code.ShouldBe(ErrorCode.PolicyViolation);
+        refused.Error.Target.ShouldBe("/properties/adminPassword");
+        refused.Error.Message.ShouldContain(assignment);
+        (await cluster.Index(address).GetAsync()).GetValueOrThrow().State.ShouldBe(IndexEntryState.Free);
+    }
+
+    [Fact]
+    public async Task ABodyWithAMemberNamedTwiceIsAFourHundredAtStepTwo() {
+        // ⚠ Found by the review of #46: JsonDocument kept the last value and passed it, and step 5's
+        // JsonNode copy threw on the duplicate — a 500 for a malformed request.
+        ResourceManagerCluster.ResetDoubles();
+
+        var group = await GroupAsync("duplicate");
+        var refused = await PutAsync(
+            Widget(group, "d"),
+            """{"location":"eu-central","properties":{"size":2,"label":"a","label":"b"}}"""
+        );
+
+        refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        refused.Error.Message.ShouldContain("not valid JSON");
     }
 
     [Fact]
@@ -757,6 +878,18 @@ public sealed class PolicyEnforcementTests(ResourceManagerCluster cluster) : IAs
 
         evaluated.IsSuccess.ShouldBeTrue(evaluated.Error?.Message);
         return evaluated.GetValueOrThrow().States;
+    }
+
+    /// <summary>A body with a tag bag added at the root, where a request carries it.</summary>
+    static string Tagged(string body, params (string Key, string Value)[] tags) {
+        var document = JsonNode.Parse(body)!.AsObject();
+        var bag = new JsonObject();
+        foreach (var (key, value) in tags) {
+            bag[key] = value;
+        }
+
+        document["tags"] = bag;
+        return document.ToJsonString();
     }
 
     static PolicyRequest Request(string path, string body = "{}") =>

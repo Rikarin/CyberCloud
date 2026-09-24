@@ -16481,6 +16481,1215 @@
         }
       }
     },
+    "policy": {
+      "name": "policy",
+      "summary": "Objects addressed on a scope under CyberCloud.Policy — docs/plan/08 § Policy. ⚠ Not resources: a write converges before the call returns, so there is nothing to wait for and no --wait.",
+      "commands": {
+        "management-group-assignments": {
+          "name": "management-group-assignments",
+          "objectType": "CyberCloud.Policy/policyAssignments",
+          "scope": "managementGroup",
+          "title": "Policy assignment",
+          "plural": "Policy assignments",
+          "summary": "A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a policy assignment on a management group. The object is written whole; repeating it changes nothing.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--display-name",
+                  "type": "string",
+                  "required": false,
+                  "summary": "What a person reads.",
+                  "jsonPointer": "/properties/displayName"
+                },
+                {
+                  "name": "--management-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The management group, by name. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "managementGroupName"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy assignment's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyAssignmentName"
+                },
+                {
+                  "name": "--not-scopes",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling.",
+                  "jsonPointer": "/properties/notScopes",
+                  "repeated": true
+                },
+                {
+                  "name": "--policy-definition-id",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules.",
+                  "jsonPointer": "/properties/policyDefinitionId"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a policy assignment on a management group. An object already gone is a success.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--management-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The management group, by name. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "managementGroupName"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy assignment's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyAssignmentName"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the policy assignments on a management group. ⚠ A short page never means \"that is all there is\".",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyAssignments",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--management-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The management group, by name. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "managementGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a policy assignment on a management group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--management-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The management group, by name. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "managementGroupName"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy assignment's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyAssignmentName"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            }
+          }
+        },
+        "management-group-definitions": {
+          "name": "management-group-definitions",
+          "objectType": "CyberCloud.Policy/policyDefinitions",
+          "scope": "managementGroup",
+          "title": "Policy definition",
+          "plural": "Policy definitions",
+          "summary": "A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a policy definition on a management group. The object is written whole; repeating it changes nothing.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--description",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The longer explanation.",
+                  "jsonPointer": "/properties/description"
+                },
+                {
+                  "name": "--display-name",
+                  "type": "string",
+                  "required": false,
+                  "summary": "What a person reads.",
+                  "jsonPointer": "/properties/displayName"
+                },
+                {
+                  "name": "--management-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The management group, by name. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "managementGroupName"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy definition's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyDefinitionName"
+                },
+                {
+                  "name": "--policy-rule",
+                  "type": "json",
+                  "required": true,
+                  "summary": "The rule — { \"if\": <condition>, \"then\": { \"effect\": \"deny\" | \"audit\" | \"modify\" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.",
+                  "jsonPointer": "/properties/policyRule"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a policy definition on a management group. An object already gone is a success.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--management-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The management group, by name. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "managementGroupName"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy definition's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyDefinitionName"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the policy definitions on a management group. ⚠ A short page never means \"that is all there is\".",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyDefinitions",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--management-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The management group, by name. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "managementGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a policy definition on a management group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--management-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The management group, by name. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "managementGroupName"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy definition's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyDefinitionName"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            }
+          }
+        },
+        "management-group-states": {
+          "name": "management-group-states",
+          "objectType": "CyberCloud.Policy/policyStates",
+          "scope": "managementGroup",
+          "title": "Policy state",
+          "plural": "Policy states",
+          "summary": "The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy.",
+          "verbs": {
+            "list": {
+              "name": "list",
+              "summary": "List the policy states on a management group. ⚠ A short page never means \"that is all there is\".",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyStates",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--management-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The management group, by name. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "managementGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            }
+          }
+        },
+        "resource-group-assignments": {
+          "name": "resource-group-assignments",
+          "objectType": "CyberCloud.Policy/policyAssignments",
+          "scope": "resourceGroup",
+          "title": "Policy assignment",
+          "plural": "Policy assignments",
+          "summary": "A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a policy assignment on a resource group. The object is written whole; repeating it changes nothing.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--display-name",
+                  "type": "string",
+                  "required": false,
+                  "summary": "What a person reads.",
+                  "jsonPointer": "/properties/displayName"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy assignment's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyAssignmentName"
+                },
+                {
+                  "name": "--not-scopes",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling.",
+                  "jsonPointer": "/properties/notScopes",
+                  "repeated": true
+                },
+                {
+                  "name": "--policy-definition-id",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules.",
+                  "jsonPointer": "/properties/policyDefinitionId"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a policy assignment on a resource group. An object already gone is a success.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy assignment's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyAssignmentName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the policy assignments on a resource group. ⚠ A short page never means \"that is all there is\".",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Policy/policyAssignments",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a policy assignment on a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy assignment's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyAssignmentName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            }
+          }
+        },
+        "resource-group-states": {
+          "name": "resource-group-states",
+          "objectType": "CyberCloud.Policy/policyStates",
+          "scope": "resourceGroup",
+          "title": "Policy state",
+          "plural": "Policy states",
+          "summary": "The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy.",
+          "verbs": {
+            "list": {
+              "name": "list",
+              "summary": "List the policy states on a resource group. ⚠ A short page never means \"that is all there is\".",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Policy/policyStates",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            }
+          }
+        },
+        "subscription-assignments": {
+          "name": "subscription-assignments",
+          "objectType": "CyberCloud.Policy/policyAssignments",
+          "scope": "subscription",
+          "title": "Policy assignment",
+          "plural": "Policy assignments",
+          "summary": "A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a policy assignment on a subscription. The object is written whole; repeating it changes nothing.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--display-name",
+                  "type": "string",
+                  "required": false,
+                  "summary": "What a person reads.",
+                  "jsonPointer": "/properties/displayName"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy assignment's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyAssignmentName"
+                },
+                {
+                  "name": "--not-scopes",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling.",
+                  "jsonPointer": "/properties/notScopes",
+                  "repeated": true
+                },
+                {
+                  "name": "--policy-definition-id",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules.",
+                  "jsonPointer": "/properties/policyDefinitionId"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a policy assignment on a subscription. An object already gone is a success.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy assignment's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyAssignmentName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the policy assignments on a subscription. ⚠ A short page never means \"that is all there is\".",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyAssignments",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a policy assignment on a subscription.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy assignment's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyAssignmentName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            }
+          }
+        },
+        "subscription-definitions": {
+          "name": "subscription-definitions",
+          "objectType": "CyberCloud.Policy/policyDefinitions",
+          "scope": "subscription",
+          "title": "Policy definition",
+          "plural": "Policy definitions",
+          "summary": "A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a policy definition on a subscription. The object is written whole; repeating it changes nothing.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--description",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The longer explanation.",
+                  "jsonPointer": "/properties/description"
+                },
+                {
+                  "name": "--display-name",
+                  "type": "string",
+                  "required": false,
+                  "summary": "What a person reads.",
+                  "jsonPointer": "/properties/displayName"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy definition's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyDefinitionName"
+                },
+                {
+                  "name": "--policy-rule",
+                  "type": "json",
+                  "required": true,
+                  "summary": "The rule — { \"if\": <condition>, \"then\": { \"effect\": \"deny\" | \"audit\" | \"modify\" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.",
+                  "jsonPointer": "/properties/policyRule"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a policy definition on a subscription. An object already gone is a success.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy definition's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyDefinitionName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the policy definitions on a subscription. ⚠ A short page never means \"that is all there is\".",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyDefinitions",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a policy definition on a subscription.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy definition's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyDefinitionName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            }
+          }
+        },
+        "subscription-states": {
+          "name": "subscription-states",
+          "objectType": "CyberCloud.Policy/policyStates",
+          "scope": "subscription",
+          "title": "Policy state",
+          "plural": "Policy states",
+          "summary": "The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy.",
+          "verbs": {
+            "list": {
+              "name": "list",
+              "summary": "List the policy states on a subscription. ⚠ A short page never means \"that is all there is\".",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyStates",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            }
+          }
+        },
+        "tenant-definitions": {
+          "name": "tenant-definitions",
+          "objectType": "CyberCloud.Policy/policyDefinitions",
+          "scope": "tenant",
+          "title": "Policy definition",
+          "plural": "Policy definitions",
+          "summary": "A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a policy definition on a tenant. The object is written whole; repeating it changes nothing.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--description",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The longer explanation.",
+                  "jsonPointer": "/properties/description"
+                },
+                {
+                  "name": "--display-name",
+                  "type": "string",
+                  "required": false,
+                  "summary": "What a person reads.",
+                  "jsonPointer": "/properties/displayName"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy definition's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyDefinitionName"
+                },
+                {
+                  "name": "--policy-rule",
+                  "type": "json",
+                  "required": true,
+                  "summary": "The rule — { \"if\": <condition>, \"then\": { \"effect\": \"deny\" | \"audit\" | \"modify\" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.",
+                  "jsonPointer": "/properties/policyRule"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a policy definition on a tenant. An object already gone is a success.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy definition's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyDefinitionName"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the policy definitions on a tenant. ⚠ A short page never means \"that is all there is\".",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/providers/CyberCloud.Policy/policyDefinitions",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a policy definition on a tenant.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The policy definition's own name. ⚠ Required, and never taken from the profile.",
+                  "pathPlaceholder": "policyDefinitionName"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
     "recoveryservices": {
       "name": "recoveryservices",
       "summary": "Commands for the CyberCloud.RecoveryServices provider.",

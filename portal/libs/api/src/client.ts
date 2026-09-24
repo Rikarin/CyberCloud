@@ -106,6 +106,11 @@ import type {
   NetworkVirtualNetworksSubnetsListAddressUsageResult,
   NetworkVirtualNetworksSubnetsResource,
   OperationStatus,
+  PolicyAssignment,
+  PolicyAssignmentContent,
+  PolicyDefinition,
+  PolicyDefinitionContent,
+  PolicyState,
   RecoveryServicesVaultsData,
   RecoveryServicesVaultsListRecoveryPointsResult,
   RecoveryServicesVaultsRecoverContent,
@@ -213,6 +218,141 @@ export class CyberCloudApi {
   /** ⚠ 201 the first time and 200 on a repeat, and no operation to poll. */
   createResourceGroup(tenantId: string, subscriptionId: string, resourceGroupName: string, content: ResourceGroupCreateContent): Promise<ApiResponse<ScopeResource>> {
     return this.transport.send<ScopeResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}`, body: content });
+  }
+
+  /** One page of the policy assignments on a management group. ⚠ A short page never means "that is all there is". */
+  listPolicyAssignmentsAtManagementGroup(tenantId: string, managementGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<PolicyAssignment>>> {
+    return this.transport.send<Page<PolicyAssignment>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/managementGroups/${CyberCloudApi.segment(managementGroupName)}/providers/CyberCloud.Policy/policyAssignments`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** Reads one policy assignment on a management group. */
+  getPolicyAssignmentAtManagementGroup(tenantId: string, managementGroupName: string, policyAssignmentName: string): Promise<ApiResponse<PolicyAssignment>> {
+    return this.transport.send<PolicyAssignment>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/managementGroups/${CyberCloudApi.segment(managementGroupName)}/providers/CyberCloud.Policy/policyAssignments/${CyberCloudApi.segment(policyAssignmentName)}` });
+  }
+
+  /** Creates or replaces one policy assignment on a management group, written whole. ⚠ 201 the first time and 200 after, and no operation to poll. */
+  createOrUpdatePolicyAssignmentAtManagementGroup(tenantId: string, managementGroupName: string, policyAssignmentName: string, content: PolicyAssignmentContent): Promise<ApiResponse<PolicyAssignment>> {
+    return this.transport.send<PolicyAssignment>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/managementGroups/${CyberCloudApi.segment(managementGroupName)}/providers/CyberCloud.Policy/policyAssignments/${CyberCloudApi.segment(policyAssignmentName)}`, body: content });
+  }
+
+  /** Deletes one policy assignment on a management group. An object already gone is a success. */
+  deletePolicyAssignmentAtManagementGroup(tenantId: string, managementGroupName: string, policyAssignmentName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/managementGroups/${CyberCloudApi.segment(managementGroupName)}/providers/CyberCloud.Policy/policyAssignments/${CyberCloudApi.segment(policyAssignmentName)}` });
+  }
+
+  /** One page of the policy definitions on a management group. ⚠ A short page never means "that is all there is". */
+  listPolicyDefinitionsAtManagementGroup(tenantId: string, managementGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<PolicyDefinition>>> {
+    return this.transport.send<Page<PolicyDefinition>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/managementGroups/${CyberCloudApi.segment(managementGroupName)}/providers/CyberCloud.Policy/policyDefinitions`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** Reads one policy definition on a management group. */
+  getPolicyDefinitionAtManagementGroup(tenantId: string, managementGroupName: string, policyDefinitionName: string): Promise<ApiResponse<PolicyDefinition>> {
+    return this.transport.send<PolicyDefinition>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/managementGroups/${CyberCloudApi.segment(managementGroupName)}/providers/CyberCloud.Policy/policyDefinitions/${CyberCloudApi.segment(policyDefinitionName)}` });
+  }
+
+  /** Creates or replaces one policy definition on a management group, written whole. ⚠ 201 the first time and 200 after, and no operation to poll. */
+  createOrUpdatePolicyDefinitionAtManagementGroup(tenantId: string, managementGroupName: string, policyDefinitionName: string, content: PolicyDefinitionContent): Promise<ApiResponse<PolicyDefinition>> {
+    return this.transport.send<PolicyDefinition>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/managementGroups/${CyberCloudApi.segment(managementGroupName)}/providers/CyberCloud.Policy/policyDefinitions/${CyberCloudApi.segment(policyDefinitionName)}`, body: content });
+  }
+
+  /** Deletes one policy definition on a management group. An object already gone is a success. */
+  deletePolicyDefinitionAtManagementGroup(tenantId: string, managementGroupName: string, policyDefinitionName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/managementGroups/${CyberCloudApi.segment(managementGroupName)}/providers/CyberCloud.Policy/policyDefinitions/${CyberCloudApi.segment(policyDefinitionName)}` });
+  }
+
+  /** One page of the policy states on a management group. ⚠ A short page never means "that is all there is". */
+  listPolicyStatesAtManagementGroup(tenantId: string, managementGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<PolicyState>>> {
+    return this.transport.send<Page<PolicyState>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/managementGroups/${CyberCloudApi.segment(managementGroupName)}/providers/CyberCloud.Policy/policyStates`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** One page of the policy definitions on a tenant. ⚠ A short page never means "that is all there is". */
+  listPolicyDefinitionsAtTenant(tenantId: string, page: PageRequest = {}): Promise<ApiResponse<Page<PolicyDefinition>>> {
+    return this.transport.send<Page<PolicyDefinition>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/providers/CyberCloud.Policy/policyDefinitions`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** Reads one policy definition on a tenant. */
+  getPolicyDefinitionAtTenant(tenantId: string, policyDefinitionName: string): Promise<ApiResponse<PolicyDefinition>> {
+    return this.transport.send<PolicyDefinition>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/providers/CyberCloud.Policy/policyDefinitions/${CyberCloudApi.segment(policyDefinitionName)}` });
+  }
+
+  /** Creates or replaces one policy definition on a tenant, written whole. ⚠ 201 the first time and 200 after, and no operation to poll. */
+  createOrUpdatePolicyDefinitionAtTenant(tenantId: string, policyDefinitionName: string, content: PolicyDefinitionContent): Promise<ApiResponse<PolicyDefinition>> {
+    return this.transport.send<PolicyDefinition>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/providers/CyberCloud.Policy/policyDefinitions/${CyberCloudApi.segment(policyDefinitionName)}`, body: content });
+  }
+
+  /** Deletes one policy definition on a tenant. An object already gone is a success. */
+  deletePolicyDefinitionAtTenant(tenantId: string, policyDefinitionName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/providers/CyberCloud.Policy/policyDefinitions/${CyberCloudApi.segment(policyDefinitionName)}` });
+  }
+
+  /** One page of the policy assignments on a subscription. ⚠ A short page never means "that is all there is". */
+  listPolicyAssignmentsAtSubscription(tenantId: string, subscriptionId: string, page: PageRequest = {}): Promise<ApiResponse<Page<PolicyAssignment>>> {
+    return this.transport.send<Page<PolicyAssignment>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/providers/CyberCloud.Policy/policyAssignments`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** Reads one policy assignment on a subscription. */
+  getPolicyAssignmentAtSubscription(tenantId: string, subscriptionId: string, policyAssignmentName: string): Promise<ApiResponse<PolicyAssignment>> {
+    return this.transport.send<PolicyAssignment>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/providers/CyberCloud.Policy/policyAssignments/${CyberCloudApi.segment(policyAssignmentName)}` });
+  }
+
+  /** Creates or replaces one policy assignment on a subscription, written whole. ⚠ 201 the first time and 200 after, and no operation to poll. */
+  createOrUpdatePolicyAssignmentAtSubscription(tenantId: string, subscriptionId: string, policyAssignmentName: string, content: PolicyAssignmentContent): Promise<ApiResponse<PolicyAssignment>> {
+    return this.transport.send<PolicyAssignment>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/providers/CyberCloud.Policy/policyAssignments/${CyberCloudApi.segment(policyAssignmentName)}`, body: content });
+  }
+
+  /** Deletes one policy assignment on a subscription. An object already gone is a success. */
+  deletePolicyAssignmentAtSubscription(tenantId: string, subscriptionId: string, policyAssignmentName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/providers/CyberCloud.Policy/policyAssignments/${CyberCloudApi.segment(policyAssignmentName)}` });
+  }
+
+  /** One page of the policy definitions on a subscription. ⚠ A short page never means "that is all there is". */
+  listPolicyDefinitionsAtSubscription(tenantId: string, subscriptionId: string, page: PageRequest = {}): Promise<ApiResponse<Page<PolicyDefinition>>> {
+    return this.transport.send<Page<PolicyDefinition>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/providers/CyberCloud.Policy/policyDefinitions`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** Reads one policy definition on a subscription. */
+  getPolicyDefinitionAtSubscription(tenantId: string, subscriptionId: string, policyDefinitionName: string): Promise<ApiResponse<PolicyDefinition>> {
+    return this.transport.send<PolicyDefinition>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/providers/CyberCloud.Policy/policyDefinitions/${CyberCloudApi.segment(policyDefinitionName)}` });
+  }
+
+  /** Creates or replaces one policy definition on a subscription, written whole. ⚠ 201 the first time and 200 after, and no operation to poll. */
+  createOrUpdatePolicyDefinitionAtSubscription(tenantId: string, subscriptionId: string, policyDefinitionName: string, content: PolicyDefinitionContent): Promise<ApiResponse<PolicyDefinition>> {
+    return this.transport.send<PolicyDefinition>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/providers/CyberCloud.Policy/policyDefinitions/${CyberCloudApi.segment(policyDefinitionName)}`, body: content });
+  }
+
+  /** Deletes one policy definition on a subscription. An object already gone is a success. */
+  deletePolicyDefinitionAtSubscription(tenantId: string, subscriptionId: string, policyDefinitionName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/providers/CyberCloud.Policy/policyDefinitions/${CyberCloudApi.segment(policyDefinitionName)}` });
+  }
+
+  /** One page of the policy states on a subscription. ⚠ A short page never means "that is all there is". */
+  listPolicyStatesAtSubscription(tenantId: string, subscriptionId: string, page: PageRequest = {}): Promise<ApiResponse<Page<PolicyState>>> {
+    return this.transport.send<Page<PolicyState>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/providers/CyberCloud.Policy/policyStates`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** One page of the policy assignments on a resource group. ⚠ A short page never means "that is all there is". */
+  listPolicyAssignmentsAtResourceGroup(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<PolicyAssignment>>> {
+    return this.transport.send<Page<PolicyAssignment>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Policy/policyAssignments`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** Reads one policy assignment on a resource group. */
+  getPolicyAssignmentAtResourceGroup(tenantId: string, subscriptionId: string, resourceGroupName: string, policyAssignmentName: string): Promise<ApiResponse<PolicyAssignment>> {
+    return this.transport.send<PolicyAssignment>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Policy/policyAssignments/${CyberCloudApi.segment(policyAssignmentName)}` });
+  }
+
+  /** Creates or replaces one policy assignment on a resource group, written whole. ⚠ 201 the first time and 200 after, and no operation to poll. */
+  createOrUpdatePolicyAssignmentAtResourceGroup(tenantId: string, subscriptionId: string, resourceGroupName: string, policyAssignmentName: string, content: PolicyAssignmentContent): Promise<ApiResponse<PolicyAssignment>> {
+    return this.transport.send<PolicyAssignment>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Policy/policyAssignments/${CyberCloudApi.segment(policyAssignmentName)}`, body: content });
+  }
+
+  /** Deletes one policy assignment on a resource group. An object already gone is a success. */
+  deletePolicyAssignmentAtResourceGroup(tenantId: string, subscriptionId: string, resourceGroupName: string, policyAssignmentName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Policy/policyAssignments/${CyberCloudApi.segment(policyAssignmentName)}` });
+  }
+
+  /** One page of the policy states on a resource group. ⚠ A short page never means "that is all there is". */
+  listPolicyStatesAtResourceGroup(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<PolicyState>>> {
+    return this.transport.send<Page<PolicyState>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Policy/policyStates`, query: CyberCloudApi.pageQuery(page) });
   }
 
   /** Reads one ClickHouse cluster. */

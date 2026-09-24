@@ -141,6 +141,14 @@ public sealed class CatalogPolicyEvaluator(IGrainFactory grains, ILogger<Catalog
     ///     The <c>target</c> is the first body pointer the rule tests, so a portal form can put the
     ///     refusal beside the field that caused it; a rule that tests only facts — the type, the
     ///     operation — has no field to point at and the target is absent.
+    ///     <para>
+    ///         ⚠ <b>It names scopes the caller may not be able to read</b> — an assignment on a
+    ///         management group, a definition at the tenant — to a caller who holds rights only on the
+    ///         resource group. That departs from the 404-and-say-nothing rule for unreadable scopes,
+    ///         deliberately and as Azure does: a refusal that didn't say which rule refused is one
+    ///         nobody can act on, and the names are all it gives away, never the rule. docs/plan/08
+    ///         § Policy records it.
+    ///     </para>
     /// </remarks>
     static Error Refusal(ResourceId id, PolicyDenial denial) =>
         new(
@@ -165,10 +173,19 @@ static class PolicyDocuments {
     ///     location put back where a request body carries them.
     /// </summary>
     /// <param name="snapshot">The resource grain's snapshot, read with no pointer filter.</param>
+    /// <remarks>
+    ///     ⚠ <b>The snapshot's bag replaces any <c>tags</c> member the superset holds.</b> The grain
+    ///     keeps the bag beside the superset, and a <c>PATCH</c> merges its <c>tags</c> into the
+    ///     superset as well — where a later <c>PUT</c>, which replaces only the version's declared
+    ///     pointers, leaves them. So the superset's copy can be stale, and a condition that read it
+    ///     would judge tags the resource no longer has. The write path sends a <c>PATCH</c>'s bag from
+    ///     this document merged with the patch, so the bag a rule sees is the bag the write leaves.
+    /// </remarks>
     public static JsonObject Stored(ResourceSnapshot snapshot) {
         var document = Parse(snapshot.Body);
 
-        if (!snapshot.Tags.IsEmpty && !document.ContainsKey(TagRules.Name)) {
+        document.Remove(TagRules.Name);
+        if (!snapshot.Tags.IsEmpty) {
             var tags = new JsonObject();
             foreach (var (key, value) in snapshot.Tags.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
                 tags[key] = value;
@@ -177,7 +194,7 @@ static class PolicyDocuments {
             document[TagRules.Name] = tags;
         }
 
-        if (snapshot.Location.Length > 0 && !document.ContainsKey("location")) {
+        if (snapshot.Location.Length > 0) {
             document["location"] = snapshot.Location;
         }
 
@@ -240,16 +257,40 @@ static class PolicyDocuments {
     ///     Makes the catalog's rewrites on the body the write sends, keeping the prospective body in
     ///     step so an <c>add</c> sees what a <c>PATCH</c> did not repeat.
     /// </summary>
-    /// <returns>Success, or the <see cref="ErrorCode.PolicyViolation" /> a rewrite with nowhere to go produced.</returns>
+    /// <returns>
+    ///     Success, or the <see cref="ErrorCode.PolicyViolation" /> a rewrite with nowhere to go — or
+    ///     aimed at a secret property — produced.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>A rewrite that touches a secret property refuses the write.</b> The catalog applies
+    ///     its rewrites to <see cref="Evaluated" />'s document, which has the secrets taken out, and
+    ///     this applies them again to the real body, which has them in. On a secret the two disagree:
+    ///     an <c>add</c> the trace records as made is a no-op over a secret the caller sent, and a
+    ///     <c>replace</c> overwrites the caller's secret with a constant from the definition, which
+    ///     anyone who can read the definition can read. Neither is a rewrite policy can make honestly,
+    ///     so the write is refused naming the assignment and the property, and its owner changes the
+    ///     rule. Found by the review of issue #46.
+    /// </remarks>
     public static Result Apply(
         ImmutableArray<PolicyModificationRecord> modifications,
         JsonObject target,
-        JsonObject prospective
+        JsonObject prospective,
+        ResourceSchema schema
     ) {
         foreach (var record in modifications) {
             var field = Core.Policy.PolicyField.Parse(record.Field, "");
             if (field.TryGetError(out var fieldError)) {
                 return Result.Failure(fieldError);
+            }
+
+            if (SecretUnder(record.Field, schema) is { } secret) {
+                return Result.Failure(
+                    ErrorCode.PolicyViolation,
+                    $"Policy assignment '{record.AssignmentPath}' rewrites '{record.Field}', which holds the "
+                    + $"secret property '{secret}'. Policy is evaluated without secrets, so it can't rewrite "
+                    + "one — change the definition's operations. docs/plan/08 § Policy.",
+                    record.Field
+                );
             }
 
             var kind = record.Operation == "add"
@@ -269,4 +310,17 @@ static class PolicyDocuments {
 
         return Result.Success;
     }
+
+    /// <summary>
+    ///     The first secret property a rewrite of <paramref name="pointer" /> would write — the
+    ///     pointer itself, one beneath it, or one it sits beneath — or <see langword="null" />.
+    /// </summary>
+    static string? SecretUnder(string pointer, ResourceSchema schema) =>
+        schema.Properties
+            .Where(static x => x.Secret)
+            .Select(static x => x.JsonPointer)
+            .FirstOrDefault(secret => string.Equals(secret, pointer, StringComparison.Ordinal)
+                || secret.StartsWith(pointer + "/", StringComparison.Ordinal)
+                || pointer.StartsWith(secret + "/", StringComparison.Ordinal)
+            );
 }

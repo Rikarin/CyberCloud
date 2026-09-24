@@ -793,8 +793,9 @@ public sealed class DerivedSurfaceTests {
         // it holds three commands that come from no provider, so folding them in would make "one
         // command per resource type" off by three — and the fix somebody would reach for is to relax
         // the assertion into a range, which is this check no longer catching what it was written for.
+        // ⚠ And so is `policy`, the scope-object group issue #46's review added, for the same reason.
         var commands = tree["groups"]!.AsObject()
-            .Where(static x => x.Key != CliEmitter.ScopeGroupName)
+            .Where(static x => x.Key is not (CliEmitter.ScopeGroupName or "policy"))
             .Sum(static group => group.Value!["commands"]!.AsObject().Count);
 
         commands.ShouldBe(DocumentReader.TypesOf(document).Length);
@@ -803,6 +804,9 @@ public sealed class DerivedSurfaceTests {
         // become a way of not checking it.
         tree["groups"]![CliEmitter.ScopeGroupName]!["commands"]!.AsObject()
             .Count.ShouldBe(DocumentReader.ScopesOf(document).Length);
+
+        tree["groups"]!["policy"]!["commands"]!.AsObject()
+            .Count.ShouldBe(DocumentReader.ScopeObjectsOf(document).Length);
 
         // …including the nested one, which is the type the collision would have eaten.
         tree["groups"]!["dbforpostgresql"]!["commands"]!.AsObject()

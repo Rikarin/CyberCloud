@@ -64,6 +64,7 @@ sealed class FlagBinding {
             "number" when flag.Repeated => Repeated(flag, JsonValueKind.Number),
             "number" => Scalar<double>(flag, static (writer, value) => writer.WriteNumberValue(value)),
             "keyValue" => KeyValue(flag),
+            "json" => JsonValue(flag),
             "string" when flag.Repeated => Repeated(flag, JsonValueKind.String),
             "string" => TextFlag(flag),
             _ => throw new CycUsageException(
@@ -101,6 +102,10 @@ sealed class FlagBinding {
 
         if (flag.Repeated) {
             text.Append(text.Length > 0 ? " " : string.Empty).Append("Repeatable.");
+        }
+
+        if (string.Equals(flag.Type, "json", StringComparison.Ordinal)) {
+            text.Append(text.Length > 0 ? " " : string.Empty).Append("One JSON value; from a file, \"$(cat file.json)\".");
         }
 
         if (flag.Env is { Length: > 0 } variable) {
@@ -239,6 +244,38 @@ sealed class FlagBinding {
                 }
 
                 writer.WriteEndObject();
+            }
+        );
+    }
+
+    /// <summary>
+    ///     A <c>json</c> flag — <c>--policy-rule '{"if": …}'</c> — written into the body as the JSON
+    ///     value it holds.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Parsed before anything is sent, and refused by name.</b> A policy rule is a tree the
+    ///     tree's flag types can't flatten, so the value is the tree itself; text that isn't JSON is a
+    ///     usage error naming the flag rather than a <c>400</c> naming a pointer nobody typed.
+    ///     ⚠ <b>No <c>@file</c> form, because <c>System.CommandLine</c> already owns <c>@</c></b>: it
+    ///     expands <c>@rule.json</c> as a response file into one token per word before this binding
+    ///     sees it, which the first version of this flag found. A rule in a file is
+    ///     <c>--policy-rule "$(cat rule.json)"</c>.
+    /// </remarks>
+    static FlagBinding JsonValue(VerbTreeFlag flag) {
+        var option = Declare<string>(flag);
+
+        return new FlagBinding(
+            flag,
+            option,
+            parse => Given(parse, option),
+            parse => parse.GetValue(option),
+            (parse, writer) => {
+                try {
+                    using var value = JsonDocument.Parse(parse.GetValue(option) ?? string.Empty);
+                    value.RootElement.WriteTo(writer);
+                } catch (JsonException e) {
+                    throw new CycUsageException($"{flag.Name} takes one JSON value: {e.Message}", e);
+                }
             }
         );
     }

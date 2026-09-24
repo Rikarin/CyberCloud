@@ -174,8 +174,11 @@ fall-through to a `404`. `PUT` answers `201` or `200`, `DELETE` `204`, `PATCH` a
 `Allow: GET, PUT, DELETE`; a collection is `GET` only and a write to one is a `400` naming the item
 address. The gateway enforces nothing here either — the deny a policy produces is decided at step 5 of a
 resource write inside the resource manager and arrives at the gateway as a `403 PolicyViolation` to render.
-⚠ **Not in the generated document**, for the reason the two namespaces above are not — #63's question
-asked a fifth time.
+⚠ **In the generated document, unlike the two namespaces above** — #63's question asked a fifth time, and
+the first of the three to be answered: the review of #46 added the third non-registry source they wait on,
+objects addressed on a scope (`x-cybercloud-scope-object`), and put policy's fifteen paths through it to
+`cyc policy`, the three SDKs and the portal's client ([08 § Policy](08-resource-manager.md)). Role
+assignments are the same shape — an object on a scope, and on a resource — and are the next to move.
 
 ## Request pipeline
 
