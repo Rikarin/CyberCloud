@@ -91,6 +91,21 @@ public sealed class MonitorQueryFixture : IAsyncLifetime {
     const string ClickHouseUser = "cybercloud";
     const string ClickHousePassword = "cyber-cloud-test-password";
 
+    /// <summary>
+    ///     The user the gateway's log store searches as: <c>readonly = 2</c> and <c>SELECT</c> on
+    ///     <c>ws_*</c>, the grant <see cref="MonitorQueryOptions.LogsUser" />'s remarks recommend.
+    /// </summary>
+    public const string ExplorerUser = "explorer";
+
+    /// <summary>
+    ///     The same grant under the conventional read-only profile, <c>readonly = 1</c>, which can
+    ///     change no setting and so can run no search.
+    /// </summary>
+    public const string ReadonlyOneUser = "explorer_readonly_1";
+
+    /// <summary>Both explorer users' password.</summary>
+    public const string ExplorerPassword = "explorer-test-password";
+
     readonly INetwork network = new NetworkBuilder().Build();
     readonly IContainer storage;
     readonly IContainer insert;
@@ -163,6 +178,13 @@ public sealed class MonitorQueryFixture : IAsyncLifetime {
             .Build();
     }
 
+    /// <summary>ClickHouse's HTTP interface, for a test that asks it directly.</summary>
+    public Uri ClickHouseUri => new($"http://{clickHouse.Hostname}:{clickHouse.GetMappedPublicPort(8123)}");
+
+    /// <summary>Tenant A's workspace database, where the seeded records are.</summary>
+    public string DatabaseA =>
+        MonitorWorkspaces.Database(new(TenantA, ConformanceIds.Subscription, ConformanceIds.ResourceGroup, MonitorWorkspaces.Type, Workspace, WorkspaceA));
+
     /// <summary>The metrics store's URL, for a test that asks it directly.</summary>
     public Uri SelectUri => new($"http://{select.Hostname}:{select.GetMappedPublicPort(8481)}");
 
@@ -178,11 +200,22 @@ public sealed class MonitorQueryFixture : IAsyncLifetime {
 
         var options = new MonitorQueryOptions {
             MetricsEndpoint = SelectUri.ToString(),
-            LogsEndpoint = $"http://{clickHouse.Hostname}:{clickHouse.GetMappedPublicPort(8123)}",
-            LogsUser = ClickHouseUser,
-            LogsPassword = ClickHousePassword,
+            LogsEndpoint = ClickHouseUri.ToString(),
+            LogsUser = ExplorerUser,
+            LogsPassword = ExplorerPassword,
             AllowInsecureTransport = true
         };
+
+        // ⚠ The searches run as the least-privileged user the options' remarks describe, not as the
+        // container's admin, so every log search in the suite is also the proof that the grant is
+        // enough. The seeding below stays the admin's: the explorer may not write.
+        foreach (var (user, readonlyLevel) in new[] { (ExplorerUser, 2), (ReadonlyOneUser, 1) }) {
+            await ClickHouseAsync(
+                $"CREATE USER {user} IDENTIFIED WITH sha256_password BY '{ExplorerPassword}' SETTINGS readonly = {readonlyLevel}",
+                token
+            );
+            await ClickHouseAsync($"GRANT SELECT ON ws_*.* TO {user}", token);
+        }
 
         // ── The real write path, over the harness's cluster, with the real handlers ──────────────
         //
@@ -426,7 +459,7 @@ public sealed class MonitorQueryFixture : IAsyncLifetime {
     ///     Eight records in A's database and two in B's, all inside the hour after <see cref="Origin" />.
     /// </summary>
     async Task SeedLogsAsync(CancellationToken cancellationToken) {
-        var databaseA = MonitorWorkspaces.Database(new(TenantA, ConformanceIds.Subscription, ConformanceIds.ResourceGroup, MonitorWorkspaces.Type, Workspace, WorkspaceA));
+        var databaseA = DatabaseA;
         var databaseB = MonitorWorkspaces.Database(new(TenantB, ConformanceIds.OtherSubscription, ConformanceIds.ResourceGroup, MonitorWorkspaces.Type, Workspace, WorkspaceB));
 
         foreach (var database in new[] { databaseA, databaseB }) {

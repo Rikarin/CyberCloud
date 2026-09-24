@@ -182,9 +182,13 @@ owed:
       the series outlive the workspace, so the space only fills (4 294 967 295 accounts, one per
       workspace ever created in the region); a workspace that loses the fold fails its create and
       the tenant has to delete and recreate it, which is rare and not automatic; a workspace created
-      before the ledger holds no claim until its next reconcile pass, and of two such workspaces that
-      already collided the loser keeps the VMUser it applied then — the platform has shipped no
-      workspace, so no such pair exists; and the alert evaluator's query seam, when it stops
+      before the ledger holds no claim until its next reconcile pass — until then queryMetrics and
+      listMetricLabels answer it 409, and a NEW workspace that folds onto its account claims it
+      first, so the older one fails its next pass while keeping the VMUser it applied before the
+      ledger, which writes into the account the new one reads; and of two such workspaces that
+      already collided the loser keeps its VMUser too. The platform has shipped no workspace, so
+      none of these exists, and a backfill that claims every existing workspace's account, oldest
+      first, before the handlers deploy is what a region that had shipped one would need; and the alert evaluator's query seam, when it stops
       refusing, reads under the same account and must ask the same ledger.
     closes: >
       `accountID:projectID` (VictoriaMetrics accepts both as arbitrary 32-bit integers) in the write
@@ -442,12 +446,32 @@ owed:
       The review of #41 found that no composed environment configured the section at all.
     closes: A gateway Deployment in the bundle that renders CyberCloud:Monitor:Query from the region's VMCluster and ClickHouse Services, a certificate for vmselect, and a VictoriaMetrics cluster in the AppHost — with AppHostTopologyTests asserting the metrics half as it asserts the logs half.
 
-# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
-#
-# ⚠ NO vcpu AND NO memory METER, because a workspace runs nothing. The one derived meter is storage,
-# and its two factors are the retention tier and the daily allowance — which is where docs/plan/16
-# § Cost and retention honesty's "retention is a paid property" stops being a sentence and becomes an
-# amount reserved against a subscription.
+  - id: metrics-expressions-are-bounded-by-vmselect
+    says: >
+      queryMetrics bounds the BODY — a window of at most 400 days (MonitorQueries.MaxMetricsRange) and
+      at most 11 000 points a series (MaxPoints) — and not the expression. A rollup window, a subquery,
+      an offset or an @ inside the PromQL reaches as far back as vmselect lets it, and the only bounds
+      on that are the timeout the store sends with every query (MonitorQueryOptions.QueryTimeout,
+      10 s) and vmselect's own flags. #41's second review found it. No lexical check was added, because
+      MetricsQL spells a window without a literal duration: VictoriaMetrics v1.152.0 accepts
+      `WITH (w = 400d) max_over_time(up[w])` and `up[4000000i]`, and it already refuses the review's
+      example, `max_over_time(up[400d:1s])`, with a 422 under its default
+      -search.maxPointsSubqueryPerTimeseries (100 000), which reaches the caller as a 400. Nothing in
+      this repository renders the region's VMClusters (metrics-retention-is-routing-because-per-tenant-retention-is-enterprise),
+      so nothing sets the other flags either.
+    closes: charts/bundle/ rendering the VMClusters with vmselect's -search.maxQueryDuration, -search.maxSamplesPerQuery and -search.maxPointsSubqueryPerTimeseries chosen for a portal read, and a cluster-backed assertion that a long look-behind is refused by them.
+  - id: log-search-runs-as-the-clickhouse-admin
+    says: >
+      MonitorQueryOptions.LogsUser should be a user with readonly = 2 and SELECT on ws_*.* and nothing
+      else, and nothing provisions one: the AppHost hands the gateway CyberCloudResources.ClickHouseUser,
+      the container's admin, which the resource graph is given too. So the
+      store's readonly=2 on every statement is what stops a defect in the SQL builder becoming a write,
+      not the grant. MonitorQueryFixture creates the right user and every search in
+      MonitorQueryOverHttpTests runs as it, so the grant is known to be enough; and
+      AReadonlyOneUserCanRunNoSearchBecauseTheStoreSetsItsBudgetPerStatement pins the trap in it — the
+      conventional read-only profile, readonly = 1, may change no setting, and the store sets three on
+      every statement, so every search fails (ClickHouse code 164).
+    closes: The region's ClickHouse provisioning — and the AppHost's — creating the explorer user with that grant, and the gateway's CyberCloud:Monitor:Query naming it.
   - id: customer-managed-keys
     says: >
       CyberCloud.Monitor/workspaces. OWED. THE ENGINE STEP: the time-series store does not encrypt its
@@ -460,6 +484,12 @@ owed:
       taking the data offline, which needs a re-unwrap on a schedule nothing runs. The key's home is
       no longer the blocker: CyberCloud.KeyVault/vaults was published on 2026-09-23. None of this row
       is started.
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
+#
+# ⚠ NO vcpu AND NO memory METER, because a workspace runs nothing. The one derived meter is storage,
+# and its two factors are the retention tier and the daily allowance — which is where docs/plan/16
+# § Cost and retention honesty's "retention is a paid property" stops being a sentence and becomes an
+# amount reserved against a subscription.
 meters:
   - monitor.ingest.gib
   - monitor.retained.gib.hours
