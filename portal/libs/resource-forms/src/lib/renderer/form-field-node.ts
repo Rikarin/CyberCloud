@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  afterNextRender,
+  computed,
+  inject,
+  input
+} from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { XuiInput } from '@xui/input';
 import { XuiMultiSelect } from '@xui/multi-select';
@@ -68,7 +76,7 @@ import { FormField } from '../schema';
         [attr.data-control]="field().control"
         [attr.data-pointer]="field().jsonPointer"
       >
-        <label class="text-sm font-medium" [attr.for]="id()">
+        <label class="text-sm font-medium" [id]="id() + '-label'" [attr.for]="id()">
           {{ field().label }}
           @if (field().required) {
             <span class="text-error" aria-hidden="true">*</span>
@@ -233,6 +241,28 @@ export class FormFieldNode {
 
   /** Stable per pointer, so a label's `for` and the messages' ids line up across re-renders. */
   protected readonly id = computed(() => 'cc-f' + this.field().jsonPointer.replaceAll('/', '-'));
+
+  /**
+   * ⚠ **A list that already holds values would be unlabelled without this.** `xui-tag-input`
+   * blanks its inner `<input>`'s placeholder once it holds a value, and the placeholder is the only
+   * name that input has (see `placeholder` below) — so a list rendered with a default, or opened
+   * for edit with values in it, fails axe's `label` rule. The first such field was
+   * `applicationGateways`' `routingRules` and `backendPools` (#31). Pointing the inner input at the
+   * visible label gives it a name that no value can take away. That is xUI's to fix
+   * (docs/plan/02 § ADR-017); the input is created once and kept, so one pass after the first
+   * render is enough.
+   */
+  constructor() {
+    const host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+    afterNextRender(() => {
+      const kind = this.kind();
+
+      if (this.isGroup() || (kind !== 'list' && kind !== 'tags')) return;
+
+      host.nativeElement.querySelector('xui-tag-input input')?.setAttribute('aria-labelledby', this.id() + '-label');
+    });
+  }
 
   protected readonly groupControl = computed(() => this.group().get(this.field().name) as FormGroup);
   protected readonly leaf = computed(() => this.group().get(this.field().name) as FormControl);

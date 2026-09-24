@@ -13,6 +13,9 @@ from .models import (
     AlertRuleData,
     AlertRuleListInstancesResult,
     AlertRuleResource,
+    ApplicationGatewayData,
+    ApplicationGatewayResource,
+    ApplicationGatewayShowRoutingResult,
     ArtifactFeedData,
     ArtifactFeedResource,
     BackupVaultData,
@@ -1559,6 +1562,49 @@ class VirtualNetworkClient:
         return VirtualNetworkShowIsolationResult.from_wire(wire_of(response))
 
 
+class ApplicationGatewayClient:
+    """Application gateways — CyberCloud.Network/virtualNetworks/applicationGateways. An HTTP and HTTPS gateway on an address inside a virtual network, routing by host and path to pools of workload addresses or virtual machines, behind the OWASP Core Rule Set in detection or prevention mode."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, resource_name: str) -> ApplicationGatewayResource:
+        """Reads one Application gateway."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/applicationGateways/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return ApplicationGatewayResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, resource_name: str, data: ApplicationGatewayData) -> Operation[ApplicationGatewayResource]:
+        """Creates or replaces one Application gateway. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/applicationGateways/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ApplicationGatewayResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, resource_name: str, data: ApplicationGatewayData) -> Operation[ApplicationGatewayResource]:
+        """Amends one Application gateway. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/applicationGateways/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ApplicationGatewayResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Application gateway. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/applicationGateways/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, *, top: Optional[int] = None) -> Pager[ApplicationGatewayResource]:
+        """Lists the Application gateways in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/applicationGateways", top, ApplicationGatewayResource.from_wire)
+
+    def show_routing(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, resource_name: str) -> ApplicationGatewayShowRoutingResult:
+        """showRouting — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/applicationGateways/{_segment(resource_name)}/showRouting"))
+        raise_for_status(response)
+        return ApplicationGatewayShowRoutingResult.from_wire(wire_of(response))
+
+
 class LoadBalancerClient:
     """Load balancers — CyberCloud.Network/virtualNetworks/loadBalancers. An L4 TCP proxy on an address inside a virtual network, spreading connections across a pool of workload addresses with health checks and a connection limit."""
 
@@ -1780,6 +1826,7 @@ class NetworkProvider:
     def __init__(self, transport: Transport) -> None:
         self.public_ip_addresses = PublicIPAddressClient(transport)
         self.virtual_networks = VirtualNetworkClient(transport)
+        self.virtual_networks_application_gateways = ApplicationGatewayClient(transport)
         self.virtual_networks_load_balancers = LoadBalancerClient(transport)
         self.virtual_networks_nat_gateways = NATGatewayClient(transport)
         self.virtual_networks_peerings = PeeringClient(transport)

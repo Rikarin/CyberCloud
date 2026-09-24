@@ -6797,6 +6797,463 @@
         }
       ]
     },
+    "CyberCloud.Network/virtualNetworks/applicationGateways": {
+      "resourceType": "CyberCloud.Network/virtualNetworks/applicationGateways",
+      "apiVersion": "2026-08-01",
+      "title": "Application gateway",
+      "plural": "Application gateways",
+      "summary": "An HTTP and HTTPS gateway on an address inside a virtual network, routing by host and path to pools of workload addresses or virtual machines, behind the OWASP Core Rule Set in detection or prevention mode.",
+      "overrideKey": "CyberCloud.Network/virtualNetworks/applicationGateways@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/backendPools",
+        "/properties/clusterId",
+        "/properties/frontend",
+        "/properties/frontend/v4",
+        "/properties/frontend/v6",
+        "/properties/health",
+        "/properties/health/healthyAfter",
+        "/properties/health/intervalSeconds",
+        "/properties/health/path",
+        "/properties/health/unhealthyAfter",
+        "/properties/limits",
+        "/properties/limits/maxConnections",
+        "/properties/listeners",
+        "/properties/listeners/certificate",
+        "/properties/listeners/httpPort",
+        "/properties/listeners/httpsPort",
+        "/properties/routingRules",
+        "/properties/sizing",
+        "/properties/sizing/preset",
+        "/properties/subnet",
+        "/properties/waf",
+        "/properties/waf/crsVersion",
+        "/properties/waf/customRules",
+        "/properties/waf/exclusions",
+        "/properties/waf/mode",
+        "/properties/waf/paranoiaLevel",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the gateway is billed in. ⚠ It must be its virtual network's region.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Application gateway to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The gateway's own settings."
+        },
+        {
+          "jsonPointer": "/properties/backendPools",
+          "name": "backendPools",
+          "label": "Backend pools",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": true,
+          "section": "general",
+          "hint": "The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. ⚠ A machine is resolved to its address only once this gateway has been granted read on it.",
+          "default": [
+            "web=10.20.1.11:8080"
+          ],
+          "placeholder": [
+            "web=10.20.1.11:8080",
+            "web=10.20.1.12:8080"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster the gateway runs in. ⚠ It must be the cluster the virtual network was created in.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Application gateway to change it."
+        },
+        {
+          "jsonPointer": "/properties/frontend",
+          "name": "frontend",
+          "label": "Frontend",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The address clients connect to."
+        },
+        {
+          "jsonPointer": "/properties/frontend/v4",
+          "name": "v4",
+          "label": "V4",
+          "control": "xui-cidr",
+          "type": "string",
+          "required": true,
+          "section": "frontend",
+          "hint": "The IPv4 address the gateway answers on, inside the subnet's range. ⚠ Required: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at.",
+          "pattern": "^(?:(\\d{1,3}\\.){3}\\d{1,3})$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Application gateway to change it.",
+          "default": "10.20.1.20",
+          "placeholder": "10.20.1.20"
+        },
+        {
+          "jsonPointer": "/properties/frontend/v6",
+          "name": "v6",
+          "label": "V6",
+          "control": "xui-cidr",
+          "type": "string",
+          "required": false,
+          "section": "frontend",
+          "hint": "The IPv6 address the gateway also answers on, or empty. Lower case only.",
+          "pattern": "^(?:([0-9A-Fa-f:.]+)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Application gateway to change it.",
+          "default": "",
+          "placeholder": "fd00:20:1::20"
+        },
+        {
+          "jsonPointer": "/properties/health",
+          "name": "health",
+          "label": "Health",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "How a pool member is decided to be up: an HTTP GET that answers 2xx or 3xx. ⚠ Probing cannot be turned off."
+        },
+        {
+          "jsonPointer": "/properties/health/healthyAfter",
+          "name": "healthyAfter",
+          "label": "Healthy after",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "health",
+          "hint": "How many successful probes put a member back.",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 2
+        },
+        {
+          "jsonPointer": "/properties/health/intervalSeconds",
+          "name": "intervalSeconds",
+          "label": "Interval seconds",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "health",
+          "hint": "How often each member is probed.",
+          "minimum": 2,
+          "maximum": 60,
+          "default": 5
+        },
+        {
+          "jsonPointer": "/properties/health/path",
+          "name": "path",
+          "label": "Path",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "health",
+          "hint": "The path every member is probed on.",
+          "pattern": "^(?:/[A-Za-z0-9._~/-]{0,200})$",
+          "default": "/"
+        },
+        {
+          "jsonPointer": "/properties/health/unhealthyAfter",
+          "name": "unhealthyAfter",
+          "label": "Unhealthy after",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "health",
+          "hint": "How many failed probes take a member out of its pool.",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 3
+        },
+        {
+          "jsonPointer": "/properties/limits",
+          "name": "limits",
+          "label": "Limits",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What the gateway refuses rather than passes on."
+        },
+        {
+          "jsonPointer": "/properties/limits/maxConnections",
+          "name": "maxConnections",
+          "label": "Max connections",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "limits",
+          "hint": "How many client connections the gateway accepts at once.",
+          "minimum": 10,
+          "maximum": 100000,
+          "default": 2000
+        },
+        {
+          "jsonPointer": "/properties/listeners",
+          "name": "listeners",
+          "label": "Listeners",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The HTTP listener, and the HTTPS listener when a certificate is given."
+        },
+        {
+          "jsonPointer": "/properties/listeners/certificate",
+          "name": "certificate",
+          "label": "Certificate",
+          "control": "xui-secret-ref",
+          "type": "string",
+          "required": false,
+          "section": "listeners",
+          "hint": "A vault handle — path#field, optionally @version — whose value is a PEM bundle: the certificate chain followed by its private key. Empty means no HTTPS listener. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/. The value is written into a Secret the proxy mounts and never into this body.",
+          "maxLength": 512,
+          "pattern": "^(?:([^#@\\s]+#[^#@\\s]+(@[^#@\\s]+)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/listeners/httpPort",
+          "name": "httpPort",
+          "label": "Http port",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "listeners",
+          "hint": "The port plain HTTP is served on.",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 80
+        },
+        {
+          "jsonPointer": "/properties/listeners/httpsPort",
+          "name": "httpsPort",
+          "label": "Https port",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "listeners",
+          "hint": "The port HTTPS is served on. Used only when a certificate is given.",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 443
+        },
+        {
+          "jsonPointer": "/properties/routingRules",
+          "name": "routingRules",
+          "label": "Routing rules",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": true,
+          "section": "general",
+          "hint": "Where each request goes, as host/path=pool — for example shop.example.com/api=api, *.example.com/=web or */=web. The host is *, a name, or *. and a suffix; the path is a prefix, matched on whole segments. ⚠ The first rule that matches wins, in the order written. A request no rule matches gets 404.",
+          "default": [
+            "*/=web"
+          ],
+          "placeholder": [
+            "shop.example.com/api=api",
+            "*/=web"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/sizing",
+          "name": "sizing",
+          "label": "Sizing",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "CPU and memory for the proxy and the firewall, each."
+        },
+        {
+          "jsonPointer": "/properties/sizing/preset",
+          "name": "preset",
+          "label": "Preset",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "How much the proxy and the firewall each get. With the firewall on, the firewall is where the CPU goes.",
+          "choices": [
+            {
+              "value": "c1.large",
+              "label": "C1 large"
+            },
+            {
+              "value": "c1.medium",
+              "label": "C1 medium"
+            },
+            {
+              "value": "c1.small",
+              "label": "C1 small"
+            }
+          ],
+          "default": "c1.small"
+        },
+        {
+          "jsonPointer": "/properties/subnet",
+          "name": "subnet",
+          "label": "Subnet",
+          "control": "xui-subnet",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The subnet of this virtual network the gateway sits on. The frontend address below must be inside its range.",
+          "maxLength": 63,
+          "pattern": "^(?:[a-z0-9]([-a-z0-9]*[a-z0-9])?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Application gateway to change it.",
+          "default": "web",
+          "placeholder": "web"
+        },
+        {
+          "jsonPointer": "/properties/waf",
+          "name": "waf",
+          "label": "Waf",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The web application firewall: the OWASP Core Rule Set on Coraza."
+        },
+        {
+          "jsonPointer": "/properties/waf/crsVersion",
+          "name": "crsVersion",
+          "label": "Crs version",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "waf",
+          "hint": "The OWASP Core Rule Set version. ⚠ One is offered: the rule set is compiled into the firewall image, so a second version is a second image.",
+          "choices": [
+            {
+              "value": "4.25",
+              "label": "4 25"
+            }
+          ],
+          "default": "4.25"
+        },
+        {
+          "jsonPointer": "/properties/waf/customRules",
+          "name": "customRules",
+          "label": "Custom rules",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "waf",
+          "hint": "Rules evaluated before the rule set, in order: deny or allow, then ip <address or range>, path <prefix>, host <name>, useragent <text> or method <METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. ⚠ allow skips the rule set for that request entirely.",
+          "default": [],
+          "placeholder": [
+            "deny ip 203.0.113.0/24"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/waf/exclusions",
+          "name": "exclusions",
+          "label": "Exclusions",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "waf",
+          "hint": "Rules to turn off, as a rule id (942100), a range (942100-942199), or a rule id and one request field it stops inspecting (942100:ARGS:password).",
+          "default": [],
+          "placeholder": [
+            "942100:ARGS:password"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/waf/mode",
+          "name": "mode",
+          "label": "Mode",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "waf",
+          "hint": "prevention answers 403 to a request the rule set scores as an attack; detection evaluates and logs every rule and blocks nothing; off runs no firewall at all. ⚠ In prevention mode a firewall that does not answer in time is a 503, never a pass.",
+          "choices": [
+            {
+              "value": "detection",
+              "label": "Detection"
+            },
+            {
+              "value": "off",
+              "label": "Off"
+            },
+            {
+              "value": "prevention",
+              "label": "Prevention"
+            }
+          ],
+          "default": "prevention"
+        },
+        {
+          "jsonPointer": "/properties/waf/paranoiaLevel",
+          "name": "paranoiaLevel",
+          "label": "Paranoia level",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "waf",
+          "hint": "The CRS paranoia level. 1 is the default and blocks little that is legitimate; each level above adds rules and false positives.",
+          "minimum": 1,
+          "maximum": 4,
+          "default": 1
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "showRouting",
+          "label": "Show routing",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.Network/virtualNetworks/loadBalancers": {
       "resourceType": "CyberCloud.Network/virtualNetworks/loadBalancers",
       "apiVersion": "2026-08-01",

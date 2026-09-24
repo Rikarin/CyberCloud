@@ -2861,6 +2861,156 @@ type VirtualNetworkShowIsolationResult struct {
 	Substrate string `json:"substrate"`
 }
 
+// ApplicationGatewayPreset is the values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.
+type ApplicationGatewayPreset string
+
+const (
+	ApplicationGatewayPresetC1Large  ApplicationGatewayPreset = "c1.large"
+	ApplicationGatewayPresetC1Medium ApplicationGatewayPreset = "c1.medium"
+	ApplicationGatewayPresetC1Small  ApplicationGatewayPreset = "c1.small"
+)
+
+// ApplicationGatewayCrsVersion is the values /properties/waf/crsVersion accepts. ⚠ Closed: the write path refuses anything else.
+type ApplicationGatewayCrsVersion string
+
+const (
+	ApplicationGatewayCrsVersionN425 ApplicationGatewayCrsVersion = "4.25"
+)
+
+// ApplicationGatewayMode is the values /properties/waf/mode accepts. ⚠ Closed: the write path refuses anything else.
+type ApplicationGatewayMode string
+
+const (
+	ApplicationGatewayModeDetection  ApplicationGatewayMode = "detection"
+	ApplicationGatewayModeOff        ApplicationGatewayMode = "off"
+	ApplicationGatewayModePrevention ApplicationGatewayMode = "prevention"
+)
+
+// ApplicationGatewayData is Application gateway: the body a caller writes. An HTTP and HTTPS gateway on an address inside a virtual network, routing by host and path to pools of workload addresses or virtual machines, behind the OWASP Core Rule Set in detection or prevention mode.
+type ApplicationGatewayData struct {
+	// The region the gateway is billed in. ⚠ It must be its virtual network's region.
+	Location string `json:"location"`
+	// The gateway's own settings.
+	Properties *ApplicationGatewayProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// ApplicationGatewayProperties is The gateway's own settings.
+type ApplicationGatewayProperties struct {
+	// The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. ⚠ A machine is resolved to its address only once this gateway has been granted read on it.
+	BackendPools []string `json:"backendPools"`
+	// The cluster the gateway runs in. ⚠ It must be the cluster the virtual network was created in.
+	ClusterID string `json:"clusterId"`
+	// The address clients connect to.
+	Frontend *ApplicationGatewayPropertiesFrontend `json:"frontend,omitempty"`
+	// How a pool member is decided to be up: an HTTP GET that answers 2xx or 3xx. ⚠ Probing cannot be turned off.
+	Health *ApplicationGatewayPropertiesHealth `json:"health,omitempty"`
+	// What the gateway refuses rather than passes on.
+	Limits *ApplicationGatewayPropertiesLimits `json:"limits,omitempty"`
+	// The HTTP listener, and the HTTPS listener when a certificate is given.
+	Listeners *ApplicationGatewayPropertiesListeners `json:"listeners,omitempty"`
+	// Where each request goes, as host/path=pool — for example shop.example.com/api=api, *.example.com/=web or */=web. The host is *, a name, or *. and a suffix; the path is a prefix, matched on whole segments. ⚠ The first rule that matches wins, in the order written. A request no rule matches gets 404.
+	RoutingRules []string `json:"routingRules"`
+	// CPU and memory for the proxy and the firewall, each.
+	Sizing *ApplicationGatewayPropertiesSizing `json:"sizing,omitempty"`
+	// The subnet of this virtual network the gateway sits on. The frontend address below must be inside its range.
+	Subnet string `json:"subnet"`
+	// The web application firewall: the OWASP Core Rule Set on Coraza.
+	Waf *ApplicationGatewayPropertiesWaf `json:"waf,omitempty"`
+}
+
+// ApplicationGatewayPropertiesFrontend is The address clients connect to.
+type ApplicationGatewayPropertiesFrontend struct {
+	// The IPv4 address the gateway answers on, inside the subnet's range. ⚠ Required: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at.
+	V4 string `json:"v4"`
+	// The IPv6 address the gateway also answers on, or empty. Lower case only.
+	V6 *string `json:"v6,omitempty"`
+}
+
+// ApplicationGatewayPropertiesHealth is How a pool member is decided to be up: an HTTP GET that answers 2xx or 3xx. ⚠ Probing cannot be turned off.
+type ApplicationGatewayPropertiesHealth struct {
+	// How many successful probes put a member back.
+	HealthyAfter *int64 `json:"healthyAfter,omitempty"`
+	// How often each member is probed.
+	IntervalSeconds *int64 `json:"intervalSeconds,omitempty"`
+	// The path every member is probed on.
+	Path *string `json:"path,omitempty"`
+	// How many failed probes take a member out of its pool.
+	UnhealthyAfter *int64 `json:"unhealthyAfter,omitempty"`
+}
+
+// ApplicationGatewayPropertiesLimits is What the gateway refuses rather than passes on.
+type ApplicationGatewayPropertiesLimits struct {
+	// How many client connections the gateway accepts at once.
+	MaxConnections *int64 `json:"maxConnections,omitempty"`
+}
+
+// ApplicationGatewayPropertiesListeners is The HTTP listener, and the HTTPS listener when a certificate is given.
+type ApplicationGatewayPropertiesListeners struct {
+	// A vault handle — path#field, optionally @version — whose value is a PEM bundle: the certificate chain followed by its private key. Empty means no HTTPS listener. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/. The value is written into a Secret the proxy mounts and never into this body.
+	Certificate *string `json:"certificate,omitempty"`
+	// The port plain HTTP is served on.
+	HttpPort int64 `json:"httpPort"`
+	// The port HTTPS is served on. Used only when a certificate is given.
+	HttpsPort *int64 `json:"httpsPort,omitempty"`
+}
+
+// ApplicationGatewayPropertiesSizing is CPU and memory for the proxy and the firewall, each.
+type ApplicationGatewayPropertiesSizing struct {
+	// How much the proxy and the firewall each get. With the firewall on, the firewall is where the CPU goes.
+	Preset *ApplicationGatewayPreset `json:"preset,omitempty"`
+}
+
+// ApplicationGatewayPropertiesWaf is The web application firewall: the OWASP Core Rule Set on Coraza.
+type ApplicationGatewayPropertiesWaf struct {
+	// The OWASP Core Rule Set version. ⚠ One is offered: the rule set is compiled into the firewall image, so a second version is a second image.
+	CrsVersion *ApplicationGatewayCrsVersion `json:"crsVersion,omitempty"`
+	// Rules evaluated before the rule set, in order: deny or allow, then ip <address or range>, path <prefix>, host <name>, useragent <text> or method <METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. ⚠ allow skips the rule set for that request entirely.
+	CustomRules []string `json:"customRules,omitempty"`
+	// Rules to turn off, as a rule id (942100), a range (942100-942199), or a rule id and one request field it stops inspecting (942100:ARGS:password).
+	Exclusions []string `json:"exclusions,omitempty"`
+	// prevention answers 403 to a request the rule set scores as an attack; detection evaluates and logs every rule and blocks nothing; off runs no firewall at all. ⚠ In prevention mode a firewall that does not answer in time is a 503, never a pass.
+	Mode *ApplicationGatewayMode `json:"mode,omitempty"`
+	// The CRS paranoia level. 1 is the default and blocks little that is legitimate; each level above adds rules and false positives.
+	ParanoiaLevel *int64 `json:"paranoiaLevel,omitempty"`
+}
+
+// ApplicationGatewayResource is one Application gateway, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type ApplicationGatewayResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data ApplicationGatewayData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *ApplicationGatewayResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// ApplicationGatewayShowRoutingResult is what showRouting returns.
+type ApplicationGatewayShowRoutingResult struct {
+	// Each listener, as address:port and protocol.
+	Listeners []string `json:"listeners"`
+	// Every pool member as the gateway was configured with it, a machine's resolved address beside its resource id.
+	Members []string `json:"members"`
+	// What the answer is and is not.
+	Note string `json:"note"`
+	// How many gateway pods are ready. ⚠ 0 is a gateway configured and carrying no traffic.
+	ReadyReplicas int64 `json:"readyReplicas"`
+	// The routing rules in evaluation order.
+	Rules []string `json:"rules"`
+	// When the platform read the cluster, RFC 3339.
+	SampledAt string `json:"sampledAt"`
+	// Machine members that did not resolve to an address and are not in the configuration.
+	Unresolved []string `json:"unresolved"`
+	// The firewall's mode, rule set and paranoia level.
+	Waf string `json:"waf"`
+}
+
 // LoadBalancerPreset is the values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.
 type LoadBalancerPreset string
 

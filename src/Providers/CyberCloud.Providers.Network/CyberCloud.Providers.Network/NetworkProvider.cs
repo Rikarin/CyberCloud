@@ -303,16 +303,22 @@ namespace CyberCloud.Providers.Network;
 ///             same resource group, and the full argument for why a resource id was not offered is on
 ///             <see cref="VirtualNetworkPeerings" />.
 ///         </item>
+///         <item>
+///             <b><c>virtualNetworks/applicationGateways</c> — SHIPPED (#31), ON HAPROXY AND CORAZA
+///             SPOA RATHER THAN THE ENVOY GATEWAY docs/plan/14 NAMED.</b> The measurement that owed it
+///             predicted a bundle component first — the bundle carries no Gateway API controller — and a
+///             proxy pod the platform could not template. Rendering the pod directly, as
+///             <c>loadBalancers</c> does, removes both: the pod carries the <c>logical_switch</c> and
+///             <c>ip_pool</c> annotations itself, backends are addresses HAProxy takes natively, and the
+///             WAF is the OWASP Coraza project's agent for HAProxy's SPOE with the CRS embedded. Routes
+///             are a list on the gateway rather than a child each, because on HAProxy the routing table
+///             is lines in one file. The reading is in docs/plan/14 § Application gateway and on
+///             <see cref="ApplicationGateways" />.
+///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>NO <c>applicationGateways</c> OR <c>privateEndpoints</c>, AND NO FLOW LOGS.</b> The
-///         first and the third are #31's other two nouns and stay owed there, each measured before
-///         it was left: <c>applicationGateways</c> at
-///         <c>charts/managed/haproxy/conformance.yaml § owed</c>,
-///         <c>application-gateway-is-not-an-http-mode-of-this-proxy</c> — the L7 controller is not
-///         in <c>charts/bundle</c>, the proxy has to be inside the tenant's subnet, backends are
-///         addresses, routes are one child each, and the WAF is an <c>EnvoyExtensionPolicy</c> —
-///         and flow logs at <c>charts/managed/kube-ovn-vpc/conformance.yaml § owed</c>,
+///         ⚠ <b>NO <c>privateEndpoints</c>, AND NO FLOW LOGS.</b> Flow logs are #31's last noun and
+///         stay owed at <c>charts/managed/kube-ovn-vpc/conformance.yaml § owed</c>,
 ///         <c>flow-logs-have-nothing-to-render</c>, which is why they are not a type under this
 ///         namespace at all. docs/plan/14 puts <c>privateEndpoints</c> at M3.
 ///     </para>
@@ -676,8 +682,76 @@ public sealed class NetworkProvider : IResourceProvider {
             )
             .Chart(VirtualNetworkPeerings.ChartName)
             .SupportsTags()
+            .RequiresCluster()
+            // ── The eighth type — docs/plan/14 § Application gateway ───────────────────────────
+            //
+            // ⚠ HAPROXY AND CORAZA SPOA, AND NOT THE ENVOY GATEWAY docs/plan/14 NAMED: the decision
+            // and its four readings are in that section now, and ApplicationGateways' remarks carry
+            // the short form. A child of virtualNetworks on the load balancer's argument.
+            .ResourceType(ApplicationGateways.TypePath)
+            .ApiVersion(ApplicationGateways.V2026, ApplicationGateways.Schema2026)
+            .Reconciler<ApplicationGatewayReconciler>()
+            // ⚠ COMPUTE, LIKE THE LOAD BALANCER, AND TWICE IT WHEN THE FIREWALL IS ON: the pod runs
+            // the proxy and, unless waf.mode is off, the Coraza agent beside it, each at the preset.
+            .Meter(QuotaMeter.Vcpu, GatewayVcpuDrawn)
+            .Meter(QuotaMeter.MemoryGb, GatewayMemoryDrawn)
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .Action(
+                ApplicationGateways.RoutingAction,
+                ActionKind.Post,
+                ApplicationGateways.RoutingPermission,
+                response: ApplicationGateways.RoutingResponse,
+                handler: typeof(ShowRoutingHandler)
+            )
+            // ⚠ `appgateway`, AND NOT `appgw` OR `gateway`: the first is a token somebody else will
+            // reach for, and the second is the platform's own word for its API front door.
+            .Display(
+                "Application gateway",
+                "Application gateways",
+                "appgateway",
+                "An HTTP and HTTPS gateway on an address inside a virtual network, routing by host "
+                + "and path to pools of workload addresses or virtual machines, behind the OWASP Core "
+                + "Rule Set in detection or prevention mode."
+            )
+            .Chart(ApplicationGateways.ChartName)
+            .SupportsTags()
             .RequiresCluster();
     }
+
+    // ── What an application gateway draws ──────────────────────────────────────────────────────
+    //
+    // ⚠ TWO POINTERS AND NOT ONE: the preset sets each container's size and the WAF mode decides
+    // whether there are one or two containers. A derivation over the preset alone would reserve the
+    // agent's CPU on a gateway that runs none, or miss it on one that does.
+
+    /// <summary>vCPU: each container at its preset, times the containers the pod runs.</summary>
+    static MeterDerivation GatewayVcpuDrawn { get; } =
+        MeterDerivation.Of(
+            "sizing.preset's cpu, in cores, once per container — twice unless waf.mode is off",
+            ["/properties/sizing/preset", "/properties/waf/mode"],
+            static body => KubeQuantity.TryParse(ApplicationGateways.Resources(body).Cpu, out var cores)
+                ? Result<decimal>.Success(cores * ApplicationGateways.Containers(body))
+                : Result<decimal>.Failure(
+                    ErrorCode.InternalError,
+                    "the sizing preset behind '/properties/sizing/preset' carries a cpu quantity that "
+                    + "does not parse, so no reservation can be computed"
+                )
+        );
+
+    /// <summary>Memory: the same containers, in gibibytes.</summary>
+    static MeterDerivation GatewayMemoryDrawn { get; } =
+        MeterDerivation.Of(
+            "sizing.preset's memory, in GiB, once per container — twice unless waf.mode is off",
+            ["/properties/sizing/preset", "/properties/waf/mode"],
+            static body => KubeQuantity.TryGibibytes(ApplicationGateways.Resources(body).Memory, out var gibibytes)
+                ? Result<decimal>.Success(gibibytes * ApplicationGateways.Containers(body))
+                : Result<decimal>.Failure(
+                    ErrorCode.InternalError,
+                    "the sizing preset behind '/properties/sizing/preset' carries a memory quantity "
+                    + "that does not parse, so no reservation can be computed"
+                )
+        );
 
     // ── What a load balancer draws ─────────────────────────────────────────────────────────────
     //

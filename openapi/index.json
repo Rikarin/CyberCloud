@@ -619,6 +619,19 @@
       }
     },
     {
+      "type": "CyberCloud.Network/virtualNetworks/applicationGateways",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Application gateway",
+        "plural": "Application gateways",
+        "alias": "appgateway",
+        "summary": "An HTTP and HTTPS gateway on an address inside a virtual network, routing by host and path to pools of workload addresses or virtual machines, behind the OWASP Core Rule Set in detection or prevention mode.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.Network/virtualNetworks/loadBalancers",
       "apiVersions": [
         "2026-08-01"

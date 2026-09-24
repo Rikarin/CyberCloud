@@ -15,7 +15,7 @@ public sealed class NetworkDeclarationTests {
         // process that does not start. Running it here is what turns those into a test failure.
         var registry = Build();
 
-        registry.Types.Length.ShouldBe(7);
+        registry.Types.Length.ShouldBe(8);
 
         registry.Types.Select(static x => x.Type.ToString())
             .ShouldBe(
@@ -37,7 +37,10 @@ public sealed class NetworkDeclarationTests {
                     "CyberCloud.Network/virtualNetworks/natGateways",
                     // ⚠ TWO SEGMENTS, AND docs/plan/14 SPELLS IT THAT WAY: the network a peering hangs
                     // off is the LOCAL side of the exchange, and the body names the remote.
-                    "CyberCloud.Network/virtualNetworks/peerings"
+                    "CyberCloud.Network/virtualNetworks/peerings",
+                    // ⚠ TWO SEGMENTS, on the load balancer's argument: the gateway's pod is annotated onto one
+                    // subnet of one VPC.
+                    "CyberCloud.Network/virtualNetworks/applicationGateways"
                 ],
                 true
             );
@@ -82,7 +85,7 @@ public sealed class NetworkDeclarationTests {
                 // HAProxy Deployment — because ADR-019's ENABLE_LB=false leaves Kube-OVN's own
                 // SwitchLBRule unreconciled — so its vCPU and memory come off a sizing preset through
                 // a MeterDerivation. Its `Resources` meter is still flat.
-                if (type.Type == LoadBalancers.Type && meter.Meter != QuotaMeter.Resources) {
+                if ((type.Type == LoadBalancers.Type || type.Type == ApplicationGateways.Type) && meter.Meter != QuotaMeter.Resources) {
                     meter.Derivation.ShouldNotBeNull($"{type.Type}/{meter.Meter}");
 
                     continue;
@@ -94,7 +97,30 @@ public sealed class NetworkDeclarationTests {
     }
 
     [Fact]
-    public void OnlyTheLoadBalancerDrawsComputeAndItDrawsItsPresetsRow() {
+    public void TheApplicationGatewayDrawsOneContainerMoreWhenItsFirewallIsOn() {
+        // ⚠ TWO POINTERS, AND THIS IS THE ONE A PRESET-ONLY DERIVATION GETS WRONG: the agent is a second
+        // container at the same preset, and it is absent when waf.mode is off.
+        var gateway = Build().Types.Single(static x => x.Type == ApplicationGateways.Type);
+        var vcpu = gateway.Meters.Single(static x => x.Meter == QuotaMeter.Vcpu).Derivation!;
+        var memory = gateway.Meters.Single(static x => x.Meter == QuotaMeter.MemoryGb).Derivation!;
+
+        vcpu.Reads.ShouldBe(["/properties/sizing/preset", "/properties/waf/mode"]);
+
+        using var on = System.Text.Json.JsonDocument.Parse(ApplicationGateways.Body(Guid.NewGuid(), preset: "c1.medium"));
+        using var off = System.Text.Json.JsonDocument.Parse(
+            ApplicationGateways.Body(Guid.NewGuid(), preset: "c1.medium", wafMode: ApplicationGateways.WafOff)
+        );
+
+        vcpu.Amount(on.RootElement).GetValueOrThrow().ShouldBe(1.0m);
+        vcpu.Amount(off.RootElement).GetValueOrThrow().ShouldBe(0.5m);
+        memory.Amount(on.RootElement).GetValueOrThrow().ShouldBe(1.0m);
+        memory.Amount(off.RootElement).GetValueOrThrow().ShouldBe(0.5m);
+    }
+
+    [Fact]
+    public void OnlyTheTwoProxyTypesDrawComputeAndEachDrawsItsPresetsRow() {
+        // ⚠ The load balancer and, since #31, the application gateway — both are pods, for the
+        // ENABLE_LB=false reason below.
         // ⚠ THE ASSERTION THE FIFTH TYPE EXISTS FOR, AND IT IS A CLAIM ABOUT THE SUBSTRATE RATHER
         // THAN ABOUT ARITHMETIC. A Vpc, a Subnet and a SecurityGroup provision nothing a node gives
         // up, and this row would have been the same — Kube-OVN's SwitchLBRule is a VIP on a logical
@@ -104,7 +130,7 @@ public sealed class NetworkDeclarationTests {
         foreach (var type in Build().Types) {
             var meters = type.Meters.Select(static x => x.Meter).ToList();
 
-            if (type.Type == LoadBalancers.Type) {
+            if (type.Type == LoadBalancers.Type || type.Type == ApplicationGateways.Type) {
                 meters.ShouldBe(
                     [QuotaMeter.Vcpu, QuotaMeter.MemoryGb, QuotaMeter.Resources],
                     true
@@ -230,7 +256,7 @@ public sealed class NetworkDeclarationTests {
         // `loadBalancers` — a tenant who has never heard of HAProxy should be able to guess it.
         // ⚠ `peering` AND NOT `peer`, for the same argument a fourth time.
         ShortNames().ShouldBe(
-            ["vnet", "subnet", "secgroup", "publicip", "loadbalancer", "natgateway", "peering"],
+            ["vnet", "subnet", "secgroup", "publicip", "loadbalancer", "natgateway", "peering", "appgateway"],
             true
         );
     }

@@ -185,6 +185,13 @@ is moot on a v2 host and is kept for a host in the state this one was in.
 > `ClusterInfrastructure`) now starts through `/bin/sh -c 'mount --make-rshared /var/run && exec
 > /bin/k3s "$@"'`. And it needs no CNI of its own if kube-ovn is to be installed, which k3s cannot
 > be asked for after the fact: kube-ovn is a cluster-creation component and stays off this lane.
+>
+> ⚠ **A third, found by #31 on 2026-09-24: the node's disk is the whole machine's Docker disk.** k3s
+> taints its node `disk-pressure` below 5% free, and a developer's Docker VM disk at 98% left every
+> pod the application gateway's traffic suite created unschedulable while every suite that only
+> applies objects stayed green. `ClusterInfrastructure` now lowers both thresholds to 1% through a
+> second kubelet drop-in. `K3sFixture` and the AppHost do not carry it yet, so on such a disk a pod
+> they schedule stays `Pending` for the same reason.
 
 **What this lane can and cannot prove**, so nobody re-derives it:
 

@@ -6706,6 +6706,343 @@ public sealed partial class VirtualNetworkCollection {
 }
 
 /// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ApplicationGatewayPreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>c1.large</summary>
+    [JsonStringEnumMemberName("c1.large")]
+    C1Large = 1,
+
+    /// <summary>c1.medium</summary>
+    [JsonStringEnumMemberName("c1.medium")]
+    C1Medium = 2,
+
+    /// <summary>c1.small</summary>
+    [JsonStringEnumMemberName("c1.small")]
+    C1Small = 3
+}
+
+/// <summary>The values /properties/waf/crsVersion accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ApplicationGatewayCrsVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>4.25</summary>
+    [JsonStringEnumMemberName("4.25")]
+    N425 = 1
+}
+
+/// <summary>The values /properties/waf/mode accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ApplicationGatewayMode {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>detection</summary>
+    [JsonStringEnumMemberName("detection")]
+    Detection = 1,
+
+    /// <summary>off</summary>
+    [JsonStringEnumMemberName("off")]
+    Off = 2,
+
+    /// <summary>prevention</summary>
+    [JsonStringEnumMemberName("prevention")]
+    Prevention = 3
+}
+
+/// <summary>The body of a CyberCloud.Network/virtualNetworks/applicationGateways.</summary>
+/// <remarks>An HTTP and HTTPS gateway on an address inside a virtual network, routing by host and path to pools of workload addresses or virtual machines, behind the OWASP Core Rule Set in detection or prevention mode.</remarks>
+public sealed partial class ApplicationGatewayData {
+
+    /// <summary>The region the gateway is billed in. ⚠ It must be its virtual network's region.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The gateway's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The gateway's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. ⚠ A machine is resolved to its address only once this gateway has been granted read on it.</summary>
+        /// <remarks>Required on a create. Defaults to ["web=10.20.1.11:8080"] when left unset.</remarks>
+        [JsonPropertyName("backendPools")]
+        public IList<string> BackendPools { get; set; } = new List<string>();
+
+        /// <summary>The cluster the gateway runs in. ⚠ It must be the cluster the virtual network was created in.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>The address clients connect to.</summary>
+        [JsonPropertyName("frontend")]
+        public FrontendData? Frontend { get; set; }
+
+        /// <summary>How a pool member is decided to be up: an HTTP GET that answers 2xx or 3xx. ⚠ Probing cannot be turned off.</summary>
+        [JsonPropertyName("health")]
+        public HealthData? Health { get; set; }
+
+        /// <summary>What the gateway refuses rather than passes on.</summary>
+        [JsonPropertyName("limits")]
+        public LimitsData? Limits { get; set; }
+
+        /// <summary>The HTTP listener, and the HTTPS listener when a certificate is given.</summary>
+        [JsonPropertyName("listeners")]
+        public ListenersData? Listeners { get; set; }
+
+        /// <summary>Where each request goes, as host/path=pool — for example shop.example.com/api=api, *.example.com/=web or */=web. The host is *, a name, or *. and a suffix; the path is a prefix, matched on whole segments. ⚠ The first rule that matches wins, in the order written. A request no rule matches gets 404.</summary>
+        /// <remarks>Required on a create. Defaults to ["*/=web"] when left unset.</remarks>
+        [JsonPropertyName("routingRules")]
+        public IList<string> RoutingRules { get; set; } = new List<string>();
+
+        /// <summary>CPU and memory for the proxy and the firewall, each.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>The subnet of this virtual network the gateway sits on. The frontend address below must be inside its range.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "web" when left unset.</remarks>
+        [JsonPropertyName("subnet")]
+        public required string Subnet { get; set; }
+
+        /// <summary>The web application firewall: the OWASP Core Rule Set on Coraza.</summary>
+        [JsonPropertyName("waf")]
+        public WafData? Waf { get; set; }
+
+        /// <summary>The address clients connect to.</summary>
+        public sealed partial class FrontendData {
+
+            /// <summary>The IPv4 address the gateway answers on, inside the subnet's range. ⚠ Required: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at.</summary>
+            /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.20.1.20" when left unset.</remarks>
+            [JsonPropertyName("v4")]
+            public required string V4 { get; set; }
+
+            /// <summary>The IPv6 address the gateway also answers on, or empty. Lower case only.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("v6")]
+            public string? V6 { get; set; }
+        }
+
+        /// <summary>How a pool member is decided to be up: an HTTP GET that answers 2xx or 3xx. ⚠ Probing cannot be turned off.</summary>
+        public sealed partial class HealthData {
+
+            /// <summary>How many successful probes put a member back.</summary>
+            /// <remarks>Defaults to 2 when left unset.</remarks>
+            [JsonPropertyName("healthyAfter")]
+            public long? HealthyAfter { get; set; }
+
+            /// <summary>How often each member is probed.</summary>
+            /// <remarks>Defaults to 5 when left unset.</remarks>
+            [JsonPropertyName("intervalSeconds")]
+            public long? IntervalSeconds { get; set; }
+
+            /// <summary>The path every member is probed on.</summary>
+            /// <remarks>Defaults to "/" when left unset.</remarks>
+            [JsonPropertyName("path")]
+            public string? Path { get; set; }
+
+            /// <summary>How many failed probes take a member out of its pool.</summary>
+            /// <remarks>Defaults to 3 when left unset.</remarks>
+            [JsonPropertyName("unhealthyAfter")]
+            public long? UnhealthyAfter { get; set; }
+        }
+
+        /// <summary>What the gateway refuses rather than passes on.</summary>
+        public sealed partial class LimitsData {
+
+            /// <summary>How many client connections the gateway accepts at once.</summary>
+            /// <remarks>Defaults to 2000 when left unset.</remarks>
+            [JsonPropertyName("maxConnections")]
+            public long? MaxConnections { get; set; }
+        }
+
+        /// <summary>The HTTP listener, and the HTTPS listener when a certificate is given.</summary>
+        public sealed partial class ListenersData {
+
+            /// <summary>A vault handle — path#field, optionally @version — whose value is a PEM bundle: the certificate chain followed by its private key. Empty means no HTTPS listener. ⚠ The path must be under your own tenant's vault prefix, tenants/&lt;tenantId&gt;/. The value is written into a Secret the proxy mounts and never into this body.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("certificate")]
+            public string? Certificate { get; set; }
+
+            /// <summary>The port plain HTTP is served on.</summary>
+            /// <remarks>Required on a create. Defaults to 80 when left unset.</remarks>
+            [JsonPropertyName("httpPort")]
+            public required long HttpPort { get; set; }
+
+            /// <summary>The port HTTPS is served on. Used only when a certificate is given.</summary>
+            /// <remarks>Defaults to 443 when left unset.</remarks>
+            [JsonPropertyName("httpsPort")]
+            public long? HttpsPort { get; set; }
+        }
+
+        /// <summary>CPU and memory for the proxy and the firewall, each.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>How much the proxy and the firewall each get. With the firewall on, the firewall is where the CPU goes.</summary>
+            /// <remarks>Defaults to "c1.small" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public ApplicationGatewayPreset? Preset { get; set; }
+        }
+
+        /// <summary>The web application firewall: the OWASP Core Rule Set on Coraza.</summary>
+        public sealed partial class WafData {
+
+            /// <summary>The OWASP Core Rule Set version. ⚠ One is offered: the rule set is compiled into the firewall image, so a second version is a second image.</summary>
+            /// <remarks>Defaults to "4.25" when left unset.</remarks>
+            [JsonPropertyName("crsVersion")]
+            public ApplicationGatewayCrsVersion? CrsVersion { get; set; }
+
+            /// <summary>Rules evaluated before the rule set, in order: deny or allow, then ip &lt;address or range&gt;, path &lt;prefix&gt;, host &lt;name&gt;, useragent &lt;text&gt; or method &lt;METHOD&gt; — for example deny ip 203.0.113.0/24 or allow path /healthz. ⚠ allow skips the rule set for that request entirely.</summary>
+            /// <remarks>Defaults to [] when left unset.</remarks>
+            [JsonPropertyName("customRules")]
+            public IList<string> CustomRules { get; set; } = new List<string>();
+
+            /// <summary>Rules to turn off, as a rule id (942100), a range (942100-942199), or a rule id and one request field it stops inspecting (942100:ARGS:password).</summary>
+            /// <remarks>Defaults to [] when left unset.</remarks>
+            [JsonPropertyName("exclusions")]
+            public IList<string> Exclusions { get; set; } = new List<string>();
+
+            /// <summary>prevention answers 403 to a request the rule set scores as an attack; detection evaluates and logs every rule and blocks nothing; off runs no firewall at all. ⚠ In prevention mode a firewall that does not answer in time is a 503, never a pass.</summary>
+            /// <remarks>Defaults to "prevention" when left unset.</remarks>
+            [JsonPropertyName("mode")]
+            public ApplicationGatewayMode? Mode { get; set; }
+
+            /// <summary>The CRS paranoia level. 1 is the default and blocks little that is legitimate; each level above adds rules and false positives.</summary>
+            /// <remarks>Defaults to 1 when left unset.</remarks>
+            [JsonPropertyName("paranoiaLevel")]
+            public long? ParanoiaLevel { get; set; }
+        }
+    }
+}
+
+/// <summary>One Application gateway, as the API returns it, and the operations on it.</summary>
+public sealed partial class ApplicationGatewayResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required ApplicationGatewayData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<ApplicationGatewayResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<ApplicationGatewayResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        ApplicationGatewayData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What showRouting returns.</summary>
+    public sealed partial class ShowRoutingResult {
+
+        /// <summary>Each listener, as address:port and protocol.</summary>
+        [JsonPropertyName("listeners")]
+        public IList<string> Listeners { get; set; } = new List<string>();
+
+        /// <summary>Every pool member as the gateway was configured with it, a machine's resolved address beside its resource id.</summary>
+        [JsonPropertyName("members")]
+        public IList<string> Members { get; set; } = new List<string>();
+
+        /// <summary>What the answer is and is not.</summary>
+        [JsonPropertyName("note")]
+        public required string Note { get; set; }
+
+        /// <summary>How many gateway pods are ready. ⚠ 0 is a gateway configured and carrying no traffic.</summary>
+        [JsonPropertyName("readyReplicas")]
+        public required long ReadyReplicas { get; set; }
+
+        /// <summary>The routing rules in evaluation order.</summary>
+        [JsonPropertyName("rules")]
+        public IList<string> Rules { get; set; } = new List<string>();
+
+        /// <summary>When the platform read the cluster, RFC 3339.</summary>
+        [JsonPropertyName("sampledAt")]
+        public required DateTimeOffset SampledAt { get; set; }
+
+        /// <summary>Machine members that did not resolve to an address and are not in the configuration.</summary>
+        [JsonPropertyName("unresolved")]
+        public IList<string> Unresolved { get; set; } = new List<string>();
+
+        /// <summary>The firewall's mode, rule set and paranoia level.</summary>
+        [JsonPropertyName("waf")]
+        public required string Waf { get; set; }
+    }
+
+    /// <summary>ShowRouting. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ShowRoutingResult>> ShowRoutingAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Application gateways in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class ApplicationGatewayCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Network/virtualNetworks/applicationGateways";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/applicationGateways/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/applicationGateways";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Application gateway.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<ApplicationGatewayResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string virtualNetworksName, string name,
+        ApplicationGatewayData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Application gateway by name.</summary>
+    public partial Task<Response<ApplicationGatewayResource>> GetAsync(string virtualNetworksName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Application gateways in one parent, paged.</summary>
+    public partial AsyncPageable<ApplicationGatewayResource> GetAllAsync(string virtualNetworksName, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum LoadBalancerPreset {
     /// <summary>Never assigned. Not a value the API accepts.</summary>
     Unknown = 0,

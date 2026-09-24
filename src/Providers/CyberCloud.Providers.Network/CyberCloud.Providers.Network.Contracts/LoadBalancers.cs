@@ -946,7 +946,8 @@ public static class LoadBalancers {
     ///             <c>mode tcp</c> AND NOT <c>mode http</c>, WHICH IS THE WHOLE OF WHAT THIS ROW
     ///             CLAIMS.
     ///         </b> docs/plan/14 puts L7 — host and path routing, TLS termination, header
-    ///         rewrites, a WAF — on <c>applicationGateways</c> at M2, over Envoy. An HTTP-mode HAProxy
+    ///         rewrites, a WAF — on <see cref="ApplicationGateways" /> (#31), a second type with its own
+    ///         chart rather than an HTTP mode of this one. An HTTP-mode HAProxy
     ///         here would be a second, quieter L7 product with none of those, and the first tenant to
     ///         ask for a path rule would be told to migrate.
     ///     </para>

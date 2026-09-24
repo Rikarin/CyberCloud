@@ -6119,6 +6119,364 @@ class VirtualNetworkShowIsolationResult:
         return wire
 
 
+ApplicationGatewayPreset = Literal["c1.large", "c1.medium", "c1.small"]
+"""The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+ApplicationGatewayCrsVersion = Literal["4.25"]
+"""The values /properties/waf/crsVersion accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+ApplicationGatewayMode = Literal["detection", "off", "prevention"]
+"""The values /properties/waf/mode accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class ApplicationGatewayData:
+    """Application gateway. An HTTP and HTTPS gateway on an address inside a virtual network, routing by host and path to pools of workload addresses or virtual machines, behind the OWASP Core Rule Set in detection or prevention mode. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The gateway's own settings."""
+
+        @dataclass
+        class Frontend:
+            """The address clients connect to."""
+
+            # The IPv4 address the gateway answers on, inside the subnet's range. ⚠ Required: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at.
+            v4: str
+            # The IPv6 address the gateway also answers on, or empty. Lower case only.
+            v6: Optional[str] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ApplicationGatewayData.Properties.Frontend:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    v4=wire["v4"],
+                    v6=wire.get("v6"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["v4"] = self.v4
+                if self.v6 is not None:
+                    wire["v6"] = self.v6
+                return wire
+
+        @dataclass
+        class Health:
+            """How a pool member is decided to be up: an HTTP GET that answers 2xx or 3xx. ⚠ Probing cannot be turned off."""
+
+            # How many successful probes put a member back.
+            healthy_after: Optional[int] = None
+            # How often each member is probed.
+            interval_seconds: Optional[int] = None
+            # The path every member is probed on.
+            path: Optional[str] = None
+            # How many failed probes take a member out of its pool.
+            unhealthy_after: Optional[int] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ApplicationGatewayData.Properties.Health:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    healthy_after=wire.get("healthyAfter"),
+                    interval_seconds=wire.get("intervalSeconds"),
+                    path=wire.get("path"),
+                    unhealthy_after=wire.get("unhealthyAfter"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.healthy_after is not None:
+                    wire["healthyAfter"] = self.healthy_after
+                if self.interval_seconds is not None:
+                    wire["intervalSeconds"] = self.interval_seconds
+                if self.path is not None:
+                    wire["path"] = self.path
+                if self.unhealthy_after is not None:
+                    wire["unhealthyAfter"] = self.unhealthy_after
+                return wire
+
+        @dataclass
+        class Limits:
+            """What the gateway refuses rather than passes on."""
+
+            # How many client connections the gateway accepts at once.
+            max_connections: Optional[int] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ApplicationGatewayData.Properties.Limits:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    max_connections=wire.get("maxConnections"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.max_connections is not None:
+                    wire["maxConnections"] = self.max_connections
+                return wire
+
+        @dataclass
+        class Listeners:
+            """The HTTP listener, and the HTTPS listener when a certificate is given."""
+
+            # The port plain HTTP is served on.
+            http_port: int
+            # A vault handle — path#field, optionally @version — whose value is a PEM bundle: the certificate chain followed by its private key. Empty means no HTTPS listener. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/. The value is written into a Secret the proxy mounts and never into this body.
+            certificate: Optional[str] = None
+            # The port HTTPS is served on. Used only when a certificate is given.
+            https_port: Optional[int] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ApplicationGatewayData.Properties.Listeners:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    http_port=wire["httpPort"],
+                    certificate=wire.get("certificate"),
+                    https_port=wire.get("httpsPort"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["httpPort"] = self.http_port
+                if self.certificate is not None:
+                    wire["certificate"] = self.certificate
+                if self.https_port is not None:
+                    wire["httpsPort"] = self.https_port
+                return wire
+
+        @dataclass
+        class Sizing:
+            """CPU and memory for the proxy and the firewall, each."""
+
+            # How much the proxy and the firewall each get. With the firewall on, the firewall is where the CPU goes.
+            preset: Optional[ApplicationGatewayPreset] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ApplicationGatewayData.Properties.Sizing:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    preset=wire.get("preset"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.preset is not None:
+                    wire["preset"] = self.preset
+                return wire
+
+        @dataclass
+        class Waf:
+            """The web application firewall: the OWASP Core Rule Set on Coraza."""
+
+            # The OWASP Core Rule Set version. ⚠ One is offered: the rule set is compiled into the firewall image, so a second version is a second image.
+            crs_version: Optional[ApplicationGatewayCrsVersion] = None
+            # Rules evaluated before the rule set, in order: deny or allow, then ip <address or range>, path <prefix>, host <name>, useragent <text> or method <METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. ⚠ allow skips the rule set for that request entirely.
+            custom_rules: Optional[List[str]] = None
+            # Rules to turn off, as a rule id (942100), a range (942100-942199), or a rule id and one request field it stops inspecting (942100:ARGS:password).
+            exclusions: Optional[List[str]] = None
+            # prevention answers 403 to a request the rule set scores as an attack; detection evaluates and logs every rule and blocks nothing; off runs no firewall at all. ⚠ In prevention mode a firewall that does not answer in time is a 503, never a pass.
+            mode: Optional[ApplicationGatewayMode] = None
+            # The CRS paranoia level. 1 is the default and blocks little that is legitimate; each level above adds rules and false positives.
+            paranoia_level: Optional[int] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ApplicationGatewayData.Properties.Waf:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    crs_version=wire.get("crsVersion"),
+                    custom_rules=wire.get("customRules"),
+                    exclusions=wire.get("exclusions"),
+                    mode=wire.get("mode"),
+                    paranoia_level=wire.get("paranoiaLevel"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.crs_version is not None:
+                    wire["crsVersion"] = self.crs_version
+                if self.custom_rules is not None:
+                    wire["customRules"] = self.custom_rules
+                if self.exclusions is not None:
+                    wire["exclusions"] = self.exclusions
+                if self.mode is not None:
+                    wire["mode"] = self.mode
+                if self.paranoia_level is not None:
+                    wire["paranoiaLevel"] = self.paranoia_level
+                return wire
+
+        # The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. ⚠ A machine is resolved to its address only once this gateway has been granted read on it.
+        backend_pools: List[str]
+        # The cluster the gateway runs in. ⚠ It must be the cluster the virtual network was created in.
+        cluster_id: str
+        # Where each request goes, as host/path=pool — for example shop.example.com/api=api, *.example.com/=web or */=web. The host is *, a name, or *. and a suffix; the path is a prefix, matched on whole segments. ⚠ The first rule that matches wins, in the order written. A request no rule matches gets 404.
+        routing_rules: List[str]
+        # The subnet of this virtual network the gateway sits on. The frontend address below must be inside its range.
+        subnet: str
+        # The address clients connect to.
+        frontend: Optional[ApplicationGatewayData.Properties.Frontend] = None
+        # How a pool member is decided to be up: an HTTP GET that answers 2xx or 3xx. ⚠ Probing cannot be turned off.
+        health: Optional[ApplicationGatewayData.Properties.Health] = None
+        # What the gateway refuses rather than passes on.
+        limits: Optional[ApplicationGatewayData.Properties.Limits] = None
+        # The HTTP listener, and the HTTPS listener when a certificate is given.
+        listeners: Optional[ApplicationGatewayData.Properties.Listeners] = None
+        # CPU and memory for the proxy and the firewall, each.
+        sizing: Optional[ApplicationGatewayData.Properties.Sizing] = None
+        # The web application firewall: the OWASP Core Rule Set on Coraza.
+        waf: Optional[ApplicationGatewayData.Properties.Waf] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> ApplicationGatewayData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                backend_pools=wire["backendPools"],
+                cluster_id=wire["clusterId"],
+                routing_rules=wire["routingRules"],
+                subnet=wire["subnet"],
+                frontend=_opt(wire, "frontend", ApplicationGatewayData.Properties.Frontend.from_wire),
+                health=_opt(wire, "health", ApplicationGatewayData.Properties.Health.from_wire),
+                limits=_opt(wire, "limits", ApplicationGatewayData.Properties.Limits.from_wire),
+                listeners=_opt(wire, "listeners", ApplicationGatewayData.Properties.Listeners.from_wire),
+                sizing=_opt(wire, "sizing", ApplicationGatewayData.Properties.Sizing.from_wire),
+                waf=_opt(wire, "waf", ApplicationGatewayData.Properties.Waf.from_wire),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["backendPools"] = self.backend_pools
+            wire["clusterId"] = self.cluster_id
+            wire["routingRules"] = self.routing_rules
+            wire["subnet"] = self.subnet
+            if self.frontend is not None:
+                wire["frontend"] = self.frontend.to_wire()
+            if self.health is not None:
+                wire["health"] = self.health.to_wire()
+            if self.limits is not None:
+                wire["limits"] = self.limits.to_wire()
+            if self.listeners is not None:
+                wire["listeners"] = self.listeners.to_wire()
+            if self.sizing is not None:
+                wire["sizing"] = self.sizing.to_wire()
+            if self.waf is not None:
+                wire["waf"] = self.waf.to_wire()
+            return wire
+
+    # The region the gateway is billed in. ⚠ It must be its virtual network's region.
+    location: str
+    # The gateway's own settings.
+    properties: Optional[ApplicationGatewayData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationGatewayData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", ApplicationGatewayData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class ApplicationGatewayResource:
+    """One Application gateway, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: ApplicationGatewayData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationGatewayResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=ApplicationGatewayData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class ApplicationGatewayShowRoutingResult:
+    """What showRouting returns."""
+
+    # Each listener, as address:port and protocol.
+    listeners: List[str]
+    # Every pool member as the gateway was configured with it, a machine's resolved address beside its resource id.
+    members: List[str]
+    # What the answer is and is not.
+    note: str
+    # How many gateway pods are ready. ⚠ 0 is a gateway configured and carrying no traffic.
+    ready_replicas: int
+    # The routing rules in evaluation order.
+    rules: List[str]
+    # When the platform read the cluster, RFC 3339.
+    sampled_at: str
+    # Machine members that did not resolve to an address and are not in the configuration.
+    unresolved: List[str]
+    # The firewall's mode, rule set and paranoia level.
+    waf: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationGatewayShowRoutingResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            listeners=wire["listeners"],
+            members=wire["members"],
+            note=wire["note"],
+            ready_replicas=wire["readyReplicas"],
+            rules=wire["rules"],
+            sampled_at=wire["sampledAt"],
+            unresolved=wire["unresolved"],
+            waf=wire["waf"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["listeners"] = self.listeners
+        wire["members"] = self.members
+        wire["note"] = self.note
+        wire["readyReplicas"] = self.ready_replicas
+        wire["rules"] = self.rules
+        wire["sampledAt"] = self.sampled_at
+        wire["unresolved"] = self.unresolved
+        wire["waf"] = self.waf
+        return wire
+
+
 LoadBalancerPreset = Literal["c1.large", "c1.medium", "c1.small"]
 """The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else."""
 
@@ -8823,6 +9181,12 @@ __all__ = [
     "VirtualNetworkData",
     "VirtualNetworkResource",
     "VirtualNetworkShowIsolationResult",
+    "ApplicationGatewayPreset",
+    "ApplicationGatewayCrsVersion",
+    "ApplicationGatewayMode",
+    "ApplicationGatewayData",
+    "ApplicationGatewayResource",
+    "ApplicationGatewayShowRoutingResult",
     "LoadBalancerPreset",
     "LoadBalancerVersion",
     "LoadBalancerData",

@@ -2084,6 +2084,116 @@ export interface NetworkVirtualNetworksShowIsolationResult {
 }
 
 /** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
+export type NetworkVirtualNetworksApplicationGatewaysPreset =
+  | 'c1.large'
+  | 'c1.medium'
+  | 'c1.small';
+
+/** The values /properties/waf/crsVersion accepts. ⚠ Closed: the write path refuses anything else. */
+export type NetworkVirtualNetworksApplicationGatewaysCrsVersion =
+  | '4.25';
+
+/** The values /properties/waf/mode accepts. ⚠ Closed: the write path refuses anything else. */
+export type NetworkVirtualNetworksApplicationGatewaysMode =
+  | 'detection'
+  | 'off'
+  | 'prevention';
+
+/** Application gateway. An HTTP and HTTPS gateway on an address inside a virtual network, routing by host and path to pools of workload addresses or virtual machines, behind the OWASP Core Rule Set in detection or prevention mode. */
+export interface NetworkVirtualNetworksApplicationGatewaysData {
+  /** The region the gateway is billed in. ⚠ It must be its virtual network's region. */
+  location: string;
+  /** The gateway's own settings. */
+  properties?: {
+    /** The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. ⚠ A machine is resolved to its address only once this gateway has been granted read on it. */
+    backendPools: string[];
+    /** The cluster the gateway runs in. ⚠ It must be the cluster the virtual network was created in. */
+    clusterId: string;
+    /** The address clients connect to. */
+    frontend?: {
+      /** The IPv4 address the gateway answers on, inside the subnet's range. ⚠ Required: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at. */
+      v4: string;
+      /** The IPv6 address the gateway also answers on, or empty. Lower case only. */
+      v6?: string;
+    };
+    /** How a pool member is decided to be up: an HTTP GET that answers 2xx or 3xx. ⚠ Probing cannot be turned off. */
+    health?: {
+      /** How many successful probes put a member back. */
+      healthyAfter?: number;
+      /** How often each member is probed. */
+      intervalSeconds?: number;
+      /** The path every member is probed on. */
+      path?: string;
+      /** How many failed probes take a member out of its pool. */
+      unhealthyAfter?: number;
+    };
+    /** What the gateway refuses rather than passes on. */
+    limits?: {
+      /** How many client connections the gateway accepts at once. */
+      maxConnections?: number;
+    };
+    /** The HTTP listener, and the HTTPS listener when a certificate is given. */
+    listeners?: {
+      /** A vault handle — path#field, optionally @version — whose value is a PEM bundle: the certificate chain followed by its private key. Empty means no HTTPS listener. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/. The value is written into a Secret the proxy mounts and never into this body. */
+      certificate?: string;
+      /** The port plain HTTP is served on. */
+      httpPort: number;
+      /** The port HTTPS is served on. Used only when a certificate is given. */
+      httpsPort?: number;
+    };
+    /** Where each request goes, as host/path=pool — for example shop.example.com/api=api, *.example.com/=web or * /=web. The host is *, a name, or *. and a suffix; the path is a prefix, matched on whole segments. ⚠ The first rule that matches wins, in the order written. A request no rule matches gets 404. */
+    routingRules: string[];
+    /** CPU and memory for the proxy and the firewall, each. */
+    sizing?: {
+      /** How much the proxy and the firewall each get. With the firewall on, the firewall is where the CPU goes. */
+      preset?: NetworkVirtualNetworksApplicationGatewaysPreset;
+    };
+    /** The subnet of this virtual network the gateway sits on. The frontend address below must be inside its range. */
+    subnet: string;
+    /** The web application firewall: the OWASP Core Rule Set on Coraza. */
+    waf?: {
+      /** The OWASP Core Rule Set version. ⚠ One is offered: the rule set is compiled into the firewall image, so a second version is a second image. */
+      crsVersion?: NetworkVirtualNetworksApplicationGatewaysCrsVersion;
+      /** Rules evaluated before the rule set, in order: deny or allow, then ip <address or range>, path <prefix>, host <name>, useragent <text> or method <METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. ⚠ allow skips the rule set for that request entirely. */
+      customRules?: string[];
+      /** Rules to turn off, as a rule id (942100), a range (942100-942199), or a rule id and one request field it stops inspecting (942100:ARGS:password). */
+      exclusions?: string[];
+      /** prevention answers 403 to a request the rule set scores as an attack; detection evaluates and logs every rule and blocks nothing; off runs no firewall at all. ⚠ In prevention mode a firewall that does not answer in time is a 503, never a pass. */
+      mode?: NetworkVirtualNetworksApplicationGatewaysMode;
+      /** The CRS paranoia level. 1 is the default and blocks little that is legitimate; each level above adds rules and false positives. */
+      paranoiaLevel?: number;
+    };
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Application gateway, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface NetworkVirtualNetworksApplicationGatewaysResource extends Resource, NetworkVirtualNetworksApplicationGatewaysData {
+  readonly type: 'CyberCloud.Network/virtualNetworks/applicationGateways';
+}
+
+/** What showRouting returns. */
+export interface NetworkVirtualNetworksApplicationGatewaysShowRoutingResult {
+  /** Each listener, as address:port and protocol. */
+  listeners: string[];
+  /** Every pool member as the gateway was configured with it, a machine's resolved address beside its resource id. */
+  members: string[];
+  /** What the answer is and is not. */
+  note: string;
+  /** How many gateway pods are ready. ⚠ 0 is a gateway configured and carrying no traffic. */
+  readyReplicas: number;
+  /** The routing rules in evaluation order. */
+  rules: string[];
+  /** When the platform read the cluster, RFC 3339. */
+  sampledAt: string;
+  /** Machine members that did not resolve to an address and are not in the configuration. */
+  unresolved: string[];
+  /** The firewall's mode, rule set and paranoia level. */
+  waf: string;
+}
+
+/** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
 export type NetworkVirtualNetworksLoadBalancersPreset =
   | 'c1.large'
   | 'c1.medium'

@@ -13967,6 +13967,776 @@
           },
           "alias": "vnet"
         },
+        "virtual-networks-application-gateways": {
+          "name": "virtual-networks-application-gateways",
+          "resourceType": "CyberCloud.Network/virtualNetworks/applicationGateways",
+          "title": "Application gateway",
+          "plural": "Application gateways",
+          "summary": "An HTTP and HTTPS gateway on an address inside a virtual network, routing by host and path to pools of workload addresses or virtual machines, behind the OWASP Core Rule Set in detection or prevention mode.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Application gateway.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/applicationGateways/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--backend-pools",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. ⚠ A machine is resolved to its address only once this gateway has been granted read on it.",
+                  "jsonPointer": "/properties/backendPools",
+                  "repeated": true,
+                  "default": [
+                    "web=10.20.1.11:8080"
+                  ],
+                  "example": [
+                    "web=10.20.1.11:8080",
+                    "web=10.20.1.12:8080"
+                  ]
+                },
+                {
+                  "name": "--certificate",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A vault handle — path#field, optionally @version — whose value is a PEM bundle: the certificate chain followed by its private key. Empty means no HTTPS listener. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/. The value is written into a Secret the proxy mounts and never into this body.",
+                  "jsonPointer": "/properties/listeners/certificate",
+                  "widget": "secret-ref",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster the gateway runs in. ⚠ It must be the cluster the virtual network was created in.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--crs-version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The OWASP Core Rule Set version. ⚠ One is offered: the rule set is compiled into the firewall image, so a second version is a second image.",
+                  "jsonPointer": "/properties/waf/crsVersion",
+                  "choices": [
+                    "4.25"
+                  ],
+                  "default": "4.25"
+                },
+                {
+                  "name": "--custom-rules",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Rules evaluated before the rule set, in order: deny or allow, then ip <address or range>, path <prefix>, host <name>, useragent <text> or method <METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. ⚠ allow skips the rule set for that request entirely.",
+                  "jsonPointer": "/properties/waf/customRules",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "deny ip 203.0.113.0/24"
+                  ]
+                },
+                {
+                  "name": "--exclusions",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Rules to turn off, as a rule id (942100), a range (942100-942199), or a rule id and one request field it stops inspecting (942100:ARGS:password).",
+                  "jsonPointer": "/properties/waf/exclusions",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "942100:ARGS:password"
+                  ]
+                },
+                {
+                  "name": "--healthy-after",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many successful probes put a member back.",
+                  "jsonPointer": "/properties/health/healthyAfter",
+                  "default": 2
+                },
+                {
+                  "name": "--http-port",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "The port plain HTTP is served on.",
+                  "jsonPointer": "/properties/listeners/httpPort",
+                  "default": 80
+                },
+                {
+                  "name": "--https-port",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The port HTTPS is served on. Used only when a certificate is given.",
+                  "jsonPointer": "/properties/listeners/httpsPort",
+                  "default": 443
+                },
+                {
+                  "name": "--interval-seconds",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How often each member is probed.",
+                  "jsonPointer": "/properties/health/intervalSeconds",
+                  "default": 5
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the gateway is billed in. ⚠ It must be its virtual network's region.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-connections",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many client connections the gateway accepts at once.",
+                  "jsonPointer": "/properties/limits/maxConnections",
+                  "default": 2000
+                },
+                {
+                  "name": "--mode",
+                  "type": "string",
+                  "required": false,
+                  "summary": "prevention answers 403 to a request the rule set scores as an attack; detection evaluates and logs every rule and blocks nothing; off runs no firewall at all. ⚠ In prevention mode a firewall that does not answer in time is a 503, never a pass.",
+                  "jsonPointer": "/properties/waf/mode",
+                  "choices": [
+                    "detection",
+                    "off",
+                    "prevention"
+                  ],
+                  "default": "prevention"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--paranoia-level",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The CRS paranoia level. 1 is the default and blocks little that is legitimate; each level above adds rules and false positives.",
+                  "jsonPointer": "/properties/waf/paranoiaLevel",
+                  "default": 1
+                },
+                {
+                  "name": "--path",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The path every member is probed on.",
+                  "jsonPointer": "/properties/health/path",
+                  "default": "/"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How much the proxy and the firewall each get. With the firewall on, the firewall is where the CPU goes.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.large",
+                    "c1.medium",
+                    "c1.small"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--routing-rules",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Where each request goes, as host/path=pool — for example shop.example.com/api=api, *.example.com/=web or */=web. The host is *, a name, or *. and a suffix; the path is a prefix, matched on whole segments. ⚠ The first rule that matches wins, in the order written. A request no rule matches gets 404.",
+                  "jsonPointer": "/properties/routingRules",
+                  "repeated": true,
+                  "default": [
+                    "*/=web"
+                  ],
+                  "example": [
+                    "shop.example.com/api=api",
+                    "*/=web"
+                  ]
+                },
+                {
+                  "name": "--subnet",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The subnet of this virtual network the gateway sits on. The frontend address below must be inside its range.",
+                  "jsonPointer": "/properties/subnet",
+                  "immutable": true,
+                  "widget": "subnet",
+                  "default": "web",
+                  "example": "web"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--unhealthy-after",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many failed probes take a member out of its pool.",
+                  "jsonPointer": "/properties/health/unhealthyAfter",
+                  "default": 3
+                },
+                {
+                  "name": "--v4",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The IPv4 address the gateway answers on, inside the subnet's range. ⚠ Required: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at.",
+                  "jsonPointer": "/properties/frontend/v4",
+                  "immutable": true,
+                  "widget": "cidr",
+                  "default": "10.20.1.20",
+                  "example": "10.20.1.20"
+                },
+                {
+                  "name": "--v6",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv6 address the gateway also answers on, or empty. Lower case only.",
+                  "jsonPointer": "/properties/frontend/v6",
+                  "immutable": true,
+                  "widget": "cidr",
+                  "default": "",
+                  "example": "fd00:20:1::20"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application gateway lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Application gateway. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/applicationGateways/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application gateway lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the Application gateways in a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/applicationGateways",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application gateway lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Application gateway.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/applicationGateways/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application gateway lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ]
+            },
+            "show-routing": {
+              "name": "show-routing",
+              "summary": "showRouting a Application gateway.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/applicationGateways/{resourceName}/showRouting",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application gateway lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "action": "showRouting",
+              "permission": "read",
+              "rawBody": true
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Application gateway. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/applicationGateways/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--backend-pools",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. ⚠ A machine is resolved to its address only once this gateway has been granted read on it.",
+                  "jsonPointer": "/properties/backendPools",
+                  "repeated": true,
+                  "default": [
+                    "web=10.20.1.11:8080"
+                  ],
+                  "example": [
+                    "web=10.20.1.11:8080",
+                    "web=10.20.1.12:8080"
+                  ]
+                },
+                {
+                  "name": "--certificate",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A vault handle — path#field, optionally @version — whose value is a PEM bundle: the certificate chain followed by its private key. Empty means no HTTPS listener. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/. The value is written into a Secret the proxy mounts and never into this body.",
+                  "jsonPointer": "/properties/listeners/certificate",
+                  "widget": "secret-ref",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster the gateway runs in. ⚠ It must be the cluster the virtual network was created in.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--crs-version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The OWASP Core Rule Set version. ⚠ One is offered: the rule set is compiled into the firewall image, so a second version is a second image.",
+                  "jsonPointer": "/properties/waf/crsVersion",
+                  "choices": [
+                    "4.25"
+                  ],
+                  "default": "4.25"
+                },
+                {
+                  "name": "--custom-rules",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Rules evaluated before the rule set, in order: deny or allow, then ip <address or range>, path <prefix>, host <name>, useragent <text> or method <METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. ⚠ allow skips the rule set for that request entirely.",
+                  "jsonPointer": "/properties/waf/customRules",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "deny ip 203.0.113.0/24"
+                  ]
+                },
+                {
+                  "name": "--exclusions",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Rules to turn off, as a rule id (942100), a range (942100-942199), or a rule id and one request field it stops inspecting (942100:ARGS:password).",
+                  "jsonPointer": "/properties/waf/exclusions",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "942100:ARGS:password"
+                  ]
+                },
+                {
+                  "name": "--healthy-after",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many successful probes put a member back.",
+                  "jsonPointer": "/properties/health/healthyAfter",
+                  "default": 2
+                },
+                {
+                  "name": "--http-port",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The port plain HTTP is served on.",
+                  "jsonPointer": "/properties/listeners/httpPort",
+                  "default": 80
+                },
+                {
+                  "name": "--https-port",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The port HTTPS is served on. Used only when a certificate is given.",
+                  "jsonPointer": "/properties/listeners/httpsPort",
+                  "default": 443
+                },
+                {
+                  "name": "--interval-seconds",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How often each member is probed.",
+                  "jsonPointer": "/properties/health/intervalSeconds",
+                  "default": 5
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the gateway is billed in. ⚠ It must be its virtual network's region.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-connections",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many client connections the gateway accepts at once.",
+                  "jsonPointer": "/properties/limits/maxConnections",
+                  "default": 2000
+                },
+                {
+                  "name": "--mode",
+                  "type": "string",
+                  "required": false,
+                  "summary": "prevention answers 403 to a request the rule set scores as an attack; detection evaluates and logs every rule and blocks nothing; off runs no firewall at all. ⚠ In prevention mode a firewall that does not answer in time is a 503, never a pass.",
+                  "jsonPointer": "/properties/waf/mode",
+                  "choices": [
+                    "detection",
+                    "off",
+                    "prevention"
+                  ],
+                  "default": "prevention"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--paranoia-level",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The CRS paranoia level. 1 is the default and blocks little that is legitimate; each level above adds rules and false positives.",
+                  "jsonPointer": "/properties/waf/paranoiaLevel",
+                  "default": 1
+                },
+                {
+                  "name": "--path",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The path every member is probed on.",
+                  "jsonPointer": "/properties/health/path",
+                  "default": "/"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How much the proxy and the firewall each get. With the firewall on, the firewall is where the CPU goes.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.large",
+                    "c1.medium",
+                    "c1.small"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--routing-rules",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where each request goes, as host/path=pool — for example shop.example.com/api=api, *.example.com/=web or */=web. The host is *, a name, or *. and a suffix; the path is a prefix, matched on whole segments. ⚠ The first rule that matches wins, in the order written. A request no rule matches gets 404.",
+                  "jsonPointer": "/properties/routingRules",
+                  "repeated": true,
+                  "default": [
+                    "*/=web"
+                  ],
+                  "example": [
+                    "shop.example.com/api=api",
+                    "*/=web"
+                  ]
+                },
+                {
+                  "name": "--subnet",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subnet of this virtual network the gateway sits on. The frontend address below must be inside its range.",
+                  "jsonPointer": "/properties/subnet",
+                  "immutable": true,
+                  "widget": "subnet",
+                  "default": "web",
+                  "example": "web"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--unhealthy-after",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many failed probes take a member out of its pool.",
+                  "jsonPointer": "/properties/health/unhealthyAfter",
+                  "default": 3
+                },
+                {
+                  "name": "--v4",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv4 address the gateway answers on, inside the subnet's range. ⚠ Required: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at.",
+                  "jsonPointer": "/properties/frontend/v4",
+                  "immutable": true,
+                  "widget": "cidr",
+                  "default": "10.20.1.20",
+                  "example": "10.20.1.20"
+                },
+                {
+                  "name": "--v6",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv6 address the gateway also answers on, or empty. Lower case only.",
+                  "jsonPointer": "/properties/frontend/v6",
+                  "immutable": true,
+                  "widget": "cidr",
+                  "default": "",
+                  "example": "fd00:20:1::20"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application gateway lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "appgateway"
+        },
         "virtual-networks-load-balancers": {
           "name": "virtual-networks-load-balancers",
           "resourceType": "CyberCloud.Network/virtualNetworks/loadBalancers",

@@ -140,6 +140,39 @@ public static class ClusterInfrastructure {
         "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nfailCgroupV1: false\n";
 
     /// <summary>
+    ///     A second kubelet drop-in beside <see cref="KubeletDropInPath" />: the disk-pressure
+    ///     thresholds, lowered from k3s' 5% to 1%.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             WITHOUT IT, A DEVELOPER'S NEARLY FULL DOCKER DISK READS AS A TEST FAILURE IN WHATEVER
+    ///             SUITE FIRST SCHEDULES A POD.
+    ///         </b> The k3s node's file systems are Docker Desktop's VM disk, shared by every
+    ///         container and volume on the machine. k3s writes <c>evictionHard</c> of 5% on
+    ///         <c>imagefs.available</c> and <c>nodefs.available</c> into its own defaults drop-in
+    ///         (<c>pkg/daemons/agent/agent.go</c> at v1.35.7+k3s1); below that the kubelet taints the
+    ///         node <c>disk-pressure:NoSchedule</c>. Measured on 2026-09-24 with that VM disk at 98%
+    ///         (5.2 GB of 251 GB free): <c>ApplicationGatewayTrafficConformance</c>'s backend pods
+    ///         stayed <i>"0/1 nodes are available: 1 node(s) had untolerated taint(s)"</i> for eight
+    ///         minutes, while every suite that only applies objects stayed green.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>1% rather than 0</b>, so a disk that really fills still stops the node rather than
+    ///         the container runtime. k3s' own <c>evictionHard</c> holds only these two keys, so this
+    ///         file means the same whether the kubelet merges that map or replaces it.
+    ///     </para>
+    /// </remarks>
+    public const string KubeletEvictionDropInPath =
+        "/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/98-cybercloud-disk-pressure.conf";
+
+    /// <summary>The eviction drop-in's content. See <see cref="KubeletEvictionDropInPath" />.</summary>
+    public const string KubeletEvictionDropIn =
+        "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\n"
+        + "evictionHard:\n  imagefs.available: \"1%\"\n  nodefs.available: \"1%\"\n";
+
+    /// <summary>
     ///     The entrypoint every k3s-in-Docker here starts through: make <c>/var/run</c> a shared
     ///     mount, then <c>exec</c> k3s with whatever command the container was given.
     /// </summary>
@@ -180,14 +213,16 @@ public static class ClusterInfrastructure {
 
     /// <summary>
     ///     A k3s builder on <see cref="K3sImage" /> that comes up on a cgroup v1 host as well as a
-    ///     v2 one, with <c>/var/run</c> shared so KubeVirt's handler can run on it. Every k3s under
+    ///     v2 one, with <c>/var/run</c> shared so KubeVirt's handler can run on it, and that still
+    ///     schedules pods when the machine's Docker disk is nearly full. Every k3s under
     ///     <c>test/</c> goes through here; <c>CyberCloud.Kubernetes.Tests.Infrastructure.K3sFixture</c>
     ///     cannot reference this assembly and carries the same lines beside its own copy of the pin.
     /// </summary>
     public static K3sBuilder K3s() =>
         new K3sBuilder(K3sImage)
             .WithEntrypoint("/bin/sh", "-c", SharedVarRunScript, "k3s")
-            .WithResourceMapping(Encoding.UTF8.GetBytes(KubeletDropIn), KubeletDropInPath);
+            .WithResourceMapping(Encoding.UTF8.GetBytes(KubeletDropIn), KubeletDropInPath)
+            .WithResourceMapping(Encoding.UTF8.GetBytes(KubeletEvictionDropIn), KubeletEvictionDropInPath);
 
     /// <summary>The PostgreSQL image, matching <c>CyberCloud.ServiceDefaults.Tests</c>'s durable shards.</summary>
     public const string PostgresImage = "postgres:17-alpine";

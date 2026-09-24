@@ -1,0 +1,394 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/application-gateway/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the application-gateway chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "backendPools": {
+      "default": [
+        "web=10.20.1.11:8080"
+      ],
+      "description": "The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. ⚠ A machine is resolved to its address only once this gateway has been granted read on it.",
+      "examples": [
+        [
+          "web=10.20.1.11:8080",
+          "web=10.20.1.12:8080"
+        ]
+      ],
+      "items": {},
+      "type": "array",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/backendPools"
+    },
+    "frontend": {
+      "additionalProperties": false,
+      "description": "The address clients connect to.",
+      "properties": {
+        "v4": {
+          "default": "10.20.1.20",
+          "description": "The IPv4 address the gateway answers on, inside the subnet's range. ⚠ Required: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at.",
+          "examples": [
+            "10.20.1.20"
+          ],
+          "pattern": "^(?:(\\d{1,3}\\.){3}\\d{1,3})$",
+          "type": "string",
+          "x-cybercloud-immutable": true,
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/frontend/v4",
+          "x-cybercloud-widget": "cidr"
+        },
+        "v6": {
+          "default": "",
+          "description": "The IPv6 address the gateway also answers on, or empty. Lower case only.",
+          "examples": [
+            "fd00:20:1::20"
+          ],
+          "pattern": "^(?:([0-9A-Fa-f:.]+)?)$",
+          "type": "string",
+          "x-cybercloud-immutable": true,
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/frontend/v6",
+          "x-cybercloud-widget": "cidr"
+        }
+      },
+      "required": [
+        "v4"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/frontend"
+    },
+    "health": {
+      "additionalProperties": false,
+      "description": "How a pool member is decided to be up: an HTTP GET that answers 2xx or 3xx. ⚠ Probing cannot be turned off.",
+      "properties": {
+        "healthyAfter": {
+          "default": 2,
+          "description": "How many successful probes put a member back.",
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/health/healthyAfter"
+        },
+        "intervalSeconds": {
+          "default": 5,
+          "description": "How often each member is probed.",
+          "maximum": 60,
+          "minimum": 2,
+          "type": "integer",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/health/intervalSeconds"
+        },
+        "path": {
+          "default": "/",
+          "description": "The path every member is probed on.",
+          "pattern": "^(?:/[A-Za-z0-9._~/-]{0,200})$",
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/health/path"
+        },
+        "unhealthyAfter": {
+          "default": 3,
+          "description": "How many failed probes take a member out of its pool.",
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/health/unhealthyAfter"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/health"
+    },
+    "limits": {
+      "additionalProperties": false,
+      "description": "What the gateway refuses rather than passes on.",
+      "properties": {
+        "maxConnections": {
+          "default": 2000,
+          "description": "How many client connections the gateway accepts at once.",
+          "maximum": 100000,
+          "minimum": 10,
+          "type": "integer",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/limits/maxConnections"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 7,
+      "x-cybercloud-pointer": "/properties/limits"
+    },
+    "listeners": {
+      "additionalProperties": false,
+      "description": "The HTTP listener, and the HTTPS listener when a certificate is given.",
+      "properties": {
+        "certificate": {
+          "default": "",
+          "description": "A vault handle — path#field, optionally @version — whose value is a PEM bundle: the certificate chain followed by its private key. Empty means no HTTPS listener. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/. The value is written into a Secret the proxy mounts and never into this body.",
+          "maxLength": 512,
+          "pattern": "^(?:([^#@\\s]+#[^#@\\s]+(@[^#@\\s]+)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/listeners/certificate",
+          "x-cybercloud-widget": "secret-ref"
+        },
+        "httpPort": {
+          "default": 80,
+          "description": "The port plain HTTP is served on.",
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/listeners/httpPort"
+        },
+        "httpsPort": {
+          "default": 443,
+          "description": "The port HTTPS is served on. Used only when a certificate is given.",
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/listeners/httpsPort"
+        }
+      },
+      "required": [
+        "httpPort"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/listeners"
+    },
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 10,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity injected by the reconciler. Not a tenant-facing setting.",
+      "properties": {
+        "apiVersion": {
+          "default": "2026-08-01",
+          "description": "The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "managedBy": {
+          "default": "cybercloud",
+          "description": "Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 6,
+          "x-cybercloud-pointer": "/properties/platform/managedBy"
+        },
+        "namespace": {
+          "default": "",
+          "description": "The resource's own namespace, which is the first component of that same Subnet object's name.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 8,
+          "x-cybercloud-pointer": "/properties/platform/namespace"
+        },
+        "resourceGroup": {
+          "default": "",
+          "description": "Resource group name, rendered into the cybercloud.io/resource-group label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceGroup"
+        },
+        "resourceId": {
+          "default": "",
+          "description": "Resource GUID, rendered into the cybercloud.io/resource-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/resourceId"
+        },
+        "resourceType": {
+          "default": "CyberCloud.Network/virtualNetworks/applicationGateways",
+          "description": "Fully qualified resource type, rendered into the cybercloud.io/resource-type label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "subscriptionId": {
+          "default": "",
+          "description": "Subscription GUID, rendered into the cybercloud.io/subscription-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/subscriptionId"
+        },
+        "tenantId": {
+          "default": "",
+          "description": "Tenant GUID, rendered into the cybercloud.io/tenant-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tenantId"
+        },
+        "virtualNetwork": {
+          "default": "net",
+          "description": "The parent virtual network's name, which is a component of the Subnet object the gateway pod is annotated onto.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 7,
+          "x-cybercloud-pointer": "/properties/platform/virtualNetwork"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 9,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "routingRules": {
+      "default": [
+        "*/=web"
+      ],
+      "description": "Where each request goes, as host/path=pool — for example shop.example.com/api=api, *.example.com/=web or */=web. The host is *, a name, or *. and a suffix; the path is a prefix, matched on whole segments. ⚠ The first rule that matches wins, in the order written. A request no rule matches gets 404.",
+      "examples": [
+        [
+          "shop.example.com/api=api",
+          "*/=web"
+        ]
+      ],
+      "items": {},
+      "type": "array",
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/routingRules"
+    },
+    "sizing": {
+      "additionalProperties": false,
+      "description": "CPU and memory for the proxy and the firewall, each.",
+      "properties": {
+        "preset": {
+          "default": "c1.small",
+          "description": "How much the proxy and the firewall each get. With the firewall on, the firewall is where the CPU goes.",
+          "enum": [
+            "c1.large",
+            "c1.medium",
+            "c1.small"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/sizing/preset",
+          "x-cybercloud-widget": "cozy-preset"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 8,
+      "x-cybercloud-pointer": "/properties/sizing"
+    },
+    "subnet": {
+      "default": "web",
+      "description": "The subnet of this virtual network the gateway sits on. The frontend address below must be inside its range.",
+      "examples": [
+        "web"
+      ],
+      "maxLength": 63,
+      "pattern": "^(?:[a-z0-9]([-a-z0-9]*[a-z0-9])?)$",
+      "type": "string",
+      "x-cybercloud-immutable": true,
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/subnet",
+      "x-cybercloud-widget": "subnet"
+    },
+    "waf": {
+      "additionalProperties": false,
+      "description": "The web application firewall: the OWASP Core Rule Set on Coraza.",
+      "properties": {
+        "crsVersion": {
+          "default": "4.25",
+          "description": "The OWASP Core Rule Set version. ⚠ One is offered: the rule set is compiled into the firewall image, so a second version is a second image.",
+          "enum": [
+            "4.25"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/waf/crsVersion"
+        },
+        "customRules": {
+          "default": [],
+          "description": "Rules evaluated before the rule set, in order: deny or allow, then ip <address or range>, path <prefix>, host <name>, useragent <text> or method <METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. ⚠ allow skips the rule set for that request entirely.",
+          "examples": [
+            [
+              "deny ip 203.0.113.0/24"
+            ]
+          ],
+          "items": {},
+          "type": "array",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/waf/customRules"
+        },
+        "exclusions": {
+          "default": [],
+          "description": "Rules to turn off, as a rule id (942100), a range (942100-942199), or a rule id and one request field it stops inspecting (942100:ARGS:password).",
+          "examples": [
+            [
+              "942100:ARGS:password"
+            ]
+          ],
+          "items": {},
+          "type": "array",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/waf/exclusions"
+        },
+        "mode": {
+          "default": "prevention",
+          "description": "prevention answers 403 to a request the rule set scores as an attack; detection evaluates and logs every rule and blocks nothing; off runs no firewall at all. ⚠ In prevention mode a firewall that does not answer in time is a 503, never a pass.",
+          "enum": [
+            "detection",
+            "off",
+            "prevention"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/waf/mode"
+        },
+        "paranoiaLevel": {
+          "default": 1,
+          "description": "The CRS paranoia level. 1 is the default and blocks little that is legitimate; each level above adds rules and false positives.",
+          "maximum": 4,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/waf/paranoiaLevel"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 6,
+      "x-cybercloud-pointer": "/properties/waf"
+    }
+  },
+  "required": [
+    "backendPools",
+    "routingRules",
+    "subnet"
+  ],
+  "title": "application-gateway chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "application-gateway",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks/applicationGateways"
+}
