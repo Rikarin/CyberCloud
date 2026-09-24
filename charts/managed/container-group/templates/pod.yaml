@@ -1,0 +1,93 @@
+{{/*
+The group's Pod — docs/plan/13 § Container Instances. ContainerGroups.PodJson builds the same object.
+
+⚠ EACH CONTAINER IS ONE `name=image` STRING, split at its first `=`: an array of objects is not
+expressible in the schema this chart is generated from, so what one string carries is what a container
+gets, and everything a pod shares — ports, environment, restart policy, the CPU and memory budget — is
+the group's.
+
+⚠ POD-LEVEL `resources`, requests equal to limits: one budget the containers share, which is what quota
+reserved. Beta and on by default since Kubernetes 1.34.
+*/}}
+{{- $name := include "container-group.objectName" . }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "container-group.selectorLabels" . | nindent 4 }}
+    {{- include "container-group.platformLabels" . | nindent 4 }}
+  {{- $switch := include "container-group.logicalSwitch" . }}
+  {{- if or $switch .Values.network.ipAddress }}
+  annotations:
+    {{- if $switch }}
+    {{/* The join to the tenant network, the annotation a load balancer's proxy pod uses. */}}
+    ovn.kubernetes.io/logical_switch: {{ $switch | quote }}
+    {{- end }}
+    {{- if .Values.network.ipAddress }}
+    {{/* The pinned address, as a load balancer's frontend is pinned. */}}
+    ovn.kubernetes.io/ip_address: {{ .Values.network.ipAddress | quote }}
+    {{- end }}
+  {{- end }}
+spec:
+  restartPolicy: {{ .Values.restartPolicy }}
+  {{/* ⚠ A tenant's workload holds no credential to the cluster it runs in. */}}
+  automountServiceAccountToken: false
+  {{/* ⚠ No variable per Service in the namespace — other resources' addresses the group did not ask for. */}}
+  enableServiceLinks: false
+  {{/* Ten seconds, so a restart — which waits for this pod to be gone — fits one request. */}}
+  terminationGracePeriodSeconds: 10
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  resources:
+    requests:
+      cpu: {{ .Values.cpu | quote }}
+      memory: {{ .Values.memory | quote }}
+    limits:
+      cpu: {{ .Values.cpu | quote }}
+      memory: {{ .Values.memory | quote }}
+  {{- if .Values.registry.password }}
+  {{/* ⚠ NAMED, NOT RENDERED: the reconciler writes `{name}-pull` from the resolved vault handle. */}}
+  imagePullSecrets:
+    - name: {{ printf "%s-pull" $name }}
+  {{- end }}
+  containers:
+    {{- range $index, $spec := .Values.containers }}
+    {{- $parts := splitn "=" 2 $spec }}
+    - name: {{ $parts._0 | quote }}
+      image: {{ $parts._1 | quote }}
+      securityContext:
+        allowPrivilegeEscalation: false
+      {{- if and (eq $index 0) $.Values.command }}
+      command:
+        {{- range $.Values.command }}
+        - {{ . | quote }}
+        {{- end }}
+      {{- end }}
+      {{- if or $.Values.environment $.Values.secureEnvironment }}
+      env:
+        {{- range $.Values.environment }}
+        {{- $pair := splitn "=" 2 . }}
+        - name: {{ $pair._0 | quote }}
+          value: {{ $pair._1 | quote }}
+        {{- end }}
+        {{- range $.Values.secureEnvironment }}
+        {{- $pair := splitn "=" 2 . }}
+        {{/* ⚠ The handle stays in the body; the value is in `{name}-env`, one key per variable. */}}
+        - name: {{ $pair._0 | quote }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ printf "%s-env" $name }}
+              key: {{ $pair._0 | quote }}
+        {{- end }}
+      {{- end }}
+      {{- if and (eq $index 0) $.Values.ports }}
+      ports:
+        {{- range $.Values.ports }}
+        {{- $port := splitn "/" 2 (toString .) }}
+        - containerPort: {{ $port._0 }}
+          protocol: {{ default "TCP" $port._1 }}
+        {{- end }}
+      {{- end }}
+    {{- end }}

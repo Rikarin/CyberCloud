@@ -34,6 +34,7 @@ type Client struct {
 	Cache             *CacheProvider
 	Communication     *CommunicationProvider
 	Compute           *ComputeProvider
+	ContainerInstance *ContainerInstanceProvider
 	ContainerRegistry *ContainerRegistryProvider
 	ContainerService  *ContainerServiceProvider
 	DBforMySQL        *DBforMySQLProvider
@@ -67,6 +68,7 @@ func NewClient(transport Transport) *Client {
 		Cache:             newCacheProvider(transport),
 		Communication:     newCommunicationProvider(transport),
 		Compute:           newComputeProvider(transport),
+		ContainerInstance: newContainerInstanceProvider(transport),
 		ContainerRegistry: newContainerRegistryProvider(transport),
 		ContainerService:  newContainerServiceProvider(transport),
 		DBforMySQL:        newDBforMySQLProvider(transport),
@@ -837,17 +839,19 @@ func (c *MessageTemplateClient) Render(ctx context.Context, tenantID, subscripti
 
 // ComputeProvider holds the resource types of CyberCloud.Compute.
 type ComputeProvider struct {
-	Disks           *ManagedDiskClient
-	Images          *ImageClient
-	VirtualMachines *VirtualMachineClient
+	Disks                   *ManagedDiskClient
+	Images                  *ImageClient
+	VirtualMachineScaleSets *VirtualMachineScaleSetClient
+	VirtualMachines         *VirtualMachineClient
 }
 
 // newComputeProvider builds the group's clients over one transport.
 func newComputeProvider(transport Transport) *ComputeProvider {
 	return &ComputeProvider{
-		Disks:           &ManagedDiskClient{transport: transport},
-		Images:          &ImageClient{transport: transport},
-		VirtualMachines: &VirtualMachineClient{transport: transport},
+		Disks:                   &ManagedDiskClient{transport: transport},
+		Images:                  &ImageClient{transport: transport},
+		VirtualMachineScaleSets: &VirtualMachineScaleSetClient{transport: transport},
+		VirtualMachines:         &VirtualMachineClient{transport: transport},
 	}
 }
 
@@ -929,6 +933,65 @@ func (c *ImageClient) List(tenantID, subscriptionID, resourceGroupName string, o
 	return newPager[ImageResource](c.transport, path, options)
 }
 
+// VirtualMachineScaleSetClient is virtual machine scale sets — CyberCloud.Compute/virtualMachineScaleSets. A set of identical virtual machines on KubeVirt: one size, one image, one subnet and one cloud-init, a capacity quota reserves, a scale action within it, and an upgrade policy that says how running machines take a changed template.
+type VirtualMachineScaleSetClient struct {
+	transport Transport
+}
+
+// Get reads one Virtual machine scale set.
+func (c *VirtualMachineScaleSetClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*VirtualMachineScaleSetResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachineScaleSets/" + segment(resourceName)
+	var result VirtualMachineScaleSetResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Virtual machine scale set. ⚠ Long-running: Wait on the result.
+func (c *VirtualMachineScaleSetClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data VirtualMachineScaleSetData) (*Operation[VirtualMachineScaleSetResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachineScaleSets/" + segment(resourceName)
+	return begin[VirtualMachineScaleSetResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Virtual machine scale set. A merge patch: what is not set is not changed.
+func (c *VirtualMachineScaleSetClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data VirtualMachineScaleSetData) (*Operation[VirtualMachineScaleSetResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachineScaleSets/" + segment(resourceName)
+	return begin[VirtualMachineScaleSetResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Virtual machine scale set. ⚠ Permanent: this type declares no soft-delete window.
+func (c *VirtualMachineScaleSetClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachineScaleSets/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Virtual machine scale sets in a resource group. ⚠ A short page never means "that is all there is".
+func (c *VirtualMachineScaleSetClient) List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[VirtualMachineScaleSetResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachineScaleSets"
+	return newPager[VirtualMachineScaleSetResource](c.transport, path, options)
+}
+
+// ListInstances runs listInstances — permission 'read'.
+func (c *VirtualMachineScaleSetClient) ListInstances(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*VirtualMachineScaleSetListInstancesResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachineScaleSets/" + segment(resourceName) + "/listInstances"
+	var result VirtualMachineScaleSetListInstancesResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Scale runs scale — permission 'write'.
+func (c *VirtualMachineScaleSetClient) Scale(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content VirtualMachineScaleSetScaleContent) (*VirtualMachineScaleSetScaleResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachineScaleSets/" + segment(resourceName) + "/scale"
+	var result VirtualMachineScaleSetScaleResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // VirtualMachineClient is virtual machines — CyberCloud.Compute/virtualMachines. A virtual machine on KubeVirt: a size from the platform catalogue, a root disk cloned from an image, managed disks by name, a tenant subnet, and cloud-init from a vault handle. Start, stop and restart are actions; stop releases compute and keeps every disk.
 type VirtualMachineClient struct {
 	transport Transport
@@ -992,6 +1055,77 @@ func (c *VirtualMachineClient) Start(ctx context.Context, tenantID, subscription
 func (c *VirtualMachineClient) Stop(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*VirtualMachineStopResult, error) {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Compute/virtualMachines/" + segment(resourceName) + "/stop"
 	var result VirtualMachineStopResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ContainerInstanceProvider holds the resource types of CyberCloud.ContainerInstance.
+type ContainerInstanceProvider struct {
+	ContainerGroups *ContainerGroupClient
+}
+
+// newContainerInstanceProvider builds the group's clients over one transport.
+func newContainerInstanceProvider(transport Transport) *ContainerInstanceProvider {
+	return &ContainerInstanceProvider{
+		ContainerGroups: &ContainerGroupClient{transport: transport},
+	}
+}
+
+// ContainerGroupClient is container groups — CyberCloud.ContainerInstance/containerGroups. One or more containers run together as a pod in your resource group: public or private images, a CPU and memory budget they share, environment from vault handles, ports on a subnet and an optional public address, with logs and restart as actions.
+type ContainerGroupClient struct {
+	transport Transport
+}
+
+// Get reads one Container group.
+func (c *ContainerGroupClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*ContainerGroupResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.ContainerInstance/containerGroups/" + segment(resourceName)
+	var result ContainerGroupResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Container group. ⚠ Long-running: Wait on the result.
+func (c *ContainerGroupClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data ContainerGroupData) (*Operation[ContainerGroupResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.ContainerInstance/containerGroups/" + segment(resourceName)
+	return begin[ContainerGroupResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Container group. A merge patch: what is not set is not changed.
+func (c *ContainerGroupClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data ContainerGroupData) (*Operation[ContainerGroupResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.ContainerInstance/containerGroups/" + segment(resourceName)
+	return begin[ContainerGroupResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Container group. ⚠ Permanent: this type declares no soft-delete window.
+func (c *ContainerGroupClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.ContainerInstance/containerGroups/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Container groups in a resource group. ⚠ A short page never means "that is all there is".
+func (c *ContainerGroupClient) List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[ContainerGroupResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.ContainerInstance/containerGroups"
+	return newPager[ContainerGroupResource](c.transport, path, options)
+}
+
+// Logs runs logs — permission 'read'.
+func (c *ContainerGroupClient) Logs(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content ContainerGroupLogsContent) (*ContainerGroupLogsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.ContainerInstance/containerGroups/" + segment(resourceName) + "/logs"
+	var result ContainerGroupLogsResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Restart runs restart — permission 'write'.
+func (c *ContainerGroupClient) Restart(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*ContainerGroupRestartResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.ContainerInstance/containerGroups/" + segment(resourceName) + "/restart"
+	var result ContainerGroupRestartResult
 	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}

@@ -16,9 +16,13 @@ namespace CyberCloud.Providers.Compute.Tests;
 ///     the <c>.csproj</c> so the comparison runs wherever the tests do.
 /// </remarks>
 public sealed partial class ComputeChartDriftTests {
-    [Fact]
-    public void TheChartsSizeTableIsTheCSharpOne() {
-        var helpers = Embedded("virtual-machine.helpers.tpl");
+    [Theory]
+    [InlineData("virtual-machine.helpers.tpl")]
+    [InlineData("virtual-machine-scale-set.helpers.tpl")]
+    public void TheChartsSizeTableIsTheCSharpOne(string chart) {
+        // ⚠ Two charts, one C# table: the scale set's helpers spell the machine's sizes a third time,
+        // because a Helm chart cannot include another chart's helpers without a dependency.
+        var helpers = Embedded(chart);
 
         var cores = Dictionary(helpers, "$cores");
         var memory = Dictionary(helpers, "$memory");
@@ -58,6 +62,21 @@ public sealed partial class ComputeChartDriftTests {
         foreach (var (name, image) in Images.Catalogue) {
             rows[name].ShouldBe(image.Url, $"{name} is pinned to different bytes in the chart and in C#");
         }
+    }
+
+    [Fact]
+    public void TheSetChartsCloudInitSecretIsTheSetsOwnNameAndNotAMachines() {
+        // ⚠ #28's review renamed the set's Secret apart from a machine's (VirtualMachineScaleSets
+        // .CloudInitSecretName); the chart spells the name a second time, and a chart that still said
+        // `{name}-cloud-init` would mount a machine's user data into every instance of a set.
+        var helpers = Embedded("virtual-machine-scale-set.helpers.tpl").Split('\n');
+        var define = Array.FindIndex(helpers, static x => x.Contains("define \"virtual-machine-scale-set.cloudInitSecret\"", StringComparison.Ordinal));
+        define.ShouldBeGreaterThanOrEqualTo(0, "the chart defines no cloudInitSecret helper");
+
+        var format = Regex.Match(helpers[define + 1], "printf \"(?<format>[^\"]+)\"").Groups["format"].Value;
+
+        format.Replace("%s", "web", StringComparison.Ordinal).ShouldBe(VirtualMachineScaleSets.CloudInitSecretName("web"));
+        VirtualMachineScaleSets.CloudInitSecretName("web").ShouldNotBe(VirtualMachines.CloudInitSecretName("web"));
     }
 
     [Fact]

@@ -117,7 +117,20 @@ public sealed class K3sFixture : IAsyncLifetime {
     /// <inheritdoc />
     public async ValueTask DisposeAsync() {
         Raw?.Dispose();
-        await container.DisposeAsync();
+
+        try {
+            await container.DisposeAsync();
+        } catch (Docker.DotNet.DockerApiException ex) when (ex.Message.Contains("is zombie", StringComparison.Ordinal)) {
+            // ⚠ THE NODE CAN OUTLIVE ONE REMOVE, AND THE REAPER TAKES IT. Since a kubelet runs this
+            // collection's pods, a full run of this assembly failed its last step twice in three
+            // (2026-09-24) — every test green, then "PID … is zombie and can not be killed" from Docker
+            // for the k3s container, which xunit reports against every test in the collection. The
+            // container is gone once the process ends: Testcontainers' Ryuk removes what this session
+            // labelled. The same catch is in EmptyClusterFixture, where KVM guests first showed it.
+            TestContext.Current.SendDiagnosticMessage(
+                $"The k3s container was not removed on the first attempt and is left to Testcontainers' reaper: {ex.Message}"
+            );
+        }
     }
 
     /// <summary>

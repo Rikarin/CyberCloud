@@ -251,6 +251,7 @@
     "CyberCloud.Cache",
     "CyberCloud.Communication",
     "CyberCloud.Compute",
+    "CyberCloud.ContainerInstance",
     "CyberCloud.ContainerRegistry",
     "CyberCloud.ContainerService",
     "CyberCloud.DBforMySQL",
@@ -388,6 +389,19 @@
       }
     },
     {
+      "type": "CyberCloud.Compute/virtualMachineScaleSets",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Virtual machine scale set",
+        "plural": "Virtual machine scale sets",
+        "alias": "vmss",
+        "summary": "A set of identical virtual machines on KubeVirt: one size, one image, one subnet and one cloud-init, a capacity quota reserves, a scale action within it, and an upgrade policy that says how running machines take a changed template.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.Compute/virtualMachines",
       "apiVersions": [
         "2026-08-01"
@@ -397,6 +411,19 @@
         "plural": "Virtual machines",
         "alias": "vm",
         "summary": "A virtual machine on KubeVirt: a size from the platform catalogue, a root disk cloned from an image, managed disks by name, a tenant subnet, and cloud-init from a vault handle. Start, stop and restart are actions; stop releases compute and keeps every disk.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.ContainerInstance/containerGroups",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Container group",
+        "plural": "Container groups",
+        "alias": "cg",
+        "summary": "One or more containers run together as a pod in your resource group: public or private images, a CPU and memory budget they share, environment from vault handles, ports on a subnet and an optional public address, with logs and restart as actions.",
         "declared": true
       }
     },

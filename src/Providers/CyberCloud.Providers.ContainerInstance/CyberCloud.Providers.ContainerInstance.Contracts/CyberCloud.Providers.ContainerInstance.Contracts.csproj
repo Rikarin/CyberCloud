@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". Here that is one schema, a container group, and the Pod, the two Secrets and
+      the Kube-OVN floating IP it renders into.
+
+      ⚠ NO GRAIN INTERFACES. A group's desired state is the manager's ResourceGrain like every other
+      resource's, and what looks like state to hold — which pod is the group, what it wrote — is the
+      cluster's: the pod by name, its output through the kubelet.
+
+      ⚠ IT REFERENCES ONLY CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts —
+      the whole reference set docs/plan/03 § The .Contracts split allows a provider — and rule 2 of
+      § Assembly graph rules is why three rules are spelled here a second time rather than referenced:
+      the tenant vault prefix (CyberCloud.Compute's VirtualMachines.TenantVaultPrefix), a subnet's
+      object name (NetworkSubnets.ObjectNameOf) and a public address's (PublicIpAddresses.ObjectNameOf).
+      ContainerGroupSpellingTests compares each pair from a test project, which the rule does not reach.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

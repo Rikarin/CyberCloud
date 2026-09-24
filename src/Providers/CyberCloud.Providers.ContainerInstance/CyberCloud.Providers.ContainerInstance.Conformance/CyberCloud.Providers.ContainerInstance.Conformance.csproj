@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fifth project: "the shared provider conformance suite,
+      parameterised".
+
+      ⚠ IT CONTAINS NO ASSERTIONS ABOUT THE PROVIDER. One case object and two class declarations over
+      test/CyberCloud.Conformance; the one test class here is about the case's shape.
+
+      ⚠ THIS PROJECT IS COUNTED BY THE Labels ARCHITECTURE GATE. Build.Architecture § LabelsGate runs
+      EveryAppliedObjectCarriesTheSevenMandatoryLabelsAndBothAnnotations in every *.Conformance
+      project under src/Providers — and the pod is the object here, so a group's workload carries the
+      seven labels billing attributes it by.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.ContainerInstance/CyberCloud.Providers.ContainerInstance.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

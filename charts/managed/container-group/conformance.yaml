@@ -1,0 +1,201 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.ContainerInstance/containerGroups. This file is
+# data: `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml.
+#
+# ⚠ THE FIRST MANIFEST WHOSE OBJECT A KUBELET RUNS ON THE CLUSTER-BACKED LANE. Every earlier chart's
+# objects are admitted and echoed; this one's pod is pulled, started and read from, and the assertions
+# below that say "Running" or "comes back" are measured rather than predicted.
+
+resourceType: CyberCloud.ContainerInstance/containerGroups
+apiVersion: "2026-08-01"
+chart: container-group
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ ONE POD FROM THE CHART, AND THREE OBJECTS ONLY SOME BODIES RENDER: the secure-environment Secret
+# `{name}-env` and the pull Secret `{name}-pull` — the reconciler's, from resolved vault handles, which a
+# chart must not carry — and the OvnFip, cluster-scoped, when the body names a public address.
+renders:
+  - group: ""
+    version: v1
+    kind: Pod
+    count: 1
+    clusterScoped: false
+  # Only when the body names a secure environment or a registry credential — one each.
+  - group: ""
+    version: v1
+    kind: Secret
+    count: 2
+    clusterScoped: false
+  # Only when the body names network.publicIpAddress.
+  - group: kubeovn.io
+    version: v1
+    kind: OvnFip
+    count: 1
+    clusterScoped: true
+
+# ADR-013 — every rendered object carries all seven labels.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.containerinstance_containergroups
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: a-group-runs-and-its-logs-come-back
+    says: >
+      ⚠ #28's ASSERTION, MEASURED. On a k3s with a kubelet a group whose container writes a line
+      converges on a pod the kubelet reports Running, and `POST …/logs` returns that line — through the
+      resource manager's action dispatcher, ContainerGroupActionHandler and
+      IKubeClusterConnection.ReadLogsAsync, the member this type added, to the pod's `log` subresource.
+      CyberCloud.Providers.ContainerInstance.Cluster.Conformance § ContainerGroupLifecycleConformance,
+      AGroupRunsOnTheNodeAndItsOutputComesBackThroughTheLogsAction.
+  - id: secure-environment-is-a-handle-in-the-body-and-a-value-in-a-secret
+    says: >
+      Each `secureEnvironment` element is NAME=path#field; the reconciler resolves it once per pass,
+      writes the value into `{name}-env` under NAME, and the container reads it through secretKeyRef.
+      The value appears in no body, no grain and no rendered chart — docs/plan/13 § Container Instances,
+      "env from SecretRefs". The cluster-backed test prints the resolved value from inside the
+      container and reads it back through the logs action; ContainerGroupReconcilerTests holds that the
+      pod the platform applied never carries it.
+  - id: a-handle-names-the-tenants-own-vault-and-nothing-else
+    says: >
+      A `secureEnvironment` or `registry.password` handle whose path is not under
+      `tenants/{this tenant}/` is refused with AuthorizationFailed before the resolver is asked — the
+      rule CyberCloud.Compute's cloud-init established, spelled here a second time and held to it by
+      ContainerGroupSpellingTests. Without it a body could put another tenant's credential into a
+      container's environment and print it to its own logs.
+  - id: a-private-image-is-pulled-with-a-minted-secret
+    says: >
+      `registry.server`, `registry.username` and `registry.password` (a vault handle) become one
+      `kubernetes.io/dockerconfigjson` Secret, `{name}-pull`, which the pod names in imagePullSecrets.
+      For a CyberCloud.ContainerRegistry the handle is that registry's own minted credential —
+      `tenants/<tenant>/CyberCloud.ContainerRegistry/registries/<id>#adminPassword`, the value
+      listCredentials hands out — so the existing mint is the path and nothing is minted twice.
+  - id: the-budget-is-the-pods-and-quota-reserves-it
+    says: >
+      `cpu` and `memory` are the pod's own `spec.resources`, requests equal to limits, so the pod is
+      Guaranteed and its containers share one budget; the same two quantities are what QuotaMeter.Vcpu
+      and QuotaMeter.MemoryGb reserve, and billing derives vCPU-hours and GiB-hours from those families
+      as it does for every workload. ⚠ Pod-level resources are beta and on by default since Kubernetes
+      1.34; the cluster-backed test reads them back off the pod the k3s lane ran (1.35.7), qosClass
+      Guaranteed, and a cluster with the gate off drops them and the group never converges.
+  - id: a-changed-group-is-a-replaced-pod
+    says: >
+      A pod's containers, environment and resources cannot be changed in place, so a body that differs
+      from the live pod has the pod deleted and, once it is gone, created again under the same name.
+      A pod still terminating is waited for. ContainerGroupReconcilerTests drives the sequence; the
+      shared suite's update test runs it on both harnesses, because the changed body moves the CPU.
+  - id: restart-replaces-the-pod
+    says: >
+      `POST …/restart` deletes the pod, waits for it to be gone — ten seconds of grace, so it fits one
+      request — and applies the same render under the reconciler's own field manager; the answer
+      carries the old and the new pod uid. On a group with no pod it is refused with
+      OperationInProgress; an action never creates.
+  - id: ports-are-reached-on-the-subnet
+    says: >
+      A group naming a virtual network and a subnet renders `ovn.kubernetes.io/logical_switch:
+      {namespace}-{network}-{subnet}` on its pod — NetworkSubnets.ObjectNameOf's name — and, with
+      `network.ipAddress`, `ovn.kubernetes.io/ip_address`, the pair a load balancer's proxy pod uses;
+      the ports the main container declares are reached at that address. A public address is one
+      OvnFip onto the pod's own Kube-OVN IP object, `{pod}.{namespace}`.
+  - id: converged-follows-the-kubelet
+    says: >
+      A Pending pod is InProgress with the reason a container or the scheduler gave — ErrImagePull and
+      the registry's own sentence, Unschedulable and the scheduler's. Running converges, and so do
+      Succeeded and Failed: a group that ran to its end under Never or OnFailure is where it is meant
+      to stop, with its logs still readable. ⚠ A crash loop converges too, because the pod is placed
+      and holds its budget, and the workload's failure is the workload's; ObserveAsync reports the
+      restart count.
+
+# Meters the type must emit.
+meters:
+  - meter: resources
+    amount: 1
+  - meter: vcpu
+    amount: cpu, in cores
+  - meter: memoryGb
+    amount: memory, in GiB
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────────
+owed:
+  - id: logs-are-a-tail
+    says: >
+      docs/plan/13 wants "logs streamed to the portal". The `logs` action is a tail — the last
+      tailLines lines, at most 5000 and a mebibyte — because an action is one request and one answer
+      and the gateway has no long-lived channel for one. `follow` needs the terminal hub's shape
+      (docs/plan/19) or a server-sent stream on the gateway; neither is built. `previous` (the log of
+      a container's last crash) is one flag on the same read and is not offered yet either.
+  - id: one-command-and-one-environment
+    says: >
+      An array of objects is not expressible in a ResourceSchema, so a container is `name=image` and
+      nothing else: the command is the main container's, a sidecar runs its image's entrypoint, and the
+      environment is the group's, seen by every container. Per-container commands, environments,
+      probes and budgets wait for the api-version that models an array of objects — docs/plan/20's
+      data-table shape.
+  - id: array-elements-are-checked-at-reconcile
+    says: >
+      `containers`, `environment`, `secureEnvironment` and `ports` declare no per-element pattern
+      because `./build.sh Charts` refuses `@pattern` on an `{array}` @param (charts/managed/kafka's
+      `cidr-shape-is-unenforced`). ContainerGroups.BodyProblem checks every element on the first
+      reconcile pass, so a bad element is a 202 followed by a Failed operation naming the property
+      rather than a 400.
+  - id: no-volume
+    says: >
+      docs/plan/13's "an optional volume" is not offered: a group has no claim, no emptyDir a tenant
+      names and no mount. A volume is a CyberCloud.Compute/disks claim or a file share by name, and the
+      join is the reader a same-group resource id needs — the one every family records as missing.
+  - id: runs-as-the-image-says
+    says: >
+      The pod mounts no service-account token, forbids privilege escalation and runs seccomp
+      RuntimeDefault; the user and the capabilities are the image's, because a group runs images a
+      tenant chose and nginx binding 80 as root is the ordinary case. The namespace's Pod Security level
+      is the limit, and the platform labels no tenant namespace with one yet.
+  - id: the-public-address-is-rendered-and-not-routed
+    says: >
+      A public address is an OvnFip onto the pod's own IP object, validated against the kube-ovn
+      definition charts/bundle/crds.sh commits and nothing more: no lane runs Kube-OVN (#95's), so no
+      packet has crossed the translation, and an OvnFip needs the pod on a VPC with an external gateway,
+      which is the NAT gateway's world. The EIP's own meter is the address type's; a group only names it.
+  - id: the-in-cluster-registry-is-not-reachable-from-the-node
+    says: >
+      A CyberCloud.ContainerRegistry's endpoint is `http://{name}.{namespace}.svc:8080` — a Service
+      name the kubelet cannot resolve, because the kubelet pulls from the node's own resolver and not
+      the cluster's, over plain HTTP containerd refuses without a mirror entry. The pull Secret is
+      minted correctly for it; pulling needs the registry's `one-front-door` (charts/managed/harbor
+      § owed) or a node mirror configuration, neither of which is this type's to write.
+  - id: a-rotated-secret-needs-a-restart
+    says: >
+      The containers read `{name}-env` when they start. A vault value that changes reaches the Secret
+      on the next reconcile pass and the containers on their next start — `restart` — not in place.
+  - id: converged-is-not-ready
+    says: >
+      A pod that reads back as applied and carries no status at all converges — the branch the
+      Docker-free harness, with no kubelet, lands on. The k3s lane has a kubelet and never takes it.
+  - id: the-log-read-has-not-crossed-the-grain-on-a-real-cluster
+    says: >
+      The cluster-backed suite reaches the kubelet through RealClusterConnection over KubeApiClient,
+      not through ClusterConnectionGrain.ReadLogsAsync. Each half is proven on its own — the grain's
+      tenancy check and forwarding in-process (ClusterConnectionTenancyTests), the tunnel's `readLogs`
+      spelling (TunnelEndToEndTests), the client against k3s (PreconditionAndLogTests) — and no run has
+      put the three in one path. ⚠ In production the call CROSSES A PROCESS: a synchronous action runs
+      inside ResourceManagerService in the gateway (HostCompositionTests' remarks), and the connection
+      grain is the silo's. The method carries [Alias("ReadLogs")] and every type on it already crosses
+      that boundary in another member (ObjectRef in GetAsync, Result<string> in
+      IManagementGroupGrain.DeleteAsync), but an in-process TestCluster shares one type manifest and
+      would hide a miss, so a `logs` POST through the real hosts against a running group is the closing
+      step — the AppHost lane's, which this batch did not start.
+  - id: grafana-dashboard
+    says: >
+      Seventh sighting of charts/managed/nats' item of the same name. A group's CPU, memory and restarts
+      are the kubelet's cAdvisor metrics; nothing here scrapes or shows them.

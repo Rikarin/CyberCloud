@@ -123,6 +123,26 @@ public sealed class TunnelEndToEndTests {
             && x.Selector == "app=x"
             && x.ResourceVersion == "42"
         );
+
+        var pod = new ObjectRef {
+            Kind = new() { Group = "", Version = "v1", Kind = "Pod", Plural = "pods" },
+            Namespace = "ns",
+            Name = "web",
+        };
+        tunnel.Api.Log = Result<string>.Success("ready\nserving on :80\n");
+        var log = await tunnel.Client.ReadLogsAsync(pod, "main", 50, Ct);
+        log.IsSuccess.ShouldBeTrue(log.Error?.Message);
+        log.GetValueOrThrow().ShouldBe("ready\nserving on :80\n");
+        tunnel.Api.LogReads.ShouldContain(x => x.Pod.Name == "web"
+            && x.Pod.Namespace == "ns"
+            && x.Container == "main"
+            && x.TailLines == 50
+        );
+
+        // A container the kubelet has not started keeps its code across the wire, so the action
+        // answers "not yet" rather than a failure.
+        tunnel.Api.Log = Result<string>.Failure(ErrorCode.OperationInProgress, "waiting to start");
+        (await tunnel.Client.ReadLogsAsync(pod, "main", 50, Ct)).Error!.Code.ShouldBe(ErrorCode.OperationInProgress);
     }
 
     [Fact]

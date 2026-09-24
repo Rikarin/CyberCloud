@@ -50,6 +50,30 @@ none).
 autoscaler in M2: autoscaling a VM pool needs a metric source and a scale-in safety story, and it is
 M3. A fixed-size set is 80 % of the value for 20 % of the risk.
 
+**What landed (#28, 2026-09-23): `CyberCloud.Compute/virtualMachineScaleSets`, on KubeVirt's own
+`VirtualMachinePool`.** The type path is `virtualMachineScaleSets`, Azure's noun, rather than the
+`/scaleSets` above, and it is a root type rather than a machine's child. The pinned KubeVirt serves the
+pool at `pool.kubevirt.io/v1beta1` and stores it there — read off a cluster `charts/bundle/install.sh`
+installed it onto; the row that owed this type had said `v1alpha1` — so the set is one pool, the
+chart `charts/managed/virtual-machine-scale-set`, and the pool's controller does the fan-out: machines
+`{set}-{index}`, each cloning its own `{set}-root-{index}` from the image. The KubeVirt lane asserts
+the pool admitted by the webhook and fanned out with both root disks indexed; Running is reported
+rather than asserted (#95's), and was measured under KVM 51 seconds after the apply on 2026-09-23. The body is a machine's without `dataDisks` (a managed disk is one
+`ReadWriteOnce` claim and a set is N machines) plus `capacity` and an upgrade policy; the schema is
+derived from the machine's, so every reader and the render are the machine's own. ⚠ **The replica
+count is the machine's power state again**: an action cannot change a body, so `scale` writes
+`spec.replicas` on the pool and the reconciler reads it back before every render, clamped to
+`capacity` — the ceiling quota reserves, one machine's size and root disk times the capacity. The
+upgrade policy is rendered rather than recorded: `Manual`, `OnRestart` and `Rolling` are the pool's
+`unmanaged`, `opportunistic` and `proactive` update strategies, `maxUnavailable` bounding the last.
+`listInstances` answers the machines the pool made and KubeVirt's word for each. ⚠ **And the race the
+power state carried is closed** for both types: a reconcile pass's apply carries the
+`resourceVersion` it read (`IKubeCommandBuilder.IfResourceVersion`), so a `start`, `stop` or `scale`
+landing between the read and the apply is not undone — the pass loses as `Stale` and reads again.
+What is owed — capacity-priced quota, per-machine disks and power, autohealing, autoscaling, and a
+machine whose name a set's instance can take — is `charts/managed/virtual-machine-scale-set/conformance.yaml
+§ owed`.
+
 **Live migration** is supported by KubeVirt for maintenance drains and is used by the platform, but is
 not a tenant-facing action. It is an operational capability, not a feature to document and support.
 
@@ -106,10 +130,11 @@ belongs to a tenant is minted outside it. A key vault's root was first minted un
 ([18 § What landed, and what is owed](18-security-vault-and-malware-scan.md)). The mail family's
 DKIM key and Dovecot master password are still inside it, which is owed
 (`charts/managed/mail/conformance.yaml § owed`,
-`the-credentials-sit-inside-the-tenant-vault-prefix`). And the two nouns of #28 this row does
-not land are recorded with what each waits for at `charts/managed/virtual-machine/conformance.yaml
-§ owed` — scale sets are this row's (`scale-sets-are-not-landed`); container instances are the next
-row's, a provider namespace of their own.
+`the-credentials-sit-inside-the-tenant-vault-prefix`). A container group's `secureEnvironment` is a
+second reader of that prefix, and a shorter one than a guest: a container can print what it was
+given and `logs` returns it. The two nouns of #28 this row's first landing did not include were
+recorded as owed and have since landed: scale sets as this row's fourth type (above), container
+instances as the next row's provider namespace.
 
 ## Container Instances — `CyberCloud.ContainerInstance/containerGroups` · M2 · 0.8 EM
 
@@ -120,6 +145,30 @@ optional volume, an optional public IP, and logs streamed to the portal.
 Its value here is disproportionate: it is the provider used to prove the reconciler contract, the
 label discipline, the log-streaming path and the metering hook, in a resource type simple enough that
 a bug is obviously a platform bug.
+
+**What landed (#28, 2026-09-23): `CyberCloud.ContainerInstance/containerGroups`, a family of its own,
+and the first cluster-backed case a kubelet runs.** A group is a `Pod` for every restart policy — the
+pod's own `Never` is the batch job, so no `Job` is rendered — in the tenant's namespace, from
+`charts/managed/container-group`. One or more containers are an array of `name=image` strings, because
+an array of objects is not expressible in a `ResourceSchema`; what a pod shares is the group's: the
+ports, the environment, the restart policy and the CPU and memory, which are the pod's own
+`spec.resources` (beta and on by default since Kubernetes 1.34, kept by the k3s lane, `Guaranteed`) —
+so what quota reserves on `vcpu` and `memoryGb` is what the kubelet enforces, and billing derives
+vCPU-hours and GiB-hours from those families as for every workload. Env from `SecretRef`s is
+`secureEnvironment`, `NAME=path#field`, resolved into a Secret the containers read and refused outside
+the tenant's own vault prefix before the resolver is asked — the rule the machines' cloud-init
+established. A private image is pulled with a `kubernetes.io/dockerconfigjson` Secret minted from a
+vault handle, which for a `CyberCloud.ContainerRegistry` is that registry's own credential. Ports are
+reached on a tenant subnet through the annotations a load balancer's proxy uses, at a pinned address
+if the body names one, and a public address is one Kube-OVN `OvnFip` onto the pod's own IP object.
+⚠ **The log-streaming path is a tail, and it is new platform surface.** `IKubeClusterConnection
+.ReadLogsAsync` reads the pod's `log` subresource through the connection grain, bounded to 5 000
+lines and a mebibyte; the `logs` action answers it, and `restart` replaces the pod. The cluster-backed
+suite runs a group on a real kubelet and reads its line — and a vault-resolved value printed from
+inside the container — back through the `logs` action, restarts it, and reads it again. What is owed —
+streaming, per-container commands and environments, a volume, the public address
+routed on a real fabric, and the in-cluster registry's reachability from the node — is
+`charts/managed/container-group/conformance.yaml § owed`.
 
 ## Container Apps — `CyberCloud.App/containerApps` · M3 · 2.5 EM
 

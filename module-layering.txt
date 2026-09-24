@@ -407,6 +407,17 @@ CyberCloud.Providers.Compute -> CyberCloud.Core
 CyberCloud.Providers.Compute -> CyberCloud.Kubernetes
 CyberCloud.Providers.Compute -> CyberCloud.ResourceManager
 CyberCloud.Providers.Compute -> CyberCloud.Tenancy
+# ⚠ THE SAME FOUR FOR CyberCloud.Providers.ContainerInstance, AND IT SPELLS THREE OTHER FAMILIES'
+# RULES RATHER THAN TAKING A FIFTH. A container group joins a subnet (NetworkSubnets.ObjectNameOf's
+# name), translates a public address onto itself (PublicIpAddresses.ObjectNameOf's) and resolves vault
+# handles under the tenant prefix CyberCloud.Compute's machines established; each is spelled again in
+# ContainerGroups and held to its owner by ContainerGroupSpellingTests, a test project rule 2 does not
+# reach. What it added below the line is a member, not an edge: IKubeClusterConnection.ReadLogsAsync,
+# which is CyberCloud.Kubernetes' and arrives through the edge every cluster provider already has.
+CyberCloud.Providers.ContainerInstance -> CyberCloud.Core
+CyberCloud.Providers.ContainerInstance -> CyberCloud.Kubernetes
+CyberCloud.Providers.ContainerInstance -> CyberCloud.ResourceManager
+CyberCloud.Providers.ContainerInstance -> CyberCloud.Tenancy
 CyberCloud.Providers.Communication -> CyberCloud.Communication
 CyberCloud.Providers.Communication -> CyberCloud.Core
 CyberCloud.Providers.Communication -> CyberCloud.ResourceManager

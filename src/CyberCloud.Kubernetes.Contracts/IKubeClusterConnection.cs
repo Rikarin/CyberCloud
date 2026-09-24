@@ -312,4 +312,58 @@ public interface IKubeClusterConnection {
                 + "shell that accepts keystrokes into nothing is worse than one that is closed."
             )
         );
+
+    /// <summary>
+    ///     The last lines one container of a pod wrote, as the kubelet keeps them.
+    /// </summary>
+    /// <param name="pod">The pod. Its kind is <c>v1/Pod</c> and it is namespaced.</param>
+    /// <param name="container">The container, or empty for the pod's only one.</param>
+    /// <param name="tailLines">How many lines from the end; at least one.</param>
+    /// <param name="cancellationToken">The caller's budget.</param>
+    /// <returns>
+    ///     The text, possibly empty for a container that has written nothing; or
+    ///     <see cref="ErrorCode.ResourceNotFound" /> for a pod that is not there, and
+    ///     <see cref="ErrorCode.OperationInProgress" /> for a container the kubelet has not started
+    ///     yet — the API server's <c>400</c> "is waiting to start", which a caller retries.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             THE FIRST MEMBER HERE THAT READS SOMETHING WHICH IS NOT AN OBJECT, AND IT WAS
+    ///             ADDED BY docs/plan/13 § Container Instances.
+    ///         </b> That row calls a container group
+    ///         "the provider used to prove … the log-streaming path", and until it landed nothing in
+    ///         this tree could read a line a tenant's workload wrote: every other member addresses the
+    ///         API server's objects, and a log is the kubelet's, served through the pod's <c>log</c>
+    ///         subresource. <c>CyberCloud.ContainerInstance/containerGroups</c>' <c>logs</c> action is
+    ///         the caller.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A tail, not a stream.</b> An action is one request and one answer, so what crosses
+    ///         here is a bounded read — the last <paramref name="tailLines" /> lines, capped in bytes by
+    ///         the implementation — and <c>follow</c> is not offered. Streaming to the portal needs a
+    ///         long-lived channel the gateway does not have for actions;
+    ///         <c>charts/managed/container-group/conformance.yaml § owed</c>, <c>logs-are-a-tail</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Fails by default</b>, for the reason every read-shaped member here does: a double
+    ///         that answered an empty string would report a container that wrote nothing, which is a
+    ///         claim about the workload rather than the absence of one.
+    ///     </para>
+    /// </remarks>
+    Task<Result<string>> ReadLogsAsync(
+        ObjectRef pod,
+        string container,
+        int tailLines,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<string>.Failure(
+                ErrorCode.InternalError,
+                $"This cluster connection ({GetType().Name}) cannot read the logs of '{pod}' on cluster "
+                + $"{ClusterId:D}. It fails rather than answering an empty log, which would say the "
+                + "container wrote nothing."
+            )
+        );
 }

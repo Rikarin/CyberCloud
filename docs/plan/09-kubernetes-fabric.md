@@ -316,6 +316,40 @@ one provider, so a cross-provider case has no fixture today — the same gap as 
 test's side. In one line: #89 answers "a second writer on an object this tenant owns", #30 needs "a
 reader of resources this provider does not", and neither design constrains the other.
 
+### An ordinary apply that carries what it read — `IfResourceVersion`
+
+The ordinary apply is last-writer-wins by design, because a reconciler's document is a pure function
+of the desired body. Two types render a value they **read off the object** instead — a virtual
+machine's `spec.runStrategy` and a scale set's `spec.replicas`, each moved by an action because an
+action cannot change a body — and for them last-writer-wins was a bug: a `stop` or a `scale` landing
+between a pass's read and its apply was undone by the pass. `IKubeCommandBuilder.IfResourceVersion`
+(#28, 2026-09-23) puts the version the render was computed from into `metadata.resourceVersion`,
+after the reconcile hash is taken, and the co-owned mode's two measurements carry over unchanged: a
+moved object refuses the apply with the optimistic lock's `409`, which `KubeApiClient` already reports
+as `ApplyResult.Stale`, and an absent object is created regardless, so the precondition guards a read
+that found something and an empty version is the honest spelling of one that did not. Refused in the
+co-owned mode, which carries its own. Against k3s:
+`PreconditionAndLogTests.AnApplyCarryingAVersionTheObjectMovedPastIsStaleAndWritesNothing`.
+
+### Reading what a workload wrote — `ReadLogsAsync`
+
+`IKubeClusterConnection.ReadLogsAsync` (#28, `CyberCloud.ContainerInstance/containerGroups`' `logs`
+action) is the first member that reads something which is not an object: a pod's `log` subresource,
+through the connection grain behind its tenancy check, as a bounded tail — at most the lines asked for
+and a mebibyte — never a stream, because an action is one request and one answer. A container the
+kubelet has not started answers `OperationInProgress`, a pod that is not there `ResourceNotFound`.
+⚠ The API server says neither in so many words for two of the "not yet" cases, measured on
+2026-09-24: an unscheduled pod's log is an empty `200`, and a pod its kubelet has not synced is the
+kubelet's `404` passed through. `KubeApiClient` reads the pod once more on either answer, so an empty
+log means a container that wrote nothing and a `ResourceNotFound` means a pod the API server has no
+record of — `PreconditionAndLogTests.AnUnscheduledPodsLogIsNotYetRatherThanEmpty` and
+`APodWhoseNodeAnswersNotFoundIsNotYetRatherThanGone`.
+Like every read-shaped member it fails by default. The agent tunnel carries it as its eighth
+operation, `readLogs` — one request and one bounded answer, the shape `get` already has, so it needs
+none of the streaming frame a watch is owed. Against k3s:
+`PreconditionAndLogTests.ARunningPodsLogIsReadBackThroughTheKubelet`; across the tunnel:
+`TunnelEndToEndTests.TheWireHasASpellingForEveryUnaryMemberOfTheClient`.
+
 ## Observing: informers, not polling
 
 Each connection grain runs shared informers for the GVKs its tenant's resources use, filtered by

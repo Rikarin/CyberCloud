@@ -120,42 +120,9 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
         // here is what turns that into a message naming the image and its phase. It is also what
         // keeps the conformance suites honest rather than what they need: a harness with no image
         // object takes the absent branch and lands where every other type does.
-        var image = await cluster.GetAsync(
-            Images.DataVolumeRef(ns, VirtualMachines.Image(context.Desired)),
-            cancellationToken
-        );
-
-        if (image.TryGetError(out var imageError) && imageError.Code != ErrorCode.ResourceNotFound) {
-            return ReconcileOutcome.FromFailure(imageError);
-        }
-
-        var imagePhase = image.IsSuccess ? Cdi.Phase(image.GetValueOrThrow().Json) : Cdi.Succeeded;
-
-        if (!Cdi.IsPopulated(imagePhase)) {
-            if (imagePhase == Cdi.Failed) {
-                // ⚠ Terminal, because `image` is immutable: a machine whose image failed cannot be
-                // pointed at another by a PUT, so a retry would spin forever on a body the tenant
-                // cannot mend. Failed says "delete this and create it against an image that imported".
-                return ReconcileOutcome.Failed(
-                    ErrorCode.ProvisioningFailed,
-                    $"the image '{VirtualMachines.Image(context.Desired)}' failed to import"
-                    + Detail(Cdi.Detail(image.GetValueOrThrow().Json))
-                    + ", so there is nothing for the root disk to clone. Replace the image and create "
-                    + "the machine again; its image cannot be changed in place."
-                );
-            }
-
-            context.Log.Report(
-                "waiting-for-image",
-                $"the image '{VirtualMachines.Image(context.Desired)}' is {Phase(imagePhase)}",
-                15
-            );
-
-            return ReconcileOutcome.InProgress(
-                $"the image '{VirtualMachines.Image(context.Desired)}' is {Phase(imagePhase)} and the root "
-                + "disk clones it once it has imported",
-                TimeSpan.FromSeconds(15)
-            );
+        if (await ImageGate.WaitForAsync(context, cluster, VirtualMachines.Image(context.Desired), "machine", cancellationToken)
+            is { } waiting) {
+            return waiting;
         }
 
         // ── The power state, read off the object before anything is rendered ───────────────────
@@ -168,6 +135,14 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
         var runStrategy = existing.IsSuccess
             ? VirtualMachines.RunStrategyOf(existing.GetValueOrThrow().Json)
             : string.Empty;
+
+        // ⚠ THE VERSION THE RUN STRATEGY WAS READ AT, AND THE APPLY BELOW IS CONDITIONAL ON IT. A
+        // start or stop that lands between this read and that apply moves the object, the apply is
+        // refused as Stale with nothing written, and the pass ends InProgress to read again — so the
+        // pass can no longer write back a power state the action just replaced. Empty for a machine
+        // that is not there yet, because the API server does not hold the lock against an absent
+        // object and there is no action to race: an action never creates.
+        var readVersion = existing.IsSuccess ? existing.GetValueOrThrow().ResourceVersion : string.Empty;
 
         if (runStrategy.Length == 0) {
             runStrategy = VirtualMachines.RunAlways;
@@ -230,7 +205,8 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
                 VirtualMachines.VirtualMachineKind,
                 VirtualMachines.VirtualMachineJson(ns, name, context.Desired, runStrategy),
                 cancellationToken,
-                true
+                true,
+                readVersion
             ) is { } problem) {
             return problem;
         }
@@ -415,13 +391,49 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
     ///     template and its root-disk template, so the launcher pod and the root claim are attributable
     ///     — ADR-013 on the objects KubeVirt derives from ours.
     /// </remarks>
-    static async Task<ReconcileOutcome?> Apply(
+    static Task<ReconcileOutcome?> Apply(
         ReconcileContext context,
         IKubeClusterConnection cluster,
         GroupVersionKind kind,
         string objectJson,
         CancellationToken cancellationToken,
-        bool templates = false
+        bool templates = false,
+        string readVersion = ""
+    ) =>
+        ApplyAsync(
+            context,
+            cluster,
+            kind,
+            objectJson,
+            templates ? [PodTemplatePath, RootDiskTemplatePath] : [],
+            readVersion,
+            cancellationToken
+        );
+
+    /// <summary>Applies one object for a Compute reconciler, or answers the outcome that ends the pass.</summary>
+    /// <param name="context">The pass.</param>
+    /// <param name="cluster">The pass's cluster.</param>
+    /// <param name="kind">The object's kind.</param>
+    /// <param name="objectJson">The rendered object.</param>
+    /// <param name="templatePaths">Nested templates the platform's labels are stamped into.</param>
+    /// <param name="readVersion">
+    ///     The version a value in the render was read at — <see cref="IKubeCommandBuilder.IfResourceVersion" />
+    ///     — or empty for an unconditional apply.
+    /// </param>
+    /// <param name="cancellationToken">The pass's token.</param>
+    /// <remarks>
+    ///     Shared by the machine's and the scale set's reconciler, because the branches are a policy —
+    ///     suspended, owned by somebody else, moved under the read — and both types read a value off
+    ///     their object before rendering it.
+    /// </remarks>
+    internal static async Task<ReconcileOutcome?> ApplyAsync(
+        ReconcileContext context,
+        IKubeClusterConnection cluster,
+        GroupVersionKind kind,
+        string objectJson,
+        string[] templatePaths,
+        string readVersion,
+        CancellationToken cancellationToken
     ) {
         var command = KubeCommand.For(cluster)
             .WithTenantId(context.Id.TenantId)
@@ -429,10 +441,11 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
             .InNamespace(context.Namespace)
             .WithKind(kind)
             .WithApiVersion(context.ApiVersion)
+            .IfResourceVersion(readVersion)
             .ObjectJson(objectJson);
 
-        if (templates) {
-            command = command.WithTemplateLabels(PodTemplatePath, RootDiskTemplatePath);
+        if (templatePaths.Length > 0) {
+            command = command.WithTemplateLabels(templatePaths);
         }
 
         var applied = await command.ApplyAsync(cancellationToken);
@@ -463,6 +476,19 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
                     ?? $"another field manager owns part of the {kind.Kind} and it was not overwritten",
                     TimeSpan.FromSeconds(30)
                 );
+
+            case ApplyResult.Stale:
+                // ⚠ AN ACTION LANDED BETWEEN THIS PASS'S READ AND ITS APPLY — a start, a stop, a
+                // scale — and nothing was written. The next pass reads what the action left and
+                // renders that, which is the whole of power-state-can-lose-a-race's fix; retrying
+                // soon rather than in thirty seconds because nothing here is waiting on anybody.
+                context.Log.Report("moved", outcome.Message);
+
+                return ReconcileOutcome.InProgress(
+                    $"the {kind.Kind} moved between this pass's read and its apply — an action changed it — "
+                    + "and nothing was written; the next pass reads it again",
+                    TimeSpan.FromSeconds(2)
+                );
         }
 
         return null;
@@ -473,8 +499,4 @@ public sealed class VirtualMachineReconciler(IClock clock) : IResourceReconciler
 
     /// <summary>Where the root-disk template sits, for <c>WithTemplateLabels</c>.</summary>
     public const string RootDiskTemplatePath = "spec/dataVolumeTemplates";
-
-    static string Phase(string phase) => phase.Length == 0 ? "not yet reported on by CDI" : phase;
-
-    static string Detail(string detail) => detail.Length == 0 ? string.Empty : $" ({detail})";
 }

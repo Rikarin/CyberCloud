@@ -91,19 +91,20 @@ Architecture`'s **Generated surfaces** gate regenerates every surface from the p
 compares bytes, which is what makes "and drift fails the build" a fact rather than an intention:
 
 ```text
-✔ Generated surfaces  Enforced  44 resource type(s) over 2 OpenAPI document(s), 14 derived file(s) —
+✔ Generated surfaces  Enforced  46 resource type(s) over 2 OpenAPI document(s), 14 derived file(s) —
   the cyc verb tree, the .NET SDK, the portal forms, and the Python and Go SDKs (#40) — and 6 file(s)
   of the portal's TypeScript client, all regenerated and compared byte-for-byte
-✔ Generated SDK compiles  Enforced  1 api-version file(s) declaring 390 type(s), each compiled on its
-  own against CyberCloud.Sdk — 301 partial member(s) accepted as declared-but-not-implemented
+✔ Generated SDK compiles  Enforced  1 api-version file(s) declaring 566 type(s), each compiled on its
+  own against CyberCloud.Sdk — 408 partial member(s) accepted as declared-but-not-implemented
 ```
 
 ⚠ **The second line read "251 type(s) … 176 partial member(s)" from 2026-09-15 until #39, and the jump is
 not #39's.** That line was quoted from #40's run and no merge after it re-read the gate, while eighteen
 resource types landed; the tree #39 branched from already declared 383 types and 294 partial members.
 `Resources/deployments` adds seven of each — a collection, its data, its resource, two property bags
-and the what-if's content and result; get, get by name, list, create, update, delete and what-if —
-and the figures above are re-read from the run of 2026-09-24.
+and the what-if's content and result; get, get by name, list, create, update, delete and what-if. Both
+figures above are re-read from the run on the merge of #28's scale sets and container groups into
+master (2026-09-24), not carried over from either side of it.
 
 ⚠ **The second gate is younger than the first and exists because the first was not enough** (#73): a
 byte-comparison proves the emitter is deterministic and proves nothing about whether what it emitted is
@@ -258,7 +259,7 @@ target scale.
 | Group | Items | EM | Issue | Landed |
 |---|---|---|---|---|
 | Data | FerretDB, RabbitMQ, Kafka, ClickHouse | 4.4 | — | ✅ **SHIPPED AHEAD OF PHASE 3 — all four, and the whole row.** `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, every one published with a provider, a chart and a conformance suite. ⚠ The 4.4 is [12 § Effort](12-managed-data-services.md)'s four M2 lines exactly — 1.2 + 0.8 + 1.2 + 1.2 — so the whole of it is spent, not part |
-| Compute | VMs + disks + images, scale sets, container instances | 3.8 | #28 | ◐ `Compute/virtualMachines`, `Compute/disks` and `Compute/images` published (#28, 2026-09-17) on KubeVirt and CDI, with the charts under `charts/managed/virtual-machine`, `charts/managed/disk` and `charts/managed/image` — the VM noun of [13 § Virtual Machines](13-compute-vm-containers.md): a size from a closed set that is what the guest gets and what quota reserves, a root disk cloned from an image in the same resource group, disks by name, a subnet by the Network family's own object name, cloud-init as a vault handle, and `start`/`stop`/`restart` as the first handlers in the tree that write a cluster. ⚠ **The first three nouns of five, and the first family whose webhook half is measured rather than owed**: `CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance § KubeVirtOnAnEmptyCluster` installs CDI and KubeVirt through `install.sh`, imports an image, provisions a disk and applies a machine that attaches it against the real webhooks — on every merge in the `Cluster` lane of `Test`, never on a PR, for the eight minutes it costs — and the guest reports `Running` under KVM in 46 seconds with the disk populated and mounted, on the k3s-in-Docker lane #95 said had no `/dev/kvm` (it has: WSL2 nests virtualization and the k3s container is privileged). What is not reached is the guest itself — console, cloud-init, the disk inside — `charts/managed/virtual-machine/conformance.yaml § owed`, `the-guest-is-not-reached`; and a cloud-init handle may name only the tenant's own vault prefix, which the review of #28 found nothing enforcing. Scale sets and container instances are not types; `charts/managed/virtual-machine/conformance.yaml § owed`, `scale-sets-are-not-landed` and `container-instances-are-not-landed`, say what each waits for. ⚠ The 3.8 is the row's whole price and no EM is claimed: doc 13 prices the VM noun at 3.0 and what landed is its core |
+| Compute | VMs + disks + images, scale sets, container instances | 3.8 | #28 | ✅ `Compute/virtualMachines`, `Compute/disks` and `Compute/images` published (#28, 2026-09-17) on KubeVirt and CDI, with the charts under `charts/managed/virtual-machine`, `charts/managed/disk` and `charts/managed/image` — the VM noun of [13 § Virtual Machines](13-compute-vm-containers.md): a size from a closed set that is what the guest gets and what quota reserves, a root disk cloned from an image in the same resource group, disks by name, a subnet by the Network family's own object name, cloud-init as a vault handle, and `start`/`stop`/`restart` as the first handlers in the tree that write a cluster. ⚠ **The first three nouns of five, and the first family whose webhook half is measured rather than owed**: `CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance § KubeVirtOnAnEmptyCluster` installs CDI and KubeVirt through `install.sh`, imports an image, provisions a disk and applies a machine that attaches it against the real webhooks — on every merge in the `Cluster` lane of `Test`, never on a PR, for the eight minutes it costs — and the guest reports `Running` under KVM in 46 seconds with the disk populated and mounted, on the k3s-in-Docker lane #95 said had no `/dev/kvm` (it has: WSL2 nests virtualization and the k3s container is privileged). What is not reached is the guest itself — console, cloud-init, the disk inside — `charts/managed/virtual-machine/conformance.yaml § owed`, `the-guest-is-not-reached`; and a cloud-init handle may name only the tenant's own vault prefix, which the review of #28 found nothing enforcing. ⚠ **The last two nouns landed on 2026-09-23 (#28)**: `Compute/virtualMachineScaleSets`, a KubeVirt `VirtualMachinePool` (`pool.kubevirt.io/v1beta1` at the pin, read off the cluster) admitted by KubeVirt's webhook on the same lane, with the replica count on the pool beside `capacity` as its ceiling and the upgrade policy rendered as the pool's own update strategy; and `ContainerInstance/containerGroups`, a family of its own — one or more containers as one pod, run on the k3s lane's kubelet, whose `logs` action reads the container's output back through a new `IKubeClusterConnection.ReadLogsAsync`. The power-state race the first landing owed is closed by a `resourceVersion` precondition on `KubeCommand`. What each still owes is its chart's `conformance.yaml § owed`; guests Running on a real fleet stay #95's |
 | Registry | NuGet/npm/Maven feeds | 1.5 | #29 | ◐ `ContainerRegistry/feeds` published (#29, 2026-09-15) with `CyberCloud.Registry.Feeds.Host` serving NuGet v3, npm and Maven over the gateway's bearer tokens, artefacts on the platform's object store, the catalogue in a durable grain. ⚠ The *host* third of [13](13-compute-vm-containers.md)'s "proxy + host + retention"; proxy and retention are not declared, and both are owed at `charts/managed/feeds/conformance.yaml § owed`, together with the two meters the row must emit and does not |
 | Storage | File shares, backup vaults, customer-managed keys | 3.0 | #30 | ◐ `Storage/accounts/fileShares` published (#30, 2026-09-15) with the chart under `charts/managed/seaweedfs-fileshare` — a `ReadWriteMany` claim the SeaweedFS CSI driver binds against the account's filer. ⚠ **The first noun of three, and a correction to [15](15-storage-blob-file.md) came with it:** the engine serves no NFS, so the pod half ships and the VM half is owed. Backup vaults are published as `RecoveryServices/vaults` (2026-09-18) and, since 2026-09-24, protect end to end: a PostgreSQL server archives to a bucket of its own on the platform's object store with a vault-held key, `backupNow` takes a point, `recover` creates a new server resource as the caller, and a manager-started pass enforces retention — proven on a real k3s with CloudNativePG and SeaweedFS ([08](08-resource-manager.md) § The manager-started pass, [15](15-storage-blob-file.md) § Backup as a service). Customer-managed keys stay owed (`charts/managed/seaweedfs/conformance.yaml` § owed, `customer-managed-keys`). The same pass took `buckets`' `stats` action off `actions-without-handlers.txt`. ⚠ The k3s-backed lifecycle and silo-kill suites for all three Storage types first ran green on a real API server on 2026-09-15, after #30's review found them skipped on every machine that had tried — the harness now starts k3s 1.35 on a cgroup v1 Docker host — and the first real run found two defects the fake could not: the API server respells a claim's request (`102400Mi` → `100Gi`) and a shared driver cannot pass "delete → gone" with a sibling left behind |
 | Network | Application gateway + WAF, NAT, peering, flow logs | 3.6 | #31 | ◐ `Network/virtualNetworks/natGateways` published (#31, 2026-09-15), on the router's own `OvnSnatRule` naming the address `publicIpAddresses` already renders rather than on the `VpcNatGateway` pod [14](14-networking.md) names — and it is the first thing on the platform that attaches a public address to anything. ⚠ **`Network/virtualNetworks/peerings` published (#31, 2026-09-18), on #89's co-owned apply — the first type in the tree that owns no object.** A Kube-OVN peering is two entries on two `Vpc` specs, both atomic lists (the `routeTables` refusal, twice over), and the type writes each network's half as a fragment under one manager named for that network ([09 § A second writer on an object](09-kubernetes-fabric.md)): the networks' labels stay, teardown withdraws and both networks stand, the live `resourceVersion` makes two peerings racing onto one `Vpc` lose loudly. The body is the remote network's name — in the same resource group, for an authorization reason rather than a schema one — and three ranges the reconciler refuses terminally when any two overlap. The shared Docker-free suite grew the co-writer's reading of its ownership assertions (a fake that models the second manager, a world put back after every reset, drift as a slice stripped by hand) and runs the peering at the network's exact count; the cluster-backed half runs a dedicated class on the real k3s, where the co-writer manager reads back off `managedFields`. ⚠ **What is proven is the write and not the routing**: no harness here has a Kube-OVN controller, so the peer ports and the routes wait for the VM lane (#95) — `charts/managed/kube-ovn-vpc-peering/conformance.yaml § owed`, `routing-is-unproven-until-the-vm-lane`, with the rest of what is still owed about peering beside it. ⚠ **#31 stays open: two nouns of four landed, and the other two are owed rows rather than a sentence.** Application gateway + WAF is measured and owed at `charts/managed/haproxy/conformance.yaml § owed`, `application-gateway-is-not-an-http-mode-of-this-proxy` — the L7 controller is not in `charts/bundle` at all, so its first deliverable is a bundle component and [ADR-019](02-technology-decisions.md)'s comparison, not a chart. Flow logs are measured and owed at `charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `flow-logs-have-nothing-to-render` — the bundle installs no Cilium and so no Hubble, the substrate's CRDs export no flow, and [01](01-azure-parity-catalogue.md) files the deliverable under `CyberCloud.Monitor` at M3 rather than here. ⚠ The 3.6 is [14 § Effort](14-networking.md)'s 2.0 + 0.8 + 0.8; what landed is the whole of the 0.8 `NAT gateways, peering` line, and that 0.8 is claimed below — the other two lines are not |
@@ -302,19 +303,23 @@ other — see [§ Running total](#running-total), which is where the consequence
 production behind NAT; the first managed mail domain sending with a clean reputation for 30 days;
 median time-to-add-a-managed-service measured and ≤ 2 engineer-weeks.
 
-⚠ **On "28 resource types": there are 44 today**, and twenty-two of them are this phase's — the `Data`
-row's four, `Mail/domains` and `Mail/domains/mailboxes`, the `Communication` row's four, `Monitor/workspaces/alertRules`, the
+⚠ **On "28 resource types": there are 46 today**, and twenty-seven of them are this phase's — the `Data`
+row's four, `Mail/domains`, the `Communication` row's four, `Monitor/workspaces/alertRules`, the
 four that merged on 2026-09-15 from four branches that each counted only itself
 (`Storage/accounts/fileShares`, `Network/virtualNetworks/natGateways`,
 `ContainerService/connectedClusters` and `ContainerRegistry/feeds`), the seven that merged on
 2026-09-18 from five branches that each counted only itself again (`Network/virtualNetworks/peerings`,
 `RecoveryServices/vaults`, `Monitor/workspaces/collectors`, `Dashboard/grafanas`,
-`Compute/virtualMachines`, `Compute/disks`, `Compute/images`), and `Resources/deployments` (#39) and `Billing/budgets` (#38) `Monitor/workspaces/components` (#32) and `Mail/domains/mailboxes` (#34) on 2026-09-23,
-each recounted in the same change. The other
-eighteen are counted, phase by phase, in [§ What has landed](#what-has-landed--recounted-2026-09-23) —
-which is also where to see that two of the 44 belong to phase 4 and one is phase 1's deliberately
+`Compute/virtualMachines`, `Compute/disks`, `Compute/images`), the four of 2026-09-23
+(`Resources/deployments` from #39, `Billing/budgets` from #38, `Monitor/workspaces/components` from #32
+and `Mail/domains/mailboxes` from #34), and the two #28 merged last on 2026-09-24
+(`Compute/virtualMachineScaleSets`, `ContainerInstance/containerGroups`) — 4 + 1 + 4 + 1 + 4 + 7 + 4 +
+2, summed when #28's review merged it, because master's own sentence had said twenty-two over a table
+row of twenty-five. The other
+nineteen are counted, phase by phase, in [§ What has landed](#what-has-landed--recounted-2026-09-23) —
+which is also where to see that two of the 46 belong to phase 4 and one is phase 1's deliberately
 trivial sample. ⚠ **The count passed the criterion and the criterion is not met**: "28 resource
-types" was written as a proxy for a catalogue, fifteen of the 44 are children of families, and the
+types" was written as a proxy for a catalogue, fifteen of the 46 are children of families, and the
 rows that reached the number are each one noun of several. Read the exit off the rows, not the
 total.
 
@@ -427,11 +432,10 @@ master that had 23 — the merge took none of their numbers and re-ran the comma
 the merge of 2026-09-18 landed seven more from five branches (#31, #30, #32, #28 — Compute's three
 on one branch), each of which had recounted itself against a master that had 32 — the merge took
 none of their numbers and re-ran the command a second time; 39 was right until #39 published
-`Resources/deployments` on 2026-09-23, recounting in the same change; 40 was right until `KeyVault/vaults`
-(#30), `Billing/budgets` (#38), `Monitor/workspaces/components` (#32) and `Mail/domains/mailboxes` (#34)
-merged. Each added its row to the table below and none moved the **Total**, the command's output or the
-gate line, so master read 40 over rows that sum to 44 and `RoadmapReconciliationTests` was red on it. The
-merge of master into #22 on 2026-09-24 re-ran the command; 44 is right. That is worth *establishing* rather than
+`Resources/deployments` on 2026-09-23, recounting in the same change, and #38, #32 and #34 published
+three more beside it. #28's scale sets and container groups recounted themselves to 41 on their own
+branch against a master that had 39, and master had moved on without them — so the merge of that
+branch took neither side's number and re-ran the command, and 46 is its answer. That is worth *establishing* rather than
 assuming, and it is cheap to establish twice because two independent producers can be asked for it.
 
 ⚠ **#38 and #46 (`issue-46-policy`) conflict textually in seven files when merged**, counted by
@@ -473,7 +477,7 @@ The document, read directly:
 ```console
 $ grep -o '"x-cybercloud-resource-type": "[^"]*"' openapi/2026-08-01.json \
     | sed 's/.*: "//;s/"$//' | sort -u | wc -l
-44
+46
 ```
 
 and the build, from the other end — `./build.sh Architecture`'s **Generated surfaces** gate regenerates
@@ -481,7 +485,7 @@ every surface from `src/CyberCloud.ResourceManager/Registry/` and compares bytes
 registry's rather than the document's:
 
 ```text
-✔ Generated surfaces  Enforced  44 resource type(s) over 2 OpenAPI document(s), …
+✔ Generated surfaces  Enforced  46 resource type(s) over 2 OpenAPI document(s), …
 ```
 
 ⚠ **What would make this stale, said plainly so it can be checked rather than trusted:** any provider's
@@ -509,7 +513,7 @@ only.** No EM figure anywhere in this document is machine-checked — not a phas
 the 69.6–89.1 — and the test cannot see the `Landed` column's *judgement* at all. The date in this
 heading is still what says when a person last read the rest.
 
-All 44, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
+All 46, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
 prefix dropped, because this table is machine-checked** — `RoadmapReconciliationTests` reads it and the
 published document and asserts the two sets are equal, so an abbreviated `…/subnets` would be a name no
 test could match and the check would quietly become a check of nothing.
@@ -518,9 +522,9 @@ test could match and the check would quietly become a check of nothing.
 |---|---|---|
 | 1 — the deliberately trivial provider of exit criterion 1 | `Sample/widgets` | 1 |
 | 2 — M1 | `ContainerService/managedClusters`, `ContainerService/managedClusters/agentPools`, `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`, `ContainerRegistry/registries`, `Network/virtualNetworks`, `Network/virtualNetworks/subnets`, `Network/virtualNetworks/securityGroups`, `Network/virtualNetworks/loadBalancers`, `Network/publicIpAddresses`, `Storage/accounts`, `Storage/accounts/buckets`, `Monitor/workspaces`, `Terminal/consoles`, `KeyVault/vaults` | 16 |
-| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains`, `Mail/domains/mailboxes`, `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions`, `Monitor/workspaces/alertRules`, `Storage/accounts/fileShares`, `Network/virtualNetworks/natGateways`, `ContainerService/connectedClusters`, `ContainerRegistry/feeds`, `Network/virtualNetworks/peerings`, `RecoveryServices/vaults`, `Monitor/workspaces/collectors`, `Dashboard/grafanas`, `Compute/virtualMachines`, `Compute/disks`, `Compute/images`, `Resources/deployments`, `Billing/budgets`, `Monitor/workspaces/components` | 25 |
+| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains`, `Mail/domains/mailboxes`, `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions`, `Monitor/workspaces/alertRules`, `Storage/accounts/fileShares`, `Network/virtualNetworks/natGateways`, `ContainerService/connectedClusters`, `ContainerRegistry/feeds`, `Network/virtualNetworks/peerings`, `RecoveryServices/vaults`, `Monitor/workspaces/collectors`, `Dashboard/grafanas`, `Compute/virtualMachines`, `Compute/disks`, `Compute/images`, `Resources/deployments`, `Billing/budgets`, `Monitor/workspaces/components`, `Compute/virtualMachineScaleSets`, `ContainerInstance/containerGroups` | 27 |
 | 4 — M3 | `DBforMySQL/servers`, `Search/services` | 2 |
-| **Total** | | **44** |
+| **Total** | | **46** |
 
 ⚠ **`agentPools` is itself an ahead-of-phase landing that this table cannot show twice.** Phase 2's row
 names node pools, so it is counted as phase 2 here — but [01](01-azure-parity-catalogue.md) verdicts
@@ -549,7 +553,7 @@ Where an issue tracks one of these rows it is named on the row; where none does,
 the finding.
 
 ⚠ **Tenancy is the case that looks like a gap and is not.** `CyberCloud.Platform/subscriptions` is an M1
-row in the catalogue and is not in the 44 — because tenants, subscriptions and resource groups are
+row in the catalogue and is not in the 46 — because tenants, subscriptions and resource groups are
 published as *scope paths* (`/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/…`) and
 not as typed resources under a provider (#63). Counting it as missing would have been the easy error in
 this recount, and it is written down here so the next recount does not make it.
@@ -568,22 +572,22 @@ published-types table and moves no count; its phase-4 row says what it did land.
 | 0 — Prerequisites | ~~1.5~~ **1.1** | 1.1 | **0.4 ⊘** | Exact. Phase 0's heading *is* its row sum, so the dropped ADR-005 bump comes straight off |
 | 1 — Spine | 14 | 14.0 | — | Not reconciled here; only exit criterion 4 was checked |
 | 2 — M1 | 26 | 44.0 | **≥ 11.3 ✅** | 3.0 + 1.5 + 2.0 + 1.5 fully shipped rows, plus 3.3 of the `Network` row's split. Conservative: the partly-landed Managed Kubernetes (4.0) and Monitor (2.5) rows have no defensible split and are counted as zero. ⚠ Not conservative enough — the 3.0 row's ✅ means *published*, and #69 is open inside it; see below |
-| 3 — M2 | 28 | 38.4 | **7.6 ✅** | The whole `Data` row (4.4), the whole `Communication` row (2.0, 2026-09-15), the `NAT gateways, peering` line of the `Network` row (0.8, 2026-09-18) — the one line of [14 § Effort](14-networking.md) that row has a per-noun split for, and both nouns are published — and the `Budgets, alerts, forecast` line of the `Billing` row (0.4, 2026-09-23), the one line of [22 § Effort](22-billing-metering-and-quota.md)'s four whose every noun shipped — built and tested against a real ledger, and reading an empty one in production until the sampler has a source (`the-sampler-has-no-source`). ⚠ `Billing`'s other 3.2 is counted as zero: rating and invoicing landed without dunning, the PDF or tag views, and no line of them is whole. ⚠ `Mail`'s ◐ is counted as zero: one noun of five is published and the row has no defensible split. `Observability`'s ◐ is counted as zero for the same reason — alerts are one noun of four, and the 3.0 has no per-noun split to read |
+| 3 — M2 | 28 | 38.4 | **11.4 ✅** | The whole `Data` row (4.4), the whole `Communication` row (2.0, 2026-09-15), the whole `Compute` row (3.8, 2026-09-24 — its last two nouns, scale sets and container groups, merged then), the `NAT gateways, peering` line of the `Network` row (0.8, 2026-09-18) — the one line of [14 § Effort](14-networking.md) that row has a per-noun split for, and both nouns are published — and the `Budgets, alerts, forecast` line of the `Billing` row (0.4, 2026-09-23), the one line of [22 § Effort](22-billing-metering-and-quota.md)'s four whose every noun shipped — built and tested against a real ledger, and reading an empty one in production until the sampler has a source (`the-sampler-has-no-source`). ⚠ `Billing`'s other 3.2 is counted as zero: rating and invoicing landed without dunning, the PDF or tag views, and no line of them is whole. ⚠ `Mail`'s ◐ is counted as zero: one noun of five is published and the row has no defensible split. `Observability`'s ◐ is counted as zero for the same reason — alerts are one noun of four, and the 3.0 has no per-noun split to read |
 | 4 — M3 | 20 | 16.9 priced, 4 items unpriced | **1.8 ✅, 0.6 ⊘** | MariaDB 0.8 + OpenSearch 1.0 shipped; Qdrant's 0.6 void |
 
-**Between 68.4 and 89.1 EM to M3** — where this section said **68.8–89.1** from 2026-09-18 to
-2026-09-23, **69.6–89.1** from 2026-09-15 to 2026-09-18, **71.6–89.1** from 2026-09-06 to 2026-09-15,
+**Between 64.6 and 89.1 EM to M3** — where this section said **68.4–89.1** on 2026-09-23 and
+2026-09-24, **68.8–89.1** from 2026-09-18 to 2026-09-23, **69.6–89.1** from 2026-09-15 to 2026-09-18, **71.6–89.1** from 2026-09-06 to 2026-09-15,
 and **~90** before that. ⚠ **The range is the finding, not a hedge**, and it is narrower
 than the old single number was honest.
 
 The arithmetic, once, so it can be checked: the plan's own 89.5 loses phase 0's dropped 0.4 outright,
-which gives **89.1**. Against that sit 11.3 + 7.6 + 1.8 = **20.7 EM of rows whose every named type is
+which gives **89.1**. Against that sit 11.3 + 11.4 + 1.8 = **24.5 EM of rows whose every named type is
 published**. Work that is finished takes zero time on *any* path, so it can only make the remaining
 critical path shorter — but by **at most** its own size, and by **at least** nothing, and this document
-does not say which of its rows were on the critical path in the first place. 89.1 − 20.7 = **68.4** is
+does not say which of its rows were on the critical path in the first place. 89.1 − 24.5 = **64.6** is
 therefore the floor and 89.1 the ceiling.
 
-⚠ **That figure — 17.5 until 2026-09-15, 19.5 until 2026-09-18, 20.3 until 2026-09-23, 20.7 since — said "rows that are finished" until 2026-09-06, and this document's own annotations do not
+⚠ **That figure — 17.5 until 2026-09-15, 19.5 until 2026-09-18, 20.3 until 2026-09-23, 20.7 until 2026-09-24, 24.5 since — said "rows that are finished" until 2026-09-06, and this document's own annotations do not
 support the word.** [§ How to read the `Landed` column](#how-to-read-the-landed-column) defines ✅ as no
 more than *a published resource type in `openapi/2026-08-01.json` for every type the row names* — and
 one ✅ row inside it carries a live defect three tables above: **Postgres · Valkey · NATS**, 3.0 EM,
@@ -591,7 +595,7 @@ where #69 is open against the first because the seven-day recovery window return
 published type is not a working restore, and the same caution that counted Managed Kubernetes (4.0) and
 Monitor (2.5) as **zero** should not have skipped a row this page had already qualified. ⚠ **The floor
 survives and it is worth saying why rather than leaving it to be re-derived:** subtracting *more* than
-is truly finished can only push the result *down*, so 68.4 remains a valid lower bound — it is simply a
+is truly finished can only push the result *down*, so 64.6 remains a valid lower bound — it is simply a
 weaker one than it looked, and the ✅ column is a claim about the published document rather than about
 the feature.
 
@@ -602,7 +606,7 @@ headings rather than a fact about them** — [§ Phase 3](#phase-3--m2-a-catalog
 now records the competing one: 28 and 20 are [01 § Summary of scope](01-azure-parity-catalogue.md)'s M2
 and M3 milestone totals exactly, so the headings may be a top-down budget that the bottom-up rows were
 never inside. Either way the gap was invisible while nothing had shipped and is load-bearing the moment
-anything does, and either way it is the reason 20.7 EM of completed work cannot simply be subtracted.
+anything does, and either way it is the reason 24.5 EM of completed work cannot simply be subtracted.
 **Closing the range is a scheduling exercise on the first reading — say which rows are on the path — and
 a re-estimate on the second.**
 
@@ -624,7 +628,7 @@ names, and four more phase-4 items — the policy engine, the resource graph API
 policies — carry no estimate at all. So the figure is wrong in **both** directions at once, which is the
 state a total reaches when it is only ever corrected downward.
 
-At 4–5 engineers that is **roughly 14–22 months** — 68.4 ÷ 5 = 13.7 at the fast end, 89.1 ÷ 4 = 22.3 at
+At 4–5 engineers that is **roughly 13–22 months** — 64.6 ÷ 5 = 12.9 at the fast end, 89.1 ÷ 4 = 22.3 at
 the slow one. ⚠ The old line said *"roughly 18–20 months"* for 89.5 EM, and 89.5 ÷ 4 is 22.4: **the
 upper end was already understated by more than two months before any of this reconciliation**, because
 it was carried over rather than divided. That is the same failure as the stale phase rows above, in the
@@ -634,7 +638,7 @@ The estimate is load-bearing on two assumptions, both stated so they could be ch
 have now been checked**:
 
 1. **That the operator selections in [12](12-managed-data-services.md) hold up without a fork —
-   holding, with one exception that is worse than a fork.** All 23 charts under `charts/managed/` carry
+   holding, with one exception that is worse than a fork.** All 34 charts under `charts/managed/` carry
    the `SOURCE` file [R4](25-risks-and-open-questions.md) asks for and every one of them records
    `vendored: none`: nothing upstream has been forked, because nothing upstream has been copied — these
    charts render somebody else's CRDs and were written here. ⚠ The exception is Qdrant, and it fails the

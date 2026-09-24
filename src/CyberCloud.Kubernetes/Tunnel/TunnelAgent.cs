@@ -284,6 +284,24 @@ public sealed class TunnelAgent : IDisposable {
                 );
             }
 
+            case TunnelOperations.ReadLogs: {
+                var arguments = TunnelCodec.Deserialize<TunnelOperations.ReadLogsArguments>(request.Payload);
+
+                if (arguments.TryGetError(out var error)) {
+                    return TunnelOperations.Seal(Result<TunnelOperations.ReadLogsAnswer>.Failure(error));
+                }
+
+                var value = arguments.GetValueOrThrow();
+                var log = await api.ReadLogsAsync(value.Pod, value.Container, value.TailLines, cancellationToken)
+                    .ConfigureAwait(false);
+
+                return TunnelOperations.Seal(
+                    log.TryGetError(out var logError)
+                        ? Result<TunnelOperations.ReadLogsAnswer>.Failure(logError)
+                        : Result<TunnelOperations.ReadLogsAnswer>.Success(new() { Log = log.GetValueOrThrow() })
+                );
+            }
+
             case TunnelOperations.Discover: {
                 var kinds = await api.DiscoverNamespacedKindsAsync(cancellationToken).ConfigureAwait(false);
 

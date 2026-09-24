@@ -163,6 +163,23 @@ public sealed class RecordingApiClient : IKubeApiClient {
         return Task.FromResult(Pages.Count > 0 ? Pages.Dequeue() : DefaultPage);
     }
 
+    /// <summary>Every log read, in order.</summary>
+    public List<(ObjectRef Pod, string Container, int TailLines)> LogReads { get; } = [];
+
+    /// <summary>What <see cref="ReadLogsAsync" /> answers.</summary>
+    public Result<string> Log { get; set; } = Result<string>.Success(string.Empty);
+
+    /// <inheritdoc />
+    public Task<Result<string>> ReadLogsAsync(
+        ObjectRef pod,
+        string container,
+        int tailLines,
+        CancellationToken cancellationToken = default
+    ) {
+        LogReads.Add((pod, container, tailLines));
+        return Task.FromResult(Log);
+    }
+
     /// <inheritdoc />
     public async IAsyncEnumerable<KubeWatchEvent> WatchAsync(
         GroupVersionKind kind,

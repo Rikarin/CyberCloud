@@ -1,0 +1,161 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Compute/virtualMachineScaleSets. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as Chart.yaml.
+#
+# ⚠ THE MACHINE'S MANIFEST IS THE OTHER HALF OF THIS ONE. Every instance is
+# charts/managed/virtual-machine's machine — the same render, the same size table, the same cloud-init
+# rule — so its assertions about a machine hold here per instance, and this file says what a SET adds.
+
+resourceType: CyberCloud.Compute/virtualMachineScaleSets
+apiVersion: "2026-08-01"
+chart: virtual-machine-scale-set
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ ONE POOL, AND WHEN THE BODY NAMES CLOUD-INIT, ONE SECRET EVERY MACHINE MOUNTS — `{name}-cloud-init-set`,
+# the reconciler's, as the machine's is, and named apart from a machine's `{name}-cloud-init` since #28's
+# review found a machine and a set of one name writing one Secret. The machines and their root disks are the pool controller's:
+# created from the template, owned by the pool, garbage-collected with it, and not counted.
+renders:
+  - group: pool.kubevirt.io
+    version: v1beta1
+    kind: VirtualMachinePool
+    count: 1
+  # Only when the body names cloud-init.
+  - group: ""
+    version: v1
+    kind: Secret
+    count: 1
+
+# ADR-013 — every rendered object carries all seven labels.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.compute_virtualmachinescalesets
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: the-pool-is-admitted-and-makes-its-machines
+    says: >
+      ⚠ MEASURED AGAINST KUBEVIRT'S OWN WEBHOOK AND CONTROLLER. A charts/managed/virtual-machine-scale-set
+      render is admitted by the pinned KubeVirt's validating webhook, and the pool controller creates
+      `capacity` VirtualMachines named `{set}-{index}`, each with a root disk `{set}-root-{index}`
+      cloned from the image, each admitted as a machine is, and VirtualMachineScaleSets.Matches holds
+      against the admitted pool. CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance
+      § KubeVirtOnAnEmptyCluster. Running is #95's lane to assert and is read there as a diagnostic.
+  - id: the-template-is-the-machines
+    says: >
+      `virtualMachineTemplate.spec` is VirtualMachines.VirtualMachineJson's spec at runStrategy Always —
+      the size as domain.cpu.cores and domain.memory.guest, the root disk a clone of the image in this
+      namespace, the logical switch when the body names a subnet, cloud-init as the one Secret — and the
+      schema is the machine's without dataDisks. ComputeDeclarationTests holds every pointer the two
+      schemas share identical but for its description.
+  - id: the-replica-count-is-on-the-pool-and-survives-a-reconcile
+    says: >
+      After `POST …/scale {"replicas": n}` the pool carries `spec.replicas: n`; a PUT that changes an
+      unrelated property afterwards leaves it at n; a PUT that lowers `capacity` below it brings it down
+      to the capacity. ⚠ The machine's power-state design with a number in it: the reconciler reads the
+      count off the pool before every render and applies conditionally on the version it read, so a
+      scale landing between the read and the apply is not undone. VirtualMachineScaleSetTests drives
+      both sequences.
+  - id: capacity-is-the-ceiling-and-what-quota-reserves
+    says: >
+      Every meter is one machine's times `capacity` — vcpu the size's cores, memoryGb its guest memory,
+      storageGb the root disk — and `scale` refuses a count above the capacity with the capacity named,
+      so no machine runs that quota did not reserve. Raising it is a PUT, which reserves first.
+  - id: the-upgrade-policy-is-the-pools-update-strategy
+    says: >
+      Manual renders `updateStrategy.unmanaged` (a changed template reaches only machines created
+      afterwards), OnRestart `opportunistic` (each machine's spec is updated and its guest takes it at
+      the next restart), Rolling `proactive` with `maxUnavailable` (the controller restarts machines
+      onto the new template, at most that many at a time) — KubeVirt enforces each, and nothing here
+      imitates it.
+  - id: list-instances-reads-what-the-pool-made
+    says: >
+      `POST …/listInstances` lists the VirtualMachines carrying the pool's own selector, in index order,
+      with KubeVirt's printable status for each, the pool's replica and ready counts and the capacity —
+      a machine still shutting down after a scale-in is listed, because it is still running.
+  - id: converged-follows-the-pool
+    says: >
+      A set is Succeeded when `status.readyReplicas` reaches `spec.replicas` AND `status.replicas` equals
+      it — measured: mid scale-in the pool reads ready 1 of 1 while two machines still exist. No status
+      at all converges (`converged-is-not-ready`); anything else is InProgress with the counts and the
+      pool's first condition message.
+  - id: the-delete-waits-for-the-machines
+    says: >
+      The pool is deleted Foreground, so it stays readable until every machine it owns is gone and the
+      teardown's Converged means the machines too — never silently gone while guests still run.
+
+# Meters the type must emit.
+meters:
+  - meter: resources
+    amount: 1
+  - meter: vcpu
+    amount: the size's cores, times capacity
+  - meter: memoryGb
+    amount: the size's guest memory, times capacity
+  - meter: storageGb
+    amount: osDiskSize, times capacity
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────────
+owed:
+  - id: quota-is-reserved-at-capacity
+    says: >
+      The meters are a pure function of the body and the body holds the capacity, not the live count,
+      so a set scaled to two of five is reserved — and, once docs/plan/22's pipeline rates it, billed —
+      at five. The machine's `deallocate-is-stop` row is the same gap one level down: billing only what
+      runs needs the usage pipeline to sample the object, not the body.
+  - id: no-per-instance-data-disks
+    says: >
+      A managed disk is one ReadWriteOnce claim and a set is N machines, so the schema has no
+      `dataDisks`. A per-machine data disk is a second `dataVolumeTemplates` entry, which the pool
+      controller indexes as it indexes the root disk — a property this api-version does not declare.
+  - id: instance-names-share-the-machines-namespace
+    says: >
+      The pool names machines `{set}-{index}`, which is the space a standalone machine's name lives in:
+      a `virtualMachines` resource called `web-0` and a set called `web` in one resource group both want
+      the object `web-0`. Nothing refuses the pair; closing it is the reader a same-group name check needs.
+      ⚠ The root disks share a space too (#28's review): the pool indexes `{set}-root` into
+      `{set}-root-{index}`, and a `disks` or `images` resource's DataVolume is its own name, so a disk
+      called `web-root-0` and a set called `web` want one DataVolume. The cloud-init Secret no longer
+      does: it was `{set}-cloud-init`, a machine `web`'s own name, written by both under one field
+      manager, and is `{set}-cloud-init-set` now (VirtualMachineScaleSets.CloudInitSecretName).
+  - id: no-per-instance-power-actions
+    says: >
+      The replica count is the switch: there is no start, stop or restart of one machine of a set, and a
+      tenant who reaches a machine with virtctl is working on the pool controller's object. Selecting a
+      machine for scale-in (the pool's `scaleInStrategy.proactive.selectionPolicy`) is not offered
+      either; the pool's default picks.
+  - id: no-autohealing
+    says: >
+      The pool's `autohealing` — replace a machine that keeps failing to start — is not rendered; a
+      machine stuck in CrashLoopBackOff stays one, and the set reads not ready with the pool's reason.
+      docs/plan/13 § Scale sets defers autoscaling to M3 and this row defers self-repair with it.
+  - id: no-autoscaling
+    says: >
+      docs/plan/13: "Deliberately not an autoscaler in M2: autoscaling a VM pool needs a metric source
+      and a scale-in safety story, and it is M3." The pool has a `scale` subresource an HPA could drive;
+      nothing here drives it.
+  - id: running-is-read-and-not-asserted
+    says: >
+      The KubeVirt lane asserts the pool admitted and its machines created and admitted; whether they
+      reach Running is #95's to assert, and the lane reports what it saw as a diagnostic. On the
+      development host (WSL2 with nested virtualization) both machines ran in 51 seconds (2026-09-23).
+  - id: converged-is-not-ready
+    says: >
+      A pool that reads back as applied and carries no status converges — the branch a harness with the
+      committed definition and no pool controller lands on, as charts/managed/virtual-machine records.
+  - id: the-joins-are-not-resolved-before-202
+    says: >
+      `image`, `network.virtualNetwork` and `network.subnet` are names nothing on the write path can
+      check, as on a machine: an image that is not there is CDI's refusal on every machine's clone, and
+      the pool reads not ready with it.

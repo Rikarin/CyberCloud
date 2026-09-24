@@ -616,9 +616,9 @@
 
         <!--
           The eighteenth provider family — CyberCloud.Compute/virtualMachines, disks and images, on
-          KubeVirt and CDI. docs/plan/13 § Virtual Machines, "M2 · 3.0 EM"; the core of #28, whose scale
-          sets and container instances are recorded as owed in
-          charts/managed/virtual-machine/conformance.yaml rather than implied by the type list.
+          KubeVirt and CDI. docs/plan/13 § Virtual Machines, "M2 · 3.0 EM"; #28's row, with its scale
+          sets as a fourth type on KubeVirt's VirtualMachinePool and its container instances as the
+          family below.
 
           ⚠ THE FIRST FAMILY WITH A POWER STATE, AND IT IS NOT IN THE BODY. A machine is on or off
           through `spec.runStrategy` on the VirtualMachine object; the start/stop/restart actions move
@@ -649,6 +649,23 @@
           for its fixture and installer rather than copying them.
         -->
         <Project Path="src/Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance/CyberCloud.Providers.Compute.KubeVirt.Cluster.Conformance.csproj" />
+    </Folder>
+    <Folder Name="/src/Providers/CyberCloud.Providers.ContainerInstance/">
+        <!--
+          docs/plan/13 § Container Instances — CyberCloud.ContainerInstance/containerGroups, one or more
+          containers as one pod in the tenant's namespace, and a provider namespace of its own rather
+          than a fifth CyberCloud.Compute type.
+
+          ⚠ THE FAMILY THAT ADDED THE LOG READ. IKubeClusterConnection.ReadLogsAsync is the seam its
+          `logs` action needed, and its .Cluster.Conformance project is the first cluster-backed suite
+          whose case runs on a kubelet: a group writes a line and the action reads it back.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerInstance/CyberCloud.Providers.ContainerInstance.Contracts/CyberCloud.Providers.ContainerInstance.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerInstance/CyberCloud.Providers.ContainerInstance/CyberCloud.Providers.ContainerInstance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerInstance/CyberCloud.Providers.ContainerInstance.Application/CyberCloud.Providers.ContainerInstance.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerInstance/CyberCloud.Providers.ContainerInstance.Tests/CyberCloud.Providers.ContainerInstance.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerInstance/CyberCloud.Providers.ContainerInstance.Conformance/CyberCloud.Providers.ContainerInstance.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerInstance/CyberCloud.Providers.ContainerInstance.Cluster.Conformance/CyberCloud.Providers.ContainerInstance.Cluster.Conformance.csproj" />
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj" />

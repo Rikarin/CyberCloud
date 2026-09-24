@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fourth project: "TestCluster + k3s".
+
+      ⚠ NEITHER, HERE. The TestCluster half is test/CyberCloud.Conformance's and the k3s half is
+      CyberCloud.Providers.ContainerInstance.Cluster.Conformance's, which runs a group on a real kubelet
+      and reads its output back through the logs action. What is left is what only THIS provider can be
+      wrong about: the pod it renders, the relations its schema cannot state, the vault handles that
+      must stay handles, the replace-the-pod path, the two actions' refusals, and the three rules it
+      spells a second time.
+
+      ⚠ IT REFERENCES TWO OTHER FAMILIES' .Contracts — Compute's and Network's — and that is legal
+      because docs/plan/03 § Assembly graph rules, rule 2, is over the SHIPPED graph. It is here because
+      the tenant vault prefix, a subnet's object name and a public address's object name are spelled in
+      this family a second time, and ContainerGroupSpellingTests is the only thing that holds each pair
+      together.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.ContainerInstance/CyberCloud.Providers.ContainerInstance.csproj"/>
+        <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <!-- The two families whose rules are spelled here a second time — see the header. -->
+        <ProjectReference Include="../../CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Contracts/CyberCloud.Providers.Compute.Contracts.csproj"/>
+        <ProjectReference Include="../../CyberCloud.Providers.Network/CyberCloud.Providers.Network.Contracts/CyberCloud.Providers.Network.Contracts.csproj"/>
+    </ItemGroup>
+
+</Project>

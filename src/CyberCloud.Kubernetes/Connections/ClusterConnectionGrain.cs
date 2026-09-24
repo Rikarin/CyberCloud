@@ -511,6 +511,39 @@ public sealed class ClusterConnectionGrain : Grain, IClusterConnectionGrain {
     }
 
     /// <inheritdoc />
+    public async Task<Result<string>> ReadLogsAsync(ObjectRef pod, string container, int tailLines) {
+        // ⚠ The tenancy check first, before any argument is looked at — ListNamespaceAsync's rule, and
+        // the probe in ClusterConnectionTenancyTests calls every method with default arguments.
+        var allowed = EnsureCallerMayReach(nameof(ReadLogsAsync));
+        if (allowed.IsFailure) {
+            return Refused<string>(allowed);
+        }
+
+        if (pod is null || pod.Name.Length == 0 || pod.Namespace.Length == 0 || pod.Kind.Kind != "Pod") {
+            return Result<string>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"A log read on cluster {clusterId:D} was asked for against '{pod}', which does not address "
+                + "a pod. A log is the kubelet's and belongs to a namespaced v1/Pod."
+            );
+        }
+
+        if (health.Current.State == ClusterHealthState.Degraded) {
+            return Result<string>.Failure(ErrorCode.OperationInProgress, health.Current.Message);
+        }
+
+        var client = await ClientAsync(CancellationToken.None);
+        if (client.TryGetError(out var connectError)) {
+            return Result<string>.Failure(connectError);
+        }
+
+        var outcome = await client.GetValueOrThrow()
+            .ReadLogsAsync(pod, container ?? string.Empty, tailLines, CancellationToken.None);
+
+        await RecordReachabilityAsync(Answered(outcome.Error));
+        return outcome;
+    }
+
+    /// <inheritdoc />
     public async Task<Result<InformerLease>> WatchAsync(GroupVersionKind kind, string labelSelector) {
         ArgumentNullException.ThrowIfNull(kind);
 

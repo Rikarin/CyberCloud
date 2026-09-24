@@ -1,0 +1,41 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+
+vendored: none
+upstream: https://github.com/kubevirt/kubevirt
+
+upstream-api: pool.kubevirt.io/v1beta1, kubevirt.io/v1, cdi.kubevirt.io/v1beta1
+
+hypervisor: https://github.com/kubevirt/kubevirt                          # v1.9.0
+importer: https://github.com/kubevirt/containerized-data-importer         # v1.66.0
+
+reviewed: 2026-09-23
+
+# ── What the review established, read off a cluster install.sh installed the pinned release onto ───
+#
+# ⚠ THE POOL IS SERVED AT `v1beta1` AND STORED THERE. `kubectl get crd virtualmachinepools.pool.kubevirt.io`
+# lists `v1alpha1` (served, not storage) and `v1beta1` (served, storage); `kubectl api-resources
+# --api-group=pool.kubevirt.io` answers `v1beta1`. The definition is committed by
+# `charts/bundle/crds.sh --capture` beside the VirtualMachine's.
+#
+# ⚠ THE CONTROLLER NAMES MACHINES `{pool}-{index}` AND INDEXES THE TEMPLATE'S DATA VOLUMES. Applied
+# with capacity 2: VirtualMachines `web-0` and `web-1`, each owned by the pool and labelled with the
+# template's labels plus `kubevirt.io/vm-pool-revision-name`; DataVolumes `web-root-0` and
+# `web-root-1`, clones of the image, where the template names one `web-root`. Both machines reported
+# Running under KVM and the pool `readyReplicas: 2` within 51 seconds of the apply.
+#
+# ⚠ SCALE-IN IS PROACTIVE AND TAKES THE GRACE PERIOD. `kubectl scale vmpool web --replicas=1`: the pool
+# read `replicas: 2, readyReplicas: 1` while `web-1` was Terminating, for the machine's sixty-second
+# ACPI grace. So a set is converged only when the current count equals the ask as well as the ready one
+# (VirtualMachineScaleSets.ReadinessOf).
+#
+# ⚠ `updateStrategy` HAS THREE MEMBERS AND `maxUnavailable` BOUNDS AN AUTOMATED UPDATE, read off the
+# definition's own descriptions: `unmanaged` ("the VMPool controller will not update the VMs"),
+# `opportunistic` ("only gets applied to the VM, VMI is updated naturally upon the restart"),
+# `proactive` ("forcing the VMs to restart during update"), and `maxUnavailable` "(Defaults to 100%) …
+# unavailable at a time during automated update". The body's Manual, OnRestart and Rolling are those
+# three, and maxUnavailable is rendered for Rolling alone.
+#
+# ⚠ WHAT THIS CHART DOES NOT RENDER: `scaleInStrategy` (the default proactive, random selection),
+# `autohealing`, `nameGeneration` (one cloud-init Secret for every machine), and a per-machine data
+# disk. conformance.yaml § owed carries each.
+upstream-webhook: kubevirt ships a VALIDATING webhook for VirtualMachinePool that checks the machine template as it checks a VirtualMachine — measured admitting this chart's render on 2026-09-23

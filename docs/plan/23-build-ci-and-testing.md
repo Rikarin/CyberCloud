@@ -186,6 +186,19 @@ is moot on a v2 host and is kept for a host in the state this one was in.
 > /bin/k3s "$@"'`. And it needs no CNI of its own if kube-ovn is to be installed, which k3s cannot
 > be asked for after the fact: kube-ovn is a cluster-creation component and stays off this lane.
 
+> ⚠ **And a third, found by the first case that needs a kubelet to RUN something (#28, 2026-09-24):
+> the node's disk is the Docker host's.** A k3s in Docker reports the Docker Desktop VM's filesystem
+> as its `nodefs` and `imagefs`, and the kubelet's default hard eviction (`nodefs.available<10%`,
+> `imagefs.available<15%`) taints the node `disk-pressure` once that VM is 90 % full — which a host
+> shared by a dozen suites reaches (95 %, 11.8 GB of 251 GB free, that day). Every pod stays Pending,
+> and a suite that only reads objects back never notices; `PreconditionAndLogTests`' pod waited
+> three minutes for a log. #30's CloudNativePG lane had met the same taint the same day, and its
+> fix — the thresholds at 1 % inside the one kubelet drop-in `K3sFixture` and
+> `ClusterInfrastructure.K3s()` already carry — is what both recipes use; #28's second drop-in for it
+> was dropped when the two met in master. The count above is twenty-four since that batch, counted
+> over the `*.Cluster.Conformance.csproj` files at the merge: `ContainerInstance.Cluster.Conformance`
+> is the twentieth provider assembly.
+
 **What this lane can and cannot prove**, so nobody re-derives it:
 
 | Proven on k3s-in-Docker (2026-09-15, re-measured 2026-09-17) | Stays for real nodes — the VM lane |

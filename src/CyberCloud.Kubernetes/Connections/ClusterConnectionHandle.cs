@@ -100,4 +100,13 @@ public sealed class ClusterConnectionHandle(IGrainFactory grains, Guid clusterId
                 )
             )
             : attach.AttachAsync(clusterId, pod, container, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<Result<string>> ReadLogsAsync(
+        ObjectRef pod,
+        string container,
+        int tailLines,
+        CancellationToken cancellationToken = default
+    ) =>
+        Grain.ReadLogsAsync(pod, container, tailLines);
 }

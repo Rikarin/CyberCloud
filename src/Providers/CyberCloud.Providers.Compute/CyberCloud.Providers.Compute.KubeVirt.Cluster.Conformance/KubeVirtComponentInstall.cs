@@ -253,7 +253,10 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
     ///     blank disk from <c>charts/managed/disk</c> is provisioned and waits for a consumer, a
     ///     machine rendered from <c>charts/managed/virtual-machine</c> naming that disk is admitted
     ///     by KubeVirt's webhooks, its root disk is cloned from the image, the guest runs under KVM,
-    ///     and the disk is populated and mounted by the machine that consumed it.
+    ///     and the disk is populated and mounted by the machine that consumed it — and then a
+    ///     <c>charts/managed/virtual-machine-scale-set</c> pool of the same machine is admitted by the
+    ///     pool webhook and fanned out by the pool controller into two machines, each cloning its own
+    ///     indexed root disk.
     /// </summary>
     [Fact]
     public async Task InstallingCdiAndKubeVirtAdmitsAMachineThatBootsUnderKvmWithADiskAttached() {
@@ -366,13 +369,13 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
         )
             .ShouldBe("Deployed");
 
-        // ⚠ READ AND REPORTED, NOT ASSERTED. charts/managed/virtual-machine/conformance.yaml § owed,
-        // `scale-sets-are-not-landed`, names KubeVirt's VirtualMachinePool as the shape a scale set
-        // would render, and kubevirt/component.yaml claims `serves: kubevirt.io/v1` alone — the
-        // operator installs the other definitions at runtime, so whether this pin serves the pool
-        // group is a fact only a cluster can answer. The diagnostic line at the bottom carries the
-        // answer for the row to quote; nothing here depends on it.
-        var poolsServed = await IsServedAsync(client, "pool.kubevirt.io", "v1alpha1", "virtualmachinepools", token);
+        // ⚠ ASSERTED SINCE THE SCALE SETS LANDED, AND AT THE VERSION THE CHART RENDERS. This line used to
+        // read `v1alpha1` and report the answer, for a row that owed the type; the pin serves
+        // `v1beta1` as its storage version (charts/bundle/kubevirt/component.yaml § serves), and
+        // charts/managed/virtual-machine-scale-set is applied against it below.
+        (await IsServedAsync(client, PoolGroup, "v1beta1", "virtualmachinepools", token)).ShouldBeTrue(
+            "pool.kubevirt.io/v1beta1 is not served after install.sh succeeded, and charts/managed/virtual-machine-scale-set renders it"
+        );
 
         // ── The node advertises KVM, which is the premise the whole record had backwards ───────
         var nodes = await client.CoreV1.ListNodeAsync(cancellationToken: token);
@@ -691,12 +694,134 @@ public sealed class KubeVirtOnAnEmptyCluster(EmptyClusterFixture cluster) : ICla
             "the reconciler would not call this machine converged, and KubeVirt calls it Running: " + readiness.Detail
         );
 
+        // ── The scale set: a pool of the same machine, admitted by the pool webhook ─────────────
+        //
+        // ⚠ THE MACHINE ABOVE IS DELETED FIRST, because the node is a laptop's share of a Docker VM and
+        // three guests of four gibibytes each is the difference between a pool whose machines are
+        // scheduled and one whose machines wait for memory. What this half asserts does not depend on
+        // either — admission, the controller's fan-out, the indexed root disks, Matches — and Running is
+        // read and reported, not asserted: charts/managed/virtual-machine-scale-set/conformance.yaml
+        // § owed, `running-is-read-and-not-asserted`.
+        await CaptureAsync("kubectl", ["delete", "virtualmachine", MachineName, "--namespace", Probe, "--wait=false"], null, cluster.KubeconfigPath, token);
+
+        var set = await RenderAsync(
+            "virtual-machine-scale-set",
+            SetName,
+            [
+                "--set", "capacity=" + SetCapacity, "--set", "size=" + MachineSize, "--set", "image=" + ImageName,
+                "--set", "osDiskSize=" + OneGibibyte, "--set", "upgradePolicy.mode=Rolling", "--set",
+                "upgradePolicy.maxUnavailable=1"
+            ],
+            token
+        );
+
+        set.ShouldContain("kind: VirtualMachinePool", Case.Sensitive, "Rendered:\n" + set);
+        set.ShouldContain("proactive: {}", Case.Sensitive, "Rolling is the pool's proactive update strategy. Rendered:\n" + set);
+
+        // ⚠ THE APPLY IS THE WEBHOOK ASSERTION, as the machine's is: KubeVirt validates a pool's machine
+        // template the way it validates a VirtualMachine.
+        await ApplyAsync(set, token);
+
+        var fanned = await Poll(
+            RunningBudget,
+            async () => {
+                var machines = JsonSerializer.SerializeToElement(
+                    await client.CustomObjects.ListNamespacedCustomObjectAsync(
+                        KubeVirtGroup,
+                        "v1",
+                        Probe,
+                        "virtualmachines",
+                        labelSelector: VirtualMachineScaleSets.InstanceSelector(SetName),
+                        cancellationToken: token
+                    )
+                );
+
+                var names = machines.GetProperty("items").EnumerateArray()
+                    .Select(static x => x.GetProperty("metadata").GetProperty("name").GetString()!)
+                    .Order(StringComparer.Ordinal)
+                    .ToList();
+
+                return names.Count == SetCapacity ? names : null;
+            },
+            token
+        );
+
+        fanned.ShouldNotBeNull(
+            $"the pool controller did not create {SetCapacity} machines within {RunningBudget.TotalMinutes:F0} minutes. Last pool status:\n"
+            + await DescribeAsync(client, PoolGroup, "v1beta1", Probe, "virtualmachinepools", SetName, token)
+        );
+        fanned.ShouldBe(
+            [VirtualMachineScaleSets.InstanceName(SetName, 0), VirtualMachineScaleSets.InstanceName(SetName, 1)],
+            "the pool names its machines {set}-{index}, which VirtualMachineScaleSets.InstanceName and listInstances read"
+        );
+
+        // Each machine clones its own root disk: the template's one DataVolume, indexed per machine.
+        foreach (var index in new[] { 0, 1 }) {
+            var root = await Poll(
+                ImportBudget,
+                async () => await client.CustomObjects.GetNamespacedCustomObjectAsync(
+                    CdiGroup,
+                    "v1beta1",
+                    Probe,
+                    "datavolumes",
+                    VirtualMachineScaleSets.IndexedRootDataVolumeName(SetName, index),
+                    token
+                ),
+                token
+            );
+
+            root.ShouldNotBeNull(
+                $"no DataVolume '{VirtualMachineScaleSets.IndexedRootDataVolumeName(SetName, index)}': the pool controller did not index the template's root disk for machine {index}"
+            );
+        }
+
+        var admittedPool = JsonSerializer.Serialize(
+            await client.CustomObjects.GetNamespacedCustomObjectAsync(PoolGroup, "v1beta1", Probe, "virtualmachinepools", SetName, token)
+        );
+
+        using var setBody = JsonDocument.Parse(
+            VirtualMachineScaleSets.Body(Guid.Empty, SetCapacity, ImageName, MachineSize, OneGibibyte)
+        );
+
+        VirtualMachineScaleSets.Matches(admittedPool, Probe, setBody.RootElement, SetCapacity)
+            .ShouldBeTrue(
+                "the reconciler would report the admitted pool as not yet carrying the desired spec, forever — the "
+                + "mutating webhook changed a field Matches reads, or the chart and VirtualMachineScaleSets.PoolJson "
+                + "disagree. The admitted pool:\n"
+                + admittedPool
+            );
+
+        // ── Running is read, not asserted — see above ──────────────────────────────────────────
+        var setStarted = Stopwatch.StartNew();
+        var ready = await Poll(
+            RunningBudget,
+            async () => {
+                var pool = JsonSerializer.Serialize(
+                    await client.CustomObjects.GetNamespacedCustomObjectAsync(PoolGroup, "v1beta1", Probe, "virtualmachinepools", SetName, token)
+                );
+                return VirtualMachineScaleSets.ReadinessOf(pool).Kind == VirtualMachines.ReadinessKind.Ready ? pool : null;
+            },
+            token
+        );
+
         TestContext.Current.SendDiagnosticMessage(
             $"install.sh (openebs-localpv + CDI + KubeVirt): {installed.TotalSeconds:F0} s; cirros import: {importTook.TotalSeconds:F0} s; "
             + $"blank disk provisioned as {provisioned}; machine applied to Running with the disk attached: {bootTook.TotalSeconds:F0} s; "
-            + $"pool.kubevirt.io/v1alpha1 served by this pin: {poolsServed}"
+            + $"pool of {SetCapacity} admitted and fanned out to {string.Join(", ", fanned)}; "
+            + (ready is null
+                ? $"its machines did not all report ready within {RunningBudget.TotalMinutes:F0} minutes (read, not asserted)"
+                : $"all ready {setStarted.Elapsed.TotalSeconds:F0} s after the fan-out")
         );
     }
+
+    /// <summary>The pool group charts/managed/virtual-machine-scale-set renders.</summary>
+    const string PoolGroup = "pool.kubevirt.io";
+
+    /// <summary>The scale set's release name — the pool, and the stem of every machine it makes.</summary>
+    const string SetName = "probe-set";
+
+    /// <summary>Two machines: the fewest that show the controller indexing the root disk per machine.</summary>
+    const int SetCapacity = 2;
 
     /// <summary>
     ///     The root DataVolume KubeVirt derives from the chart's template, spelled by the contracts so the chart's helper

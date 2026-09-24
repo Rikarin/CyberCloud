@@ -766,6 +766,17 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         //    "pokes only what diverged" is the re-drive, and this is it. ─────────────────────────
         var repaired = await ReconcileOnceAsync(harness, accepted.Resource.Id, name);
 
+        // ⚠ PASSES, NOT A PASS, WHEN THE FIRST ONE SAYS IT IS STILL WORKING — the operation's own
+        // budget, MaxDrives a second apart. A re-drive in production is an operation driven until it is
+        // terminal, and until CyberCloud.ContainerInstance/containerGroups every case was converged by
+        // the pass that re-applied it: an API server's echo. A pod is converged by a kubelet, which has
+        // to schedule it and start its container first, and the one-pass form read "Pending" as a
+        // failed repair (2026-09-23). A pass that FAILS still fails here on the first one.
+        for (var pass = 1; repaired.Kind == ReconcileOutcomeKind.InProgress && pass < MaxDrives; pass++) {
+            await Task.Delay(BetweenDrives, token);
+            repaired = await ReconcileOnceAsync(harness, accepted.Resource.Id, name);
+        }
+
         repaired.Kind.ShouldBe(
             ReconcileOutcomeKind.Converged,
             $"the re-drive did not converge: {repaired.Reason} {repaired.Error?.Message}"
@@ -1738,6 +1749,13 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     ///         has genuinely not landed fails here in two seconds with the object named, which is what
     ///         the assertion it replaced did.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Except for a pod a kubelet is running</b>, which is a workload draining, and which
+    ///         says for how long: <c>metadata.deletionGracePeriodSeconds</c>. The first case to render
+    ///         one, <c>CyberCloud.ContainerInstance/containerGroups</c>, failed here on a busybox that
+    ///         took its full ten seconds (2026-09-23), so the wait extends to what the object reports
+    ///         and no further.
+    ///     </para>
     /// </remarks>
     protected static async Task WaitUntilAbsentAsync(
         ClusterConformanceHarness<TSource> harness,
@@ -1745,12 +1763,23 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         CancellationToken cancellationToken
     ) {
         string? json = null;
+        var budget = 20;
 
-        for (var attempt = 0; attempt < 20; attempt++) {
+        for (var attempt = 0; attempt < budget; attempt++) {
             json = await ReadFromClusterAsync(harness, target, cancellationToken);
 
             if (json is null) {
                 return;
+            }
+
+            // ⚠ A POD WITH A RUNNING CONTAINER STATES ITS OWN DRAIN, AND UNTIL
+            // CyberCloud.ContainerInstance/containerGroups NO CASE HAD ONE. The kubelet runs this
+            // lane's pods since the WSL2 kernel moved to cgroup v2, and a deleted pod stays readable,
+            // carrying `deletionGracePeriodSeconds`, until its containers have stopped — up to that many
+            // seconds. The two-second budget above is for a finalizer; a pod's is the one it reports,
+            // plus five for the kubelet's sync, and a delete that never landed still fails naming it.
+            if (DrainSeconds(json) is > 0 and var drain) {
+                budget = Math.Max(budget, (drain + 5) * 10);
             }
 
             await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
@@ -1759,8 +1788,17 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         // ⚠ The body is in the message on purpose: a `deletionTimestamp` in it says "a finalizer is
         // holding this" and its absence says "the delete never reached the API server", and those are
         // different bugs with the same symptom.
-        json.ShouldBeNull($"the delete of '{target}' did not land within two seconds.");
+        json.ShouldBeNull(
+            $"the delete of '{target}' did not land within {(budget / 10).ToString(CultureInfo.InvariantCulture)} seconds."
+        );
     }
+
+    /// <summary>The <c>metadata.deletionGracePeriodSeconds</c> a deleted object reports, or zero.</summary>
+    static int DrainSeconds(string json) =>
+        JsonNode.Parse(json)?["metadata"]?["deletionGracePeriodSeconds"] is JsonValue value
+        && value.TryGetValue<int>(out var seconds)
+            ? seconds
+            : 0;
 
     /// <summary>One label's value, read straight from the API server.</summary>
     /// <param name="harness">The harness.</param>

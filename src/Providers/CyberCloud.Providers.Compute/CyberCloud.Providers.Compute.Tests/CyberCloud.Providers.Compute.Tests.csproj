@@ -42,6 +42,8 @@
                           LogicalName="virtual-machine.helpers.tpl"/>
         <EmbeddedResource Include="../../../../charts/managed/image/templates/_helpers.tpl"
                           LogicalName="image.helpers.tpl"/>
+        <EmbeddedResource Include="../../../../charts/managed/virtual-machine-scale-set/templates/_helpers.tpl"
+                          LogicalName="virtual-machine-scale-set.helpers.tpl"/>
     </ItemGroup>
 
     <ItemGroup>

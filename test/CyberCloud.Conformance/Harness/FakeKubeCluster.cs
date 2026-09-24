@@ -197,6 +197,7 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         addresses.Clear();
         versions.Clear();
         coOwned.Clear();
+        logs.Clear();
 
         foreach (var (key, json) in baseline.Objects) {
             objects[key] = json;
@@ -455,6 +456,31 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
 
         var key = Key(command.Target);
         var existed = objects.TryGetValue(key, out var before);
+
+        // ⚠ AN ORDINARY APPLY MAY CARRY A PRECONDITION TOO — IKubeCommandBuilder.IfResourceVersion —
+        // and the API server's two answers are modelled: a version that moved is Stale with nothing
+        // written, and an absent object is created regardless, because the real create-on-update path
+        // clears the version (CoOwnedApplyTests measured it). The version is stripped before the body
+        // is stored, for the reason ApplyCoOwned's remarks give: the store never holds it.
+        if (PreconditionOf(admitted.GetValueOrThrow()) is { Length: > 0 } carried) {
+            if (existed && !string.Equals(carried, VersionOf(key), StringComparison.Ordinal)) {
+                return Task.FromResult(
+                    Result<ApplyOutcome>.Success(
+                        new() {
+                            Result = ApplyResult.Stale,
+                            Target = command.Target,
+                            ResourceVersion = VersionOf(key),
+                            ReconcileHash = command.ReconcileHash,
+                            Message = $"'{command.Target}' moved between the read the command was built from "
+                                + "and the apply; nothing was written. Read it again and apply again."
+                        }
+                    )
+                );
+            }
+
+            admitted = Result<string>.Success(WithoutPrecondition(admitted.GetValueOrThrow()));
+        }
+
         var unchanged = existed && hashes.TryGetValue(key, out var previous) && previous == command.ReconcileHash;
 
         // ⚠ A BUILT-IN OBJECT IS STORED WITHOUT ITS EMPTY COLLECTIONS, AND THAT IS THE ONE PLACE THIS
@@ -722,6 +748,17 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     /// <summary>Moves an object's version on, as a write that changed it does.</summary>
     void Bump(string key) => versions[key] = versions.GetValueOrDefault(key) + 1;
 
+    /// <summary>The <c>metadata.resourceVersion</c> an ordinary apply carries as its precondition, or empty.</summary>
+    static string PreconditionOf(string body) =>
+        (JsonNode.Parse(body) as JsonObject)?["metadata"]?["resourceVersion"]?.GetValue<string>() ?? string.Empty;
+
+    /// <summary>The body with its precondition taken off, which is what the store holds.</summary>
+    static string WithoutPrecondition(string body) {
+        var document = JsonNode.Parse(body)!.AsObject();
+        (document["metadata"] as JsonObject)?.Remove("resourceVersion");
+        return document.ToJsonString();
+    }
+
     /// <summary>The object's current version as the API server would spell it — a decimal string.</summary>
     string VersionOf(string key) =>
         versions.GetValueOrDefault(key, 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -905,6 +942,53 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         }
 
         return Task.FromResult(Result<IReadOnlyList<KubeObjectSummary>>.Success(found));
+    }
+
+    // What a test says a container wrote, keyed by the pod's key and the container name.
+    readonly ConcurrentDictionary<string, string> logs = new(StringComparer.Ordinal);
+
+    /// <summary>Says what a container of a pod in this fake has written, as a kubelet would keep it.</summary>
+    /// <param name="pod">The pod.</param>
+    /// <param name="container">The container, or empty for the pod's only one.</param>
+    /// <param name="text">The whole log, newline-separated.</param>
+    public void WriteLogs(ObjectRef pod, string container, string text) =>
+        logs[Key(pod) + "#" + container] = text;
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ <b>There is no kubelet here</b>, so a pod that exists and whose container nobody seeded
+    ///     through <see cref="WriteLogs" /> answers what a real API server answers for a container that
+    ///     has not started: <see cref="ErrorCode.OperationInProgress" />. An empty success would be
+    ///     the fake claiming the container ran and wrote nothing.
+    /// </remarks>
+    public Task<Result<string>> ReadLogsAsync(
+        ObjectRef pod,
+        string container,
+        int tailLines,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(pod);
+
+        if (!objects.ContainsKey(Key(pod))) {
+            return Task.FromResult(
+                Result<string>.Failure(ErrorCode.ResourceNotFound, $"'{pod}' is not in cluster {clusterId:D}.")
+            );
+        }
+
+        if (!logs.TryGetValue(Key(pod) + "#" + container, out var text)) {
+            return Task.FromResult(
+                Result<string>.Failure(
+                    ErrorCode.OperationInProgress,
+                    $"container \"{container}\" in pod \"{pod.Name}\" is waiting to start: this fake has no kubelet"
+                )
+            );
+        }
+
+        var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        return Task.FromResult(
+            Result<string>.Success(string.Join('\n', tailLines > 0 ? lines.TakeLast(tailLines) : lines) + "\n")
+        );
     }
 
     /// <inheritdoc />

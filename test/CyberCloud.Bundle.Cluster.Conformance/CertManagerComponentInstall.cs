@@ -222,7 +222,20 @@ public sealed class EmptyClusterFixture : IAsyncLifetime {
         }
 
         if (container is not null) {
-            await container.DisposeAsync().ConfigureAwait(false);
+            try {
+                await container.DisposeAsync().ConfigureAwait(false);
+            } catch (Docker.DotNet.DockerApiException ex) when (ex.Message.Contains("is zombie", StringComparison.Ordinal)) {
+                // ⚠ A NODE THAT RAN KVM GUESTS CAN OUTLIVE ONE REMOVE, AND THE REAPER TAKES IT. The first
+                // KubeVirt run with a scale set's two guests still up at teardown (#28, 2026-09-24)
+                // passed every assertion and then failed here: Docker answered "PID … is zombie and
+                // can not be killed" for the privileged k3s container. It was gone a minute later —
+                // Testcontainers' Ryuk removes every container this session labelled when the process
+                // ends — so the refusal is Docker's timing and not a leaked cluster. Reported, not
+                // thrown, so the class's verdict stays the one its test earned.
+                TestContext.Current.SendDiagnosticMessage(
+                    $"The k3s container was not removed on the first attempt and is left to Testcontainers' reaper: {ex.Message}"
+                );
+            }
         }
     }
 }

@@ -465,6 +465,127 @@ public sealed class KubeApiClient(
         }
     }
 
+    /// <summary>The most bytes one log read returns — the kubelet's <c>limitBytes</c>.</summary>
+    /// <remarks>
+    ///     ⚠ A cap and not a page: a container that writes a megabyte a second would otherwise hand an
+    ///     action a response the gateway buffers whole. What is beyond it is not reachable through a
+    ///     tail, which is <c>IKubeClusterConnection.ReadLogsAsync</c>'s own limit.
+    /// </remarks>
+    public const int MaxLogBytes = 1024 * 1024;
+
+    /// <summary>The API server's sentences for a pod whose log is not readable YET.</summary>
+    static readonly string[] NotYet = ["does not have a host assigned", "is not available", "is waiting to start"];
+
+    /// <inheritdoc />
+    public async Task<Result<string>> ReadLogsAsync(
+        ObjectRef pod,
+        string container,
+        int tailLines,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(pod);
+
+        try {
+            using var response = await client.CoreV1.ReadNamespacedPodLogWithHttpMessagesAsync(
+                pod.Name,
+                pod.Namespace,
+                container: string.IsNullOrEmpty(container) ? null : container,
+                tailLines: tailLines > 0 ? tailLines : null,
+                limitBytes: MaxLogBytes,
+                cancellationToken: cancellationToken
+            )
+                .ConfigureAwait(false);
+
+            using var reader = new StreamReader(response.Body, System.Text.Encoding.UTF8);
+            var text = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+
+            if (text.Length > 0) {
+                return Result<string>.Success(text);
+            }
+
+            // ⚠ AN UNSCHEDULED POD ANSWERS 200 AND AN EMPTY BODY, NOT A 400. The API server has no
+            // kubelet to ask, and its LogLocation returns "no location" for a pod without a node,
+            // which streams nothing. Measured on 2026-09-24: a pod held Pending by a node's
+            // disk-pressure taint read "" for three minutes. An empty log is a claim that the
+            // container wrote nothing, so one more read tells the two apart.
+            var read = await client.CoreV1.ReadNamespacedPodAsync(
+                pod.Name,
+                pod.Namespace,
+                cancellationToken: cancellationToken
+            )
+                .ConfigureAwait(false);
+
+            return string.IsNullOrEmpty(read.Spec?.NodeName)
+                ? Result<string>.Failure(
+                    ErrorCode.OperationInProgress,
+                    $"The logs of '{pod}' are not readable yet: the pod has not been scheduled to a node."
+                )
+                : Result<string>.Success(text);
+        } catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.BadRequest) {
+            // ⚠ THE KUBELET HAS NO LOG YET, OR THE CONTAINER IS NOT THE POD'S — both a 400, told apart
+            // by the API server's own sentence (pkg/registry/core/pod's LogLocation). These say "not
+            // yet", which a caller retries: "is not available" (scheduled, no container status yet)
+            // and "is waiting to start" (pulled or created); "does not have a host assigned" is kept
+            // for a server that refuses rather than streaming nothing, which 1.35 does not (above).
+            // The full suite measured the first: a pod read 180 ms after its create on a busy k3s
+            // answered it, where the same test alone first met "waiting to start". Anything
+            // else (a container name the pod does not have) is the caller's mistake, and the server's
+            // words say which container names are valid.
+            var said = StatusMessage(ex.Response.Content);
+
+            return NotYet.Any(x => said.Contains(x, StringComparison.Ordinal))
+                ? Result<string>.Failure(
+                    ErrorCode.OperationInProgress,
+                    $"The logs of '{pod}' are not readable yet: {said}"
+                )
+                : Result<string>.Failure(ErrorCode.InvalidRequestBody, $"The logs of '{pod}' were refused: {said}");
+        } catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.NotFound) {
+            // ⚠ A 404 IS ALSO THE KUBELET'S, AND THEN THE POD IS THERE. The API server passes the
+            // kubelet's own status through for pods/log, and a kubelet that has not synced a pod the
+            // scheduler just bound to it answers "pod … does not exist". Measured on 2026-09-24: a full
+            // run of CyberCloud.Kubernetes.Tests read it 378 ms after the create, where the same test
+            // alone met the 400s above. Only a pod the API server has no record of is ResourceNotFound.
+            return await PodIsThereAsync(pod, cancellationToken).ConfigureAwait(false)
+                ? Result<string>.Failure(
+                    ErrorCode.OperationInProgress,
+                    $"The logs of '{pod}' are not readable yet: its node has not picked the pod up."
+                )
+                : Refuse<string>(ex, pod, "read the logs of");
+        } catch (HttpOperationException ex) {
+            return Refuse<string>(ex, pod, "read the logs of");
+        } catch (Exception ex) when (IsTransport(ex)) {
+            return Result<string>.Failure(Unreachable(ex));
+        }
+    }
+
+    /// <summary>
+    ///     Whether the API server has a record of the pod — what tells a kubelet's 404 on its log from a
+    ///     pod that is gone. Any failure of the read itself answers <see langword="false" />, so the
+    ///     caller reports the original 404.
+    /// </summary>
+    async Task<bool> PodIsThereAsync(ObjectRef pod, CancellationToken cancellationToken) {
+        try {
+            await client.CoreV1.ReadNamespacedPodAsync(pod.Name, pod.Namespace, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            return true;
+        } catch (Exception ex) when (ex is HttpOperationException || IsTransport(ex)) {
+            return false;
+        }
+    }
+
+    /// <summary>The <c>message</c> of a Kubernetes <c>Status</c> body, or the body itself.</summary>
+    static string StatusMessage(string? content) {
+        if (string.IsNullOrEmpty(content)) {
+            return "(no message)";
+        }
+
+        try {
+            return JsonNode.Parse(content)?["message"]?.GetValue<string>() ?? content;
+        } catch (JsonException) {
+            return content;
+        }
+    }
+
     /// <inheritdoc />
     public async Task<Result<IReadOnlyList<GroupVersionKind>>> DiscoverNamespacedKindsAsync(
         CancellationToken cancellationToken = default

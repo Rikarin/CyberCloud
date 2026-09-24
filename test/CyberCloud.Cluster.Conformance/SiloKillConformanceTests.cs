@@ -196,7 +196,18 @@ public abstract class SiloKillConformanceTests<TSource>
             );
 
             OperationStatus? last = null;
-            for (var i = 0; i < 12; i++) {
+
+            // ⚠ FORTY DRIVES A SECOND APART, NOT TWELVE BACK TO BACK — ClusterConformanceTests
+            // .ConvergeAsync's budget. Twelve immediate drives were enough while every case converged on
+            // an API server's echo; CyberCloud.ContainerInstance/containerGroups converges on a kubelet,
+            // which pulls an image and starts a container on a successor cluster whose node has never
+            // seen it, and the operation was still Running on the twelfth drive (2026-09-23). A case
+            // that converges at once still breaks out on its first terminal answer.
+            for (var i = 0; i < 40; i++) {
+                if (i > 0) {
+                    await Task.Delay(TimeSpan.FromSeconds(1), token);
+                }
+
                 var driven = await operation.DriveAsync();
 
                 // ⚠ Unwrapped by hand rather than with GetValueOrThrow, because the failure this

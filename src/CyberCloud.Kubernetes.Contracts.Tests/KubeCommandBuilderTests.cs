@@ -41,6 +41,42 @@ public sealed class KubeCommandBuilderTests {
     }
 
     [Fact]
+    public void APreconditionRidesInMetadataAndLeavesTheHashDescribingTheDesiredDocument() {
+        // IKubeCommandBuilder.IfResourceVersion — #28's fix for a render that carries a value it read
+        // off the object. The hash is taken before the version goes in, so two passes over one body
+        // hash alike whatever version each read; an empty version is no precondition at all.
+        var unconditional = Complete().Build();
+        var conditional = Complete().IfResourceVersion("4711").Build();
+        var empty = Complete().IfResourceVersion(string.Empty).Build();
+
+        using (var document = JsonDocument.Parse(conditional.Body)) {
+            document.RootElement.GetProperty("metadata").GetProperty("resourceVersion").GetString().ShouldBe("4711");
+        }
+
+        conditional.ReconcileHash.ShouldBe(unconditional.ReconcileHash);
+        empty.Body.ShouldBe(unconditional.Body);
+    }
+
+    [Fact]
+    public void APreconditionIsRefusedInTheCoOwnedModeWhichCarriesItsOwn() {
+        var refused = Builder()
+            .WithKind(Deployments)
+            .IfResourceVersion("4711")
+            .CoWriting(
+                new() {
+                    Ref = new() { Kind = Deployments, Namespace = "tenant-space", Name = "main" },
+                    Json = """{"metadata":{"name":"main","resourceVersion":"4711","labels":{}}}""",
+                    ResourceVersion = "4711"
+                }
+            )
+            .ObjectJson("""{"spec":{"replicas":2}}""")
+            .TryBuild();
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Message.ShouldContain("IfResourceVersion");
+    }
+
+    [Fact]
     public void TheCallersOwnFieldsAreLeftAlone() {
         var command = Complete().Build();
 

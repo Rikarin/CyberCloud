@@ -359,6 +359,10 @@ public sealed class KubeReacherGrain : Grain, IKubeReacherGrain {
             return CascadePolicy.Background;
         }
 
+        if (type == typeof(int)) {
+            return 10;
+        }
+
         if (type == typeof(OwnerRef)) {
             return new OwnerRef { ApiVersion = "apps/v1", Kind = "Deployment", Name = "main", Uid = "uid-main" };
         }

@@ -1,0 +1,91 @@
+# A virtual machine scale set — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from VirtualMachineScaleSets.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json — which is itself derived from the machine's schema,
+# so a machine's row and a set's row cannot disagree. Add a field in C#, never here.
+#
+# ⚠ THE REPLICA COUNT IS NOT A TENANT VALUE. `replicas` below is @internal: the platform renders what the
+# pool already says, clamped to `capacity`, and a tenant moves it through the `scale` action.
+
+## @param size {string} Every machine's size, from the platform's sizing catalogue: s1.small is 1 vCPU and 4 GiB, and each rung doubles both. A change reaches running machines as the upgrade policy says.
+## @required
+## @enum s1.large | s1.medium | s1.small | s1.xlarge
+## @widget cozy-preset
+size: s1.small
+
+## @param image {string} The CyberCloud.Compute/images resource every machine's root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the set waits for it and says so.
+## @required
+## @immutable
+## @length ..63
+## @pattern [a-z0-9]([-a-z0-9]*[a-z0-9])?
+## @example "ubuntu"
+image: ubuntu
+
+## @param osDiskSize {string} Each machine's root disk, in Kubernetes quantity form. At least the image's own size. ⚠ Immutable.
+## @required
+## @immutable
+## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+## @example "20Gi"
+osDiskSize: "20Gi"
+
+## @param network {object} The tenant network every machine's interface joins. Both empty means the cluster's pod network.
+network:
+  ## @param virtualNetwork {string} The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.
+  ## @immutable
+  ## @length ..63
+  ## @pattern ([a-z0-9]([-a-z0-9]*[a-z0-9])?)?
+  virtualNetwork: ""
+  ## @param subnet {string} The subnet of that network the interface takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the machine never starts.
+  ## @immutable
+  ## @length ..63
+  ## @pattern ([a-z0-9]([-a-z0-9]*[a-z0-9])?)?
+  ## @widget subnet
+  subnet: ""
+
+## @param cloudInit {object} First-boot configuration every machine gets, as cloud-init reads it.
+cloudInit:
+  ## @param userData {string} A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other path is refused. Empty means no cloud-init at all.
+  ## @length ..512
+  ## @pattern ([^#@\s]+#[^#@\s]+(@[^#@\s]+)?)?
+  ## @widget secret-ref
+  userData: ""
+
+## @param capacity {integer} How many machines the set holds: the count a new set starts at, the most the scale action may run, and what quota reserves — capacity times one machine's size and root disk. Raise it with a PUT, which reserves the difference first.
+## @required
+## @range 1..20
+capacity: 2
+
+## @param upgradePolicy {object} What happens to running machines when the template changes.
+upgradePolicy:
+  ## @param mode {string} Manual: only machines created afterwards get the new template. OnRestart: every machine's spec is updated and each guest takes it at its next restart. Rolling: the platform restarts machines onto the new template, at most maxUnavailable at a time.
+  ## @enum Manual | OnRestart | Rolling
+  mode: Rolling
+  ## @param maxUnavailable {integer} For a Rolling upgrade, how many machines may be restarting at once.
+  ## @range 1..20
+  maxUnavailable: 1
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Compute/virtualMachineScaleSets
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param replicas {integer} The pool's replica count, or -1 for a set not yet created, which renders the capacity.
+## @internal The scale. The reconciler reads it off the VirtualMachinePool before every render and writes back what it found, clamped to capacity; the scale action is what changes it. A tenant has no body property for it, which is why it is not generated from the schema.
+replicas: -1
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

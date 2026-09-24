@@ -3,6 +3,7 @@ using CyberCloud.Providers.Billing.Application;
 using CyberCloud.Providers.Cache.Application;
 using CyberCloud.Providers.Communication.Application;
 using CyberCloud.Providers.Compute.Application;
+using CyberCloud.Providers.ContainerInstance.Application;
 using CyberCloud.Providers.ContainerRegistry.Application;
 using CyberCloud.Providers.ContainerService.Application;
 using CyberCloud.Providers.DBforMySQL.Application;
@@ -60,6 +61,7 @@ namespace CyberCloud.Silo.Host;
 [DependsOn(typeof(ValkeyCacheApplicationModule))]
 [DependsOn(typeof(CommunicationApplicationModule))]
 [DependsOn(typeof(ComputeApplicationModule))]
+[DependsOn(typeof(ContainerInstanceApplicationModule))]
 [DependsOn(typeof(ContainerRegistryApplicationModule))]
 [DependsOn(typeof(ContainerServiceApplicationModule))]
 [DependsOn(typeof(MariaDbApplicationModule))]
