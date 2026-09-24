@@ -178,7 +178,8 @@ public sealed class IdentitySerializationTests : IDisposable {
         typeof(SecretRef)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Select(static x => x.Name)
-            .ShouldBe(["Path", "Field", "Version", "IsEmpty"], true);
+            // IsEmpty and IsCanonical are read off the address; neither is anywhere to put a value.
+            .ShouldBe(["Path", "Field", "Version", "IsEmpty", "IsCanonical"], true);
     }
 
     /// <summary>

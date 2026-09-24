@@ -325,8 +325,8 @@ public sealed class DeploymentOverHttpTests(LocalTopology topology) : IAsyncLife
     async Task BootstrapTenantAsync() {
         var tenant = topology.Client.ForTenant(Tenant.ToString("D", CultureInfo.InvariantCulture));
 
-        (await tenant.GetGrain<ITenantGrain>(GrainKeys.Tenant(Tenant)).CreateAsync(Slug, "Deployments over HTTP", "eu-central"))
-            .IsSuccess.ShouldBeTrue();
+        var created = await tenant.GetGrain<ITenantGrain>(GrainKeys.Tenant(Tenant)).CreateAsync(Slug, "Deployments over HTTP", "eu-central");
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
 
         var tuple = RelationTuple.Create(
             AuthObjectRef.Create(ObjectTypes.Tenant, Tenant.ToString("N", CultureInfo.InvariantCulture)).GetValueOrThrow(),

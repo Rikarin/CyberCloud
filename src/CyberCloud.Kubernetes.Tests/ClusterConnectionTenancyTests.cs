@@ -267,7 +267,7 @@ public sealed class ClusterConnectionTenancyTests(KubeTestCluster cluster) {
         typeof(IClusterConnectionGrain)
             .GetMethods(BindingFlags.Public | BindingFlags.Instance)
             .Length
-            .ShouldBe(12, "the interface has twelve methods; the probe covers whatever is there.");
+            .ShouldBe(13, "the interface has thirteen methods — AuthorizeAttachAsync (#22) and ReadLogsAsync (#28) were the last two; the probe covers whatever is there.");
 
         var unchecked_ = await cluster.Reacher(TenantB)
             .ProbeUncheckedMethodsAsync(

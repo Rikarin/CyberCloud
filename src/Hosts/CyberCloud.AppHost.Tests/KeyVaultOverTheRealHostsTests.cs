@@ -57,8 +57,10 @@ namespace CyberCloud.AppHost.Tests;
 /// <param name="topology">The running AppHost: two silo processes, Redis, PostgreSQL, k3s.</param>
 [Collection(LocalTopologySuite.Name)]
 public sealed class KeyVaultOverTheRealHostsTests(LocalTopology topology) : IAsyncLifetime {
-    static readonly Guid Tenant = new("0d1f0dfe-4c7e-4f2c-9b5b-2f9b4d0a0030");
-    static readonly Guid Subscription = new("0d1f0dfe-4c7e-4f2c-9b5b-2f9b4d0a0031");
+    // ⚠ …0040, not …0030: #30 and #39 each took the next free id on their own branches, and the
+    // second test of the collection to seed its tenant found it already created.
+    static readonly Guid Tenant = new("0d1f0dfe-4c7e-4f2c-9b5b-2f9b4d0a0040");
+    static readonly Guid Subscription = new("0d1f0dfe-4c7e-4f2c-9b5b-2f9b4d0a0041");
 
     const string ResourceGroup = "key-vault-boundary";
 

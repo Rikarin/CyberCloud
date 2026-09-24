@@ -210,8 +210,11 @@ public sealed class ResolveFailureTests(OpenBaoFixture vault) {
             );
 
         resolved.IsFailure.ShouldBeTrue("a path with a '..' segment was resolved");
-        resolved.Error!.Code.ShouldBe(ErrorCode.InternalError);
-        resolved.Error.Message.ShouldContain("malformed handle");
+        // ⚠ AuthorizationFailed since the merge of #34's and #30's two fixes into one rule
+        // (SecretRef.IsCanonicalPath, VaultFailures.NotCanonical): the only way to spell one is to aim
+        // a handle somewhere it may not go.
+        resolved.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
+        resolved.Error.Message.ShouldContain("'..' segment");
     }
 
     [Fact]
