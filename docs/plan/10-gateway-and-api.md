@@ -193,7 +193,11 @@ write is a `405` with `Allow: GET`. `InvoiceRoutingTests` pins the gateway's hal
 question asked a fourth time.** The reserved namespace keeps it out of the registry the emitters
 read, exactly as `CyberCloud.Authorization`'s does, so `openapi/`, the three SDKs and the portal's
 generated client are silent about it and `cyc graph query` — hand-written beside `cyc rest`,
-[21 § Grammar](21-cli-and-sdks.md) — is the CLI's whole knowledge of it. The fix is the same third
+[21 § Grammar](21-cli-and-sdks.md) — is the CLI's whole knowledge of it. The portal's resource graph
+explorer (#41, [20](20-portal.md)) reaches it the way the access page reaches role assignments:
+`ResourceGraphApi` (`portal/apps/portal/src/app/api/resource-graph.ts`), hand-written beside
+`RoleAssignmentsApi` over the generated client's transport, and following a `nextLink` by its
+`$skipToken` rather than by its URL. The fix is the same third
 non-registry source the role assignment API waits on, one path rather than a sub-path of every
 scope, and it is owed with that one because it touches the same five surfaces.
 

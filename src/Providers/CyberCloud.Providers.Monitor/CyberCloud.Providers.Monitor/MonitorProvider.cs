@@ -1,3 +1,5 @@
+using CyberCloud.Providers.Monitor.Query;
+
 namespace CyberCloud.Providers.Monitor;
 
 /// <summary>
@@ -255,6 +257,40 @@ public sealed class MonitorProvider : IResourceProvider {
                 true,
                 response: MonitorWorkspaces.ListKeysResponse,
                 handler: typeof(MonitorWorkspaceListKeysHandler)
+            )
+            // ── The explorers' three reads — #41, docs/plan/16 § Querying a workspace ─────────────
+            //
+            // ⚠ ACTIONS AND NOT A ROUTE OF THEIR OWN, AND `read` AND NOT A PERMISSION OF THEIR OWN.
+            // MonitorQueries' remarks carry both arguments: the action path already resolves the
+            // address with the token's tenant, 404s what does not exist, checks through the one seam
+            // and hands the handler the GUID the accountID and the database are derived from; and a
+            // query reads the workspace, which is what Reader is for.
+            //
+            // ⚠ TWO OF THE THREE DECLARE NO RESPONSE. A series list and a row list are arrays of
+            // objects, which SchemaKind.Array refuses; the dispatcher leaves an undeclared response
+            // unchecked and the generated clients type it `unknown`. conformance.yaml § owed,
+            // query-responses-are-undeclared.
+            .Action(
+                MonitorQueries.QueryMetricsAction,
+                ActionKind.Post,
+                MonitorQueries.Permission,
+                request: MonitorQueries.QueryMetricsRequest,
+                handler: typeof(MonitorWorkspaceQueryMetricsHandler)
+            )
+            .Action(
+                MonitorQueries.ListMetricLabelsAction,
+                ActionKind.Post,
+                MonitorQueries.Permission,
+                request: MonitorQueries.ListMetricLabelsRequest,
+                response: MonitorQueries.ListMetricLabelsResponse,
+                handler: typeof(MonitorWorkspaceListMetricLabelsHandler)
+            )
+            .Action(
+                MonitorQueries.SearchLogsAction,
+                ActionKind.Post,
+                MonitorQueries.Permission,
+                request: MonitorQueries.SearchLogsRequest,
+                handler: typeof(MonitorWorkspaceSearchLogsHandler)
             )
             // ⚠ `workspace`, AND `monitor` IS THE ONE WORD THIS NAMESPACE COULD NOT HAVE.
             // CliEmitter derives the CLI GROUP key from the provider namespace's last segment,

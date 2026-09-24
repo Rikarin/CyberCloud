@@ -2697,6 +2697,73 @@ export interface MonitorWorkspacesListKeysResult {
   sqlEndpoint: string;
 }
 
+/** The parameters of listMetricLabels. */
+export interface MonitorWorkspacesListMetricLabelsContent {
+  /** The window's end. Defaults to now. */
+  end?: string;
+  /** The label whose values to list — __name__ for the metric names. Leave it out to list the label names instead. */
+  label?: string;
+  /** A series selector the answer is narrowed to, for example http_requests_total. */
+  match?: string;
+  /** The window's start. Defaults to a day before end. */
+  start?: string;
+}
+
+/** What listMetricLabels returns. */
+export interface MonitorWorkspacesListMetricLabelsResult {
+  /** Whether more than 10000 matched and the rest were left out. */
+  truncated: boolean;
+  /** The label values, or the label names when no label was named, sorted. */
+  values: string[];
+}
+
+/** The parameters of queryMetrics. */
+export interface MonitorWorkspacesQueryMetricsContent {
+  /** Where a range query ends. Give it with start. */
+  end?: string;
+  /** A PromQL or MetricsQL expression, run under this workspace's metrics tenancy. */
+  query: string;
+  /** Where a range query starts. Give it with end, or neither for an instant query. */
+  start?: string;
+  /** A range query's resolution. Defaults to the window cut into 240 points; the window divided by it may not exceed 11000. */
+  stepSeconds?: number;
+  /** The instant an instant query is evaluated at. Defaults to now. */
+  time?: string;
+}
+
+/** The values /severities accepts. ⚠ Closed: the write path refuses anything else. */
+export type MonitorWorkspacesSearchLogsContentSeverities =
+  | 'trace'
+  | 'debug'
+  | 'info'
+  | 'warn'
+  | 'error'
+  | 'fatal';
+
+/** The parameters of searchLogs. */
+export interface MonitorWorkspacesSearchLogsContent {
+  /** Up to 10 key=value filters, each matched against the record's own attributes and its resource's. */
+  attributes?: string[];
+  /** The histogram's bucket width. Defaults to the window cut into 60. */
+  bucketSeconds?: number;
+  /** Answer how many rows the search would read, and run nothing else. */
+  estimate?: boolean;
+  /** The window's start, inclusive. */
+  from: string;
+  /** The service.name the record must come from. */
+  service?: string;
+  /** The severity classes to keep. Leave it out for every record, including those with no severity. */
+  severities?: MonitorWorkspacesSearchLogsContentSeverities[];
+  /** Text the log body must contain, compared without regard to case. */
+  text?: string;
+  /** The window's end, exclusive. At most 90 days after from. */
+  to: string;
+  /** How many records to return, newest first. Defaults to 100. */
+  top?: number;
+  /** The trace the record must belong to, 32 hex digits. */
+  traceId?: string;
+}
+
 /** The values /properties/actionGroup/channel accepts. ⚠ Closed: the write path refuses anything else. */
 export type MonitorWorkspacesAlertRulesChannel =
   | 'sms'

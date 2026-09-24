@@ -7567,6 +7567,178 @@ class MonitorWorkspaceListKeysResult:
         return wire
 
 
+@dataclass
+class MonitorWorkspaceListMetricLabelsContent:
+    """The parameters of listMetricLabels."""
+
+    # The window's end. Defaults to now.
+    end: Optional[str] = None
+    # The label whose values to list — __name__ for the metric names. Leave it out to list the label names instead.
+    label: Optional[str] = None
+    # A series selector the answer is narrowed to, for example http_requests_total.
+    match_: Optional[str] = None
+    # The window's start. Defaults to a day before end.
+    start: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MonitorWorkspaceListMetricLabelsContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            end=wire.get("end"),
+            label=wire.get("label"),
+            match_=wire.get("match"),
+            start=wire.get("start"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.end is not None:
+            wire["end"] = self.end
+        if self.label is not None:
+            wire["label"] = self.label
+        if self.match_ is not None:
+            wire["match"] = self.match_
+        if self.start is not None:
+            wire["start"] = self.start
+        return wire
+
+
+@dataclass
+class MonitorWorkspaceListMetricLabelsResult:
+    """What listMetricLabels returns."""
+
+    # Whether more than 10000 matched and the rest were left out.
+    truncated: bool
+    # The label values, or the label names when no label was named, sorted.
+    values: List[str]
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MonitorWorkspaceListMetricLabelsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            truncated=wire["truncated"],
+            values=wire["values"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["truncated"] = self.truncated
+        wire["values"] = self.values
+        return wire
+
+
+@dataclass
+class MonitorWorkspaceQueryMetricsContent:
+    """The parameters of queryMetrics."""
+
+    # A PromQL or MetricsQL expression, run under this workspace's metrics tenancy.
+    query: str
+    # Where a range query ends. Give it with start.
+    end: Optional[str] = None
+    # Where a range query starts. Give it with end, or neither for an instant query.
+    start: Optional[str] = None
+    # A range query's resolution. Defaults to the window cut into 240 points; the window divided by it may not exceed 11000.
+    step_seconds: Optional[int] = None
+    # The instant an instant query is evaluated at. Defaults to now.
+    time: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MonitorWorkspaceQueryMetricsContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            query=wire["query"],
+            end=wire.get("end"),
+            start=wire.get("start"),
+            step_seconds=wire.get("stepSeconds"),
+            time=wire.get("time"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["query"] = self.query
+        if self.end is not None:
+            wire["end"] = self.end
+        if self.start is not None:
+            wire["start"] = self.start
+        if self.step_seconds is not None:
+            wire["stepSeconds"] = self.step_seconds
+        if self.time is not None:
+            wire["time"] = self.time
+        return wire
+
+
+MonitorWorkspaceSearchLogsContentSeverities = Literal["trace", "debug", "info", "warn", "error", "fatal"]
+"""The values /severities accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class MonitorWorkspaceSearchLogsContent:
+    """The parameters of searchLogs."""
+
+    # The window's start, inclusive.
+    from_: str
+    # The window's end, exclusive. At most 90 days after from.
+    to: str
+    # Up to 10 key=value filters, each matched against the record's own attributes and its resource's.
+    attributes: Optional[List[str]] = None
+    # The histogram's bucket width. Defaults to the window cut into 60.
+    bucket_seconds: Optional[int] = None
+    # Answer how many rows the search would read, and run nothing else.
+    estimate: Optional[bool] = None
+    # The service.name the record must come from.
+    service: Optional[str] = None
+    # The severity classes to keep. Leave it out for every record, including those with no severity.
+    severities: Optional[List[MonitorWorkspaceSearchLogsContentSeverities]] = None
+    # Text the log body must contain, compared without regard to case.
+    text: Optional[str] = None
+    # How many records to return, newest first. Defaults to 100.
+    top: Optional[int] = None
+    # The trace the record must belong to, 32 hex digits.
+    trace_id: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MonitorWorkspaceSearchLogsContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            from_=wire["from"],
+            to=wire["to"],
+            attributes=wire.get("attributes"),
+            bucket_seconds=wire.get("bucketSeconds"),
+            estimate=wire.get("estimate"),
+            service=wire.get("service"),
+            severities=wire.get("severities"),
+            text=wire.get("text"),
+            top=wire.get("top"),
+            trace_id=wire.get("traceId"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["from"] = self.from_
+        wire["to"] = self.to
+        if self.attributes is not None:
+            wire["attributes"] = self.attributes
+        if self.bucket_seconds is not None:
+            wire["bucketSeconds"] = self.bucket_seconds
+        if self.estimate is not None:
+            wire["estimate"] = self.estimate
+        if self.service is not None:
+            wire["service"] = self.service
+        if self.severities is not None:
+            wire["severities"] = self.severities
+        if self.text is not None:
+            wire["text"] = self.text
+        if self.top is not None:
+            wire["top"] = self.top
+        if self.trace_id is not None:
+            wire["traceId"] = self.trace_id
+        return wire
+
+
 AlertRuleChannel = Literal["sms", "whatsapp", "email", "push", "voice"]
 """The values /properties/actionGroup/channel accepts. ⚠ Closed: the write path refuses anything else."""
 
@@ -11270,6 +11442,11 @@ __all__ = [
     "MonitorWorkspaceData",
     "MonitorWorkspaceResource",
     "MonitorWorkspaceListKeysResult",
+    "MonitorWorkspaceListMetricLabelsContent",
+    "MonitorWorkspaceListMetricLabelsResult",
+    "MonitorWorkspaceQueryMetricsContent",
+    "MonitorWorkspaceSearchLogsContentSeverities",
+    "MonitorWorkspaceSearchLogsContent",
     "AlertRuleChannel",
     "AlertRuleOperator",
     "AlertRuleSignal",

@@ -26,7 +26,7 @@
  * split or copied into a route chunk, and the route ceiling is the one that must then hold.
  *
  * ⚠ The marker alone can't tell the library's own chunk from a route chunk the library was merged
- * into. A page that imported `echarts-build` statically would put ECharts in its route chunk, that
+ * into. A page that imported `echarts-engine` statically would put ECharts in its route chunk, that
  * chunk would be the only one carrying the marker, and it would be measured against the chart
  * ceiling instead of the route one. So a chunk counts as the library only when it also carries no
  * Angular definition: `ɵcmp`, `ɵdir`, `ɵpipe`, `ɵfac` and `ɵprov` are property names the compiler

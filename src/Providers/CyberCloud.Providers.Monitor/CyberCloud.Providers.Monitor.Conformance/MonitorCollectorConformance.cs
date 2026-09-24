@@ -1,6 +1,7 @@
 using CyberCloud.Conformance;
 using CyberCloud.Providers.Monitor.Alerting;
 using CyberCloud.Providers.Monitor.Contracts;
+using CyberCloud.Providers.Monitor.Query;
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -84,7 +85,7 @@ public sealed class MonitorCollectorCase : IProviderCaseSource {
     ///     <c>IAlertControlPlane</c>.
     /// </remarks>
     public static void ConfigureSilo(ISiloBuilder silo) =>
-        silo.ConfigureServices(static services => services.AddCyberCloudMonitorAlerting());
+        silo.ConfigureServices(static services => services.AddCyberCloudMonitorAlerting().AddCyberCloudMonitorQuery(new()));
 
     static string WithReplicas(string body, int replicas) {
         var node = JsonNode.Parse(body)!.AsObject();

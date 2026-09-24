@@ -21,8 +21,9 @@ import { links } from '../../app/routes/portal-links';
     <p class="text-foreground-muted mt-2 text-sm" i18n="@@home.body">
       The dashboard is a bespoke page and is not part of the M1 shell. Press Ctrl+K to search.
     </p>
-    <p class="mt-4 text-sm">
+    <p class="mt-4 flex gap-4 text-sm">
       <a class="underline" [routerLink]="subscriptions" i18n="@@home.subscriptions">Subscriptions</a>
+      <a class="underline" [routerLink]="graph" i18n="@@home.graph">Resource graph</a>
     </p>
     <p class="mt-2 text-sm">
       <a class="underline" [routerLink]="identity" i18n="@@home.identity">Members and applications</a>
@@ -32,4 +33,5 @@ import { links } from '../../app/routes/portal-links';
 export class Home {
   protected readonly subscriptions = links.subscriptions();
   protected readonly identity = links.identityMembers();
+  protected readonly graph = links.graph();
 }

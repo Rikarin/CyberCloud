@@ -52,6 +52,17 @@ namespace CyberCloud.Providers.Monitor;
 ///         still there. <c>conformance.yaml § owed</c>, <c>retention-shrink-is-refused-after-202</c>.
 ///     </para>
 ///     <para>
+///         ⚠ <b>THE ACCOUNT IS CLAIMED FIRST, BEFORE THE KEY IS MINTED OR ANYTHING IS APPLIED.</b>
+///         <see cref="MonitorWorkspaces.AccountId" /> folds the GUID to 32 bits, so a workspace can
+///         land on an account another tenant's workspace already holds, and the <c>VMUser</c> this pass
+///         would apply is then a write path into that tenant's series. The claim goes to
+///         <see cref="IMonitorAccounts" />; a workspace that folds onto a held account fails with a
+///         <c>409</c> that says to delete and recreate it — a new workspace gets a new GUID and, almost
+///         surely, a free account — and nothing is applied. The explorer's metrics reads check the same
+///         claim, so the failed workspace reads nothing either. #41's review; docs/plan/16 § Querying
+///         a workspace.
+///     </para>
+///     <para>
 ///         The four clauses of docs/plan/08 § The reconcile loop, and where each is satisfied:
 ///     </para>
 ///     <list type="number">
@@ -62,16 +73,17 @@ namespace CyberCloud.Providers.Monitor;
 ///             appends or timestamps.
 ///         </item>
 ///         <item>
-///             <b>No hidden state.</b> The only field is the primary constructor's
-///             <see cref="IClock" />, which is a dependency rather than a memory. ⚠ A reconciler is
+///             <b>No hidden state.</b> The only fields are the primary constructor's
+///             <see cref="IClock" /> and <see cref="IMonitorAccounts" />, which are dependencies rather
+///             than memory — the ledger's state is in its grain. ⚠ A reconciler is
 ///             registered <b>as a singleton, by concrete type</b>, so one instance serves every
 ///             tenant in the process — and a <c>readonly</c> field holding a mutable dictionary is
 ///             the shape that gets past a structural check, because the field never reassigns.
 ///             <c>MonitorReconcilerTests</c> asserts both halves.
 ///         </item>
 ///         <item>
-///             <b>Bounded.</b> One vault round trip, three applies and four reads, on the caller's
-///             token.
+///             <b>Bounded.</b> One claim, one vault round trip, three applies and four reads, on the
+///             caller's token.
 ///         </item>
 ///         <item>
 ///             <b>Observes, never assumes.</b> <see cref="ReconcileOutcome.Converged" /> follows a
@@ -86,7 +98,8 @@ namespace CyberCloud.Providers.Monitor;
 ///     </para>
 /// </remarks>
 /// <param name="clock">Stamps <see cref="ObservedState.ObservedAt" />.</param>
-public sealed class MonitorWorkspaceReconciler(IClock clock) : IResourceReconciler {
+/// <param name="accounts">The ledger the workspace's <c>accountID</c> is claimed in.</param>
+public sealed class MonitorWorkspaceReconciler(IClock clock, IMonitorAccounts accounts) : IResourceReconciler {
     /// <inheritdoc />
     public ResourceTypeName Type => MonitorWorkspaces.Type;
 
@@ -107,6 +120,20 @@ public sealed class MonitorWorkspaceReconciler(IClock clock) : IResourceReconcil
         }
 
         var name = context.Id.Name;
+
+        // ── The account, BEFORE anything is minted or applied. See the remarks. ──────────────
+        var account = MonitorWorkspaces.AccountId(context.Id);
+
+        if (!await accounts.ClaimAsync(account, context.Id.Id, cancellationToken)) {
+            return ReconcileOutcome.Failed(
+                ErrorCode.Conflict,
+                $"'{context.Id.Path}' folds to metrics account {account.ToString(CultureInfo.InvariantCulture)}, "
+                + "which another monitor workspace already holds. Two workspaces under one account would "
+                + "read and write each other's metrics, so nothing was applied: no ingest key, no metrics "
+                + "routing, no row. Delete this workspace and create it again — a new workspace gets a new "
+                + "GUID and, with it, a different account."
+            );
+        }
 
         // ── The shrink check, BEFORE anything is applied. See the remarks. ────────────────────
         if (await ShrinkAsync(context, cluster, cancellationToken) is { } refusal) {

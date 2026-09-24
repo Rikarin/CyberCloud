@@ -1,5 +1,8 @@
 using CyberCloud.Core.Contracts;
 using CyberCloud.Providers.Monitor.Alerting;
+using CyberCloud.Providers.Monitor.Query;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using CyberCloud.ResourceManager;
 using Volo.Abp.Application;
 using Volo.Abp.Modularity;
@@ -68,5 +71,14 @@ public sealed class MonitorApplicationModule : AbpModule {
         // the gateway needs it as much as the silo does. The query seam is the refusing default
         // until a host registers a real one; TryAdd keeps a real one registered first.
         context.Services.AddCyberCloudMonitorAlerting();
+
+        // ⚠ THE EXPLORERS' STORES, FROM CONFIGURATION, IN BOTH HOSTS (#41). queryMetrics,
+        // listMetricLabels and searchLogs run inside ResourceManagerService — the gateway's process —
+        // and their handlers hold IMonitorMetricsStore and IMonitorLogStore. A host whose
+        // CyberCloud:Monitor:Query section is empty keeps the refusing store for that half, and a
+        // malformed endpoint throws here, so the pod does not start rather than failing the first query.
+        var query = new MonitorQueryOptions();
+        context.Services.GetConfiguration().GetSection(MonitorQueryOptions.SectionName).Bind(query);
+        context.Services.AddCyberCloudMonitorQuery(query);
     }
 }

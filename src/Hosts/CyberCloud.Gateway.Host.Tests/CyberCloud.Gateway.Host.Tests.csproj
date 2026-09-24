@@ -84,4 +84,19 @@
         <ProjectReference Include="../CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
     </ItemGroup>
 
+    <!--
+      ⚠ THE MONITOR PROVIDER'S CONFORMANCE PROJECT, FOR ONE SUITE AND ONE REASON (#41).
+      MonitorQueryOverHttpTests types queryMetrics, listMetricLabels and searchLogs at a real listener
+      and needs them answered by the REAL write path — the action dispatcher, the permission check, the
+      GUID the accountID and the database are derived from — which only an Orleans test cluster with
+      the provider registered has. ProviderTestCluster<MonitorCase> is that cluster, built the way the
+      provider's own conformance suite builds it, so the fixture composes a manager over it rather than
+      a third copy of the harness. It brings a VictoriaMetrics cluster (three containers — the
+      single-node image has no accountID) and a ClickHouse beside the one ResourceGraphQueryEndToEndTests
+      starts; the header's "one container" is three suites now, and still none for the pipeline itself.
+    -->
+    <ItemGroup Label="The explorers' reads over a real write path and real stores — see above">
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.Conformance/CyberCloud.Providers.Monitor.Conformance.csproj"/>
+    </ItemGroup>
+
 </Project>

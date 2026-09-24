@@ -14408,6 +14408,76 @@
               "secret": true,
               "rawBody": true
             },
+            "list-metric-labels": {
+              "name": "list-metric-labels",
+              "summary": "listMetricLabels a Monitor workspace.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}/listMetricLabels",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--end",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The window's end. Defaults to now.",
+                  "jsonPointer": "/end"
+                },
+                {
+                  "name": "--label",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The label whose values to list — __name__ for the metric names. Leave it out to list the label names instead.",
+                  "jsonPointer": "/label"
+                },
+                {
+                  "name": "--match",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A series selector the answer is narrowed to, for example http_requests_total.",
+                  "jsonPointer": "/match"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--start",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The window's start. Defaults to a day before end.",
+                  "jsonPointer": "/start"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "listMetricLabels",
+              "permission": "read"
+            },
             "purge": {
               "name": "purge",
               "summary": "purge a Monitor workspace.",
@@ -14455,6 +14525,83 @@
               "permission": "purge",
               "rawBody": true
             },
+            "query-metrics": {
+              "name": "query-metrics",
+              "summary": "queryMetrics a Monitor workspace.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}/queryMetrics",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--end",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where a range query ends. Give it with start.",
+                  "jsonPointer": "/end"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--query",
+                  "type": "string",
+                  "required": true,
+                  "summary": "A PromQL or MetricsQL expression, run under this workspace's metrics tenancy.",
+                  "jsonPointer": "/query"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--start",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where a range query starts. Give it with end, or neither for an instant query.",
+                  "jsonPointer": "/start"
+                },
+                {
+                  "name": "--step-seconds",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "A range query's resolution. Defaults to the window cut into 240 points; the window divided by it may not exceed 11000.",
+                  "jsonPointer": "/stepSeconds"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--time",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The instant an instant query is evaluated at. Defaults to now.",
+                  "jsonPointer": "/time"
+                }
+              ],
+              "action": "queryMetrics",
+              "permission": "read"
+            },
             "restore": {
               "name": "restore",
               "summary": "restore a Monitor workspace.",
@@ -14501,6 +14648,128 @@
               "action": "restore",
               "permission": "write",
               "rawBody": true
+            },
+            "search-logs": {
+              "name": "search-logs",
+              "summary": "searchLogs a Monitor workspace.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}/searchLogs",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--attributes",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Up to 10 key=value filters, each matched against the record's own attributes and its resource's.",
+                  "jsonPointer": "/attributes",
+                  "repeated": true
+                },
+                {
+                  "name": "--bucket-seconds",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The histogram's bucket width. Defaults to the window cut into 60.",
+                  "jsonPointer": "/bucketSeconds"
+                },
+                {
+                  "name": "--estimate",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Answer how many rows the search would read, and run nothing else.",
+                  "jsonPointer": "/estimate"
+                },
+                {
+                  "name": "--from",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The window's start, inclusive.",
+                  "jsonPointer": "/from"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--service",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The service.name the record must come from.",
+                  "jsonPointer": "/service"
+                },
+                {
+                  "name": "--severities",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The severity classes to keep. Leave it out for every record, including those with no severity.",
+                  "jsonPointer": "/severities",
+                  "repeated": true,
+                  "choices": [
+                    "trace",
+                    "debug",
+                    "info",
+                    "warn",
+                    "error",
+                    "fatal"
+                  ]
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--text",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Text the log body must contain, compared without regard to case.",
+                  "jsonPointer": "/text"
+                },
+                {
+                  "name": "--to",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The window's end, exclusive. At most 90 days after from.",
+                  "jsonPointer": "/to"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many records to return, newest first. Defaults to 100.",
+                  "jsonPointer": "/top"
+                },
+                {
+                  "name": "--trace-id",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The trace the record must belong to, 32 hex digits.",
+                  "jsonPointer": "/traceId"
+                }
+              ],
+              "action": "searchLogs",
+              "permission": "read"
             },
             "show": {
               "name": "show",

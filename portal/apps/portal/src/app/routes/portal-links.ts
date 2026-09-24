@@ -107,6 +107,18 @@ export const links = {
   invoices: () => '/invoices',
   invoice: (number: string) => `/invoices/${seg(number)}`,
 
+  /**
+   * A Monitor workspace's metrics explorer and log search (#41). Only that type has them, so they
+   * take the workspace's three segments rather than an address and a type.
+   */
+  workspaceMetrics: (subscriptionId: string, resourceGroup: string, workspace: string) =>
+    `${links.resourceGroup(subscriptionId, resourceGroup)}/providers/CyberCloud.Monitor/workspaces/${seg(workspace)}/metrics`,
+  workspaceLogs: (subscriptionId: string, resourceGroup: string, workspace: string) =>
+    `${links.resourceGroup(subscriptionId, resourceGroup)}/providers/CyberCloud.Monitor/workspaces/${seg(workspace)}/logs`,
+
+  /** The resource graph explorer — the tenant's, so no scope in the path. */
+  graph: () => '/graph',
+
   /** The operation view, and where to go once it succeeds. */
   operation: (operationId: string, then?: string) =>
     `/operations/${seg(operationId)}` + (then === undefined ? '' : `?then=${seg(then)}`)
