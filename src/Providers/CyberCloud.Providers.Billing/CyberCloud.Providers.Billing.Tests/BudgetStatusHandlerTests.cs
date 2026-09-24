@@ -1,3 +1,4 @@
+using CyberCloud.Authorization.Contracts;
 using CyberCloud.Metering.Contracts;
 using CyberCloud.ResourceManager.Conformance;
 using Orleans.Multitenant;
@@ -74,6 +75,50 @@ public sealed class BudgetStatusHandlerTests(BudgetSilo silo) {
         alert.ShouldContain(" actual 50% at 1.00: ");
     }
 
+    /// <summary>
+    ///     ⚠ A subscription budget's figures are the subscription's spend. A reader of the budget's group,
+    ///     whom the cost query answers with <c>filtered</c>, doesn't get them from the budget either; a
+    ///     reader of the subscription does, and loses them at the revoke, not at the next evaluation.
+    /// </summary>
+    [Fact]
+    public async Task ASubscriptionBudgetsFiguresAreShownOnlyToAReaderOfTheSubscription() {
+        var subscription = Guid.NewGuid();
+        var id = Budget(subscription);
+        await ReconcileAsync(id, Budgets.Body(Service(subscription), ["finance@example.com"], 1.50m, actual: [50m], scope: "subscription"));
+
+        var onTheSubscription = ObjectRef.Of(ObjectTypes.Subscription, subscription);
+        await GrantAsync(onTheSubscription, SubjectRef.Of(ObjectTypes.Resource, id.Id));
+        await GrantAsync(ObjectRef.Of(ObjectTypes.ResourceGroup, subscription.ToString("N", CultureInfo.InvariantCulture) + "-prod"), User("bob"));
+        await GrantAsync(onTheSubscription, User("alice"));
+
+        await UseAsync(subscription, 40m);
+        (await silo.Plane.EvaluateAsync(Tenant, id.Id, TestContext.Current.CancellationToken)).GetValueOrThrow().Fired.ShouldBe(1);
+
+        var groupReader = await StatusAsync(id, "bob");
+        groupReader.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
+        groupReader.Error.Message.ShouldNotContain("1.00", Case.Sensitive, "the refusal carries no figure");
+
+        (await StatusAsync(id)).Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed, "a call with no caller is nobody's, and nobody reads the subscription");
+
+        using (var status = Parsed(await StatusAsync(id, "alice"))) {
+            status.RootElement.GetProperty("actual").GetDecimal().ShouldBe(1.00m);
+        }
+
+        await RevokeAsync(onTheSubscription, User("alice"));
+        (await StatusAsync(id, "alice")).Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed, "checked fully consistent, at the revoke");
+    }
+
+    /// <summary>A group budget's figures are the group's, and <c>read</c> on the budget is enough.</summary>
+    [Fact]
+    public async Task AGroupBudgetAsksNothingMoreThanTheManagerAsked() {
+        var subscription = Guid.NewGuid();
+        var id = Budget(subscription);
+        await ReconcileAsync(id, Budgets.Body(Service(subscription), ["finance@example.com"], 1.50m, actual: [50m]));
+
+        using var status = Parsed(await StatusAsync(id, "bob"));
+        status.RootElement.GetProperty("amount").GetDecimal().ShouldBe(1.50m);
+    }
+
     // ── Plumbing ──────────────────────────────────────────────────────────────────────────────────
 
     static ResourceId Budget(Guid subscription) =>
@@ -117,12 +162,28 @@ public sealed class BudgetStatusHandlerTests(BudgetSilo silo) {
         appended.IsSuccess.ShouldBeTrue(appended.Error?.Message);
     }
 
-    Task<Result<string>> StatusAsync(ResourceId id) {
+    Task<Result<string>> StatusAsync(ResourceId id, string user = "") {
         using var empty = JsonDocument.Parse("{}");
         return new BudgetStatusHandler(silo.Plane).InvokeAsync(
-            new(id, Budgets.V2026, Budgets.StatusAction, empty.RootElement.Clone(), empty.RootElement.Clone(), string.Empty, null, new InMemorySecretVault()),
+            new(id, Budgets.V2026, Budgets.StatusAction, empty.RootElement.Clone(), empty.RootElement.Clone(), string.Empty, null, new InMemorySecretVault()) {
+                Caller = new() { TenantId = Tenant, SubjectType = "user", SubjectId = user }
+            },
             TestContext.Current.CancellationToken
         );
+    }
+
+    static SubjectRef User(string id) => SubjectRef.Of(ObjectTypes.User, id);
+
+    Task GrantAsync(ObjectRef on, SubjectRef subject) => WriteAsync(on, subject, grant: true);
+
+    Task RevokeAsync(ObjectRef on, SubjectRef subject) => WriteAsync(on, subject, grant: false);
+
+    async Task WriteAsync(ObjectRef on, SubjectRef subject, bool grant) {
+        var tuple = RelationTuple.Create(on, Relations.Reader, subject).GetValueOrThrow();
+        var store = silo.Grains.ForTenant(Tenant.ToString("D", CultureInfo.InvariantCulture)).GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(Tenant));
+
+        var written = grant ? await store.WriteAsync(tuple) : await store.DeleteAsync(tuple);
+        written.IsSuccess.ShouldBeTrue(written.Error?.Message);
     }
 
     /// <summary>The answer, parsed, after the dispatcher's own check against the published shape.</summary>

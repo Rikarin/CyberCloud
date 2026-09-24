@@ -303,4 +303,24 @@ public interface IBudgetControlPlane {
     /// <param name="budgetId">The budget resource's GUID.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
     Task<Result<bool>> IsArmedAsync(Guid tenantId, Guid budgetId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Whether a caller may read a subscription, checked fully consistent. A check that could not be
+    ///     answered is a no.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>What <c>showStatus</c> asks before it shows a subscription budget's figures</b>, which are
+    ///     the subscription's spend. Fully consistent for the reason <c>IInvoiceQueryGrain</c>'s check
+    ///     is: a revoked reader must stop seeing the figures at the revoke, not at the next evaluation.
+    /// </remarks>
+    /// <param name="tenantId">The tenant.</param>
+    /// <param name="subscriptionId">The subscription.</param>
+    /// <param name="caller">Who is asking.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    Task<bool> MayReadSubscriptionAsync(
+        Guid tenantId,
+        Guid subscriptionId,
+        CostCaller caller,
+        CancellationToken cancellationToken = default
+    );
 }

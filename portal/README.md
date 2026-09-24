@@ -294,10 +294,11 @@ four verbs exist on `CyberCloudApi` for every type in the document. A hand-writt
 third copy of what two generated surfaces already say.
 
 ⚠ **The access page and the cost pages are the pages over a hand-written client, and the reason is
-the address, not the page** — the cost pages' two addresses are under `CyberCloud.CostManagement`,
-reserved the same way (`apps/portal/src/app/api/cost-management.ts`). `CyberCloud.Authorization` is a reserved namespace the registry refuses, so the emitters
-that read the registry never see `{scope}/providers/CyberCloud.Authorization/roleAssignments/{name}`
-— docs/plan/10 § Shape calls it "#63's question asked a third time".
+the address, not the page.** `CyberCloud.Authorization` is a reserved namespace the registry refuses,
+so the emitters that read the registry never see
+`{scope}/providers/CyberCloud.Authorization/roleAssignments/{name}` — docs/plan/10 § Shape calls it
+"#63's question asked a third time". The cost pages' two addresses are under
+`CyberCloud.CostManagement`, reserved the same way (`apps/portal/src/app/api/cost-management.ts`).
 `apps/portal/src/app/api/role-assignments.ts` builds the address for a tenant, a subscription, a
 resource group or a resource, derives the name as `RoleAssignmentName` does
 (`{role}-{principalType}-{principalId}`), and sends it through the same `HttpApiTransport` as the

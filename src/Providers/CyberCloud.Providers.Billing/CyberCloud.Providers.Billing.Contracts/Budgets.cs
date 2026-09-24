@@ -33,7 +33,8 @@ namespace CyberCloud.Providers.Billing.Contracts;
 ///             reader on it.
 ///         </b> <c>IBudgetGrain</c>'s remarks carry the argument; the short form is that anyone who
 ///         can write in one group can create a budget, and a subscription-wide figure is not theirs
-///         to read by default.
+///         to read by default. For the same reason, whoever reads a subscription budget's figures
+///         through <see cref="StatusAction" /> must read the subscription as well as the budget.
 ///     </para>
 /// </remarks>
 public static class Budgets {
@@ -123,7 +124,9 @@ public static class Budgets {
                     Description: "What the figure covers: this resource group, or the whole subscription. A "
                     + "subscription budget is evaluated only once the budget itself has been granted reader on "
                     + "the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex "
-                    + "digits} at the subscription, which only an owner of the subscription can make."
+                    + "digits} at the subscription, which only an owner of the subscription can make. Its figures "
+                    + "are the subscription's spend, so showStatus shows them only to a caller who may read the "
+                    + "subscription."
                 ) { AllowedValues = ScopeValues, DefaultJson = "\"resourceGroup\"" },
                 new(
                     "/properties/thresholds",
@@ -208,6 +211,11 @@ public static class Budgets {
     ///         firing sends a message; a <c>read</c> that paged finance would be a write behind a read
     ///         permission. The figures are the last hourly evaluation's, and <c>/lastEvaluatedAt</c> says
     ///         when that was.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>read</c> on the budget is enough only for a group budget.</b> A
+    ///         <c>scope: subscription</c> budget's figures are the subscription's spend, and
+    ///         <c>BudgetStatusHandler</c> refuses them to a caller who may not read the subscription.
     ///     </para>
     /// </remarks>
     public const string StatusAction = "showStatus";

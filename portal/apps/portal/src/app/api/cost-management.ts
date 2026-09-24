@@ -40,7 +40,11 @@ export interface CostAnswer {
   readonly groupBy: CostGrouping;
   readonly granularity: CostGranularity;
   readonly total: number;
-  /** Whether something in scope was withheld because the caller may not read it — and nothing about what. */
+  /**
+   * Whether the caller may read less than the whole scope, so the answer may leave usage out. ⚠ About
+   * the caller's access, never about the usage: it's the same whether or not anything they can't read
+   * was used, or it would report exactly that.
+   */
   readonly filtered: boolean;
   readonly rows: readonly CostRow[];
 }

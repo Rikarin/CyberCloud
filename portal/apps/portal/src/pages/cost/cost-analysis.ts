@@ -192,7 +192,8 @@ function isDimension(value: string | undefined): value is Dimension {
         @if (answer.filtered) {
           <xui-callout class="mt-4" color="info" [title]="filteredTitle">
             <p i18n="@@cost.filteredBody">
-              Some cost in this scope belongs to resources you can't read, and isn't in these figures.
+              You can read only part of this scope, so these figures cover what you can read. Any cost elsewhere in it
+              isn't shown, and this page can't tell you whether there is any.
             </p>
           </xui-callout>
         }
@@ -335,7 +336,7 @@ export class CostAnalysis {
   protected readonly invoicesLink = links.invoices();
   protected readonly periodChoices: readonly Period[] = ['month', 'lastMonth', '30d', '90d', 'custom'];
   protected readonly customTitle = $localize`:@@cost.customTitle:Choose the days`;
-  protected readonly filteredTitle = $localize`:@@cost.filteredTitle:Not everything is shown`;
+  protected readonly filteredTitle = $localize`:@@cost.filteredTitle:Only what you can read`;
   protected readonly emptyTitle = $localize`:@@cost.emptyTitle:No cost in this period`;
   protected readonly emptyDescription = $localize`:@@cost.emptyDescription:Nothing you can read in this scope was metered in this period.`;
 

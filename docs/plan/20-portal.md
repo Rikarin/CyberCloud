@@ -145,23 +145,28 @@ Enforced in CI, failing the build:
 |---|---|
 | Initial JS (shell, gzipped) | < 250 KB |
 | Route chunk | < 120 KB |
-| Chart library — ECharts, one deferred chunk | < 180 KB |
+| Chart library — ECharts, one deferred chunk | < 180 KB — ⚠ proposed by #41, not signed off ([§ What is owed](#what-is-owed) `chart-library-ceiling`) |
 | LCP on a resource list, cold, 4G | < 2.5 s |
 | INP | < 200 ms |
 | Data table, 10 000 rows, virtualised | 60 fps scroll |
 | Blade open → first content | < 300 ms warm |
 
-⚠ **The chart library has a ceiling of its own, and it is a measurement, not a preference (#41).** ECharts
-is `@xui/echarts`' engine and ADR-017 keeps the portal on xUI, so the cost page draws with it. Minified
-and gzipped at level 9, **ECharts' core and canvas renderer alone are 129.3 KB** — no build of it fits
-the 120 KB route ceiling — and the portal's tree-shaken build (bar, a plain grid and legend, tooltip,
-canvas: `portal/libs/charts/src/lib/echarts-build.ts`) is **172.8 KB**, where adding the line chart,
-the full grid and the scrolling legend made it 185.3 KB. It is never in the initial set (196.2 KB of
-250 with the cost pages) and never in a route chunk (the cost page's is 10.1 KB): it is one chunk,
-fetched by `import()` the first time a chart renders, and the page shows its totals, its table and its
-budgets without it. `scripts/bundle-budget.mjs` finds it by the `_echarts_instance_` attribute only
-ECharts contains, measures it against 180 KB, and fails if it is ever split, copied into a route chunk
-or reached from the initial set. Every chart type a later page registers is paid for there.
+⚠ **The chart library has a ceiling of its own, and the 180 KB is #41's proposal, not a decision.** The
+need for a separate ceiling is a measurement; the number is the implementer's, written here so the gate
+has one, and it is owed a sign-off (`chart-library-ceiling`). ECharts is `@xui/echarts`' engine and
+ADR-017 keeps the portal on xUI, so the cost page draws with it. Bundled alone with esbuild, minified
+and gzipped at level 9, **ECharts' core and canvas renderer are 129.3 KB** — no build of it fits the 120
+KB route ceiling — the portal's tree-shaken set (bar, a plain grid and legend, tooltip, canvas:
+`portal/libs/charts/src/lib/echarts-build.ts`) is 173.8 KB, and adding the line chart, the full grid
+and the scrolling legend makes it 185.2 KB. The Angular production build emits the portal's set as a
+chunk of **172.8 KB**, which is the number `scripts/bundle-budget.mjs` reports and holds to the ceiling.
+It is never in the initial set (196.2 KB of 250 with the cost pages) and never in a route chunk (the
+cost page's is 10.1 KB): it is one chunk, fetched by `import()` the first time a chart renders, and the
+page shows its totals, its table and its budgets without it. The script finds it by the
+`_echarts_instance_` attribute only ECharts contains, in a chunk with no Angular definition in it, and
+fails if the library is split, merged into a route chunk (a chunk with the marker *and* a compiled
+component is measured against the route ceiling and failed by name) or reached from the initial set.
+Every chart type a later page registers is paid for there.
 
 ⚠ **Route-level code splitting is mandatory**, and with 100 resource types the generated form renderer
 must not pull every schema into the main bundle. Schemas are fetched per type, cached, and versioned by
@@ -184,6 +189,7 @@ What the portal's landed pages do not do yet, each with the id a later change cl
 | `cost-tile-on-home` | The dashboard's cost, [§ The pages that are not generated](#the-pages-that-are-not-generated)'s first row | The home page is its own row; the cost query it would call now exists |
 | `xui-table-cell-roles` | `@xui/table` 3.0.0 gives `xui-tr` `role="row"` and its cells no role, so axe fails every row that has content (`aria-required-children`) | The fix is xUI's (ADR-017). The cost pages set `role="columnheader"` and `role="cell"` by hand and their specs run axe over filled tables; the resource list and the access page still render rows without cell roles, and no spec runs axe over them with rows in |
 | `charts-in-a-real-browser` | A chart drawn by ECharts on a canvas and looked at | jsdom has no canvas: the specs hand the chart a recording engine and assert the option the page built, and the colour-contrast gap `a11y.spec.ts` records is the same gap. The browser-driven suite that lands with the e2e layer is where both are closed |
+| `chart-library-ceiling` | A signed-off ceiling for the chart library's chunk | #41 needed one to gate the build and chose 180 KB against a 172.8 KB chunk; it is an eighth of headroom, one line chart and a scrolling legend would spend it, and whether the portal should pay that for a chart is a product decision, not a measurement |
 | `cost-query-across-two-processes` | A cost query and an invoice read through the gateway's HTTP pipeline into a silo in another process | `BillingAcrossTheHostsTests` makes both calls from the real gateway host's client to the real silo host in one OS process; `CyberCloud.AppHost.Tests` is where a request crosses two |
 
 ## Effort

@@ -239,7 +239,10 @@ describe('the cost pages, signed in', () => {
       await open(`/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/cost`);
       await answerCost(GROUP_PATH, { currency: 'EUR', total: 0, filtered: false, rows: [] }, forecastRows);
 
-      await answerBudgets([budget('monthly', 1.5, [50, 100], [100]), budget('fresh', 20, [80], [])], {
+      const whole = budget('whole', 500, [80], []);
+      whole.properties.scope = 'subscription';
+
+      await answerBudgets([budget('monthly', 1.5, [50, 100], [100]), budget('fresh', 20, [80], []), whole], {
         monthly: {
           evaluated: true,
           currency: 'EUR',
@@ -252,7 +255,16 @@ describe('the cost pages, signed in', () => {
           firedForecast: [100],
           alerts: []
         },
-        fresh: { status: 409, body: { error: { code: 'Conflict', message: "Budget 'fresh' is not held yet." } } }
+        fresh: { status: 409, body: { error: { code: 'Conflict', message: "Budget 'fresh' is not held yet." } } },
+        whole: {
+          status: 403,
+          body: {
+            error: {
+              code: 'AuthorizationFailed',
+              message: "Budget 'whole' covers the whole subscription, so its figures are the subscription's spend."
+            }
+          }
+        }
       });
 
       const monthly = host().querySelector('[data-budget="monthly"]');
@@ -267,6 +279,16 @@ describe('the cost pages, signed in', () => {
       expect(host().querySelector('[data-budget="fresh"] [data-figure="not-evaluated"]')?.textContent?.trim()).toBe(
         "Budget 'fresh' is not held yet."
       );
+      // ⚠ A subscription budget's figures are the subscription's spend, refused to a reader of the group
+      // alone: the row says why and shows no figure and no fired threshold.
+      const refused = host().querySelector('[data-budget="whole"]');
+      expect(refused?.querySelector('[data-figure="not-evaluated"]')?.textContent?.trim()).toContain(
+        "its figures are the subscription's spend"
+      );
+      expect(refused?.querySelector('[data-figure="actual"]')).toBeNull();
+      expect(
+        [...(refused?.querySelectorAll('[data-threshold]') ?? [])].map(t => t.getAttribute('data-threshold'))
+      ).toEqual(['actual:80']);
 
       const hrefs = [...host().querySelectorAll('a')].map(a => a.getAttribute('href'));
       expect(hrefs).toContain(
@@ -320,7 +342,7 @@ describe('the cost pages, signed in', () => {
   });
 
   describe('cost analysis on a subscription', () => {
-    it('says when something was withheld, offers the group dimension, and sends budgets to the groups', async () => {
+    it('says when the caller reads only part of the scope, offers the group dimension, and sends budgets to the groups', async () => {
       await open(`/subscriptions/${SUBSCRIPTION}/cost?period=lastMonth&groupBy=resourceGroup`);
 
       const bodies = await answerCost(
@@ -341,9 +363,8 @@ describe('the cost pages, signed in', () => {
         to: '2026-09-01T00:00:00.000Z',
         groupBy: 'resourceGroup'
       });
-      expect(host().textContent).toContain(
-        'Some cost in this scope belongs to resources you can’t read'.replace('’', "'")
-      );
+      expect(host().textContent).toContain('You can read only part of this scope');
+      expect(host().textContent).not.toContain('belongs to resources you can');
       expect(host().textContent).toContain('Budgets live in a resource group');
       expect(http.match(r => r.url.includes('CyberCloud.Billing/budgets'))).toEqual([]);
     });

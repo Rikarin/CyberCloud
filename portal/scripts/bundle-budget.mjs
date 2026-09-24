@@ -24,6 +24,15 @@
  * cost page renders its totals and table without it and the chart fills in when it arrives —
  * docs/plan/20 § Performance budget. ⚠ Exactly one chunk may match. Two would mean the library was
  * split or copied into a route chunk, and the route ceiling is the one that must then hold.
+ *
+ * ⚠ The marker alone can't tell the library's own chunk from a route chunk the library was merged
+ * into. A page that imported `echarts-build` statically would put ECharts in its route chunk, that
+ * chunk would be the only one carrying the marker, and it would be measured against the chart
+ * ceiling instead of the route one. So a chunk counts as the library only when it also carries no
+ * Angular definition: `ɵcmp`, `ɵdir`, `ɵpipe`, `ɵfac` and `ɵprov` are property names the compiler
+ * writes on every component, directive, pipe and injectable, and a minifier doesn't rename a property.
+ * A marked chunk that has one is a route chunk with ECharts in it, measured against the route ceiling
+ * and failed by name.
  */
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -42,6 +51,9 @@ const BUDGET = {
 
 /** What only the ECharts chunk contains — the attribute it stamps on a chart's element. */
 const CHART_LIBRARY_MARKER = '_echarts_instance_';
+
+/** What Angular's compiler writes on what it defines, and the library's own chunk never holds. */
+const ANGULAR_DEFINITIONS = ['ɵcmp', 'ɵdir', 'ɵpipe', 'ɵfac', 'ɵprov'];
 
 const here = dirname(fileURLToPath(import.meta.url));
 const browserDir = join(here, '..', 'dist', 'portal', 'browser');
@@ -80,9 +92,10 @@ function initialScripts() {
 
 const initial = initialScripts();
 const allJs = readdirSync(browserDir).filter(f => f.endsWith('.js'));
-const chartLibrary = allJs.filter(
-  f => !initial.has(f) && readFileSync(join(browserDir, f), 'utf8').includes(CHART_LIBRARY_MARKER)
-);
+const source = f => readFileSync(join(browserDir, f), 'utf8');
+const marked = allJs.filter(f => !initial.has(f) && source(f).includes(CHART_LIBRARY_MARKER));
+const mergedIntoRoutes = marked.filter(f => ANGULAR_DEFINITIONS.some(d => source(f).includes(d)));
+const chartLibrary = marked.filter(f => !mergedIntoRoutes.includes(f));
 const lazy = allJs.filter(f => !initial.has(f) && !(chartLibrary.length === 1 && chartLibrary[0] === f));
 
 const initialTotal = [...initial].reduce((sum, f) => sum + gzipOf(f), 0);
@@ -124,21 +137,26 @@ for (const f of lazy.sort()) {
 
 console.log('\n  Chart library (gzipped)');
 
+for (const f of mergedIntoRoutes) {
+  failures.push(
+    `the chart library is in route chunk ${f}, beside Angular code; it must be a chunk of its own, reached through import()`
+  );
+}
+
 if (chartLibrary.length > 1) {
   failures.push(
     `the chart library is in ${chartLibrary.length} chunks (${chartLibrary.join(', ')}); it must be one, loaded by import()`
   );
 }
 
-if (
-  initial.size > 0 &&
-  allJs.some(f => initial.has(f) && readFileSync(join(browserDir, f), 'utf8').includes(CHART_LIBRARY_MARKER))
-) {
+if (initial.size > 0 && allJs.some(f => initial.has(f) && source(f).includes(CHART_LIBRARY_MARKER))) {
   failures.push('the chart library is in the initial set; it must only be reached through import()');
 }
 
-if (chartLibrary.length === 0) {
+if (chartLibrary.length === 0 && mergedIntoRoutes.length === 0) {
   console.log('    (none — no page draws a chart)');
+} else if (chartLibrary.length === 0) {
+  console.log('    (none of its own — see failure below)');
 } else if (chartLibrary.length === 1) {
   const size = gzipOf(chartLibrary[0]);
   const verdict = size < BUDGET.chartLibraryGzip ? 'pass' : 'FAIL';

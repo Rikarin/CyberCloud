@@ -136,13 +136,14 @@ static class GatewayServiceCollectionExtensions {
         // ── The cost query, docs/plan/22 § Cost visibility (#38). ──
         //
         // ⚠ DISPATCH HOLDS ICostQuery AND IInvoiceReader AND NOTHING ELSE OF BILLING. The grain behind the
-        // first prices the
-        // subscription's usage and filters every row by ReBAC on the silo; this host copies the caller
-        // across and renders what comes back, and checks nothing — docs/plan/10 § Request pipeline's one
-        // enforcement seam. The second's grain asks whether the caller may read the tenant before it
-        // reads the billing account (#41). IBudgetControlPlane comes with them because the budget reconciler is
-        // registered in this container as well as the silo's (the registry is built the same way in
-        // both), and a type whose reconciler cannot be constructed here would fail the first resolve.
+        // first prices the subscription's usage and filters every row by ReBAC on the silo; this host
+        // copies the caller across and renders what comes back, and checks nothing — docs/plan/10
+        // § Request pipeline's one enforcement seam. The second's grain asks whether the caller may read
+        // the tenant before it reads the billing account (#41). IBudgetControlPlane comes with them
+        // because the budget reconciler is registered in this container as well as the silo's (the
+        // registry is built the same way in both), and a type whose reconciler cannot be constructed
+        // here would fail the first resolve. It is also what showStatus reads a budget through, and
+        // what asks whether the caller may read the subscription a budget covers (#41).
         services.AddCyberCloudBillingClient();
 
         // ── SignalR. docs/plan/10 § SignalR — no backplane product, by design. ──

@@ -70,6 +70,12 @@ public sealed class CostVisibilityTests(BillingCluster cluster) {
         onlyProdUsed.Filtered.ShouldBeTrue("bob reads one group of three, whether or not the others used anything");
         devUsedToo.Filtered.ShouldBe(onlyProdUsed.Filtered, "a flag that moved with dev's usage would report it");
         theirGroup.Filtered.ShouldBeFalse("bob reads the whole of prod");
+
+        // ⚠ The daily axis (#41) asks the same question a day at a time, and must get the same flag.
+        var onlyProdUsedDaily = (await world.QueryAsync("bob", CostGrouping.ResourceGroup, from: August, to: August.AddDays(1), granularity: CostGranularity.Daily)).GetValueOrThrow();
+        var devUsedTooDaily = (await world.QueryAsync("bob", CostGrouping.ResourceGroup, from: August.AddDays(1), to: August.AddDays(2), granularity: CostGranularity.Daily)).GetValueOrThrow();
+        onlyProdUsedDaily.Filtered.ShouldBeTrue();
+        devUsedTooDaily.Filtered.ShouldBe(onlyProdUsedDaily.Filtered, "a daily answer's flag that moved with dev's usage would draw it day by day");
     }
 
     [Fact]

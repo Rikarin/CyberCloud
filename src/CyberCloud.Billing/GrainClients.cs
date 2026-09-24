@@ -1,3 +1,4 @@
+using CyberCloud.Authorization.Contracts;
 using Orleans.Multitenant;
 using System.Collections.Immutable;
 using System.Globalization;
@@ -43,6 +44,27 @@ public sealed class GrainBudgetControlPlane(IGrainFactory grains) : IBudgetContr
     /// <inheritdoc />
     public Task<Result<bool>> IsArmedAsync(Guid tenantId, Guid budgetId, CancellationToken cancellationToken = default) =>
         Budget(tenantId, budgetId).IsArmedAsync();
+
+    /// <inheritdoc />
+    public async Task<bool> MayReadSubscriptionAsync(
+        Guid tenantId,
+        Guid subscriptionId,
+        CostCaller caller,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(caller);
+
+        var subject = SubjectRef.Create(caller.SubjectType, caller.SubjectId);
+        if (subject.TryGetError(out _)) {
+            return false;
+        }
+
+        var checkedRead = await grains.ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<ICheckGrain>(GrainKeys.CheckCache(ObjectTypes.Subscription, subscriptionId.ToString("N", CultureInfo.InvariantCulture)))
+            .CheckAsync(Permissions.Read, subject.GetValueOrThrow(), Consistency.FullyConsistent);
+
+        return checkedRead.TryGetValue(out var answer) && answer.Allowed;
+    }
 
     IBudgetGrain Budget(Guid tenantId, Guid budgetId) =>
         grains.ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture)).GetGrain<IBudgetGrain>(GrainKeys.Resource(budgetId));

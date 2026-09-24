@@ -526,7 +526,7 @@ class BudgetData:
         notification: Optional[BudgetData.Properties.Notification] = None
         # How long a period is. Periods are calendar-aligned in UTC: a month, a quarter from January, April, July or October, or a year.
         period: Optional[BudgetPeriod] = None
-        # What the figure covers: this resource group, or the whole subscription. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make.
+        # What the figure covers: this resource group, or the whole subscription. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make. Its figures are the subscription's spend, so showStatus shows them only to a caller who may read the subscription.
         scope: Optional[BudgetScope] = None
         # Percentages of the amount that alert, each at most once per period.
         thresholds: Optional[BudgetData.Properties.Thresholds] = None
