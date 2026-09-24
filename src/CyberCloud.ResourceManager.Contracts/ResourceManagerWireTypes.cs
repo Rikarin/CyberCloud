@@ -167,6 +167,21 @@ public sealed record WriteTrace {
     [Id(0)]
     public ImmutableArray<WriteStep> Reached { get; init; } = [];
 
+    /// <summary>
+    ///     What happened inside <see cref="WriteStep.Policy" /> — every assignment that applied to the
+    ///     request, in the order the engine evaluated them, with the rewrites a modify made.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Inside step 5's span and not a step of its own.</b> The closed twelve are the
+    ///     document's numbers and <see cref="Canonical" /> is asserted ordinally; a modify is something
+    ///     that happens <i>at</i> step 5, the way a membership record happens at step 7.
+    ///     ⚠ <b>Visible to an in-process caller of <c>IResourceManager</c> only.</b> The gateway renders no
+    ///     part of <see cref="WriteTrace" />, so an HTTP caller still finds a rewrite by reading the
+    ///     resource back — docs/plan/08 § Policy lists it as owed.
+    /// </remarks>
+    [Id(1)]
+    public ImmutableArray<PolicyTraceEntry> Policy { get; init; } = [];
+
     /// <summary>The step the request stopped at, or <see cref="WriteStep.Accepted" /> when it did not.</summary>
     public WriteStep StoppedAt => Reached.IsDefaultOrEmpty ? WriteStep.None : Reached[^1];
 

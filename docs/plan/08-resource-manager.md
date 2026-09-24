@@ -21,7 +21,9 @@ PUT /tenants/{t}/subscriptions/{s}/resourceGroups/{rg}
     2. validate body against the type's JSON Schema for that api-version
     3. ReBAC Check(resource | parent rg, "write", caller)      → 404 if not readable
     4. locks: CanNotDelete / ReadOnly inherited from rg, sub, mg
-    5. policy evaluation (M3) — deny / modify / audit
+    5. policy — IPolicyCatalogGrain.EvaluateAsync: modify, then deny, then audit   → 403 PolicyViolation
+         → every write kind: PUT, PATCH, DELETE, action — § Policy
+         → a modify rewrites the body and it is validated again; the trace records what it wrote
     6. quota: IQuotaGrain.TryReserveAsync                      → 429 with which meter
     7. IResourceIndexGrain.TryClaim(path)                      → 409 if taken
    7b. IResourceGroupGrain.BeginCreateAsync(address)           → 404 if the group does not exist
@@ -194,6 +196,186 @@ it lands or the sixty-minute ceiling reports a `Failed` operation that names the
 appears only for actions on an existing resource (`/restart`, `/rotateKeys`, `/listKeys`), never for
 creation. This is Azure's grammar and it is copied because it makes retry-safety a property of the
 verb rather than of each provider's care.
+
+## Policy
+
+Step 5 had a seam from the first day — `IPolicyEvaluator`, answered by a stub that said no engine ran
+— precisely so that the day an engine existed the step would not have to move. Issue #46 is that day,
+and the step did not move: `CatalogPolicyEvaluator` replaced `NotSupportedPolicyEvaluator` as the
+default `AddCyberCloudResourceManager` registers, and `WriteTrace.Canonical` is the same closed twelve.
+
+**The objects.** A *definition* is a rule; an *assignment* applies a definition at a scope; a *state*
+is one resource's compliance with one audit assignment. They are addressed as extensions on a scope,
+the shape role assignments already have:
+
+```
+{scope}/providers/CyberCloud.Policy/policyDefinitions/{name}    scope: tenant, management group, subscription
+{scope}/providers/CyberCloud.Policy/policyAssignments/{name}    scope: management group, subscription, resource group
+{scope}/providers/CyberCloud.Policy/policyStates                scope: management group, subscription, resource group — GET only
+```
+
+⚠ **Not a type in the registry, which is where [01](01-azure-parity-catalogue.md) put
+`CyberCloud.Policy/policyDefinitions`, and the reason is two facts rather than a preference.** An
+assignment sits on a management group or a subscription, and `ResourceId.ParsePath` has no shape above a
+resource group. And a definition's rule is a recursive tree, which `ResourceSchema` deliberately cannot
+express — its schema is a flat pointer list whose arrays hold scalars, so the condition would have been a
+string of JSON inside the body, validated by nobody at step 2 and opaque to every generated client. So
+the three are served by `IPolicyManager` beside `IRoleAssignmentManager`, under a fourth reserved
+namespace that `ProviderRegistry.Build` refuses to a provider and the gateway routes before the scope and
+resource grammars (`PolicyAddress`). The cost was the one [24](24-roadmap.md)'s resource-graph row records
+for its own address — no generated surface knew them — and the review of #46 paid it: § Policy on every
+generated surface, below.
+
+**The rule.** `{ "if": <condition>, "then": { "effect": "deny" | "audit" | "modify", "operations": […] } }`.
+A condition is `allOf`, `anyOf`, `not`, or a `field` with exactly one of `equals`, `in`, `like`,
+`exists` — Azure Policy's vocabulary, JSON-Logic's shape. A field is one of four facts — `type`,
+`name`, `operation` (`create`, `update`, `delete`, `action`), `action` — or an RFC 6901 pointer into the
+body, `/properties/sku`, `/tags/env`: the spelling the registry and every error target already use, so
+there is no alias table to drift from the schema. Strings compare ignoring case and an absent field
+equals nothing, as in Azure. A modify's operations are `add` (only where the body has no value — a
+default the caller can override) and `replace` (whatever the caller sent). ⚠ **Every set is closed and
+a word outside it is refused by name** — `'contains' is not an operator`, with the list and the offending
+member as the error's target — because a rule that silently ignored an operator would deny nothing and say
+nothing. ⚠ **The cost is bounded at parse time**: sixteen levels, 256 nodes, 64 branches, 256 values in an
+`in`, sixteen operations, and `like` is a glob with one metacharacter rather than a regular expression. A
+rule runs on every write beneath its scope, and one that could be made expensive would be a way for one
+owner to slow everybody else's writes.
+
+**Evaluation, in the write path, for every write kind.** A `PUT`, a `PATCH`, a `DELETE` and an action
+all enter step 5 (`PolicyEnforcementTests.EveryWriteKindEntersStepFiveAndADenyStopsEachOne` drives the
+five shapes through real grains). No provider is reached before it: a reconciler runs from the operation
+step 10 starts, and a synchronous action's handler runs after the fork step 5 precedes. Within the step:
+
+- **Modify, then deny, then audit** — Azure's order. A deny judges the body the write will store, so a
+  modify that fixes a violation is not refused for it; an audit records the state the resource is left in.
+- **The body judged is the one the write leaves**: a `PUT`'s body; a `PATCH` merged onto the stored
+  superset exactly as the resource grain will merge it (judging the patch alone would let a patch that
+  does not repeat a field past every rule about it); the stored body for a `DELETE` or an action. ⚠ With
+  the type's secret properties removed — an audit's verdict is readable by anyone who can read the scope,
+  and a rule over a password would be an oracle for it.
+- ⚠ **"The one the write leaves" includes the tag bag, and it didn't at first.** The resource grain keeps
+  the bag beside the body and replaces it with the one it is sent, and a `PATCH` sent the bag of the patch
+  alone — empty for a patch that left `tags` out. So step 5 judged the stored tags and step 9 stripped
+  them: "deny when `/tags/env` doesn't exist" refused a `PUT` without the tag and let that `PATCH`
+  through. The write now sends the merged body's bag — a `PATCH` merges `tags` as RFC 7386 merges any
+  object, which is also what `TagRules.MaxTags` said it did — and the stored bag, not the copy a `PATCH`
+  leaves in the superset, is the one a condition reads. Step 2 refuses a `null` inside the bag as it
+  refuses one anywhere, so a tag is removed by a `PUT`. Found by the review
+  (`PolicyEnforcementTests.APatchThatLeavesOutTheTagsKeepsTheTagsTheRuleWasJudgedOn`).
+- ⚠ **A modify can't write a secret property**, and one that tries refuses the write naming the assignment
+  and the property. The catalog rewrites the document with the secrets taken out and the write path the
+  real one, so over a secret they disagree: an `add` the trace recorded did nothing over a password the
+  caller sent, and a `replace` overwrote it with a constant anyone who can read the definition can read.
+- ⚠ **A rule about a resource's shape applies to creates and updates only.** Only a deny rule whose
+  condition names `operation` reaches a `DELETE` or an action — "deny delete where `/tags/env` is `prod`".
+  The alternative is "deny sku premium" making every existing premium resource undeletable, which is the
+  one thing the author of that rule wants to be able to do.
+- **A modify rewrites the document the request sends** and the result is validated against the schema
+  again before anything below step 5 reads it; everything below — quota amounts, tags, location, cluster,
+  desired state — reads the rewritten body. `WriteTrace.Policy` records, inside step 5's span, every
+  assignment that applied and every rewrite it made (`replace /properties/label = "enforced"`). ⚠ An
+  in-process caller of `IResourceManager` reads it off the `WriteAccepted` it gets back; an HTTP caller
+  doesn't, because the gateway renders no part of `WriteTrace` — until it does (owed, below), what a modify
+  made is found by reading the resource back.
+- **A deny is `403 PolicyViolation`**, naming the assignment and the definition in the message and again
+  as two details, with the rule's first body pointer as the target. ⚠ Those paths can name a scope the
+  caller can't read — a management group above a subscription where they hold only a resource group —
+  which departs from the 404-and-nothing rule for unreadable scopes. Deliberately, and as Azure does: a
+  refusal that won't say which rule refused is one nobody can act on, and it gives away the names, never
+  the rule.
+- **An audit's verdict is recorded after step 9 succeeds**, never at step 5 — a verdict for a body that
+  step 6 or 7 then refused would describe a resource that is not so. It is not allowed to fail the write.
+  A verdict records when it last *changed*, so re-applying the same body writes nothing durable. A delete
+  forgets the resource's verdicts when it is accepted; a replaced assignment and a changed rule drop the
+  verdicts they no longer vouch for, and a verdict evaluated before either and recorded after it is dropped
+  on arrival — each verdict carries the assignment's and the definition's versions it was judged under.
+
+**Inheritance and exclusion.** A write is judged by the assignments on its resource group, its
+subscription and every management group above the subscription, top down — so where two modify rules
+replace one field, the one nearest the resource writes last. A deny cannot be refined away: every deny
+that matches refuses. `notScopes` excludes a scope or a resource beneath the assignment; beneath a
+management group that is decided by the tree, not by the path's spelling, and the evaluation checks the
+chain it walked. A definition is usable only at its own scope and beneath it — a subscription owner cannot
+assign another subscription's rules, and a definition at the tenant is usable everywhere.
+
+**Cost and isolation — one grain per tenant.** `IPolicyCatalogGrain` (`policy/{tenantId:N}`) holds the
+tenant's definitions, assignments and verdicts, and evaluates. Step 5 is one grain call whatever the depth:
+the catalog caches each scope's assignments with their rules already parsed, drops a scope's entry when an
+assignment there is written and every entry naming a definition when that definition is, and walks the
+management groups — one `IManagementGroupGrain` read per level, at most six — only when the tenant has an
+assignment at one. The evaluation is `[ReadOnly]`, so evaluations interleave with each other; they queue
+behind the catalog's non-read-only turns — a policy write, the verdicts recorded after every write an audit
+reached, and the forget every accepted `DELETE` sends, which runs in every tenant, including one with no
+policy at all (it writes nothing when there's nothing to forget, and the turn is still a turn). The tenant
+boundary is the grain key's qualification: tenant A's assignments are not in the activation tenant B's
+writes reach, even at an identical path
+(`PolicyEnforcementTests.TenantAsAssignmentNeverAppliesToTenantBEvenAtTheSamePath`). ⚠ **It fails
+closed**: a catalog that cannot answer is a refusal, not an allow, and so is a management group in the walk
+that fails to answer, and a `PATCH` or an action whose stored body can't be read. Two absences don't refuse,
+because each is a record that is gone rather than a store that failed: a management group deleted under a
+subscription ends the walk, since the groups above it can't be named, and a `DELETE` of a resource with no
+record judges an empty body, since there are no fields left to protect.
+
+**A deleted scope takes its policy with it.** The catalog keys everything by path, and a management group's
+path is its name, so a group re-created under a deleted one's name used to find the old owner's rules in
+force — undeletable over the API, which answers 404 for a scope that doesn't exist. Deleting a management
+group or a resource group now forgets, beside #39's tuple sweep, the definitions and assignments on it,
+every assignment elsewhere that names one of its definitions (logged: a definition at a group can be
+assigned at a subscription that later moved out), and the verdicts beneath it; a re-driven `DELETE` forgets
+again. `ManagementGroupTests.ADeletedGroupRecreatedUnderTheSameNameCarriesNoneOfItsOldPolicy` drives it
+through the real scope manager.
+
+**Who may write it.** `assignRole` on the scope, which `CyberCloudSchema` defines as
+`Rel(owner) & !Rel(suspended)` — Azure keeps `policyAssignments/write` out of Contributor for the reason it
+keeps role assignments out of it, and a contributor who could assign a deny could stop every other
+contributor's writes. Reading is `read` on the scope. 404, never 403, for a caller who cannot read the scope
+(`PolicyIsolationTests`, through the real schema).
+
+**Policy on every generated surface — the third non-registry source.** The review of #46 found the
+addresses served and generated nowhere, #63's question a fifth time, and answered it the way #63 did: the
+document declares them, and every surface reads them out of the document. `OpenApiEmitter` emits the
+fifteen paths — an item and a collection per definition and assignment scope, a collection per state scope,
+the scopes read off `PolicyAddress.AllowsScope` so the document can't declare a pair the router refuses —
+with `Policy.Definition`, `Policy.Assignment`, `Policy.State`, their write bodies and their pages, and the
+rule language as `Policy.Rule` and `Policy.Condition` built from `CyberCloud.Core.Policy`'s closed sets.
+Each path item carries `x-cybercloud-scope-object` (the type), `x-cybercloud-scope-object-scope` and, on a
+collection, `x-cybercloud-scope-object-collection`: a third discriminator beside the resource type's and
+the scope's, so `DocumentReader.ScopeObjectsOf` finds them and neither older reader mistakes one for its
+own. From there `cyc policy {scope}-{definitions|assignments|states}` with `show`, `create`, `delete` and
+`list`; `PolicyClient` in the .NET, Python and Go SDKs and the `…At{Scope}` methods on the portal's
+`CyberCloudApi`, none of them long-running. ⚠ **The rule is a JSON value on every surface.** The member
+keeps its `$ref` to `Policy.Rule` so the document describes it exactly, and carries `x-cybercloud-json`,
+which every emitter reads first: a `JsonNode`, a Python `Any`, a Go `json.RawMessage`, a TypeScript
+`unknown`, and a `cyc` flag of type `json` that takes one JSON value — a rule in a file is
+`--policy-rule "$(cat rule.json)"`, because `System.CommandLine` already owns `@` for response files.
+Without the marker an untyped object reads as the tag bag's string map. `PolicySurfaceTests` holds the
+document to the router's grammar in both directions, `ServedShapesMatchTheDocumentTests` validates what the
+gateway serves at the addresses, rule included, against it, and
+`PolicyEnforcementTests.TheManagersRenderingIsTheDocumentsSchema` holds the real manager's member sets to
+the schema. ⚠ **No portal form:** the portal has no policy page yet, and a condition tree is not a form a
+generated field can hold.
+
+⚠ **Owed, recorded here rather than implied:**
+
+- **The gateway doesn't render `WriteTrace.Policy`**, so an HTTP caller learns what a modify rewrote only by
+  reading the resource back. Azure answers with the stored body; ours is the `202`'s operation.
+- **No compliance scan.** A verdict is produced by a write; an assignment made today says nothing about the
+  resources that already exist until each is written again. Azure re-evaluates on a cycle; the reminder
+  that would do it, walking a scope's membership, is not built.
+- **Scope writes are not policed.** Creating a resource group or a subscription runs `IScopeManager`'s four
+  steps, which have no step 5.
+- **Restore and purge are not policed**, deliberately for now: a restore brings back what existed, and a deny
+  written during the recovery window refusing it would turn the window into a deletion; a purge is the end
+  of a delete that step 5 already judged. Both deserve a decision rather than a default.
+- **The verdicts live in the catalog's state**, one row per resource per audit assignment. A tenant with a
+  hundred thousand audited resources holds that many rows in one activation; past that size they belong
+  beside the resource-graph projection.
+- **No `enforcementMode`, no parameters, no exemptions.** A definition is one rule with its values written
+  in; Azure's parameterised definitions and `DoNotEnforce` are the next vocabulary to add, and each is a
+  change to the closed sets above.
+- **Conditional access (#48) shares the language, not yet the call.** `CyberCloud.Core.Policy` holds the
+  condition parser and evaluator as pure functions over a JSON document, deliberately in the one assembly
+  the identity module can reference; the subject and the facts are #48's to define.
 
 ## The reconcile loop
 

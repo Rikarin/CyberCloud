@@ -107,6 +107,7 @@ public static class GoSdkEmitter {
         var version = DocumentReader.VersionOf(document);
         var types = DocumentReader.TypesOf(document);
         var scopes = DocumentReader.ScopesOf(document);
+        var objects = DocumentReader.ScopeObjectsOf(document);
         var names = SdkEmitter.ModelNames(types);
         var package = PackageOf(version);
         var directory = package + "/";
@@ -114,8 +115,8 @@ public static class GoSdkEmitter {
         return ImmutableSortedDictionary.CreateRange(
             StringComparer.Ordinal,
             new Dictionary<string, string>(StringComparer.Ordinal) {
-                [directory + "models.go"] = Models(version, package, document, types, scopes, names),
-                [directory + "client.go"] = Client(version, package, document, types, scopes, names),
+                [directory + "models.go"] = Models(version, package, document, types, scopes, objects, names),
+                [directory + "client.go"] = Client(version, package, document, types, scopes, objects, names),
                 [directory + "runtime.go"] = Runtime(version, package)
             }
         );
@@ -129,6 +130,7 @@ public static class GoSdkEmitter {
         JsonObject document,
         ImmutableArray<DocumentType> types,
         ImmutableArray<DocumentScope> scopes,
+        ImmutableArray<DocumentScopeObject> objects,
         ImmutableDictionary<string, string> names
     ) {
         var built = new StringBuilder(Head(version));
@@ -150,6 +152,7 @@ public static class GoSdkEmitter {
         AppendErrorModels(built, document, declared);
         AppendOperationModels(built, document, declared);
         AppendScopeModels(built, document, scopes, declared);
+        AppendScopeObjectModels(built, objects, declared);
         AppendEnvelope(built, document, declared);
 
         foreach (var type in types) {
@@ -340,6 +343,53 @@ public static class GoSdkEmitter {
                 name
             );
         }
+    }
+
+    /// <summary>
+    ///     The objects addressed on a scope — issue #46's policy — one read struct and one write
+    ///     struct per object, whatever the number of scopes it sits on.
+    /// </summary>
+    static void AppendScopeObjectModels(StringBuilder built, ImmutableArray<DocumentScopeObject> objects, Declared declared) {
+        var emitted = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var scoped in objects) {
+            if (emitted.Add(scoped.ModelName)) {
+                AppendScopeObjectModel(
+                    built,
+                    scoped.ModelName,
+                    scoped.Resource,
+                    "a " + Comment(scoped.DisplayName.ToLowerInvariant()) + ", as the API renders it. " + scoped.Summary,
+                    declared,
+                    scoped.Component
+                );
+            }
+
+            if (scoped.ContentName.Length > 0 && emitted.Add(scoped.ContentName)) {
+                AppendScopeObjectModel(
+                    built,
+                    scoped.ContentName,
+                    scoped.Content,
+                    "the body of a PUT that writes a " + scoped.DisplayName.ToLowerInvariant() + ".",
+                    declared,
+                    scoped.ContentComponent
+                );
+            }
+        }
+    }
+
+    static void AppendScopeObjectModel(
+        StringBuilder built,
+        string name,
+        JsonObject schema,
+        string doc,
+        Declared declared,
+        string origin
+    ) {
+        var leaves = DocumentReader.LeavesOf(schema);
+        var naming = EnumNaming.For(name, leaves);
+
+        AppendEnums(built, naming, leaves, declared);
+        AppendObjectStruct(built, name, doc, schema, string.Empty, naming, declared, origin);
     }
 
     /// <summary>
@@ -589,6 +639,9 @@ public static class GoSdkEmitter {
             ? naming.NameOf(leaf)
             : kind switch {
                 "array" => "[]" + Scalar(schema["items"] as JsonObject ?? [], naming, leaf),
+                // ⚠ Any JSON value — a policy rule — held as the bytes the wire carried, before the
+                // object branch reads it as the tag bag's map.
+                "object" when DocumentReader.IsJsonValue(schema) => "json.RawMessage",
                 "object" => "map[string]string",
                 var scalar => Scalar(schema, naming, leaf, scalar)
             };
@@ -851,6 +904,7 @@ public static class GoSdkEmitter {
         JsonObject document,
         ImmutableArray<DocumentType> types,
         ImmutableArray<DocumentScope> scopes,
+        ImmutableArray<DocumentScopeObject> objects,
         ImmutableDictionary<string, string> names
     ) {
         var built = new StringBuilder(Head(version));
@@ -875,7 +929,11 @@ public static class GoSdkEmitter {
             .OrderBy(static x => x.Key, StringComparer.Ordinal)
             .ToList();
 
-        AppendRootClient(built, version, polls, scopes, groups);
+        var families = objects.GroupBy(static x => x.Group, StringComparer.Ordinal)
+            .OrderBy(static x => x.Key, StringComparer.Ordinal)
+            .ToList();
+
+        AppendRootClient(built, version, polls, scopes, families.Select(static x => x.Key).ToList(), groups);
 
         if (polls) {
             AppendOperationsClient(built);
@@ -883,6 +941,10 @@ public static class GoSdkEmitter {
 
         foreach (var scope in scopes) {
             AppendScopeClient(built, scope);
+        }
+
+        foreach (var family in families) {
+            AppendScopeObjectClient(built, family.Key, family.ToList());
         }
 
         foreach (var group in groups) {
@@ -907,6 +969,7 @@ public static class GoSdkEmitter {
         string version,
         bool polls,
         ImmutableArray<DocumentScope> scopes,
+        List<string> families,
         List<IGrouping<string, DocumentType>> groups
     ) {
         built.Append("\n// Client is the public REST API at api-version ")
@@ -931,10 +994,16 @@ public static class GoSdkEmitter {
             );
         }
 
+        foreach (var family in families) {
+            var field = SdkEmitter.Pascal(family);
+            members.Add((field, "*" + field + "Client", "&" + field + "Client{transport: transport}"));
+        }
+
         foreach (var group in groups) {
             var segment = SdkEmitter.Pascal(group.Key.Split('.')[^1]);
 
-            if (segment is "Operations" or "Tenants" or "Subscriptions" or "ResourceGroups") {
+            if (segment is "Operations" or "Tenants" or "Subscriptions" or "ResourceGroups" or "ManagementGroups"
+                || families.Contains(segment, StringComparer.Ordinal)) {
                 throw new InvalidOperationException(
                     $"The provider namespace '{group.Key}' would be the field '{segment}' on Client, which the "
                     + "client already declares for the platform's own API."
@@ -1068,6 +1137,117 @@ public static class GoSdkEmitter {
             .Append(ScopeContent(scope))
             .Append(") (*ScopeResource, error) {\n")
             .Append(Read("PUT", PathExpression(scope.Path), "content", "ScopeResource"));
+    }
+
+    /// <summary>
+    ///     One client per namespace of scope objects — <c>PolicyClient</c> — with a method per object,
+    ///     scope and verb.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ No <c>Begin*</c> and no <c>Operation</c>: a write converges before the call returns — the
+    ///     scope client's rule, for the scope client's reason.
+    /// </remarks>
+    static void AppendScopeObjectClient(StringBuilder built, string group, List<DocumentScopeObject> objects) {
+        var name = SdkEmitter.Pascal(group) + "Client";
+
+        built.Append("\n// ")
+            .Append(name)
+            .Append(" reads and writes the objects under ")
+            .Append(objects[0].ProviderNamespace)
+            .Append(", on every scope that takes them — docs/plan/08 § Policy.\n")
+            .Append("type ")
+            .Append(name)
+            .Append(" struct {\n\ttransport Transport\n}\n");
+
+        foreach (var scoped in objects) {
+            var on = Comment(scoped.DisplayName.ToLowerInvariant()) + " on a " + CliEmitter.Kebab(scoped.Scope).Replace('-', ' ');
+            var collectionParameters = Parameters(DocumentReader.PlaceholdersOf(scoped.CollectionPath));
+
+            built.Append("\n// List")
+                .Append(scoped.PluralStem)
+                .Append(" pages through the ")
+                .Append(Comment(scoped.DisplayPlural.ToLowerInvariant()))
+                .Append(" on a ")
+                .Append(CliEmitter.Kebab(scoped.Scope).Replace('-', ' '))
+                .Append(". ⚠ A short page never means \"that is all there is\".\n")
+                .Append("func (c *")
+                .Append(name)
+                .Append(") List")
+                .Append(scoped.PluralStem)
+                .Append('(')
+                .Append(collectionParameters.TrimStart(',', ' '))
+                .Append(collectionParameters.Length > 0 ? ", " : string.Empty)
+                .Append("options *ListOptions) *Pager[")
+                .Append(scoped.ModelName)
+                .Append("] {\n")
+                .Append("\tpath := ")
+                .Append(PathExpression(scoped.CollectionPath))
+                .Append('\n')
+                .Append("\treturn newPager[")
+                .Append(scoped.ModelName)
+                .Append("](c.transport, path, options)\n}\n");
+
+            if (scoped.Path.Length == 0) {
+                continue;
+            }
+
+            var parameters = Parameters(DocumentReader.PlaceholdersOf(scoped.Path));
+            var path = PathExpression(scoped.Path);
+
+            built.Append("\n// Get")
+                .Append(scoped.SingularStem)
+                .Append(" reads one ")
+                .Append(on)
+                .Append(".\n")
+                .Append("func (c *")
+                .Append(name)
+                .Append(") Get")
+                .Append(scoped.SingularStem)
+                .Append("(ctx context.Context")
+                .Append(parameters)
+                .Append(") (*")
+                .Append(scoped.ModelName)
+                .Append(", error) {\n")
+                .Append(Read("GET", path, "nil", scoped.ModelName));
+
+            if (!scoped.Writable) {
+                continue;
+            }
+
+            built.Append("\n// CreateOrUpdate")
+                .Append(scoped.SingularStem)
+                .Append(" creates or replaces one ")
+                .Append(on)
+                .Append(", written whole. ⚠ 201 the first time and 200 after, and no operation to poll.\n")
+                .Append("func (c *")
+                .Append(name)
+                .Append(") CreateOrUpdate")
+                .Append(scoped.SingularStem)
+                .Append("(ctx context.Context")
+                .Append(parameters)
+                .Append(", content ")
+                .Append(scoped.ContentName)
+                .Append(") (*")
+                .Append(scoped.ModelName)
+                .Append(", error) {\n")
+                .Append(Read("PUT", path, "content", scoped.ModelName))
+                .Append("\n// Delete")
+                .Append(scoped.SingularStem)
+                .Append(" deletes one ")
+                .Append(on)
+                .Append(". An object already gone is a success.\n")
+                .Append("func (c *")
+                .Append(name)
+                .Append(") Delete")
+                .Append(scoped.SingularStem)
+                .Append("(ctx context.Context")
+                .Append(parameters)
+                .Append(") error {\n")
+                .Append("\tpath := ")
+                .Append(path)
+                .Append('\n')
+                .Append("\treturn call(ctx, c.transport, \"DELETE\", path, nil, nil)\n}\n");
+        }
     }
 
     static void AppendProviderGroup(

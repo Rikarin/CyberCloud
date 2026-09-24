@@ -210,6 +210,26 @@ public sealed class ProviderRegistry : IProviderRegistry {
                 );
             }
 
+            // ⚠ RESERVED FOR POLICY, FOR THE FIRST ROUTING REASON AGAIN (#46). Policy definitions,
+            // assignments and states are addressed as {scope}/providers/CyberCloud.Policy/{type}[/{name}]
+            // (PolicyAddress), and on a resource group that is a well-formed resource id of type
+            // CyberCloud.Policy/policyAssignments. The gateway routes the whole namespace to the policy
+            // manager before it looks at the registry, so a provider that registered it would have every
+            // type it declared answered as a malformed policy address.
+            if (string.Equals(
+                    provider.ProviderNamespace,
+                    PolicyAddress.ProviderNamespace,
+                    StringComparison.OrdinalIgnoreCase
+                )) {
+                throw new InvalidOperationException(
+                    $"Provider '{provider.ProviderNamespace}' declares the reserved namespace "
+                    + $"'{PolicyAddress.ProviderNamespace}'. Every address under it is a policy definition, "
+                    + "assignment or compliance state — docs/plan/08 § Policy — and the gateway routes those "
+                    + "before it looks at the registry, so no type this provider declared could ever be "
+                    + "reached. See PolicyAddress.ProviderNamespace."
+                );
+            }
+
             if (!seenNamespaces.Add(provider.ProviderNamespace)) {
                 throw new InvalidOperationException(
                     $"Two providers declare the namespace '{provider.ProviderNamespace}'. A namespace names "

@@ -347,6 +347,13 @@ public sealed class IsolationCluster : IAsyncLifetime {
     public static CapturingInvitationDelivery InvitationMail { get; } = new();
 
     /// <summary>
+    ///     The policy path (#46), held the way a gateway holds it, over the real scope seam — the
+    ///     <c>assignRole</c> check a definition or an assignment write needs is answered by
+    ///     <c>CyberCloudSchema</c>, not by a double.
+    /// </summary>
+    public IPolicyManager Policies { get; private set; } = null!;
+
+    /// <summary>
     ///     The cross-resource seam of docs/plan/08 § What the resource manager deliberately does not
     ///     do, over the real authorizer. <c>Views.For(owner)</c> is what a reconcile pass for
     ///     <c>owner</c> receives; <c>CrossResourceViewTests</c> and <c>ResourceWatchTests</c> attack
@@ -696,7 +703,10 @@ public sealed class IsolationCluster : IAsyncLifetime {
                 NullLogger<ReBacResourceRelationWriter>.Instance
             ),
             new ResourceScopeLockResolver(cluster.GrainFactory),
-            new NotSupportedPolicyEvaluator(),
+            // ⚠ THE REAL POLICY ENGINE (#46), SO EVERY ATTACK IN THIS SUITE CROSSES STEP 5 AS IT IS
+            // SHIPPED. Each tenant's catalog is reached ForTenant from the resource's own address, and
+            // PolicyIsolationTests assigns a deny in one tenant and writes the same path in the other.
+            new CatalogPolicyEvaluator(cluster.GrainFactory, NullLogger<CatalogPolicyEvaluator>.Instance),
             new LoggingResourceChangedSink(NullLogger<LoggingResourceChangedSink>.Instance),
             cluster.GrainFactory,
             // ⚠ THE ACTION PATH, AND IT IS ON THE SEAM SIDE THIS SUITE EXISTS TO ATTACK. A
@@ -782,6 +792,15 @@ public sealed class IsolationCluster : IAsyncLifetime {
             new GrainIdentityDirectory(cluster.GrainFactory),
             cluster.GrainFactory,
             NullLogger<IdentityAdministrationService>.Instance
+        );
+
+        // ⚠ The policy path (#46), over the same real scope seam: who may write a definition or an
+        // assignment is `assignRole` on the scope through CyberCloudSchema, and PolicyIsolationTests
+        // drives it with a contributor, a reader and another tenant's owner.
+        Policies = new PolicyManagerService(
+            new ReBacScopeAuthorizer(cluster.GrainFactory, NullLogger<ReBacScopeAuthorizer>.Instance),
+            cluster.GrainFactory,
+            NullLogger<PolicyManagerService>.Instance
         );
 
         // ⚠ The subscriptions and their groups are real records now, because step 1 of the write path

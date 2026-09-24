@@ -300,6 +300,64 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
     }
 
     [Fact]
+    public void AWriteTraceCarriesStepFivesPolicyEntriesAcrossTheWire() {
+        // #46: what a modify wrote is part of the trace the caller reads, so it has to survive the hop
+        // from the process that ran the write path to whoever asked.
+        var value = new WriteTrace {
+            Reached = WriteTrace.Canonical,
+            Policy = [
+                new() {
+                    AssignmentPath = "/a",
+                    DefinitionPath = "/d",
+                    Effect = "modify",
+                    Matched = true,
+                    Applied = ["replace /properties/label = \"enforced\""]
+                }
+            ]
+        };
+
+        var round = RoundTrip(value);
+
+        var entry = round.Policy.ShouldHaveSingleItem();
+        entry.Effect.ShouldBe("modify");
+        entry.Matched.ShouldBeTrue();
+        entry.Applied.ShouldBe(["replace /properties/label = \"enforced\""]);
+    }
+
+    [Fact]
+    public void APolicyEvaluationRoundTripsWithItsDenialItsRewritesAndItsVerdicts() {
+        // ⚠ The catalog grain answers step 5 from a silo PROCESS to a gateway that is an Orleans client
+        // in another one; TenantOverHttpTests drives that hop for real. This is the cheap half: every
+        // member survives the codec.
+        var since = new DateTimeOffset(2026, 9, 23, 12, 0, 0, TimeSpan.Zero);
+        var value = new PolicyEvaluation {
+            Entries = [new() { AssignmentPath = "/a", DefinitionPath = "/d", Effect = "deny", Matched = true }],
+            Denial = new() { AssignmentPath = "/a", DefinitionPath = "/d", AssignmentName = "A", DefinitionName = "D", Target = "/properties/sku" },
+            Modifications = [new() { AssignmentPath = "/m", Operation = "add", Field = "/tags/x", Value = "\"y\"" }],
+            States = [
+                new() {
+                    ResourcePath = "/r",
+                    ResourceType = "CyberCloud.Testing/widgets",
+                    AssignmentPath = "/a",
+                    DefinitionPath = "/d",
+                    State = PolicyComplianceState.NonCompliant,
+                    Since = since
+                }
+            ],
+            HadStates = true
+        };
+
+        var round = RoundTrip(value);
+
+        round.Denial!.Target.ShouldBe("/properties/sku");
+        round.Modifications.ShouldHaveSingleItem().Value.ShouldBe("\"y\"");
+        round.States.ShouldHaveSingleItem().State.ShouldBe(PolicyComplianceState.NonCompliant);
+        round.States[0].Since.ShouldBe(since);
+        round.HadStates.ShouldBeTrue();
+        round.Entries.ShouldHaveSingleItem().Matched.ShouldBeTrue();
+    }
+
+    [Fact]
     public void AnObservedStateRoundTrips() {
         var value = new ObservedState {
             Exists = true,

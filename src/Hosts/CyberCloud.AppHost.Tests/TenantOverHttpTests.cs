@@ -425,6 +425,105 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
 
         value[0].GetProperty("id").GetString().ShouldBe(Address.Path);
         value[0].GetProperty("provisioningState").GetString().ShouldBe("Succeeded");
+
+        // ── Step 7: policy (#46) — written over HTTP, enforced at step 5 of a write over HTTP. ───
+        //
+        // ⚠ THE FIRST TIME THE POLICY CATALOG IS REACHED ACROSS A PROCESS BOUNDARY. The gateway here is
+        // an Orleans CLIENT in this process and the catalog grain lives in a silo PROCESS, so every
+        // type the policy path puts on the wire — the definition and assignment records, the subject
+        // step 5 sends, the evaluation it gets back — has to be resolvable by name on the other side.
+        // In-process TestClusters share one type manifest and cannot see a missing [Alias]; this can,
+        // and it is how #39's shard-map confirmation was caught after its merge.
+        var definition = PolicyAddress.Definition(ScopeId.Subscription(Tenant, Subscription), "no-second-widget");
+
+        var defined = await PutAsync(
+            definition.Path,
+            """
+            { "properties": { "displayName": "No second widget",
+              "policyRule": { "if": { "allOf": [
+                  { "field": "type", "equals": "CyberCloud.Sample/widgets" },
+                  { "field": "name", "like": "second-*" } ] },
+                "then": { "effect": "deny" } } } }
+            """,
+            cancellationToken
+        );
+
+        defined.Status.ShouldBe(
+            HttpStatusCode.Created,
+            "the tenant's owner could not write a policy definition on its own subscription: " + defined.Body
+        );
+
+        var assignment = PolicyAddress.Assignment(ScopeId.Group(Tenant, Subscription, ResourceGroup), "no-second-widget");
+
+        var assigned = await PutAsync(
+            assignment.Path,
+            $$"""{ "properties": { "policyDefinitionId": "{{definition.Path}}" } }""",
+            cancellationToken
+        );
+
+        assigned.Status.ShouldBe(HttpStatusCode.Created, "the assignment was refused: " + assigned.Body);
+
+        var readBack = await GetAsync(assignment.Path, cancellationToken);
+        readBack.Status.ShouldBe(HttpStatusCode.OK, readBack.Body);
+        Json(readBack.Body).GetProperty("properties").GetProperty("policyDefinitionId").GetString().ShouldBe(definition.Path);
+
+        var second = new ResourceId(Tenant, Subscription, ResourceGroup, SampleWidgets.Type, "second-widget", Guid.Empty);
+        var refusedWrite = await PutAsync(second.Path, SampleWidgets.Body(Cluster), cancellationToken);
+
+        refusedWrite.Status.ShouldBe(
+            HttpStatusCode.Forbidden,
+            "a write the tenant's own deny assignment matches was not refused at step 5: " + refusedWrite.Body
+        );
+
+        var error = Json(refusedWrite.Body).GetProperty("error");
+        error.GetProperty("code").GetString().ShouldBe("PolicyViolation");
+        error.GetProperty("message").GetString().ShouldNotBeNull().ShouldContain(assignment.Path);
+
+        // The widget the deny does not match is untouched by it — step 5 ran on this PUT and found
+        // nothing to refuse.
+        var unaffected = await PutAsync(Address.Path, SampleWidgets.Body(Cluster), cancellationToken);
+        unaffected.Status.ShouldBeOneOf(
+            [HttpStatusCode.OK, HttpStatusCode.Accepted],
+            "the first widget's re-PUT, which the rule does not match, was refused: " + unaffected.Body
+        );
+
+        // ── Step 8: a deleted management group takes its policy with it (#46's review). ─────────
+        //
+        // ⚠ THE FORGET RUNS IN THE GATEWAY PROCESS AND THE CATALOG IN THE SILO, so this is the new
+        // IPolicyCatalogGrain.ForgetScopeAsync crossing the boundary. The group's path is its name, so
+        // an assignment the delete left behind would be readable, and in force, on the group
+        // re-created under that name.
+        var managementGroup = ScopeId.ManagementGroupOf(Tenant, "policy-residue");
+        var madeGroup = await PutAsync(managementGroup.Path, "{}", cancellationToken);
+        madeGroup.Status.ShouldBe(HttpStatusCode.Created, madeGroup.Body);
+
+        var groupDefinition = PolicyAddress.Definition(managementGroup, "residue");
+        var madeDefinition = await PutAsync(
+            groupDefinition.Path,
+            """{ "properties": { "policyRule": { "if": { "field": "type", "like": "*" }, "then": { "effect": "deny" } } } }""",
+            cancellationToken
+        );
+        madeDefinition.Status.ShouldBe(HttpStatusCode.Created, madeDefinition.Body);
+
+        var groupAssignment = PolicyAddress.Assignment(managementGroup, "residue");
+        var madeAssignment = await PutAsync(
+            groupAssignment.Path,
+            $$"""{ "properties": { "policyDefinitionId": "{{groupDefinition.Path}}" } }""",
+            cancellationToken
+        );
+        madeAssignment.Status.ShouldBe(HttpStatusCode.Created, madeAssignment.Body);
+
+        var deleted = await DeleteAsync(managementGroup.Path, cancellationToken);
+        deleted.Status.ShouldBe(HttpStatusCode.NoContent, "the empty group's delete: " + deleted.Body);
+
+        var remade = await PutAsync(managementGroup.Path, "{}", cancellationToken);
+        remade.Status.ShouldBe(HttpStatusCode.Created, remade.Body);
+
+        var residue = await GetAsync(groupAssignment.Path, cancellationToken);
+        residue.Status.ShouldBe(
+            HttpStatusCode.NotFound,
+            "the deleted group's assignment is back on the group re-created under its name: " + residue.Body
+        );
     }
 
     // ── Polling ──────────────────────────────────────────────────────────────────────────────────
@@ -481,6 +580,15 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
             new Uri(path + Version, UriKind.Relative)
         );
         request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+
+        return await SendAsync(request, cancellationToken);
+    }
+
+    async Task<Answer> DeleteAsync(string path, CancellationToken cancellationToken) {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            new Uri(path + Version, UriKind.Relative)
+        );
 
         return await SendAsync(request, cancellationToken);
     }

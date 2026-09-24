@@ -14,6 +14,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13203,5 +13204,441 @@ public sealed partial class ScopeClient {
         string subscriptionId,
         string resourceGroupName,
         ResourceGroupCreateContent content,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum PolicyAssignmentType {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>CyberCloud.Policy/policyAssignments</summary>
+    [JsonStringEnumMemberName("CyberCloud.Policy/policyAssignments")]
+    CyberCloudPolicyPolicyAssignments = 1
+}
+
+/// <summary>Policy assignment, as the API renders it. A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy.</summary>
+public sealed partial class PolicyAssignment {
+
+    /// <summary>The assignment's own address.</summary>
+    [JsonPropertyName("id")]
+    public required string Id { get; set; }
+
+    /// <summary>The last segment of the address.</summary>
+    [JsonPropertyName("name")]
+    public required string Name { get; set; }
+
+    /// <summary>What the assignment applies, and where it doesn't.</summary>
+    [JsonPropertyName("properties")]
+    public required PropertiesData Properties { get; set; }
+
+    /// <summary>The Azure-shaped type string.</summary>
+    [JsonPropertyName("type")]
+    public required PolicyAssignmentType Type { get; set; }
+
+    /// <summary>What the assignment applies, and where it doesn't.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>What a person reads.</summary>
+        [JsonPropertyName("displayName")]
+        public required string DisplayName { get; set; }
+
+        /// <summary>Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling.</summary>
+        [JsonPropertyName("notScopes")]
+        public IList<string> NotScopes { get; set; } = new List<string>();
+
+        /// <summary>The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules.</summary>
+        [JsonPropertyName("policyDefinitionId")]
+        public required string PolicyDefinitionId { get; set; }
+
+        /// <summary>The scope the assignment sits on.</summary>
+        [JsonPropertyName("scope")]
+        public required string Scope { get; set; }
+    }
+}
+
+/// <summary>The body of a PUT that writes a policy assignment.</summary>
+public sealed partial class PolicyAssignmentContent {
+
+    /// <summary>What the assignment applies, and where it doesn't.</summary>
+    /// <remarks>Required on a create.</remarks>
+    [JsonPropertyName("properties")]
+    public required PropertiesData Properties { get; set; }
+
+    /// <summary>What the assignment applies, and where it doesn't.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>What a person reads.</summary>
+        [JsonPropertyName("displayName")]
+        public string? DisplayName { get; set; }
+
+        /// <summary>Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling.</summary>
+        [JsonPropertyName("notScopes")]
+        public IList<string> NotScopes { get; set; } = new List<string>();
+
+        /// <summary>The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules.</summary>
+        /// <remarks>Required on a create.</remarks>
+        [JsonPropertyName("policyDefinitionId")]
+        public required string PolicyDefinitionId { get; set; }
+    }
+}
+
+/// <summary>The values /type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum PolicyDefinitionType {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>CyberCloud.Policy/policyDefinitions</summary>
+    [JsonStringEnumMemberName("CyberCloud.Policy/policyDefinitions")]
+    CyberCloudPolicyPolicyDefinitions = 1
+}
+
+/// <summary>Policy definition, as the API renders it. A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy.</summary>
+public sealed partial class PolicyDefinition {
+
+    /// <summary>The definition's own address. An assignment names its definition by this.</summary>
+    [JsonPropertyName("id")]
+    public required string Id { get; set; }
+
+    /// <summary>The last segment of the address.</summary>
+    [JsonPropertyName("name")]
+    public required string Name { get; set; }
+
+    /// <summary>The definition's rule and its names.</summary>
+    [JsonPropertyName("properties")]
+    public required PropertiesData Properties { get; set; }
+
+    /// <summary>The Azure-shaped type string.</summary>
+    [JsonPropertyName("type")]
+    public required PolicyDefinitionType Type { get; set; }
+
+    /// <summary>The definition's rule and its names.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The longer explanation.</summary>
+        [JsonPropertyName("description")]
+        public required string Description { get; set; }
+
+        /// <summary>What a person reads.</summary>
+        [JsonPropertyName("displayName")]
+        public required string DisplayName { get; set; }
+
+        /// <summary>The rule — { "if": &lt;condition&gt;, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.</summary>
+        [JsonPropertyName("policyRule")]
+        public required JsonNode PolicyRule { get; set; }
+    }
+}
+
+/// <summary>The body of a PUT that writes a policy definition.</summary>
+public sealed partial class PolicyDefinitionContent {
+
+    /// <summary>The definition's rule and its names.</summary>
+    /// <remarks>Required on a create.</remarks>
+    [JsonPropertyName("properties")]
+    public required PropertiesData Properties { get; set; }
+
+    /// <summary>The definition's rule and its names.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The longer explanation.</summary>
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+
+        /// <summary>What a person reads.</summary>
+        [JsonPropertyName("displayName")]
+        public string? DisplayName { get; set; }
+
+        /// <summary>The rule — { "if": &lt;condition&gt;, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.</summary>
+        /// <remarks>Required on a create.</remarks>
+        [JsonPropertyName("policyRule")]
+        public required JsonNode PolicyRule { get; set; }
+    }
+}
+
+/// <summary>The values /complianceState accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum PolicyStateComplianceState {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>Compliant</summary>
+    [JsonStringEnumMemberName("Compliant")]
+    Compliant = 1,
+
+    /// <summary>NonCompliant</summary>
+    [JsonStringEnumMemberName("NonCompliant")]
+    NonCompliant = 2
+}
+
+/// <summary>Policy state, as the API renders it. The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy.</summary>
+public sealed partial class PolicyState {
+
+    /// <summary>Whether the audit rule matched.</summary>
+    [JsonPropertyName("complianceState")]
+    public required PolicyStateComplianceState ComplianceState { get; set; }
+
+    /// <summary>The audit assignment.</summary>
+    [JsonPropertyName("policyAssignmentId")]
+    public required string PolicyAssignmentId { get; set; }
+
+    /// <summary>Its definition.</summary>
+    [JsonPropertyName("policyDefinitionId")]
+    public required string PolicyDefinitionId { get; set; }
+
+    /// <summary>The resource's canonical path.</summary>
+    [JsonPropertyName("resourceId")]
+    public required string ResourceId { get; set; }
+
+    /// <summary>The resource's type.</summary>
+    [JsonPropertyName("resourceType")]
+    public required string ResourceType { get; set; }
+
+    /// <summary>When the verdict last changed.</summary>
+    [JsonPropertyName("timestamp")]
+    public required DateTimeOffset Timestamp { get; set; }
+}
+
+/// <summary>The objects under CyberCloud.Policy, on every scope that takes them — docs/plan/08 § Policy.</summary>
+/// <remarks>⚠ No WaitUntil and no Operation&lt;T&gt;: a write converges before the call
+/// returns — 201 the first time and 200 after on a PUT, 204 on a DELETE.</remarks>
+public sealed partial class PolicyClient {
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>The collection URL template ListPolicyAssignmentsAtManagementGroupAsync pages.</summary>
+    public const string PolicyAssignmentsAtManagementGroupPathTemplate = "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyAssignments";
+
+    /// <summary>The policy assignments on a management group, paged. A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyAssignment> ListPolicyAssignmentsAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The URL template one policy assignment on a management group is addressed at.</summary>
+    public const string PolicyAssignmentAtManagementGroupPathTemplate = "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}";
+
+    /// <summary>Reads one policy assignment on a management group.</summary>
+    public partial Task<Response<PolicyAssignment>> GetPolicyAssignmentAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        string policyAssignmentName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Creates or replaces one policy assignment on a management group, written whole.</summary>
+    /// <remarks>⚠ No WaitUntil: 201 the first time and 200 after, and nothing to poll.</remarks>
+    public partial Task<Response<PolicyAssignment>> CreateOrUpdatePolicyAssignmentAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        string policyAssignmentName,
+        PolicyAssignmentContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes one policy assignment on a management group. An object already gone is a success.</summary>
+    public partial Task<Response> DeletePolicyAssignmentAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        string policyAssignmentName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyDefinitionsAtManagementGroupAsync pages.</summary>
+    public const string PolicyDefinitionsAtManagementGroupPathTemplate = "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyDefinitions";
+
+    /// <summary>The policy definitions on a management group, paged. A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyDefinition> ListPolicyDefinitionsAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The URL template one policy definition on a management group is addressed at.</summary>
+    public const string PolicyDefinitionAtManagementGroupPathTemplate = "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}";
+
+    /// <summary>Reads one policy definition on a management group.</summary>
+    public partial Task<Response<PolicyDefinition>> GetPolicyDefinitionAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        string policyDefinitionName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Creates or replaces one policy definition on a management group, written whole.</summary>
+    /// <remarks>⚠ No WaitUntil: 201 the first time and 200 after, and nothing to poll.</remarks>
+    public partial Task<Response<PolicyDefinition>> CreateOrUpdatePolicyDefinitionAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        string policyDefinitionName,
+        PolicyDefinitionContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes one policy definition on a management group. An object already gone is a success.</summary>
+    public partial Task<Response> DeletePolicyDefinitionAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        string policyDefinitionName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyStatesAtManagementGroupAsync pages.</summary>
+    public const string PolicyStatesAtManagementGroupPathTemplate = "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyStates";
+
+    /// <summary>The policy states on a management group, paged. The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyState> ListPolicyStatesAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyDefinitionsAtTenantAsync pages.</summary>
+    public const string PolicyDefinitionsAtTenantPathTemplate = "/tenants/{tenantId}/providers/CyberCloud.Policy/policyDefinitions";
+
+    /// <summary>The policy definitions on a tenant, paged. A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyDefinition> ListPolicyDefinitionsAtTenantAsync(
+        string tenantId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The URL template one policy definition on a tenant is addressed at.</summary>
+    public const string PolicyDefinitionAtTenantPathTemplate = "/tenants/{tenantId}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}";
+
+    /// <summary>Reads one policy definition on a tenant.</summary>
+    public partial Task<Response<PolicyDefinition>> GetPolicyDefinitionAtTenantAsync(
+        string tenantId,
+        string policyDefinitionName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Creates or replaces one policy definition on a tenant, written whole.</summary>
+    /// <remarks>⚠ No WaitUntil: 201 the first time and 200 after, and nothing to poll.</remarks>
+    public partial Task<Response<PolicyDefinition>> CreateOrUpdatePolicyDefinitionAtTenantAsync(
+        string tenantId,
+        string policyDefinitionName,
+        PolicyDefinitionContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes one policy definition on a tenant. An object already gone is a success.</summary>
+    public partial Task<Response> DeletePolicyDefinitionAtTenantAsync(
+        string tenantId,
+        string policyDefinitionName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyAssignmentsAtSubscriptionAsync pages.</summary>
+    public const string PolicyAssignmentsAtSubscriptionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyAssignments";
+
+    /// <summary>The policy assignments on a subscription, paged. A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyAssignment> ListPolicyAssignmentsAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The URL template one policy assignment on a subscription is addressed at.</summary>
+    public const string PolicyAssignmentAtSubscriptionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}";
+
+    /// <summary>Reads one policy assignment on a subscription.</summary>
+    public partial Task<Response<PolicyAssignment>> GetPolicyAssignmentAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        string policyAssignmentName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Creates or replaces one policy assignment on a subscription, written whole.</summary>
+    /// <remarks>⚠ No WaitUntil: 201 the first time and 200 after, and nothing to poll.</remarks>
+    public partial Task<Response<PolicyAssignment>> CreateOrUpdatePolicyAssignmentAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        string policyAssignmentName,
+        PolicyAssignmentContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes one policy assignment on a subscription. An object already gone is a success.</summary>
+    public partial Task<Response> DeletePolicyAssignmentAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        string policyAssignmentName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyDefinitionsAtSubscriptionAsync pages.</summary>
+    public const string PolicyDefinitionsAtSubscriptionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyDefinitions";
+
+    /// <summary>The policy definitions on a subscription, paged. A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyDefinition> ListPolicyDefinitionsAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The URL template one policy definition on a subscription is addressed at.</summary>
+    public const string PolicyDefinitionAtSubscriptionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}";
+
+    /// <summary>Reads one policy definition on a subscription.</summary>
+    public partial Task<Response<PolicyDefinition>> GetPolicyDefinitionAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        string policyDefinitionName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Creates or replaces one policy definition on a subscription, written whole.</summary>
+    /// <remarks>⚠ No WaitUntil: 201 the first time and 200 after, and nothing to poll.</remarks>
+    public partial Task<Response<PolicyDefinition>> CreateOrUpdatePolicyDefinitionAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        string policyDefinitionName,
+        PolicyDefinitionContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes one policy definition on a subscription. An object already gone is a success.</summary>
+    public partial Task<Response> DeletePolicyDefinitionAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        string policyDefinitionName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyStatesAtSubscriptionAsync pages.</summary>
+    public const string PolicyStatesAtSubscriptionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyStates";
+
+    /// <summary>The policy states on a subscription, paged. The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyState> ListPolicyStatesAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyAssignmentsAtResourceGroupAsync pages.</summary>
+    public const string PolicyAssignmentsAtResourceGroupPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Policy/policyAssignments";
+
+    /// <summary>The policy assignments on a resource group, paged. A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyAssignment> ListPolicyAssignmentsAtResourceGroupAsync(
+        string tenantId,
+        string subscriptionId,
+        string resourceGroupName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The URL template one policy assignment on a resource group is addressed at.</summary>
+    public const string PolicyAssignmentAtResourceGroupPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}";
+
+    /// <summary>Reads one policy assignment on a resource group.</summary>
+    public partial Task<Response<PolicyAssignment>> GetPolicyAssignmentAtResourceGroupAsync(
+        string tenantId,
+        string subscriptionId,
+        string resourceGroupName,
+        string policyAssignmentName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Creates or replaces one policy assignment on a resource group, written whole.</summary>
+    /// <remarks>⚠ No WaitUntil: 201 the first time and 200 after, and nothing to poll.</remarks>
+    public partial Task<Response<PolicyAssignment>> CreateOrUpdatePolicyAssignmentAtResourceGroupAsync(
+        string tenantId,
+        string subscriptionId,
+        string resourceGroupName,
+        string policyAssignmentName,
+        PolicyAssignmentContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes one policy assignment on a resource group. An object already gone is a success.</summary>
+    public partial Task<Response> DeletePolicyAssignmentAtResourceGroupAsync(
+        string tenantId,
+        string subscriptionId,
+        string resourceGroupName,
+        string policyAssignmentName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyStatesAtResourceGroupAsync pages.</summary>
+    public const string PolicyStatesAtResourceGroupPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Policy/policyStates";
+
+    /// <summary>The policy states on a resource group, paged. The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyState> ListPolicyStatesAtResourceGroupAsync(
+        string tenantId,
+        string subscriptionId,
+        string resourceGroupName,
         CancellationToken cancellationToken = default);
 }

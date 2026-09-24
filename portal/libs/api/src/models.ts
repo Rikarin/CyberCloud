@@ -111,6 +111,101 @@ export interface ScopeResource {
   type: string;
 }
 
+/** The values /type accepts. ⚠ Closed: the write path refuses anything else. */
+export type PolicyAssignmentType =
+  | 'CyberCloud.Policy/policyAssignments';
+
+/** Policy assignment, as the API renders it. A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy. */
+export interface PolicyAssignment {
+  /** The assignment's own address. */
+  id: string;
+  /** The last segment of the address. */
+  name: string;
+  /** What the assignment applies, and where it doesn't. */
+  properties: {
+    /** What a person reads. */
+    displayName: string;
+    /** Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling. */
+    notScopes: string[];
+    /** The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules. */
+    policyDefinitionId: string;
+    /** The scope the assignment sits on. */
+    scope: string;
+  };
+  /** The Azure-shaped type string. */
+  type: PolicyAssignmentType;
+}
+
+/** The body of a PUT that writes a policy assignment. */
+export interface PolicyAssignmentContent {
+  /** What the assignment applies, and where it doesn't. */
+  properties: {
+    /** What a person reads. */
+    displayName?: string;
+    /** Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling. */
+    notScopes?: string[];
+    /** The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules. */
+    policyDefinitionId: string;
+  };
+}
+
+/** The values /type accepts. ⚠ Closed: the write path refuses anything else. */
+export type PolicyDefinitionType =
+  | 'CyberCloud.Policy/policyDefinitions';
+
+/** Policy definition, as the API renders it. A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy. */
+export interface PolicyDefinition {
+  /** The definition's own address. An assignment names its definition by this. */
+  id: string;
+  /** The last segment of the address. */
+  name: string;
+  /** The definition's rule and its names. */
+  properties: {
+    /** The longer explanation. */
+    description: string;
+    /** What a person reads. */
+    displayName: string;
+    /** The rule — { "if": <condition>, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy. */
+    policyRule: unknown;
+  };
+  /** The Azure-shaped type string. */
+  type: PolicyDefinitionType;
+}
+
+/** The body of a PUT that writes a policy definition. */
+export interface PolicyDefinitionContent {
+  /** The definition's rule and its names. */
+  properties: {
+    /** The longer explanation. */
+    description?: string;
+    /** What a person reads. */
+    displayName?: string;
+    /** The rule — { "if": <condition>, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy. */
+    policyRule: unknown;
+  };
+}
+
+/** The values /complianceState accepts. ⚠ Closed: the write path refuses anything else. */
+export type PolicyStateComplianceState =
+  | 'Compliant'
+  | 'NonCompliant';
+
+/** Policy state, as the API renders it. The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy. */
+export interface PolicyState {
+  /** Whether the audit rule matched. */
+  complianceState: PolicyStateComplianceState;
+  /** The audit assignment. */
+  policyAssignmentId: string;
+  /** Its definition. */
+  policyDefinitionId: string;
+  /** The resource's canonical path. */
+  resourceId: string;
+  /** The resource's type. */
+  resourceType: string;
+  /** When the verdict last changed. */
+  timestamp: string;
+}
+
 /** The values /provisioningState carries. ⚠ Read-only: the server sets it, and a write that carries it is refused. */
 export type ProvisioningState =
   | 'Canceled'

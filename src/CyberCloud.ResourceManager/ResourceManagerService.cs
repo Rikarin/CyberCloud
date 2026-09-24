@@ -1,3 +1,4 @@
+using CyberCloud.Core.Policy;
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using CyberCloud.ResourceManager.Orchestration;
@@ -7,6 +8,7 @@ using Orleans.Multitenant;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace CyberCloud.ResourceManager;
 
@@ -87,6 +89,9 @@ public sealed class ResourceManagerService(
 )
     : IResourceManager {
     readonly ImmutableArray<IResourceBodyValidator> bodyValidators = [.. validators ?? []];
+
+    /// <summary>How step 2 reads a request body: a member named twice is malformed, not "the last one".</summary>
+    static readonly JsonDocumentOptions StrictJson = new() { AllowDuplicateProperties = false };
 
     /// <inheritdoc />
     public Task<Result<WriteAccepted>> WriteAsync(
@@ -190,7 +195,10 @@ public sealed class ResourceManagerService(
 
         JsonDocument body;
         try {
-            body = JsonDocument.Parse(request.Body);
+            // ⚠ A duplicate member is refused here, as the 400 it is. JsonDocument keeps the last
+            // value and would pass it; step 5's JsonNode copy of the same body then threw an
+            // ArgumentException on it, a 500. Found by the review of issue #46.
+            body = JsonDocument.Parse(request.Body, StrictJson);
         } catch (JsonException exception) {
             return Result<WriteAccepted>.Failure(
                 ErrorCode.InvalidRequestBody,
@@ -737,10 +745,49 @@ public sealed class ResourceManagerService(
             );
         }
 
-        // Steps 5, 6 and 7 read differently on the delete path and the trace says so rather than
-        // pretending they ran: policy is not evaluated for a delete in this build, quota is returned
-        // rather than reserved (and only once teardown converges), and the index is RELEASED rather
-        // than claimed.
+        // ── 5. Policy, on the resource as it stands ─────────────────────────────────────────────
+        //
+        // ⚠ A DELETE IS POLICED, AND ONLY BY A RULE THAT SAYS IT IS ABOUT DELETES. PolicyRule.AppliesTo
+        // carries the argument: a rule about a resource's shape must not make the resources that
+        // violate it undeletable, so only a deny rule whose condition names `operation` reaches this
+        // request — "deny delete where /tags/env is prod". The body it judges is the stored one, read
+        // a few lines up for the single-writer refusal, because a DELETE carries none.
+        //
+        // ⚠ AN EMPTY BODY WHEN THAT READ FAILED, AND UNLIKE A PATCH OR AN ACTION THIS DOESN'T REFUSE.
+        // The read fails only with NotFound: the grain holds no record, so the resource has no fields
+        // for a rule to protect, and a rule about the type or the operation still judges. Refusing
+        // here would stop the index release below for a name whose record is already gone.
+        //
+        // ⚠ AFTER THE SINGLE-WRITER REFUSAL AND BEFORE THE INDEX RELEASE, which is the order the
+        // write path has: a refusal here must leave the name held and the resource untouched, and the
+        // release below is the irreversible step.
+        trace.Enter(WriteStep.Policy);
+
+        var denied = await policy.EvaluateAsync(
+            new() {
+                Id = target.Id,
+                Operation = PolicyOperations.Delete,
+                Document = PolicyDocuments.Evaluated(
+                    live.IsSuccess ? PolicyDocuments.Stored(live.GetValueOrThrow()) : new JsonObject(),
+                    target.Schema
+                ),
+                ManagementGroup = target.ManagementGroup,
+                Caller = request.Caller
+            },
+            cancellationToken
+        );
+
+        trace.RecordPolicy(denied.Trace);
+
+        if (!denied.Permits) {
+            return Result<WriteAccepted>.Failure(
+                denied.Error ?? new Error(ErrorCode.PolicyViolation, $"Policy denied the delete of '{request.Path}'.")
+            );
+        }
+
+        // Steps 6 and 7 read differently on the delete path and the trace says so rather than
+        // pretending they ran: quota is returned rather than reserved (and only once teardown
+        // converges), and the index is RELEASED rather than claimed.
         trace.Enter(WriteStep.IndexClaim);
 
         // ⚠ THE INDEX GOES FIRST, AND THAT IS THE ORDER docs/plan/06 § Two-phase create GIVES:
@@ -878,6 +925,20 @@ public sealed class ResourceManagerService(
 
         if (started.TryGetError(out var startError)) {
             return Result<WriteAccepted>.Failure(startError);
+        }
+
+        // ⚠ The resource's audit verdicts go when its delete is accepted, not when teardown converges.
+        // policyStates answers "is this resource compliant", and a resource being torn down is no
+        // longer being written to comply with anything; keeping its rows until a teardown that may
+        // take an hour — or fail and retry for a day — would count it in every compliance summary
+        // taken meanwhile. Not allowed to fail the delete, which has already been accepted.
+        var forgotten = await policy.ForgetAsync(target.Id, cancellationToken);
+        if (forgotten.TryGetError(out var forgetError)) {
+            logger.LogError(
+                "Forgetting the audit verdicts of {Path} failed after its delete was accepted: {Message}",
+                target.Id.Path,
+                forgetError.Message
+            );
         }
 
         trace.Enter(WriteStep.EmitChanged);
@@ -1965,6 +2026,50 @@ public sealed class ResourceManagerService(
             return NotFound<WriteAccepted>(request.Path);
         }
 
+        // ── 5. Policy, before any handler runs and before any operation starts ──────────────────
+        //
+        // ⚠ AN ACTION IS POLICED BY A DENY RULE THAT NAMES THE OPERATION, AND BY NOTHING ELSE — the
+        // rule PolicyRule.AppliesTo states for a DELETE, for the same reason: "deny rotateKeys where
+        // /tags/env is prod" says which request it is about, and a rule about the resource's shape does
+        // not. It judges the stored body, because an action's body is its parameters and not the
+        // resource.
+        //
+        // ⚠ HERE, AFTER THE CHECK AND BEFORE THE FORK, SO BOTH KINDS OF ACTION PASS THROUGH IT. A
+        // synchronous action's handler runs in CompleteActionAsync and a long-running one's from the
+        // operation grain; either placed after the fork would be a handler a policy could not stop.
+        trace.Enter(WriteStep.Policy);
+
+        // ⚠ A failed read refuses rather than judging an empty body, which would let the action past
+        // every rule about the resource's fields. It fails only with NotFound, a delete racing this
+        // action, and an action on a resource that is gone is the 404 the check above gives.
+        var current = await Resource(target).GetAsync(string.Empty, []);
+        if (current.TryGetError(out var currentError)) {
+            return currentError.Code == ErrorCode.ResourceNotFound
+                ? NotFound<WriteAccepted>(request.Path)
+                : Result<WriteAccepted>.Failure(currentError);
+        }
+
+        var refused = await policy.EvaluateAsync(
+            new() {
+                Id = target.Id,
+                Operation = PolicyOperations.Action,
+                Action = action.Name,
+                Document = PolicyDocuments.Evaluated(PolicyDocuments.Stored(current.GetValueOrThrow()), target.Schema),
+                ManagementGroup = target.ManagementGroup,
+                Caller = request.Caller
+            },
+            cancellationToken
+        );
+
+        trace.RecordPolicy(refused.Trace);
+
+        if (!refused.Permits) {
+            return Result<WriteAccepted>.Failure(
+                refused.Error
+                ?? new Error(ErrorCode.PolicyViolation, $"Policy denied '{action.Name}' on '{request.Path}'.")
+            );
+        }
+
         // ── An action that does no work answers here, and never starts an operation ──────────────
         //
         // ⚠ THE SECRET MUST NOT REACH THE OPERATION RECORD, AND NOT STARTING ONE IS HOW THAT IS
@@ -2261,16 +2366,52 @@ public sealed class ResourceManagerService(
             }
         }
 
-        // ── 5. Policy — deny, modify, audit ─────────────────────────────────────────────────────
+        // ── 5. Policy — modify, then deny, then audit. docs/plan/08 § Policy ───────────────────
+        //
+        // ⚠ THE CONDITION JUDGES THE BODY THE WRITE WILL LEAVE, NOT THE ONE IT CARRIES. For a PUT
+        // those are the same document. For a PATCH they are not — a merge patch omits every field it
+        // is not changing — so the stored superset is read and the patch merged onto it, exactly as
+        // the resource grain will merge it at step 9. Judging the patch alone would let "PATCH
+        // { tags: {} }" through a rule about the sku, and would fail every `exists: true` rule on a
+        // field the patch did not repeat.
+        //
+        // ⚠ A MODIFY REWRITES THE DOCUMENT THIS REQUEST SENDS, AND THE REWRITE IS VALIDATED AGAIN.
+        // Step 2 validated what the caller sent; the schema has not seen what the policy made of it,
+        // and a policy engine whose output skipped the schema would be a way past it. Everything below
+        // this step — the quota amounts, the tags, the location, the cluster, the desired state — reads
+        // the rewritten body, because it is the body being written.
         trace.Enter(WriteStep.Policy);
 
+        var sent = PolicyDocuments.Parse(request.Body);
+        var prospective = sent;
+
+        if (request.Verb == WriteVerb.Patch && target.Exists) {
+            // ⚠ A failed read refuses: the patch alone is exactly the body the paragraph above says
+            // lets writes past rules about fields it doesn't repeat. The read fails only with NotFound
+            // — the resource was deleted after step 1 saw it — and a PATCH of a resource that is gone
+            // is the canonical 404 anyway. Found by the review of issue #46.
+            var stored = await Resource(target).GetAsync(string.Empty, []);
+            if (stored.TryGetError(out var storedError)) {
+                return storedError.Code == ErrorCode.ResourceNotFound
+                    ? NotFound<WriteAccepted>(request.Path)
+                    : Result<WriteAccepted>.Failure(storedError);
+            }
+
+            prospective = PolicyDocuments.MergePatch(PolicyDocuments.Stored(stored.GetValueOrThrow()), sent);
+        }
+
         var decision = await policy.EvaluateAsync(
-            target.Id,
-            target.ApiVersion.Value,
-            request.Body,
-            request.Caller,
+            new() {
+                Id = target.Id,
+                Operation = target.Exists ? PolicyOperations.Update : PolicyOperations.Create,
+                Document = PolicyDocuments.Evaluated(prospective, target.Schema),
+                ManagementGroup = target.ManagementGroup,
+                Caller = request.Caller
+            },
             cancellationToken
         );
+
+        trace.RecordPolicy(decision.Trace);
 
         if (!decision.Permits) {
             return Result<WriteAccepted>.Failure(
@@ -2283,13 +2424,20 @@ public sealed class ResourceManagerService(
             );
         }
 
-        var effectiveBody = decision.ModifiedBody ?? request.Body;
+        var effectiveBody = request.Body;
 
-        if (decision.Effect == PolicyEffect.Modify) {
-            // ⚠ A modified body is re-validated. A policy that produced an invalid body would
-            // otherwise reach the provider unchecked, which is a policy engine granting itself the
-            // right to bypass the schema.
-            using var modified = JsonDocument.Parse(effectiveBody);
+        if (!decision.Modifications.IsDefaultOrEmpty) {
+            var rewritten = PolicyDocuments.Apply(decision.Modifications, sent, prospective, target.Schema);
+            if (rewritten.TryGetError(out var rewriteError)) {
+                return Result<WriteAccepted>.Failure(rewriteError);
+            }
+
+            effectiveBody = sent.ToJsonString();
+        }
+
+        using var modified = ReferenceEquals(effectiveBody, request.Body) ? null : JsonDocument.Parse(effectiveBody);
+
+        if (modified is not null) {
             var revalidated = target.Schema.Validate(
                 modified.RootElement,
                 request.Verb == WriteVerb.Put,
@@ -2303,6 +2451,8 @@ public sealed class ResourceManagerService(
                     modifiedError.Target
                 );
             }
+
+            body = modified.RootElement;
         }
 
         // ── 6. Quota ────────────────────────────────────────────────────────────────────────────
@@ -2480,7 +2630,11 @@ public sealed class ResourceManagerService(
                     OperationId = operationId,
                     IfMatch = request.IfMatch,
                     Caller = request.Caller,
-                    Tags = TagsFrom(body, resolvedTarget.Registration),
+                    // ⚠ A PATCH sends the merged body's bag — the one step 5 judged — never the
+                    // patch's own, which the grain would store in place of every tag it left out.
+                    Tags = request.Verb == WriteVerb.Patch && target.Exists
+                        ? TagsFrom(prospective, resolvedTarget.Registration)
+                        : TagsFrom(body, resolvedTarget.Registration),
                     Location = LocationFrom(body),
                     ClusterId = ClusterFrom(body, resolvedTarget.Registration),
                     DeclaredPointers = Pointers(resolvedTarget.Schema),
@@ -2514,6 +2668,25 @@ public sealed class ResourceManagerService(
         }
 
         var snapshot = submitted.GetValueOrThrow();
+
+        // ── The audit verdicts, now that the body they judged is the one stored ─────────────────
+        //
+        // ⚠ HERE AND NOT AT STEP 5, because until step 9 succeeded the body could still have been
+        // refused — by quota, by the name race, by the group — and a verdict recorded for a body that
+        // never landed would have policyStates describe a resource that is not what it says. And not
+        // allowed to fail the write, for the reason the child counter below gives: the resource is
+        // durable, and a 500 for a write that succeeded is the worse answer. A lost verdict comes
+        // back on the resource's next write.
+        if (decision.RecordsCompliance) {
+            var recorded = await policy.RecordComplianceAsync(addressed, decision, cancellationToken);
+            if (recorded.TryGetError(out var recordError)) {
+                logger.LogError(
+                    "Recording the audit verdicts for {Path} failed after its write was accepted: {Message}",
+                    addressed.Path,
+                    recordError.Message
+                );
+            }
+        }
 
         // ⚠ THE NO-OP. docs/plan/06 § Two-phase create: "the caller retries the PUT — which is
         // idempotent because PUT with the same body on an existing resource is a no-op, which is
@@ -2917,7 +3090,8 @@ public sealed class ResourceManagerService(
                 found.ApiVersion,
                 found.Schema,
                 existing.IsSuccess,
-                parentId
+                parentId,
+                subscription.GetValueOrThrow().ManagementGroup
             )
         );
     }
@@ -3259,6 +3433,36 @@ public sealed class ResourceManagerService(
         return built.ToImmutable();
     }
 
+    /// <summary>
+    ///     The tag bag of the body a <c>PATCH</c> leaves — the stored bag with the patch's <c>tags</c>
+    ///     merged onto it — which is the bag step 5 judged.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Not the patch's own bag, and that was a policy bypass.</b> The resource grain replaces
+    ///     the stored bag with the one it's sent, so a <c>PATCH</c> that left <c>tags</c> out used to
+    ///     send an empty bag and strip every tag, after step 5 had judged the merged body with the
+    ///     tags still on it: "deny when <c>/tags/env</c> doesn't exist" refused a <c>PUT</c> without
+    ///     the tag and let that <c>PATCH</c> through. Found by the review of issue #46;
+    ///     <c>PolicyEnforcementTests.APatchThatLeavesOutTheTagsKeepsTheTagsTheRuleWasJudgedOn</c>
+    ///     drives it. Merging is also what <see cref="TagRules.MaxTags" /> already said a patch does.
+    /// </remarks>
+    /// <param name="prospective">Step 5's merged body, with any modify already applied to it.</param>
+    /// <param name="registration">The type, which says whether it carries tags at all.</param>
+    static ImmutableDictionary<string, string> TagsFrom(JsonObject prospective, ResourceTypeRegistration registration) {
+        if (!registration.SupportsTags || prospective[TagRules.Name] is not JsonObject tags) {
+            return ImmutableDictionary<string, string>.Empty;
+        }
+
+        var built = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in tags) {
+            if (value is JsonValue text && text.TryGetValue<string>(out var tag)) {
+                built[key] = tag;
+            }
+        }
+
+        return built.ToImmutable();
+    }
+
     static string LocationFrom(JsonElement body) =>
         body.TryGetProperty("location", out var location) && location.ValueKind == JsonValueKind.String
             ? location.GetString() ?? string.Empty
@@ -3407,12 +3611,18 @@ public sealed class ResourceManagerService(
     ///         <c>OperationSpec</c> for the unlink.
     ///     </para>
     /// </param>
+    /// <param name="ManagementGroup">
+    ///     The management group the subscription sits in, as step 1's subscription read found it, or
+    ///     empty. Carried to step 5 so the policy engine starts its walk up the tree without reading the
+    ///     subscription a second time.
+    /// </param>
     readonly record struct WriteTarget(
         ResourceId Id,
         ResourceTypeRegistration Registration,
         ApiVersion ApiVersion,
         ResourceSchema Schema,
         bool Exists,
-        Guid ParentId
+        Guid ParentId,
+        string ManagementGroup
     );
 }

@@ -416,13 +416,14 @@ public sealed class OpenApiEmitterTests {
         OpenApiStructure.Validate(document).ShouldBeEmpty();
 
         // Two resource paths, two collection paths, /operations/{operationId}, the four scope
-        // paths and the three scope collections. ⚠ The count was 3 until a type gained a collection
-        // path, 5 until the scope API reached the document (issue #63), 8 until the scope
-        // collections did and 10 until the management group brought a path and a collection
-        // (issue #39); it is asserted at all because a path that silently replaced another
-        // would leave the document valid and one provider missing, which is the failure
-        // `paths[key] = …` makes invisible.
-        document["paths"]!.AsObject().Count.ShouldBe(12);
+        // paths, the three scope collections and policy's fifteen. ⚠ The count was 3 until a type
+        // gained a collection path, 5 until the scope API reached the document (issue #63), 8 until
+        // the scope collections did, 10 until the management group brought a path and a collection
+        // (issue #39) and 12 until policy's addresses did (the review of issue #46); it is asserted
+        // at all because a path that silently replaced another would leave the document valid and
+        // one provider missing, which is the failure `paths[key] = …` makes invisible.
+        document["paths"]!.AsObject().Count.ShouldBe(27);
+        DocumentReader.ScopeObjectsOf(document).Length.ShouldBe(9, "three definition scopes, three assignment scopes, three state scopes");
 
         // ⚠ And the four that came from no provider are named, not just counted — and the three
         // collections read as collections on those four, never as a fifth, sixth and seventh scope.

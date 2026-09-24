@@ -6,29 +6,45 @@ using System.Globalization;
 namespace CyberCloud.ResourceManager;
 
 /// <summary>
-///     The policy evaluator a platform with no policy engine registers. Step 5, M3.
+///     The policy evaluator a harness with no policy engine passes. Step 5, answered by nobody.
 /// </summary>
 /// <remarks>
-///     ⚠
-///     <b>
-///         Returns <see cref="PolicyEffect.NotSupported" /> rather than
-///         <see cref="PolicyEffect.Allow" />, and the difference is what an audit log has to be able to
-///         state.
-///     </b> An <see cref="PolicyEffect.Allow" /> is indistinguishable from a policy engine that
-///     evaluated and permitted; <see cref="PolicyEffect.NotSupported" /> says no engine ran. The write
-///     path treats both as "carry on", so the step stays in its place in the order from the first day
-///     — and the ordering is the thing that must not move later.
+///     <para>
+///         ⚠
+///         <b>
+///             Returns <see cref="PolicyEffect.NotSupported" /> rather than
+///             <see cref="PolicyEffect.Allow" />, and the difference is what an audit log has to be able
+///             to state.
+///         </b> An <see cref="PolicyEffect.Allow" /> is indistinguishable from a policy engine that
+///         evaluated and permitted; <see cref="PolicyEffect.NotSupported" /> says no engine ran. The
+///         write path treats both as "carry on".
+///     </para>
+///     <para>
+///         ⚠ <b>No longer the default a host gets.</b> <c>AddCyberCloudResourceManager</c> registers
+///         <see cref="CatalogPolicyEvaluator" /> since issue #46; this remains for the hand-built
+///         harnesses — the conformance suites, the isolation suite — whose subject is not policy and
+///         which build <see cref="ResourceManagerService" /> without a catalog grain to ask.
+///     </para>
 /// </remarks>
 public sealed class NotSupportedPolicyEvaluator : IPolicyEvaluator {
     /// <inheritdoc />
     public Task<PolicyDecision> EvaluateAsync(
-        ResourceId id,
-        string apiVersion,
-        string body,
-        CallerContext caller,
+        PolicyEvaluationRequest request,
         CancellationToken cancellationToken = default
     ) =>
         Task.FromResult(PolicyDecision.NotSupported);
+
+    /// <inheritdoc />
+    public Task<Result> RecordComplianceAsync(
+        ResourceId id,
+        PolicyDecision decision,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(Result.Success);
+
+    /// <inheritdoc />
+    public Task<Result> ForgetAsync(ResourceId id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result.Success);
 }
 
 /// <summary>

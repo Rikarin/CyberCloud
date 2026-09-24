@@ -44,8 +44,8 @@ public static class ResourceManagerSiloBuilderExtensions {
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Every seam gets a default and every default is honest about what it is.</b>
-    ///         <see cref="NotSupportedPolicyEvaluator" /> says no policy engine ran rather than
-    ///         allowing; <see cref="UnavailableSecretResolver" /> refuses rather than returning empty;
+    ///         <see cref="CatalogPolicyEvaluator" /> fails closed when the catalog cannot answer rather
+    ///         than allowing; <see cref="UnavailableSecretResolver" /> refuses rather than returning empty;
     ///         <see cref="UnavailableClusterObjectInventory" /> fails rather than reporting an empty
     ///         cluster; <see cref="ConnectionNamespaceInventory" /> refuses when there is no
     ///         connection rather than reporting an empty namespace, which is the answer that would
@@ -133,7 +133,10 @@ public static class ResourceManagerSiloBuilderExtensions {
             )
         );
 
-        services.TryAddSingleton<IPolicyEvaluator, NotSupportedPolicyEvaluator>();
+        // ⚠ The real engine since issue #46 — the tenant's policy catalog grain. It replaced
+        // NotSupportedPolicyEvaluator here without step 5 moving, which is the reason the step was put
+        // in its place before it did anything.
+        services.TryAddSingleton<IPolicyEvaluator, CatalogPolicyEvaluator>();
         services.TryAddSingleton<IResourceChangedSink, LoggingResourceChangedSink>();
         services.TryAddSingleton<ILockResolver, ResourceScopeLockResolver>();
         services.TryAddSingleton<ISecretResolver, UnavailableSecretResolver>();
@@ -263,6 +266,16 @@ public static class ResourceManagerSiloBuilderExtensions {
         // with AddResourceGraphQuery when its section carries a ClickHouse endpoint, and a silo keeps
         // the refusal because a silo serves no query.
         services.TryAddSingleton<IResourceGraphQuery, UnavailableResourceGraphQuery>();
+
+        // ── Policy. docs/plan/08 § Policy, issue #46 ────────────────────────────────────────────
+        //
+        // ⚠ THE FIFTH ENTRY POINT, AND IT HAS NO REFUSING DEFAULT BECAUSE ITS IMPLEMENTATION IS HERE.
+        // IPolicyManager writes definitions and assignments through the scope seam above — the same
+        // IScopeAuthorizer the role assignment path uses — into the tenant's IPolicyCatalogGrain, and
+        // IPolicyEvaluator (registered at the top of this list) reads the same grain at step 5. Both
+        // run in whichever process holds the manager: the gateway in production, where the catalog is
+        // a grain call to a silo.
+        services.TryAddSingleton<IPolicyManager, PolicyManagerService>();
 
         // ── The SignalR connection grain's dependencies. docs/plan/10 § SignalR ──────────────────
         //

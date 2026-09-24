@@ -195,6 +195,98 @@ public sealed record DocumentScope(
         node is JsonValue value && value.TryGetValue<string>(out var text) ? text : string.Empty;
 }
 
+/// <summary>
+///     One kind of object addressed on one kind of scope — a policy definition on a subscription —
+///     read back out of an emitted document.
+/// </summary>
+/// <param name="Type">The <c>x-cybercloud-scope-object</c> value: <c>CyberCloud.Policy/policyDefinitions</c>.</param>
+/// <param name="Scope">The kind of scope it sits on, in <see cref="DocumentScope.Kind" />'s vocabulary.</param>
+/// <param name="Path">The item's URL template, or <c>""</c> for an object read only as a collection — the compliance states.</param>
+/// <param name="CollectionPath">The collection's URL template. Every scope object has one.</param>
+/// <param name="CollectionQuery">The query parameters the collection accepts, ordered by name.</param>
+/// <param name="Display">The <c>x-cybercloud-display</c> object.</param>
+/// <param name="Component">The read schema's component key — what a <c>GET</c> and a page element are.</param>
+/// <param name="Resource">The read schema.</param>
+/// <param name="ContentComponent">The <c>PUT</c> body's component key, or <c>""</c> for a read-only object.</param>
+/// <param name="Content">The <c>PUT</c> body's schema, or empty.</param>
+/// <remarks>
+///     <para>
+///         ⚠ <b>Neither a <see cref="DocumentType" /> nor a <see cref="DocumentScope" />, for the
+///         reason a scope isn't a type.</b> It has no provisioning state, no <c>202</c>, no
+///         api-version of its own and no tags, and it isn't a place anything else lives. One record per
+///         object <i>and</i> scope, because the path is: a definition on a tenant and one on a
+///         subscription are two URL templates with two parameter lists, and a surface's method per
+///         scope is what a caller can call without assembling a path.
+///     </para>
+///     <para>
+///         ⚠ <b>The models are per object, not per scope.</b> <see cref="Component" /> and
+///         <see cref="ContentComponent" /> are the same for every scope an object sits on, so a surface
+///         declares each model once and names it <see cref="ModelName" />.
+///     </para>
+/// </remarks>
+public sealed record DocumentScopeObject(
+    string Type,
+    string Scope,
+    string Path,
+    string CollectionPath,
+    ImmutableArray<DocumentQueryParameter> CollectionQuery,
+    JsonObject Display,
+    string Component,
+    JsonObject Resource,
+    string ContentComponent,
+    JsonObject Content
+) {
+    /// <summary>The provider namespace — <c>CyberCloud.Policy</c>.</summary>
+    public string ProviderNamespace {
+        get {
+            var slash = Type.IndexOf('/', StringComparison.Ordinal);
+            return slash < 0 ? Type : Type[..slash];
+        }
+    }
+
+    /// <summary>The type segment — <c>policyDefinitions</c>.</summary>
+    public string TypePath {
+        get {
+            var slash = Type.IndexOf('/', StringComparison.Ordinal);
+            return slash < 0 ? string.Empty : Type[(slash + 1)..];
+        }
+    }
+
+    /// <summary>The namespace's last segment — <c>Policy</c> — which names the client and the CLI group.</summary>
+    public string Group => ProviderNamespace.Split('.')[^1];
+
+    /// <summary>Whether the object can be written — a <c>PUT</c> and a <c>DELETE</c> at <see cref="Path" />.</summary>
+    public bool Writable => Path.Length > 0 && ContentComponent.Length > 0;
+
+    /// <summary>The read model's name in every language: the component key, Pascal-cased — <c>PolicyDefinition</c>.</summary>
+    public string ModelName => SdkEmitter.Pascal(Component);
+
+    /// <summary>The write body's model name — <c>PolicyDefinitionContent</c> — or <c>""</c>.</summary>
+    public string ContentName => ContentComponent.Length == 0 ? string.Empty : SdkEmitter.Pascal(ContentComponent);
+
+    /// <summary>
+    ///     The stem every per-scope member is named from — <c>PolicyDefinitionAtSubscription</c> for one
+    ///     object and <c>PolicyDefinitionsAtSubscription</c> for the collection.
+    /// </summary>
+    public string SingularStem => ModelName + "At" + SdkEmitter.Pascal(Scope);
+
+    /// <inheritdoc cref="SingularStem" />
+    public string PluralStem => SdkEmitter.Pascal(TypePath) + "At" + SdkEmitter.Pascal(Scope);
+
+    /// <summary>The placeholder the object's own name fills, or <c>""</c> for a collection-only object.</summary>
+    public string NamePlaceholder =>
+        Path.Length > 0 && DocumentReader.PlaceholdersOf(Path) is [.., var last] ? last : string.Empty;
+
+    /// <summary>The display name.</summary>
+    public string DisplayName => DocumentReader.Text(Display["name"]);
+
+    /// <summary>The plural display name.</summary>
+    public string DisplayPlural => DocumentReader.Text(Display["plural"]);
+
+    /// <summary>The one-sentence summary.</summary>
+    public string Summary => DocumentReader.Text(Display["summary"]);
+}
+
 /// <summary>One query parameter, read back out of an emitted document.</summary>
 /// <param name="Name">The name on the wire, <c>$</c> and all — <c>$skipToken</c>.</param>
 /// <param name="Type">The schema's <c>type</c>, with a nullable union already collapsed.</param>
@@ -454,6 +546,88 @@ public static class DocumentReader {
     ///     would be exactly the second interpretation it is not allowed to be.
     /// </remarks>
     public const string ScopeExtension = OpenApiEmitter.ScopeExtension;
+
+    /// <summary>
+    ///     Every object addressed on a scope — one per object and scope — ordered by collection path.
+    /// </summary>
+    /// <param name="document">An emitted per-version document.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The third thing this reader reads, and issue #46 is why.</b> Policy is served under a
+    ///         reserved namespace no provider registers, so <see cref="TypesOf" /> can't see it, and it is
+    ///         an object <i>on</i> a scope rather than a scope, so <see cref="ScopesOf" /> can't either.
+    ///         Every derived surface reads this, which is what makes one extension in the document enough
+    ///         for all of them — #63's argument, a third time.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Keyed on the collection, which every object has.</b> The compliance states are a
+    ///         collection with no item, so a reader that started from the item would lose them.
+    ///     </para>
+    /// </remarks>
+    public static ImmutableArray<DocumentScopeObject> ScopeObjectsOf(JsonObject document) {
+        ArgumentNullException.ThrowIfNull(document);
+
+        if (document["paths"] is not JsonObject paths) {
+            return [];
+        }
+
+        var schemas = document["components"]?["schemas"] as JsonObject;
+        var found = new List<DocumentScopeObject>();
+
+        foreach (var path in paths) {
+            if (path.Value is not JsonObject collection
+                || !Flag(collection[OpenApiEmitter.ScopeObjectCollectionExtension])
+                || Text(collection[OpenApiEmitter.ScopeObjectExtension]) is not { Length: > 0 } type) {
+                continue;
+            }
+
+            var scope = Text(collection[OpenApiEmitter.ScopeObjectScopeExtension]);
+            var item = paths.FirstOrDefault(x => x.Value is JsonObject candidate
+                && !Flag(candidate[OpenApiEmitter.ScopeObjectCollectionExtension])
+                && string.Equals(Text(candidate[OpenApiEmitter.ScopeObjectExtension]), type, StringComparison.Ordinal)
+                && string.Equals(Text(candidate[OpenApiEmitter.ScopeObjectScopeExtension]), scope, StringComparison.Ordinal)
+            );
+
+            // ⚠ The element's component, read off the page: a collection-only object has no item to
+            // read a GET's 200 from.
+            var page = ComponentOf(collection);
+            var component = ComponentOf(
+                (page.Length > 0 ? schemas?[page] as JsonObject : null)?["properties"]?["value"]?["items"]?["$ref"]
+            );
+
+            var content = item.Value is JsonObject written
+                ? ComponentOf(written["put"]?["requestBody"]?["content"]?["application/json"]?["schema"]?["$ref"])
+                : string.Empty;
+
+            found.Add(
+                new(
+                    type,
+                    scope,
+                    item.Value is null ? string.Empty : item.Key,
+                    path.Key,
+                    QueryOf(collection, document),
+                    collection["x-cybercloud-display"] as JsonObject ?? [],
+                    component,
+                    (component.Length > 0 ? schemas?[component] as JsonObject : null) ?? [],
+                    content,
+                    (content.Length > 0 ? schemas?[content] as JsonObject : null) ?? []
+                )
+            );
+        }
+
+        return [.. found.OrderBy(static x => x.CollectionPath, StringComparer.Ordinal)];
+    }
+
+    /// <summary>
+    ///     Whether a schema holds any JSON value — <see cref="OpenApiEmitter.JsonValueExtension" /> — so a
+    ///     surface passes it through rather than typing it.
+    /// </summary>
+    /// <param name="schema">A leaf's schema.</param>
+    public static bool IsJsonValue(JsonObject schema) {
+        ArgumentNullException.ThrowIfNull(schema);
+
+        return Flag(schema[OpenApiEmitter.JsonValueExtension]);
+    }
 
     /// <summary>
     ///     The collection path declared for one resource type and the query it accepts, or

@@ -85,8 +85,10 @@ are ([24 § What the type list cannot say](24-roadmap.md), the tenancy case) and
 a different parent for an existing group is a `409`, because a safe move re-checks the depth of every
 node beneath it against the cap and refuses a cycle, with nothing holding the tree still between the
 calls; that is the seal-then-move choreography a resource group's delete uses, and it is M3. *A lock at
-a group* — see [§ Tags, locks](#tags-locks-and-the-small-stuff-that-is-not-small) below. *Policy* — the
-"for policy" half of the tree's purpose has no policy engine to attach to yet. And one thing that is a
+a group* — see [§ Tags, locks](#tags-locks-and-the-small-stuff-that-is-not-small) below. *Policy* — ~~the
+"for policy" half of the tree's purpose has no policy engine to attach to yet~~ paid by #46: an
+assignment at a group reaches every subscription and resource group beneath it, and an exclusion of a
+child group is decided by the tree rather than by the path's spelling ([08 § Policy](08-resource-manager.md)). And one thing that is a
 consequence rather than a debt: **a tenant that has any group loses the one-walk subscription listing**
 and falls back to a check per member, because a subscription in a group sits two or more hops below the
 tenant where the depth-1 walk cannot see it and a deeper walk would read every resource under every
@@ -213,6 +215,7 @@ tenant-qualified key. `GrainKeys` is the only type allowed to build the within-t
 | `IInvitationGrain` | `invite/{invitationId:N}` — one invitation of an address into the tenant, [11 § Sign-up and tenant creation](11-identity.md), #43 |
 | `IDirectoryIndexGrain` | `idx/dir/{users\|invitations\|applications}` — the ids of one kind of directory object, the only `idx/` row keyed by a name from a closed set rather than a digest, [11 § The object model](11-identity.md), #41 |
 | `IOperationGrain` | `op/{operationId:N}` |
+| `IPolicyCatalogGrain` | `policy/{tenantId:N}` — the tenant's policy definitions, assignments and verdicts, one activation per tenant on the write path's step 5; [08 § Policy](08-resource-manager.md), #46 |
 | `IQuotaGrain` | `sub/{subscriptionId:N}` — same key string as the subscription, different grain **type** |
 | `ITenantDirectoryGrain` | *(null tenant)* `platform/tenant-directory` |
 | `IShardMapGrain` | *(null tenant)* `platform/shard-map` |

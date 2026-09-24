@@ -28,6 +28,7 @@ type Client struct {
 	ManagementGroups  *ManagementGroupsClient
 	Subscriptions     *SubscriptionsClient
 	ResourceGroups    *ResourceGroupsClient
+	Policy            *PolicyClient
 	Analytics         *AnalyticsProvider
 	Billing           *BillingProvider
 	Cache             *CacheProvider
@@ -60,6 +61,7 @@ func NewClient(transport Transport) *Client {
 		ManagementGroups:  &ManagementGroupsClient{transport: transport},
 		Subscriptions:     &SubscriptionsClient{transport: transport},
 		ResourceGroups:    &ResourceGroupsClient{transport: transport},
+		Policy:            &PolicyClient{transport: transport},
 		Analytics:         newAnalyticsProvider(transport),
 		Billing:           newBillingProvider(transport),
 		Cache:             newCacheProvider(transport),
@@ -209,6 +211,221 @@ func (c *ResourceGroupsClient) Create(ctx context.Context, tenantID, subscriptio
 		return nil, err
 	}
 	return &result, nil
+}
+
+// PolicyClient reads and writes the objects under CyberCloud.Policy, on every scope that takes them — docs/plan/08 § Policy.
+type PolicyClient struct {
+	transport Transport
+}
+
+// ListPolicyAssignmentsAtManagementGroup pages through the policy assignments on a management group. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyAssignmentsAtManagementGroup(tenantID, managementGroupName string, options *ListOptions) *Pager[PolicyAssignment] {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyAssignments"
+	return newPager[PolicyAssignment](c.transport, path, options)
+}
+
+// GetPolicyAssignmentAtManagementGroup reads one policy assignment on a management group.
+func (c *PolicyClient) GetPolicyAssignmentAtManagementGroup(ctx context.Context, tenantID, managementGroupName, policyAssignmentName string) (*PolicyAssignment, error) {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	var result PolicyAssignment
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateOrUpdatePolicyAssignmentAtManagementGroup creates or replaces one policy assignment on a management group, written whole. ⚠ 201 the first time and 200 after, and no operation to poll.
+func (c *PolicyClient) CreateOrUpdatePolicyAssignmentAtManagementGroup(ctx context.Context, tenantID, managementGroupName, policyAssignmentName string, content PolicyAssignmentContent) (*PolicyAssignment, error) {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	var result PolicyAssignment
+	if err := call(ctx, c.transport, "PUT", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeletePolicyAssignmentAtManagementGroup deletes one policy assignment on a management group. An object already gone is a success.
+func (c *PolicyClient) DeletePolicyAssignmentAtManagementGroup(ctx context.Context, tenantID, managementGroupName, policyAssignmentName string) error {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	return call(ctx, c.transport, "DELETE", path, nil, nil)
+}
+
+// ListPolicyDefinitionsAtManagementGroup pages through the policy definitions on a management group. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyDefinitionsAtManagementGroup(tenantID, managementGroupName string, options *ListOptions) *Pager[PolicyDefinition] {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyDefinitions"
+	return newPager[PolicyDefinition](c.transport, path, options)
+}
+
+// GetPolicyDefinitionAtManagementGroup reads one policy definition on a management group.
+func (c *PolicyClient) GetPolicyDefinitionAtManagementGroup(ctx context.Context, tenantID, managementGroupName, policyDefinitionName string) (*PolicyDefinition, error) {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	var result PolicyDefinition
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateOrUpdatePolicyDefinitionAtManagementGroup creates or replaces one policy definition on a management group, written whole. ⚠ 201 the first time and 200 after, and no operation to poll.
+func (c *PolicyClient) CreateOrUpdatePolicyDefinitionAtManagementGroup(ctx context.Context, tenantID, managementGroupName, policyDefinitionName string, content PolicyDefinitionContent) (*PolicyDefinition, error) {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	var result PolicyDefinition
+	if err := call(ctx, c.transport, "PUT", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeletePolicyDefinitionAtManagementGroup deletes one policy definition on a management group. An object already gone is a success.
+func (c *PolicyClient) DeletePolicyDefinitionAtManagementGroup(ctx context.Context, tenantID, managementGroupName, policyDefinitionName string) error {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	return call(ctx, c.transport, "DELETE", path, nil, nil)
+}
+
+// ListPolicyStatesAtManagementGroup pages through the policy states on a management group. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyStatesAtManagementGroup(tenantID, managementGroupName string, options *ListOptions) *Pager[PolicyState] {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyStates"
+	return newPager[PolicyState](c.transport, path, options)
+}
+
+// ListPolicyDefinitionsAtTenant pages through the policy definitions on a tenant. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyDefinitionsAtTenant(tenantID string, options *ListOptions) *Pager[PolicyDefinition] {
+	path := "/tenants/" + segment(tenantID) + "/providers/CyberCloud.Policy/policyDefinitions"
+	return newPager[PolicyDefinition](c.transport, path, options)
+}
+
+// GetPolicyDefinitionAtTenant reads one policy definition on a tenant.
+func (c *PolicyClient) GetPolicyDefinitionAtTenant(ctx context.Context, tenantID, policyDefinitionName string) (*PolicyDefinition, error) {
+	path := "/tenants/" + segment(tenantID) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	var result PolicyDefinition
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateOrUpdatePolicyDefinitionAtTenant creates or replaces one policy definition on a tenant, written whole. ⚠ 201 the first time and 200 after, and no operation to poll.
+func (c *PolicyClient) CreateOrUpdatePolicyDefinitionAtTenant(ctx context.Context, tenantID, policyDefinitionName string, content PolicyDefinitionContent) (*PolicyDefinition, error) {
+	path := "/tenants/" + segment(tenantID) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	var result PolicyDefinition
+	if err := call(ctx, c.transport, "PUT", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeletePolicyDefinitionAtTenant deletes one policy definition on a tenant. An object already gone is a success.
+func (c *PolicyClient) DeletePolicyDefinitionAtTenant(ctx context.Context, tenantID, policyDefinitionName string) error {
+	path := "/tenants/" + segment(tenantID) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	return call(ctx, c.transport, "DELETE", path, nil, nil)
+}
+
+// ListPolicyAssignmentsAtSubscription pages through the policy assignments on a subscription. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyAssignmentsAtSubscription(tenantID, subscriptionID string, options *ListOptions) *Pager[PolicyAssignment] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyAssignments"
+	return newPager[PolicyAssignment](c.transport, path, options)
+}
+
+// GetPolicyAssignmentAtSubscription reads one policy assignment on a subscription.
+func (c *PolicyClient) GetPolicyAssignmentAtSubscription(ctx context.Context, tenantID, subscriptionID, policyAssignmentName string) (*PolicyAssignment, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	var result PolicyAssignment
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateOrUpdatePolicyAssignmentAtSubscription creates or replaces one policy assignment on a subscription, written whole. ⚠ 201 the first time and 200 after, and no operation to poll.
+func (c *PolicyClient) CreateOrUpdatePolicyAssignmentAtSubscription(ctx context.Context, tenantID, subscriptionID, policyAssignmentName string, content PolicyAssignmentContent) (*PolicyAssignment, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	var result PolicyAssignment
+	if err := call(ctx, c.transport, "PUT", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeletePolicyAssignmentAtSubscription deletes one policy assignment on a subscription. An object already gone is a success.
+func (c *PolicyClient) DeletePolicyAssignmentAtSubscription(ctx context.Context, tenantID, subscriptionID, policyAssignmentName string) error {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	return call(ctx, c.transport, "DELETE", path, nil, nil)
+}
+
+// ListPolicyDefinitionsAtSubscription pages through the policy definitions on a subscription. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyDefinitionsAtSubscription(tenantID, subscriptionID string, options *ListOptions) *Pager[PolicyDefinition] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyDefinitions"
+	return newPager[PolicyDefinition](c.transport, path, options)
+}
+
+// GetPolicyDefinitionAtSubscription reads one policy definition on a subscription.
+func (c *PolicyClient) GetPolicyDefinitionAtSubscription(ctx context.Context, tenantID, subscriptionID, policyDefinitionName string) (*PolicyDefinition, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	var result PolicyDefinition
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateOrUpdatePolicyDefinitionAtSubscription creates or replaces one policy definition on a subscription, written whole. ⚠ 201 the first time and 200 after, and no operation to poll.
+func (c *PolicyClient) CreateOrUpdatePolicyDefinitionAtSubscription(ctx context.Context, tenantID, subscriptionID, policyDefinitionName string, content PolicyDefinitionContent) (*PolicyDefinition, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	var result PolicyDefinition
+	if err := call(ctx, c.transport, "PUT", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeletePolicyDefinitionAtSubscription deletes one policy definition on a subscription. An object already gone is a success.
+func (c *PolicyClient) DeletePolicyDefinitionAtSubscription(ctx context.Context, tenantID, subscriptionID, policyDefinitionName string) error {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	return call(ctx, c.transport, "DELETE", path, nil, nil)
+}
+
+// ListPolicyStatesAtSubscription pages through the policy states on a subscription. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyStatesAtSubscription(tenantID, subscriptionID string, options *ListOptions) *Pager[PolicyState] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyStates"
+	return newPager[PolicyState](c.transport, path, options)
+}
+
+// ListPolicyAssignmentsAtResourceGroup pages through the policy assignments on a resource group. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyAssignmentsAtResourceGroup(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[PolicyAssignment] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Policy/policyAssignments"
+	return newPager[PolicyAssignment](c.transport, path, options)
+}
+
+// GetPolicyAssignmentAtResourceGroup reads one policy assignment on a resource group.
+func (c *PolicyClient) GetPolicyAssignmentAtResourceGroup(ctx context.Context, tenantID, subscriptionID, resourceGroupName, policyAssignmentName string) (*PolicyAssignment, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	var result PolicyAssignment
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateOrUpdatePolicyAssignmentAtResourceGroup creates or replaces one policy assignment on a resource group, written whole. ⚠ 201 the first time and 200 after, and no operation to poll.
+func (c *PolicyClient) CreateOrUpdatePolicyAssignmentAtResourceGroup(ctx context.Context, tenantID, subscriptionID, resourceGroupName, policyAssignmentName string, content PolicyAssignmentContent) (*PolicyAssignment, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	var result PolicyAssignment
+	if err := call(ctx, c.transport, "PUT", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeletePolicyAssignmentAtResourceGroup deletes one policy assignment on a resource group. An object already gone is a success.
+func (c *PolicyClient) DeletePolicyAssignmentAtResourceGroup(ctx context.Context, tenantID, subscriptionID, resourceGroupName, policyAssignmentName string) error {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	return call(ctx, c.transport, "DELETE", path, nil, nil)
+}
+
+// ListPolicyStatesAtResourceGroup pages through the policy states on a resource group. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyStatesAtResourceGroup(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[PolicyState] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Policy/policyStates"
+	return newPager[PolicyState](c.transport, path, options)
 }
 
 // AnalyticsProvider holds the resource types of CyberCloud.Analytics.

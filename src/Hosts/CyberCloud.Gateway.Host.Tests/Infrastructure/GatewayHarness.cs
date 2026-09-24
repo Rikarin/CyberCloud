@@ -106,6 +106,9 @@ sealed class GatewayHarness {
     /// <summary>The recording invoice reader stage 8 dispatches an invoice route to.</summary>
     public RecordingInvoiceReader Invoices { get; } = new();
 
+    /// <summary>The recording policy manager stage 8 dispatches a policy route to — issue #46.</summary>
+    public RecordingPolicyManager Policies { get; } = new();
+
     /// <summary>The operation reader, scripted so an LRO poll needs no cluster.</summary>
     public ScriptedOperationReader Operations { get; } = new();
 
@@ -207,7 +210,7 @@ sealed class GatewayHarness {
             new RateLimitStage(new GatewayRateLimiter(Counters)),
             new RouteStage(registry ?? new OneTypeRegistry(), Options),
             new ValidateStage(Options),
-            new DispatchStage(manager ?? Manager, Scopes, Roles, graph ?? Graph, Deployments, Invitations, Identity, Costs, Invoices, Operations, Tickets, Options)
+            new DispatchStage(manager ?? Manager, Scopes, Roles, graph ?? Graph, Deployments, Invitations, Identity, Costs, Invoices, Policies, Operations, Tickets, Options)
         ];
 
         pipeline = new(Stages, NullLogger<GatewayPipeline>.Instance);

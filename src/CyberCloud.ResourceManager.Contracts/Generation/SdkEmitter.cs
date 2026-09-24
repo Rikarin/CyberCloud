@@ -110,6 +110,7 @@ public static class SdkEmitter {
             .Append('\n')
             .Append("using System;\n")
             .Append("using System.Collections.Generic;\n")
+            .Append("using System.Text.Json.Nodes;\n")
             .Append("using System.Text.Json.Serialization;\n")
             .Append("using System.Threading;\n")
             .Append("using System.Threading.Tasks;\n")
@@ -134,6 +135,7 @@ public static class SdkEmitter {
         }
 
         AppendScopes(built, document, version);
+        AppendScopeObjects(built, document, version);
 
         return built.ToString();
     }
@@ -767,7 +769,9 @@ public static class SdkEmitter {
     static bool Required(SchemaLeaf leaf) =>
         leaf.Required
         && !DocumentReader.Flag(leaf.Schema["readOnly"])
-        && (leaf.IsObject || DocumentReader.TypeOf(leaf.Schema) is not ("array" or "object"));
+        && (leaf.IsObject
+            || DocumentReader.IsJsonValue(leaf.Schema)
+            || DocumentReader.TypeOf(leaf.Schema) is not ("array" or "object"));
 
     /// <summary>
     ///     The CLR type of one leaf.
@@ -789,6 +793,13 @@ public static class SdkEmitter {
 
         if (leaf.IsObject) {
             return members.ClassOf(leaf) + (nullable ? "?" : string.Empty);
+        }
+
+        // ⚠ A policy rule, and anything else the document marks as any JSON value: a JsonNode the
+        // caller builds or parses, never the tag bag's IDictionary<string, string> an untyped object
+        // otherwise reads as — OpenApiEmitter.JsonValueExtension.
+        if (DocumentReader.IsJsonValue(schema)) {
+            return "JsonNode" + (nullable ? "?" : string.Empty);
         }
 
         if (!DocumentReader.EnumOf(schema).IsEmpty && DocumentReader.TypeOf(schema) != "array") {
@@ -835,8 +846,9 @@ public static class SdkEmitter {
     }
 
     static string Initialiser(EnumNaming naming, SchemaLeaf leaf) =>
-        leaf.IsObject
-            // A container is never initialised — AppendObject says why.
+        leaf.IsObject || DocumentReader.IsJsonValue(leaf.Schema)
+            // A container is never initialised — AppendObject says why — and a JSON value is required
+            // or null, never an empty dictionary that would go out as a rule with no members.
             ? string.Empty
             : DocumentReader.TypeOf(leaf.Schema) switch {
                 // ⚠ Initialised, because a null collection is the member a caller has to new up before
@@ -1431,6 +1443,179 @@ public static class SdkEmitter {
         AppendObject(built, naming, members, leaves, "", "    ");
 
         built.Append("}\n");
+    }
+
+    /// <summary>
+    ///     The objects addressed on a scope — issue #46's policy — as one read model and one write
+    ///     body per object, and one <c>{Group}Client</c> with a method per object, scope and verb.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>No <c>WaitUntil</c> and no <c>Operation&lt;T&gt;</c>, as on <c>ScopeClient</c>.</b> One
+    ///         catalog write converges before the call returns, so a poller would poll an operation that
+    ///         was never started.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A method per scope rather than a scope parameter</b> — <c>GetPolicyDefinitionAtSubscriptionAsync</c>
+    ///         beside <c>…AtManagementGroupAsync</c> — because the scopes take different parameters, and a
+    ///         method that took a path would be the caller assembling the URL the SDK exists to assemble.
+    ///     </para>
+    /// </remarks>
+    static void AppendScopeObjects(StringBuilder built, JsonObject document, string version) {
+        var objects = DocumentReader.ScopeObjectsOf(document);
+
+        if (objects.IsEmpty) {
+            return;
+        }
+
+        var declared = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var scoped in objects) {
+            if (declared.Add(scoped.ModelName)) {
+                AppendScopeObjectModel(
+                    built,
+                    scoped.ModelName,
+                    scoped.Resource,
+                    scoped.DisplayName + ", as the API renders it. " + scoped.Summary,
+                    false
+                );
+            }
+
+            if (scoped.ContentName.Length > 0 && declared.Add(scoped.ContentName)) {
+                AppendScopeObjectModel(
+                    built,
+                    scoped.ContentName,
+                    scoped.Content,
+                    "The body of a PUT that writes a " + scoped.DisplayName.ToLowerInvariant() + ".",
+                    true
+                );
+            }
+        }
+
+        foreach (var family in objects.GroupBy(static x => x.Group, StringComparer.Ordinal)
+                     .OrderBy(static x => x.Key, StringComparer.Ordinal)) {
+            built.Append("\n/// <summary>The objects under ")
+                .Append(Escape(family.First().ProviderNamespace))
+                .Append(", on every scope that takes them — docs/plan/08 § Policy.</summary>\n")
+                .Append("/// <remarks>⚠ No WaitUntil and no Operation&lt;T&gt;: a write converges before the call\n")
+                .Append("/// returns — 201 the first time and 200 after on a PUT, 204 on a DELETE.</remarks>\n")
+                .Append("public sealed partial class ")
+                .Append(Pascal(family.Key))
+                .Append("Client {\n")
+                .Append("    /// <inheritdoc cref=\"GeneratedApiVersion.Value\" />\n")
+                .Append("    public const string ApiVersion = ")
+                .Append(Quote(version))
+                .Append(";\n");
+
+            foreach (var scoped in family) {
+                AppendScopeObjectMethods(built, scoped);
+            }
+
+            built.Append("}\n");
+        }
+    }
+
+    static void AppendScopeObjectModel(StringBuilder built, string name, JsonObject schema, string summary, bool writable) {
+        var leaves = DocumentReader.LeavesOf(schema);
+        var naming = EnumNaming.For(name, leaves);
+        var members = MemberNaming.For(name, leaves);
+
+        AppendEnums(built, naming, leaves);
+
+        built.Append("\n/// <summary>")
+            .Append(Escape(summary))
+            .Append("</summary>\n")
+            .Append("public sealed partial class ")
+            .Append(name)
+            .Append(" {\n");
+
+        AppendObject(built, naming, members, leaves, "", "    ", writable);
+
+        built.Append("}\n");
+    }
+
+    static void AppendScopeObjectMethods(StringBuilder built, DocumentScopeObject scoped) {
+        var what = Escape(scoped.DisplayName.ToLowerInvariant()) + " on a " + Escape(CliEmitter.Kebab(scoped.Scope).Replace('-', ' '));
+        var collectionParameters = DocumentReader.PlaceholdersOf(scoped.CollectionPath)
+            .Select(static x => "string " + Camel(x))
+            .ToList();
+
+        built.Append("\n    /// <summary>The collection URL template List")
+            .Append(scoped.PluralStem)
+            .Append("Async pages.</summary>\n")
+            .Append("    public const string ")
+            .Append(scoped.PluralStem)
+            .Append("PathTemplate = ")
+            .Append(Quote(scoped.CollectionPath))
+            .Append(";\n")
+            .Append("\n    /// <summary>The ")
+            .Append(Escape(scoped.DisplayPlural.ToLowerInvariant()))
+            .Append(" on a ")
+            .Append(Escape(CliEmitter.Kebab(scoped.Scope).Replace('-', ' ')))
+            .Append(", paged. ")
+            .Append(Escape(scoped.Summary))
+            .Append("</summary>\n")
+            .Append("    public partial AsyncPageable<")
+            .Append(scoped.ModelName)
+            .Append("> List")
+            .Append(scoped.PluralStem)
+            .Append("Async(\n        ")
+            .Append(string.Join(",\n        ", collectionParameters))
+            .Append(collectionParameters.Count > 0 ? ",\n        " : string.Empty)
+            .Append("CancellationToken cancellationToken = default);\n");
+
+        if (scoped.Path.Length == 0) {
+            return;
+        }
+
+        var parameters = DocumentReader.PlaceholdersOf(scoped.Path)
+            .Select(static x => "string " + Camel(x))
+            .ToList();
+        var signature = string.Join(",\n        ", parameters) + ",\n        ";
+
+        built.Append("\n    /// <summary>The URL template one ")
+            .Append(what)
+            .Append(" is addressed at.</summary>\n")
+            .Append("    public const string ")
+            .Append(scoped.SingularStem)
+            .Append("PathTemplate = ")
+            .Append(Quote(scoped.Path))
+            .Append(";\n")
+            .Append("\n    /// <summary>Reads one ")
+            .Append(what)
+            .Append(".</summary>\n")
+            .Append("    public partial Task<Response<")
+            .Append(scoped.ModelName)
+            .Append(">> Get")
+            .Append(scoped.SingularStem)
+            .Append("Async(\n        ")
+            .Append(signature)
+            .Append("CancellationToken cancellationToken = default);\n");
+
+        if (!scoped.Writable) {
+            return;
+        }
+
+        built.Append("\n    /// <summary>Creates or replaces one ")
+            .Append(what)
+            .Append(", written whole.</summary>\n")
+            .Append("    /// <remarks>⚠ No WaitUntil: 201 the first time and 200 after, and nothing to poll.</remarks>\n")
+            .Append("    public partial Task<Response<")
+            .Append(scoped.ModelName)
+            .Append(">> CreateOrUpdate")
+            .Append(scoped.SingularStem)
+            .Append("Async(\n        ")
+            .Append(signature)
+            .Append(scoped.ContentName)
+            .Append(" content,\n        CancellationToken cancellationToken = default);\n")
+            .Append("\n    /// <summary>Deletes one ")
+            .Append(what)
+            .Append(". An object already gone is a success.</summary>\n")
+            .Append("    public partial Task<Response> Delete")
+            .Append(scoped.SingularStem)
+            .Append("Async(\n        ")
+            .Append(signature)
+            .Append("CancellationToken cancellationToken = default);\n");
     }
 
     /// <summary>

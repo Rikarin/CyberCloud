@@ -317,6 +317,801 @@
         }
       }
     },
+    "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyAssignments": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/ManagementGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "PolicyAssignments_ListAtManagementGroup",
+        "summary": "List policy assignments on a management group.",
+        "description": "Lists the policy assignments on this management group — directly on it, not inherited from above — one page at a time, ordered by id. Stop when nextLink is absent.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Assignment.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope-object-collection": true,
+      "x-cybercloud-scope-object": "CyberCloud.Policy/policyAssignments",
+      "x-cybercloud-scope-object-scope": "managementGroup",
+      "x-cybercloud-display": {
+        "name": "Policy assignment",
+        "plural": "Policy assignments",
+        "summary": "A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy."
+      }
+    },
+    "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/ManagementGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/PolicyAssignmentName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "PolicyAssignments_GetAtManagementGroup",
+        "summary": "Read a policy assignment on a management group.",
+        "description": "Reads one policy assignment. ⚠ 404 for a caller who can't read the scope, the same answer as for an object that doesn't exist — docs/plan/07 § The enforcement seam.",
+        "responses": {
+          "200": {
+            "description": "The object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Assignment"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "put": {
+        "operationId": "PolicyAssignments_CreateOrUpdateAtManagementGroup",
+        "summary": "Create or replace a policy assignment on a management group.",
+        "description": "Writes the object whole. ⚠ 201 the first time and 200 after, and no operation to poll: one catalog write converges before the call returns. Writing needs assignRole on the scope, which is Owner — a contributor who could assign a deny could stop every other contributor's writes. docs/plan/08 § Policy.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Policy.AssignmentContent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The object was replaced, or was already this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Assignment"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The object was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Assignment"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "PolicyAssignments_DeleteAtManagementGroup",
+        "summary": "Delete a policy assignment on a management group.",
+        "description": "Deletes the object; an object already gone is a success too. The assignment stops applying to the next write beneath it.",
+        "responses": {
+          "204": {
+            "description": "Deleted, or already gone."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope-object": "CyberCloud.Policy/policyAssignments",
+      "x-cybercloud-scope-object-scope": "managementGroup",
+      "x-cybercloud-display": {
+        "name": "Policy assignment",
+        "plural": "Policy assignments",
+        "summary": "A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy."
+      }
+    },
+    "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyDefinitions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/ManagementGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "PolicyDefinitions_ListAtManagementGroup",
+        "summary": "List policy definitions on a management group.",
+        "description": "Lists the policy definitions on this management group — directly on it, not inherited from above — one page at a time, ordered by id. Stop when nextLink is absent.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Definition.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope-object-collection": true,
+      "x-cybercloud-scope-object": "CyberCloud.Policy/policyDefinitions",
+      "x-cybercloud-scope-object-scope": "managementGroup",
+      "x-cybercloud-display": {
+        "name": "Policy definition",
+        "plural": "Policy definitions",
+        "summary": "A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy."
+      }
+    },
+    "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/ManagementGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/PolicyDefinitionName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "PolicyDefinitions_GetAtManagementGroup",
+        "summary": "Read a policy definition on a management group.",
+        "description": "Reads one policy definition. ⚠ 404 for a caller who can't read the scope, the same answer as for an object that doesn't exist — docs/plan/07 § The enforcement seam.",
+        "responses": {
+          "200": {
+            "description": "The object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Definition"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "put": {
+        "operationId": "PolicyDefinitions_CreateOrUpdateAtManagementGroup",
+        "summary": "Create or replace a policy definition on a management group.",
+        "description": "Writes the object whole. ⚠ 201 the first time and 200 after, and no operation to poll: one catalog write converges before the call returns. Writing needs assignRole on the scope, which is Owner — a contributor who could assign a deny could stop every other contributor's writes. docs/plan/08 § Policy.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Policy.DefinitionContent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The object was replaced, or was already this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Definition"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The object was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Definition"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "PolicyDefinitions_DeleteAtManagementGroup",
+        "summary": "Delete a policy definition on a management group.",
+        "description": "Deletes the object; an object already gone is a success too. ⚠ 409 while an assignment still names the definition, listing them: deleting a deny out from under its assignments would lift an enforcement nobody lifted on purpose.",
+        "responses": {
+          "204": {
+            "description": "Deleted, or already gone."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope-object": "CyberCloud.Policy/policyDefinitions",
+      "x-cybercloud-scope-object-scope": "managementGroup",
+      "x-cybercloud-display": {
+        "name": "Policy definition",
+        "plural": "Policy definitions",
+        "summary": "A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy."
+      }
+    },
+    "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyStates": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/ManagementGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "PolicyStates_ListAtManagementGroup",
+        "summary": "List policy states on a management group.",
+        "description": "Lists the compliance every audit assignment recorded for the resources beneath this management group, one page at a time. ⚠ A verdict is produced by a write, so a resource nobody has written since an assignment was made has no row yet — docs/plan/08 § Policy. Stop when nextLink is absent.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.State.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope-object-collection": true,
+      "x-cybercloud-scope-object": "CyberCloud.Policy/policyStates",
+      "x-cybercloud-scope-object-scope": "managementGroup",
+      "x-cybercloud-display": {
+        "name": "Policy state",
+        "plural": "Policy states",
+        "summary": "The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy."
+      }
+    },
+    "/tenants/{tenantId}/providers/CyberCloud.Policy/policyDefinitions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "PolicyDefinitions_ListAtTenant",
+        "summary": "List policy definitions on a tenant.",
+        "description": "Lists the policy definitions on this tenant — directly on it, not inherited from above — one page at a time, ordered by id. Stop when nextLink is absent.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Definition.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope-object-collection": true,
+      "x-cybercloud-scope-object": "CyberCloud.Policy/policyDefinitions",
+      "x-cybercloud-scope-object-scope": "tenant",
+      "x-cybercloud-display": {
+        "name": "Policy definition",
+        "plural": "Policy definitions",
+        "summary": "A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy."
+      }
+    },
+    "/tenants/{tenantId}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/PolicyDefinitionName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "PolicyDefinitions_GetAtTenant",
+        "summary": "Read a policy definition on a tenant.",
+        "description": "Reads one policy definition. ⚠ 404 for a caller who can't read the scope, the same answer as for an object that doesn't exist — docs/plan/07 § The enforcement seam.",
+        "responses": {
+          "200": {
+            "description": "The object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Definition"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "put": {
+        "operationId": "PolicyDefinitions_CreateOrUpdateAtTenant",
+        "summary": "Create or replace a policy definition on a tenant.",
+        "description": "Writes the object whole. ⚠ 201 the first time and 200 after, and no operation to poll: one catalog write converges before the call returns. Writing needs assignRole on the scope, which is Owner — a contributor who could assign a deny could stop every other contributor's writes. docs/plan/08 § Policy.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Policy.DefinitionContent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The object was replaced, or was already this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Definition"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The object was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Definition"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "PolicyDefinitions_DeleteAtTenant",
+        "summary": "Delete a policy definition on a tenant.",
+        "description": "Deletes the object; an object already gone is a success too. ⚠ 409 while an assignment still names the definition, listing them: deleting a deny out from under its assignments would lift an enforcement nobody lifted on purpose.",
+        "responses": {
+          "204": {
+            "description": "Deleted, or already gone."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope-object": "CyberCloud.Policy/policyDefinitions",
+      "x-cybercloud-scope-object-scope": "tenant",
+      "x-cybercloud-display": {
+        "name": "Policy definition",
+        "plural": "Policy definitions",
+        "summary": "A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy."
+      }
+    },
     "/tenants/{tenantId}/subscriptions": {
       "parameters": [
         {
@@ -510,6 +1305,567 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         }
+      }
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyAssignments": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "PolicyAssignments_ListAtSubscription",
+        "summary": "List policy assignments on a subscription.",
+        "description": "Lists the policy assignments on this subscription — directly on it, not inherited from above — one page at a time, ordered by id. Stop when nextLink is absent.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Assignment.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope-object-collection": true,
+      "x-cybercloud-scope-object": "CyberCloud.Policy/policyAssignments",
+      "x-cybercloud-scope-object-scope": "subscription",
+      "x-cybercloud-display": {
+        "name": "Policy assignment",
+        "plural": "Policy assignments",
+        "summary": "A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy."
+      }
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/PolicyAssignmentName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "PolicyAssignments_GetAtSubscription",
+        "summary": "Read a policy assignment on a subscription.",
+        "description": "Reads one policy assignment. ⚠ 404 for a caller who can't read the scope, the same answer as for an object that doesn't exist — docs/plan/07 § The enforcement seam.",
+        "responses": {
+          "200": {
+            "description": "The object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Assignment"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "put": {
+        "operationId": "PolicyAssignments_CreateOrUpdateAtSubscription",
+        "summary": "Create or replace a policy assignment on a subscription.",
+        "description": "Writes the object whole. ⚠ 201 the first time and 200 after, and no operation to poll: one catalog write converges before the call returns. Writing needs assignRole on the scope, which is Owner — a contributor who could assign a deny could stop every other contributor's writes. docs/plan/08 § Policy.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Policy.AssignmentContent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The object was replaced, or was already this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Assignment"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The object was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Assignment"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "PolicyAssignments_DeleteAtSubscription",
+        "summary": "Delete a policy assignment on a subscription.",
+        "description": "Deletes the object; an object already gone is a success too. The assignment stops applying to the next write beneath it.",
+        "responses": {
+          "204": {
+            "description": "Deleted, or already gone."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope-object": "CyberCloud.Policy/policyAssignments",
+      "x-cybercloud-scope-object-scope": "subscription",
+      "x-cybercloud-display": {
+        "name": "Policy assignment",
+        "plural": "Policy assignments",
+        "summary": "A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy."
+      }
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyDefinitions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "PolicyDefinitions_ListAtSubscription",
+        "summary": "List policy definitions on a subscription.",
+        "description": "Lists the policy definitions on this subscription — directly on it, not inherited from above — one page at a time, ordered by id. Stop when nextLink is absent.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Definition.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope-object-collection": true,
+      "x-cybercloud-scope-object": "CyberCloud.Policy/policyDefinitions",
+      "x-cybercloud-scope-object-scope": "subscription",
+      "x-cybercloud-display": {
+        "name": "Policy definition",
+        "plural": "Policy definitions",
+        "summary": "A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy."
+      }
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/PolicyDefinitionName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "PolicyDefinitions_GetAtSubscription",
+        "summary": "Read a policy definition on a subscription.",
+        "description": "Reads one policy definition. ⚠ 404 for a caller who can't read the scope, the same answer as for an object that doesn't exist — docs/plan/07 § The enforcement seam.",
+        "responses": {
+          "200": {
+            "description": "The object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Definition"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "put": {
+        "operationId": "PolicyDefinitions_CreateOrUpdateAtSubscription",
+        "summary": "Create or replace a policy definition on a subscription.",
+        "description": "Writes the object whole. ⚠ 201 the first time and 200 after, and no operation to poll: one catalog write converges before the call returns. Writing needs assignRole on the scope, which is Owner — a contributor who could assign a deny could stop every other contributor's writes. docs/plan/08 § Policy.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Policy.DefinitionContent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The object was replaced, or was already this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Definition"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The object was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Definition"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "PolicyDefinitions_DeleteAtSubscription",
+        "summary": "Delete a policy definition on a subscription.",
+        "description": "Deletes the object; an object already gone is a success too. ⚠ 409 while an assignment still names the definition, listing them: deleting a deny out from under its assignments would lift an enforcement nobody lifted on purpose.",
+        "responses": {
+          "204": {
+            "description": "Deleted, or already gone."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope-object": "CyberCloud.Policy/policyDefinitions",
+      "x-cybercloud-scope-object-scope": "subscription",
+      "x-cybercloud-display": {
+        "name": "Policy definition",
+        "plural": "Policy definitions",
+        "summary": "A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy."
+      }
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyStates": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "PolicyStates_ListAtSubscription",
+        "summary": "List policy states on a subscription.",
+        "description": "Lists the compliance every audit assignment recorded for the resources beneath this subscription, one page at a time. ⚠ A verdict is produced by a write, so a resource nobody has written since an assignment was made has no row yet — docs/plan/08 § Policy. Stop when nextLink is absent.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.State.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope-object-collection": true,
+      "x-cybercloud-scope-object": "CyberCloud.Policy/policyStates",
+      "x-cybercloud-scope-object-scope": "subscription",
+      "x-cybercloud-display": {
+        "name": "Policy state",
+        "plural": "Policy states",
+        "summary": "The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy."
       }
     },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups": {
@@ -18980,6 +20336,336 @@
       "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks/subnets",
       "x-cybercloud-action": "listAddressUsage"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Policy/policyAssignments": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "PolicyAssignments_ListAtResourceGroup",
+        "summary": "List policy assignments on a resource group.",
+        "description": "Lists the policy assignments on this resource group — directly on it, not inherited from above — one page at a time, ordered by id. Stop when nextLink is absent.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Assignment.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope-object-collection": true,
+      "x-cybercloud-scope-object": "CyberCloud.Policy/policyAssignments",
+      "x-cybercloud-scope-object-scope": "resourceGroup",
+      "x-cybercloud-display": {
+        "name": "Policy assignment",
+        "plural": "Policy assignments",
+        "summary": "A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy."
+      }
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/PolicyAssignmentName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "PolicyAssignments_GetAtResourceGroup",
+        "summary": "Read a policy assignment on a resource group.",
+        "description": "Reads one policy assignment. ⚠ 404 for a caller who can't read the scope, the same answer as for an object that doesn't exist — docs/plan/07 § The enforcement seam.",
+        "responses": {
+          "200": {
+            "description": "The object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Assignment"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "put": {
+        "operationId": "PolicyAssignments_CreateOrUpdateAtResourceGroup",
+        "summary": "Create or replace a policy assignment on a resource group.",
+        "description": "Writes the object whole. ⚠ 201 the first time and 200 after, and no operation to poll: one catalog write converges before the call returns. Writing needs assignRole on the scope, which is Owner — a contributor who could assign a deny could stop every other contributor's writes. docs/plan/08 § Policy.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Policy.AssignmentContent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The object was replaced, or was already this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Assignment"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The object was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.Assignment"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "PolicyAssignments_DeleteAtResourceGroup",
+        "summary": "Delete a policy assignment on a resource group.",
+        "description": "Deletes the object; an object already gone is a success too. The assignment stops applying to the next write beneath it.",
+        "responses": {
+          "204": {
+            "description": "Deleted, or already gone."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope-object": "CyberCloud.Policy/policyAssignments",
+      "x-cybercloud-scope-object-scope": "resourceGroup",
+      "x-cybercloud-display": {
+        "name": "Policy assignment",
+        "plural": "Policy assignments",
+        "summary": "A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy."
+      }
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Policy/policyStates": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "PolicyStates_ListAtResourceGroup",
+        "summary": "List policy states on a resource group.",
+        "description": "Lists the compliance every audit assignment recorded for the resources beneath this resource group, one page at a time. ⚠ A verdict is produced by a write, so a resource nobody has written since an assignment was made has no row yet — docs/plan/08 § Policy. Stop when nextLink is absent.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy.State.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope-object-collection": true,
+      "x-cybercloud-scope-object": "CyberCloud.Policy/policyStates",
+      "x-cybercloud-scope-object-scope": "resourceGroup",
+      "x-cybercloud-display": {
+        "name": "Policy state",
+        "plural": "Policy states",
+        "summary": "The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy."
+      }
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.RecoveryServices/vaults": {
       "parameters": [
         {
@@ -22999,6 +24685,30 @@
         "in": "path",
         "required": true,
         "description": "The management group — the optional tree above the subscription, unique within the tenant. docs/plan/06 § The hierarchy.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        }
+      },
+      "PolicyAssignmentName": {
+        "name": "policyAssignmentName",
+        "in": "path",
+        "required": true,
+        "description": "The policy assignment's name, unique on its scope. docs/plan/08 § Policy.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        }
+      },
+      "PolicyDefinitionName": {
+        "name": "policyDefinitionName",
+        "in": "path",
+        "required": true,
+        "description": "The policy definition's name, unique on its scope. docs/plan/08 § Policy.",
         "schema": {
           "type": "string",
           "minLength": 1,
@@ -34762,6 +36472,427 @@
           "startTime",
           "status"
         ]
+      },
+      "Policy.Assignment": {
+        "type": "object",
+        "title": "Policy.Assignment",
+        "description": "A policy assignment, as the API renders it.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The assignment's own address."
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the address."
+          },
+          "properties": {
+            "type": "object",
+            "description": "What the assignment applies, and where it doesn't.",
+            "properties": {
+              "displayName": {
+                "type": "string",
+                "maxLength": 128,
+                "description": "What a person reads."
+              },
+              "notScopes": {
+                "type": "array",
+                "maxItems": 32,
+                "items": {
+                  "type": "string"
+                },
+                "description": "Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling."
+              },
+              "policyDefinitionId": {
+                "type": "string",
+                "description": "The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules."
+              },
+              "scope": {
+                "type": "string",
+                "description": "The scope the assignment sits on."
+              }
+            },
+            "required": [
+              "displayName",
+              "notScopes",
+              "policyDefinitionId",
+              "scope"
+            ],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "description": "The Azure-shaped type string.",
+            "enum": [
+              "CyberCloud.Policy/policyAssignments"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "properties",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "Policy.Assignment.List": {
+        "type": "object",
+        "title": "Policy.Assignment.List",
+        "description": "One page of policy assignments. Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page."
+          },
+          "value": {
+            "type": "array",
+            "description": "The objects on this page, ordered by id.",
+            "items": {
+              "$ref": "#/components/schemas/Policy.Assignment"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "Policy.AssignmentContent": {
+        "type": "object",
+        "title": "Policy.AssignmentContent",
+        "description": "The body of a PUT that writes a policy assignment. ⚠ id, name and type are allowed only when they repeat the address.",
+        "properties": {
+          "properties": {
+            "type": "object",
+            "description": "What the assignment applies, and where it doesn't.",
+            "properties": {
+              "displayName": {
+                "type": "string",
+                "maxLength": 128,
+                "description": "What a person reads."
+              },
+              "notScopes": {
+                "type": "array",
+                "maxItems": 32,
+                "items": {
+                  "type": "string"
+                },
+                "description": "Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling."
+              },
+              "policyDefinitionId": {
+                "type": "string",
+                "description": "The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules."
+              }
+            },
+            "required": [
+              "policyDefinitionId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "properties"
+        ],
+        "additionalProperties": false
+      },
+      "Policy.Condition": {
+        "type": "object",
+        "title": "Policy.Condition",
+        "description": "Exactly one of allOf, anyOf, not, or a field with exactly one of equals, in, like, exists. ⚠ Bounded at parse time: 16 levels and 256 nodes. Strings compare ignoring case, and an absent field equals nothing.",
+        "properties": {
+          "allOf": {
+            "type": "array",
+            "maxItems": 64,
+            "description": "Holds when every branch holds.",
+            "items": {
+              "$ref": "#/components/schemas/Policy.Condition"
+            }
+          },
+          "anyOf": {
+            "type": "array",
+            "maxItems": 64,
+            "description": "Holds when any branch holds.",
+            "items": {
+              "$ref": "#/components/schemas/Policy.Condition"
+            }
+          },
+          "equals": {
+            "description": "Holds when the field equals this JSON value."
+          },
+          "exists": {
+            "type": "boolean",
+            "description": "Holds when the field is present, or absent for false."
+          },
+          "field": {
+            "type": "string",
+            "description": "One of type, name, operation, action, or an RFC 6901 pointer into the body such as /tags/env. operation is one of create, update, delete, action."
+          },
+          "in": {
+            "type": "array",
+            "maxItems": 256,
+            "description": "Holds when the field equals one of these values."
+          },
+          "like": {
+            "type": "string",
+            "description": "A glob whose one metacharacter is *, not a regular expression."
+          },
+          "not": {
+            "$ref": "#/components/schemas/Policy.Condition"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Policy.Definition": {
+        "type": "object",
+        "title": "Policy.Definition",
+        "description": "A policy definition, as the API renders it.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The definition's own address. An assignment names its definition by this."
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the address."
+          },
+          "properties": {
+            "type": "object",
+            "description": "The definition's rule and its names.",
+            "properties": {
+              "description": {
+                "type": "string",
+                "maxLength": 1024,
+                "description": "The longer explanation."
+              },
+              "displayName": {
+                "type": "string",
+                "maxLength": 128,
+                "description": "What a person reads."
+              },
+              "policyRule": {
+                "$ref": "#/components/schemas/Policy.Rule",
+                "type": "object",
+                "description": "The rule — { \"if\": <condition>, \"then\": { \"effect\": \"deny\" | \"audit\" | \"modify\" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.",
+                "x-cybercloud-json": true
+              }
+            },
+            "required": [
+              "description",
+              "displayName",
+              "policyRule"
+            ],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "description": "The Azure-shaped type string.",
+            "enum": [
+              "CyberCloud.Policy/policyDefinitions"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "properties",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "Policy.Definition.List": {
+        "type": "object",
+        "title": "Policy.Definition.List",
+        "description": "One page of policy definitions. Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page."
+          },
+          "value": {
+            "type": "array",
+            "description": "The objects on this page, ordered by id.",
+            "items": {
+              "$ref": "#/components/schemas/Policy.Definition"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "Policy.DefinitionContent": {
+        "type": "object",
+        "title": "Policy.DefinitionContent",
+        "description": "The body of a PUT that writes a policy definition. ⚠ id, name and type are allowed only when they repeat the address.",
+        "properties": {
+          "properties": {
+            "type": "object",
+            "description": "The definition's rule and its names.",
+            "properties": {
+              "description": {
+                "type": "string",
+                "maxLength": 1024,
+                "description": "The longer explanation."
+              },
+              "displayName": {
+                "type": "string",
+                "maxLength": 128,
+                "description": "What a person reads."
+              },
+              "policyRule": {
+                "$ref": "#/components/schemas/Policy.Rule",
+                "type": "object",
+                "description": "The rule — { \"if\": <condition>, \"then\": { \"effect\": \"deny\" | \"audit\" | \"modify\" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.",
+                "x-cybercloud-json": true
+              }
+            },
+            "required": [
+              "policyRule"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "properties"
+        ],
+        "additionalProperties": false
+      },
+      "Policy.Modification": {
+        "type": "object",
+        "title": "Policy.Modification",
+        "description": "One rewrite. add writes only where the body has no value — a default the caller can override; replace writes whatever the caller sent. ⚠ Never on a secret property: the write is refused.",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "An RFC 6901 pointer into the body."
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "add",
+              "replace"
+            ]
+          },
+          "value": {
+            "description": "The JSON value it writes."
+          }
+        },
+        "required": [
+          "field",
+          "operation",
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "Policy.Rule": {
+        "type": "object",
+        "title": "Policy.Rule",
+        "description": "A policy rule: a condition over the request and the body it would leave, and what happens when it holds. Modify runs first, then deny, then audit. ⚠ A rule that doesn't name the operation applies to creates and updates only. docs/plan/08 § Policy.",
+        "properties": {
+          "if": {
+            "$ref": "#/components/schemas/Policy.Condition"
+          },
+          "then": {
+            "type": "object",
+            "description": "What happens when the condition holds.",
+            "properties": {
+              "effect": {
+                "type": "string",
+                "enum": [
+                  "deny",
+                  "audit",
+                  "modify"
+                ]
+              },
+              "operations": {
+                "type": "array",
+                "maxItems": 16,
+                "description": "A modify's rewrites, applied in order. Required for modify, refused otherwise.",
+                "items": {
+                  "$ref": "#/components/schemas/Policy.Modification"
+                }
+              }
+            },
+            "required": [
+              "effect"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "if",
+          "then"
+        ],
+        "additionalProperties": false
+      },
+      "Policy.State": {
+        "type": "object",
+        "title": "Policy.State",
+        "description": "One resource's compliance with one audit assignment. ⚠ timestamp is when the verdict last changed, not when it was last evaluated: re-applying the same body writes nothing.",
+        "properties": {
+          "complianceState": {
+            "type": "string",
+            "enum": [
+              "Compliant",
+              "NonCompliant"
+            ],
+            "description": "Whether the audit rule matched."
+          },
+          "policyAssignmentId": {
+            "type": "string",
+            "description": "The audit assignment."
+          },
+          "policyDefinitionId": {
+            "type": "string",
+            "description": "Its definition."
+          },
+          "resourceId": {
+            "type": "string",
+            "description": "The resource's canonical path."
+          },
+          "resourceType": {
+            "type": "string",
+            "description": "The resource's type."
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the verdict last changed."
+          }
+        },
+        "required": [
+          "complianceState",
+          "policyAssignmentId",
+          "policyDefinitionId",
+          "resourceId",
+          "resourceType",
+          "timestamp"
+        ],
+        "additionalProperties": false
+      },
+      "Policy.State.List": {
+        "type": "object",
+        "title": "Policy.State.List",
+        "description": "One page of policy states. Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page."
+          },
+          "value": {
+            "type": "array",
+            "description": "The objects on this page, ordered by id.",
+            "items": {
+              "$ref": "#/components/schemas/Policy.State"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
       },
       "Resource": {
         "type": "object",

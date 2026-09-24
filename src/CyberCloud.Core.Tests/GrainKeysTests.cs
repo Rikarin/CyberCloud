@@ -172,7 +172,7 @@ public class GrainKeysTests {
             }
         }
 
-        count.ShouldBe(3_000 * 8);
+        count.ShouldBe(3_000 * 9);
     }
 
     [Fact]
@@ -180,7 +180,8 @@ public class GrainKeysTests {
         foreach (var id in Corpus.ResourceIds(500, 11)) {
             var expected = new[] {
                 GrainKeyKind.Subscription, GrainKeyKind.ResourceGroup, GrainKeyKind.Resource, GrainKeyKind.PathIndex,
-                GrainKeyKind.User, GrainKeyKind.EmailIndex, GrainKeyKind.Operation, GrainKeyKind.ClusterConnection
+                GrainKeyKind.User, GrainKeyKind.EmailIndex, GrainKeyKind.Operation, GrainKeyKind.ClusterConnection,
+                GrainKeyKind.PolicyCatalog
             };
 
             var actual = Corpus.EveryGrainKeyShapeFor(id)
@@ -248,8 +249,8 @@ public class GrainKeysTests {
             }
         }
 
-        // Sanity: the corpus really did exercise all eight shapes.
-        seen.Values.Select(static x => x.Kind).Distinct().Count().ShouldBe(8);
+        // Sanity: the corpus really did exercise all nine shapes — #46 added the policy catalog.
+        seen.Values.Select(static x => x.Kind).Distinct().Count().ShouldBe(9);
     }
 
     [Fact]
@@ -1567,9 +1568,32 @@ public class GrainKeysTests {
     ///     since #43's <see cref="GrainKeyKind.DeviceAuthorization" /> and
     ///     <see cref="GrainKeyKind.Invitation" />; thirty-two since #41's
     ///     <see cref="GrainKeyKind.DirectoryIndex" />; thirty-three since #41's review's
-    ///     <see cref="GrainKeyKind.MetricsAccount" />.
+    ///     <see cref="GrainKeyKind.MetricsAccount" />; thirty-four since #46's
+    ///     <see cref="GrainKeyKind.PolicyCatalog" />.
     /// </summary>
     [Fact]
-    public void TheClosedSetHasThirtyThreeShapes() =>
-        Enum.GetValues<GrainKeyKind>().Count(static x => x != GrainKeyKind.None).ShouldBe(33);
+    public void TheClosedSetHasThirtyFourShapes() =>
+        Enum.GetValues<GrainKeyKind>().Count(static x => x != GrainKeyKind.None).ShouldBe(34);
+
+    /// <summary>
+    ///     ⚠ The policy catalog (#46) repeats its tenant inside its own qualification, as
+    ///     <see cref="GrainKeys.TupleStore" /> does, and round-trips through the parser like every
+    ///     other shape — a key that could be built and not decoded would be one a dead-letter handler
+    ///     could not route back to its grain.
+    /// </summary>
+    [Fact]
+    public void ThePolicyCatalogShapeIsKeyedByTenantAndRoundTrips() {
+        var key = GrainKeys.PolicyCatalog(Tenant);
+
+        key.ShouldBe("policy/" + Tenant.ToString("N", CultureInfo.InvariantCulture));
+        GrainKeys.IsTenantQualificationSafe(key).ShouldBeTrue();
+
+        var decoded = GrainKeys.Parse(key).GetValueOrThrow();
+        decoded.Kind.ShouldBe(GrainKeyKind.PolicyCatalog);
+        decoded.Id.ShouldBe(Tenant);
+        decoded.ToString().ShouldBe(key);
+
+        GrainKeys.Parse("policy/" + Tenant.ToString("D", CultureInfo.InvariantCulture))
+            .IsFailure.ShouldBeTrue("only the 32-digit 'N' form is a key — one grain, one spelling");
+    }
 }

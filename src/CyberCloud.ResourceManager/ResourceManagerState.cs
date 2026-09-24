@@ -418,3 +418,38 @@ public sealed class ResourceWatchState {
     [Id(0)]
     public Dictionary<Guid, ResourceWatcher> Watchers { get; set; } = [];
 }
+
+/// <summary>
+///     The durable state of an <c>IPolicyCatalogGrain</c> — a tenant's policy definitions, its
+///     assignments, and the compliance its audits recorded (docs/plan/08 § Policy, issue #46).
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>Every collection is <c>{ get; set; }</c></b>, for the reason <see cref="ResourceState" />
+///         gives: a get-only collection deserializes empty through System.Text.Json, and a catalog that
+///         came back empty would be a tenant whose deny rules silently stopped applying.
+///     </para>
+///     <para>
+///         ⚠ <b>The states grow with the tenant's audited resources, and that is the bound to watch.</b>
+///         One row per resource per audit assignment that reaches it, dropped when the resource's
+///         delete is accepted, when its assignment is deleted or replaced, and when its definition's rule
+///         changes. A tenant with a hundred thousand audited resources holds a hundred thousand rows in
+///         one activation; docs/plan/08 § Policy records moving them beside the resource-graph
+///         projection as what is owed past that size.
+///     </para>
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.ResourceManager.State.PolicyCatalog")]
+public sealed class PolicyCatalogState {
+    /// <summary>The definitions, by canonical address.</summary>
+    [Id(0)]
+    public Dictionary<string, PolicyDefinitionRecord> Definitions { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>The assignments, by canonical address.</summary>
+    [Id(1)]
+    public Dictionary<string, PolicyAssignmentRecord> Assignments { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>The audit verdicts, by resource canonical path, each list ordered by assignment.</summary>
+    [Id(2)]
+    public Dictionary<string, List<PolicyStateRecord>> States { get; set; } = new(StringComparer.Ordinal);
+}

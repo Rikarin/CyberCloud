@@ -206,6 +206,287 @@ class ResourceGroupCreateContent:
         return wire
 
 
+PolicyAssignmentType = Literal["CyberCloud.Policy/policyAssignments"]
+"""The values /type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class PolicyAssignment:
+    """Policy assignment, as the API renders it. A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy."""
+
+    @dataclass
+    class Properties:
+        """What the assignment applies, and where it doesn't."""
+
+        # What a person reads.
+        display_name: str
+        # Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling.
+        not_scopes: List[str]
+        # The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules.
+        policy_definition_id: str
+        # The scope the assignment sits on.
+        scope: str
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> PolicyAssignment.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                display_name=wire["displayName"],
+                not_scopes=wire["notScopes"],
+                policy_definition_id=wire["policyDefinitionId"],
+                scope=wire["scope"],
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["displayName"] = self.display_name
+            wire["notScopes"] = self.not_scopes
+            wire["policyDefinitionId"] = self.policy_definition_id
+            wire["scope"] = self.scope
+            return wire
+
+    # The assignment's own address.
+    id: str
+    # The last segment of the address.
+    name: str
+    # What the assignment applies, and where it doesn't.
+    properties: PolicyAssignment.Properties
+    # The Azure-shaped type string.
+    type: PolicyAssignmentType
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> PolicyAssignment:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            id=wire["id"],
+            name=wire["name"],
+            properties=PolicyAssignment.Properties.from_wire(wire["properties"]),
+            type=wire["type"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["id"] = self.id
+        wire["name"] = self.name
+        wire["properties"] = self.properties.to_wire()
+        wire["type"] = self.type
+        return wire
+
+
+@dataclass
+class PolicyAssignmentContent:
+    """The body of a PUT that writes a policy assignment."""
+
+    @dataclass
+    class Properties:
+        """What the assignment applies, and where it doesn't."""
+
+        # The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules.
+        policy_definition_id: str
+        # What a person reads.
+        display_name: Optional[str] = None
+        # Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling.
+        not_scopes: Optional[List[str]] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> PolicyAssignmentContent.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                policy_definition_id=wire["policyDefinitionId"],
+                display_name=wire.get("displayName"),
+                not_scopes=wire.get("notScopes"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["policyDefinitionId"] = self.policy_definition_id
+            if self.display_name is not None:
+                wire["displayName"] = self.display_name
+            if self.not_scopes is not None:
+                wire["notScopes"] = self.not_scopes
+            return wire
+
+    # What the assignment applies, and where it doesn't.
+    properties: PolicyAssignmentContent.Properties
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> PolicyAssignmentContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            properties=PolicyAssignmentContent.Properties.from_wire(wire["properties"]),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["properties"] = self.properties.to_wire()
+        return wire
+
+
+PolicyDefinitionType = Literal["CyberCloud.Policy/policyDefinitions"]
+"""The values /type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class PolicyDefinition:
+    """Policy definition, as the API renders it. A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy."""
+
+    @dataclass
+    class Properties:
+        """The definition's rule and its names."""
+
+        # The longer explanation.
+        description: str
+        # What a person reads.
+        display_name: str
+        # The rule — { "if": <condition>, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.
+        policy_rule: Any
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> PolicyDefinition.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                description=wire["description"],
+                display_name=wire["displayName"],
+                policy_rule=wire["policyRule"],
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["description"] = self.description
+            wire["displayName"] = self.display_name
+            wire["policyRule"] = self.policy_rule
+            return wire
+
+    # The definition's own address. An assignment names its definition by this.
+    id: str
+    # The last segment of the address.
+    name: str
+    # The definition's rule and its names.
+    properties: PolicyDefinition.Properties
+    # The Azure-shaped type string.
+    type: PolicyDefinitionType
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> PolicyDefinition:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            id=wire["id"],
+            name=wire["name"],
+            properties=PolicyDefinition.Properties.from_wire(wire["properties"]),
+            type=wire["type"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["id"] = self.id
+        wire["name"] = self.name
+        wire["properties"] = self.properties.to_wire()
+        wire["type"] = self.type
+        return wire
+
+
+@dataclass
+class PolicyDefinitionContent:
+    """The body of a PUT that writes a policy definition."""
+
+    @dataclass
+    class Properties:
+        """The definition's rule and its names."""
+
+        # The rule — { "if": <condition>, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.
+        policy_rule: Any
+        # The longer explanation.
+        description: Optional[str] = None
+        # What a person reads.
+        display_name: Optional[str] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> PolicyDefinitionContent.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                policy_rule=wire["policyRule"],
+                description=wire.get("description"),
+                display_name=wire.get("displayName"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["policyRule"] = self.policy_rule
+            if self.description is not None:
+                wire["description"] = self.description
+            if self.display_name is not None:
+                wire["displayName"] = self.display_name
+            return wire
+
+    # The definition's rule and its names.
+    properties: PolicyDefinitionContent.Properties
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> PolicyDefinitionContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            properties=PolicyDefinitionContent.Properties.from_wire(wire["properties"]),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["properties"] = self.properties.to_wire()
+        return wire
+
+
+PolicyStateComplianceState = Literal["Compliant", "NonCompliant"]
+"""The values /complianceState accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class PolicyState:
+    """Policy state, as the API renders it. The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy."""
+
+    # Whether the audit rule matched.
+    compliance_state: PolicyStateComplianceState
+    # The audit assignment.
+    policy_assignment_id: str
+    # Its definition.
+    policy_definition_id: str
+    # The resource's canonical path.
+    resource_id: str
+    # The resource's type.
+    resource_type: str
+    # When the verdict last changed.
+    timestamp: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> PolicyState:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            compliance_state=wire["complianceState"],
+            policy_assignment_id=wire["policyAssignmentId"],
+            policy_definition_id=wire["policyDefinitionId"],
+            resource_id=wire["resourceId"],
+            resource_type=wire["resourceType"],
+            timestamp=wire["timestamp"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["complianceState"] = self.compliance_state
+        wire["policyAssignmentId"] = self.policy_assignment_id
+        wire["policyDefinitionId"] = self.policy_definition_id
+        wire["resourceId"] = self.resource_id
+        wire["resourceType"] = self.resource_type
+        wire["timestamp"] = self.timestamp
+        return wire
+
+
 ProvisioningState = Literal["Canceled", "Creating", "Deleting", "Failed", "Succeeded", "Updating"]
 """The values /provisioningState carries. ⚠ Read-only: the server sets it, and a write that carries it is refused."""
 
@@ -12722,6 +13003,14 @@ __all__ = [
     "ManagementGroupCreateContent",
     "SubscriptionCreateContent",
     "ResourceGroupCreateContent",
+    "PolicyAssignmentType",
+    "PolicyAssignment",
+    "PolicyAssignmentContent",
+    "PolicyDefinitionType",
+    "PolicyDefinition",
+    "PolicyDefinitionContent",
+    "PolicyStateComplianceState",
+    "PolicyState",
     "ProvisioningState",
     "ClickHouseClusterPreset",
     "ClickHouseClusterVersion",

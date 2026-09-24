@@ -139,6 +139,122 @@ type ResourceGroupCreateContent struct {
 	Location string `json:"location"`
 }
 
+// PolicyAssignmentType is the values /type accepts. ⚠ Closed: the write path refuses anything else.
+type PolicyAssignmentType string
+
+const (
+	PolicyAssignmentTypeCyberCloudPolicyPolicyAssignments PolicyAssignmentType = "CyberCloud.Policy/policyAssignments"
+)
+
+// PolicyAssignment is a policy assignment, as the API renders it. A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy.
+type PolicyAssignment struct {
+	// The assignment's own address.
+	ID string `json:"id"`
+	// The last segment of the address.
+	Name string `json:"name"`
+	// What the assignment applies, and where it doesn't.
+	Properties PolicyAssignmentProperties `json:"properties"`
+	// The Azure-shaped type string.
+	Type PolicyAssignmentType `json:"type"`
+}
+
+// PolicyAssignmentProperties is What the assignment applies, and where it doesn't.
+type PolicyAssignmentProperties struct {
+	// What a person reads.
+	DisplayName string `json:"displayName"`
+	// Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling.
+	NotScopes []string `json:"notScopes"`
+	// The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules.
+	PolicyDefinitionID string `json:"policyDefinitionId"`
+	// The scope the assignment sits on.
+	Scope string `json:"scope"`
+}
+
+// PolicyAssignmentContent is the body of a PUT that writes a policy assignment.
+type PolicyAssignmentContent struct {
+	// What the assignment applies, and where it doesn't.
+	Properties PolicyAssignmentContentProperties `json:"properties"`
+}
+
+// PolicyAssignmentContentProperties is What the assignment applies, and where it doesn't.
+type PolicyAssignmentContentProperties struct {
+	// What a person reads.
+	DisplayName *string `json:"displayName,omitempty"`
+	// Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling.
+	NotScopes []string `json:"notScopes,omitempty"`
+	// The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules.
+	PolicyDefinitionID string `json:"policyDefinitionId"`
+}
+
+// PolicyDefinitionType is the values /type accepts. ⚠ Closed: the write path refuses anything else.
+type PolicyDefinitionType string
+
+const (
+	PolicyDefinitionTypeCyberCloudPolicyPolicyDefinitions PolicyDefinitionType = "CyberCloud.Policy/policyDefinitions"
+)
+
+// PolicyDefinition is a policy definition, as the API renders it. A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy.
+type PolicyDefinition struct {
+	// The definition's own address. An assignment names its definition by this.
+	ID string `json:"id"`
+	// The last segment of the address.
+	Name string `json:"name"`
+	// The definition's rule and its names.
+	Properties PolicyDefinitionProperties `json:"properties"`
+	// The Azure-shaped type string.
+	Type PolicyDefinitionType `json:"type"`
+}
+
+// PolicyDefinitionProperties is The definition's rule and its names.
+type PolicyDefinitionProperties struct {
+	// The longer explanation.
+	Description string `json:"description"`
+	// What a person reads.
+	DisplayName string `json:"displayName"`
+	// The rule — { "if": <condition>, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.
+	PolicyRule json.RawMessage `json:"policyRule"`
+}
+
+// PolicyDefinitionContent is the body of a PUT that writes a policy definition.
+type PolicyDefinitionContent struct {
+	// The definition's rule and its names.
+	Properties PolicyDefinitionContentProperties `json:"properties"`
+}
+
+// PolicyDefinitionContentProperties is The definition's rule and its names.
+type PolicyDefinitionContentProperties struct {
+	// The longer explanation.
+	Description *string `json:"description,omitempty"`
+	// What a person reads.
+	DisplayName *string `json:"displayName,omitempty"`
+	// The rule — { "if": <condition>, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.
+	PolicyRule json.RawMessage `json:"policyRule"`
+}
+
+// PolicyStateComplianceState is the values /complianceState accepts. ⚠ Closed: the write path refuses anything else.
+type PolicyStateComplianceState string
+
+const (
+	PolicyStateComplianceStateCompliant    PolicyStateComplianceState = "Compliant"
+	PolicyStateComplianceStateNonCompliant PolicyStateComplianceState = "NonCompliant"
+)
+
+// PolicyState is a policy state, as the API renders it. The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy.
+type PolicyState struct {
+	// Whether the audit rule matched.
+	ComplianceState PolicyStateComplianceState `json:"complianceState"`
+	// The audit assignment.
+	PolicyAssignmentID string `json:"policyAssignmentId"`
+	// Its definition.
+	PolicyDefinitionID string `json:"policyDefinitionId"`
+	// The resource's canonical path.
+	ResourceID string `json:"resourceId"`
+	// The resource's type.
+	ResourceType string `json:"resourceType"`
+	// When the verdict last changed.
+	Timestamp string `json:"timestamp"`
+}
+
 // ProvisioningState is the values /provisioningState carries. ⚠ Read-only: the server sets it, and a write that carries it is refused.
 type ProvisioningState string
 

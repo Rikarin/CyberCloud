@@ -214,15 +214,24 @@ public sealed class SwitchablePolicyEvaluator : IPolicyEvaluator {
 
     /// <inheritdoc />
     public Task<PolicyDecision> EvaluateAsync(
-        ResourceId id,
-        string apiVersion,
-        string body,
-        CallerContext caller,
+        PolicyEvaluationRequest request,
         CancellationToken cancellationToken = default
     ) {
         Asked++;
         return Task.FromResult(Next);
     }
+
+    /// <inheritdoc />
+    public Task<Result> RecordComplianceAsync(
+        ResourceId id,
+        PolicyDecision decision,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(Result.Success);
+
+    /// <inheritdoc />
+    public Task<Result> ForgetAsync(ResourceId id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result.Success);
 }
 
 /// <summary>An <see cref="ILockResolver" /> a test can set a lock on.</summary>
