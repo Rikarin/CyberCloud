@@ -76,6 +76,7 @@ public sealed class ActionDispatcher(
     ///     The caller-bound creator a handler may use, or <see langword="null" /> for the refusing
     ///     default — see <see cref="IResourceCreator" />.
     /// </param>
+    /// <param name="caller">Who invoked it, handed to the handler as <see cref="ActionContext.Caller" />.</param>
     /// <param name="cancellationToken">Cancels the invocation.</param>
     /// <returns>The response JSON, or a failure.</returns>
     public async Task<Result<string>> InvokeAsync(
@@ -85,6 +86,7 @@ public sealed class ActionDispatcher(
         ReconcileInput input,
         JsonElement body,
         IResourceCreator? creator = null,
+        CallerContext? caller = null,
         CancellationToken cancellationToken = default
     ) {
         ArgumentNullException.ThrowIfNull(registration);
@@ -172,7 +174,8 @@ public sealed class ActionDispatcher(
                 // without one — which every test double does, and which is the right answer for a
                 // dispatcher that serves no connected cluster.
                 Agents = agents ?? new UnavailableAgentTunnels(),
-                Creator = creator ?? new RefusingResourceCreator()
+                Creator = creator ?? new RefusingResourceCreator(),
+                Caller = caller ?? new()
             };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

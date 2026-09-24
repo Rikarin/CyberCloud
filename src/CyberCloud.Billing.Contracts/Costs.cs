@@ -45,6 +45,10 @@ public sealed record CostQueryRequest {
     /// <summary>How the rows are keyed.</summary>
     [Id(5)]
     public CostGrouping Grouping { get; init; } = CostGrouping.Unknown;
+
+    /// <summary>Whether each row is also one day's. Refused with <see cref="CostGrouping.Day" />, which already is.</summary>
+    [Id(6)]
+    public CostGranularity Granularity { get; init; } = CostGranularity.None;
 }
 
 /// <summary>One row of a cost answer.</summary>
@@ -62,6 +66,10 @@ public sealed record CostRow {
     /// <summary>The quantity, for <see cref="CostGrouping.Meter" /> rows; zero for every other grouping, where units do not add.</summary>
     [Id(2)]
     public decimal Quantity { get; init; }
+
+    /// <summary>The UTC day, <c>yyyy-MM-dd</c>, for a <see cref="CostGranularity.Daily" /> answer; empty otherwise.</summary>
+    [Id(3)]
+    public string Day { get; init; } = string.Empty;
 }
 
 /// <summary>A cost answer.</summary>
@@ -84,7 +92,10 @@ public sealed record CostQueryResult {
     [Id(3)]
     public CostGrouping Grouping { get; init; } = CostGrouping.Unknown;
 
-    /// <summary>The rows the caller may see, most expensive first, then by name.</summary>
+    /// <summary>
+    ///     The rows the caller may see, most expensive first, then by name — and for a
+    ///     <see cref="CostGranularity.Daily" /> answer, by day first.
+    /// </summary>
     [Id(4)]
     public ImmutableArray<CostRow> Rows { get; init; } = [];
 
@@ -99,6 +110,10 @@ public sealed record CostQueryResult {
     /// </summary>
     [Id(6)]
     public bool Filtered { get; init; }
+
+    /// <summary>The granularity answered.</summary>
+    [Id(7)]
+    public CostGranularity Granularity { get; init; } = CostGranularity.None;
 }
 
 /// <summary>

@@ -2075,6 +2075,7 @@ public sealed class ResourceManagerService(
             // handler creates is this caller's write, through every step of WriteAsync — see
             // IResourceCreator for why an action may create and a reconciler may not.
             new CallerResourceCreator(this, target.Id, request.Caller),
+            request.Caller,
             cancellationToken
         );
 

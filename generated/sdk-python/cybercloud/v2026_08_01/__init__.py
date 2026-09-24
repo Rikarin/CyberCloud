@@ -44,6 +44,7 @@ __all__ = [
     "BudgetPeriod",
     "BudgetResource",
     "BudgetScope",
+    "BudgetShowStatusResult",
     "ClickHouseClusterData",
     "ClickHouseClusterListKeysResult",
     "ClickHouseClusterPreset",

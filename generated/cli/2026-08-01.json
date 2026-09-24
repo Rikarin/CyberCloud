@@ -699,7 +699,7 @@
                   "name": "--scope",
                   "type": "string",
                   "required": false,
-                  "summary": "What the figure covers: this resource group, or the whole subscription. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make.",
+                  "summary": "What the figure covers: this resource group, or the whole subscription. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make. Its figures are the subscription's spend, so showStatus shows them only to a caller who may read the subscription.",
                   "jsonPointer": "/properties/scope",
                   "choices": [
                     "resourceGroup",
@@ -880,6 +880,49 @@
                 }
               ]
             },
+            "show-status": {
+              "name": "show-status",
+              "summary": "showStatus a Budget.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Billing/budgets/{resourceName}/showStatus",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "showStatus",
+              "permission": "read",
+              "rawBody": true
+            },
             "update": {
               "name": "update",
               "summary": "Amend a Budget. Only the flags given are changed.",
@@ -995,7 +1038,7 @@
                   "name": "--scope",
                   "type": "string",
                   "required": false,
-                  "summary": "What the figure covers: this resource group, or the whole subscription. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make.",
+                  "summary": "What the figure covers: this resource group, or the whole subscription. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make. Its figures are the subscription's spend, so showStatus shows them only to a caller who may read the subscription.",
                   "jsonPointer": "/properties/scope",
                   "choices": [
                     "resourceGroup",

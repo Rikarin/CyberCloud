@@ -95,6 +95,18 @@ export const links = {
   identityApplications: () => '/identity/applications',
   identitySessions: () => '/identity/sessions',
 
+  /**
+   * Cost analysis on a subscription, or on one of its groups — docs/plan/20 § The pages that are not
+   * generated. The period and the grouping ride in the query (`?period=`, `?groupBy=`), so a link
+   * can name them; absent, the page shows this month by service.
+   */
+  cost: (subscriptionId: string, resourceGroup?: string) =>
+    `${resourceGroup === undefined ? links.subscription(subscriptionId) : links.resourceGroup(subscriptionId, resourceGroup)}/cost`,
+
+  /** The tenant's invoices, and one by its number. */
+  invoices: () => '/invoices',
+  invoice: (number: string) => `/invoices/${seg(number)}`,
+
   /** The operation view, and where to go once it succeeds. */
   operation: (operationId: string, then?: string) =>
     `/operations/${seg(operationId)}` + (then === undefined ? '' : `?then=${seg(then)}`)

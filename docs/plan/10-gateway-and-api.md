@@ -176,6 +176,18 @@ nine-segment **collection** path, so asked after the resource grammar it would b
 called `query`. `CostQueryRoutingTests` pins the precedence, the `405` on a `GET` and the `400` per
 body member; stage 5 counts it as a read, like the graph's. ⚠ **It is not in the generated document
 either** — #63's question a fifth time, and the same answer as the paragraph below gives the graph's.
+Since #41 the body takes an optional `"granularity": "daily"`, which splits any grouping but `day` by UTC
+day — the time axis of the portal's cost chart, one query where the alternative was one per day.
+
+**A tenant's invoices are the namespace's second address (#41):** `GET
+/tenants/{t}/providers/CyberCloud.CostManagement/invoices` lists the finalized invoices, newest first,
+lines included, and `…/invoices/{number}` reads one. Routed as `RouteKind.Invoice`, asked before the
+cost query's grammar and disjoint from it by scope — invoices are the tenant's billing account's, the
+cost query refuses a tenant — so the order only decides which refusal a malformed path gets, and the
+cost query's names both addresses. Dispatched to `IInvoiceReader`, whose grain asks ReBAC whether the
+caller may `read` the **tenant**, fully consistent, and answers anyone else the address's `404`; a
+write is a `405` with `Allow: GET`. `InvoiceRoutingTests` pins the gateway's half and
+`InvoiceVisibilityTests` the grain's, against the real engine.
 
 ⚠ **The resource graph's address is not in the generated document either, and that is #63's
 question asked a fourth time.** The reserved namespace keeps it out of the registry the emitters

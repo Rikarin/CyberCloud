@@ -41,9 +41,9 @@ public sealed class BudgetCase : IProviderCaseSource {
             // A service that is not a resource id path — refused by the schema's format, at the pointer.
             InvalidBody = static _ => WithService(Budgets.Body(HarnessService, ["finance@example.com"]), "not-a-path"),
             InvalidBodyTarget = "/properties/notification/service",
-            // No action: a budget's figures are its status, read on GET — stated rather than defaulted,
-            // for the reason ProviderConformanceCase.ActionName gives.
-            ActionName = string.Empty,
+            // The one action (#41): the figures and fired thresholds, read from the grain. It needs no
+            // cluster and no body, so the suite's action cases run against the real handler here.
+            ActionName = Budgets.StatusAction,
             Objects = static (_, _) => [],
             OperatorWritten = static (_, _) => [],
             DataPlane = null,

@@ -411,7 +411,7 @@ public sealed partial class BudgetData {
         [JsonPropertyName("period")]
         public BudgetPeriod? Period { get; set; }
 
-        /// <summary>What the figure covers: this resource group, or the whole subscription. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make.</summary>
+        /// <summary>What the figure covers: this resource group, or the whole subscription. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make. Its figures are the subscription's spend, so showStatus shows them only to a caller who may read the subscription.</summary>
         /// <remarks>Defaults to "resourceGroup" when left unset.</remarks>
         [JsonPropertyName("scope")]
         public BudgetScope? Scope { get; set; }
@@ -490,6 +490,62 @@ public sealed partial class BudgetResource {
     /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
     public partial Task<Operation> DeleteAsync(
         WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What showStatus returns.</summary>
+    public sealed partial class ShowStatusResult {
+
+        /// <summary>What the period has cost so far, rounded to the currency, as of the last evaluation.</summary>
+        [JsonPropertyName("actual")]
+        public required double Actual { get; set; }
+
+        /// <summary>Every alert the budget has fired, oldest first, one line each: '{firedAt} {actual|forecast} {percent}% at {figure}: {notification}'.</summary>
+        [JsonPropertyName("alerts")]
+        public IList<string> Alerts { get; set; } = new List<string>();
+
+        /// <summary>The amount for one period, from the budget's body.</summary>
+        [JsonPropertyName("amount")]
+        public required double Amount { get; set; }
+
+        /// <summary>The currency the figures are in. Empty until evaluated.</summary>
+        [JsonPropertyName("currency")]
+        public required string Currency { get; set; }
+
+        /// <summary>Whether the budget has been evaluated in its current period. False until the first hourly evaluation, and for a disabled budget.</summary>
+        [JsonPropertyName("evaluated")]
+        public required bool Evaluated { get; set; }
+
+        /// <summary>The thresholds on the actual cost that have fired this period, as percentages.</summary>
+        [JsonPropertyName("firedActual")]
+        public IList<double> FiredActual { get; set; } = new List<double>();
+
+        /// <summary>The thresholds on the forecast that have fired this period, as percentages.</summary>
+        [JsonPropertyName("firedForecast")]
+        public IList<double> FiredForecast { get; set; } = new List<double>();
+
+        /// <summary>What the period will cost at the trailing seven days' rate, rounded. An estimate.</summary>
+        [JsonPropertyName("forecast")]
+        public required double Forecast { get; set; }
+
+        /// <summary>Why the last evaluation could not run, or empty. A subscription budget not yet granted reader on its subscription says so here.</summary>
+        [JsonPropertyName("lastError")]
+        public required string LastError { get; set; }
+
+        /// <summary>When the figures were computed. Absent until evaluated.</summary>
+        [JsonPropertyName("lastEvaluatedAt")]
+        public DateTimeOffset? LastEvaluatedAt { get; set; }
+
+        /// <summary>The first instant of the next period. Absent until evaluated.</summary>
+        [JsonPropertyName("periodEnd")]
+        public DateTimeOffset? PeriodEnd { get; set; }
+
+        /// <summary>The first instant of the period the figures are for. Absent until evaluated.</summary>
+        [JsonPropertyName("periodStart")]
+        public DateTimeOffset? PeriodStart { get; set; }
+    }
+
+    /// <summary>ShowStatus. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ShowStatusResult>> ShowStatusAsync(
         CancellationToken cancellationToken = default);
 }
 

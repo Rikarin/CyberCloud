@@ -64,6 +64,19 @@ public readonly record struct ActionContext(
     public IAgentTunnels Agents { get; init; } = new UnavailableAgentTunnels();
 
     /// <summary>
+    ///     Who invoked the action, as the manager checked the action's permission for. Empty when the
+    ///     dispatcher was built without one, as every test double's is.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>For a handler whose answer depends on more than the resource.</b> The manager has checked
+    ///     the declared permission on the resource and nothing else. <c>showStatus</c> on a budget that
+    ///     covers its subscription returns the subscription's spend, and a reader of the budget's group
+    ///     may not read that — so the handler asks again, about the subscription, for this caller. A
+    ///     handler that asks must refuse when this is empty rather than answer as nobody in particular.
+    /// </remarks>
+    public CallerContext Caller { get; init; } = new();
+
+    /// <summary>
     ///     Creates another resource in this resource's group, as the <b>caller</b> of this action,
     ///     through the whole write path. docs/plan/08 § What the resource manager deliberately does not
     ///     do, "An action may create, as its caller".

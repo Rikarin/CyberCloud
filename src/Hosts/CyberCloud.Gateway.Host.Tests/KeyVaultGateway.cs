@@ -353,7 +353,7 @@ public sealed class KeyVaultGateway : IAsyncLifetime {
             new RateLimitStage(new GatewayRateLimiter(new InMemoryRateLimitCounters(clock))),
             new RouteStage(registry, options),
             new ValidateStage(options),
-            new DispatchStage(manager, scopes, roles, new RecordingResourceGraphQuery(), new RecordingDeploymentManager(), new RecordingInvitationManager(), new RecordingIdentityAdministration(), new RecordingCostQuery(), new TenantScopedOperationReader(manager), tickets, options)
+            new DispatchStage(manager, scopes, roles, new RecordingResourceGraphQuery(), new RecordingDeploymentManager(), new RecordingInvitationManager(), new RecordingIdentityAdministration(), new RecordingCostQuery(), new RecordingInvoiceReader(), new TenantScopedOperationReader(manager), tickets, options)
         ];
 
         var web = WebApplication.CreateSlimBuilder();

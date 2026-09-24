@@ -38,6 +38,14 @@ public sealed class BillingProvider : IResourceProvider {
             .Reconciler<BudgetReconciler>()
             .Meters(QuotaMeter.Resources)
             .Permissions("read", "write", "delete")
+            // Issue #41: the only way a caller reads the figures and the thresholds that fired.
+            .Action(
+                Budgets.StatusAction,
+                ActionKind.Post,
+                "read",
+                response: Budgets.StatusResponse,
+                handler: typeof(BudgetStatusHandler)
+            )
             .Display(
                 "Budget",
                 "Budgets",

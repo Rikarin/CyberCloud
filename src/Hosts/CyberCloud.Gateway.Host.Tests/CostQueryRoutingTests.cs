@@ -93,6 +93,7 @@ public sealed class CostQueryRoutingTests {
     [InlineData("""{ "to": "2026-09-01T00:00:00Z", "groupBy": "day" }""", "/from")]
     [InlineData("""{ "from": "2026-08-01T00:00:00Z", "to": "yesterday", "groupBy": "day" }""", "/to")]
     [InlineData("""{ "from": "2026-08-01T00:00:00Z", "to": "2026-09-01T00:00:00Z", "groupBy": "tag" }""", "/groupBy")]
+    [InlineData("""{ "from": "2026-08-01T00:00:00Z", "to": "2026-09-01T00:00:00Z", "groupBy": "meter", "granularity": "hourly" }""", "/granularity")]
     public async Task AMalformedBodyIsA400ThatNamesTheMember(string body, string target) {
         var gateway = new GatewayHarness();
 
@@ -101,6 +102,37 @@ public sealed class CostQueryRoutingTests {
         response.Status.ShouldBe(StatusCodes.Status400BadRequest, response.Body);
         response.Body.ShouldContain(target);
         gateway.Costs.Calls.ShouldBeEmpty();
+    }
+
+    /// <summary>The daily axis (#41): parsed onto the request, and each rendered row carries its day.</summary>
+    [Fact]
+    public async Task DailyGranularityReachesTheSeamAndEachRowCarriesItsDay() {
+        var gateway = new GatewayHarness();
+        gateway.Costs.OnQuery = request => Result<CostQueryResult>.Success(
+            new() {
+                Currency = "EUR",
+                From = request.From,
+                To = request.To,
+                Grouping = request.Grouping,
+                Granularity = request.Granularity,
+                Rows = [new() { Day = "2026-08-01", Name = "prod", Amount = 2.40m }, new() { Day = "2026-08-02", Name = "prod", Amount = 0.10m }],
+                Total = 2.50m
+            }
+        );
+
+        var response = await gateway.SendAsync(
+            "POST",
+            OnSubscription(GatewayHarness.TenantA),
+            gateway.Token(GatewayHarness.TenantA),
+            body: """{ "from": "2026-08-01T00:00:00Z", "to": "2026-09-01T00:00:00Z", "groupBy": "resourceGroup", "granularity": "daily" }"""
+        );
+
+        response.Status.ShouldBe(StatusCodes.Status200OK, response.Body);
+        gateway.Costs.Calls.ShouldHaveSingleItem().Request.Granularity.ShouldBe(CostGranularity.Daily);
+
+        using var document = JsonDocument.Parse(response.Body);
+        document.RootElement.GetProperty("granularity").GetString().ShouldBe("daily");
+        document.RootElement.GetProperty("rows").EnumerateArray().Select(static x => x.GetProperty("day").GetString()).ShouldBe(["2026-08-01", "2026-08-02"]);
     }
 
     [Fact]

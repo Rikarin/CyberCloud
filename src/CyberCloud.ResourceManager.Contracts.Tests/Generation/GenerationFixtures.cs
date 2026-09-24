@@ -158,6 +158,11 @@ static class Fixtures {
                 },
                 new("/properties/allowedRanges", SchemaKind.Array, Description: "CIDR ranges.") {
                     ElementKind = SchemaKind.Text, Pattern = @"\d{1,3}(\.\d{1,3}){3}/\d{1,2}", Widget = WidgetHint.Cidr
+                },
+                // A list of numbers — the shape a budget's thresholds have (#41), and the one array whose
+                // elements the portal form must send back as something other than text.
+                new("/properties/alertPercents", SchemaKind.Array, Description: "Storage alert thresholds.") {
+                    ElementKind = SchemaKind.Number, Minimum = 1, Maximum = 100
                 }
             ]
         );

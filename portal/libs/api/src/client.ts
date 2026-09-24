@@ -10,6 +10,7 @@ import type {
   AnalyticsClickhouseClustersResource,
   BillingBudgetsData,
   BillingBudgetsResource,
+  BillingBudgetsShowStatusResult,
   CacheRedisData,
   CacheRedisListKeysResult,
   CacheRedisResource,
@@ -324,6 +325,11 @@ export class CyberCloudApi {
   /** One page of the Budgets in a resource group. ⚠ A short page never means "that is all there is". */
   listBudget(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<BillingBudgetsResource>>> {
     return this.transport.send<Page<BillingBudgetsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Billing/budgets`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** showStatus — permission 'read'. */
+  showStatusBudget(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<BillingBudgetsShowStatusResult>> {
+    return this.transport.send<BillingBudgetsShowStatusResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Billing/budgets/${CyberCloudApi.segment(resourceName)}/showStatus` });
   }
 
   /** Reads one Valkey cache. */

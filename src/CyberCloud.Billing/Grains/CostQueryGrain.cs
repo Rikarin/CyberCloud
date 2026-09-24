@@ -134,14 +134,15 @@ public sealed class CostQueryGrain(IGrainFactory grains, UsagePricing pricing) :
         // ⚠ FILTERED IS ABOUT THE CALLER, NOT ABOUT THE USAGE. It first said whether any row was
         // withheld, which told a reader of one group whether the others had usage in the period—ask
         // day by day and it drew their activity. It now says whether the caller's access covers less
-        // than the scope, which is the same answer whatever anyone else used.
-        return Answer(request.Grouping, from, to, visible, !mayReadWholeScope);
+        // than the scope, which is the same answer whatever anyone else used, at either granularity.
+        return Answer(request.Grouping, request.Granularity, from, to, visible, !mayReadWholeScope);
     }
 
     // ── The answer ───────────────────────────────────────────────────────────────────────────────
 
     Result<CostQueryResult> Answer(
         CostGrouping grouping,
+        CostGranularity granularity,
         DateTimeOffset from,
         DateTimeOffset to,
         IReadOnlyCollection<RatedHour> visible,
@@ -158,15 +159,22 @@ public sealed class CostQueryGrain(IGrainFactory grains, UsagePricing pricing) :
 
         var currency = currencies.Count == 1 ? currencies[0] : DefaultCurrency();
 
+        var daily = granularity == CostGranularity.Daily;
+
+        // ⚠ Each (day, key) row is rounded on its own, like every row, and the total stays the unrounded
+        // sum rounded once — MoneyRounding, rule 6 — so a chart's stacked days may differ from the total
+        // by a cent per row, which is what a cost view is allowed and an invoice is not.
         var rows = visible
-            .GroupBy(x => KeyOf(grouping, x), StringComparer.Ordinal)
+            .GroupBy(x => (Day: daily ? DayOf(x) : string.Empty, Key: KeyOf(grouping, x)))
             .Select(x => new CostRow {
-                    Name = x.Key,
+                    Name = x.Key.Key,
+                    Day = x.Key.Day,
                     Amount = MoneyRounding.Round(x.Sum(static y => y.Amount), currency).GetValueOrThrow(),
                     Quantity = grouping == CostGrouping.Meter ? x.Sum(static y => y.Quantity) : 0m
                 }
             )
-            .OrderByDescending(static x => x.Amount)
+            .OrderBy(static x => x.Day, StringComparer.Ordinal)
+            .ThenByDescending(static x => x.Amount)
             .ThenBy(static x => x.Name, StringComparer.Ordinal)
             .ToImmutableArray();
 
@@ -176,6 +184,7 @@ public sealed class CostQueryGrain(IGrainFactory grains, UsagePricing pricing) :
                 From = from,
                 To = to,
                 Grouping = grouping,
+                Granularity = granularity,
                 Rows = rows,
                 Total = MoneyRounding.Round(visible.Sum(static x => x.Amount), currency).GetValueOrThrow(),
                 Filtered = filtered
@@ -189,8 +198,10 @@ public sealed class CostQueryGrain(IGrainFactory grains, UsagePricing pricing) :
             CostGrouping.ResourceGroup => hour.ResourceGroup,
             CostGrouping.ResourceType => hour.ResourceType,
             CostGrouping.Meter => hour.Meter.ToString(),
-            _ => hour.WindowStart.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            _ => DayOf(hour)
         };
+
+    static string DayOf(RatedHour hour) => hour.WindowStart.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     string DefaultCurrency() =>
         pricing.Sheet.Versions[^1].Meters.Values.Select(static x => x.Currency).FirstOrDefault() ?? Currencies.Euro;
@@ -198,6 +209,14 @@ public sealed class CostQueryGrain(IGrainFactory grains, UsagePricing pricing) :
     // ── The question's shape ─────────────────────────────────────────────────────────────────────
 
     static Result<(DateTimeOffset From, DateTimeOffset To)> Shape(CostQueryRequest request) {
+        if (!Enum.IsDefined(request.Granularity)) {
+            return Invalid("A cost query's granularity is none or daily.", "/granularity");
+        }
+
+        if (request.Granularity == CostGranularity.Daily && request.Grouping == CostGrouping.Day) {
+            return Invalid("Grouping by day is already one row per day; daily granularity splits another grouping by day.", "/granularity");
+        }
+
         if (request.Grouping == CostGrouping.Unknown || !Enum.IsDefined(request.Grouping)) {
             return Invalid("A cost query groups by resource, resourceGroup, resourceType, meter or day.", "/groupBy");
         }

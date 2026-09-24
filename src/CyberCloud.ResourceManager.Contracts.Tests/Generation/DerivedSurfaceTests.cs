@@ -386,6 +386,20 @@ public sealed class DerivedSurfaceTests {
         DocumentReader.Flag(Field("/properties/adminPassword")?["writeOnly"]).ShouldBeTrue();
     }
 
+    /// <summary>
+    ///     ⚠ A list of numbers says so (#41): without the element type the form sends a budget's
+    ///     thresholds back as strings, and a list of text carries nothing new.
+    /// </summary>
+    [Fact]
+    public void AListOfNumbersCarriesItsElementTypeAndBounds() {
+        var items = Field("/properties/alertPercents")?["items"];
+
+        DocumentReader.Text(items?["type"]).ShouldBe("number");
+        items?["minimum"]?.GetValue<double>().ShouldBe(1);
+        items?["maximum"]?.GetValue<double>().ShouldBe(100);
+        Field("/properties/allowedRanges")?["items"].ShouldBeNull();
+    }
+
     [Fact]
     public void TheTagBagIsATagInput() =>
         // docs/plan/20: "object + additionalProperties: string → @xui/tag-input". It is here at all

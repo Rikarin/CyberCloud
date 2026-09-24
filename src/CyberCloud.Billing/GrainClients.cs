@@ -1,4 +1,6 @@
+using CyberCloud.Authorization.Contracts;
 using Orleans.Multitenant;
+using System.Collections.Immutable;
 using System.Globalization;
 
 namespace CyberCloud.Billing;
@@ -43,6 +45,27 @@ public sealed class GrainBudgetControlPlane(IGrainFactory grains) : IBudgetContr
     public Task<Result<bool>> IsArmedAsync(Guid tenantId, Guid budgetId, CancellationToken cancellationToken = default) =>
         Budget(tenantId, budgetId).IsArmedAsync();
 
+    /// <inheritdoc />
+    public async Task<bool> MayReadSubscriptionAsync(
+        Guid tenantId,
+        Guid subscriptionId,
+        CostCaller caller,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(caller);
+
+        var subject = SubjectRef.Create(caller.SubjectType, caller.SubjectId);
+        if (subject.TryGetError(out _)) {
+            return false;
+        }
+
+        var checkedRead = await grains.ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<ICheckGrain>(GrainKeys.CheckCache(ObjectTypes.Subscription, subscriptionId.ToString("N", CultureInfo.InvariantCulture)))
+            .CheckAsync(Permissions.Read, subject.GetValueOrThrow(), Consistency.FullyConsistent);
+
+        return checkedRead.TryGetValue(out var answer) && answer.Allowed;
+    }
+
     IBudgetGrain Budget(Guid tenantId, Guid budgetId) =>
         grains.ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture)).GetGrain<IBudgetGrain>(GrainKeys.Resource(budgetId));
 }
@@ -71,4 +94,40 @@ public sealed class GrainCostQuery(IGrainFactory grains) : ICostQuery {
             .GetGrain<ICostQueryGrain>(GrainKeys.Subscription(request.SubscriptionId))
             .QueryAsync(request);
     }
+}
+
+/// <summary>
+///     The <see cref="IInvoiceReader" /> the gateway's dispatch stage holds — one grain call over the
+///     gateway's cluster client, qualified with the token's tenant.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>The tenant is the argument and the grain's key both</b>, for the reason
+///     <see cref="GrainCostQuery" /> gives: nothing the request carries can name another tenant's
+///     billing account.
+/// </remarks>
+/// <param name="grains">The gateway's cluster client, as a grain factory.</param>
+public sealed class GrainInvoiceReader(IGrainFactory grains) : IInvoiceReader {
+    /// <inheritdoc />
+    public Task<Result<ImmutableArray<Invoice>>> ListAsync(
+        Guid tenantId,
+        CostCaller caller,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(caller);
+        return Query(tenantId).ListAsync(caller);
+    }
+
+    /// <inheritdoc />
+    public Task<Result<Invoice>> GetAsync(
+        Guid tenantId,
+        CostCaller caller,
+        string number,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(caller);
+        return Query(tenantId).GetAsync(caller, number);
+    }
+
+    IInvoiceQueryGrain Query(Guid tenantId) =>
+        grains.ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture)).GetGrain<IInvoiceQueryGrain>(GrainKeys.Tenant(tenantId));
 }

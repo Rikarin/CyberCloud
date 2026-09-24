@@ -81,6 +81,9 @@ public sealed class BillingCluster : IAsyncLifetime {
     /// <summary>The budget control plane, built on the client side as a reconciler's host builds it.</summary>
     public IBudgetControlPlane Budgets { get; private set; } = null!;
 
+    /// <summary>The invoice reader the gateway's dispatch stage holds, over this cluster's client.</summary>
+    public IInvoiceReader Invoices { get; private set; } = null!;
+
     /// <summary>A tenant-qualified factory.</summary>
     /// <param name="tenant">The tenant.</param>
     public TenantGrainFactory For(Guid tenant) => Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
@@ -255,6 +258,7 @@ public sealed class BillingCluster : IAsyncLifetime {
         var provider = services.BuildServiceProvider();
         Costs = provider.GetRequiredService<ICostQuery>();
         Budgets = provider.GetRequiredService<IBudgetControlPlane>();
+        Invoices = provider.GetRequiredService<IInvoiceReader>();
     }
 
     /// <inheritdoc />

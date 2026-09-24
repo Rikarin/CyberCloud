@@ -72,6 +72,13 @@ export const appRoutes: Routes = [
     title: 'Access'
   },
   {
+    // Cost analysis (#41): a literal segment on the two scopes the cost query answers for.
+    path: 'subscriptions/:subscriptionId/cost',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/cost/cost-analysis').then(m => m.CostAnalysis),
+    title: 'Cost analysis'
+  },
+  {
     path: 'subscriptions/:subscriptionId/resourceGroups',
     canActivate: [authGuard],
     loadComponent: () => import('../pages/scopes/resource-groups').then(m => m.ResourceGroups),
@@ -88,6 +95,12 @@ export const appRoutes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('../pages/access/access-blade').then(m => m.AccessBlade),
     title: 'Access'
+  },
+  {
+    path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/cost',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/cost/cost-analysis').then(m => m.CostAnalysis),
+    title: 'Cost analysis'
   },
   {
     // The cloud shell — a literal segment beside `resources`, `create` and `access`, so a
@@ -171,6 +184,19 @@ export const appRoutes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('../pages/identity/sessions').then(m => m.IdentitySessions),
     title: 'My sessions'
+  },
+  {
+    // ⚠ The tenant's, so no subscription in the path: the tenant comes from the token, as everywhere.
+    path: 'invoices',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/cost/invoices').then(m => m.Invoices),
+    title: 'Invoices'
+  },
+  {
+    path: 'invoices/:number',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/cost/invoice-view').then(m => m.InvoiceView),
+    title: 'Invoice'
   },
   {
     path: 'operations/:operationId',
