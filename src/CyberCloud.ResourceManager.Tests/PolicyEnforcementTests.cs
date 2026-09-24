@@ -75,7 +75,12 @@ public sealed class PolicyEnforcementTests(ResourceManagerCluster cluster) : IAs
             new RecordingChangeSink(),
             cluster.Grains,
             new ActionDispatcher(actions, new NoClusterConnectionFactory(), new UnavailableSecretResolver()),
-            NullLogger<ResourceManagerService>.Instance
+            NullLogger<ResourceManagerService>.Instance,
+            // ⚠ ADeploymentsChildWriteEntersStepFive writes a child, and since #39's second review a
+            // child asks whether its recorded caller may still act before step 5. Left to the
+            // refusing default, the child was refused InternalError there and never reached the
+            // policy this class is about — red on master from the moment #39 and #46 both merged.
+            standing: new SwitchablePrincipalStanding()
         );
 
     /// <inheritdoc />

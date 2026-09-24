@@ -79,9 +79,14 @@ public static class CyberCloudSchema {
     /// </summary>
     /// <remarks>
     ///     <para>
+    ///         ⚠ <b>5 since <see cref="Permissions.Connect" /> was declared on a resource</b> (the
+    ///         second review of #22). A cached <c>connect</c> computed under 4 is the undeclared
+    ///         permission's false, and would refuse a console's owner for as long as it was cached.
+    ///     </para>
+    ///     <para>
     ///         ⚠
     ///         <b>
-    ///             4 since the key-vault data-plane roles and permissions were defined (issue #30's
+    ///             It was 4 since the key-vault data-plane roles and permissions were defined (issue #30's
     ///             prerequisite, <c>CyberCloud.KeyVault/vaults</c>).
     ///         </b> A cached answer for <c>readSecrets</c> computed under 3 would be a failure
     ///         to evaluate an undeclared permission, which is not the same answer.
@@ -103,7 +108,7 @@ public static class CyberCloudSchema {
     ///         permission for how a permission that always evaluated false went unnoticed.
     ///     </para>
     /// </remarks>
-    public const int SchemaVersion = 4;
+    public const int SchemaVersion = 5;
 
     /// <summary>The built-in schema, built once.</summary>
     public static AuthorizationSchema Instance { get; } = Build();
@@ -263,12 +268,19 @@ public static class CyberCloudSchema {
                     Permissions.Purge,
                     Rel(Relations.Owner) & !Rel(Relations.Suspended)
                 )
-                // ⚠ AND THE SAME DEFECT STANDS FOR FIVE MORE: listKeys, listCredentials,
-                // listInstallCommand, connect (cloud consoles) and url (Grafana) are checked by other
-                // types' actions and declared nowhere here, so each of those actions answers 404 to
-                // everybody. Owed as docs/plan/07's `action-permissions-are-undeclared`, and
-                // HostCompositionTests.EveryPermissionTheRegistryChecksIsDeclaredOrIsOneOfTheFiveOwed
-                // pins the undeclared set to exactly those five.
+                // ⚠ CONNECT, WHICH A CLOUD CONSOLE'S connect AND terminate CHECK, AND Rel(contributor).
+                // Undeclared until the second review of #22, so the first connect driven through the
+                // real engine (AppHost.Tests' TerminalOverTheRealHostsTests) answered the console's
+                // owner with the canonical 404 — every terminal test before it ran against a doubled
+                // authorizer. Contributor, because whoever may write the console may already change the
+                // identity its shell acts as; a reader may look at the console and not act as it.
+                .Permission(Permissions.Connect, Rel(Relations.Contributor))
+                // ⚠ AND THE SAME DEFECT STANDS FOR FOUR MORE: listKeys, listCredentials,
+                // listInstallCommand and url (Grafana) are checked by other types' actions and declared
+                // nowhere here, so each of those actions answers 404 to everybody. Owed as
+                // docs/plan/07's `action-permissions-are-undeclared`, and
+                // HostCompositionTests.EveryPermissionTheRegistryChecksIsDeclaredOrIsOneOfTheFourOwed
+                // pins the undeclared set to exactly those four.
                 // ⚠ THE KEY-VAULT DATA PLANE — docs/plan/18 § CyberCloud.KeyVault/vaults. On
                 // `resource` only, because an action is checked on the resource it is posted to, and
                 // defined in terms of the four data-plane roles and NEVER of owner, contributor or

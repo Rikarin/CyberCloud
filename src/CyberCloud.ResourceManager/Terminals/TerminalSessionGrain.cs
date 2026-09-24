@@ -29,6 +29,13 @@ namespace CyberCloud.ResourceManager.Terminals;
 ///         idle grain.
 ///     </para>
 ///     <para>
+///         ⚠ <b>The owner is written down before it's answered, in two places.</b> The hot tier holds
+///         it for the next activation (<see cref="TerminalSessionState" />), and the pod carries the
+///         stamp <c>connect</c> put on it at creation, which this grain reads before binding anybody
+///         it has no record of. Neither alone survives everything: a lost activation forgets the
+///         memory, and a hot-tier loss forgets the record.
+///     </para>
+///     <para>
 ///         ⚠ <b>In the resource manager and not in <c>CyberCloud.Providers.Terminal</c>, because the
 ///         Architecture gate refuses it there.</b> Rule 8 of docs/plan/03 § Assembly graph rules
 ///         forbids a provider to ask <see cref="IResourceAuthorizer" /> or open a connection through
@@ -38,6 +45,10 @@ namespace CyberCloud.ResourceManager.Terminals;
 ///         <see cref="ActionContext.Terminals" />; nothing here knows what a console is.
 ///     </para>
 /// </remarks>
+/// <param name="state">
+///     Whose session this is and whether it has ended, in the hot tier — see
+///     <see cref="TerminalSessionState" /> for why an activation's memory wasn't enough.
+/// </param>
 /// <param name="clusters">Turns the resource's cluster id into a connection. The silo's own.</param>
 /// <param name="authorizer">
 ///     The ReBAC seam every attach re-checks the spec's permission through. ⚠ The manager's, from
@@ -47,6 +58,8 @@ namespace CyberCloud.ResourceManager.Terminals;
 /// <param name="clock">What the idle clock is read from.</param>
 /// <param name="logger">Where a session's life is written: who, when, which console, and how it ended.</param>
 public sealed class TerminalSessionGrain(
+    [PersistentState("terminal-session", StorageTiers.Hot)]
+    IPersistentState<TerminalSessionState> state,
     IClusterConnectionFactory clusters,
     IResourceAuthorizer authorizer,
     IClock clock,
@@ -135,6 +148,18 @@ public sealed class TerminalSessionGrain(
         }
 
         sessionId = within[TerminalSessionKeys.Prefix.Length..];
+
+        // ⚠ The owner and the end come back from the hot tier; the spec, the ring and the stream
+        // don't. A session that lost its activation is re-registered by its owner's next connect,
+        // which brings the spec, and until then every hub call is refused as it would be for a
+        // session nobody registered.
+        owner = state.State.Owner;
+
+        if (state.State.Ended) {
+            phase = TerminalSessionPhase.Ended;
+            endedBecause = state.State.EndedBecause;
+        }
+
         return Task.CompletedTask;
     }
 
@@ -208,12 +233,39 @@ public sealed class TerminalSessionGrain(
         }
 
         if (this.owner is null) {
+            // ⚠ No record of an owner is either a new session or a record the hot tier lost. The pod
+            // tells them apart: connect stamps its owner on it when it creates it, and never changes
+            // the stamp afterwards.
+            var stamped = await StampAllowsAsync(spec, owner);
+            if (stamped.IsFailure) {
+                return stamped;
+            }
+
             // ⚠ The per-tenant cap is taken HERE, once, when a session first gets a person — a
             // re-registration by the same owner renews nothing and costs nothing. Refused, connect
-            // deletes the pod it just started — see CloudConsoleSessionHandler in CyberCloud.Providers.Terminal.
+            // deletes the pod if it just started it — see CloudConsoleSessionHandler in
+            // CyberCloud.Providers.Terminal.
             var admitted = await Limit(spec.Resource.TenantId).AdmitAsync(sessionId);
             if (admitted.IsFailure) {
                 return admitted;
+            }
+
+            // ⚠ Written before the binding is answered, and a failed write refuses it. A session bound
+            // only in memory is the defect this state exists to close: the next lost activation
+            // would give the shell to whoever called connect next.
+            try {
+                state.State.Owner = owner;
+                await state.WriteStateAsync();
+            } catch (Exception ex) when (ex is not OutOfMemoryException) {
+                state.State.Owner = null;
+                await Limit(spec.Resource.TenantId).ReleaseAsync(sessionId);
+
+                logger.LogWarning(ex, "Terminal session {Session}: the owner could not be recorded.", sessionId);
+
+                return Refuse(
+                    ErrorCode.OperationInProgress,
+                    "The session could not be recorded, so it wasn't opened. Connect again in a moment."
+                );
             }
 
             logger.LogInformation(
@@ -418,7 +470,7 @@ public sealed class TerminalSessionGrain(
         Task.FromResult(
             new TerminalSessionStatus {
                 Phase = phase,
-                Owner = owner is null ? string.Empty : owner.SubjectType + ":" + owner.SubjectId,
+                Owner = owner is null ? string.Empty : TerminalSessionKeys.OwnerStamp(owner),
                 Viewers = viewers.Count,
                 Buffered = ring.Count,
                 EndedBecause = endedBecause
@@ -780,10 +832,39 @@ public sealed class TerminalSessionGrain(
         reclaimOwed = deletePod && spec is not null;
 
         if (reclaimOwed) {
+            // Recorded as ended until the pod is gone: an activation lost before the delete lands
+            // must still refuse to re-open the session, so connect replaces the pod.
+            await RecordAsync(ended: true);
             await ReclaimAsync();
         } else {
+            // The pod is gone, going, or another session's, and its UID is never reused.
+            await RecordAsync(ended: false);
             idleTimer?.Dispose();
             idleTimer = null;
+        }
+    }
+
+    /// <summary>Records that the session has ended, or forgets it once its pod is gone.</summary>
+    /// <param name="ended">
+    ///     <see langword="true" /> to record the end; <see langword="false" /> to clear the record,
+    ///     which is only right once nothing can name this session again.
+    /// </param>
+    /// <remarks>
+    ///     A failure is logged and not thrown. The session has already ended in this activation, and
+    ///     the one it can't reach is the next, which then answers from the pod: a gone pod is never
+    ///     registered again, and a pod that's still standing carries its owner's stamp.
+    /// </remarks>
+    async Task RecordAsync(bool ended) {
+        try {
+            if (ended) {
+                state.State.Ended = true;
+                state.State.EndedBecause = endedBecause;
+                await state.WriteStateAsync();
+            } else {
+                await state.ClearStateAsync();
+            }
+        } catch (Exception ex) when (ex is not OutOfMemoryException) {
+            logger.LogWarning(ex, "Terminal session {Session}: its end could not be recorded.", sessionId);
         }
     }
 
@@ -839,6 +920,8 @@ public sealed class TerminalSessionGrain(
                 endedBecause,
                 deleteError.Message
             );
+        } else {
+            await RecordAsync(ended: false);
         }
 
         reclaimOwed = false;
@@ -914,6 +997,70 @@ public sealed class TerminalSessionGrain(
         }
 
         return Result.Success;
+    }
+
+    /// <summary>
+    ///     Whether the pod lets <paramref name="caller" /> become the owner of a session this grain has
+    ///     no record of.
+    /// </summary>
+    /// <param name="spec">The spec being registered, which names the pod and its owner annotation.</param>
+    /// <param name="caller">Who is about to become the owner.</param>
+    /// <returns>
+    ///     Success when the spec names no annotation, the pod carries none, or it names
+    ///     <paramref name="caller" />. <see cref="ErrorCode.Conflict" /> when it names somebody else.
+    ///     <see cref="ErrorCode.OperationInProgress" /> when the pod is gone or has been replaced since
+    ///     <c>connect</c> read it, which a retry of <c>connect</c> answers.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>Fails closed.</b> A pod that can't be read binds nobody. Binding anyway would bring back
+    ///     the one outcome this check exists to stop, on exactly the day the hot tier and the cluster
+    ///     were both in trouble.
+    /// </remarks>
+    async Task<Result> StampAllowsAsync(TerminalSessionSpec spec, CallerContext caller) {
+        if (spec.OwnerAnnotation.Length == 0) {
+            return Result.Success;
+        }
+
+        if (clusters.Connect(spec.ClusterId) is not { } cluster) {
+            return Refuse(
+                ErrorCode.InternalError,
+                $"This silo has no connection to cluster {spec.ClusterId:D}, so the owner of session "
+                + $"{sessionId} could not be read from its pod."
+            );
+        }
+
+        var read = await cluster.GetAsync(spec.Pod);
+
+        if (read.TryGetError(out var readError)) {
+            return readError.Code == ErrorCode.ResourceNotFound
+                ? Refuse(ErrorCode.OperationInProgress, "The shell's pod went away while it was being registered. Connect again.")
+                : Result.Failure(readError);
+        }
+
+        var pod = JsonNode.Parse(read.GetValueOrThrow().Json);
+
+        if (!string.Equals(pod?["metadata"]?["uid"]?.GetValue<string>(), sessionId, StringComparison.Ordinal)) {
+            return Refuse(ErrorCode.OperationInProgress, "The shell's pod was replaced while it was being registered. Connect again.");
+        }
+
+        var stamp = pod?["metadata"]?["annotations"]?[spec.OwnerAnnotation]?.GetValue<string>();
+
+        if (string.IsNullOrEmpty(stamp) || string.Equals(stamp, TerminalSessionKeys.OwnerStamp(caller), StringComparison.Ordinal)) {
+            return Result.Success;
+        }
+
+        logger.LogWarning(
+            "Terminal session {Session}: {Caller} was refused by the pod's owner stamp, which names {Stamp}.",
+            sessionId,
+            caller,
+            stamp
+        );
+
+        return Refuse(
+            ErrorCode.Conflict,
+            $"The shell of '{spec.Resource.Path}' is open for another person. A session belongs to "
+            + "the person who opened it; it ends when they exit, when it sits idle, or on terminate."
+        );
     }
 
     static bool SameSubject(CallerContext a, CallerContext b) =>

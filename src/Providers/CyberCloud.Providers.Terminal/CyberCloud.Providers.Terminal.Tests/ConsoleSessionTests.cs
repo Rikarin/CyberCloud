@@ -377,6 +377,62 @@ public sealed class ConsoleSessionTests {
     }
 
     [Fact]
+    public async Task OverTheCapAPodThatWasAlreadyThereIsLeftRunning() {
+        // ⚠ Found by the second review of #22: a QuotaExceeded deleted the pod whether or not this
+        // connect had started it. A pod that was already there is somebody's shell, for example the
+        // owner's own after the session grain lost its activation.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions {
+            First = new([Result.Success]),
+            Answer = Result.Failure(ErrorCode.QuotaExceeded, "This tenant already has 10 cloud shells running.")
+        };
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        (await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions)).IsSuccess.ShouldBeTrue();
+
+        var again = await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions);
+
+        again.Error!.Code.ShouldBe(ErrorCode.QuotaExceeded);
+        connection.Deleted.ShouldBeEmpty("a refused connect deleted a shell it didn't start");
+        connection.Objects.Keys.Count(static x => x.StartsWith("Pod/", StringComparison.Ordinal)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task ThePodKeepsTheOwnerItWasCreatedForWhoeverConnectsNext() {
+        // The session grain's hot-tier record says whose shell this is; the stamp says it again for the
+        // day that record is gone. A connect that stamped its own caller would make the pod name
+        // whoever asked last — including the colleague the grain is about to refuse.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions();
+        var alice = new CallerContext { TenantId = ConsoleReconcilerTests.TenantA, SubjectType = "user", SubjectId = "alice" };
+        var bob = alice with { SubjectId = "bob" };
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        (await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions, caller: alice)).IsSuccess.ShouldBeTrue();
+        await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions, caller: bob);
+
+        Stamp(connection).ShouldBe("user:alice");
+        sessions.Opened.ShouldAllBe(static x => x.Spec.OwnerAnnotation == CloudConsoles.OwnerAnnotation);
+
+        // A shell that's over gets a new pod, stamped for whoever started it.
+        connection.Objects.TryRemove(
+            RecordingConnection.Key(CloudConsoles.PodRef(ConsoleReconcilerTests.Namespace, "observed")),
+            out _
+        ).ShouldBeTrue();
+
+        await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions, caller: bob);
+        Stamp(connection).ShouldBe("user:bob");
+    }
+
+    static string? Stamp(RecordingConnection connection) =>
+        JsonNode.Parse(connection.Objects[RecordingConnection.Key(CloudConsoles.PodRef(ConsoleReconcilerTests.Namespace, "observed"))])?
+            ["metadata"]?["annotations"]?[CloudConsoles.OwnerAnnotation]?.GetValue<string>();
+
+    [Fact]
     public async Task AConflictLeavesTheOtherPersonsShellRunning() {
         // The other half of the cap's rule: a 409 means the pod is somebody's live shell.
         var connection = new RecordingConnection();

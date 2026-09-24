@@ -206,8 +206,12 @@ public sealed class HubPane : IAsyncDisposable {
             if (socket.State == WebSocketState.Open) {
                 await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", CancellationToken.None);
             }
-        } catch (WebSocketException) {
-            // Already gone.
+        } catch (Exception gone) when (gone is WebSocketException or OperationCanceledException or ObjectDisposedException) {
+            // Already gone. ⚠ Including by our own hand: cancelling `stopping` cancels the reader's
+            // pending receive, and a cancelled receive ABORTS a ManagedWebSocket — so the state read
+            // above can still say Open while the close underneath it throws OperationCanceledException
+            // over a disposed socket. Seen once in the second review of #22, failing
+            // AnotherPersonAnotherTenantAndARevokedRoleAreRefused on its disposal, not on an assertion.
         }
 
         await reading.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);

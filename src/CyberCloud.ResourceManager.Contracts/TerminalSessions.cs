@@ -63,6 +63,21 @@ public sealed record TerminalSessionSpec {
     [Id(8)]
     public string ReadPermission { get; init; } = "read";
 
+    /// <summary>
+    ///     The pod annotation the action stamped the session's owner under, as
+    ///     <see cref="TerminalSessionKeys.OwnerStamp" /> spells it, or empty when it stamps none.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The owner's second home, for when the grain's record is gone.</b> The session grain
+    ///     keeps its owner in the hot tier, and a hot tier that lost its data would bind the next
+    ///     person to call <c>connect</c> to a shell that's still running somebody else's session. So
+    ///     the pod carries its owner too, written when the pod is created and never changed by a
+    ///     later <c>connect</c>, and a grain with no record of an owner reads it before it binds
+    ///     anybody.
+    /// </remarks>
+    [Id(9)]
+    public string OwnerAnnotation { get; init; } = string.Empty;
+
     /// <inheritdoc />
     public override string ToString() =>
         string.Create(CultureInfo.InvariantCulture, $"{Resource.Path} (pod {PodUid}, idle {IdleTimeoutSeconds}s)");
@@ -211,7 +226,7 @@ public interface ITerminalViewer : IGrainObserver {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>Kind</b> Session · <b>Tier</b> <b>none</b> · <b>Key</b> <c>terminal/{sessionId}</c>,
+///         <b>Kind</b> Session · <b>Tier</b> Hot · <b>Key</b> <c>terminal/{sessionId}</c>,
 ///         tenant-qualified. Build it with <see cref="TerminalSessionKeys.Session" />.
 ///     </para>
 ///     <para>
@@ -223,14 +238,17 @@ public interface ITerminalViewer : IGrainObserver {
 ///         reaches the grain at all: the key is tenant-qualified and the hub takes it from the token.
 ///     </para>
 ///     <para>
-///         ⚠ <b>No storage, and docs/plan/19's "hot tier" is answered by the pod.</b> A lost
-///         activation loses the replay ring and the open stream — both of which are reconnect-shaped
-///         — and nothing else: the pod is still running, and the portal's reconnect is
-///         <c>connect</c> again, which re-registers the same session id and re-binds its caller.
-///         What is lost with it is the idle clock, and the pod's own hard cap
-///         (<c>activeDeadlineSeconds</c>) is the kubelet's and still holds;
-///         <c>charts/managed/cloud-shell/conformance.yaml § owed</c> records the sweeper that would
-///         close the gap.
+///         ⚠ <b>Its owner outlives the activation; nothing else does.</b> The owner, and whether the
+///         session has ended, are hot-tier state. Until the second review of #22 they were only in
+///         memory, and a lost activation (a silo restart, a rolling deploy, a rebalance) bound the
+///         still-running shell to whoever in the tenant called <c>connect</c> next. A lost activation
+///         now loses the replay ring and the open stream, both reconnect-shaped: the portal's
+///         reconnect is <c>connect</c> again, which re-registers the same session id, and the grain
+///         accepts only the owner it recorded. It also loses the idle clock, until that
+///         <c>connect</c>; the pod's own hard cap (<c>activeDeadlineSeconds</c>) is the kubelet's and
+///         still holds, and <c>charts/managed/cloud-shell/conformance.yaml § owed</c> records the
+///         sweeper that would close the gap. A hot tier that lost its data falls back to
+///         <see cref="TerminalSessionSpec.OwnerAnnotation" />.
 ///     </para>
 /// </remarks>
 [Alias("Rm.TerminalSession")]
@@ -243,8 +261,9 @@ public interface ITerminalSessionGrain : IGrainWithStringKey {
     /// <param name="owner">The caller of <c>connect</c>.</param>
     /// <returns>
     ///     Success, including for the owner re-registering a live session. <see cref="ErrorCode.Conflict" />
-    ///     when another person already holds it, and <see cref="ErrorCode.PreconditionFailed" /> when
-    ///     it has ended. ⚠ An ended session can't be re-joined, and its pod may still stand, so the
+    ///     when another person already holds it — by the grain's record or, when the record is gone,
+    ///     by the pod's <see cref="TerminalSessionSpec.OwnerAnnotation" /> — and
+    ///     <see cref="ErrorCode.PreconditionFailed" /> when it has ended. ⚠ An ended session can't be re-joined, and its pod may still stand, so the
     ///     caller of <c>connect</c> answers this by deleting the pod and registering the new one's
     ///     UID. Otherwise every later <c>connect</c> would name the same ended session.
     /// </returns>
@@ -388,6 +407,17 @@ public static class TerminalSessionKeys {
         }
 
         return Prefix + sessionId;
+    }
+
+    /// <summary>
+    ///     How a session's owner is written where it's compared as text: on the pod, and in
+    ///     <see cref="TerminalSessionStatus.Owner" />.
+    /// </summary>
+    /// <param name="owner">The caller the session belongs to.</param>
+    /// <returns><c>{subjectType}:{subjectId}</c>. The tenant is left out; the pod's namespace and the grain's key both carry it.</returns>
+    public static string OwnerStamp(CallerContext owner) {
+        ArgumentNullException.ThrowIfNull(owner);
+        return owner.SubjectType + ":" + owner.SubjectId;
     }
 
     /// <summary>Whether a string has the shape of a pod UID.</summary>

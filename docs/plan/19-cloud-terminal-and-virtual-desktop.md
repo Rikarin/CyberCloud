@@ -53,8 +53,9 @@ the ring, an idle shell is reclaimed with its home volume kept, and another pers
 a revoked role are refused. The silo there reaches k3s through the cluster connection grain, so the
 attach takes the production path: the session grain, the dialer, the connection grain's tenancy check,
 and a client built from the connection's descriptor. ⚠ The gateway and the silo share one process in
-that suite, as every `TestCluster` does; the real crossing is owed
-(`the-session-grain-has-not-crossed-a-process-boundary`). Five choices the diagram records, each
+that suite, as every `TestCluster` does, so the crossing has a suite of its own:
+`CyberCloud.AppHost.Tests § TerminalOverTheRealHostsTests` runs connect, attach, keystrokes, output and
+terminate from a gateway process into the AppHost's two silo processes. Five choices the diagram records, each
 against the obvious alternative:
 
 - **`connect` runs on a silo, not in the gateway that received it.** A synchronous action normally
@@ -82,10 +83,15 @@ against the obvious alternative:
   grain *decides* (`AuthorizeAttachAsync`, its tenancy check unchanged) and the calling silo dials
   (`IKubeAttachDialer`). An agent-connected cluster cannot be attached to yet — the tunnel carries one
   response per request.
-- **The session belongs to the person who opened it.** `connect` binds it to its caller
-  (`ActionContext.Caller`, a fact rather than a decision); every hub call must come from that person,
-  and an attach re-asks ReBAC for `connect`, fully consistent. A second person with `connect` on the
-  same console gets `409` from `connect` and nothing from the hub.
+- **The session belongs to the person who opened it, and that outlives the grain.** `connect` binds
+  it to its caller (`ActionContext.Caller`, a fact rather than a decision); every hub call must come
+  from that person, and an attach re-asks ReBAC for `connect`, fully consistent. A second person with
+  `connect` on the same console gets `409` from `connect` and nothing from the hub. The owner is
+  written down twice: in the hot tier, for the next activation, and on the pod as
+  `cybercloud.io/session-owner`, stamped when `connect` creates it and never rewritten. A grain with no
+  record reads the stamp before it binds anyone. ⚠ Until the second review of #22 the owner lived
+  only in the activation, and a silo restart, a rolling deploy or a rebalance handed the
+  still-running shell to the next colleague who called `connect`.
 
 ⚠ **Only the pod ends a session.** A shell that exited, idled out, never started or was terminated
 ends it; failing to *reach* the shell — an attach refused, a cluster that stopped answering, a stream
@@ -95,9 +101,9 @@ named by every later `connect`; `connect` answers an ended session by deleting i
 new one, which is the backstop for a reclaim whose delete never reached the cluster.
 
 What is still owed is in `charts/managed/cloud-shell/conformance.yaml § owed`: no terminal over the
-agent tunnel, no idle sweep once a session grain's activation is lost, keystrokes not re-checked, the
-cross-process crossing not yet exercised against the AppHost, and the image and the managed identity
-below.
+agent tunnel, no idle sweep once a session grain's activation is lost, keystrokes not re-checked, two
+narrow gaps in where the owner is recorded (`the-owner-has-two-homes-and-one-race`), and the image and
+the managed identity below.
 
 > ⚠ **The brief says "SignalR endpoint which spins up grain with ssh client to the docker".** SSH is
 > the wrong transport here and it is worth saying why: it means running `sshd` in the shell image
@@ -111,15 +117,17 @@ below.
 > where there is no Kubernetes API to exec through. That path is bastion-shaped and is M2.
 
 **The session grain** owns: the attach stream, the resize channel, an idle timer (20 min → delete the
-pod, keep the PVC), an output ring buffer for reconnect (64 KiB), and the session's record. ⚠ **Four
+pod, keep the PVC), an output ring buffer for reconnect (64 KiB), and the session's record. ⚠ **Three
 things this sentence used to give it that it does not hold, each deliberately.** The pod's *creation*
 is `connect`'s, so a shell exists because a person asked and not because a grain decided. The hard cap
 (8 h) is the kubelet's `activeDeadlineSeconds`, which holds when nothing of the platform is running.
 The *audit record* is a silo log line — who, which console, which cluster, why it ended — because no
-audit sink exists (`no-audit-sink`). And it is not hot-tier: it has **no storage at all**, because the
-pod is the durable half — a lost activation loses the ring and the open stream, both reconnect-shaped,
-and the next `connect` re-registers the same session id. What a lost activation also loses is the idle
-clock, until that `connect` or the hard cap; a sweeper that does not depend on an activation is
+audit sink exists (`no-audit-sink`). ⚠ **Its hot-tier state is two facts and nothing else**: whose
+session it is and whether it has ended. This paragraph said "no storage at all, because the pod is the
+durable half" until the second review of #22 showed what that cost: the pod is durable, and who owns
+it was not. A lost activation still loses the ring and the open stream, both reconnect-shaped, and the
+next `connect` by the owner re-registers the same session id. It also loses the idle clock, until that
+`connect` or the hard cap; a sweeper that does not depend on an activation is
 [§ Shared machinery](#shared-machinery)'s second item and is owed.
 
 **A tenant's live shells are capped** (`TerminalSessionLimits.LiveSessionsPerTenant`, ten), counted per

@@ -67,7 +67,9 @@ namespace CyberCloud.Gateway.Host.Cluster.Conformance;
 ///         <see cref="TerminalGatewayCase.Kubeconfig" /> rather than a vault. The ticket store, the hub,
 ///         the grains and the cluster are all real. ⚠ The gateway and the silo still share this
 ///         process, as every <c>TestCluster</c> does, so the Orleans wire between them is the
-///         in-process one — <c>charts/managed/cloud-shell/conformance.yaml § owed</c>,
+///         in-process one. <c>TerminalOverTheRealHostsTests</c> in <c>CyberCloud.AppHost.Tests</c> is
+///         where the same calls cross into a silo process —
+///         <c>charts/managed/cloud-shell/conformance.yaml § owed</c>,
 ///         <c>the-session-grain-has-not-crossed-a-process-boundary</c>.
 ///     </para>
 /// </remarks>

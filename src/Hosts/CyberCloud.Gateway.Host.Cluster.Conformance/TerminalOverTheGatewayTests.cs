@@ -34,8 +34,9 @@ namespace CyberCloud.Gateway.Host.Cluster.Conformance;
 ///         NetworkPolicy is applied and nothing here asserts that it constrains the shell —
 ///         <c>a-networkpolicy-that-nothing-enforces-still-reads-back</c> in the chart's owed list is
 ///         unchanged. The session grain and the gateway share one process with the silo here, as
-///         every <c>TestCluster</c> does; the cross-process half is the wire contract's
-///         (<c>[Alias]</c> on every type and method) and the AppHost's, which this lane does not start.
+///         every <c>TestCluster</c> does; the cross-process half is
+///         <c>CyberCloud.AppHost.Tests</c>' <c>TerminalOverTheRealHostsTests</c>, which drives the same
+///         grain calls from a gateway process into the AppHost's silo processes.
 ///     </para>
 /// </remarks>
 /// <param name="fixture">The silo, the cluster and the gateway in front of them.</param>
@@ -257,12 +258,20 @@ public sealed class TerminalOverTheGatewayTests(TerminalGatewayFixture fixture) 
             }
 
             if (DateTimeOffset.UtcNow > deadline) {
+                // ⚠ The conditions as well as the container's wait. A pod that never scheduled has no
+                // container status at all, and the second review of #22 got an empty message from a
+                // node tainted DiskPressure: the reason is on PodScheduled, not on the container.
                 throw new TimeoutException(
                     string.Create(
                         CultureInfo.InvariantCulture,
-                        $"the shell pod stayed {pod.Status?.Phase} for {PodBudget.TotalMinutes} minutes: "
+                        $"the shell pod stayed {pod.Status?.Phase} for {PodBudget.TotalMinutes} minutes. Conditions: "
                     )
-                    + string.Join("; ", pod.Status?.ContainerStatuses?.Select(static x => x.State?.Waiting?.Message) ?? [])
+                    + string.Join("; ", pod.Status?.Conditions?.Select(static x => $"{x.Type}={x.Status} {x.Reason} {x.Message}") ?? [])
+                    + ". Containers: "
+                    + string.Join(
+                        "; ",
+                        pod.Status?.ContainerStatuses?.Select(static x => $"{x.State?.Waiting?.Reason} {x.State?.Waiting?.Message}") ?? []
+                    )
                 );
             }
 

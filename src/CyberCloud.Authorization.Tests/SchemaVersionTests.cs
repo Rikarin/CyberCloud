@@ -32,7 +32,7 @@ public sealed class SchemaVersionTests {
     ///     ⚠ Change both together, and only together. A new fingerprint under the same version is
     ///     the defect this file exists for.
     /// </remarks>
-    static readonly (int Version, string Fingerprint) Pinned = (4, "af37848fde295aed");
+    static readonly (int Version, string Fingerprint) Pinned = (5, "6997c79b99f2f134");
 
     [Fact]
     public void TheSchemaVersionNamesExactlyOneSchema() {

@@ -208,19 +208,23 @@ that do not reference each other (`CyberCloud.ResourceManager.Contracts` does no
 author believed about a permission name. `test/CyberCloud.Isolation` is what drove one through this
 schema and found it, which is the second defect that project has caught in the same way.
 
-⚠ **Owed, `action-permissions-are-undeclared`: the same defect stands for five more permissions.**
+⚠ **Owed, `action-permissions-are-undeclared`: the same defect stands for four more permissions.**
 `listKeys` (eleven types: the data services, the caches, the brokers, search, storage accounts and
 monitor workspaces), `listCredentials` (`ContainerRegistry/registries`,
-`ContainerService/managedClusters`), `listInstallCommand` (`ContainerService/connectedClusters`),
-`connect` (`Terminal/consoles`' `connect` and `terminate`) and `url` (`Dashboard/grafanas`) are each
-checked by an action, and `CyberCloudSchema` declares none of them. So on a real silo every one of
-those actions answers the canonical `404`, to every caller, the owner included. The first three
-were found by reading during #30, and the last two by the test below when it was written. None is
-fixed there. Declaring them is a `SchemaVersion` bump, and it needs a decision about which role holds
-each: Azure puts `listKeys` in Contributor, and [12](12-managed-data-services.md) wants it audited
-on every call. `HostCompositionTests.EveryPermissionTheRegistryChecksIsDeclaredOrIsOneOfTheFiveOwed`
+`ContainerService/managedClusters`), `listInstallCommand` (`ContainerService/connectedClusters`) and
+`url` (`Dashboard/grafanas`) are each checked by an action, and `CyberCloudSchema` declares none of
+them. So on a real silo every one of those actions answers the canonical `404`, to every caller, the
+owner included. The first three were found by reading during #30, and the last by the test below
+when it was written. Declaring them is a `SchemaVersion` bump, and it needs a decision about which
+role holds each: Azure puts `listKeys` in Contributor, and [12](12-managed-data-services.md) wants it
+audited on every call. `HostCompositionTests.EveryPermissionTheRegistryChecksIsDeclaredOrIsOneOfTheFourOwed`
 reads every permission the gateway's composed registry checks and pins the undeclared set to exactly
-these five, so a sixth fails the build and so does fixing one without updating the test.
+these four, so a fifth fails the build and so does fixing one without updating the test. ⚠ There were
+five until the second review of #22: `connect`, which `Terminal/consoles`' `connect` and `terminate`
+check, is declared at `SchemaVersion` 5 as `Rel("contributor")` — whoever may write a console may
+already change the identity its shell acts as. The first `connect` driven through the real engine
+(`CyberCloud.AppHost.Tests § TerminalOverTheRealHostsTests`) is what found it: the console's owner got
+`404`, and every terminal suite before it had run against a doubled authorizer.
 
 **Decided: `resource.purge` is `Rel("owner") & !Rel("suspended")`, and that is deliberately less
 separation than [08](08-resource-manager.md) § Soft delete describes.** That section wants *"a role

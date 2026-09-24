@@ -192,6 +192,9 @@ public static class CloudConsoles {
     ///     ⚠ Its own permission rather than <c>read</c>, because attaching to a shell that holds an
     ///     identity is not reading a resource. A Reader on a resource group must not inherit a
     ///     terminal inside it — docs/plan/07's roles are the reason this is a separate string.
+    ///     ⚠ <c>CyberCloudSchema</c> declares it as <c>Rel(contributor)</c> under the same spelling,
+    ///     which this assembly can't reference. Until the second review of #22 it didn't, and every
+    ///     <c>connect</c> through the real engine answered <c>404</c>, to the owner too.
     /// </remarks>
     public const string ConnectPermission = "connect";
 
@@ -456,6 +459,19 @@ public static class CloudConsoles {
     ///     tenant's shell can see it without asking the API.
     /// </remarks>
     public const string RecordingAnnotation = "cybercloud.io/session-recording";
+
+    /// <summary>
+    ///     The annotation the shell's owner is stamped under, as
+    ///     <see cref="TerminalSessionKeys.OwnerStamp" /> writes it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Written when the pod is created and carried unchanged by every later apply.</b> The
+    ///     session grain keeps its owner in the hot tier, and reads this before binding anybody it has no
+    ///     record of, so a hot tier that lost its data can't hand the shell to the next person to call
+    ///     <c>connect</c>. An apply that rewrote it to its own caller would make the stamp say whoever
+    ///     asked last, which is the answer the grain's record already refuses.
+    /// </remarks>
+    public const string OwnerAnnotation = "cybercloud.io/session-owner";
 
     /// <summary>How long a shell may run before the kubelet stops it, in seconds.</summary>
     /// <param name="desired">The desired body.</param>
@@ -1080,22 +1096,39 @@ public static class CloudConsoles {
     ///     The image reference, by digest — see <see cref="IsPinned" />. ⚠ Never a tenant's value:
     ///     <see cref="ImageRepository" /> says why a tenant choosing what runs here is the whole attack.
     /// </param>
-    public static string PodJson(string name, JsonElement desired, string image) {
+    public static string PodJson(string name, JsonElement desired, string image) => PodJson(name, desired, image, string.Empty);
+
+    /// <summary>The shell pod, stamped with the person it belongs to.</summary>
+    /// <param name="name">The console's name.</param>
+    /// <param name="desired">The desired body.</param>
+    /// <param name="image">The image reference, by digest — see <see cref="IsPinned" />.</param>
+    /// <param name="owner">
+    ///     The <see cref="OwnerAnnotation" /> value, or empty for none. ⚠ The pod's existing stamp when
+    ///     the pod is already there — see <see cref="OwnerAnnotation" />.
+    /// </param>
+    public static string PodJson(string name, JsonElement desired, string image, string owner) {
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(image);
+        ArgumentNullException.ThrowIfNull(owner);
 
         var (cpu, memory) = Resources(desired);
+
+        var annotations = new JsonObject {
+            [IdleTimeoutAnnotation] = IdleTimeoutSeconds(desired)
+                .ToString(CultureInfo.InvariantCulture),
+            [RecordingAnnotation] = SessionRecording(desired)
+                ? "true"
+                : "false"
+        };
+
+        if (owner.Length > 0) {
+            annotations[OwnerAnnotation] = owner;
+        }
 
         return new JsonObject {
             ["metadata"] = new JsonObject {
                 ["name"] = ShellName(name),
-                ["annotations"] = new JsonObject {
-                    [IdleTimeoutAnnotation] = IdleTimeoutSeconds(desired)
-                        .ToString(CultureInfo.InvariantCulture),
-                    [RecordingAnnotation] = SessionRecording(desired)
-                        ? "true"
-                        : "false"
-                }
+                ["annotations"] = annotations
             },
             ["spec"] = new JsonObject {
                 ["serviceAccountName"] = ShellName(name),

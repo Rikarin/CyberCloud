@@ -98,12 +98,18 @@ sealed class RecordingConnection : IKubeClusterConnection {
             );
         }
 
+        // Created only the first time, as a real API server answers: connect removes a pod over the
+        // tenant's cap only when its own apply created it.
+        var existed = Objects.ContainsKey(Key(command.Target));
+
         if (!SwallowApplies) {
             Objects[Key(command.Target)] = Accept(command);
         }
 
         return Task.FromResult(
-            Result<ApplyOutcome>.Success(new() { Result = ApplyResult.Created, Target = command.Target })
+            Result<ApplyOutcome>.Success(
+                new() { Result = existed ? ApplyResult.Updated : ApplyResult.Created, Target = command.Target }
+            )
         );
     }
 

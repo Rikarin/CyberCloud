@@ -169,6 +169,15 @@ public static class Permissions {
     /// </remarks>
     public const string Purge = "purge";
 
+    /// <summary>Open a shell on a cloud console — <c>CyberCloud.Terminal/consoles</c>' <c>connect</c> and <c>terminate</c>.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Also written in a place that can't see it</b>: <c>CloudConsoles.ConnectPermission</c>,
+    ///     for <see cref="Purge" />'s reason. Declared by the second review of #22, whose first run
+    ///     through the real engine answered <c>404</c> to the console's owner, because nothing here
+    ///     declared it and an undeclared permission can only evaluate false.
+    /// </remarks>
+    public const string Connect = "connect";
+
     /// <summary>Administer the platform.</summary>
     public const string Administer = "administer";
 

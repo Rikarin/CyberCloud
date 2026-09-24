@@ -1,5 +1,6 @@
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
+using CyberCloud.Providers.Terminal.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
@@ -247,6 +248,21 @@ public sealed class AppHostTopologyTests {
         // And the region a signed-up tenant is homed to, without which the first create step refuses.
         var identity = await built.EnvironmentOf(CyberCloudResources.Identity);
         identity["CyberCloud__Identity__DefaultRegion"].ShouldBe(CyberCloudResources.DefaultRegion);
+    }
+
+    [Fact]
+    public async Task BothSilosStartTheCloudShellFromOneImagePinnedByDigest() {
+        var built = Model();
+
+        // ⚠ Both, because the gateway relays connect to whichever silo its client reaches, and a
+        // silo without the setting starts the placeholder digest, which never pulls.
+        CloudConsoles.IsPinned(CyberCloudResources.ShellImage).ShouldBeTrue("connect refuses an image that is not pinned by digest");
+
+        foreach (var name in new[] { CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo }) {
+            var environment = await built.EnvironmentOf(name);
+
+            environment["CyberCloud__Terminal__Images__Default"].ShouldBe(CyberCloudResources.ShellImage, $"{name} runs connect too");
+        }
     }
 
     [Fact]

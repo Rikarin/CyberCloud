@@ -1,6 +1,7 @@
 using CyberCloud.Conformance;
 using CyberCloud.Providers.Monitor.Alerting;
 using CyberCloud.Providers.Monitor.Contracts;
+using CyberCloud.Providers.Monitor.Query;
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -56,9 +57,14 @@ public sealed class MonitorComponentCase : IProviderCaseSource {
     public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [MonitorCase.ProviderCase];
 
     /// <inheritdoc />
-    /// <remarks>The line <c>MonitorCollectorCase</c> carries, for the sibling's handler.</remarks>
+    /// <remarks>
+    ///     The line <c>MonitorCollectorCase</c> carries, for the sibling's handler. ⚠ And the query
+    ///     stores and the account ledger, which the ancestor workspace's reconciler and its three
+    ///     query handlers take since #41's explorers: #32 wrote this before them, the merge kept the
+    ///     old line, and every suite over this case failed its container's validation on master.
+    /// </remarks>
     public static void ConfigureSilo(ISiloBuilder silo) =>
-        silo.ConfigureServices(static services => services.AddCyberCloudMonitorAlerting());
+        silo.ConfigureServices(static services => services.AddCyberCloudMonitorAlerting().AddCyberCloudMonitorQuery(new()));
 
     static string WithProtocol(string body, string protocol) {
         var node = JsonNode.Parse(body)!.AsObject();

@@ -161,6 +161,82 @@ public sealed class TerminalSessionGrainTests(ResourceManagerCluster cluster) {
         ScriptedShell.AttachCalls.ShouldBeGreaterThan(opened);
     }
 
+    [Fact]
+    public async Task ALostActivationKeepsTheSessionsOwner() {
+        // ⚠ Found by the second review of #22. The owner lived only in the activation, so after a silo
+        // restart, a rolling deploy or a rebalance the next person in the tenant to call connect was
+        // bound to the still-running shell: the same pod, the same bash, the owner's state in it.
+        var (session, alice, spec) = Arrange();
+        var bob = alice with { SubjectId = "bob" };
+
+        (await session.OpenAsync(spec, alice)).IsSuccess.ShouldBeTrue();
+        (await session.OpenAsync(spec, bob)).Error!.Code.ShouldBe(ErrorCode.Conflict);
+
+        await LoseActivationAsync(session);
+        (await session.StatusAsync()).Phase.ShouldBe(TerminalSessionPhase.Unknown, "the activation was never lost");
+
+        var taken = await session.OpenAsync(spec, bob);
+        taken.IsFailure.ShouldBeTrue("a lost activation handed the shell to the next person to connect");
+        taken.Error!.Code.ShouldBe(ErrorCode.Conflict);
+        (await session.StatusAsync()).Owner.ShouldBe(TerminalSessionKeys.OwnerStamp(alice));
+        (await session.AttachAsync(bob, Reference(new RecordingViewer()), 80, 24)).Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+        // The owner's reconnect is connect again, and it re-registers the same session.
+        (await session.OpenAsync(spec, alice)).IsSuccess.ShouldBeTrue();
+        (await session.AttachAsync(alice, Reference(new RecordingViewer()), 80, 24)).IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WithItsRecordGoneTheGrainTakesTheOwnerFromThePod() {
+        // A grain with no record is a new session or a hot tier that lost its data; the stamp connect
+        // put on the pod when it created it tells them apart. Nothing is recorded before the first
+        // OpenAsync, so a fresh grain over a stamped pod is exactly the lost-record case.
+        var (session, alice, spec) = Arrange();
+        var bob = alice with { SubjectId = "bob" };
+        var stamped = spec with { OwnerAnnotation = ScriptedShell.OwnerAnnotation };
+        ScriptedShell.Owner = TerminalSessionKeys.OwnerStamp(alice);
+
+        var taken = await session.OpenAsync(stamped, bob);
+        taken.IsFailure.ShouldBeTrue("the grain bound somebody the pod's stamp doesn't name");
+        taken.Error!.Code.ShouldBe(ErrorCode.Conflict);
+        (await session.StatusAsync()).Owner.ShouldBeEmpty();
+
+        (await session.OpenAsync(stamped, alice)).IsSuccess.ShouldBeTrue();
+        (await session.StatusAsync()).Owner.ShouldBe(TerminalSessionKeys.OwnerStamp(alice));
+    }
+
+    [Fact]
+    public async Task AnEndedSessionWhosePodStillStandsStaysEndedAcrossActivations() {
+        // An ended session whose pod couldn't be deleted keeps its record, so the next activation still
+        // answers PreconditionFailed and connect replaces the pod rather than re-opening a shell that
+        // ended — possibly for somebody else.
+        var (session, owner, spec) = Arrange();
+        ScriptedShell.RefuseDeletes = int.MaxValue;
+
+        (await session.OpenAsync(spec, owner)).IsSuccess.ShouldBeTrue();
+
+        var pane = new RecordingViewer();
+        (await session.AttachAsync(owner, Reference(pane), 80, 24)).IsSuccess.ShouldBeTrue();
+        await Until(() => !ScriptedShell.Opened.IsEmpty, "the stream never opened");
+
+        ScriptedShell.Opened.TryPeek(out var terminal).ShouldBeTrue();
+        ScriptedShell.Phase = "Failed";
+        terminal!.Close();
+        await Until(() => pane.Ended is not null, "the pane was never told the shell ended");
+
+        await LoseActivationAsync(session);
+
+        var again = await session.OpenAsync(spec, owner);
+        again.IsFailure.ShouldBeTrue("an ended session came back after its activation was lost");
+        again.Error!.Code.ShouldBe(ErrorCode.PreconditionFailed);
+        ScriptedShell.RefuseDeletes = 0;
+    }
+
+    /// <summary>Deactivates the session's activation, as a silo restart or a rebalance would.</summary>
+    /// <remarks>Calls made after this reach a new activation: Orleans holds them until the old one has gone.</remarks>
+    static async Task LoseActivationAsync(ITerminalSessionGrain session) =>
+        await session.AsReference<Orleans.Core.Internal.IGrainManagementExtension>().DeactivateOnIdle();
+
     (ITerminalSessionGrain Session, CallerContext Owner, TerminalSessionSpec Spec) Arrange() {
         ResourceManagerCluster.ResetDoubles();
         var uid = ScriptedShell.Reset();

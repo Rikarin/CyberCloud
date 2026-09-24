@@ -125,7 +125,12 @@ public sealed class AuthorizationVocabularyTests {
         Permissions.WriteKeys.ShouldBe("writeKeys");
         Permissions.PurgeKeys.ShouldBe("purgeKeys");
 
-        Literals(typeof(Permissions)).Count.ShouldBe(12);
+        // And the cloud console's, the same kind of pair: CloudConsoles.ConnectPermission spells it
+        // without referencing this assembly. HostCompositionTests'
+        // EveryPermissionTheRegistryChecksIsDeclaredOrIsOneOfTheFourOwed is where the two meet.
+        Permissions.Connect.ShouldBe("connect");
+
+        Literals(typeof(Permissions)).Count.ShouldBe(13);
     }
 
     [Fact]

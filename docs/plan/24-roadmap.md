@@ -91,7 +91,7 @@ Architecture`'s **Generated surfaces** gate regenerates every surface from the p
 compares bytes, which is what makes "and drift fails the build" a fact rather than an intention:
 
 ```text
-✔ Generated surfaces  Enforced  40 resource type(s) over 2 OpenAPI document(s), 14 derived file(s) —
+✔ Generated surfaces  Enforced  44 resource type(s) over 2 OpenAPI document(s), 14 derived file(s) —
   the cyc verb tree, the .NET SDK, the portal forms, and the Python and Go SDKs (#40) — and 6 file(s)
   of the portal's TypeScript client, all regenerated and compared byte-for-byte
 ✔ Generated SDK compiles  Enforced  1 api-version file(s) declaring 390 type(s), each compiled on its
@@ -187,9 +187,11 @@ composed as the gateway's is — no cluster connection, so the action is relayed
 in a deployment (the review of #22 found a deployed gateway refused every `connect` before the relay) —
 opens `/hubs/terminal` with a ticket, and types into the shell: an `echo` round-trips, `stty size`
 reads back a resize, a reconnect is replayed the ring, an idle shell is reclaimed with its home volume
-kept, and another person, another tenant and a revoked role are refused. ⚠ The gateway and the silo
-share one process in that suite; the real hosts' crossing is owed
-(`the-session-grain-has-not-crossed-a-process-boundary`). What the sentence says that the test does not: "`psql` into it
+kept, and another person, another tenant and a revoked role are refused. The gateway and the silo
+share one process in that suite, so `CyberCloud.AppHost.Tests § TerminalOverTheRealHostsTests` runs the
+same connect, attach, echo and terminate from a gateway process into the AppHost's silo processes, where
+`connect` on a dev run now gives a shell (the second review of #22). What the sentence says that
+neither test does: "`psql` into it
 **using a managed identity**". The shell the test runs carries `psql` because its stand-in image does
 (no image pipeline exists — [19 § The image](19-cloud-terminal-and-virtual-desktop.md)), and nothing
 lets a command in it act as the console's managed identity: no projected token in the pod, no workload
@@ -310,9 +312,9 @@ four that merged on 2026-09-15 from four branches that each counted only itself
 `Compute/virtualMachines`, `Compute/disks`, `Compute/images`), and `Resources/deployments` (#39) and `Billing/budgets` (#38) `Monitor/workspaces/components` (#32) and `Mail/domains/mailboxes` (#34) on 2026-09-23,
 each recounted in the same change. The other
 eighteen are counted, phase by phase, in [§ What has landed](#what-has-landed--recounted-2026-09-23) —
-which is also where to see that two of the 40 belong to phase 4 and one is phase 1's deliberately
+which is also where to see that two of the 44 belong to phase 4 and one is phase 1's deliberately
 trivial sample. ⚠ **The count passed the criterion and the criterion is not met**: "28 resource
-types" was written as a proxy for a catalogue, fourteen of the 40 are children of families, and the
+types" was written as a proxy for a catalogue, fifteen of the 44 are children of families, and the
 rows that reached the number are each one noun of several. Read the exit off the rows, not the
 total.
 
@@ -425,7 +427,11 @@ master that had 23 — the merge took none of their numbers and re-ran the comma
 the merge of 2026-09-18 landed seven more from five branches (#31, #30, #32, #28 — Compute's three
 on one branch), each of which had recounted itself against a master that had 32 — the merge took
 none of their numbers and re-ran the command a second time; 39 was right until #39 published
-`Resources/deployments` on 2026-09-23, recounting in the same change; 40 is right. That is worth *establishing* rather than
+`Resources/deployments` on 2026-09-23, recounting in the same change; 40 was right until `KeyVault/vaults`
+(#30), `Billing/budgets` (#38), `Monitor/workspaces/components` (#32) and `Mail/domains/mailboxes` (#34)
+merged. Each added its row to the table below and none moved the **Total**, the command's output or the
+gate line, so master read 40 over rows that sum to 44 and `RoadmapReconciliationTests` was red on it. The
+merge of master into #22 on 2026-09-24 re-ran the command; 44 is right. That is worth *establishing* rather than
 assuming, and it is cheap to establish twice because two independent producers can be asked for it.
 
 ⚠ **#38 and #46 (`issue-46-policy`) conflict textually in seven files when merged**, counted by
@@ -467,7 +473,7 @@ The document, read directly:
 ```console
 $ grep -o '"x-cybercloud-resource-type": "[^"]*"' openapi/2026-08-01.json \
     | sed 's/.*: "//;s/"$//' | sort -u | wc -l
-40
+44
 ```
 
 and the build, from the other end — `./build.sh Architecture`'s **Generated surfaces** gate regenerates
@@ -475,7 +481,7 @@ every surface from `src/CyberCloud.ResourceManager/Registry/` and compares bytes
 registry's rather than the document's:
 
 ```text
-✔ Generated surfaces  Enforced  40 resource type(s) over 2 OpenAPI document(s), …
+✔ Generated surfaces  Enforced  44 resource type(s) over 2 OpenAPI document(s), …
 ```
 
 ⚠ **What would make this stale, said plainly so it can be checked rather than trusted:** any provider's
@@ -503,7 +509,7 @@ only.** No EM figure anywhere in this document is machine-checked — not a phas
 the 69.6–89.1 — and the test cannot see the `Landed` column's *judgement* at all. The date in this
 heading is still what says when a person last read the rest.
 
-All 40, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
+All 44, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
 prefix dropped, because this table is machine-checked** — `RoadmapReconciliationTests` reads it and the
 published document and asserts the two sets are equal, so an abbreviated `…/subnets` would be a name no
 test could match and the check would quietly become a check of nothing.
@@ -514,7 +520,7 @@ test could match and the check would quietly become a check of nothing.
 | 2 — M1 | `ContainerService/managedClusters`, `ContainerService/managedClusters/agentPools`, `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`, `ContainerRegistry/registries`, `Network/virtualNetworks`, `Network/virtualNetworks/subnets`, `Network/virtualNetworks/securityGroups`, `Network/virtualNetworks/loadBalancers`, `Network/publicIpAddresses`, `Storage/accounts`, `Storage/accounts/buckets`, `Monitor/workspaces`, `Terminal/consoles`, `KeyVault/vaults` | 16 |
 | 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains`, `Mail/domains/mailboxes`, `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions`, `Monitor/workspaces/alertRules`, `Storage/accounts/fileShares`, `Network/virtualNetworks/natGateways`, `ContainerService/connectedClusters`, `ContainerRegistry/feeds`, `Network/virtualNetworks/peerings`, `RecoveryServices/vaults`, `Monitor/workspaces/collectors`, `Dashboard/grafanas`, `Compute/virtualMachines`, `Compute/disks`, `Compute/images`, `Resources/deployments`, `Billing/budgets`, `Monitor/workspaces/components` | 25 |
 | 4 — M3 | `DBforMySQL/servers`, `Search/services` | 2 |
-| **Total** | | **40** |
+| **Total** | | **44** |
 
 ⚠ **`agentPools` is itself an ahead-of-phase landing that this table cannot show twice.** Phase 2's row
 names node pools, so it is counted as phase 2 here — but [01](01-azure-parity-catalogue.md) verdicts
@@ -543,7 +549,7 @@ Where an issue tracks one of these rows it is named on the row; where none does,
 the finding.
 
 ⚠ **Tenancy is the case that looks like a gap and is not.** `CyberCloud.Platform/subscriptions` is an M1
-row in the catalogue and is not in the 40 — because tenants, subscriptions and resource groups are
+row in the catalogue and is not in the 44 — because tenants, subscriptions and resource groups are
 published as *scope paths* (`/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/…`) and
 not as typed resources under a provider (#63). Counting it as missing would have been the easy error in
 this recount, and it is written down here so the next recount does not make it.

@@ -32,6 +32,12 @@ public static class ScriptedShell {
     /// <summary>The pod's <c>status.phase</c>.</summary>
     public static string Phase { get; set; } = "Running";
 
+    /// <summary>The annotation a spec names for the pod's owner stamp.</summary>
+    public const string OwnerAnnotation = "cybercloud.io/session-owner";
+
+    /// <summary>The pod's owner stamp, or empty for a pod that carries none.</summary>
+    public static string Owner { get; set; } = string.Empty;
+
     /// <summary>Answers for the next attaches, in order; an empty queue opens a terminal.</summary>
     public static ConcurrentQueue<Result<IKubeTerminal>> Attaches { get; } = new();
 
@@ -56,6 +62,7 @@ public static class ScriptedShell {
     public static string Reset() {
         PodUid = Guid.NewGuid().ToString("D");
         Phase = "Running";
+        Owner = string.Empty;
         Attaches.Clear();
         Opened.Clear();
         Deleted.Clear();
@@ -115,10 +122,13 @@ public sealed class ScriptedShellClusters : IClusterConnectionFactory {
                 return Task.FromResult(Result<KubeObject>.Failure(ErrorCode.ResourceNotFound, $"'{target}' is not here."));
             }
 
-            var pod = new JsonObject {
-                ["metadata"] = new JsonObject { ["name"] = target.Name, ["uid"] = ScriptedShell.PodUid },
-                ["status"] = new JsonObject { ["phase"] = ScriptedShell.Phase }
-            };
+            var metadata = new JsonObject { ["name"] = target.Name, ["uid"] = ScriptedShell.PodUid };
+
+            if (ScriptedShell.Owner.Length > 0) {
+                metadata["annotations"] = new JsonObject { [ScriptedShell.OwnerAnnotation] = ScriptedShell.Owner };
+            }
+
+            var pod = new JsonObject { ["metadata"] = metadata, ["status"] = new JsonObject { ["phase"] = ScriptedShell.Phase } };
 
             return Task.FromResult(Result<KubeObject>.Success(new() { Ref = target, Json = pod.ToJsonString() }));
         }

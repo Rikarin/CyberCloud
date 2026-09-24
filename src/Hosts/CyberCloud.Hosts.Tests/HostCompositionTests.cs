@@ -297,18 +297,19 @@ public sealed class HostCompositionTests {
     ///         in the compiler sees the drift. This host is where every provider and the schema meet.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The five names below are a known defect, pinned rather than fixed.</b>
-    ///         <c>listKeys</c>, <c>listCredentials</c>, <c>listInstallCommand</c>, the cloud console's
-    ///         <c>connect</c> and Grafana's <c>url</c> are checked by other types' actions and declared
-    ///         nowhere, so every one of those actions answers 404 on a real silo. Declaring them is a
-    ///         <c>SchemaVersion</c> bump and a decision about which role holds each, which is not
-    ///         #30's. docs/plan/07 records it as owed row <c>action-permissions-are-undeclared</c>. The
-    ///         list is exact in both directions: a sixth undeclared name fails here, and so does
-    ///         declaring one of the five without removing it from this list.
+    ///         ⚠ <b>The four names below are a known defect, pinned rather than fixed.</b>
+    ///         <c>listKeys</c>, <c>listCredentials</c>, <c>listInstallCommand</c> and Grafana's
+    ///         <c>url</c> are checked by other types' actions and declared nowhere, so every one of
+    ///         those actions answers 404 on a real silo. Declaring them is a <c>SchemaVersion</c> bump
+    ///         and a decision about which role holds each, which is not #30's. docs/plan/07 records it
+    ///         as owed row <c>action-permissions-are-undeclared</c>. The list is exact in both
+    ///         directions: a fifth undeclared name fails here, and so does declaring one of the four
+    ///         without removing it from this list. The cloud console's <c>connect</c> was the fifth
+    ///         until the second review of #22 declared it, as <c>Rel(contributor)</c>.
     ///     </para>
     /// </remarks>
     [Fact]
-    public async Task EveryPermissionTheRegistryChecksIsDeclaredOrIsOneOfTheFiveOwed() {
+    public async Task EveryPermissionTheRegistryChecksIsDeclaredOrIsOneOfTheFourOwed() {
         await using var gateway = await BuildGatewayAsync();
 
         var registry = gateway.Services.GetRequiredService<IProviderRegistry>();
@@ -335,7 +336,7 @@ public sealed class HostCompositionTests {
 
         undeclared.Select(static x => x.Key)
             .ShouldBe(
-                ["connect", "listCredentials", "listInstallCommand", "listKeys", "url"],
+                ["listCredentials", "listInstallCommand", "listKeys", "url"],
                 "undeclared, and so answering 404 to everybody: "
                 + string.Join("; ", undeclared.Select(static x => $"{x.Key} ← {string.Join(", ", x.Select(static y => y.Item2))}"))
             );
