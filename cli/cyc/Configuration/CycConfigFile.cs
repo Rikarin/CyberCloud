@@ -23,12 +23,10 @@ namespace CyberCloud.Cli.Configuration;
 ///         <b>
 ///             No token, no secret, no credential of any kind is ever written here, and nothing in
 ///             this type can write one.
-///         </b> docs/plan/21 § Decisions:
-///         <i>
-///             "Never a plaintext file — that is
-///             how CI credentials leak into container images."
-///         </i> The refresh token lives in the OS
-///         keychain and the SDK owns it (<c>TokenCache.CreatePersistent</c>); the CLI never sees it.
+///         </b> The refresh token lives where the SDK puts it (<c>TokenCache.CreatePersistent</c>):
+///         the OS keychain, or on a machine with none an owner-only file of the SDK's own —
+///         docs/plan/21 § Decisions, the token-cache row. The CLI never sees it, and a config file
+///         people copy between machines and paste into bug reports is the last place it belongs.
 ///         <see cref="Set" /> refuses a key that looks like a credential, so the rule survives someone
 ///         adding <c>cyc config set token …</c> in a hurry.
 ///     </para>
@@ -183,11 +181,10 @@ sealed class CycConfigFile {
 
         if (LooksLikeCredential(key)) {
             throw new CycUsageException(
-                $"'{key}' is credential-shaped and ~/.cyc/config is a plaintext file. docs/plan/21 "
-                + """§ Decisions: "Never a plaintext file — that is how CI credentials leak into """
-                + """container images." Sign in with 'cyc login', which stores the refresh token in the """
-                + "OS keychain, or pass a service principal through the CYC_CLIENT_* environment "
-                + "variables."
+                $"'{key}' is credential-shaped and ~/.cyc/config holds no credential: it is a plaintext "
+                + "file people copy and paste. Sign in with 'cyc login', which stores the refresh token in "
+                + "the OS keychain (or an owner-only file where there is none), or pass a service principal "
+                + "through the CYC_CLIENT_* environment variables."
             );
         }
 

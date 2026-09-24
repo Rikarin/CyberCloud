@@ -1,3 +1,4 @@
+using CyberCloud.Cli.Execution;
 using CyberCloud.Cli.VerbTree;
 using System.CommandLine;
 using System.Reflection;
@@ -23,7 +24,7 @@ static class HostCommands {
 
         return [
             LoginCommand.Build(host, globals, tree),
-            LogoutCommand(host),
+            LogoutCommand(host, globals, tree),
             AccountCommands.Build(host, globals, tree),
             RestCommand.Build(host, globals, tree),
             GraphCommands.Build(host, globals, tree),
@@ -36,27 +37,46 @@ static class HostCommands {
     }
 
     /// <summary>
-    ///     <c>cyc logout</c>.
+    ///     <c>cyc logout</c> — revoke the cached sign-in at the identity server, then forget it.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>It clears the SDK's cache entry and nothing else, because there is nothing else.</b>
-    ///     The refresh token lives in the OS keychain under a key the SDK owns; <c>cyc</c> has no file
-    ///     of its own to delete, which is the whole point of docs/plan/21 § Decisions' token-cache row.
+    ///     <para>
+    ///         ⚠ <b>It revokes, and it did not use to.</b> Until #43 this cleared the keychain entry and
+    ///         nothing else, which left the refresh token valid on the server for fourteen days in any
+    ///         other copy of it. The protocol is the SDK's (<see cref="CyberCloudSignOut" />): the
+    ///         refresh token goes to the host's <c>/revoke</c>, which ends the session behind it, and
+    ///         the entry is forgotten whatever the server answered — a <c>logout</c> on a machine that
+    ///         has lost its network still signs it out locally, and says the revocation is owed.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The authority and the cache are the ones <c>cyc login</c> used — the profile's
+    ///         <c>authority</c> and <see cref="CycHost.CreateCredentialOptions" /> — where this used to
+    ///         key the entry off the SDK's default authority and would miss a sign-in made against
+    ///         any other.
+    ///     </para>
     /// </remarks>
-    static Command LogoutCommand(CycHost host) {
-        var command = new Command("logout", "Forget the signed-in account. Removes the SDK's keychain entry.");
+    static Command LogoutCommand(CycHost host, GlobalOptions globals, VerbTreeDocument tree) {
+        var command = new Command("logout", "Sign out: revoke the cached sign-in at the identity host and forget it.");
 
         command.SetAction(async (parse, cancellationToken) => {
-                var cache = TokenCache.CreatePersistent();
-                var key = TokenCache.KeyFor(
-                    CyberCloudAuthorityHosts.Default,
-                    CyberCloudCliCredential.CliClientId,
-                    null
-                );
+                var invocation = CycRunner.Bind(host, globals, tree, parse);
+                var options = host.CreateCredentialOptions();
+                options.AuthorityHost = LoginCommand.Authority(invocation);
 
-                await cache.RemoveAsync(key, cancellationToken).ConfigureAwait(false);
+                var result = await CyberCloudSignOut
+                    .SignOutAsync(options, CyberCloudCliCredential.CliClientId, cancellationToken)
+                    .ConfigureAwait(false);
 
-                host.Console.Note("Signed out.");
+                if (!result.HadSignIn) {
+                    host.Console.Note("Not signed in.");
+                } else if (result.Revoked) {
+                    host.Console.Note("Signed out. The session was revoked at the identity host.");
+                } else {
+                    host.Console.Note(
+                        "Signed out on this machine, but the session could not be revoked at the identity "
+                        + "host: " + result.Detail
+                    );
+                }
 
                 return (int)ExitCode.Ok;
             }

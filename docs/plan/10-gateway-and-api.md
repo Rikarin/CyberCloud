@@ -354,7 +354,7 @@ named `resources/negotiate` and answered 404 to every client that negotiated.
 | Caller | Credential | Notes |
 |---|---|---|
 | Portal | Authorization Code + PKCE → access token in memory, refresh in an `HttpOnly` cookie scoped to the identity host | Access token never in `localStorage`. The cookie is `__Host-cyc-refresh`, `SameSite=Lax`, and the identity host both writes it and reads it back only when the request's `Origin` is one of the portal's registered redirect-URI origins — `Lax` lets a same-site subdomain's `POST` carry it, and a top-level cross-site form `POST` would have its `Set-Cookie` honoured whatever `SameSite` says; the `Origin` check is what refuses both ([11 § Protocol](11-identity.md#protocol)) |
-| CLI | Device code, or client credentials for CI | Token cached in the OS keychain |
+| CLI | Device code, or client credentials for CI | Token cached in the OS keychain, or in an owner-only file where the machine has none (#43, [21 § Decisions](21-cli-and-sdks.md)) |
 | SDK | `TokenCredential` — the Azure SDK shape, so the mental model transfers | |
 | Service principal | Client credentials, or a certificate | |
 | Workload in a tenant cluster | Its projected SA token, exchanged for a platform token against the cluster's trusted OIDC issuer | This is managed identity ([11](11-identity.md)) and it is the reason a tenant's app needs no stored secret |

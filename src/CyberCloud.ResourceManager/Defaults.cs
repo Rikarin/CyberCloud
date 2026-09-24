@@ -575,3 +575,20 @@ public sealed class UnavailableObjectStoreGrants : IObjectStoreGrants {
     ) =>
         Task.FromResult(Result.Failure(ErrorCode.InternalError, Because));
 }
+
+/// <summary>
+///     The <see cref="IInvitationIssuer" /> a host with no identity reach registers: it refuses, and
+///     names the seam — <see cref="UnavailablePrincipalDirectory" />'s arrangement, for its reason.
+/// </summary>
+public sealed class UnavailableInvitationIssuer : IInvitationIssuer {
+    /// <inheritdoc />
+    public Task<Result<InvitationSnapshot>> IssueAsync(InvitationIssue issue, CancellationToken cancellationToken = default) =>
+        Task.FromResult(
+            Result<InvitationSnapshot>.Failure(
+                ErrorCode.InternalError,
+                "No invitation issuer is wired, so the invitation was checked and not created. The host "
+                + "that serves invitations replaces this IInvitationIssuer registration with its own — the "
+                + "gateway's is GrainInvitationIssuer, over IInvitationGrain."
+            )
+        );
+}

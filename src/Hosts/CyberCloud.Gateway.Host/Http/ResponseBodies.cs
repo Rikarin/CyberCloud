@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
@@ -255,6 +256,42 @@ static class ResponseBodies {
     ///     ancestor's — the tuple's own address — and not the scope the listing was asked at;
     ///     <c>IRoleAssignmentManager.ListAsync</c>'s remarks say why.
     /// </remarks>
+    /// <summary>
+    ///     Renders an invitation — its id, the user it created and when its link expires (#43).
+    /// </summary>
+    /// <param name="invitation">The invitation as the manager reports it.</param>
+    /// <remarks>
+    ///     ⚠ <b>Never the link.</b> Its secret went to the invited address and nowhere else; a
+    ///     response that echoed it would hand the inviter a way to accept on the invitee's behalf.
+    ///     <c>userId</c> is here because it is the principal a role is granted to next —
+    ///     <c>PUT {scope}/providers/CyberCloud.Authorization/roleAssignments/reader-user-{userId}</c>.
+    /// </remarks>
+    public static string Invitation(InvitationSnapshot invitation) {
+        ArgumentNullException.ThrowIfNull(invitation);
+
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(512);
+
+        using (var writer = new Utf8JsonWriter(buffer)) {
+            writer.WriteStartObject();
+            writer.WriteString(
+                "id",
+                new InvitationAddress(invitation.TenantId).Path + "/" + invitation.InvitationId.ToString("N", CultureInfo.InvariantCulture)
+            );
+            writer.WriteString("name", invitation.InvitationId.ToString("N", CultureInfo.InvariantCulture));
+            writer.WriteString("type", InvitationAddress.ProviderNamespace + "/" + InvitationAddress.TypeSegment);
+            writer.WritePropertyName("properties");
+            writer.WriteStartObject();
+            writer.WriteString("email", invitation.Email);
+            writer.WriteString("userId", invitation.UserId.ToString("N", CultureInfo.InvariantCulture));
+            writer.WriteString("status", invitation.Status);
+            writer.WriteString("expiresAt", invitation.ExpiresAt);
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
     static void WriteRoleAssignment(Utf8JsonWriter writer, RoleAssignmentSnapshot assignment) {
         writer.WriteStartObject();
         writer.WriteString("id", assignment.Path);

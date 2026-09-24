@@ -173,7 +173,20 @@ public enum GrainKeyKind {
     ///     by a GUID; see <see cref="GrainKeys.ManagementGroup" /> for why, and for why the name is
     ///     unique within the tenant by construction.
     /// </summary>
-    ManagementGroup
+    ManagementGroup,
+
+    /// <summary>
+    ///     <c>IDeviceAuthorizationGrain</c> — <c>device/{digest}</c>, one RFC 8628 device
+    ///     authorization, qualified by the <b>platform</b> tenant and keyed by its user code's
+    ///     digest. See <see cref="GrainKeys.DeviceAuthorization" />.
+    /// </summary>
+    DeviceAuthorization,
+
+    /// <summary>
+    ///     <c>IInvitationGrain</c> — <c>invite/{invitationId:N}</c>, one invitation of an address
+    ///     into a tenant. See <see cref="GrainKeys.Invitation" />.
+    /// </summary>
+    Invitation
 }
 
 /// <summary>
@@ -272,7 +285,10 @@ public readonly record struct GrainKey {
     /// </summary>
     public string Name => name ?? string.Empty;
 
-    /// <summary>The digest, for the three <c>idx/</c> shapes and <see cref="GrainKeyKind.ConsentGrant" />.</summary>
+    /// <summary>
+    ///     The digest, for the three <c>idx/</c> shapes, <see cref="GrainKeyKind.ConsentGrant" /> and
+    ///     <see cref="GrainKeyKind.DeviceAuthorization" />.
+    /// </summary>
     public string Digest => digest ?? string.Empty;
 
     /// <summary>
@@ -339,6 +355,8 @@ public readonly record struct GrainKey {
             GrainKeyKind.ListObjects => GrainKeys.ListObjects(ObjectType, ObjectId),
             GrainKeyKind.MembershipIndex => GrainKeys.MembershipIndex(ObjectType, ObjectId),
             GrainKeyKind.ManagementGroup => GrainKeys.ManagementGroup(Name),
+            GrainKeyKind.DeviceAuthorization => GrainKeys.DeviceAuthorizationPrefix + Digest,
+            GrainKeyKind.Invitation => GrainKeys.Invitation(Id),
             _ => string.Empty
         };
 }
@@ -355,7 +373,7 @@ public readonly record struct GrainKey {
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The twenty-nine shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
+///         <b>The thirty-one shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
 ///         two more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
 ///         table is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
 ///         Platform rows; four are docs/plan/07 § Storage's authorization grains; five are
@@ -384,7 +402,12 @@ public readonly record struct GrainKey {
 ///         #94; the twenty-eighth is <see cref="WatchIndex" />, #90's; and the twenty-ninth is
 ///         <see cref="ManagementGroup" />, the scope above the subscription that docs/plan/06 § The
 ///         hierarchy drew from the first day and docs/plan/06 § Grain keys carried no row for until
-///         issue #39 put a grain behind it. See the remarks on each. Every one of them is formatted <i>and</i> parsed —
+///         issue #39 put a grain behind it; and the thirtieth and thirty-first are
+///         <see cref="DeviceAuthorization" /> and <see cref="Invitation" />, issue #43's — the code
+///         store RFC 8628's device flow needs, which is the second identity shape qualified by the
+///         platform tenant and for <see cref="SignUp" />'s reason, and the invitation of an address
+///         into a tenant that docs/plan/11 § Sign-up and tenant creation describes as the invited
+///         path. See the remarks on each. Every one of them is formatted <i>and</i> parsed —
 ///         a key that can
 ///         be built but not decoded is half a type, and routing a physical key back to a grain type
 ///         (in a log, in a repair tool, in a dead-letter handler) needs the other half.
@@ -392,12 +415,16 @@ public readonly record struct GrainKey {
 ///     <para>
 ///         ⚠
 ///         <b>
-///             Twenty-eight was twenty-seven, was twenty-five, was twenty-four, was twenty-three, was twenty-two, was
-///             twenty-one, was twenty, was nineteen, and was eight before that, and the count is
-///             re-derived rather than incremented.
-///         </b> Counted on 2026-09-18 off
-///         <see cref="GrainKeyKind" />'s members, excluding <see cref="GrainKeyKind.None" />, which
-///         is not a key — twenty-nine members: <see cref="ManagementGroup" /> is #39's and
+///             Thirty-one was twenty-nine, was twenty-eight, was twenty-seven, was twenty-five, was
+///             twenty-four, was twenty-three, was twenty-two, was twenty-one, was twenty, was
+///             nineteen, and was eight before that, and the count is re-derived rather than
+///             incremented.
+///         </b> Recounted on 2026-09-23 off <see cref="GrainKeyKind" />'s members, excluding
+///         <see cref="GrainKeyKind.None" />, which is not a key — thirty-one members, the
+///         twenty-nine below plus #43's <see cref="DeviceAuthorization" /> and
+///         <see cref="Invitation" />; the heading's "twenty-eight" had already lagged the
+///         twenty-nine this paragraph counted, which is the drift the sentence warns of. Counted
+///         before that on 2026-09-18 — twenty-nine members: <see cref="ManagementGroup" /> is #39's and
 ///         <see cref="WatchIndex" /> #90's, both merged on this date beside #94's <see cref="AuthorizationCode" /> and
 ///         <see cref="ConsentGrant" />, the two added on top of the twenty-five #88's
 ///         <see cref="SignUp" /> had made of the twenty-four the same day's merge of three branches
@@ -406,7 +433,7 @@ public readonly record struct GrainKey {
 ///         and #88 before this. It goes stale the moment a
 ///         member is added without this sentence being reread, which is exactly how issue #71 came to
 ///         describe this type as covering "eight key shapes today": eight is the size of
-///         docs/plan/06's <i>table</i>, and it stopped being the size of this type twenty-one shapes ago (twenty-nine less
+///         docs/plan/06's <i>table</i>, and it stopped being the size of this type twenty-three shapes ago (thirty-one less
 ///         eight — re-derived, as #39's review of this sentence
 ///         asked; #39's own task text had called its kind "the 25th", a count from an older tree).
 ///     </para>
@@ -590,6 +617,20 @@ public readonly record struct GrainKey {
 ///             </term>
 ///             <description><c>mg/{name}</c> — docs/plan/06 § Grain keys, since issue #39</description>
 ///         </item>
+///         <item>
+///             <term>
+///                 <see cref="DeviceAuthorization" />
+///             </term>
+///             <description><c>device/{digest}</c> — docs/plan/11 § Protocol, since issue #43</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="Invitation" />
+///             </term>
+///             <description>
+///                 <c>invite/{invitationId:N}</c> — docs/plan/11 § Sign-up and tenant creation, since issue #43
+///             </description>
+///         </item>
 ///     </list>
 ///     <para>
 ///         The six <c>rel/</c> shapes are docs/plan/07 § Storage's three indexes, plus the three
@@ -696,6 +737,12 @@ public static class GrainKeys {
 
     /// <summary><c>consent/</c> — a person's consent to one client, docs/plan/11 § Protocol.</summary>
     public const string ConsentGrantPrefix = "consent/";
+
+    /// <summary><c>device/</c> — one RFC 8628 device authorization, docs/plan/11 § Protocol.</summary>
+    public const string DeviceAuthorizationPrefix = "device/";
+
+    /// <summary><c>invite/</c> — an invitation into a tenant, docs/plan/11 § Sign-up and tenant creation.</summary>
+    public const string InvitationPrefix = "invite/";
 
     /// <summary><c>mg/</c> — a management group, keyed by its name within the tenant.</summary>
     public const string ManagementGroupPrefix = "mg/";
@@ -1405,6 +1452,86 @@ public static class GrainKeys {
     }
 
     /// <summary>
+    ///     <c>device/{sha256(userCode)[..16]}</c> — <c>IDeviceAuthorizationGrain</c>, one RFC 8628
+    ///     device authorization. docs/plan/11 § Protocol. <b>Hot tier</b>, qualified by the
+    ///     <b>platform</b> tenant.
+    /// </summary>
+    /// <param name="userCode">
+    ///     The user code in its normalized form, upper-case with no separator. The identity host's
+    ///     <c>DeviceCodes.NormalizeUserCode</c> produces it from anything a person types, and only
+    ///     from RFC 8628 § 6.1's twenty consonants; this method checks the wider shape, letters and
+    ///     digits, so it can't disagree with a later alphabet.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Keyed by the user code, because the user code is the one thing both halves hold.</b>
+    ///         The device polls with its <c>device_code</c> and the person types the
+    ///         <c>user_code</c> into a page on another machine, and one grain has to answer both.
+    ///         The device code carries its user code inside it (the identity host's
+    ///         <c>DeviceCodes</c> says how), so a poll finds the grain the page reached; the other
+    ///         direction would need the page to know the device code, which is the secret the flow
+    ///         exists to keep off the person's screen.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A digest, and never the code spelled out.</b> A live user code is a short-lived
+    ///         credential — whoever types it first approves the device — and a key that spelled it
+    ///         would put it in every log line and trace that prints a grain id. The digest is
+    ///         unkeyed: the code space is small enough that a reader of the logs could grind it back
+    ///         to a code, and what that buys is a code that expired minutes ago or one somebody is
+    ///         about to type, with the per-IP limit on the page in front of both. The same trade
+    ///         <c>CommunicationOtpDelivery</c> records for its idempotency key, and the same HMAC
+    ///         would close it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The platform tenant, because the tenant is not known yet.</b> The device asks
+    ///         before anybody has signed in, and the person names their tenant on the sign-in page
+    ///         afterwards — so the authorization cannot live in the tenant it will end up in, exactly
+    ///         as <see cref="SignUp" /> cannot. <b>Cardinality</b> is one record per device
+    ///         authorization, and the record is short-lived: a reminder clears it a minute after the
+    ///         codes expire.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    ///     <paramref name="userCode" /> is empty, longer than 32 characters, or holds anything but
+    ///     upper-case ASCII letters and digits.
+    /// </exception>
+    public static string DeviceAuthorization(string userCode) {
+        if (string.IsNullOrEmpty(userCode)
+            || userCode.Length > 32
+            || !userCode.All(static c => c is >= 'A' and <= 'Z' or >= '0' and <= '9')) {
+            throw new ArgumentException(
+                "A device-authorization key is built from a normalized user code — upper-case ASCII "
+                + "letters and digits, at most 32 of them. Normalize what a person typed before "
+                + "building a key from it.",
+                nameof(userCode)
+            );
+        }
+
+        return DeviceAuthorizationPrefix + Digest(DeviceAuthorizationPrefix, userCode);
+    }
+
+    /// <summary>
+    ///     <c>invite/{invitationId:N}</c> — <c>IInvitationGrain</c>, one invitation of an address
+    ///     into a tenant. docs/plan/11 § Sign-up and tenant creation, the invited path.
+    ///     <b>Durable</b>, tenant-qualified.
+    /// </summary>
+    /// <param name="invitationId">Random, minted when the invitation is created, and carried in its link.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Keyed by a random id and never by the address.</b> An invitation reachable by
+    ///         address would be a second email index — the per-tenant <see cref="EmailIndex" />
+    ///         already says whether the address belongs to somebody here, and the invitation grain
+    ///         holds the user id that claim was made for. Reaching the grain proves nothing: the link
+    ///         carries a secret beside the id, and the grain compares its digest.
+    ///     </para>
+    ///     <para>
+    ///         <b>Cardinality</b> is one activation per invitation; the record outlives acceptance
+    ///         so a second click on the link can be told "already used" rather than "not found".
+    ///     </para>
+    /// </remarks>
+    public static string Invitation(Guid invitationId) => InvitationPrefix + N(invitationId);
+
+    /// <summary>
     ///     <c>mg/{name}</c> — <c>IManagementGroupGrain</c>, the scope above the subscription in
     ///     docs/plan/06 § The hierarchy (issue #39).
     /// </summary>
@@ -1937,6 +2064,20 @@ public static class GrainKeys {
                 );
         }
 
+        // The second digest-payload shape, for the same reason: a user code is typed by a person
+        // and is not key-safe text, so the key carries its digest — DeviceAuthorization says more.
+        if (string.Equals(segments[0], "device", StringComparison.Ordinal)) {
+            return IsDigest(segments[1])
+                ? Result<GrainKey>.Success(new(GrainKeyKind.DeviceAuthorization, Guid.Empty, null, segments[1]))
+                : Invalid(
+                    $"'{segments[1]}' is not a device-authorization digest: it must be exactly "
+                    + Int(DigestLength)
+                    + " lower-case hexadecimal characters, the first "
+                    + Int(DigestLength)
+                    + " of a SHA-256."
+                );
+        }
+
         if (string.Equals(segments[0], "platform", StringComparison.Ordinal)) {
             return PlatformSingletons.Contains(segments[1], StringComparer.Ordinal)
                 ? Result<GrainKey>.Success(new(GrainKeyKind.PlatformSingleton, Guid.Empty, segments[1], null))
@@ -1970,6 +2111,7 @@ public static class GrainKeys {
             "mi" => GrainKeyKind.ManagedIdentity,
             "signup" => GrainKeyKind.SignUp,
             "code" => GrainKeyKind.AuthorizationCode,
+            "invite" => GrainKeyKind.Invitation,
             _ => GrainKeyKind.None
         };
 
@@ -1977,9 +2119,7 @@ public static class GrainKeys {
             return Invalid(
                 $"'{key}' is not a grain key: '{segments[0]}' is not one of 'sub', 'res', 'user', "
                 + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session', 'mi', 'signup', 'code', "
-                + "'consent' or 'platform'. "
-                + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session', 'mi', 'signup', 'mg' or "
-                + "'platform'. "
+                + "'invite', 'consent', 'device', 'mg' or 'platform'. "
                 + "The prefix is matched case-sensitively — see docs/plan/06 § Grain keys and "
                 + "docs/plan/11 § The object model."
             );

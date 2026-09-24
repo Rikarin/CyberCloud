@@ -171,6 +171,24 @@ public sealed class ProviderRegistry : IProviderRegistry {
                 );
             }
 
+            // ⚠ THE FOURTH RESERVATION (#43), FOR THE RESOURCE GRAPH'S REASON: the gateway routes
+            // everything under /providers/CyberCloud.Identity/ to the invitation manager before it
+            // looks at the registry (InvitationAddress), so a provider that registered the namespace
+            // would have every type it declared answered as "not the invitations address".
+            if (string.Equals(
+                    provider.ProviderNamespace,
+                    InvitationAddress.ProviderNamespace,
+                    StringComparison.OrdinalIgnoreCase
+                )) {
+                throw new InvalidOperationException(
+                    $"Provider '{provider.ProviderNamespace}' declares the reserved namespace "
+                    + $"'{InvitationAddress.ProviderNamespace}'. The one address under it is where a "
+                    + "tenant invites a member — docs/plan/11 § Sign-up and tenant creation — and the "
+                    + "gateway routes it before it looks at the registry, so no type this provider "
+                    + "declared could ever be reached. See InvitationAddress.ProviderNamespace."
+                );
+            }
+
             if (!seenNamespaces.Add(provider.ProviderNamespace)) {
                 throw new InvalidOperationException(
                     $"Two providers declare the namespace '{provider.ProviderNamespace}'. A namespace names "

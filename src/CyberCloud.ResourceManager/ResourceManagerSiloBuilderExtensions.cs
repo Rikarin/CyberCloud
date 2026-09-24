@@ -239,6 +239,14 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<IPrincipalDirectory, UnavailablePrincipalDirectory>();
         services.TryAddSingleton<IRoleAssignmentManager, RoleAssignmentService>();
 
+        // ── Invitations (#43) — the member half of the exit story's step 7. ──────────────────────────
+        //
+        // ⚠ The same shape as the directory above: the check is this module's (InvitationService,
+        // assignRole on the tenant) and the work is identity's, behind a refusing default the gateway
+        // Replaces with GrainInvitationIssuer.
+        services.TryAddSingleton<IInvitationIssuer, UnavailableInvitationIssuer>();
+        services.TryAddSingleton<IInvitationManager, InvitationService>();
+
         // ── The resource graph query. docs/plan/08 § The resource-graph projection — the read half of #54. ──
         //
         // ⚠ THE FOURTH ENTRY POINT, AND THE ONLY ONE WHOSE REAL IMPLEMENTATION IS NOT IN THIS

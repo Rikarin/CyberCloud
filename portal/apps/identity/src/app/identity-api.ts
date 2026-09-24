@@ -162,6 +162,75 @@ export interface ConsentPageResponse {
 }
 
 /**
+ * What `POST /api/device/lookup` and `POST /api/device/decision` answer — what the device page
+ * renders next. RFC 8628 § 3.3, #43.
+ */
+export interface DevicePageResponse {
+  /** Whether a device sign-in is waiting for this code. When false, `message` says why. */
+  found: boolean;
+
+  /** The code as a person reads it — `BCDF-GHJK`. */
+  userCode: string;
+
+  /**
+   * The client's registered display name.
+   *
+   * ⚠ **Never from the query.** The device that asked is whoever ran the command; a name it chose
+   * would be a phisher's. The server resolves the registration and this page renders what it gets.
+   */
+  clientName: string;
+
+  /** What the device asked for. */
+  scopes: string[];
+
+  /** Whether this browser holds a complete sign-in. When false the page sends the person to sign in. */
+  signedIn: boolean;
+
+  /** The address the person is signed in as — the account the device will act as. */
+  account: string;
+
+  /** `pending`, `approved` or `denied`. */
+  status: 'pending' | 'approved' | 'denied' | '';
+
+  /** What to render, verbatim. */
+  message: string;
+}
+
+/** The three parts of an invitation link, as the page read them off its query. */
+export interface InvitationLink {
+  tenant: string;
+  invitation: string;
+  token: string;
+}
+
+/** What `POST /api/invitations/describe` and `POST /api/invitations/accept` answer (#43). */
+export interface InvitationPageResponse {
+  /** Whether the link names an invitation. When false, `message` says why. */
+  found: boolean;
+
+  /** The address invited — the account being created. */
+  email: string;
+
+  /** The organisation, by its short name. */
+  tenantName: string;
+
+  /**
+   * `pending`, `accepted`, `expired`, or `withdrawn` — the invited user is no longer waiting to join
+   * (a member through another link, suspended, or removed), so the link opens nothing.
+   */
+  status: 'pending' | 'accepted' | 'expired' | 'withdrawn' | '';
+
+  /** Whether an accept made the person a member and signed them in. */
+  succeeded: boolean;
+
+  /** Where the portal is, from its registration — only after an accept. */
+  portalUrl: string;
+
+  /** What to render, verbatim. */
+  message: string;
+}
+
+/**
  * The identity host's JSON endpoints, as this app calls them.
  *
  * ⚠ **Every path is relative and every call is same-origin.** docs/plan/11 § Hosts puts the cookie
@@ -273,6 +342,48 @@ export class IdentityApi {
       credential,
       returnUrl
     });
+  }
+
+  /**
+   * Looks a device's user code up — the device page's first step (#43).
+   *
+   * ⚠ Anonymous and metered: the person types the code before signing in, so the server counts
+   * every lookup per IP with every other route that takes a code, and answers a wrong code, an
+   * expired one and a guess with one sentence.
+   *
+   * @param userCode The code as typed. The server normalizes case, the dash and spaces.
+   */
+  lookupDevice(userCode: string): Observable<DevicePageResponse> {
+    return this.#http.post<DevicePageResponse>('/api/device/lookup', { userCode });
+  }
+
+  /**
+   * Answers a device's sign-in — allow or deny.
+   *
+   * ⚠ Who is answering, in which tenant and how they signed in all come from the session cookie,
+   * never from this body; and the server takes the answer only from this origin, so a page elsewhere
+   * cannot approve a device with the person's cookie.
+   */
+  decideDevice(userCode: string, decision: 'allow' | 'deny'): Observable<DevicePageResponse> {
+    return this.#http.post<DevicePageResponse>('/api/device/decision', { userCode, decision });
+  }
+
+  /**
+   * Describes an invitation link (#43). Anonymous and metered per IP, as every route that takes a
+   * code is; a wrong link of any kind is one sentence.
+   */
+  describeInvitation(link: InvitationLink): Observable<InvitationPageResponse> {
+    return this.#http.post<InvitationPageResponse>('/api/invitations/describe', link);
+  }
+
+  /**
+   * Accepts an invitation: the person's name and a password for this organisation.
+   *
+   * ⚠ The password travels in the body, never a query string — `signInWithPassword` says why. On
+   * `succeeded` the host has set the session cookie; the link is spent either way once accepted.
+   */
+  acceptInvitation(link: InvitationLink, displayName: string, password: string): Observable<InvitationPageResponse> {
+    return this.#http.post<InvitationPageResponse>('/api/invitations/accept', { ...link, displayName, password });
   }
 
   /**

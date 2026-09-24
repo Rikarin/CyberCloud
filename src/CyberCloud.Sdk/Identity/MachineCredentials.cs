@@ -50,6 +50,20 @@ public abstract class TokenEndpointCredential : TokenCredential, IDisposable {
         return new(payload.AccessToken, DateTimeOffset.UtcNow.AddSeconds(payload.ExpiresIn));
     }
 
+    /// <summary>
+    ///     <paramref name="context" /> with <see cref="CyberCloudScopes.OfflineAccess" /> added — what
+    ///     the two interactive credentials ask for, because a sign-in that returns no refresh token
+    ///     leaves nothing to cache.
+    /// </summary>
+    /// <param name="context">The caller's request.</param>
+    protected static TokenRequestContext WithOfflineAccess(TokenRequestContext context) {
+        var scopes = context.Scopes ?? [];
+
+        return scopes.Contains(CyberCloudScopes.OfflineAccess, StringComparer.Ordinal)
+            ? context
+            : new([.. scopes, CyberCloudScopes.OfflineAccess], context.TenantId);
+    }
+
     /// <summary>Adds the scope field when there are scopes to ask for.</summary>
     /// <param name="form">The form.</param>
     /// <param name="context">The request.</param>

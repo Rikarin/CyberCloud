@@ -9,13 +9,10 @@ namespace CyberCloud.Cli.Tests;
 ///     <para>
 ///         ⚠ <b>The structural half of this guarantee is that <c>cyc</c> never holds the token.</b>
 ///         <c>BearerTokenHandler</c> attaches <c>Authorization</c> inside the SDK's pipeline, below
-///         anything the CLI can see, and the SDK owns the keychain-backed cache. So the tests below
+///         anything the CLI can see, and the SDK owns the cache — the keychain, or an owner-only file
+///         where there is none (docs/plan/21 § Decisions, the token-cache row). So the tests below
 ///         assert two things a reviewer can check: a sentinel token never appears in any stream, and
-///         the CLI writes no cache of its own — docs/plan/21 § Decisions:
-///         <i>
-///             "Never a plaintext file —
-///             that is how CI credentials leak into container images."
-///         </i>
+///         the CLI writes no cache of its own.
 ///     </para>
 ///     <para>
 ///         ⚠ The sentinel is the token <see cref="TestHost" />'s credential hands out, so a leak is a

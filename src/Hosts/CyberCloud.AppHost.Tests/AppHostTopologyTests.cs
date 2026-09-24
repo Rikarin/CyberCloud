@@ -346,6 +346,13 @@ public sealed class AppHostTopologyTests {
             // ⚠ No explicit route: the silo is in Development, so the unset section is what makes
             // DevelopmentOtpDelivery log the code AND mail it through the platform's own service.
             environment.ShouldNotContainKey("CyberCloud__Identity__OtpDelivery__ServiceId");
+
+            // #43: an invitation's link opens the identity app — the same origin the identity host
+            // sends a person to sign in on — and without it the silo refuses to invite.
+            environment[CyberCloudResourceExtensions.InvitationPageVariable].ShouldBe(
+                $"http://localhost:{CyberCloudResources.IdentityAppPort}",
+                $"{name} mails invitation links that open the identity app"
+            );
             environment["DOTNET_ENVIRONMENT"].ShouldBe("Development");
         }
 

@@ -209,6 +209,8 @@ tenant-qualified key. `GrainKeys` is the only type allowed to build the within-t
 | `IClientIndexGrain` | `idx/client/{sha256(tenantId + clientId)[..16]}` — [11 § Protocol](11-identity.md) |
 | `IResourceWatchGrain` | `idx/watch/{sha256(subscriptionId + canonicalType)[..16]}` — [08 § What the resource manager deliberately does not do](08-resource-manager.md) |
 | `ISignUpGrain` | `signup/{signupId:N}` — **hot tier, qualified by the platform tenant**, [11 § Sign-up and tenant creation](11-identity.md) |
+| `IDeviceAuthorizationGrain` | `device/{sha256(userCode)[..16]}` — **hot tier, qualified by the platform tenant**, one RFC 8628 device authorization, [11 § Protocol](11-identity.md), #43 |
+| `IInvitationGrain` | `invite/{invitationId:N}` — one invitation of an address into the tenant, [11 § Sign-up and tenant creation](11-identity.md), #43 |
 | `IOperationGrain` | `op/{operationId:N}` |
 | `IQuotaGrain` | `sub/{subscriptionId:N}` — same key string as the subscription, different grain **type** |
 | `ITenantDirectoryGrain` | *(null tenant)* `platform/tenant-directory` |

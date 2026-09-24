@@ -61,11 +61,40 @@ generated verbs' own code (`ResourceVerb.WaitForResourceAsync`). `deployment` jo
 | `--query <JMESPath>` | Azure CLI's convention; a huge productivity feature and a well-specified language |
 | `--wait` / `--no-wait` | Every LRO. `--wait` streams the operation's progress array ([08](08-resource-manager.md)) — this is what makes a nine-minute cluster creation bearable in a terminal |
 | Exit codes | `0` ok · `1` client error · `2` usage · `3` auth · `4` server · `5` timeout. Documented, stable, so CI can branch on them |
-| Token cache | OS keychain (DPAPI / Keychain / libsecret). ⚠ **Never a plaintext file** — that is how CI credentials leak into container images |
+| Token cache | OS keychain (Credential Manager / Keychain / libsecret) first. ⚠ **On a machine with no keychain, an owner-only file in the per-user state directory** — `%LOCALAPPDATA%\CyberCloud\tokens`, `~/Library/Application Support/CyberCloud/tokens`, `$XDG_STATE_HOME/cybercloud/tokens` — `0600` in a `0700` directory on Unix, a protected owner-only DACL on Windows, refused on read when it has widened (#43). This was "never a plaintext file", which on a headless box meant no cache at all, so `cyc login --device-code` — the one sign-in built for that box — persisted nothing. CI still signs in with `--service-principal`, whose cache is none, and that is the leak the old rule was about |
 | Config | `~/.cyc/config` with named profiles; every setting also an env var (`CYC_SUBSCRIPTION`, …) for CI |
 | Completion | bash, zsh, fish, pwsh — generated |
 | Telemetry | **Opt-in, off by default, and asked once.** Opt-out telemetry in a developer tool is a trust cost that is never worth the data |
 | Update check | Once a day, non-blocking, never auto-installs |
+
+### Signing in and out — #43
+
+`cyc login --device-code` (and plain `cyc login` over SSH or with no display) is RFC 8628 against the
+identity host, end to end since #43: the SDK's `DeviceCodeCredential` asks `/device` as `cyc-cli`
+for `cyc.api offline_access`, prints the code and `verification_uri`, and polls `/token` at the
+server's `interval`, adding five seconds on every `slow_down`; the person opens the link, types or
+confirms the code on the identity app's device page, signs in there (the device named no tenant, so
+the sign-in page asks for the organisation), and allows or denies. The refresh token goes to the
+cache above, and every later command refreshes on use through #94's rotation. `cyc logout` revokes
+the refresh token at the host's `/revoke` (RFC 7009, refresh tokens only) and then forgets it — it
+used to forget it only, which left it valid on the server for fourteen days in any other copy.
+`Identity.Host.Tests`' `DeviceFlowThroughTheSdkTests` runs the SDK half against the real host, and
+`DeviceFlowOverHttpTests` every answer the host gives a poll.
+
+⚠ **What the scripted server had agreed to that the host did not.** Before #43 the SDK signed in as
+`cyc` (the host registers `cyc-cli`), asked for the Azure-shaped `https://api.cybercloud.io/.default`
+(the host registers `cyc.api` and refuses anything else with `invalid_scope`), polled with a `scope`
+parameter (OpenIddict refuses one on a device-code request), asked for no `offline_access` (so no
+refresh token came back and nothing was cached), and sent a tenant as `tenant_id` (the host reads
+`tenant`). Every `cyc` test passed against a scripted identity server built to accept exactly that.
+And on Windows a real sign-in's cache record is 2,951 bytes against Credential Manager's 2,560, so
+the write failed after the person had approved — the Windows cache now chunks.
+
+⚠ **Owed:** the resource commands' credential (`CycDefaults.SignedInCredential`) reads the cache
+under `CYC_AUTHORITY_HOST` or the SDK's default authority, while `cyc login` and `cyc logout` also
+honour the profile's `authority` setting — a sign-in against an authority set only in the profile
+is not found by the next command. Aligning the two is a change to `DefaultCyberCloudCredentialOptions`'
+construction in `cyc`, not to the protocol.
 
 ⚠ **`cyc rest` matters more than it looks.** A generated CLI always lags the API by a release; without a
 raw escape hatch the answer to "how do I call the new endpoint" is "wait". With it, the CLI is never a

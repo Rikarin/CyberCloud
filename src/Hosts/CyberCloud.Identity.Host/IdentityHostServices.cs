@@ -90,6 +90,7 @@ public static class IdentityHostServices {
         // so a host — or a test supplying what its deployment would — wins without touching this
         // line.
         services.TryAddSingleton<IClientSecretSeam, UnavailableClientSecrets>();
+        services.TryAddSingleton<DeviceFlow>();
         services.TryAddSingleton<TokenApi>();
 
         // ── The interactive grants ─────────────────────────────────────────────────────────────
@@ -104,6 +105,8 @@ public static class IdentityHostServices {
         services.TryAddSingleton<IClientResolver, ClientResolver>();
         services.TryAddSingleton<AuthorizeApi>();
         services.TryAddSingleton<ConsentApi>();
+        services.TryAddSingleton<DeviceApi>();
+        services.TryAddSingleton<InvitationApi>();
         services.TryAddSingleton<DevelopmentKeyFile>();
 
         // ── The per-IP buckets — docs/plan/11 § Credentials' "global per-IP limit" ───────────────

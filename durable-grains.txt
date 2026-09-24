@@ -371,3 +371,20 @@ CyberCloud.Identity.Grains.ConsentGrain
 # costs one replay window on the codes in flight at that moment, each still bound to its verifier by
 # PKCE. Session-shaped, bounded by concurrent sign-ins, and written once per sign-in on the path a
 # person is waiting on.
+#
+# ⚠ DeviceAuthorizationGrain is ABSENT for AuthorizationCodeGrain's reason (#43). It is one RFC 8628
+# device authorization — the codes `cyc login` on a headless box prints, and the person's answer —
+# and it is worth ten minutes: past them the codes are refused whatever the tier holds, and the grain
+# clears itself. Losing the tier mid-flow costs one more `cyc login`. Bounded by concurrent device
+# sign-ins, and polled every five seconds while pending, which is a write rate the durable tier's
+# synchronous replication should never see.
+#
+# InvitationGrain is one invitation of an address into a tenant (#43, docs/plan/11 § Sign-up and
+# tenant creation, the invited path), and DURABLE for the question docs/plan/05 § Choosing a tier
+# asks: its loss is a colleague holding a link they were told would work for seven days and that
+# answers "not valid" — a dead end a person notices, with no way to rebuild the record from anything
+# else (the link's secret is kept only as a digest, by design). Written a handful of times per
+# invitation, so the durable tier's write cost is nothing; the invited user it created is in the
+# durable tier already, and an invitation that outlived a hot-tier flush while its user did not would
+# be the worse split.
+CyberCloud.Identity.Grains.InvitationGrain
