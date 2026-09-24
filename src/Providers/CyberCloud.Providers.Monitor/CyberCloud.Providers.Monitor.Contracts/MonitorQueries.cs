@@ -93,6 +93,17 @@ public static class MonitorQueries {
     public const int MaxSeries = 500;
 
     /// <summary>The longest window a metrics query may cover: the <c>extended</c> tier's retention.</summary>
+    /// <remarks>
+    ///     ⚠ <b>The body's window, not the expression's.</b> This and <see cref="MaxPoints" /> bound
+    ///     <c>start</c>, <c>end</c> and <c>stepSeconds</c>. What the expression reaches back on its own —
+    ///     a rollup window, a subquery, an <c>offset</c>, an <c>@</c> — is vmselect's to bound, by the
+    ///     per-query timeout the store sends and by its own flags. No lexical check is attempted,
+    ///     because MetricsQL can spell a window without a literal duration: VictoriaMetrics v1.152.0 accepts
+    ///     <c>WITH (w = 400d) max_over_time(up[w])</c> and <c>up[4000000i]</c> (steps), and refuses
+    ///     <c>up[400d:1s]</c> itself under its default <c>-search.maxPointsSubqueryPerTimeseries</c>.
+    ///     <c>charts/managed/monitor-workspace/conformance.yaml § owed</c>,
+    ///     <c>metrics-expressions-are-bounded-by-vmselect</c>.
+    /// </remarks>
     public static TimeSpan MaxMetricsRange { get; } = TimeSpan.FromDays(400);
 
     /// <summary>The most label names or values <c>listMetricLabels</c> returns.</summary>

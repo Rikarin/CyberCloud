@@ -5,6 +5,7 @@ import { XuiButton } from '@xui/button';
 import { XuiCallout } from '@xui/callout';
 import { XuiInput } from '@xui/input';
 import { XuiSelect } from '@xui/select';
+import { XuiTable, XuiTd, XuiTh, XuiTr } from '@xui/table';
 import {
   LogAnswer,
   LogEstimate,
@@ -24,10 +25,35 @@ import { TimeRange, Window, stamp, timeRanges, windowOf } from './time-range';
  */
 export const CONFIRM_ROWS = 10_000_000;
 
+const LOCAL_TIME = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  fractionalSecondDigits: 3
+});
+
 /**
- * Log search over one Monitor workspace: a query box, a window, a histogram and the newest rows,
- * each expandable to its attributes — docs/plan/20 § The pages that are not generated, "Log
- * search", over docs/plan/16 § Querying a workspace.
+ * A record's `timestamp` in the viewer's time zone, to the millisecond.
+ *
+ * ⚠ **`searchLogs` answers RFC 3339 with nine fractional digits**, the nanoseconds the store keeps,
+ * and `Date` holds milliseconds. The digits past the third are cut before parsing rather than left
+ * to `Date.parse`, which the specification only requires to read three. The full value stays on the
+ * row: in the `<time>` element's `datetime` and `title`, and as the first line of the expansion.
+ *
+ * @returns The formatted instant, or the value as it came when it doesn't parse.
+ */
+export function localTime(timestamp: string): string {
+  const instant = Date.parse(timestamp.replace(/(\.\d{3})\d+/, '$1'));
+  return Number.isNaN(instant) ? timestamp : LOCAL_TIME.format(instant);
+}
+
+/**
+ * Log search over one Monitor workspace: a query box, a window, a histogram and a table of the
+ * newest records, each expandable to its attributes — docs/plan/20 § The pages that are not
+ * generated, "Log search", over docs/plan/16 § Querying a workspace.
  *
  * ⚠ **The query box is a filter grammar, not a query language**, and the hint under it says so:
  * `severity:error service:api "timed out" http.method=GET`, parsed in the browser by
@@ -51,7 +77,20 @@ export const CONFIRM_ROWS = 10_000_000;
 @Component({
   selector: 'cc-log-search',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, XuiButton, XuiCallout, XuiInput, XuiSelect, LogHistogram, NeedsTenant, PageStatus],
+  imports: [
+    RouterLink,
+    XuiButton,
+    XuiCallout,
+    XuiInput,
+    XuiSelect,
+    XuiTable,
+    XuiTd,
+    XuiTh,
+    XuiTr,
+    LogHistogram,
+    NeedsTenant,
+    PageStatus
+  ],
   providers: [provideCharts()],
   host: { class: 'block p-6' },
   template: `
@@ -206,44 +245,68 @@ export const CONFIRM_ROWS = 10_000_000;
           </p>
         }
 
-        <ol class="border-border mt-3 divide-y rounded-md border" [attr.aria-label]="labels.rows">
+        <xui-table class="mt-3" striped [attr.aria-label]="labels.rows" data-rows>
+          <xui-tr>
+            <xui-th role="columnheader" class="w-60" i18n="@@logs.col.time">Time</xui-th>
+            <xui-th role="columnheader" class="w-20" i18n="@@logs.col.severity">Severity</xui-th>
+            <xui-th role="columnheader" class="w-32" i18n="@@logs.col.service">Service</xui-th>
+            <xui-th role="columnheader" class="flex-1" i18n="@@logs.col.message">Message</xui-th>
+          </xui-tr>
           @for (row of answer.rows; track $index; let i = $index) {
-            <li [attr.data-row]="i">
-              <button
-                type="button"
-                class="hover:bg-surface-hover flex w-full items-start gap-3 px-3 py-2 text-left text-sm"
-                [attr.aria-expanded]="expanded() === i"
-                [attr.aria-controls]="'cc-logs-row-' + i"
-                (click)="toggle(i)"
-              >
-                <time class="text-foreground-muted w-56 shrink-0 font-mono text-xs" [attr.datetime]="row.timestamp">{{
-                  row.timestamp
-                }}</time>
-                <span class="w-16 shrink-0 text-xs font-semibold uppercase" [attr.data-severity]="row.severity">{{
-                  row.severity
-                }}</span>
-                <span class="text-foreground-muted w-28 shrink-0 truncate text-xs">{{ row.service }}</span>
-                <span class="min-w-0 flex-1 break-words">{{ row.body }}</span>
-              </button>
-              @if (expanded() === i) {
-                <dl
-                  class="bg-surface-sunken grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 px-3 py-2 text-xs"
-                  [id]="'cc-logs-row-' + i"
-                  data-detail
+            <xui-tr [attr.data-row]="i">
+              <xui-td role="cell" class="w-60 items-start">
+                <button
+                  type="button"
+                  class="hover:bg-surface-hover -m-1 rounded p-1 text-left"
+                  [attr.aria-expanded]="expanded() === i"
+                  [attr.aria-controls]="'cc-logs-row-' + i"
+                  (click)="toggle(i)"
                 >
-                  @for (entry of detail(row); track entry[0]) {
-                    <dt class="text-foreground-muted">{{ entry[0] }}</dt>
-                    <dd class="font-mono break-all">{{ entry[1] }}</dd>
-                  }
-                </dl>
-              }
-            </li>
+                  <time class="font-mono text-xs" [attr.datetime]="row.timestamp" [attr.title]="row.timestamp">{{
+                    localTime(row.timestamp)
+                  }}</time>
+                </button>
+              </xui-td>
+              <xui-td
+                role="cell"
+                class="w-20 items-start text-xs font-semibold uppercase"
+                [attr.data-severity]="row.severity"
+                >{{ row.severity }}</xui-td
+              >
+              <xui-td role="cell" class="w-32 items-start text-xs" truncate>{{ row.service }}</xui-td>
+              <xui-td role="cell" class="min-w-0 flex-1 items-start text-sm"
+                ><span class="min-w-0 break-words" data-body>{{ row.body }}</span></xui-td
+              >
+            </xui-tr>
+            @if (expanded() === i) {
+              <xui-tr class="bg-surface-sunken">
+                <xui-td role="cell" class="flex-1" aria-colspan="4">
+                  <dl
+                    class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 text-xs"
+                    [id]="'cc-logs-row-' + i"
+                    data-detail
+                  >
+                    @for (entry of detail(row); track entry[0]) {
+                      <dt class="text-foreground-muted">{{ entry[0] }}</dt>
+                      <dd class="font-mono break-all">{{ entry[1] }}</dd>
+                    }
+                  </dl>
+                </xui-td>
+              </xui-tr>
+            }
           } @empty {
-            <li class="text-foreground-muted px-3 py-6 text-center text-sm" data-empty i18n="@@logs.empty">
-              No records matched in this window.
-            </li>
+            <xui-tr>
+              <xui-td
+                role="cell"
+                class="text-foreground-muted flex-1 justify-center py-6 text-sm"
+                aria-colspan="4"
+                data-empty
+              >
+                <ng-container i18n="@@logs.empty">No records matched in this window.</ng-container>
+              </xui-td>
+            </xui-tr>
           }
-        </ol>
+        </xui-table>
       }
     }
   `
@@ -363,12 +426,15 @@ export class LogSearch {
     this.explicit.set(null);
   }
 
+  protected readonly localTime = localTime;
+
   protected toggle(index: number): void {
     this.expanded.set(this.expanded() === index ? null : index);
   }
 
   protected detail(row: LogRow): readonly (readonly [string, string])[] {
     const entries: [string, string][] = [
+      ['timestamp', row.timestamp],
       ['severityText', row.severityText],
       ['service', row.service],
       ['traceId', row.traceId],

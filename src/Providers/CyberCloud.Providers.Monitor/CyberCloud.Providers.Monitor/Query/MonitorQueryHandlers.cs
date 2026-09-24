@@ -70,6 +70,10 @@ public sealed class MonitorWorkspaceQueryMetricsHandler(IMonitorMetricsStore sto
     /// <summary>
     ///     Reads and bounds a <c>queryMetrics</c> body — the rules the flat schema cannot state.
     /// </summary>
+    /// <remarks>
+    ///     ⚠ The body only. The expression's own look-behind isn't read here, and
+    ///     <see cref="MonitorQueries.MaxMetricsRange" />'s remarks say why and what bounds it instead.
+    /// </remarks>
     /// <param name="body">The body, already validated against <see cref="MonitorQueries.QueryMetricsRequest" />.</param>
     /// <param name="now">The instant an instant query with no <c>time</c> is evaluated at.</param>
     public static Result<MetricsQuery> ReadQuery(JsonElement body, DateTimeOffset now) {
