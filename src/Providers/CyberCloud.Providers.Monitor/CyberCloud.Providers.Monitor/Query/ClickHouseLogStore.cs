@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -37,6 +38,15 @@ namespace CyberCloud.Providers.Monitor.Query;
 ///         <c>400</c> naming the budget; and <c>timeout_overflow_mode=throw</c>, so a query that ran out
 ///         of time fails rather than answering the part it read — a histogram of a partial scan is a
 ///         chart of a quiet afternoon that was not quiet.
+///     </para>
+///     <para>
+///         ⚠ <b>The budget is the SEARCH's, and a search is two statements.</b> The rows and the
+///         histogram each scan the window, and the first cut gave each the whole
+///         <see cref="MonitorQueryOptions.QueryTimeout" /> and <see cref="MonitorQueryOptions.LogsMaxRowsToRead" />,
+///         so one search could read twice what the refusal names and hold the gateway for twice the
+///         timeout. The histogram now gets what the rows left: the time not yet spent and the rows
+///         ClickHouse's summary says were not yet read, and a search that has none left is refused
+///         before the second statement runs. #41's review.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Time is compared as integers, never as a zoned value.</b> The bounds are Unix
@@ -107,6 +117,7 @@ public sealed class ClickHouseLogStore : IMonitorLogStore {
 
         var (where, parameters) = Filter(search);
         var table = $"`{database}`.`{MonitorLogsTable.Name}`";
+        var started = Stopwatch.GetTimestamp();
 
         // ── The newest rows, one more than asked for so a longer result is known to be longer ────
         var rows = await ExecuteAsync(
@@ -122,11 +133,24 @@ public sealed class ClickHouseLogStore : IMonitorLogStore {
              """,
             parameters,
             database,
+            options.QueryTimeout,
+            options.LogsMaxRowsToRead,
             cancellationToken
         );
 
         if (rows.TryGetError(out var rowsError)) {
             return Empty(rowsError, out var empty) ? Result<LogAnswer>.Success(empty) : Result<LogAnswer>.Failure(rowsError);
+        }
+
+        // ── What the rows statement left of the search's one budget ─────────────────────────────
+        //
+        // ⚠ Zero rows left is a refusal, not a limit: max_rows_to_read=0 is ClickHouse's spelling of
+        // "unlimited", so passing it on would give the histogram no budget at all.
+        var timeLeft = options.QueryTimeout - Stopwatch.GetElapsedTime(started);
+        var rowsLeft = options.LogsMaxRowsToRead - rows.GetValueOrThrow().Statistics.RowsRead;
+
+        if (timeLeft <= TimeSpan.Zero || rowsLeft <= 0) {
+            return Result<LogAnswer>.Failure(BudgetExceeded().Error!);
         }
 
         // ── The histogram, over the same filter, bucketed from `from` rather than from the epoch ──
@@ -151,6 +175,8 @@ public sealed class ClickHouseLogStore : IMonitorLogStore {
              """,
             histogramParameters,
             database,
+            timeLeft,
+            rowsLeft,
             cancellationToken
         );
 
@@ -199,6 +225,8 @@ public sealed class ClickHouseLogStore : IMonitorLogStore {
              """,
             parameters,
             database,
+            options.QueryTimeout,
+            options.LogsMaxRowsToRead,
             cancellationToken
         );
 
@@ -283,24 +311,33 @@ public sealed class ClickHouseLogStore : IMonitorLogStore {
     /// <summary>A <c>200</c>'s body and what ClickHouse's summary header says it read.</summary>
     readonly record struct Executed(string Body, LogStatistics Statistics);
 
+    /// <summary>Runs one statement under what is left of the search's budget.</summary>
+    /// <param name="sql">The statement, with <c>{name:Type}</c> placeholders and nothing else from the caller.</param>
+    /// <param name="parameters">The placeholders' values, as the caller meant them.</param>
+    /// <param name="database">The workspace database, for the log line a failure writes.</param>
+    /// <param name="time">What is left of <see cref="MonitorQueryOptions.QueryTimeout" />; positive.</param>
+    /// <param name="rows">What is left of <see cref="MonitorQueryOptions.LogsMaxRowsToRead" />; positive.</param>
+    /// <param name="cancellationToken">The caller's.</param>
     async Task<Result<Executed>> ExecuteAsync(
         string sql,
         IReadOnlyDictionary<string, string> parameters,
         string database,
+        TimeSpan time,
+        long rows,
         CancellationToken cancellationToken
     ) {
         var query = new StringBuilder("?readonly=2&timeout_overflow_mode=throw&output_format_json_quote_64bit_integers=0");
-        query.Append("&max_execution_time=").Append(Seconds(options.QueryTimeout));
-        query.Append("&max_rows_to_read=").Append(options.LogsMaxRowsToRead.ToString(CultureInfo.InvariantCulture));
+        query.Append("&max_execution_time=").Append(Seconds(time));
+        query.Append("&max_rows_to_read=").Append(rows.ToString(CultureInfo.InvariantCulture));
 
         foreach (var (name, value) in parameters) {
             query.Append("&param_").Append(Uri.EscapeDataString(name)).Append('=').Append(Uri.EscapeDataString(ParameterValue(value)));
         }
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        budget.CancelAfter(options.QueryTimeout + TimeSpan.FromSeconds(2));
+        budget.CancelAfter(time + TimeSpan.FromSeconds(2));
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(endpoint, "/" + query));
+        using var request = new HttpRequestMessage(HttpMethod.Post, MonitorQueryOptions.Resolve(endpoint, query.ToString()));
         request.Content = new StringContent(sql, Encoding.UTF8, "text/plain");
         request.Headers.Add("X-ClickHouse-User", options.LogsUser);
         request.Headers.Add("X-ClickHouse-Key", options.LogsPassword);
@@ -399,7 +436,8 @@ public sealed class ClickHouseLogStore : IMonitorLogStore {
         Result<Executed>.Failure(
             ErrorCode.InvalidRequestBody,
             $"The search ran past the log store's budget of {Seconds(options.QueryTimeout)} s or "
-            + $"{options.LogsMaxRowsToRead.ToString("N0", CultureInfo.InvariantCulture)} rows read. Narrow the "
+            + $"{options.LogsMaxRowsToRead.ToString("N0", CultureInfo.InvariantCulture)} rows read, for its rows "
+            + "and its histogram together. Narrow the "
             + "window, or add a service, a severity or an attribute filter."
         );
 

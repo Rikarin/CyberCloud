@@ -190,6 +190,15 @@ CyberCloud.Metering.Grains.UsageLedgerGrain
 # the state a person might mistake for sensitive, and they are what a notification is addressed to.
 CyberCloud.Providers.Monitor.Alerting.AlertEvaluatorGrain
 #
+# ⚠ THE ACCOUNTID LEDGER, AND ITS LOSS TOLERANCE IS ZERO BECAUSE LOSING IT IS A CROSS-TENANT READ.
+# MonitorAccountGrain records which workspace GUID claimed a folded VictoriaMetrics accountID first
+# (#41's review; IMonitorAccountGrain carries the argument). Nothing can rebuild it: the fold says
+# which account a workspace maps to and not which of two colliding workspaces got there first, and a
+# flush would hand the account to whichever reconciled next — possibly the one that folded onto a
+# victim's series. Null tenant, one small row per workspace ever created in the region, written once
+# per workspace and never released, because the series outlive the workspace.
+CyberCloud.Providers.Monitor.Accounts.MonitorAccountGrain
+#
 # ⚠ THE QUESTION WAS ASKED, AND THE ANSWER IS THAT THE MANAGER IS MISSING NOTHING. FeedGrain is the
 # catalogue of CyberCloud.ContainerRegistry/feeds (docs/plan/13 § Artifact feeds): which versions of
 # which packages tenants have PUSHED INTO the feed, which are listed, what each hashes to, where its

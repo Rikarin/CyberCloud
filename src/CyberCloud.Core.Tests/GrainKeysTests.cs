@@ -1417,14 +1417,60 @@ public class GrainKeysTests {
             "a management group name containing '/' must not be constructible into a key"
         );
 
+    // ── metrics-account/{accountId}: the second per-entity null-tenant shape ──────────────────
+
+    [Fact]
+    public void AMetricsAccountKeyIsTheAccountInDecimalAndRoundTrips() {
+        GrainKeys.MetricsAccount(1).ShouldBe("metrics-account/1");
+        GrainKeys.MetricsAccount(uint.MaxValue).ShouldBe("metrics-account/4294967295");
+
+        foreach (var account in new uint[] { 1, 7, 1_000_000, 2_166_136_261, uint.MaxValue }) {
+            var key = GrainKeys.MetricsAccount(account);
+            var parsed = GrainKeys.Parse(key).GetValueOrThrow();
+
+            parsed.Kind.ShouldBe(GrainKeyKind.MetricsAccount);
+            parsed.Name.ShouldBe(account.ToString(CultureInfo.InvariantCulture));
+            parsed.Id.ShouldBe(Guid.Empty);
+            parsed.ToString().ShouldBe(key);
+
+            // Null tenant, like the cluster key: no '|', so the null-tenant encoding leaves it as itself.
+            OrleansMultitenantKeyModel.Qualify(null, key).ShouldBe(key);
+            OrleansMultitenantKeyModel.ExtractTenant(key).ShouldBeNull();
+            GrainKeys.IsTenantQualificationSafe(key).ShouldBeTrue();
+        }
+    }
+
+    [Fact]
+    public void TheZeroAccountHasNoKey() =>
+        Should.Throw<ArgumentOutOfRangeException>(
+            static () => GrainKeys.MetricsAccount(0),
+            "zero is the account every misconfigured client writes to, and the fold never produces it"
+        );
+
+    [Theory]
+    [InlineData("metrics-account/0", "zero")]
+    [InlineData("metrics-account/007", "a leading zero is a second spelling of 7")]
+    [InlineData("metrics-account/+7", "a sign")]
+    [InlineData("metrics-account/-7", "a negative")]
+    [InlineData("metrics-account/ 7", "white space")]
+    [InlineData("metrics-account/4294967296", "one past uint.MaxValue")]
+    [InlineData("metrics-account/0a1b2c3d4e5f40718293a4b5c6d7e8f9", "a GUID where the number belongs")]
+    [InlineData("metrics-account/7/extra", "a third segment")]
+    [InlineData("Metrics-Account/7", "the prefix is matched case-sensitively")]
+    public void AForgedMetricsAccountKeyIsRejected(string forged, string why) {
+        GrainKeys.TryParse(forged, out _).ShouldBeFalse($"'{forged}' — {why}");
+        GrainKeys.Parse(forged).Error!.Code.ShouldBe(ErrorCode.InvalidGrainKey);
+    }
+
     /// <summary>
     ///     ⚠ The count prose on <see cref="GrainKeys" /> is re-derived off the enum, and this is the
     ///     derivation: every member but <see cref="GrainKeyKind.None" /> is a key. The number here
-    ///     has to move with the enum AND with the prose — it was twenty-six on #39's branch, and
+    ///     has to move with the enum AND with the prose — it was twenty-six on #39's branch,
     ///     twenty-nine on the day it merged beside #90's <see cref="GrainKeyKind.WatchIndex" /> and
-    ///     #94's two, which is the drift the prose paragraph describes happening to itself.
+    ///     #94's two, which is the drift the prose paragraph describes happening to itself, and thirty
+    ///     with #41's <see cref="GrainKeyKind.MetricsAccount" />.
     /// </summary>
     [Fact]
-    public void TheClosedSetHasTwentyNineShapes() =>
-        Enum.GetValues<GrainKeyKind>().Count(static x => x != GrainKeyKind.None).ShouldBe(29);
+    public void TheClosedSetHasThirtyShapes() =>
+        Enum.GetValues<GrainKeyKind>().Count(static x => x != GrainKeyKind.None).ShouldBe(30);
 }

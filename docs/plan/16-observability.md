@@ -306,7 +306,8 @@ actions run inside `ResourceManagerService` in the gateway's process, so the gat
 is the one that names vmselect and ClickHouse; a half left unconfigured refuses by name.
 
 **Metrics** go to vmselect at `/select/{accountID}/prometheus/api/v1/query[_range]` and the label
-APIs, one `VMCluster` per retention tier (`MetricsEndpoint` carries a `{tier}` placeholder). A range
+APIs, one `VMCluster` per retention tier (`MetricsEndpoint` carries a `{tier}` placeholder, and may
+carry a path when vmselect sits behind a proxy — the store appends to it rather than replacing it). A range
 query may cover 400 days — the longest retention — at no more than 11 000 points per series,
 Prometheus' own ceiling, and gets 240 points when it names no step; vmselect is told the 10-second
 timeout and the handler cancels a second later; the response body is read to at most 64 MiB, and
@@ -316,14 +317,22 @@ anything else is a `500` whose detail is in the gateway's log. ⚠ MetricsQL can
 `vm_account_id` is a filter only on `/select/multitenant/`, which nothing builds —
 `MonitorQueryOverHttpTests.TheOtherTenantsWorkspaceOfTheSameNameReadsOnlyItsOwnAccount` sends one.
 
-⚠ **The accountID is the GUID folded to 32 bits, so "each workspace reads its own series" holds only
-while no two workspaces fold alike.** `MonitorWorkspaces.AccountId` derives the account rather than
-allocating it, and the birthday bound puts a collision at even odds around 77 000 workspaces — inside
-target scale. Before #41 nothing read under the account; now the explorer does, so a collision lets a
-Reader of either workspace query both tenants' metrics, and the gateway, which checks the workspace
-the caller named, cannot see that a second one shares its account. Nothing detects a collision. The
-closure is `conformance.yaml § owed`, `accountid-is-folded-not-allocated` — `accountID:projectID`,
-changed in the write path's vmauth suffix and in this read together.
+⚠ **The accountID is the GUID folded to 32 bits, so two workspaces can fold alike, and a ledger
+refuses the second.** `MonitorWorkspaces.AccountId` derives the account rather than allocating it, and
+the birthday bound puts a collision at even odds around 77 000 workspaces — inside target scale. Once
+the explorer read under the account, a collision was a cross-tenant read a tenant could drive: create
+workspaces until one folds onto a victim's account, then list `__name__`. #41's review closed the path:
+`IMonitorAccountGrain` — null tenant, `metrics-account/{accountId}`, [06 § Grain keys](06-tenancy-and-resource-model.md) —
+records the first workspace GUID to claim each account. The workspace reconciler claims before it
+mints a key or applies anything and fails a collision with a `409` that says to recreate the
+workspace, so the loser has no `VMUser`, no row and no Grafana datasource; `queryMetrics` and
+`listMetricLabels` answer `409` without asking vmselect unless the workspace they were handed holds its
+account. A claim is never released, because the series outlive the workspace that wrote them.
+`MonitorQueryOverHttpTests.AWorkspaceThatFoldsOntoAnotherTenantsAccountFailsToCreateAndReadsNoneOfIt`
+stages a collision over the real write path with the holder's series in the account. What is left —
+the space only fills, a lost fold is a create the tenant repeats, and the alert evaluator must ask the
+same ledger when its seam stops refusing — is `conformance.yaml § owed`,
+`accountid-is-folded-not-allocated`.
 
 **Logs** are searched in `{database}.otel_logs`, the collector's ClickHouse exporter's table
 (`MonitorLogsTable`), and ⚠ **the search is a structured filter and not #54's KQL.** The translator
@@ -337,7 +346,10 @@ by the action. Every value is a ClickHouse `{name:Type}` parameter — ⚠ sent 
 `C:\temp` was a tab and a lone backslash failed the search with a `500`; the database is the one identifier
 spelled into the SQL and must match `ws_` plus 32 hex digits; each statement carries `readonly=2`,
 `max_execution_time`, `max_rows_to_read` and `timeout_overflow_mode=throw`, and a breach is a `400`
-naming the budget. Time is compared as Unix integers, never as zoned values, because a `DateTime64`
+naming the budget. ⚠ The budget is the search's, not each statement's: the rows and the histogram
+are two scans, and the histogram gets the time and the rows the first one left, so one search reads at
+most `LogsMaxRowsToRead` rows (50 million by default) and holds the gateway for at most the timeout
+plus two seconds. Time is compared as Unix integers, never as zoned values, because a `DateTime64`
 with no zone renders in the *server's* zone. Severity filters on OpenTelemetry's `SeverityNumber`
 bands, not on the source's spelling of `SeverityText`. The answer is the newest `top` rows (at most
 1 000) plus a histogram bucketed from `from` by severity, with what the store read; `estimate: true`
@@ -352,7 +364,8 @@ response and the generated clients type the body `unknown`; the portal checks th
 write path over an Orleans test cluster, and a VictoriaMetrics *cluster* (three containers — the
 single-node image has no `accountID`) and a ClickHouse in Testcontainers, seeded for two workspaces
 of the same name in two tenants: each reads its own series and rows, another tenant's path is `404`,
-a caller without `read` is `404` and one with only `read` is `200`, the limits refuse before the
+a caller without `read` is `404` and one with only `read` is `200`, a workspace that folds onto an
+account another workspace holds fails its create and reads `409`, the limits refuse before the
 store is asked, and a `')) OR 1=1 --`, a Windows path, a lone backslash and a tab in the search each
 match the one row that contains them.
 
@@ -362,8 +375,8 @@ two responses (`query-responses-are-undeclared`); offer a query language over lo
 (`log-search-reads-the-exporters-table-by-hand`); read a tier the workspace used to have, or go
 through vmauth (`metrics-query-reads-one-tier`); count as reads at the rate limiter
 (`query-actions-count-as-writes`); page a log window, save or pin a query, or explore traces
-(`explorers-are-a-first-cut`); give two workspaces accounts that cannot collide
-(`accountid-is-folded-not-allocated`, above); or answer anywhere but a laptop's log search — the
+(`explorers-are-a-first-cut`); give two workspaces accounts that cannot collide, rather than refusing
+the second (`accountid-is-folded-not-allocated`, above); or answer anywhere but a laptop's log search — the
 AppHost's gateway reads the region's ClickHouse and has no VictoriaMetrics, no chart deploys a
 gateway, and a region's vmselect has no TLS to satisfy an `https` endpoint
 (`explorers-are-wired-on-a-laptop-only`). The alert evaluator's query seam is still the refusing default

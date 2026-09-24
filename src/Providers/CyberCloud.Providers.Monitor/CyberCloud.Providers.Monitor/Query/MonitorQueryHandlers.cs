@@ -18,6 +18,14 @@ namespace CyberCloud.Providers.Monitor.Query;
 ///         over that GUID is the account, and the body has no member that could name another.
 ///     </para>
 ///     <para>
+///         ⚠ <b>And the account is asked for only if this workspace holds it.</b> The account is a
+///         32-bit fold of the GUID, so another tenant's workspace can fold onto it. The reconciler
+///         claims the account at create and refuses a collision, and <see cref="IMonitorAccounts" />
+///         answers whether this workspace is the one that claimed it; a workspace that isn't gets a
+///         <c>409</c> and the store is never asked. Without the check, creating workspaces until one
+///         collided was a cross-tenant read — #41's review.
+///     </para>
+///     <para>
 ///         The response — undeclared, for the reason <see cref="MonitorQueries" /> gives — is
 ///         <c>{ resultType, series: [{ labels: {…}, points: [[seconds, value|null], …] }], seriesTotal,
 ///         truncated }</c> plus <c>start</c>, <c>end</c> and <c>stepSeconds</c> for a range query or
@@ -25,8 +33,10 @@ namespace CyberCloud.Providers.Monitor.Query;
 ///     </para>
 /// </remarks>
 /// <param name="store">The metrics store.</param>
+/// <param name="accounts">The ledger that says whether this workspace holds its account.</param>
 /// <param name="clock">What "now" is for an instant query that names no time.</param>
-public sealed class MonitorWorkspaceQueryMetricsHandler(IMonitorMetricsStore store, IClock clock) : IResourceActionHandler {
+public sealed class MonitorWorkspaceQueryMetricsHandler(IMonitorMetricsStore store, IMonitorAccounts accounts, IClock clock)
+    : IResourceActionHandler {
     /// <inheritdoc />
     public ResourceTypeName Type => MonitorWorkspaces.Type;
 
@@ -42,7 +52,13 @@ public sealed class MonitorWorkspaceQueryMetricsHandler(IMonitorMetricsStore sto
         }
 
         var parsed = query.GetValueOrThrow();
-        var answered = await store.QueryAsync(QueryBodies.Tenancy(context), parsed, cancellationToken);
+        var tenancy = await QueryBodies.TenancyAsync(context, accounts, cancellationToken);
+
+        if (tenancy.TryGetError(out var unheld)) {
+            return Result<string>.Failure(unheld);
+        }
+
+        var answered = await store.QueryAsync(tenancy.GetValueOrThrow(), parsed, cancellationToken);
 
         if (answered.TryGetError(out var error)) {
             return Result<string>.Failure(error);
@@ -159,8 +175,10 @@ public sealed class MonitorWorkspaceQueryMetricsHandler(IMonitorMetricsStore sto
 ///     last day. Declared response: a list of strings is something the schema can say.
 /// </remarks>
 /// <param name="store">The metrics store.</param>
+/// <param name="accounts">The ledger that says whether this workspace holds its account.</param>
 /// <param name="clock">The default window's end.</param>
-public sealed class MonitorWorkspaceListMetricLabelsHandler(IMonitorMetricsStore store, IClock clock) : IResourceActionHandler {
+public sealed class MonitorWorkspaceListMetricLabelsHandler(IMonitorMetricsStore store, IMonitorAccounts accounts, IClock clock)
+    : IResourceActionHandler {
     /// <inheritdoc />
     public ResourceTypeName Type => MonitorWorkspaces.Type;
 
@@ -183,8 +201,14 @@ public sealed class MonitorWorkspaceListMetricLabelsHandler(IMonitorMetricsStore
             );
         }
 
+        var tenancy = await QueryBodies.TenancyAsync(context, accounts, cancellationToken);
+
+        if (tenancy.TryGetError(out var unheld)) {
+            return Result<string>.Failure(unheld);
+        }
+
         var answered = await store.LabelsAsync(
-            QueryBodies.Tenancy(context),
+            tenancy.GetValueOrThrow(),
             new(QueryBodies.Text(context.Body, "label"), QueryBodies.Text(context.Body, "match").Trim(), start, end),
             cancellationToken
         );
@@ -398,14 +422,33 @@ public sealed class MonitorWorkspaceSearchLogsHandler(IMonitorLogStore store) : 
     }
 }
 
-/// <summary>Reading a validated action body, and the one tenancy derivation all three handlers share.</summary>
+/// <summary>Reading a validated action body, and the one tenancy derivation both metrics handlers share.</summary>
 static class QueryBodies {
     /// <summary>
-    ///     The workspace's metrics tenancy — its <c>accountID</c> from the resolved GUID and its tier
-    ///     from the stored body.
+    ///     Returns the workspace's metrics tenancy — its <c>accountID</c> from the resolved GUID and its
+    ///     tier from the stored body — if the workspace holds that account, and a <c>409</c> if it doesn't.
     /// </summary>
-    public static MetricsTenancy Tenancy(ActionContext context) =>
-        new(MonitorWorkspaces.AccountId(context.Id), MonitorWorkspaces.Tier(context.Desired, MonitorWorkspaces.Metrics));
+    public static async Task<Result<MetricsTenancy>> TenancyAsync(
+        ActionContext context,
+        IMonitorAccounts accounts,
+        CancellationToken cancellationToken
+    ) {
+        var account = MonitorWorkspaces.AccountId(context.Id);
+
+        if (!await accounts.IsHeldByAsync(account, context.Id.Id, cancellationToken)) {
+            return Result<MetricsTenancy>.Failure(
+                ErrorCode.Conflict,
+                $"This workspace doesn't hold its metrics account ({account.ToString(CultureInfo.InvariantCulture)}), "
+                + "so its metrics can't be read. Either it hasn't finished provisioning — try again once its "
+                + "provisioningState is Succeeded — or it folds onto an account another workspace holds, and "
+                + "its provisioning failed saying so; delete it and create it again."
+            );
+        }
+
+        return Result<MetricsTenancy>.Success(
+            new(account, MonitorWorkspaces.Tier(context.Desired, MonitorWorkspaces.Metrics))
+        );
+    }
 
     public static string Text(JsonElement body, string name) =>
         body.ValueKind == JsonValueKind.Object && body.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String

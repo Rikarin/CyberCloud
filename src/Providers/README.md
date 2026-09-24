@@ -1395,13 +1395,17 @@ declare it again once the platform closed what the measurement found.
   `MonitorReconcilerTests.TwoWorkspacesInTwoTenantsGetTwoAccountIdsAndTwoDatabases` is the hand-written
   test that covers it.
 
-- **⚠ THE `accountID` IS FOLDED RATHER THAN ALLOCATED, WHICH IS WHY THIS TYPE NEEDS NO GRAIN AND IS A
+- **⚠ THE `accountID` IS FOLDED RATHER THAN ALLOCATED, SO NO COUNTER HANDS IT OUT, AND IT IS A
   NAMED LIMIT RATHER THAN A SAFE DERIVATION.** VictoriaMetrics' accountID is a 32-bit integer in a URL
   path, so the resource GUID folded to 32 bits is stable, recomputable anywhere and needs nothing
   remembered — which is the twelfth family to report no grain and the first where the temptation was
   a real allocator. A fold is not a bijection: the birthday bound is a coin-flip around 77 000
-  workspaces, inside target scale, and a collision is two tenants sharing metrics. `accountID:projectID`
-  is accepted by VictoriaMetrics and makes the space 64 bits, which closes it without durable state.
+  workspaces, inside target scale, and a collision is two tenants sharing metrics. ⚠ **So the type
+  grew a grain after all, and not an allocator:** once #41's explorer read under the account, #41's
+  review added `IMonitorAccountGrain`, a null-tenant claim per account that the reconciler takes before
+  it applies anything and the metrics reads check, so the second workspace to fold onto an account
+  fails its create and reads nothing. `accountID:projectID` is accepted by VictoriaMetrics and makes the
+  space 64 bits, which makes a lost fold rarer without making the claim unnecessary.
   `charts/managed/monitor-workspace/conformance.yaml § owed`, `accountid-is-folded-not-allocated`.
 
 - **⚠ THE FIRST PROVIDER-SUPPLIED LABEL IN THE TREE.** ADR-013's seven identify a *resource*; the

@@ -1,5 +1,7 @@
 using CyberCloud.Providers.Monitor.Query;
+using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Registry;
+using System.Collections.Immutable;
 using System.Text.Json;
 
 namespace CyberCloud.Providers.Monitor.Tests;
@@ -38,6 +40,79 @@ public sealed class MonitorQueryTests {
             // query-responses-are-undeclared. This pins which, so declaring one is a decision.
             (action.Response is not null).ShouldBe(declared, name);
         }
+    }
+
+    // ── #41's review: the account is asked for only by the workspace that holds it ──────────────
+
+    [Theory]
+    [InlineData("unclaimed")]
+    [InlineData("held by another workspace")]
+    public async Task AWorkspaceThatDoesNotHoldItsAccountIsRefusedAndTheStoreIsNeverAsked(string ledgerState) {
+        // ⚠ The two ways a workspace comes to not hold its account: its create hasn't converged, or it
+        // folded onto an account another tenant's workspace claimed first. Both are a 409, and in both
+        // the store is never asked — asking it is the cross-tenant read.
+        var store = new CountingMetricsStore();
+        var ledger = new DictionaryAccounts();
+        var (context, account) = Context(MonitorQueries.QueryMetricsAction, """{"query":"up"}""");
+
+        if (ledgerState != "unclaimed") {
+            (await ledger.ClaimAsync(account, Guid.NewGuid(), TestContext.Current.CancellationToken)).ShouldBeTrue();
+        }
+
+        var queried = await new MonitorWorkspaceQueryMetricsHandler(store, ledger, new FixedClock())
+            .InvokeAsync(context, TestContext.Current.CancellationToken);
+
+        var (labelContext, _) = Context(MonitorQueries.ListMetricLabelsAction, """{"label":"__name__"}""");
+
+        var listed = await new MonitorWorkspaceListMetricLabelsHandler(store, ledger, new FixedClock())
+            .InvokeAsync(labelContext, TestContext.Current.CancellationToken);
+
+        foreach (var answered in new[] { queried, listed }) {
+            answered.Error!.Code.ShouldBe(ErrorCode.Conflict, ledgerState);
+            answered.Error.Message.ShouldContain("doesn't hold its metrics account");
+        }
+
+        store.Calls.ShouldBe(0, $"the store was asked under an account the workspace doesn't hold ({ledgerState})");
+    }
+
+    [Fact]
+    public async Task TheWorkspaceThatHoldsItsAccountIsAnsweredUnderIt() {
+        var store = new CountingMetricsStore();
+        var ledger = new DictionaryAccounts();
+        var (context, account) = Context(MonitorQueries.QueryMetricsAction, """{"query":"up"}""");
+
+        (await ledger.ClaimAsync(account, context.Id.Id, TestContext.Current.CancellationToken)).ShouldBeTrue();
+
+        var answered = await new MonitorWorkspaceQueryMetricsHandler(store, ledger, new FixedClock())
+            .InvokeAsync(context, TestContext.Current.CancellationToken);
+
+        answered.IsSuccess.ShouldBeTrue(answered.Error?.Message);
+        store.Calls.ShouldBe(1);
+        store.LastAccount.ShouldBe(account);
+    }
+
+    static (ActionContext Context, uint Account) Context(string action, string body) {
+        var id = new ResourceId(
+            Guid.Parse("11111111-1111-4111-8111-111111111111"),
+            Guid.Parse("22222222-2222-4222-8222-222222222222"),
+            "prod",
+            MonitorWorkspaces.Type,
+            "prod",
+            Guid.Parse("33333333-3333-4333-8333-333333333333")
+        );
+
+        var context = new ActionContext(
+            id,
+            MonitorWorkspaces.V2026,
+            action,
+            JsonDocument.Parse(body).RootElement,
+            JsonDocument.Parse(MonitorWorkspaces.Body(Guid.Parse("eeeeeeee-0000-4000-8000-00000000000c"))).RootElement,
+            "",
+            null,
+            new InMemorySecretVault()
+        );
+
+        return (context, MonitorWorkspaces.AccountId(id));
     }
 
     [Fact]
@@ -169,5 +244,103 @@ public sealed class MonitorQueryTests {
         new MonitorQueryOptions { MetricsEndpoint = "https://vmselect-telemetry-{tier}.cybercloud-telemetry.svc:8481" }
             .MetricsEndpointFor("extended")
             .Host.ShouldBe("vmselect-telemetry-extended.cybercloud-telemetry.svc");
+    }
+
+    [Theory]
+    [InlineData(30, 2, "70")]
+    [InlineData(100, 1, null)]
+    public async Task ALogSearchsTwoStatementsShareOneRowBudget(long firstReads, int statements, string? secondBudget) {
+        // ⚠ #41's review: the rows and the histogram each got the whole max_rows_to_read, so a search
+        // could read twice what the refusal names. The histogram now gets what the rows left, and a
+        // search the rows exhausted is refused before the histogram runs — max_rows_to_read=0 would be
+        // ClickHouse's "unlimited".
+        var clickHouse = new SummarizingClickHouse(firstReads);
+        var store = new ClickHouseLogStore(
+            new HttpClient(clickHouse),
+            new MonitorQueryOptions { LogsEndpoint = "https://clickhouse:8443", LogsMaxRowsToRead = 100 },
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ClickHouseLogStore>.Instance
+        );
+
+        using var body = JsonDocument.Parse("""{"from":"2026-09-23T11:00:00Z","to":"2026-09-23T12:00:00Z"}""");
+        var search = MonitorWorkspaceSearchLogsHandler.ReadSearch(body.RootElement).GetValueOrThrow();
+
+        var answered = await store.SearchAsync("ws_" + new string('a', 32), search, TestContext.Current.CancellationToken);
+
+        clickHouse.Budgets.Count.ShouldBe(statements);
+        clickHouse.Budgets[0].ShouldBe("100");
+
+        if (secondBudget is null) {
+            answered.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+            answered.Error.Message.ShouldContain("its rows and its histogram together");
+        } else {
+            answered.IsSuccess.ShouldBeTrue(answered.Error?.Message);
+            clickHouse.Budgets[1].ShouldBe(secondBudget);
+        }
+    }
+
+    [Theory]
+    [InlineData("https://vmselect:8481", "https://vmselect:8481/select/7/prometheus/api/v1/query")]
+    [InlineData("https://vmselect:8481/", "https://vmselect:8481/select/7/prometheus/api/v1/query")]
+    [InlineData("https://gateway.example/vm", "https://gateway.example/vm/select/7/prometheus/api/v1/query")]
+    [InlineData("https://gateway.example/vm/", "https://gateway.example/vm/select/7/prometheus/api/v1/query")]
+    public void AnEndpointsPathPrefixIsKept(string endpoint, string expected) =>
+        // ⚠ #41's review: vmselect behind an ingress, vmauth or a proxy path lost its prefix, because
+        // both stores resolved an absolute path against the endpoint.
+        MonitorQueryOptions.Resolve(new Uri(endpoint), "select/7/prometheus/api/v1/query").AbsoluteUri.ShouldBe(expected);
+
+    [Fact]
+    public void ClickHousesQueryStringKeepsTheEndpointsPathAndAnEndpointMayNotCarryItsOwn() {
+        MonitorQueryOptions.Resolve(new Uri("https://gateway.example/clickhouse"), "?readonly=2&max_rows_to_read=5")
+            .AbsoluteUri.ShouldBe("https://gateway.example/clickhouse/?readonly=2&max_rows_to_read=5");
+
+        Should.Throw<ArgumentException>(() => new MonitorQueryOptions { LogsEndpoint = "https://clickhouse:8443/?user=admin" }.Validate())
+            .Message.ShouldContain("query string");
+
+        Should.Throw<ArgumentException>(() => new MonitorQueryOptions { MetricsEndpoint = "https://vmselect:8481/#fragment" }.Validate())
+            .Message.ShouldContain("fragment");
+    }
+}
+
+/// <summary>A metrics store that counts what it was asked and answers empty.</summary>
+sealed class CountingMetricsStore : IMonitorMetricsStore {
+    public int Calls { get; private set; }
+
+    public uint LastAccount { get; private set; }
+
+    public Task<Result<MetricsAnswer>> QueryAsync(MetricsTenancy tenancy, MetricsQuery query, CancellationToken cancellationToken = default) {
+        Calls++;
+        LastAccount = tenancy.AccountId;
+
+        return Task.FromResult(Result<MetricsAnswer>.Success(new("vector", ImmutableArray<MetricSeries>.Empty, 0)));
+    }
+
+    public Task<Result<LabelAnswer>> LabelsAsync(MetricsTenancy tenancy, LabelQuery query, CancellationToken cancellationToken = default) {
+        Calls++;
+        LastAccount = tenancy.AccountId;
+
+        return Task.FromResult(Result<LabelAnswer>.Success(new(ImmutableArray<string>.Empty, false)));
+    }
+}
+
+/// <summary>
+///     A ClickHouse HTTP interface that answers every statement with no rows and a summary saying the
+///     first statement read <c>firstReads</c> rows, and records the <c>max_rows_to_read</c> each carried.
+/// </summary>
+sealed class SummarizingClickHouse(long firstReads) : HttpMessageHandler {
+    public List<string> Budgets { get; } = [];
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
+        var budget = request.RequestUri!.Query.TrimStart('?')
+            .Split('&')
+            .Select(static x => x.Split('=', 2))
+            .First(static x => x[0] == "max_rows_to_read")[1];
+
+        Budgets.Add(budget);
+
+        var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent("""{"data":[]}""") };
+        var read = Budgets.Count == 1 ? firstReads : 0;
+        response.Headers.Add("X-ClickHouse-Summary", $$"""{"read_rows":"{{read}}","read_bytes":"0"}""");
+
+        return Task.FromResult(response);
     }
 }

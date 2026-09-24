@@ -204,6 +204,7 @@ tenant-qualified key. `GrainKeys` is the only type allowed to build the within-t
 | `ITenantDirectoryGrain` | *(null tenant)* `platform/tenant-directory` |
 | `IShardMapGrain` | *(null tenant)* `platform/shard-map` |
 | `IClusterConnectionGrain` | *(null tenant)* `cluster/{clusterId:N}` — see below |
+| `IMonitorAccountGrain` | *(null tenant)* `metrics-account/{accountId}` — which workspace holds a folded VictoriaMetrics `accountID`, across every tenant; [16 § Querying a workspace](16-observability.md), #41 |
 
 ⚠ This table is the closed set that `GrainKeys` implements, so a grain missing from it is a grain
 that cannot be addressed. The first, tenth, eleventh and twelfth rows were absent from an earlier
@@ -277,6 +278,14 @@ platform-wide, and if it were tenant-qualified then a cluster shared between a t
 owning tenant as *state* and checks it on every call, and `PlatformCrossTenantAuthorizer` explicitly
 allows the platform → connection edge and logs it. This is the single place tenancy is enforced by
 code rather than by key, and it is called out here so nobody has to discover it.
+
+⚠ **`IMonitorAccountGrain` is the second null-tenant grain keyed per entity, and it owns nothing a
+tenant wrote.** A monitor workspace's VictoriaMetrics `accountID` is its GUID folded to 32 bits
+([16 § Querying a workspace](16-observability.md)), so two workspaces in two tenants can share one, and
+the check that stops it has to see every tenant at once — tenant-qualified, the same account would be
+one grain per tenant, each answering "free". The grain records which workspace GUID claimed the account
+first and answers one question, *does this workspace hold it*, so it never hands one tenant another's
+GUID. A claim is never released: the series under an account outlive the workspace that wrote them.
 
 ## Two-phase create
 

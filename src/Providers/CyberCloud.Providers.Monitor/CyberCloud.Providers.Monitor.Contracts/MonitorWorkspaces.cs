@@ -292,31 +292,27 @@ public static class MonitorWorkspaces {
     /// <param name="id">The resource, with its GUID resolved.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>DERIVED, NOT ALLOCATED, AND THAT IS WHY THIS TYPE NEEDS NO GRAIN.</b> A counter
-    ///         would be durable state, would need one authority per region, and would be the one
-    ///         thing in the resource that a silo restart could get wrong. VictoriaMetrics' accountID
-    ///         is a 32-bit unsigned integer in a URL path, so the resource's own GUID folded to 32
-    ///         bits is an accountID that is stable, recomputable anywhere, and needs nothing
-    ///         remembered.
+    ///         ⚠ <b>DERIVED, NOT ALLOCATED.</b> A counter would be durable state, would need one
+    ///         authority per region, and would be the one thing in the resource that a silo restart
+    ///         could get wrong. VictoriaMetrics' accountID is a 32-bit unsigned integer in a URL path,
+    ///         so the resource's own GUID folded to 32 bits is an accountID that is stable and
+    ///         recomputable anywhere. What it can't be is unique, which is the next two paragraphs.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>A FOLD IS NOT A BIJECTION AND THE COLLISION IS REAL.</b> Two workspaces sharing
     ///         an accountID would read each other's metrics, which is the cross-tenant failure this
     ///         whole document exists to prevent. At 2^32 accounts the birthday bound is a coin-flip
-    ///         at roughly 77 000 workspaces, which is inside this platform's target scale — so this
-    ///         is a <b>known limit with a named closure</b> rather than a safe derivation:
-    ///         <c>conformance.yaml § owed</c>, <c>accountid-is-folded-not-allocated</c>.
+    ///         at roughly 77 000 workspaces, which is inside this platform's target scale.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>SINCE #41 A TENANT READS UNDER IT, SO THE COLLISION IS NOW A READ PATH.</b> This
-    ///         remark used to say the limit was acceptable because nothing read the value yet. The
-    ///         metrics explorer's <c>queryMetrics</c> and <c>listMetricLabels</c> read vmselect at
-    ///         <c>/select/{accountID}/</c>, so two workspaces whose GUIDs fold to one value let a
-    ///         Reader of either query both tenants' metrics. The gateway checks the caller against the
-    ///         workspace they named and can't see that another workspace shares its account. Nothing
-    ///         detects a collision today: the only check is <c>MonitorQueryFixture</c>'s, and it
-    ///         covers one pair of GUIDs. The owed item's closure, <c>accountID:projectID</c>, has to
-    ///         change the write path's vmauth suffix and this read together.
+    ///         ⚠ <b>SO THE FOLD IS DERIVED AND THE CLAIM IS NOT.</b> Once #41's metrics explorer read
+    ///         under this value, a collision was a read a tenant could drive by creating workspaces
+    ///         until one folded onto a victim's. <see cref="IMonitorAccountGrain" /> records the first
+    ///         workspace to claim each account, across every tenant: the reconciler claims before it
+    ///         applies anything and fails the loser, and the explorer's metrics reads answer only the
+    ///         holder. Everything that reads or writes under this value must go through that claim —
+    ///         the alert evaluator included, once its seam stops refusing. What the ledger leaves is
+    ///         <c>conformance.yaml § owed</c>, <c>accountid-is-folded-not-allocated</c>.
     ///     </para>
     ///     <para>
     ///         ⚠ Zero is skipped. VictoriaMetrics treats <c>accountID=0</c> as a legal tenant, and a

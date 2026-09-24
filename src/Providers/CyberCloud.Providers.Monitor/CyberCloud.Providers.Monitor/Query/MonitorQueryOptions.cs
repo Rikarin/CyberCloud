@@ -60,7 +60,10 @@ public sealed class MonitorQueryOptions {
     /// <summary>Whether plain <c>http</c> endpoints are accepted — for a container on a laptop, never a region.</summary>
     public bool AllowInsecureTransport { get; set; }
 
-    /// <summary>How long one query may run before the store is told to stop and the caller is told why.</summary>
+    /// <summary>
+    ///     How long one query may run before the store is told to stop and the caller is told why. A log
+    ///     search's two statements share it.
+    /// </summary>
     /// <remarks>
     ///     ⚠ Under <c>ReconcileDriver.PassBudget</c>, which bounds every synchronous action, so the store's
     ///     own timeout fires first and the caller reads a sentence about their query rather than one
@@ -68,7 +71,10 @@ public sealed class MonitorQueryOptions {
     /// </remarks>
     public TimeSpan QueryTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
-    /// <summary>ClickHouse's <c>max_rows_to_read</c> for one search statement.</summary>
+    /// <summary>
+    ///     The rows one log search may read, its rows statement and its histogram together — ClickHouse's
+    ///     <c>max_rows_to_read</c>, split between the two by what the first one read.
+    /// </summary>
     public long LogsMaxRowsToRead { get; set; } = 50_000_000;
 
     /// <summary>The largest response body read from either store, in bytes.</summary>
@@ -99,8 +105,33 @@ public sealed class MonitorQueryOptions {
     /// <summary>The ClickHouse base URL.</summary>
     public Uri LogsEndpointUri() => Validated(LogsEndpoint, nameof(LogsEndpoint));
 
+    /// <summary>Appends a store path, or a query string, to an endpoint without dropping the endpoint's own path.</summary>
+    /// <param name="endpoint">A validated endpoint: absolute, with no query string and no fragment.</param>
+    /// <param name="relative">
+    ///     A path with no leading slash, such as <c>select/7/prometheus/api/v1/query</c>, or a query
+    ///     string starting with <c>?</c>.
+    /// </param>
+    /// <remarks>
+    ///     ⚠ <b>Resolved against the endpoint as a DIRECTORY.</b> A store behind an ingress, vmauth or a
+    ///     proxy path is configured as <c>https://gateway/vm</c>, and <c>new Uri(endpoint, "/select/…")</c>
+    ///     — what both stores did until #41's review — replaced <c>/vm</c> rather than extending it,
+    ///     so every query went to the proxy's root. The trailing slash is added when it's missing, and
+    ///     the relative part never starts with one.
+    /// </remarks>
+    public static Uri Resolve(Uri endpoint, string relative) {
+        ArgumentNullException.ThrowIfNull(endpoint);
+        ArgumentNullException.ThrowIfNull(relative);
+
+        var directory = endpoint.AbsolutePath.EndsWith('/') ? endpoint : new Uri(endpoint.AbsoluteUri + "/");
+
+        return new(directory, relative.TrimStart('/'));
+    }
+
     /// <summary>Checks every configured endpoint, so a bad one fails the host's start and not a query.</summary>
-    /// <exception cref="ArgumentException">An endpoint is not an absolute http(s) URI, or is http without <see cref="AllowInsecureTransport" />.</exception>
+    /// <exception cref="ArgumentException">
+    ///     An endpoint is not an absolute http(s) URI, carries a query string or a fragment, or is http
+    ///     without <see cref="AllowInsecureTransport" />.
+    /// </exception>
     public void Validate() {
         if (IsMetricsConfigured) {
             _ = MetricsEndpointFor(MonitorWorkspaces.DefaultTier);
@@ -120,6 +151,14 @@ public sealed class MonitorQueryOptions {
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)) {
             throw new ArgumentException(
                 $"{SectionName}:{key} '{value}' is not an absolute http(s) URI.",
+                key
+            );
+        }
+
+        if (uri.Query.Length > 0 || uri.Fragment.Length > 0) {
+            throw new ArgumentException(
+                $"{SectionName}:{key} '{value}' carries a query string or a fragment, and the stores build "
+                + "their own query strings. Configure a scheme, a host, a port and, behind a proxy, a path.",
                 key
             );
         }

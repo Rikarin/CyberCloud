@@ -79,7 +79,7 @@ public sealed class MonitorCase : IProviderCaseSource {
             DisplayName = "CyberCloud.Monitor/workspaces",
             CreateProvider = static () => new MonitorProvider(),
             ReconcilerType = typeof(MonitorWorkspaceReconciler),
-            CreateReconciler = static clock => new MonitorWorkspaceReconciler(clock),
+            CreateReconciler = static clock => new MonitorWorkspaceReconciler(clock, new InMemoryMonitorAccounts()),
             Type = MonitorWorkspaces.Type,
             ApiVersion = MonitorWorkspaces.V2026,
             Body = static cluster => MonitorWorkspaces.Body(cluster),

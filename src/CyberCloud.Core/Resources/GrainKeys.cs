@@ -173,7 +173,15 @@ public enum GrainKeyKind {
     ///     by a GUID; see <see cref="GrainKeys.ManagementGroup" /> for why, and for why the name is
     ///     unique within the tenant by construction.
     /// </summary>
-    ManagementGroup
+    ManagementGroup,
+
+    /// <summary>
+    ///     <c>IMonitorAccountGrain</c> — <c>metrics-account/{accountId}</c>, the one claim on a
+    ///     VictoriaMetrics <c>accountID</c> across every tenant. ⚠ <b>Null tenant</b>, see
+    ///     <see cref="GrainKeys.MetricsAccount" />. <see cref="GrainKey.Name" /> carries the account
+    ///     in decimal.
+    /// </summary>
+    MetricsAccount
 }
 
 /// <summary>
@@ -268,7 +276,8 @@ public readonly record struct GrainKey {
     ///     The resource group name, for <see cref="GrainKeyKind.ResourceGroup" />,
     ///     <see cref="GrainKeyKind.ParkedResourceRegistry" /> and
     ///     <see cref="GrainKeyKind.ExpirySweeper" />; the management group name, for
-    ///     <see cref="GrainKeyKind.ManagementGroup" />.
+    ///     <see cref="GrainKeyKind.ManagementGroup" />; the <c>accountID</c> in decimal, for
+    ///     <see cref="GrainKeyKind.MetricsAccount" />.
     /// </summary>
     public string Name => name ?? string.Empty;
 
@@ -339,6 +348,7 @@ public readonly record struct GrainKey {
             GrainKeyKind.ListObjects => GrainKeys.ListObjects(ObjectType, ObjectId),
             GrainKeyKind.MembershipIndex => GrainKeys.MembershipIndex(ObjectType, ObjectId),
             GrainKeyKind.ManagementGroup => GrainKeys.ManagementGroup(Name),
+            GrainKeyKind.MetricsAccount => GrainKeys.MetricsAccountPrefix + Name,
             _ => string.Empty
         };
 }
@@ -355,7 +365,7 @@ public readonly record struct GrainKey {
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The twenty-nine shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
+///         <b>The thirty shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
 ///         two more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
 ///         table is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
 ///         Platform rows; four are docs/plan/07 § Storage's authorization grains; five are
@@ -384,7 +394,9 @@ public readonly record struct GrainKey {
 ///         #94; the twenty-eighth is <see cref="WatchIndex" />, #90's; and the twenty-ninth is
 ///         <see cref="ManagementGroup" />, the scope above the subscription that docs/plan/06 § The
 ///         hierarchy drew from the first day and docs/plan/06 § Grain keys carried no row for until
-///         issue #39 put a grain behind it. See the remarks on each. Every one of them is formatted <i>and</i> parsed —
+///         issue #39 put a grain behind it; and the thirtieth is <see cref="MetricsAccount" />, the
+///         claim that keeps two monitor workspaces off one VictoriaMetrics <c>accountID</c>, which
+///         #41's review asked for once the metrics explorer read under that account. See the remarks on each. Every one of them is formatted <i>and</i> parsed —
 ///         a key that can
 ///         be built but not decoded is half a type, and routing a physical key back to a grain type
 ///         (in a log, in a repair tool, in a dead-letter handler) needs the other half.
@@ -392,13 +404,14 @@ public readonly record struct GrainKey {
 ///     <para>
 ///         ⚠
 ///         <b>
-///             Twenty-eight was twenty-seven, was twenty-five, was twenty-four, was twenty-three, was twenty-two, was
+///             Thirty was twenty-nine, was twenty-eight, was twenty-seven, was twenty-five, was twenty-four, was twenty-three, was twenty-two, was
 ///             twenty-one, was twenty, was nineteen, and was eight before that, and the count is
 ///             re-derived rather than incremented.
-///         </b> Counted on 2026-09-18 off
+///         </b> Counted on 2026-09-24 off
 ///         <see cref="GrainKeyKind" />'s members, excluding <see cref="GrainKeyKind.None" />, which
-///         is not a key — twenty-nine members: <see cref="ManagementGroup" /> is #39's and
-///         <see cref="WatchIndex" /> #90's, both merged on this date beside #94's <see cref="AuthorizationCode" /> and
+///         is not a key — thirty members: <see cref="MetricsAccount" /> is #41's review's, on top of
+///         the twenty-nine counted on 2026-09-18, when <see cref="ManagementGroup" /> was #39's and
+///         <see cref="WatchIndex" /> #90's, both merged that day beside #94's <see cref="AuthorizationCode" /> and
 ///         <see cref="ConsentGrant" />, the two added on top of the twenty-five #88's
 ///         <see cref="SignUp" /> had made of the twenty-four the same day's merge of three branches
 ///         (#37, #88 and the ListObjects half of #37) had counted, each branch having counted itself
@@ -406,7 +419,7 @@ public readonly record struct GrainKey {
 ///         and #88 before this. It goes stale the moment a
 ///         member is added without this sentence being reread, which is exactly how issue #71 came to
 ///         describe this type as covering "eight key shapes today": eight is the size of
-///         docs/plan/06's <i>table</i>, and it stopped being the size of this type twenty-one shapes ago (twenty-nine less
+///         docs/plan/06's <i>table</i>, and it stopped being the size of this type twenty-two shapes ago (thirty less
 ///         eight — re-derived, as #39's review of this sentence
 ///         asked; #39's own task text had called its kind "the 25th", a count from an older tree).
 ///     </para>
@@ -590,6 +603,12 @@ public readonly record struct GrainKey {
 ///             </term>
 ///             <description><c>mg/{name}</c> — docs/plan/06 § Grain keys, since issue #39</description>
 ///         </item>
+///         <item>
+///             <term>
+///                 <see cref="MetricsAccount" />
+///             </term>
+///             <description><c>metrics-account/{accountId}</c> — <b>null tenant</b>, docs/plan/16 § Querying a workspace</description>
+///         </item>
 ///     </list>
 ///     <para>
 ///         The six <c>rel/</c> shapes are docs/plan/07 § Storage's three indexes, plus the three
@@ -648,7 +667,7 @@ public readonly record struct GrainKey {
 ///         shape is fixed by its first segment (<c>sub</c>, <c>res</c>, <c>user</c>, <c>op</c>,
 ///         <c>cluster</c>, <c>group</c>, <c>app</c>, <c>sp</c>, <c>session</c>, <c>mi</c>,
 ///         <c>signup</c>, <c>code</c>, <c>consent</c>, <c>mg</c>, <c>parked</c>, <c>sweep</c>, <c>idx</c>, <c>rel</c>,
-///         <c>tenant</c>,
+///         <c>tenant</c>, <c>metrics-account</c>,
 ///         <c>platform</c>) and
 ///         its segment count, and the only caller-controlled components
 ///         — the resource group name, in <see cref="ResourceGroup" />, in
@@ -702,6 +721,9 @@ public static class GrainKeys {
 
     /// <summary><c>cluster/</c> — a cluster connection. Null tenant.</summary>
     public const string ClusterConnectionPrefix = "cluster/";
+
+    /// <summary><c>metrics-account/</c> — the claim on one VictoriaMetrics <c>accountID</c>. Null tenant.</summary>
+    public const string MetricsAccountPrefix = "metrics-account/";
 
     /// <summary>
     ///     <c>parked/</c> — a resource group's registry of soft-deleted resources, docs/plan/08
@@ -1469,6 +1491,44 @@ public static class GrainKeys {
     public static string ClusterConnection(Guid clusterId) => ClusterConnectionPrefix + N(clusterId);
 
     /// <summary>
+    ///     <c>metrics-account/{accountId}</c> — <c>IMonitorAccountGrain</c>, the record of which
+    ///     monitor workspace holds one VictoriaMetrics <c>accountID</c>.
+    /// </summary>
+    /// <param name="accountId">
+    ///     The account, as <c>MonitorWorkspaces.AccountId</c> folds it from a workspace's GUID. Never
+    ///     zero: the fold skips it, and zero is the account every misconfigured client writes to.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This key is NOT tenant-qualified, and it's the second per-entity null-tenant shape
+    ///         after <see cref="ClusterConnection" />.</b> An <c>accountID</c> is a 32-bit fold of a
+    ///         workspace's GUID, so two workspaces in two tenants can fold to one account and would
+    ///         then read and write each other's metrics. The claim that prevents it has to see every
+    ///         tenant's workspaces at once, which a tenant-qualified key can't: under
+    ///         <c>ForTenant(a)</c> and <c>ForTenant(b)</c> the same account is two grains that each
+    ///         say "free". The platform tenant would be one grain, and the separator refuses a
+    ///         reconciler's call into it (<c>CyberCloudGrainCallTenantSeparator</c>'s remarks say why
+    ///         that list stays short); a call into the null tenant is the edge
+    ///         <c>PlatformCrossTenantAuthorizer</c> already allows and logs.
+    ///     </para>
+    ///     <para>
+    ///         The grain holds a workspace GUID and nothing a tenant wrote. It answers only whether a
+    ///         given workspace holds the account, so it never tells one tenant another's GUID.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Decimal, not the <c>N</c> form, because the account is a number.</b> The parser
+    ///         accepts exactly <see cref="uint" />'s invariant spelling with no sign, no leading zero,
+    ///         and not zero itself, so one account has one key.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="accountId" /> is zero.</exception>
+    public static string MetricsAccount(uint accountId) {
+        ArgumentOutOfRangeException.ThrowIfZero(accountId);
+
+        return MetricsAccountPrefix + accountId.ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
     ///     <c>idx/path/{sha256(canonicalPath)[..16]}</c> — <c>IResourceIndexGrain</c>,
     ///     docs/plan/06 § Grain keys.
     /// </summary>
@@ -1846,7 +1906,7 @@ public static class GrainKeys {
                 + "'code/{id}', 'consent/{digest}', 'platform/{singleton}', 'idx/path/{digest}', "
                 + "'idx/email/{digest}', 'idx/client/{digest}', 'idx/watch/{digest}', "
                 + "'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
-                + "'mg/{name}', 'platform/{singleton}', 'idx/path/{digest}', "
+                + "'mg/{name}', 'metrics-account/{accountId}', 'platform/{singleton}', 'idx/path/{digest}', "
                 + "'idx/email/{digest}', 'idx/client/{digest}', 'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
                 + "'rel/sub/{type}/{id}', 'rel/check/{type}/{id}', 'rel/list/{type}/{id}' or "
                 + "'rel/idx/{type}/{id}' — see "
@@ -1946,6 +2006,20 @@ public static class GrainKeys {
                 );
         }
 
+        if (string.Equals(segments[0], "metrics-account", StringComparison.Ordinal)) {
+            // ⚠ A number, not a GUID, so it is decided before the GUID rule below runs. The
+            // re-spelling comparison is what refuses "007": the key carries the text it was given, so
+            // the canonicity guard in Parse would round-trip a leading zero rather than catch it.
+            return uint.TryParse(segments[1], NumberStyles.None, CultureInfo.InvariantCulture, out var account)
+                && account != 0
+                && string.Equals(account.ToString(CultureInfo.InvariantCulture), segments[1], StringComparison.Ordinal)
+                    ? Result<GrainKey>.Success(new(GrainKeyKind.MetricsAccount, Guid.Empty, segments[1], null))
+                    : Invalid(
+                        $"'{key}' is not a grain key: '{segments[1]}' is not an accountID. A metrics "
+                        + "account is a decimal number from 1 to 4294967295 with no sign and no leading zero."
+                    );
+        }
+
         if (string.Equals(segments[0], "mg", StringComparison.Ordinal)) {
             // ⚠ The one two-segment shape whose payload is a name and not a GUID, so it is decided
             // before the GUID rule below runs — a group named with 32 hex digits is still a group.
@@ -1977,7 +2051,7 @@ public static class GrainKeys {
             return Invalid(
                 $"'{key}' is not a grain key: '{segments[0]}' is not one of 'sub', 'res', 'user', "
                 + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session', 'mi', 'signup', 'code', "
-                + "'consent' or 'platform'. "
+                + "'consent', 'metrics-account' or 'platform'. "
                 + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session', 'mi', 'signup', 'mg' or "
                 + "'platform'. "
                 + "The prefix is matched case-sensitively — see docs/plan/06 § Grain keys and "

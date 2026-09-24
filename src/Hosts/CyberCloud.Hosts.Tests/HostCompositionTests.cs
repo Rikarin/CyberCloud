@@ -179,6 +179,26 @@ public sealed class HostCompositionTests {
     }
 
     /// <summary>
+    ///     ⚠ Both hosts hold the accountID ledger: the silo's workspace reconciler claims through it,
+    ///     and the gateway's metrics handlers check it (#41's review).
+    /// </summary>
+    /// <remarks>
+    ///     A host that lacked it would fail to build the reconciler or the handlers on their first use
+    ///     rather than at start, which is why presence is asserted here. The grain-backed one, because a
+    ///     ledger per process would let each host answer "free" for an account the other had claimed.
+    /// </remarks>
+    [Fact]
+    public async Task BothHostsResolveTheGrainBackedAccountLedger() {
+        await using var gateway = await BuildGatewayAsync();
+        await using var silo = await BuildSiloAsync();
+
+        foreach (var host in new[] { gateway.Services, silo.Services }) {
+            host.GetService<CyberCloud.Providers.Monitor.Contracts.IMonitorAccounts>()
+                .ShouldBeOfType<CyberCloud.Providers.Monitor.Accounts.GrainMonitorAccounts>();
+        }
+    }
+
+    /// <summary>
     ///     ⚠ The gateway routes from a registry with the same namespaces in it.
     /// </summary>
     [Fact]

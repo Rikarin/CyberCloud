@@ -110,6 +110,38 @@ public sealed class MonitorQueryOverHttpTests(MonitorQueryFixture stack) : IClas
     }
 
     [Fact]
+    public async Task AWorkspaceThatFoldsOntoAnotherTenantsAccountFailsToCreateAndReadsNoneOfIt() {
+        // ⚠⚠ #41's review: the accountID is the GUID folded to 32 bits, so a tenant creating
+        // workspaces in a loop eventually lands one on a victim's account. The fixture stages exactly
+        // that — tenant B's `collider` folds to an account the ledger says tenant A's workspace holds,
+        // and tenant A's series are in it — so an answer here is the boundary and not an empty account.
+        stack.CollidingCreate.State.ShouldBe(OperationState.Failed, "the reconciler converged a workspace onto a held account");
+        stack.CollidingCreate.Error!.Code.ShouldBe(CyberCloud.Core.ErrorCode.Conflict);
+        stack.CollidingCreate.Error.Message.ShouldContain("Delete this workspace and create it again");
+
+        var window = new { start = Stamp(stack.Origin), end = Stamp(stack.Origin.AddMinutes(60)) };
+
+        var (queried, queriedBody) = await stack.PostAsync(
+            MonitorQueryFixture.TenantB,
+            MonitorQueryFixture.ActionPath(MonitorQueryFixture.TenantB, MonitorQueries.QueryMetricsAction, MonitorQueryFixture.CollidingWorkspace),
+            new { query = "cc_requests_total", window.start, window.end, stepSeconds = 300 }
+        );
+
+        var (listed, listedBody) = await stack.PostAsync(
+            MonitorQueryFixture.TenantB,
+            MonitorQueryFixture.ActionPath(MonitorQueryFixture.TenantB, MonitorQueries.ListMetricLabelsAction, MonitorQueryFixture.CollidingWorkspace),
+            new { label = "route", window.start, window.end }
+        );
+
+        foreach (var (status, body) in new[] { (queried, queriedBody), (listed, listedBody) }) {
+            status.ShouldBe(409, body);
+            // No apostrophe in the phrase: the problem body's JSON may spell one as an escape.
+            body.ShouldContain("hold its metrics account");
+            body.ShouldNotContain("/collided", Case.Sensitive, "tenant A's series reached tenant B through a folded account");
+        }
+    }
+
+    [Fact]
     public async Task AnotherTenantsPathIs404AndNoneOfItsDataComesBack() {
         // Tenant B's token at tenant A's address: stage 3 refuses the disagreement before routing,
         // with the canonical 404 and not a 403.

@@ -2,6 +2,7 @@ using CyberCloud.Conformance;
 using CyberCloud.Conformance.Harness;
 using CyberCloud.Core.Time;
 using CyberCloud.Providers.Monitor;
+using CyberCloud.Providers.Monitor.Accounts;
 using CyberCloud.Providers.Monitor.Conformance;
 using CyberCloud.Providers.Monitor.Contracts;
 using CyberCloud.Providers.Monitor.Query;
@@ -33,9 +34,20 @@ namespace CyberCloud.Gateway.Host.Tests.Infrastructure;
 ///         <see cref="ActionDispatcher" />, which resolves the real handlers over the real
 ///         <see cref="VictoriaMetricsQueryStore" /> and <see cref="ClickHouseLogStore" />. What is not
 ///         production: the token issuer (the harness's, as in every gateway test), the authorizer
-///         (<c>PermissiveAuthorizer</c>, which the Reader test restricts — the real ReBAC mapping of
-///         Reader to <c>read</c> is <c>CyberCloud.Isolation</c>'s to prove), and the cluster the
+///         (<c>PermissiveAuthorizer</c>, which the Reader test restricts), and the cluster the
 ///         workspace converges onto (the conformance suite's fake; the action reads no object).
+///     </para>
+///     <para>
+///         ⚠ <b>"A Reader may query" is two proofs joined, and neither is here.</b> The permissive
+///         authorizer is told the string <c>read</c> is granted, so what this suite shows is that the
+///         three actions need <c>read</c> and nothing more. That they declare the type's own read
+///         permission is <c>MonitorQueryTests.TheThreeActionsAreDeclaredWithReadTheirRequestsAndTheirHandlers</c>;
+///         that the real ReBAC schema grants <c>read</c> on a resource to Reader and withholds
+///         <c>write</c> is <c>RoleAssignmentTests.AnOwnerGrantsReaderOnAGroupAndTheReaderCanReadButNotWriteAResourceInIt</c>,
+///         through the real authorizers and the real <c>CyberCloudSchema</c>. The resource authorizer
+///         checks an action's declared permission on the resource object as it checks <c>read</c>
+///         for a <c>GET</c>, so nothing sits between the two.
+///         #41's review asked for the join to be written down rather than implied.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The metrics store is VictoriaMetrics' CLUSTER version, three containers, because the
@@ -63,6 +75,12 @@ public sealed class MonitorQueryFixture : IAsyncLifetime {
 
     /// <summary>A workspace in tenant A that nothing has written a log to.</summary>
     public const string EmptyWorkspace = "quiet";
+
+    /// <summary>
+    ///     A workspace in tenant B whose accountID the ledger says tenant A's workspace holds — what a
+    ///     fold collision looks like from the platform. Its account carries tenant A's series.
+    /// </summary>
+    public const string CollidingWorkspace = "collider";
 
     /// <summary>
     ///     The body of tenant A's one record with a Windows path, a lone backslash and a tab in it —
@@ -96,6 +114,12 @@ public sealed class MonitorQueryFixture : IAsyncLifetime {
 
     /// <summary>Tenant B's workspace GUID.</summary>
     public Guid WorkspaceB { get; private set; }
+
+    /// <summary>How <see cref="CollidingWorkspace" />'s create ended — refused by its reconciler.</summary>
+    public OperationStatus CollidingCreate { get; private set; } = null!;
+
+    /// <summary><see cref="CollidingWorkspace" />'s accountID, which tenant A's workspace holds.</summary>
+    public uint CollidingAccount { get; private set; }
 
     /// <summary>Where the seeded data starts: an hour before the fixture started, on the minute.</summary>
     public DateTimeOffset Origin { get; } = Minute(DateTimeOffset.UtcNow.AddHours(-1));
@@ -161,8 +185,16 @@ public sealed class MonitorQueryFixture : IAsyncLifetime {
         };
 
         // ── The real write path, over the harness's cluster, with the real handlers ──────────────
+        //
+        // ⚠ The ledger is the real grain, reached through the seam the gateway registers. The silo's
+        // reconciler claims through its own instance of the same seam, so what a handler checks here
+        // is what a reconcile pass claimed. The in-process cluster shares one type manifest, which is
+        // why MonitorAccountOverTheRealHostsTests crosses a real process boundary as well.
+        var accounts = new GrainMonitorAccounts(Cluster.Grains);
+
         var handlers = new ServiceCollection()
             .AddSingleton<IClock>(new SystemClock())
+            .AddSingleton<IMonitorAccounts>(accounts)
             .AddSingleton<IMonitorMetricsStore>(
                 new VictoriaMetricsQueryStore(new HttpClient(), options, NullLogger<VictoriaMetricsQueryStore>.Instance)
             )
@@ -186,9 +218,26 @@ public sealed class MonitorQueryFixture : IAsyncLifetime {
             NullLogger<ResourceManagerService>.Instance
         );
 
-        WorkspaceA = await CreateWorkspaceAsync(manager, TenantA, ConformanceIds.Subscription, Workspace);
-        WorkspaceB = await CreateWorkspaceAsync(manager, TenantB, ConformanceIds.OtherSubscription, Workspace);
-        await CreateWorkspaceAsync(manager, TenantA, ConformanceIds.Subscription, EmptyWorkspace);
+        WorkspaceA = await CreateConvergedAsync(manager, TenantA, ConformanceIds.Subscription, Workspace);
+        WorkspaceB = await CreateConvergedAsync(manager, TenantB, ConformanceIds.OtherSubscription, Workspace);
+        await CreateConvergedAsync(manager, TenantA, ConformanceIds.Subscription, EmptyWorkspace);
+
+        // ⚠ The collision, staged where the platform would meet it: the write is accepted, and before
+        // its reconcile runs the ledger is told tenant A's workspace got the account first. Nothing
+        // searches for two GUIDs that fold alike — the write path mints the GUID, so a real collision
+        // can't be arranged, and to the reconciler and the handlers a staged one is the same thing.
+        var (_, collided) = await CreateAsync(
+            manager,
+            TenantB,
+            ConformanceIds.OtherSubscription,
+            CollidingWorkspace,
+            async id => {
+                CollidingAccount = AccountOf(id, TenantB, ConformanceIds.OtherSubscription);
+                (await accounts.ClaimAsync(CollidingAccount, WorkspaceA, token)).ShouldBeTrue();
+            }
+        );
+
+        CollidingCreate = collided;
 
         await SeedMetricsAsync(token);
         await SeedLogsAsync(token);
@@ -235,7 +284,25 @@ public sealed class MonitorQueryFixture : IAsyncLifetime {
         return ((int)response.StatusCode, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
-    async Task<Guid> CreateWorkspaceAsync(ResourceManagerService manager, Guid tenant, Guid subscription, string name) {
+    /// <summary>Creates a workspace through the write path and drives its create to Succeeded.</summary>
+    async Task<Guid> CreateConvergedAsync(ResourceManagerService manager, Guid tenant, Guid subscription, string name) {
+        var (id, status) = await CreateAsync(manager, tenant, subscription, name, static _ => Task.CompletedTask);
+
+        // ⚠ Driven, not merely accepted: the reconcile pass is what claims the accountID, and a
+        // workspace whose create hasn't converged holds none, so its metrics reads are a 409.
+        status.State.ShouldBe(OperationState.Succeeded, $"'{name}' in {tenant}: {status.Error?.Message}");
+
+        return id;
+    }
+
+    /// <summary>Creates a workspace through the write path and drives its create to a terminal state.</summary>
+    async Task<(Guid Id, OperationStatus Status)> CreateAsync(
+        ResourceManagerService manager,
+        Guid tenant,
+        Guid subscription,
+        string name,
+        Func<Guid, Task> beforeReconcile
+    ) {
         var address = new ResourceId(tenant, subscription, ConformanceIds.ResourceGroup, MonitorWorkspaces.Type, name, Guid.Empty);
 
         var accepted = await manager.WriteAsync(
@@ -254,7 +321,19 @@ public sealed class MonitorQueryFixture : IAsyncLifetime {
         var id = accepted.GetValueOrThrow().Resource.Id;
         id.ShouldNotBe(Guid.Empty);
 
-        return id;
+        await beforeReconcile(id);
+
+        var operation = Cluster.Operation(tenant, accepted.GetValueOrThrow().OperationId);
+        OperationStatus? last = null;
+
+        for (var drive = 0; drive < 8 && last is not { IsTerminal: true }; drive++) {
+            last = (await operation.DriveAsync()).GetValueOrThrow();
+        }
+
+        last.ShouldNotBeNull();
+        last.IsTerminal.ShouldBeTrue($"'{name}' in {tenant} never finished creating: {last.State}");
+
+        return (id, last);
     }
 
     // ── The seed ──────────────────────────────────────────────────────────────────────────────
@@ -278,10 +357,15 @@ public sealed class MonitorQueryFixture : IAsyncLifetime {
         await ImportAsync(accountA, ["cc_requests_total{tenant=\"a\",route=\"/api\"}", "cc_requests_total{tenant=\"a\",route=\"/health\"}"], cancellationToken);
         await ImportAsync(accountB, ["cc_requests_total{tenant=\"b\",route=\"/api\"}"], cancellationToken);
 
+        // Tenant A's series under the account the colliding workspace folds to — what its holder
+        // would have written there. A read that reached the store would answer these.
+        await ImportAsync(CollidingAccount, ["cc_requests_total{tenant=\"a\",route=\"/collided\"}"], cancellationToken);
+
         // Searchable is not the same as accepted: vminsert buffers and vmstorage publishes a new part
         // about a second later. Wait for both accounts rather than sleeping a guess.
         await UntilSeriesAsync(accountA, 2, cancellationToken);
         await UntilSeriesAsync(accountB, 1, cancellationToken);
+        await UntilSeriesAsync(CollidingAccount, 1, cancellationToken);
     }
 
     async Task ImportAsync(uint account, string[] series, CancellationToken cancellationToken) {

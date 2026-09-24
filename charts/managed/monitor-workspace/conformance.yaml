@@ -169,19 +169,28 @@ owed:
   - id: accountid-is-folded-not-allocated
     says: >
       MonitorWorkspaces.AccountId folds the resource GUID to 32 bits because VictoriaMetrics'
-      accountID is a 32-bit integer and a derived value needs no allocator and no grain. A fold is not
-      a bijection: the birthday bound puts a collision at even odds around 77 000 workspaces, which is
-      inside target scale, and two workspaces sharing an accountID read each other's metrics. ⚠ The
-      first thing to consume this value is the thing that enforces isolation.
-      ⚠ SINCE #41 A TENANT READS UNDER IT. queryMetrics and listMetricLabels ask vmselect at
-      /select/{accountID}/, so a collision now lets a Reader of one workspace query the other
-      tenant's metrics through the portal's explorer — the gateway checks the workspace the caller
-      named and cannot see that a second one shares its account. Nothing detects a collision: the only
-      check is MonitorQueryFixture's, for one pair of GUIDs.
+      accountID is a 32-bit integer, and a fold is not a bijection: the birthday bound puts a collision
+      at even odds around 77 000 workspaces. #41's metrics explorer made that a cross-tenant READ a
+      tenant could drive — create workspaces until one folded onto a victim's account, then list
+      __name__ — and #41's review closed the path rather than the fold. IMonitorAccountGrain
+      (null tenant, metrics-account/{accountId}) records which workspace GUID claimed an account first;
+      the workspace reconciler claims before it mints or applies anything and fails a collision with a
+      409 that says to recreate, so the loser gets no VMUser, no row and so no Grafana datasource; and
+      queryMetrics and listMetricLabels answer 409 without asking vmselect unless the workspace they
+      were handed holds its account. MonitorQueryOverHttpTests stages a collision over the real write
+      path with tenant A's series in the account. What is left: ⚠ a claim is never released, because
+      the series outlive the workspace, so the space only fills (4 294 967 295 accounts, one per
+      workspace ever created in the region); a workspace that loses the fold fails its create and
+      the tenant has to delete and recreate it, which is rare and not automatic; a workspace created
+      before the ledger holds no claim until its next reconcile pass, and of two such workspaces that
+      already collided the loser keeps the VMUser it applied then — the platform has shipped no
+      workspace, so no such pair exists; and the alert evaluator's query seam, when it stops
+      refusing, reads under the same account and must ask the same ledger.
     closes: >
-      An allocator — either an accountID grain per region, or `accountID:projectID` (VictoriaMetrics
-      accepts both as arbitrary 32-bit integers), which makes the space 64 bits and the collision
-      negligible without adding durable state.
+      `accountID:projectID` (VictoriaMetrics accepts both as arbitrary 32-bit integers) in the write
+      path's vmauth suffix and this read together, which makes the space 64 bits so a lost fold stops
+      being a create a tenant has to repeat; the ledger stays, because 64 bits is a smaller collision
+      and not none.
   - id: retention-shrink-is-refused-after-202
     says: >
       Shortening a retention destroys data, and the refusal is in the reconciler because it cannot be
@@ -401,9 +410,13 @@ owed:
       by verb and path prefix alone — GatewayRouter.Classify — so each spends the subscription-write
       bucket (1 200 / 5 min, sized for creates) rather than the read bucket. The resource graph's
       address is exempted by suffix; an action name is not, because a suffix list of provider action
-      names in the gateway is the coupling Classify's remarks keep out. A busy explorer tab is about
-      one query a refresh, well inside the bucket, and a tenant who scripts queries meets the smaller
-      limit first.
+      names in the gateway is the coupling Classify's remarks keep out. ⚠ One explorer interaction is
+      several requests, not one: the metrics explorer lists __name__ when it opens, the chosen
+      metric's label names, and each label filter's values, then runs the query; log search asks for
+      an estimate and then searches. A team with a few explorer tabs open spends the same 1 200 / 5 min
+      — four a second across the whole subscription — that creates, updates and deployments draw on,
+      so a busy afternoon of reading can refuse a deploy with 429, and a tenant who scripts queries
+      meets the limit sooner.
     closes: A read flag on ActionRegistration published where stage 5 can read it without the registry — or the explorers' reads moving to GET once the api-version can carry a query in a URL.
   - id: explorers-are-a-first-cut
     says: >

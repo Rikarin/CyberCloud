@@ -198,8 +198,9 @@ install was recorded as failing — under a strict-peers setting that, it turned
 so what actually stopped it is not on record. The pin was `22.0.8`/`22.0.6` because a peer said so.
 
 **Re-measured on 2026-09-15 from the registry for `@xui/*@3.0.0`** — all 22 packages the portal
-declares plus `@xui/echarts`, which the charts stub will need — with `npm view @xui/<pkg>@3.0.0
-peerDependencies`, and diffed against 2.2.4 package by package. Every peer that changed:
+declares plus `@xui/echarts`, which `libs/charts` draws with since #41 replaced its stub — with
+`npm view @xui/<pkg>@3.0.0 peerDependencies`, and diffed against 2.2.4 package by package. Every peer
+that changed:
 
 | Package                                                            | Peer                               | 2.2.4    | 3.0.0                      |
 | ------------------------------------------------------------------ | ---------------------------------- | -------- | -------------------------- |

@@ -159,7 +159,7 @@ bar, grid, tooltip, canvas — is 173.6 KB. So ECharts is one chunk of its own (
 `echarts-engine.ts`), reached only by `import()` when a charting page first draws, which is after
 that page has painted and never on the path to its first content, and cached across every chart page
 after that. `scripts/bundle-budget.mjs` matches it by the name `namedChunks` gives it and holds it to
-180 KB; every other lazy chunk, including the metrics explorer's (4.9 KB) and the log search's
+180 KB; every other lazy chunk, including the metrics explorer's (5.0 KB) and the log search's
 (4.6 KB), is still held to 120 KB, and an engine inlined into a route would fail as a route chunk. A
 chart primitive light enough for the route budget is xUI's to build (ADR-017), not this portal's.
 

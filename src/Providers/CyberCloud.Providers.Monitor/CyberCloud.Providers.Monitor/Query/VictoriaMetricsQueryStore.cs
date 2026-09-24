@@ -166,7 +166,7 @@ public sealed class VictoriaMetricsQueryStore : IMonitorMetricsStore {
     ) {
         var account = tenancy.AccountId.ToString(CultureInfo.InvariantCulture);
         var baseUri = options.MetricsEndpointFor(tenancy.Tier);
-        var uri = new Uri(baseUri, $"/select/{account}/prometheus/{path}");
+        var uri = MonitorQueryOptions.Resolve(baseUri, $"select/{account}/prometheus/{path}");
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(options.QueryTimeout + TimeSpan.FromSeconds(1));
