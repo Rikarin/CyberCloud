@@ -61,6 +61,9 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
     /// <summary>Every <c>(actionPermission, readPermission)</c> pair the write path asked about.</summary>
     public static ConcurrentQueue<string> Asked { get; } = new();
 
+    /// <summary>The permissions asked about that were asked <c>FullyConsistent</c>, in order.</summary>
+    public static ConcurrentQueue<string> AskedFullyConsistent { get; } = new();
+
     /// <summary>
     ///     Resources this caller cannot read at all — a <c>404</c> whatever permission is asked for.
     /// </summary>
@@ -114,6 +117,7 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
         AskedOn.Clear();
         Checks.Clear();
         DeniedGroups.Clear();
+        AskedFullyConsistent.Clear();
         Hidden.Clear();
         CollectionsAsked.Clear();
         Restricted = false;
@@ -146,6 +150,10 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
 
         if (DeniedGroups.ContainsKey(id.ResourceGroup)) {
             return Task.FromResult(Result.Failure(ErrorCode.ResourceNotFound, $"'{id.Path}' does not exist."));
+        }
+
+        if (fullyConsistent) {
+            AskedFullyConsistent.Enqueue(actionPermission);
         }
 
         // ⚠ Before the permission set, and it answers the canonical 404 without consulting it. A

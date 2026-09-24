@@ -64,22 +64,20 @@ public sealed record SecretRef {
     public bool IsEmpty => Path.Length == 0 || Field.Length == 0;
 
     /// <summary>
-    ///     Whether <see cref="Path" /> addresses exactly what it spells: no empty segment, and no
-    ///     <c>.</c> or <c>..</c> segment.
+    ///     Whether <see cref="Path" /> addresses exactly what it spells —
+    ///     <see cref="IsCanonicalPath" /> of it.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A PREFIX CHECK ON A PATH THAT IS NOT CANONICAL CHECKS NOTHING.</b> The resolver escapes
-    ///     each segment and <c>..</c> survives escaping unchanged, so an HTTP client collapses
-    ///     <c>tenants/{a}/../{b}/db</c> to <c>tenants/{b}/db</c> before OpenBao sees it — found by the
-    ///     #34 review, which printed <c>StartsWith</c> answering <c>True</c> for tenant A's prefix and
-    ///     the request URI naming tenant B's secret. The platform resolves with one broad token, so the
-    ///     path is the only thing standing between two tenants' vaults, and a path that is not
-    ///     canonical is refused rather than normalized: a normalizing check would have to agree
-    ///     byte for byte with every HTTP stack's normalization, forever.
+    ///     ⚠ <b>Two fixes of one defect, merged into one rule (2026-09-24).</b> The #34 review found
+    ///     <c>tenants/{a}/../{b}/db</c> passing a tenant-prefix check in the mailbox parser and added
+    ///     this property and <see cref="IsConfinedTo" />; #30's second review found
+    ///     <c>tenants/{a}/../../platform/…</c> reaching a key vault's root and added
+    ///     <see cref="IsCanonicalPath" />, which also refuses <c>\</c>, <c>%</c> and control characters.
+    ///     The stricter one is the definition, and every check reads it.
     /// </remarks>
-    public bool IsCanonical =>
-        Path.Split('/').All(static x => x.Length > 0 && x != "." && x != "..");
+    public bool IsCanonical => IsCanonicalPath(Path);
 
+    /// <summary>
     /// <summary>
     ///     Whether a tenant-spelled vault path is inside <paramref name="prefix" />: canonical, under it,
     ///     and naming something below it rather than the prefix itself.
@@ -98,7 +96,53 @@ public sealed record SecretRef {
 
         return path.Length > prefix.Length
             && path.StartsWith(prefix, StringComparison.Ordinal)
-            && new SecretRef { Path = path }.IsCanonical;
+            && IsCanonicalPath(path);
+    }
+
+    /// <summary>
+    ///     Reports whether a vault path names the one location its segments spell, so a check on its
+    ///     text is a check on where it leads.
+    /// </summary>
+    /// <param name="path">A vault path, for example <c>tenants/{tenantId}/postgres/main</c>.</param>
+    /// <returns>
+    ///     <c>true</c> if the path is non-empty and none of its <c>/</c>-separated segments is empty,
+    ///     <c>.</c> or <c>..</c>, and it carries no <c>\</c>, <c>%</c> or control character.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A prefix check on a path that isn't canonical is no check.</b>
+    ///         <c>tenants/{a}/../../platform/CyberCloud.KeyVault/vaults/{a}/{id}</c> starts with tenant
+    ///         <c>a</c>'s prefix. <c>Uri.EscapeDataString</c> leaves <c>..</c> alone, and
+    ///         <see cref="System.Uri" /> collapses dot segments before the request leaves, so OpenBao
+    ///         is asked for the vault root under <c>platform/</c> with the platform's broad token. So
+    ///         every place that resolves or mints a path refuses one that fails this, and every place
+    ///         that checks a tenant-supplied path against a prefix calls it first.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <c>%</c> and <c>\</c> are refused as well, although neither reaches a dot segment
+    ///         today: the resolver escapes <c>%</c> to <c>%25</c> and <c>\</c> to <c>%5C</c>. A path
+    ///         the platform writes never needs either, and refusing them means a second decode
+    ///         somewhere between here and OpenBao can't turn <c>%2e%2e</c> back into <c>..</c>.
+    ///     </para>
+    /// </remarks>
+    public static bool IsCanonicalPath(string path) {
+        if (string.IsNullOrEmpty(path)) {
+            return false;
+        }
+
+        foreach (var segment in path.Split('/')) {
+            if (segment is "" or "." or "..") {
+                return false;
+            }
+        }
+
+        foreach (var c in path) {
+            if (c is '\\' or '%' || char.IsControl(c)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <inheritdoc />

@@ -2097,8 +2097,10 @@ public sealed class ResourceManagerService(
             target.Registration.ReadPermission,
             request.Caller,
             // A secret-returning action is a key export, which docs/plan/07 § Consistency puts in the
-            // FullyConsistent row by name.
-            action.Secret,
+            // FullyConsistent row by name. ⚠ So is a deletion and a key's use, which return nothing
+            // secret: CheckGrain's cache has no TTL and a revoke writes no fence, so a MinimizeLatency
+            // allow cached before a revoke would keep a revoked officer purging.
+            action.Secret || action.FullyConsistent,
             cancellationToken
         );
 

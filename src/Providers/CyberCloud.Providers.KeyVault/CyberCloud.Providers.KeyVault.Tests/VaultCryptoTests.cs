@@ -91,6 +91,25 @@ public sealed class VaultCryptoTests {
         VaultCrypto.Decrypt(key.Pkcs8, algorithm, wrapped).GetValueOrThrow().ShouldBe(dataKey);
     }
 
+    [Theory]
+    [InlineData("RSA-OAEP")]
+    [InlineData("RSA-OAEP-256")]
+    public void WhatTheVaultEncryptsBouncyCastleDecrypts(string algorithm) {
+        // The other direction: OAEP's hash and MGF1 hash as the vault sets them are what a client's
+        // library expects, not only what the vault's own Decrypt accepts.
+        var key = VaultCrypto.GenerateRsa(2048);
+        var dataKey = RandomNumberGenerator.GetBytes(32);
+
+        var wrapped = VaultCrypto.Encrypt(key.Public, algorithm, dataKey).GetValueOrThrow();
+
+        var oaep = algorithm == "RSA-OAEP-256"
+            ? new OaepEncoding(new RsaEngine(), new Sha256Digest(), new Sha256Digest(), null)
+            : new OaepEncoding(new RsaEngine(), new Sha1Digest(), new Sha1Digest(), null);
+
+        oaep.Init(false, PrivateKeyFactory.CreateKey(key.Pkcs8));
+        oaep.ProcessBlock(wrapped, 0, wrapped.Length).ShouldBe(dataKey);
+    }
+
     [Fact]
     public void ASealedItemMovedToAnotherItemDoesNotOpen() {
         var root = RandomNumberGenerator.GetBytes(32);

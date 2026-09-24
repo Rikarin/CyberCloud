@@ -17,6 +17,38 @@
         <source>The platform answered <ph id="0" equiv="status" disp="failure.status"/> without an error body.</source>
       </segment>
     </unit>
+    <unit id="terminal.newSession">
+      <notes>
+        <note category="location">apps/portal/src/app/terminal/terminal-session.ts:239</note>
+      </notes>
+      <segment>
+        <source>The shell was reclaimed while the connection was down; this is a new session with the same home directory.</source>
+      </segment>
+    </unit>
+    <unit id="terminal.rejoined">
+      <notes>
+        <note category="location">apps/portal/src/app/terminal/terminal-session.ts:242</note>
+      </notes>
+      <segment>
+        <source>Reconnected to the same session.</source>
+      </segment>
+    </unit>
+    <unit id="terminal.dropped">
+      <notes>
+        <note category="location">apps/portal/src/app/terminal/terminal-session.ts:281</note>
+      </notes>
+      <segment>
+        <source>Connection lost — reconnecting…</source>
+      </segment>
+    </unit>
+    <unit id="terminal.exhausted">
+      <notes>
+        <note category="location">apps/portal/src/app/terminal/terminal-session.ts:295</note>
+      </notes>
+      <segment>
+        <source>Could not reconnect after <ph id="0" equiv="attempts" disp="RECONNECT_ATTEMPTS"/> attempts. Press Reconnect to try again.</source>
+      </segment>
+    </unit>
     <unit id="access.heading">
       <notes>
         <note category="location">apps/portal/src/pages/access/access-blade.ts:91,92</note>
@@ -353,9 +385,41 @@
         <source>Reader</source>
       </segment>
     </unit>
+    <unit id="access.role.keyVaultSecretsOfficer">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:551</note>
+      </notes>
+      <segment>
+        <source>Key Vault Secrets Officer</source>
+      </segment>
+    </unit>
+    <unit id="access.role.keyVaultSecretsUser">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:553</note>
+      </notes>
+      <segment>
+        <source>Key Vault Secrets User</source>
+      </segment>
+    </unit>
+    <unit id="access.role.keyVaultCryptoOfficer">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:555</note>
+      </notes>
+      <segment>
+        <source>Key Vault Crypto Officer</source>
+      </segment>
+    </unit>
+    <unit id="access.role.keyVaultCryptoUser">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:557</note>
+      </notes>
+      <segment>
+        <source>Key Vault Crypto User</source>
+      </segment>
+    </unit>
     <unit id="access.removeLabel">
       <notes>
-        <note category="location">apps/portal/src/pages/access/access-blade.ts:554</note>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:562</note>
       </notes>
       <segment>
         <source>Remove <ph id="0" equiv="name" disp="item.rendered"/></source>
@@ -363,7 +427,7 @@
     </unit>
     <unit id="access.role.ownerHint">
       <notes>
-        <note category="location">apps/portal/src/pages/access/access-blade.ts:656</note>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:664</note>
       </notes>
       <segment>
         <source>Read, write, delete, and assign roles. The only role that can delete or purge.</source>
@@ -371,7 +435,7 @@
     </unit>
     <unit id="access.role.contributorHint">
       <notes>
-        <note category="location">apps/portal/src/pages/access/access-blade.ts:658</note>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:666</note>
       </notes>
       <segment>
         <source>Read and write, and deliberately not delete — narrower than Azure&apos;s Contributor.</source>
@@ -379,15 +443,47 @@
     </unit>
     <unit id="access.role.readerHint">
       <notes>
-        <note category="location">apps/portal/src/pages/access/access-blade.ts:660</note>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:668</note>
       </notes>
       <segment>
         <source>Read only.</source>
       </segment>
     </unit>
+    <unit id="access.role.keyVaultSecretsOfficerHint">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:670</note>
+      </notes>
+      <segment>
+        <source>Set, read, delete, recover and purge a key vault&apos;s secrets. No control-plane right.</source>
+      </segment>
+    </unit>
+    <unit id="access.role.keyVaultSecretsUserHint">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:672</note>
+      </notes>
+      <segment>
+        <source>Read a key vault&apos;s secret values. No control-plane right.</source>
+      </segment>
+    </unit>
+    <unit id="access.role.keyVaultCryptoOfficerHint">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:674</note>
+      </notes>
+      <segment>
+        <source>Create, import, delete, recover, purge and use a key vault&apos;s keys. No control-plane right.</source>
+      </segment>
+    </unit>
+    <unit id="access.role.keyVaultCryptoUserHint">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:676</note>
+      </notes>
+      <segment>
+        <source>Encrypt, decrypt, wrap, unwrap, sign and verify with a key vault&apos;s keys. No control-plane right.</source>
+      </segment>
+    </unit>
     <unit id="access.principalType.user">
       <notes>
-        <note category="location">apps/portal/src/pages/access/access-blade.ts:667</note>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:683</note>
       </notes>
       <segment>
         <source>User</source>
@@ -395,7 +491,7 @@
     </unit>
     <unit id="access.principalType.servicePrincipal">
       <notes>
-        <note category="location">apps/portal/src/pages/access/access-blade.ts:669</note>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:685</note>
       </notes>
       <segment>
         <source>Service principal</source>
@@ -403,7 +499,7 @@
     </unit>
     <unit id="access.principalType.managedIdentity">
       <notes>
-        <note category="location">apps/portal/src/pages/access/access-blade.ts:671</note>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:687</note>
       </notes>
       <segment>
         <source>Managed identity</source>
@@ -411,10 +507,34 @@
     </unit>
     <unit id="access.principalType.group">
       <notes>
-        <note category="location">apps/portal/src/pages/access/access-blade.ts:673</note>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:689</note>
       </notes>
       <segment>
         <source>Group</source>
+      </segment>
+    </unit>
+    <unit id="auth.callback.working">
+      <notes>
+        <note category="location">apps/portal/src/pages/auth/callback.ts:41,44</note>
+      </notes>
+      <segment>
+        <source>Signing you in…</source>
+      </segment>
+    </unit>
+    <unit id="auth.callback.retry">
+      <notes>
+        <note category="location">apps/portal/src/pages/auth/callback.ts:56,58</note>
+      </notes>
+      <segment>
+        <source> Try again </source>
+      </segment>
+    </unit>
+    <unit id="auth.callback.failedTitle">
+      <notes>
+        <note category="location">apps/portal/src/pages/auth/callback.ts:70</note>
+      </notes>
+      <segment>
+        <source>Sign-in could not be completed</source>
       </segment>
     </unit>
     <unit id="home.heading">
@@ -587,7 +707,7 @@
     </unit>
     <unit id="resourceBlade.access">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:77,79</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:79,81</note>
       </notes>
       <segment>
         <source>Access</source>
@@ -595,7 +715,7 @@
     </unit>
     <unit id="resourceBlade.edit">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:80,81</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:82,83</note>
       </notes>
       <segment>
         <source>Edit</source>
@@ -603,7 +723,7 @@
     </unit>
     <unit id="resourceBlade.delete">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:89,90</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:91,92</note>
       </notes>
       <segment>
         <source> Delete </source>
@@ -611,7 +731,7 @@
     </unit>
     <unit id="resourceBlade.tags">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:116,117</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:118,119</note>
       </notes>
       <segment>
         <source>Tags</source>
@@ -619,7 +739,7 @@
     </unit>
     <unit id="resourceBlade.noTags">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:118,120</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:120,122</note>
       </notes>
       <segment>
         <source>No tags.</source>
@@ -627,7 +747,7 @@
     </unit>
     <unit id="resourceBlade.properties">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:129,130</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:131,132</note>
       </notes>
       <segment>
         <source>Properties</source>
@@ -635,7 +755,7 @@
     </unit>
     <unit id="resourceBlade.noProperties">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:132,134</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:134,136</note>
       </notes>
       <segment>
         <source> The body carries no properties the schema names. </source>
@@ -643,7 +763,7 @@
     </unit>
     <unit id="resourceBlade.raw">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:148,149</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:150,151</note>
       </notes>
       <segment>
         <source>Raw body</source>
@@ -651,7 +771,7 @@
     </unit>
     <unit id="resourceBlade.deleteBodyRecoverable">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:156,158</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:158,160</note>
       </notes>
       <segment>
         <source> The resource can be restored for <ph id="0" equiv="INTERPOLATION" disp="{{ softDeleteDays() }}"/> days, and is purged after that. Type the resource name to confirm. </source>
@@ -659,7 +779,7 @@
     </unit>
     <unit id="resourceBlade.deleteBody">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:161,163</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:163,165</note>
       </notes>
       <segment>
         <source> This is permanent: the type declares no soft-delete window. Type the resource name to confirm. </source>
@@ -667,7 +787,7 @@
     </unit>
     <unit id="resourceBlade.deleteConfirmLabel">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:168,171</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:170,173</note>
       </notes>
       <segment>
         <source>Resource name</source>
@@ -675,7 +795,7 @@
     </unit>
     <unit id="resourceBlade.deleteConfirm">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:189,191</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:191,193</note>
       </notes>
       <segment>
         <source> Delete </source>
@@ -683,7 +803,7 @@
     </unit>
     <unit id="resourceBlade.deleteCancel">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:199,201</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:201,203</note>
       </notes>
       <segment>
         <source> Keep it </source>
@@ -691,7 +811,7 @@
     </unit>
     <unit id="resourceBlade.overview">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:308</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:310</note>
       </notes>
       <segment>
         <source>Overview</source>
@@ -699,7 +819,7 @@
     </unit>
     <unit id="resourceBlade.deleteTitle">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:309</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:311</note>
       </notes>
       <segment>
         <source>Delete this resource?</source>
@@ -707,7 +827,7 @@
     </unit>
     <unit id="resourceBlade.state">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:311</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:313</note>
       </notes>
       <segment>
         <source>Provisioning state</source>
@@ -715,7 +835,7 @@
     </unit>
     <unit id="resourceBlade.location">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:312</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:314</note>
       </notes>
       <segment>
         <source>Location</source>
@@ -723,7 +843,7 @@
     </unit>
     <unit id="resourceBlade.resourceGroup">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:313</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:315</note>
       </notes>
       <segment>
         <source>Resource group</source>
@@ -731,7 +851,7 @@
     </unit>
     <unit id="resourceBlade.etag">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:314</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:316</note>
       </notes>
       <segment>
         <source>ETag</source>
@@ -739,7 +859,7 @@
     </unit>
     <unit id="resourceBlade.id">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:315</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:317</note>
       </notes>
       <segment>
         <source>Id</source>
@@ -747,7 +867,7 @@
     </unit>
     <unit id="resourceBlade.unknownType">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:338</note>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:340</note>
       </notes>
       <segment>
         <source><ph id="0" equiv="type" disp="resourceType"/> is not a resource type at api-version <ph id="1" equiv="version" disp="apiVersion"/>.</source>
@@ -907,7 +1027,7 @@
     </unit>
     <unit id="resources.heading">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:55,56</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:56,57</note>
       </notes>
       <segment>
         <source>Resources</source>
@@ -915,7 +1035,7 @@
     </unit>
     <unit id="resources.typeLabel">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:64,66</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:65,67</note>
       </notes>
       <segment>
         <source>Resource type</source>
@@ -923,7 +1043,7 @@
     </unit>
     <unit id="resources.col.name">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:94,95</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:95,96</note>
       </notes>
       <segment>
         <source>Name</source>
@@ -931,7 +1051,7 @@
     </unit>
     <unit id="resources.col.state">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:95,96</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:96,97</note>
       </notes>
       <segment>
         <source>Provisioning state</source>
@@ -939,7 +1059,7 @@
     </unit>
     <unit id="resources.col.location">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:96,97</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:97,98</note>
       </notes>
       <segment>
         <source>Location</source>
@@ -947,7 +1067,7 @@
     </unit>
     <unit id="resources.col.tags">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:97,98</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:98,99</note>
       </notes>
       <segment>
         <source>Tags</source>
@@ -955,7 +1075,7 @@
     </unit>
     <unit id="resources.more">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:122,123</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:123,124</note>
       </notes>
       <segment>
         <source> Load more </source>
@@ -963,7 +1083,7 @@
     </unit>
     <unit id="resources.end">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:125,127</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:126,128</note>
       </notes>
       <segment>
         <source>No further pages.</source>
@@ -971,7 +1091,7 @@
     </unit>
     <unit id="resources.typePlaceholder">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:160</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:161</note>
       </notes>
       <segment>
         <source>Choose a type</source>
@@ -979,7 +1099,7 @@
     </unit>
     <unit id="resources.pickTitle">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:161</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:162</note>
       </notes>
       <segment>
         <source>Choose a resource type</source>
@@ -987,7 +1107,7 @@
     </unit>
     <unit id="resources.pickDescription">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:162</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:163</note>
       </notes>
       <segment>
         <source>The API lists one type per resource group at a time. Pick one to list its resources here.</source>
@@ -995,7 +1115,7 @@
     </unit>
     <unit id="resources.emptyDescription">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:163</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:164</note>
       </notes>
       <segment>
         <source>Nothing of this type is visible to you in this resource group.</source>
@@ -1003,7 +1123,7 @@
     </unit>
     <unit id="resources.blade">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:183</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:184</note>
       </notes>
       <segment>
         <source>Resources</source>
@@ -1011,7 +1131,7 @@
     </unit>
     <unit id="resources.unknownType">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:196</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:197</note>
       </notes>
       <segment>
         <source><ph id="0" equiv="type" disp="type"/> is not a resource type at api-version <ph id="1" equiv="version" disp="apiVersion"/>.</source>
@@ -1019,7 +1139,7 @@
     </unit>
     <unit id="resources.create">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:272</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:273</note>
       </notes>
       <segment>
         <source>Create <ph id="0" equiv="type" disp="form.title"/></source>
@@ -1027,7 +1147,7 @@
     </unit>
     <unit id="resources.emptyTitle">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:276</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:277</note>
       </notes>
       <segment>
         <source>No <ph id="0" equiv="plural" disp="form.plural"/> here</source>
@@ -1051,15 +1171,23 @@
     </unit>
     <unit id="resourceGroupBlade.list">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:47,50</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:47,49</note>
       </notes>
       <segment>
         <source>Resources</source>
       </segment>
     </unit>
+    <unit id="resourceGroupBlade.terminal">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:50,53</note>
+      </notes>
+      <segment>
+        <source>Cloud shell</source>
+      </segment>
+    </unit>
     <unit id="resourceGroupBlade.create">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:63,64</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:66,67</note>
       </notes>
       <segment>
         <source>Create in this group</source>
@@ -1067,7 +1195,7 @@
     </unit>
     <unit id="resourceGroupBlade.createOne">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:84,86</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:87,89</note>
       </notes>
       <segment>
         <source> Create </source>
@@ -1075,7 +1203,7 @@
     </unit>
     <unit id="resourceGroupBlade.overview">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:116</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:120</note>
       </notes>
       <segment>
         <source>Overview</source>
@@ -1083,7 +1211,7 @@
     </unit>
     <unit id="resourceGroupBlade.location">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:118</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:122</note>
       </notes>
       <segment>
         <source>Default region</source>
@@ -1091,7 +1219,7 @@
     </unit>
     <unit id="resourceGroupBlade.type">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:119</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:123</note>
       </notes>
       <segment>
         <source>Type</source>
@@ -1099,7 +1227,7 @@
     </unit>
     <unit id="resourceGroupBlade.id">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:120</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:124</note>
       </notes>
       <segment>
         <source>Id</source>
@@ -1107,7 +1235,7 @@
     </unit>
     <unit id="resourceGroupBlade.createLabel">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:153</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:157</note>
       </notes>
       <segment>
         <source>Create <ph id="0" equiv="type" disp="type.title"/></source>
@@ -1163,7 +1291,7 @@
     </unit>
     <unit id="resourceGroups.openLabel">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:141,142</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:160,161</note>
       </notes>
       <segment>
         <source>Open by name</source>
@@ -1171,7 +1299,7 @@
     </unit>
     <unit id="resourceGroups.open">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:145,147</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:164,166</note>
       </notes>
       <segment>
         <source> Open </source>
@@ -1179,7 +1307,7 @@
     </unit>
     <unit id="resourceGroups.refused">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:182</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:207</note>
       </notes>
       <segment>
         <source>The platform refused the create</source>
@@ -1187,7 +1315,7 @@
     </unit>
     <unit id="resourceGroups.submit">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:183</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:208</note>
       </notes>
       <segment>
         <source>Create resource group</source>
@@ -1195,23 +1323,23 @@
     </unit>
     <unit id="resourceGroups.emptyTitle">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:184</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:209</note>
       </notes>
       <segment>
-        <source>No list endpoint yet</source>
+        <source>No resource groups</source>
       </segment>
     </unit>
     <unit id="resourceGroups.emptyDescription">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:185</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:210</note>
       </notes>
       <segment>
-        <source>The API can create a resource group and read one by name, and cannot yet enumerate a subscription&apos;s groups. Open one by name above.</source>
+        <source>Your sign-in can read none in this subscription. Create one above, or open one you have a role on by name.</source>
       </segment>
     </unit>
     <unit id="resourceGroups.blade">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:194</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:219</note>
       </notes>
       <segment>
         <source>Resource groups</source>
@@ -1219,7 +1347,7 @@
     </unit>
     <unit id="resourceGroups.nameRequired">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:211</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:255</note>
       </notes>
       <segment>
         <source>A name is required.</source>
@@ -1227,7 +1355,7 @@
     </unit>
     <unit id="resourceGroups.nameInvalid">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:212</note>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:256</note>
       </notes>
       <segment>
         <source>Use 1–63 lowercase letters, digits and hyphens, starting and ending with a letter or digit.</source>
@@ -1299,7 +1427,7 @@
     </unit>
     <unit id="subscriptions.heading">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:64,65</note>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:65,66</note>
       </notes>
       <segment>
         <source>Subscriptions</source>
@@ -1307,15 +1435,15 @@
     </unit>
     <unit id="subscriptions.subheading">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:66,68</note>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:67,69</note>
       </notes>
       <segment>
-        <source> The subscriptions your sign-in grants. The API has no endpoint that lists them. </source>
+        <source> The subscriptions your sign-in may read. </source>
       </segment>
     </unit>
     <unit id="subscriptions.new">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:77,79</note>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:78,80</note>
       </notes>
       <segment>
         <source> New subscription </source>
@@ -1323,7 +1451,7 @@
     </unit>
     <unit id="subscriptions.createHeading">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:84,86</note>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:85,87</note>
       </notes>
       <segment>
         <source> Create a subscription </source>
@@ -1331,7 +1459,7 @@
     </unit>
     <unit id="subscriptions.id">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:97,98</note>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:98,99</note>
       </notes>
       <segment>
         <source>Subscription id</source>
@@ -1339,7 +1467,7 @@
     </unit>
     <unit id="subscriptions.idHint">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:113,114</note>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:114,115</note>
       </notes>
       <segment>
         <source> A UUID in hyphenated form. It is the subscription&apos;s address and cannot change. </source>
@@ -1347,7 +1475,7 @@
     </unit>
     <unit id="subscriptions.cancel">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:133,134</note>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:134,135</note>
       </notes>
       <segment>
         <source> Cancel </source>
@@ -1355,7 +1483,7 @@
     </unit>
     <unit id="subscriptions.refused">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:179</note>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:192</note>
       </notes>
       <segment>
         <source>The platform refused the create</source>
@@ -1363,7 +1491,7 @@
     </unit>
     <unit id="subscriptions.submit">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:180</note>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:193</note>
       </notes>
       <segment>
         <source>Create subscription</source>
@@ -1371,23 +1499,23 @@
     </unit>
     <unit id="subscriptions.emptyTitle">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:181</note>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:194</note>
       </notes>
       <segment>
-        <source>No subscriptions known</source>
+        <source>No subscriptions</source>
       </segment>
     </unit>
     <unit id="subscriptions.emptyDescription">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:182</note>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:195</note>
       </notes>
       <segment>
-        <source>The context bar fills in once the portal holds an access token. Create one above, or open one by id from a link.</source>
+        <source>Your sign-in can read none in this tenant. Create one above, or ask an owner for a role on one.</source>
       </segment>
     </unit>
     <unit id="subscriptions.blade">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:189</note>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:202</note>
       </notes>
       <segment>
         <source>Subscriptions</source>
@@ -1395,7 +1523,7 @@
     </unit>
     <unit id="subscriptions.idRequired">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:209</note>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:236</note>
       </notes>
       <segment>
         <source>An id is required.</source>
@@ -1403,7 +1531,7 @@
     </unit>
     <unit id="subscriptions.idInvalid">
       <notes>
-        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:210</note>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:237</note>
       </notes>
       <segment>
         <source>Use the hyphenated UUID form, lowercase.</source>
@@ -1473,9 +1601,345 @@
         <source>The platform refused the request (<ph id="0" equiv="code" disp="state.code"/>)</source>
       </segment>
     </unit>
+    <unit id="terminal.heading">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:102,103</note>
+      </notes>
+      <segment>
+        <source>Cloud shell</source>
+      </segment>
+    </unit>
+    <unit id="terminal.subheading">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:104,105</note>
+      </notes>
+      <segment>
+        <source>Consoles in</source>
+      </segment>
+    </unit>
+    <unit id="terminal.createAnother">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:110,113</note>
+      </notes>
+      <segment>
+        <source>Create a console</source>
+      </segment>
+    </unit>
+    <unit id="terminal.none.body">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:122,124</note>
+      </notes>
+      <segment>
+        <source> A shell runs in a console: a home directory, a managed identity and a network policy in this group&apos;s cluster. This group has none yet — create one and the shell opens here. </source>
+      </segment>
+    </unit>
+    <unit id="terminal.create.heading">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:128,131</note>
+      </notes>
+      <segment>
+        <source> Create a console </source>
+      </segment>
+    </unit>
+    <unit id="terminal.create.name">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:142,143</note>
+      </notes>
+      <segment>
+        <source>Name</source>
+      </segment>
+    </unit>
+    <unit id="terminal.create.nameHint">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:158,159</note>
+      </notes>
+      <segment>
+        <source> 1–63 lowercase letters, digits and hyphens. It cannot change later. </source>
+      </segment>
+    </unit>
+    <unit id="terminal.consoles.heading">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:175,176</note>
+      </notes>
+      <segment>
+        <source>Consoles</source>
+      </segment>
+    </unit>
+    <unit id="terminal.reconnect">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:214,215</note>
+      </notes>
+      <segment>
+        <source> Reconnect </source>
+      </segment>
+    </unit>
+    <unit id="terminal.disconnect">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:226,227</note>
+      </notes>
+      <segment>
+        <source> Disconnect </source>
+      </segment>
+    </unit>
+    <unit id="terminal.terminateAsk">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:232,234</note>
+      </notes>
+      <segment>
+        <source>Stop the shell? Its home directory stays.</source>
+      </segment>
+    </unit>
+    <unit id="terminal.terminateConfirm">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:244,245</note>
+      </notes>
+      <segment>
+        <source> Stop it </source>
+      </segment>
+    </unit>
+    <unit id="terminal.terminateCancel">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:254,255</note>
+      </notes>
+      <segment>
+        <source> Keep it </source>
+      </segment>
+    </unit>
+    <unit id="terminal.terminate">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:268,269</note>
+      </notes>
+      <segment>
+        <source> Terminate </source>
+      </segment>
+    </unit>
+    <unit id="terminal.recording.body">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:277,278</note>
+      </notes>
+      <segment>
+        <source> Everything typed into and printed by this shell is being recorded. The console was created with session recording on, and that cannot be switched off for its lifetime. </source>
+      </segment>
+    </unit>
+    <unit id="terminal.outcome.terminated">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:293,294</note>
+      </notes>
+      <segment>
+        <source> The shell is stopped. Reconnect starts a new one in the same home directory. </source>
+      </segment>
+    </unit>
+    <unit id="terminal.outcome.wasIdle">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:297,299</note>
+      </notes>
+      <segment>
+        <source>No shell was running — nothing to stop.</source>
+      </segment>
+    </unit>
+    <unit id="terminal.none.title">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:374</note>
+      </notes>
+      <segment>
+        <source>No console in this group</source>
+      </segment>
+    </unit>
+    <unit id="terminal.create.refused">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:375</note>
+      </notes>
+      <segment>
+        <source>The platform refused the create</source>
+      </segment>
+    </unit>
+    <unit id="terminal.create.submit">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:376</note>
+      </notes>
+      <segment>
+        <source>Create console</source>
+      </segment>
+    </unit>
+    <unit id="terminal.recording.title">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:377</note>
+      </notes>
+      <segment>
+        <source>This session is being recorded</source>
+      </segment>
+    </unit>
+    <unit id="terminal.state.idle">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:392</note>
+      </notes>
+      <segment>
+        <source>Not connected</source>
+      </segment>
+    </unit>
+    <unit id="terminal.state.connecting">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:395</note>
+      </notes>
+      <segment>
+        <source>Connecting…</source>
+      </segment>
+    </unit>
+    <unit id="terminal.state.reconnectingNow">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:396</note>
+      </notes>
+      <segment>
+        <source>Reconnecting (attempt <ph id="0" equiv="attempt" disp="state.attempt"/>)…</source>
+      </segment>
+    </unit>
+    <unit id="terminal.state.attached">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:399</note>
+      </notes>
+      <segment>
+        <source>Connected</source>
+      </segment>
+    </unit>
+    <unit id="terminal.state.starting">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:400</note>
+      </notes>
+      <segment>
+        <source>Connected — the shell is still starting</source>
+      </segment>
+    </unit>
+    <unit id="terminal.state.reconnecting">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:402</note>
+      </notes>
+      <segment>
+        <source>Connection lost — retrying in <ph id="0" equiv="seconds" disp="Math.round(state.inMs / 1000)"/> s (attempt <ph id="1" equiv="attempt" disp="state.attempt"/> of 5)</source>
+      </segment>
+    </unit>
+    <unit id="terminal.state.refused">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:404</note>
+      </notes>
+      <segment>
+        <source>The hub refused the session</source>
+      </segment>
+    </unit>
+    <unit id="terminal.state.failed">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:406</note>
+      </notes>
+      <segment>
+        <source>Could not connect</source>
+      </segment>
+    </unit>
+    <unit id="terminal.state.closed">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:409</note>
+      </notes>
+      <segment>
+        <source>Disconnected</source>
+      </segment>
+    </unit>
+    <unit id="terminal.state.exhausted">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:410</note>
+      </notes>
+      <segment>
+        <source>Disconnected — reconnecting gave up</source>
+      </segment>
+    </unit>
+    <unit id="terminal.problem.refusedTitle">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:421</note>
+      </notes>
+      <segment>
+        <source>The platform&apos;s terminal data plane is not built yet</source>
+      </segment>
+    </unit>
+    <unit id="terminal.problem.notReady">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:429</note>
+      </notes>
+      <segment>
+        <source>The console is not ready to attach to yet</source>
+      </segment>
+    </unit>
+    <unit id="terminal.problem.failedTitle">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:430</note>
+      </notes>
+      <segment>
+        <source>The platform refused the connection (<ph id="0" equiv="code" disp="state.code"/>)</source>
+      </segment>
+    </unit>
+    <unit id="terminal.blade">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:448</note>
+      </notes>
+      <segment>
+        <source>Cloud shell</source>
+      </segment>
+    </unit>
+    <unit id="terminal.paneLabel">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:507</note>
+      </notes>
+      <segment>
+        <source>Terminal for <ph id="0" equiv="console" disp="console.name"/></source>
+      </segment>
+    </unit>
+    <unit id="terminal.limits">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:513</note>
+      </notes>
+      <segment>
+        <source>Reclaimed after <ph id="0" equiv="minutes" disp="idle"/> min idle · stops after <ph id="1" equiv="hours" disp="max"/> h</source>
+      </segment>
+    </unit>
+    <unit id="terminal.outcomeTitle.terminated">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:519</note>
+      </notes>
+      <segment>
+        <source>Stopped</source>
+      </segment>
+    </unit>
+    <unit id="terminal.outcomeTitle.wasIdle">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:521</note>
+      </notes>
+      <segment>
+        <source>Nothing running</source>
+      </segment>
+    </unit>
+    <unit id="terminal.outcomeTitle.failed">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:523</note>
+      </notes>
+      <segment>
+        <source>The platform refused the request</source>
+      </segment>
+    </unit>
+    <unit id="terminal.create.nameRequired">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:532</note>
+      </notes>
+      <segment>
+        <source>A name is required.</source>
+      </segment>
+    </unit>
+    <unit id="terminal.create.nameInvalid">
+      <notes>
+        <note category="location">apps/portal/src/pages/terminal/terminal-blade.ts:533</note>
+      </notes>
+      <segment>
+        <source>Use 1–63 lowercase letters, digits and hyphens, starting and ending with a letter or digit.</source>
+      </segment>
+    </unit>
     <unit id="forms.required">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/form-model.ts:290</note>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:305</note>
       </notes>
       <segment>
         <source><ph id="0" equiv="label" disp="field.label"/> is required.</source>
@@ -1483,7 +1947,7 @@
     </unit>
     <unit id="forms.integer">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/form-model.ts:291</note>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:306</note>
       </notes>
       <segment>
         <source><ph id="0" equiv="label" disp="field.label"/> must be a whole number.</source>
@@ -1491,7 +1955,7 @@
     </unit>
     <unit id="forms.min">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/form-model.ts:293</note>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:308</note>
       </notes>
       <segment>
         <source><ph id="0" equiv="label" disp="field.label"/> must be at least <ph id="1" equiv="min" disp="String(field.minimum)"/>.</source>
@@ -1499,7 +1963,7 @@
     </unit>
     <unit id="forms.max">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/form-model.ts:295</note>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:310</note>
       </notes>
       <segment>
         <source><ph id="0" equiv="label" disp="field.label"/> must be at most <ph id="1" equiv="max" disp="String(field.maximum)"/>.</source>
@@ -1507,7 +1971,7 @@
     </unit>
     <unit id="forms.minLength">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/form-model.ts:297</note>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:312</note>
       </notes>
       <segment>
         <source><ph id="0" equiv="label" disp="field.label"/> needs at least <ph id="1" equiv="min" disp="String(field.minLength)"/> characters.</source>
@@ -1515,7 +1979,7 @@
     </unit>
     <unit id="forms.maxTags">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/form-model.ts:300</note>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:315</note>
       </notes>
       <segment>
         <source>At most <ph id="0" equiv="max" disp="String(field.maxProperties)"/> tags.</source>
@@ -1523,7 +1987,7 @@
     </unit>
     <unit id="forms.maxLength">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/form-model.ts:301</note>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:316</note>
       </notes>
       <segment>
         <source><ph id="0" equiv="label" disp="field.label"/> allows at most <ph id="1" equiv="max" disp="String(field.maxLength)"/> characters.</source>
@@ -1531,7 +1995,7 @@
     </unit>
     <unit id="forms.patternExample">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/form-model.ts:304</note>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:319</note>
       </notes>
       <segment>
         <source><ph id="0" equiv="label" disp="field.label"/> is not in the expected form, for example <ph id="1" equiv="example" disp="String(field.placeholder)"/>.</source>
@@ -1539,7 +2003,7 @@
     </unit>
     <unit id="forms.pattern">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/form-model.ts:305</note>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:320</note>
       </notes>
       <segment>
         <source><ph id="0" equiv="label" disp="field.label"/> is not in the expected form.</source>
@@ -1547,7 +2011,7 @@
     </unit>
     <unit id="forms.oneOf">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/form-model.ts:307</note>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:322</note>
       </notes>
       <segment>
         <source><ph id="0" equiv="label" disp="field.label"/> is not one of the allowed values.</source>
@@ -1555,7 +2019,7 @@
     </unit>
     <unit id="forms.tagLine">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/form-model.ts:308</note>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:323</note>
       </notes>
       <segment>
         <source>Write each tag as key=value.</source>
@@ -1563,7 +2027,7 @@
     </unit>
     <unit id="forms.invalid">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/form-model.ts:310</note>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:325</note>
       </notes>
       <segment>
         <source><ph id="0" equiv="label" disp="field.label"/> is not valid.</source>
@@ -1571,7 +2035,7 @@
     </unit>
     <unit id="forms.requiredMark">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/renderer/form-field-node.ts:74,76</note>
+        <note category="location">libs/resource-forms/src/lib/renderer/form-field-node.ts:75,77</note>
       </notes>
       <segment>
         <source>required</source>
@@ -1579,7 +2043,7 @@
     </unit>
     <unit id="forms.locked">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/renderer/form-field-node.ts:78,80</note>
+        <note category="location">libs/resource-forms/src/lib/renderer/form-field-node.ts:79,81</note>
       </notes>
       <segment>
         <source>(cannot change after create)</source>
@@ -1587,7 +2051,7 @@
     </unit>
     <unit id="forms.listPlaceholder">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/renderer/form-field-node.ts:233</note>
+        <note category="location">libs/resource-forms/src/lib/renderer/form-field-node.ts:278</note>
       </notes>
       <segment>
         <source>Add a value</source>
@@ -1595,7 +2059,7 @@
     </unit>
     <unit id="forms.tagPlaceholder">
       <notes>
-        <note category="location">libs/resource-forms/src/lib/renderer/form-field-node.ts:239</note>
+        <note category="location">libs/resource-forms/src/lib/renderer/form-field-node.ts:284</note>
       </notes>
       <segment>
         <source>key=value</source>
@@ -1617,6 +2081,38 @@
         <source>Create</source>
       </segment>
     </unit>
+    <unit id="auth.callback.serverSide">
+      <notes>
+        <note category="location">libs/shell/src/lib/auth/auth-flow.ts:123</note>
+      </notes>
+      <segment>
+        <source>Sign-in completes in the browser.</source>
+      </segment>
+    </unit>
+    <unit id="auth.callback.refused">
+      <notes>
+        <note category="location">libs/shell/src/lib/auth/auth-flow.ts:131</note>
+      </notes>
+      <segment>
+        <source>The identity host refused the sign-in (<ph id="0" equiv="error" disp="error"/>).</source>
+      </segment>
+    </unit>
+    <unit id="auth.callback.mismatch">
+      <notes>
+        <note category="location">libs/shell/src/lib/auth/auth-flow.ts:142</note>
+      </notes>
+      <segment>
+        <source>The sign-in could not be completed. Try again.</source>
+      </segment>
+    </unit>
+    <unit id="auth.callback.noTenant">
+      <notes>
+        <note category="location">libs/shell/src/lib/auth/auth-flow.ts:157</note>
+      </notes>
+      <segment>
+        <source>The token names no tenant. Sign in again.</source>
+      </segment>
+    </unit>
     <unit id="shell.breadcrumbs.label">
       <notes>
         <note category="location">libs/shell/src/lib/breadcrumbs/shell-breadcrumbs.ts:50</note>
@@ -1627,7 +2123,7 @@
     </unit>
     <unit id="shell.contextBar.tenant">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:37,40</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:46,49</note>
       </notes>
       <segment>
         <source> Tenant </source>
@@ -1635,15 +2131,39 @@
     </unit>
     <unit id="shell.contextBar.subscription">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:52,55</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:61,64</note>
       </notes>
       <segment>
         <source> Subscription </source>
       </segment>
     </unit>
+    <unit id="shell.account.signOut">
+      <notes>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:112,114</note>
+      </notes>
+      <segment>
+        <source> Sign out </source>
+      </segment>
+    </unit>
+    <unit id="shell.account.panel">
+      <notes>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:125</note>
+      </notes>
+      <segment>
+        <source>Account</source>
+      </segment>
+    </unit>
+    <unit id="shell.account.trigger">
+      <notes>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:129</note>
+      </notes>
+      <segment>
+        <source>Account menu, <ph id="0" equiv="who" disp="who"/></source>
+      </segment>
+    </unit>
     <unit id="shell.contextBar.region">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:75</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:132</note>
       </notes>
       <segment>
         <source>Tenant and subscription context</source>
@@ -1651,7 +2171,7 @@
     </unit>
     <unit id="shell.contextBar.tenantLabel">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:76</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:133</note>
       </notes>
       <segment>
         <source>Select tenant</source>
@@ -1659,7 +2179,7 @@
     </unit>
     <unit id="shell.contextBar.subscriptionLabel">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:77</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:134</note>
       </notes>
       <segment>
         <source>Select subscription</source>
@@ -1667,7 +2187,7 @@
     </unit>
     <unit id="shell.contextBar.resolving">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:86</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:143</note>
       </notes>
       <segment>
         <source>Resolving your context</source>
@@ -1675,7 +2195,7 @@
     </unit>
     <unit id="shell.contextBar.tenantOnly">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:89</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:146</note>
       </notes>
       <segment>
         <source>Acting in tenant <ph id="0" equiv="tenant" disp="tenant.displayName"/>, no subscription selected</source>
@@ -1683,7 +2203,7 @@
     </unit>
     <unit id="shell.contextBar.acting">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:90</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:147</note>
       </notes>
       <segment>
         <source>Acting in tenant <ph id="0" equiv="tenant" disp="tenant.displayName"/>, subscription <ph id="1" equiv="subscription" disp="subscription.displayName"/></source>
