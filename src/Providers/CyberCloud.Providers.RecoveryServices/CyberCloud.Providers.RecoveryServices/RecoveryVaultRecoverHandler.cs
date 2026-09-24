@@ -30,9 +30,11 @@ namespace CyberCloud.Providers.RecoveryServices;
 ///         ⚠ <b>The source cluster may be gone, and that is the case a restore exists for.</b> The
 ///         restored server copies its version, storage, replicas and database from the protected
 ///         server's <c>Cluster</c> when it is still there; when it is not — the disaster the vault
-///         was bought against — <see cref="RecoveryVaults.RestoredServerBody" /> falls back to the
-///         server schema's defaults and the restore proceeds. A handler that required the source
-///         would refuse the one restore that matters.
+///         was bought against — the version comes from the point's own <c>status.majorVersion</c>
+///         (<see cref="RecoveryVaults.RestoredMajorVersion" />), the rest fall back to the server
+///         schema's defaults, and the restore proceeds. A handler that required the source would
+///         refuse the one restore that matters. A point that records no major is refused rather than
+///         restored into a guessed one.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -51,6 +53,13 @@ namespace CyberCloud.Providers.RecoveryServices;
 ///         the server type's <c>write</c> in this group. What nobody asks is whether the caller may
 ///         read the protected server the point was taken from — the vault's
 ///         <c>recover-is-gated-by-the-vault-alone</c>, narrowed to that.
+///     </para>
+///     <para>
+///         ⚠ <b>And this is the only way in.</b> The server's <c>restore.recoveryPoint</c> is
+///         declared <c>SetOnlyByAnAction</c>, so a caller's own <c>PUT</c> of a server naming a point
+///         is refused by the write path. Before #30's review it was not, and a caller with nothing but
+///         <c>write</c> on servers could restore any <c>Backup</c> in the group's namespace — skipping
+///         all four checks above, and the vault's permission with them.
 ///     </para>
 /// </remarks>
 public sealed class RecoveryVaultRecoverHandler : IResourceActionHandler {
@@ -167,6 +176,18 @@ public sealed class RecoveryVaultRecoverHandler : IResourceActionHandler {
 
         var sourceJson = source.IsSuccess ? source.GetValueOrThrow().Json : "{}";
 
+        // ⚠ The major, from the source or from the point. A restore into the wrong major is a Cluster
+        // that never starts, found an hour later in an operator log; refusing here names the cause.
+        if (RecoveryVaults.RestoredMajorVersion(sourceJson, backupJson).Length == 0) {
+            return Result<string>.Failure(
+                ErrorCode.PreconditionFailed,
+                $"Recovery point '{recoveryPoint}' does not record which PostgreSQL major it was taken from, and "
+                + "its source server is gone, so the restored server's version would be a guess. A restore "
+                + "into another major does not start.",
+                "/recoveryPoint"
+            );
+        }
+
         var pooler = sourceName.Length > 0
             ? await cluster.GetAsync(
                 new() { Kind = RecoveryVaults.PoolerKind, Namespace = context.Namespace, Name = sourceName + "-pooler" },
@@ -184,7 +205,7 @@ public sealed class RecoveryVaultRecoverHandler : IResourceActionHandler {
             RecoveryVaults.PostgresServerType,
             targetName,
             RecoveryVaults.PostgresServerApiVersion,
-            RecoveryVaults.RestoredServerBody(recoveryPoint, context.Desired, sourceJson, pooler.IsSuccess),
+            RecoveryVaults.RestoredServerBody(recoveryPoint, context.Desired, sourceJson, pooler.IsSuccess, backupJson),
             cancellationToken
         );
 

@@ -229,14 +229,26 @@ public sealed class CloudNativePgInstalled : IAsyncLifetime {
             AllowInsecureTransport = true
         };
 
-        // The administrator's key takes effect through a filer subscription; the first bucket it
-        // makes is the proof that it has.
+        // The administrator's key takes effect through a filer subscription. ⚠ Until it has, the S3
+        // gateway authenticates nobody, so the install step waits for a stranger to be refused before
+        // anything is issued (SeaweedFsObjectStoreGrants § remarks); the first bucket the key makes is
+        // the proof that the key itself works.
         var grants = PlatformObjectStore.Grants();
         var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(60);
         Result made;
 
         do {
-            made = await grants.EnsureBucketAsync("platform", token);
+            var closed = await SeaweedFsObjectStoreGrants.RefusesStrangersAsync(
+                new HttpClient { Timeout = TimeSpan.FromSeconds(30) },
+                new Uri(s3),
+                PlatformObjectStore.Options.Region,
+                new SystemClock(),
+                token
+            );
+
+            made = closed is { IsSuccess: true } && closed.GetValueOrThrow()
+                ? await grants.EnsureBucketAsync("platform", token)
+                : Result.Failure(CyberCloud.Core.ErrorCode.InternalError, "the store still answers a key nobody issued");
             if (made.IsSuccess) {
                 return;
             }
@@ -342,9 +354,11 @@ public sealed class RecoveryVaultOnOperatorCase : IProviderCaseSource {
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>Every step goes through the platform, and the only thing the test does by hand is SQL.</b>
-///         The server and the vault are PUTs through the manager; the backup is the vault's
-///         <c>backupNow</c>; the point's phase is read through <c>listRecoveryPoints</c>; the restore is
-///         <c>recover</c>, which creates the server resource through the caller's write path; the row
+///         The server and the vault are PUTs through the manager; the first point is the one
+///         CloudNativePG's ScheduledBackup controller takes when the vault's schedule appears, found by
+///         the controller's own label; the second is the vault's <c>backupNow</c>; each point's phase
+///         is read through <c>listRecoveryPoints</c>; the restore is <c>recover</c> from the
+///         controller's point, which creates the server resource through the caller's write path; the row
 ///         is written and read with <c>psql</c> inside the instance pods, because the platform has no
 ///         data-plane API for SQL and should not grow one for a test.
 ///     </para>
@@ -439,7 +453,43 @@ public sealed class RecoveryVaultAgainstCloudNativePg(
         (await harness.ReminderRowsAsync(harness.For(ConformanceIds.Tenant).GetGrain<IResourceGrain>(GrainKeys.Resource(vault.Id))))
             .ShouldBe(1, "the vault declares PassEvery and its converged create armed no reminder: " + await harness.AllRemindersAsync());
 
-        // ── 4. An on-demand backup, to completion ───────────────────────────────────────────────
+        // ── 4. The CONTROLLER's point: what the vault's schedule makes, found by its label ──────
+        //
+        // ⚠ #30'S REVIEW: the first rewrite of this lane took its only point from backupNow, which the
+        // platform labels by hand, and dropped the one assertion that CloudNativePG's ScheduledBackup
+        // controller labels its Backups the way listRecoveryPoints, recover and retention all join on.
+        // `immediate: true` makes the controller take one as soon as the schedule exists, after the
+        // row above was committed, so the restore below is from this point and not from backupNow's.
+        var schedule = RecoveryVaults.ScheduledBackupNameOf(VaultName, item);
+        var scheduled = await ControllerPointAsync(harness, ns, schedule, token);
+        var scheduledPoint = scheduled["metadata"]!["name"]!.GetValue<string>();
+
+        var labels = scheduled["metadata"]!["labels"]!.AsObject();
+        labels[RecoveryVaults.ParentScheduledBackupLabel]!.GetValue<string>().ShouldBe(schedule);
+        labels[RecoveryVaults.ClusterLabel]!.GetValue<string>().ShouldBe(item);
+        labels.Select(static x => x.Key)
+            .ShouldNotContain(static x => x.StartsWith(KubeLabels.Prefix + "/", StringComparison.Ordinal), "the platform wrote this Backup, so it proves nothing about the controller");
+        scheduled["metadata"]!["ownerReferences"]!.AsArray()
+            .Select(static x => x!.AsObject())
+            .ShouldContain(x => x["kind"]!.GetValue<string>() == "ScheduledBackup" && x["name"]!.GetValue<string>() == schedule);
+
+        var scheduledLine = await PointSettledAsync(harness, vault, scheduledPoint, token);
+        scheduledLine.ShouldStartWith(
+            item + " " + scheduledPoint + " completed",
+            Case.Sensitive,
+            $"the controller's point is not listed as completed within {PointCompleted.TotalMinutes:F0} minutes: {scheduledLine}"
+        );
+        output?.WriteLine($"controller's point completed after {clock.Elapsed.TotalSeconds:F0}s: {scheduledLine}");
+
+        // ⚠ The major the operator records, which a restore whose source is gone reads
+        // (RecoveryVaults.RestoredMajorVersion) — measured here rather than taken from the source file.
+        var recorded = JsonNode.Parse(
+            (await harness.Connection.GetAsync(RecoveryVaults.BackupRef(ns, scheduledPoint), token)).GetValueOrThrow().Json
+        )!;
+        recorded["status"]?["majorVersion"]?.GetValue<int>()
+            .ShouldBe(17, "CloudNativePG 1.30 did not record the major on the Backup: " + recorded["status"]?.ToJsonString());
+
+        // ── 5. An on-demand backup, to completion ───────────────────────────────────────────────
         var now = await ActionAsync(harness, vault, RecoveryVaults.BackupNowAction, new JsonObject { ["item"] = item }, token);
         var point = JsonNode.Parse(now)!["recoveryPoint"]!.GetValue<string>();
 
@@ -470,13 +520,38 @@ public sealed class RecoveryVaultAgainstCloudNativePg(
         listed.GetValueOrThrow().ShouldContain(x => x.Contains("/base/", StringComparison.Ordinal), $"no base backup in '{bucket}'");
         listed.GetValueOrThrow().ShouldContain(x => x.Contains("/wals/", StringComparison.Ordinal), $"no archived WAL in '{bucket}'");
 
-        // ── 5. The restore: a new server resource ──────────────────────────────────────────────
+        // ── 6. The restore, from the CONTROLLER's point: a new server resource ─────────────────
+        //
+        // ⚠ #30'S REVIEW, FIRST: a caller's own PUT of a server naming the point is refused by the write
+        // path, because only recover checks that the point is the vault's and that the caller may use
+        // the vault. It used to be accepted and bootstrap the copy.
+        var stolen = await harness.Manager.WriteAsync(
+            new() {
+                Path = (ClusterConformanceHarness<RecoveryVaultOnOperatorCase>.Address("protected-server-stolen")
+                    with { Type = RecoveryVaults.PostgresServerType }).Path,
+                ApiVersion = RecoveryVaults.PostgresServerApiVersion,
+                Verb = WriteVerb.Put,
+                Body = PostgresServers.Body(
+                    ClusterConformanceHarness<RecoveryVaultOnOperatorCase>.ClusterId,
+                    replicas: 1,
+                    storageSize: "1Gi",
+                    pooling: false,
+                    recoveryPoint: scheduledPoint
+                ),
+                Caller = ClusterConformanceHarness<RecoveryVaultOnOperatorCase>.Caller()
+            },
+            token
+        );
+
+        stolen.IsFailure.ShouldBeTrue("a PUT of a server restored another server's point without the vault");
+        stolen.Error!.Target.ShouldBe(PostgresServers.RecoveryPointPointer);
+
         var recovered = JsonNode.Parse(
             await ActionAsync(
                 harness,
                 vault,
                 RecoveryVaults.RecoverAction,
-                new JsonObject { ["recoveryPoint"] = point, ["targetName"] = Restored },
+                new JsonObject { ["recoveryPoint"] = scheduledPoint, ["targetName"] = Restored },
                 token
             )
         )!;
@@ -489,7 +564,7 @@ public sealed class RecoveryVaultAgainstCloudNativePg(
         await ClusterReadyAsync(harness, ns, Restored, RestoreReady, token);
         output?.WriteLine($"restored server ready after {clock.Elapsed.TotalSeconds:F0}s");
 
-        // ── 6. The row is there ─────────────────────────────────────────────────────────────────
+        // ── 7. The row is there ─────────────────────────────────────────────────────────────────
         var read = await SqlAsync(harness, ns, Restored + "-1", "select v from cc30;", token);
         read.Trim().ShouldBe(Row, "the restored server's database does not hold the row written before the backup");
 
@@ -497,6 +572,48 @@ public sealed class RecoveryVaultAgainstCloudNativePg(
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Waits for a <c>Backup</c> CloudNativePG's ScheduledBackup controller made for
+    ///     <paramref name="schedule" />, found the way <c>listRecoveryPoints</c> finds one — by the
+    ///     controller's own label — and not named like a <c>backupNow</c> point.
+    /// </summary>
+    static async Task<JsonObject> ControllerPointAsync(
+        ClusterConformanceHarness<RecoveryVaultOnOperatorCase> harness,
+        string ns,
+        string schedule,
+        CancellationToken token
+    ) {
+        var deadline = DateTimeOffset.UtcNow + PointCompleted;
+
+        while (DateTimeOffset.UtcNow < deadline) {
+            var listed = await harness.Raw.CustomObjects.ListNamespacedCustomObjectAsync(
+                RecoveryVaults.BackupKind.Group,
+                RecoveryVaults.BackupKind.Version,
+                ns,
+                RecoveryVaults.BackupKind.Plural,
+                labelSelector: RecoveryVaults.RecoveryPointSelector(schedule),
+                cancellationToken: token
+            );
+
+            var made = JsonNode.Parse(listed.ToString()!)?["items"]?.AsArray()
+                .OfType<JsonObject>()
+                .FirstOrDefault(static x => !x["metadata"]!["name"]!.GetValue<string>().Contains("-now-", StringComparison.Ordinal));
+
+            if (made is not null) {
+                return made;
+            }
+
+            await Task.Delay(BetweenPolls, token);
+        }
+
+        throw new ShouldAssertException(
+            $"no Backup labelled {RecoveryVaults.RecoveryPointSelector(schedule)} appeared in `{ns}` within "
+            + $"{PointCompleted.TotalMinutes:F0} minutes of the vault converging a ScheduledBackup with immediate: true. "
+            + "The controller is not acting on the schedule, or labels its Backups differently from what "
+            + "listRecoveryPoints, recover and retention join on. " + await EventsAsync(harness, ns)
+        );
+    }
 
     /// <summary>Waits until CloudNativePG reports every instance of a cluster ready.</summary>
     static async Task ClusterReadyAsync(

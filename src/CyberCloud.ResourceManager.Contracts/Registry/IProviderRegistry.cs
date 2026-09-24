@@ -393,6 +393,18 @@ public sealed record ResourceTypeRegistration {
     /// </summary>
     public TimeSpan PassPeriod { get; init; }
 
+    /// <summary>
+    ///     The properties only an action may set — <c>SetOnlyByAnAction</c>. A caller's own
+    ///     <c>PUT</c> or <c>PATCH</c> may repeat the stored value and may not change it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Read by the write path, not by the emitters.</b> The property stays in the published
+    ///     schema, so a client can read it back and send it again. What the write path refuses is a
+    ///     value the stored resource does not already hold (the schema's default, on a create), unless
+    ///     the write came through <see cref="IResourceCreator" />.
+    /// </remarks>
+    public ImmutableArray<string> ActionOnlyPointers { get; init; } = [];
+
     /// <summary>What this type is called, for the surfaces a human reads.</summary>
     public DisplayMetadata Display { get; init; }
 

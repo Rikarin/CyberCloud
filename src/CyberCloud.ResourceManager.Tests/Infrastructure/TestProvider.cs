@@ -607,11 +607,14 @@ public sealed class TestingProvider : IResourceProvider {
             // about FakeWorld.Passes would be a flake with no author. docs/plan/08 § The
             // manager-started pass.
             .ResourceType(PeriodicType)
-            .ApiVersion(V2026, Schema2026)
+            .ApiVersion(V2026, GaugeSchema)
             .Reconciler<PeriodicReconciler>()
             .Meters(QuotaMeter.Resources)
             .Permissions("read", "write", "delete")
             .PassEvery(PeriodicPass.MinimumPeriod)
+            // ⚠ AND THE ONE PROPERTY ONLY AN ACTION MAY SET, shaped like a PostgreSQL server's
+            // restore.recoveryPoint: `clone` on a widget may set it, a caller's own PUT may not.
+            .SetOnlyByAnAction(OriginPointer)
             .Display("Testing gauge", "Testing gauges", "tgauge");
     }
 
@@ -623,9 +626,45 @@ public sealed class TestingProvider : IResourceProvider {
     /// <summary>Its name.</summary>
     public static ResourceTypeName PeriodicTypeName { get; } = new("CyberCloud.Testing", PeriodicType);
 
-    /// <summary>What a <c>POST …/clone</c> takes.</summary>
+    /// <summary>The gauge's property only an action may set.</summary>
+    public const string OriginPointer = "/properties/origin";
+
+    /// <summary>
+    ///     <see cref="Schema2026" /> plus <see cref="OriginPointer" />, immutable and empty by default.
+    /// </summary>
+    public static ResourceSchema GaugeSchema { get; } =
+        ResourceSchema.Of(
+            [
+                .. Schema2026.Properties,
+                new(OriginPointer, SchemaKind.Text) { Immutable = true, DefaultJson = "\"\"" }
+            ]
+        );
+
+    /// <summary>A gauge body, with <see cref="OriginPointer" /> set when <paramref name="origin" /> is not null.</summary>
+    /// <param name="origin">The origin, or <see langword="null" /> to leave the property out.</param>
+    /// <param name="label">The label, so two bodies differ in a property anybody may write.</param>
+    public static string GaugeBody(string? origin, string label = "first") {
+        var properties = new JsonObject { ["size"] = 1, ["label"] = label };
+
+        if (origin is not null) {
+            properties["origin"] = origin;
+        }
+
+        return JsonSerializer.Serialize(new JsonObject { ["location"] = "eu-central", ["properties"] = properties });
+    }
+
+    /// <summary>
+    ///     What a <c>POST …/clone</c> takes. <c>/gauge</c> makes the copy a gauge rather than a widget —
+    ///     a different type, with its own <c>write</c> — carrying <c>/origin</c>.
+    /// </summary>
     public static ResourceSchema CloneRequest { get; } =
-        ResourceSchema.Of([new("/name", SchemaKind.Text, true)]);
+        ResourceSchema.Of(
+            [
+                new("/name", SchemaKind.Text, true),
+                new("/gauge", SchemaKind.Boolean),
+                new("/origin", SchemaKind.Text)
+            ]
+        );
 
     /// <summary>What a <c>POST …/clone</c> returns.</summary>
     public static ResourceSchema CloneResponse { get; } =

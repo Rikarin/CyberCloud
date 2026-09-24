@@ -35,6 +35,21 @@ namespace CyberCloud.ObjectStorage;
 ///         ending.
 ///     </para>
 ///     <para>
+///         ⚠
+///         <b>
+///             A fresh store is open to every key until its first identity reaches the S3 gateway, and
+///             no key is issued while it is.
+///         </b> <c>weed/s3api/auth_credentials.go</c> at 3.80 sets
+///         <c>isAuthEnabled = len(identities) > 0</c> once and never back (<i>"one-directional, no
+///         toggling"</i>), so an IAM change that reloads the identities can close the store and cannot
+///         reopen it. What can be open is the moment before the first identity lands: the gateway loads
+///         identities through a filer subscription, and under load that lagged long enough, in #30's
+///         Fast-lane run, for a freshly issued key to write into its neighbour's bucket.
+///         <see cref="IssueKeyAsync" /> therefore asks the store to refuse a key nobody issued before
+///         it creates anything (<see cref="RefusesStrangersAsync" />), and fails retryably when the
+///         store does not. A bucket-scoped key from an open store would scope nothing.
+///     </para>
+///     <para>
 ///         ⚠ <b>3.80's <c>CreateUser</c> appends</b> — <c>iamapi_management_handlers.go</c> adds an
 ///         identity without checking the name — so a second call for one principal would make a second
 ///         identity of the same name. <see cref="IssueKeyAsync" /> asks <c>GetUser</c> first.
@@ -55,12 +70,16 @@ public sealed class SeaweedFsObjectStoreGrants : IObjectStoreGrants {
     readonly IClock clock;
     readonly Uri s3;
     readonly Uri iam;
+    readonly bool bootstrapping;
 
     /// <summary>Creates the grants over one store.</summary>
     /// <param name="http">The client. Long-lived.</param>
     /// <param name="options">The section. ⚠ Its credential must be an administrator of the store.</param>
     /// <param name="clock">For <c>x-amz-date</c>.</param>
-    public SeaweedFsObjectStoreGrants(HttpClient http, ObjectStorageOptions options, IClock clock) {
+    public SeaweedFsObjectStoreGrants(HttpClient http, ObjectStorageOptions options, IClock clock)
+        : this(http, options, clock, false) { }
+
+    SeaweedFsObjectStoreGrants(HttpClient http, ObjectStorageOptions options, IClock clock, bool bootstrapping) {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(clock);
@@ -68,6 +87,7 @@ public sealed class SeaweedFsObjectStoreGrants : IObjectStoreGrants {
         this.http = http;
         this.options = options;
         this.clock = clock;
+        this.bootstrapping = bootstrapping;
         s3 = S3ObjectStore.ValidatedEndpoint(options);
         iam = Validated(options.IamEndpoint, nameof(ObjectStorageOptions.IamEndpoint), options);
         DataPlaneEndpoint = Validated(options.DataPlaneEndpoint, nameof(ObjectStorageOptions.DataPlaneEndpoint), options)
@@ -128,6 +148,26 @@ public sealed class SeaweedFsObjectStoreGrants : IObjectStoreGrants {
         CancellationToken cancellationToken = default
     ) {
         try {
+            // ⚠ BEFORE ANYTHING IS CREATED, so an open store is left with no user and no key. The
+            // bootstrap is the one caller that needs the store open, and it skips this.
+            if (!bootstrapping) {
+                var closed = await RefusesStrangersAsync(http, s3, options.Region, clock, cancellationToken);
+
+                if (closed.TryGetError(out var probeError)) {
+                    return Result<ObjectStoreKey>.Failure(probeError);
+                }
+
+                if (!closed.GetValueOrThrow()) {
+                    return Result<ObjectStoreKey>.Failure(
+                        ErrorCode.InternalError,
+                        $"The platform's object store at {s3.Host} accepted a key it never issued, so it is "
+                        + "not authenticating yet and a key scoped to one bucket would be scoped to nothing. "
+                        + "A fresh store does this until its first identity reaches the S3 gateway; the next "
+                        + "pass asks again."
+                    );
+                }
+            }
+
             var user = await IamAsync([("Action", "GetUser"), ("UserName", principal)], cancellationToken);
 
             if (!user.Ok) {
@@ -213,7 +253,9 @@ public sealed class SeaweedFsObjectStoreGrants : IObjectStoreGrants {
     ///     first identity exists, so the request is signed with a placeholder and the store accepts it.
     ///     Once this has run the store has an identity, and the key returned is the one every later
     ///     call signs with. An installer runs it once; the cluster-backed suites run it against the
-    ///     store they start.
+    ///     store they start. ⚠ The store stays open until that identity reaches the S3 gateway, so the
+    ///     installer then polls <see cref="RefusesStrangersAsync" /> until it answers <c>true</c>
+    ///     before handing the store to anything.
     /// </remarks>
     public static Task<Result<ObjectStoreKey>> BootstrapAdministratorAsync(
         HttpClient http,
@@ -235,7 +277,65 @@ public sealed class SeaweedFsObjectStoreGrants : IObjectStoreGrants {
         };
 
         // ⚠ "*" makes PolicyFor name every bucket and every object: the administrator's scope.
-        return new SeaweedFsObjectStoreGrants(http, open, clock).IssueKeyAsync(principal, "*", cancellationToken);
+        return new SeaweedFsObjectStoreGrants(http, open, clock, true).IssueKeyAsync(principal, "*", cancellationToken);
+    }
+
+    /// <summary>
+    ///     Asks the S3 API to list buckets with a key nobody issued, and reports whether it refused.
+    /// </summary>
+    /// <param name="http">A client.</param>
+    /// <param name="s3Endpoint">The store's S3 origin.</param>
+    /// <param name="region">The signing region. SeaweedFS ignores it.</param>
+    /// <param name="clock">For <c>x-amz-date</c>.</param>
+    /// <param name="cancellationToken">Cancels the request.</param>
+    /// <returns>
+    ///     <c>true</c> if the store answered <c>403</c>, so it authenticates; <c>false</c> if it handed
+    ///     the stranger a listing. A transport failure or any other status is a failure.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>A fresh key every time</b>, so no cached refusal can answer for this one. An installer
+    ///     polls this after <see cref="BootstrapAdministratorAsync" /> and before it hands the store to
+    ///     anything, and <see cref="IssueKeyAsync" /> asks it before every issue.
+    /// </remarks>
+    public static async Task<Result<bool>> RefusesStrangersAsync(
+        HttpClient http,
+        Uri s3Endpoint,
+        string region,
+        IClock clock,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(http);
+        ArgumentNullException.ThrowIfNull(s3Endpoint);
+        ArgumentNullException.ThrowIfNull(clock);
+
+        using var request = Signed(
+            HttpMethod.Get,
+            s3Endpoint,
+            "/",
+            region,
+            "CCPROBE" + Convert.ToHexString(RandomNumberGenerator.GetBytes(7)),
+            Convert.ToHexString(RandomNumberGenerator.GetBytes(20)),
+            clock
+        );
+
+        try {
+            using var response = await http.SendAsync(request, cancellationToken);
+
+            if (response.StatusCode == HttpStatusCode.Forbidden) {
+                return Result<bool>.Success(true);
+            }
+
+            return response.IsSuccessStatusCode
+                ? Result<bool>.Success(false)
+                : Result<bool>.Failure(
+                    ErrorCode.InternalError,
+                    $"The platform's object store at {s3Endpoint.Host} answered a stranger's bucket listing "
+                    + $"with HTTP {((int)response.StatusCode).ToString(CultureInfo.InvariantCulture)}, which is "
+                    + "neither a refusal nor a listing, so whether it authenticates is unknown."
+                );
+        } catch (Exception exception) when (IsTransport(exception)) {
+            return Result<bool>.Failure(Unreachable(s3Endpoint, "ask whether it authenticates", exception));
+        }
     }
 
     /// <summary>The policy document a principal gets: everything on one bucket and its objects, nothing else.</summary>
@@ -295,23 +395,34 @@ public sealed class SeaweedFsObjectStoreGrants : IObjectStoreGrants {
         return (response.IsSuccessStatusCode, response.StatusCode, await Body(response));
     }
 
-    HttpRequestMessage SignedS3(HttpMethod method, string path) {
+    HttpRequestMessage SignedS3(HttpMethod method, string path) =>
+        Signed(method, s3, path, options.Region, options.AccessKeyId, options.SecretAccessKey, clock);
+
+    static HttpRequestMessage Signed(
+        HttpMethod method,
+        Uri endpoint,
+        string path,
+        string region,
+        string accessKeyId,
+        string secretAccessKey,
+        IClock clock
+    ) {
         var now = clock.UtcNow;
 
         var headers = new Dictionary<string, string>(StringComparer.Ordinal) {
-            ["host"] = Host(s3),
+            ["host"] = Host(endpoint),
             ["x-amz-content-sha256"] = SignatureV4.EmptyPayloadHash,
             ["x-amz-date"] = SignatureV4.AmzDate(now)
         };
 
         var signed = new SignatureV4.Request(method.Method, path, [], headers, SignatureV4.EmptyPayloadHash);
 
-        var request = new HttpRequestMessage(method, new UriBuilder(s3) { Path = SignatureV4.Encode(path, true) }.Uri);
+        var request = new HttpRequestMessage(method, new UriBuilder(endpoint) { Path = SignatureV4.Encode(path, true) }.Uri);
         request.Headers.TryAddWithoutValidation("x-amz-content-sha256", SignatureV4.EmptyPayloadHash);
         request.Headers.TryAddWithoutValidation("x-amz-date", headers["x-amz-date"]);
         request.Headers.TryAddWithoutValidation(
             "Authorization",
-            SignatureV4.Authorization(signed, now, options.Region, options.AccessKeyId, options.SecretAccessKey)
+            SignatureV4.Authorization(signed, now, region, accessKeyId, secretAccessKey)
         );
         request.Content = new ByteArrayContent([]);
 

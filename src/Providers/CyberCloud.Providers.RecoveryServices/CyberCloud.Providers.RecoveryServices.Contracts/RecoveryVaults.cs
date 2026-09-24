@@ -953,6 +953,10 @@ public static class RecoveryVaults {
     ///     is gone — the disaster a restore exists for.
     /// </param>
     /// <param name="sourceHasPooler">Whether the source ran a pooler, so the copy connects the same way.</param>
+    /// <param name="backupJson">
+    ///     The recovery point's <c>Backup</c>, for the PostgreSQL major it was taken from when the source
+    ///     is gone — <see cref="RestoredMajorVersion" />.
+    /// </param>
     /// <remarks>
     ///     <para>
     ///         ⚠ <b>The server's published contract, spelled here and not referenced.</b>
@@ -970,15 +974,23 @@ public static class RecoveryVaults {
     ///     </para>
     ///     <para>
     ///         The version, size, class, replica count and database are copied from the source because
-    ///         a recovery needs a volume at least as large and a PostgreSQL major at least as new; with
-    ///         no source, the server schema's own defaults are what the write path fills in.
+    ///         a recovery needs a volume at least as large and the same PostgreSQL major. With no
+    ///         source, the major comes from the point itself (<see cref="RestoredMajorVersion" />) and
+    ///         the rest are the server schema's defaults.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The size is still a default when the source is gone</b>, because a <c>Backup</c>
+    ///         records no data size: a database larger than <c>20Gi</c> restores into a volume it does
+    ///         not fit. charts/managed/recovery-vault/conformance.yaml § owed,
+    ///         <c>a-restore-without-its-source-guesses-the-size</c>.
     ///     </para>
     /// </remarks>
     public static string RestoredServerBody(
         string recoveryPoint,
         JsonElement vaultDesired,
         string sourceClusterJson,
-        bool sourceHasPooler
+        bool sourceHasPooler,
+        string backupJson = "{}"
     ) {
         ArgumentException.ThrowIfNullOrEmpty(recoveryPoint);
 
@@ -992,14 +1004,13 @@ public static class RecoveryVaults {
             storage["class"] = storageClass;
         }
 
-        var image = source?["imageName"]?.GetValue<string>() ?? string.Empty;
-        var tag = image.LastIndexOf(':') is var colon and >= 0 ? image[(colon + 1)..] : string.Empty;
+        var major = RestoredMajorVersion(sourceClusterJson, backupJson);
 
         var properties = new JsonObject {
             ["clusterId"] = Property(vaultDesired, "clusterId") is { ValueKind: JsonValueKind.String } clusterId
                 ? clusterId.GetString()
                 : string.Empty,
-            ["version"] = tag is "16" or "17" or "18" ? tag : "17",
+            ["version"] = major.Length > 0 ? major : "17",
             ["replicas"] = source?["instances"]?.GetValue<int>() is int instances and >= 1 and <= 5 ? instances : 1,
             ["storage"] = storage,
             ["pooling"] = new JsonObject { ["enabled"] = sourceHasPooler },
@@ -1017,6 +1028,36 @@ public static class RecoveryVaults {
                 : string.Empty;
 
         return new JsonObject { ["location"] = location, ["properties"] = properties }.ToJsonString();
+    }
+
+    /// <summary>
+    ///     The PostgreSQL major a restore must run: the source <c>Cluster</c>'s image tag while the
+    ///     source is there, otherwise the <c>Backup</c>'s own <c>status.majorVersion</c>. Empty when
+    ///     neither says, or says a major the server schema does not offer.
+    /// </summary>
+    /// <param name="sourceClusterJson">The protected server's <c>Cluster</c>, or <c>{}</c>.</param>
+    /// <param name="backupJson">The recovery point's <c>Backup</c>.</param>
+    /// <remarks>
+    ///     ⚠ <b>Found by #30's review: the source-gone restore guessed 17.</b> A point taken on 16 then
+    ///     restored into a 17 <c>Cluster</c>, which CloudNativePG cannot start from a 16 data directory.
+    ///     CloudNativePG 1.30 records the major on the <c>Backup</c> (<c>api/v1/backup_types.go</c>,
+    ///     <c>MajorVersion int json:"majorVersion"</c>), so the point carries the answer the source did.
+    /// </remarks>
+    public static string RestoredMajorVersion(string sourceClusterJson, string backupJson) {
+        var image = ((JsonNode.Parse(sourceClusterJson) as JsonObject)?["spec"] as JsonObject)?["imageName"]?.GetValue<string>()
+            ?? string.Empty;
+        var tag = image.LastIndexOf(':') is var colon and >= 0 ? image[(colon + 1)..] : string.Empty;
+
+        if (tag is "16" or "17" or "18") {
+            return tag;
+        }
+
+        var recorded = ((JsonNode.Parse(backupJson) as JsonObject)?["status"] as JsonObject)?["majorVersion"] as JsonValue;
+        var major = recorded is not null && recorded.TryGetValue<int>(out var number)
+            ? number.ToString(CultureInfo.InvariantCulture)
+            : string.Empty;
+
+        return major is "16" or "17" or "18" ? major : string.Empty;
     }
 
     /// <summary>
@@ -1204,6 +1245,10 @@ public static class RecoveryVaults {
     ///     reconciler applied; <see langword="null" /> for no owner reference at all.
     /// </param>
     /// <param name="error">The operator's error text, or empty.</param>
+    /// <param name="majorVersion">
+    ///     The PostgreSQL major CloudNativePG 1.30 records in <c>status.majorVersion</c>, or zero to
+    ///     record none.
+    /// </param>
     /// <remarks>
     ///     ⚠ Labelled the way the operator labels — <see cref="ParentScheduledBackupLabel" /> and
     ///     <see cref="ClusterLabel" /> — and carrying <b>none</b> of the platform's seven, which is the
@@ -1218,7 +1263,8 @@ public static class RecoveryVaults {
         DateTimeOffset startedAt,
         DateTimeOffset? stoppedAt,
         string? ownerUid = null,
-        string error = ""
+        string error = "",
+        int majorVersion = 17
     ) {
         var metadata = new JsonObject {
             ["name"] = name,
@@ -1252,6 +1298,10 @@ public static class RecoveryVaults {
 
         if (error.Length > 0) {
             status["error"] = error;
+        }
+
+        if (majorVersion > 0) {
+            status["majorVersion"] = majorVersion;
         }
 
         return new JsonObject {

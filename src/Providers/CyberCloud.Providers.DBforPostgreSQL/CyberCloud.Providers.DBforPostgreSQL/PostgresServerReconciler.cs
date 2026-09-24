@@ -849,6 +849,28 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
         var name = context.Id.Name;
         var bucket = ObjectStoreCredentials.BucketFor(PostgresServers.BucketPrefix, context.Id.Id);
 
+        // ⚠ A DEPLOYMENT WITH NO STORE FAILS THE PASS, TERMINALLY — #30's review. The refusing default's
+        // InternalError is retryable, so on a host that wires no grants (the AppHost is one: its
+        // SeaweedFS reads a static identities file that ignores issued keys) every default-bodied server
+        // stayed Creating for the operation's full hour with nothing a tenant could act on. Waiting wires
+        // nothing; the tenant's move is backup.enabled false, and the operator's is the store.
+        if (context.Grants.DataPlaneEndpoint.Length == 0) {
+            return (
+                ReconcileOutcome.Failed(
+                    new Error(
+                        ErrorCode.InvalidRequestBody,
+                        "Backups are on, and this deployment has no platform object store to put them in, so no "
+                        + "bucket can be made and no key issued. Set backup.enabled to false to run the server "
+                        + "without backups, or ask the platform operator to configure the store's IAM and "
+                        + "data-plane endpoints (CyberCloud:ObjectStorage).",
+                        "/properties/backup/enabled"
+                    ),
+                    false
+                ),
+                null
+            );
+        }
+
         context.Log.Report("backup-store", $"ensuring bucket '{bucket}' and a key to it on the platform's object store", 10);
 
         var key = await ObjectStoreCredentials.EnsureAsync(

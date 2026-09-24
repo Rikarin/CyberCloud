@@ -112,4 +112,7 @@ sealed class DiscoveringProviderBuilder : IResourceTypeBuilder {
 
     /// <inheritdoc />
     public IResourceTypeBuilder PassEvery(TimeSpan period) => this;
+
+    /// <inheritdoc />
+    public IResourceTypeBuilder SetOnlyByAnAction(string propertyPointer) => this;
 }

@@ -929,6 +929,25 @@ public sealed class OperationGrain(
 
         await state.WriteStateAsync();
 
+        // ⚠ A MANAGER-STARTED PASS SAYS IT ENDED, because the resource grain may not ask — it would be
+        // calling a grain that calls it mid-pass (IResourceGrain.RunPeriodicPassAsync). A write waiting
+        // on this pass reads the field this clears. Best effort: a lost notice leaves the field set,
+        // and the next write's pass finds this operation terminal and clears it itself.
+        if (state.State.Spec is { Kind: OperationKind.Refresh } refresh) {
+            try {
+                _ = await Resource(refresh).EndPeriodicPassAsync(operationId);
+            } catch (Exception failure) when (failure is not OperationCanceledException) {
+                logger.LogWarning(
+                    failure,
+                    "Periodic pass {OperationId} ended but could not tell '{Path}'. The next write's pass "
+                    + "finds it terminal and clears it; until then, or until the operation ceiling has passed, no new "
+                    + "pass starts.",
+                    operationId,
+                    refresh.ResourcePath
+                );
+            }
+        }
+
         // The reminder is unregistered rather than left to fire on a terminal grain: a reminder with
         // nothing to do is a wakeup per minute per finished operation, forever.
         var reminder = await this.GetReminder(ReminderName);

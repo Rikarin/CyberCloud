@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace CyberCloud.ResourceManager.Tests.Infrastructure;
@@ -62,12 +63,14 @@ public sealed class CloneHandler : IResourceActionHandler {
         CancellationToken cancellationToken = default
     ) {
         var name = context.Body.GetProperty("name").GetString() ?? string.Empty;
+        var gauge = context.Body.TryGetProperty("gauge", out var asGauge) && asGauge.ValueKind is JsonValueKind.True;
+        var origin = context.Body.TryGetProperty("origin", out var given) ? given.GetString() : null;
 
         var created = await context.Creator.CreateAsync(
-            context.Id.Type,
+            gauge ? TestingProvider.PeriodicTypeName : context.Id.Type,
             name,
             TestingProvider.V2026,
-            TestingProvider.Body(1, "cloned"),
+            gauge ? TestingProvider.GaugeBody(origin, "cloned") : TestingProvider.Body(1, "cloned"),
             cancellationToken
         );
 

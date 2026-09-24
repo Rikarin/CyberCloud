@@ -35,8 +35,15 @@ namespace CyberCloud.ResourceManager.Contracts;
 public interface IObjectStoreGrants {
     /// <summary>
     ///     The S3 endpoint a workload in a tenant's cluster reaches the store at — which is not
-    ///     necessarily where the platform reaches it.
+    ///     necessarily where the platform reaches it. Empty when this host wires no store: the two
+    ///     refusing defaults answer empty, and a real store always has an endpoint.
     /// </summary>
+    /// <remarks>
+    ///     ⚠ A reconciler reads the empty endpoint as "this deployment cannot grant" and fails its pass
+    ///     terminally, naming the way out. Retrying would not help, because no amount of waiting wires a
+    ///     store — #30's review found every default-bodied PostgreSQL server on the AppHost retrying
+    ///     forever against <c>UnavailableObjectStoreGrants</c>.
+    /// </remarks>
     string DataPlaneEndpoint { get; }
 
     /// <summary>Creates a bucket, or finds it already there.</summary>

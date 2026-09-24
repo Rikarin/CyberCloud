@@ -380,7 +380,7 @@ public sealed class ResourceGrain(
         // ⚠ Armed on every converged write, and a restore is one: the delete that parked the resource
         // removed the reminder, and the restore's CompleteAsync is what puts it back.
         if (terminal is ProvisioningState.Succeeded) {
-            await ArmPeriodicPassAsync();
+            await ArmPeriodicPassCoreAsync();
         }
 
         return Result<ResourceSnapshot>.Success(Snapshot(state.State.ApiVersion, []));
@@ -406,19 +406,21 @@ public sealed class ResourceGrain(
             return Result<Guid>.Success(Guid.Empty);
         }
 
-        var tenant = GrainFactory.ForTenant(ResourceManagerGrainKeys.TenantOf(this).ToString("D", CultureInfo.InvariantCulture));
-
-        if (state.State.PassOperationId != Guid.Empty) {
-            var previous = await tenant.GetGrain<IOperationGrain>(GrainKeys.Operation(state.State.PassOperationId))
-                .GetAsync();
-
-            // ⚠ One pass at a time. A pass that is still backing off — a vault whose cluster is
-            // unreachable — is the pass; starting a second beside it would be two drivers of one
-            // resource, which is the race the single-writer guard exists to prevent.
-            if (previous.IsSuccess && !previous.GetValueOrThrow().IsTerminal) {
-                return Result<Guid>.Success(Guid.Empty);
-            }
+        // ⚠ One pass at a time. A pass that is still backing off — a vault whose cluster is
+        // unreachable — is the pass; starting a second beside it would be two drivers of one
+        // resource, which is the race the single-writer guard exists to prevent.
+        //
+        // ⚠ DECIDED FROM THIS GRAIN'S OWN STATE, AND IT USED TO ASK THE OPERATION — #30's review. The
+        // running pass calls this grain mid-drive, so a tick that awaited that operation's GetAsync
+        // while it drove was a cycle of two non-reentrant grains, broken only by Orleans' 30-second
+        // response timeout. The pass says when it ends (EndPeriodicPassAsync); one that never said so
+        // has been failed by ReconcileSchedule.Timeout's ceiling by the time this lets another start.
+        if (state.State.PassOperationId != Guid.Empty
+            && clock.UtcNow - state.State.PassStartedAt < ReconcileSchedule.Timeout + PeriodicPass.MinimumPeriod) {
+            return Result<Guid>.Success(Guid.Empty);
         }
+
+        var tenant = GrainFactory.ForTenant(ResourceManagerGrainKeys.TenantOf(this).ToString("D", CultureInfo.InvariantCulture));
 
         var address = ResourceId.ParsePath(state.State.Path).GetValueOrThrow();
         var operationId = Guid.NewGuid();
@@ -442,8 +444,35 @@ public sealed class ResourceGrain(
         }
 
         state.State.PassOperationId = operationId;
+        state.State.PassStartedAt = clock.UtcNow;
         await state.WriteStateAsync();
         return Result<Guid>.Success(operationId);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> EndPeriodicPassAsync(Guid operationId) {
+        if (operationId == Guid.Empty || state.State.PassOperationId != operationId) {
+            return Result.Success;
+        }
+
+        state.State.PassOperationId = Guid.Empty;
+        await state.WriteStateAsync();
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<bool>> ArmPeriodicPassAsync() {
+        if (!state.State.Exists) {
+            return NotFound<bool>();
+        }
+
+        // ⚠ Only a converged resource. Anything else has an operation that arms the reminder when it
+        // converges, or is waiting for its owner — a Failed create gets no hourly retry from here.
+        if (state.State.ProvisioningState != ProvisioningState.Succeeded || PassPeriod() == TimeSpan.Zero) {
+            return Result<bool>.Success(false);
+        }
+
+        return Result<bool>.Success(await ArmPeriodicPassCoreAsync());
     }
 
     /// <inheritdoc />
@@ -500,7 +529,8 @@ public sealed class ResourceGrain(
                     ChangeSequence = state.State.PendingChanges.Count == 0
                         ? 0
                         : state.State.PendingChanges[^1].Sequence,
-                    ChangesDropped = state.State.ChangesDropped
+                    ChangesDropped = state.State.ChangesDropped,
+                    PassOperationId = state.State.PassOperationId
                 }
             )
         );
@@ -577,14 +607,16 @@ public sealed class ResourceGrain(
     ///     time out again each time, and a resource written more often than its period would never
     ///     get a pass at all.
     /// </remarks>
-    async Task ArmPeriodicPassAsync() {
+    /// <returns><c>true</c> if this call registered the reminder.</returns>
+    async Task<bool> ArmPeriodicPassCoreAsync() {
         var period = PassPeriod();
 
         if (period == TimeSpan.Zero || await this.GetReminder(PeriodicPass.ReminderName) is not null) {
-            return;
+            return false;
         }
 
         await this.RegisterOrUpdateReminder(PeriodicPass.ReminderName, PeriodicPass.FirstDue(resourceId, period), period);
+        return true;
     }
 
     /// <summary>Removes the <c>periodic-pass</c> reminder if there is one.</summary>

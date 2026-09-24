@@ -133,6 +133,13 @@ public sealed class ResourceState {
     [Id(20)]
     public Guid PassOperationId { get; set; }
 
+    /// <summary>
+    ///     When <see cref="PassOperationId" /> was started. A pass older than an operation's ceiling
+    ///     (<see cref="ReconcileSchedule.Timeout" />) has ended whether or not it said so.
+    /// </summary>
+    [Id(21)]
+    public DateTimeOffset PassStartedAt { get; set; }
+
     /// <summary>Whether anything has ever been written here.</summary>
     public bool Exists => Path.Length > 0;
 }

@@ -79,6 +79,11 @@ public static class ResourceManagerSiloBuilderExtensions {
                 // call will not — the lesson AddCyberCloudProvider taught this file the hard way.
                 // ExpirySweeperBackfillOptions.RunOnStart is how a harness turns it off.
                 services.AddHostedService<ExpirySweeperBackfill>();
+
+                // ⚠ The same walk for the manager-started pass, for the same reason: a write arms the
+                // reminder when it converges, and a resource that converged before its type had a pass
+                // has had no write since. PeriodicPassBackfillOptions.RunOnStart turns it off.
+                services.AddHostedService<PeriodicPassBackfill>();
             }
         );
     }

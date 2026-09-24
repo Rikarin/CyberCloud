@@ -141,6 +141,28 @@ public sealed class ReconcileDriver(
             return new(ReconcileOutcome.Converged, [skipped], false);
         }
 
+        // ⚠ AND A WRITE'S PASS STOPS A MANAGER-STARTED ONE BEFORE IT APPLIES ANYTHING — #30's review.
+        // The check above runs once, when the refresh starts its pass; a write that begins while that
+        // pass is applying the body it already read would otherwise converge first and then be
+        // overwritten by the older body, and a delete's read-back could be followed by the refresh
+        // re-creating what it removed. So the refresh is cancelled — which tears nothing down — and
+        // driven to its end here. Neither operation grain is reentrant, and returning from its
+        // CancelAsync means its in-flight pass has finished.
+        if (spec.Kind != OperationKind.Refresh && reconcileInput.PassOperationId != Guid.Empty) {
+            var stopped = await StopPeriodicPassAsync(spec, reconcileInput.PassOperationId);
+
+            if (!stopped) {
+                var waiting = Progress(
+                    "waiting",
+                    $"The periodic pass {reconcileInput.PassOperationId:D} is still running over this resource, "
+                    + "so this operation waits for it to stop before applying anything.",
+                    0
+                );
+
+                return new(ReconcileOutcome.InProgress("the periodic pass has not stopped yet"), [waiting], false);
+            }
+        }
+
         var address = ResourceId.ParsePath(reconcileInput.Path);
         if (address.TryGetError(out var addressError)) {
             return new(ReconcileOutcome.Failed(addressError), [], false);
@@ -715,6 +737,49 @@ public sealed class ReconcileDriver(
         grains
             .ForTenant(spec.TenantId.ToString("D", CultureInfo.InvariantCulture))
             .GetGrain<IResourceGrain>(GrainKeys.Resource(spec.ResourceId));
+
+    /// <summary>Cancels a manager-started pass and drives it to its end.</summary>
+    /// <param name="spec">The write whose pass is waiting.</param>
+    /// <param name="passId">The refresh operation the resource grain says is running.</param>
+    /// <returns><c>true</c> once the refresh is terminal (or gone) and the resource grain has been told.</returns>
+    /// <remarks>
+    ///     ⚠ <b>Called from the write's operation, never from the resource grain.</b> The refresh calls
+    ///     the resource grain mid-pass; the write's operation is a third grain that nothing in the
+    ///     refresh calls, so waiting on the refresh here cannot close a cycle. A refresh that answers
+    ///     nothing within Orleans' timeout is a pass that has not stopped, and the write waits a
+    ///     reminder period and asks again.
+    /// </remarks>
+    async Task<bool> StopPeriodicPassAsync(OperationSpec spec, Guid passId) {
+        var pass = grains
+            .ForTenant(spec.TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<IOperationGrain>(GrainKeys.Operation(passId));
+
+        try {
+            var status = await pass.GetAsync();
+
+            if (status.IsSuccess && !status.GetValueOrThrow().IsTerminal) {
+                // A Conflict here is the refresh having ended between the two calls; DriveAsync answers
+                // a terminal operation with its status and does nothing else.
+                _ = await pass.CancelAsync(
+                    $"Operation {spec.OperationId:D} ({spec.Kind}) began on the resource, and a periodic "
+                    + "pass does not run beside a write."
+                );
+
+                status = await pass.DriveAsync();
+            }
+
+            if (status.IsSuccess && !status.GetValueOrThrow().IsTerminal) {
+                return false;
+            }
+
+            // ⚠ Told here as well as by the refresh's own ending, which is best effort; the call is
+            // idempotent and ignores any operation but the one the grain holds.
+            _ = await Resource(spec).EndPeriodicPassAsync(passId);
+            return true;
+        } catch (Exception failure) when (failure is TimeoutException or OrleansException) {
+            return false;
+        }
+    }
 
     static JsonElement ParseOrEmpty(string json) {
         try {

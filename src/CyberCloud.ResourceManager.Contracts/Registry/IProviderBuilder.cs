@@ -417,6 +417,33 @@ public interface IResourceTypeBuilder : IProviderBuilder {
     ///     </para>
     /// </remarks>
     IResourceTypeBuilder PassEvery(TimeSpan period);
+
+    /// <summary>
+    ///     Declares a property that only an action's <see cref="IResourceCreator" /> may set. A caller's
+    ///     own write may send back the value the resource already holds and nothing else.
+    /// </summary>
+    /// <param name="propertyPointer">
+    ///     The RFC 6901 pointer to the property. Every api-version must declare it, and it must be
+    ///     immutable.
+    /// </param>
+    /// <returns>The same builder.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>For a property whose value is a capability, not a setting.</b> A PostgreSQL
+    ///         server's <c>/properties/restore/recoveryPoint</c> names a CloudNativePG <c>Backup</c> in
+    ///         the group's namespace. The vault's <c>recover</c> checks that the point is its own and
+    ///         complete, and that the caller may <c>recover</c>. A plain <c>PUT</c> of a server that
+    ///         named the point itself would skip all three and get another server's data, with keys to
+    ///         it, from nothing but <c>write</c> on servers. #30's review found exactly that.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Enforced by the write path, not by <see cref="SchemaProperty.Immutable" /></b>,
+    ///         which is a declaration the manager does not enforce. The refusal is
+    ///         <see cref="ErrorCode.InvalidRequestBody" /> naming the pointer, before authorization, so
+    ///         it tells the caller nothing about any other resource.
+    ///     </para>
+    /// </remarks>
+    IResourceTypeBuilder SetOnlyByAnAction(string propertyPointer);
 }
 
 /// <summary>

@@ -253,10 +253,31 @@ desired state is a pure function of its body, and wrong for one with a clock in 
   minute and a re-arm does not move a resource's slot. `BeginDeleteAsync` removes it — at the *start*
   of the delete, so a parked resource wakes nothing for seven days — and a restore's converged write
   arms it again.
+- ⚠ **And a silo-start backfill arms what no write did (#30's review).** Arming on a converged write
+  covers only resources written after the pass shipped: every vault converged before it, and any whose
+  row went with a restored reminder table, had no pass until somebody wrote to it — while the vault's
+  retention row promised "at most one period late". `PeriodicPassBackfill` walks tenants,
+  subscriptions and groups once per silo start (the `ExpirySweeperBackfill` walk and price) and calls
+  `IResourceGrain.ArmPeriodicPassAsync` on every `Succeeded` member of a periodic type; it asks
+  nothing on a silo whose registry declares no period.
 - **The tick starts an operation; it does not reconcile.** `RunPeriodicPassAsync` (the reminder's body,
   and what a test drives) starts an `OperationKind.Refresh` and returns, so the grain still never
   provisions inline. It starts nothing when the resource is not `Succeeded`, when a write's operation
-  owns it, or when the previous refresh has not finished — one driver per resource.
+  owns it, or when the previous refresh has not said it ended. ⚠ It decides that from its own state:
+  the refresh calls the resource grain mid-pass, so a tick that awaited the refresh's `GetAsync` was a
+  cycle of two non-reentrant grains, broken only by Orleans' response timeout (#30's review). The
+  refresh reports its end (`EndPeriodicPassAsync`, from `OperationGrain`'s terminal step), and a pass
+  older than an operation's sixty-minute ceiling counts as ended.
+- ⚠ **One driver per resource, and the write is the one that wins (#30's review).** The at-rest check
+  below runs once, when the refresh's pass starts; nothing stopped a `PUT` or `DELETE` from beginning
+  while a refresh that had already read the old body was applying it — which could re-apply the stale
+  body after the write converged, or re-create what a delete's teardown had read back as gone. So a
+  write's pass reads `ReconcileInput.PassOperationId` and, before it applies anything, cancels that
+  refresh and drives it to its end: a cancelled refresh tears nothing down, and because neither
+  operation grain is reentrant, the cancel returning means the refresh's in-flight pass has finished.
+  The write's operation is a third grain that nothing in the refresh calls, so the wait cannot close a
+  cycle; a refresh that does not answer within Orleans' timeout leaves the write `InProgress` for the
+  next reminder.
 - **A refresh is not a write.** The driver runs the ordinary `ReconcileAsync` over the stored body — and
   converges without running it if the resource stopped being at rest after the pass was started. The
   operation reserves and commits no quota, never moves the provisioning state, bumps no etag, emits no
@@ -265,8 +286,10 @@ desired state is a pure function of its body, and wrong for one with a clock in 
   pass nobody asked for is a false alarm, and because a write that began meanwhile owns the state.
 
 `ManagerStartedPassTests` pins the arm (read out of the silo's own `IReminderTable`), the pass, the
-one-at-a-time rule, the failure that leaves the resource alone and the disarm on delete; the vault's
-CloudNativePG lane reads the row out of the real Redis table.
+one-at-a-time rule, the failure that leaves the resource alone, the disarm on delete, a write and a
+delete that each stop a running pass before applying anything, and the backfill arming a converged
+resource whose row was removed; the vault's CloudNativePG lane reads the row out of the real Redis
+table.
 
 **Owed.** (1) A failing periodic pass is visible only on its operation — nothing on the resource or a
 portal blade says "the last pass failed", which for a vault means retention can stop silently
@@ -1445,7 +1468,19 @@ body — recorded, not closed). The creator is built per request by `CompleteAct
 in no container, so a handler cannot obtain one without a caller. The vault's `recover` is the first
 user: a restore is a `CyberCloud.DBforPostgreSQL/servers` resource with `/properties/restore/recoveryPoint`,
 not an object under the vault's labels. `ActionCreatesAsTheCallerTests` pins the caller, the refusal of a
-caller who may act and not write, and the refusal of a taken name.
+caller who may act and not write, the permission asked on the *created* type rather than the action's,
+and the refusal of a taken name.
+
+⚠ **And a property only an action may set is the other half of the seam (#30's review).** The restore
+property was an ordinary one, so a caller's own `PUT` of a server could name any `Backup` in the group's
+namespace and skip `recover` — its permission on the vault, its check that the point is the vault's, its
+check that the point completed. `IResourceTypeBuilder.SetOnlyByAnAction(pointer)` records the pointer on
+the registration (it must be declared, immutable, in every api-version), and step 2 of § The write path
+refuses a caller's own write that sets it to anything but the stored value (the schema default on a
+create) with `InvalidRequestBody` at the pointer; `CreateForActionAsync` is the one route that may. The
+property stays in the published schema, so a client can read a restored server and send it back.
+`ActionCreatesAsTheCallerTests.APropertyOnlyAnActionMaySetIsRefusedOnACallersOwnWrite` pins both
+directions.
 
 **Implementation over contracts, enforced.** The view returns `ResourceSnapshot` and Kubernetes
 `ObjectRef` — the other provider's public *contract* (its schema) and nothing from its assembly. Rule

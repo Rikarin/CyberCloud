@@ -3822,7 +3822,7 @@ public sealed partial class PostgreSQLServerData {
         /// <summary>Where the server's data comes from when it is created from a recovery point rather than empty.</summary>
         public sealed partial class RestoreData {
 
-            /// <summary>A completed recovery point of a server in this resource group, as a backup vault's listRecoveryPoints names it. Empty means a new, empty database. Set at creation: a restore always creates a new server and never writes into one.</summary>
+            /// <summary>The recovery point this server was restored from. Set only by a backup vault's recover action, which creates the server: a write may send back the value the server holds and nothing else. Empty means the server started as a new, empty database.</summary>
             /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
             [JsonPropertyName("recoveryPoint")]
             public string? RecoveryPoint { get; set; }

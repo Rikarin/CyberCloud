@@ -217,7 +217,8 @@ public sealed class RecoveryVaultActionHandlerTests {
                 point,
                 "completed",
                 Now.AddDays(-1),
-                Now.AddDays(-1)
+                Now.AddDays(-1),
+                majorVersion: 16
             )
         );
 
@@ -231,9 +232,39 @@ public sealed class RecoveryVaultActionHandlerTests {
         answer.IsSuccess.ShouldBeTrue(answer.Error?.Message);
         var properties = JsonNode.Parse(creator.Created.ShouldHaveSingleItem().Body)!["properties"]!.AsObject();
         properties["storage"]!["size"]!.GetValue<string>().ShouldBe("20Gi");
-        properties["version"]!.GetValue<string>().ShouldBe("17");
         properties["replicas"]!.GetValue<int>().ShouldBe(1);
         properties["restore"]!["recoveryPoint"]!.GetValue<string>().ShouldBe(point);
+
+        // ⚠ #30's review: this used to be a guess of 17, and a 16 point restored into 17 never starts.
+        properties["version"]!.GetValue<string>().ShouldBe("16", "the major came from a guess and not from the point");
+    }
+
+    [Fact]
+    public async Task RecoverRefusesAPointThatRecordsNoMajorWhenTheSourceIsGone() {
+        var (vault, connection, ns) = await ProtectedAsync("main");
+        var schedule = RecoveryVaults.ScheduledBackupNameOf("nightly", "main");
+        var point = schedule + "-unversioned";
+
+        connection.Plant(
+            RecoveryVaults.BackupRef(ns, point),
+            RecoveryVaults.OperatorBackupJson(ns, schedule, "main", point, "completed", Now, Now, majorVersion: 0)
+        );
+
+        var creator = new RecordingCreator();
+        var answer = await new RecoveryVaultRecoverHandler().InvokeAsync(
+            Context(
+                vault,
+                connection,
+                ns,
+                RecoveryVaults.RecoverAction,
+                new JsonObject { ["recoveryPoint"] = point, ["targetName"] = "main-guess" }.ToJsonString()
+            ) with { Creator = creator },
+            TestContext.Current.CancellationToken
+        );
+
+        answer.Error!.Code.ShouldBe(ErrorCode.PreconditionFailed);
+        answer.Error.Target.ShouldBe("/recoveryPoint");
+        creator.Created.ShouldBeEmpty("a server was created at a guessed major");
     }
 
     [Fact]

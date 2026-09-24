@@ -3,6 +3,7 @@ using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Expiry;
+using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Registry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -38,8 +39,20 @@ namespace CyberCloud.ResourceManager.Tests.Infrastructure;
 ///     </para>
 /// </remarks>
 public sealed class SwitchableAuthorizer : IResourceAuthorizer {
-    /// <summary>Permissions the caller holds. Empty means they hold everything.</summary>
+    /// <summary>
+    ///     Permissions the caller holds. Empty means they hold everything. A key is a bare permission,
+    ///     held on every type, or <c>{type}:{permission}</c>, held on that type alone —
+    ///     <see cref="On" />.
+    /// </summary>
     public static ConcurrentDictionary<string, bool> Granted { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Every <c>{type}:{permission}</c> the write path asked about, in order.</summary>
+    public static ConcurrentQueue<string> AskedOn { get; } = new();
+
+    /// <summary>A grant of <paramref name="permission" /> on <paramref name="type" /> alone.</summary>
+    /// <param name="type">The type the permission is held on.</param>
+    /// <param name="permission">The permission.</param>
+    public static string On(ResourceTypeName type, string permission) => $"{type}:{permission}";
 
     /// <summary>Whether <see cref="Granted" /> is consulted at all.</summary>
     public static bool Restricted { get; set; }
@@ -84,6 +97,7 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
     public static void Reset() {
         Granted.Clear();
         Asked.Clear();
+        AskedOn.Clear();
         Hidden.Clear();
         CollectionsAsked.Clear();
         Restricted = false;
@@ -111,6 +125,7 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
         CancellationToken cancellationToken = default
     ) {
         Asked.Enqueue(actionPermission);
+        AskedOn.Enqueue(On(id.Type, actionPermission));
 
         // ⚠ Before the permission set, and it answers the canonical 404 without consulting it. A
         // resource the caller cannot see is not a resource they hold no permission on — it is one
@@ -120,13 +135,13 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
             return Task.FromResult(Result.Failure(ErrorCode.ResourceNotFound, $"'{id.Path}' does not exist."));
         }
 
-        if (!Restricted || Granted.ContainsKey(actionPermission)) {
+        if (!Restricted || Granted.ContainsKey(actionPermission) || Granted.ContainsKey(On(id.Type, actionPermission))) {
             return Task.FromResult(Result.Success);
         }
 
         // ⚠ THE RULE, REPRODUCED EXACTLY. 404 unless the caller can read; 403 only when they can read
         // but not act — docs/plan/07 § The enforcement seam.
-        if (Granted.ContainsKey(readPermission)) {
+        if (Granted.ContainsKey(readPermission) || Granted.ContainsKey(On(id.Type, readPermission))) {
             return Task.FromResult(
                 Result.Failure(
                     ErrorCode.AuthorizationFailed,
@@ -860,6 +875,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     // RunAsync, which is the same method AddCyberCloudResourceManager's hosted
                     // service calls.
                     services.Configure<ExpirySweeperBackfillOptions>(static backfill => backfill.RunOnStart = false);
+                    services.Configure<PeriodicPassBackfillOptions>(static backfill => backfill.RunOnStart = false);
 
                     services.AddSingleton<ConformingReconciler>();
 

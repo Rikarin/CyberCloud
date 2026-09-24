@@ -570,6 +570,30 @@ public sealed class PostgresReconcilerTests {
     }
 
     [Fact]
+    public async Task ADeploymentWithNoStoreFailsTheServerOnceAndNamesTheWayOut() {
+        // ⚠ #30's review: the AppHost wires no grants, and the refusing default's InternalError is
+        // retryable, so every default-bodied server there stayed Creating for the operation's full hour.
+        // No store is not a store that is slow to answer.
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+        var address = Address("unwired", TenantA, SubscriptionA);
+
+        var outcome = await new PostgresServerReconciler(new FixedClock()).ReconcileAsync(
+            new ReconcileContext(address, PostgresServers.V2026, desired.RootElement, null, ReconcileDriver.NamespaceFor(address), connection, Vault, new NullLog()) {
+                SecretWriter = Vault,
+                Grants = new RefusingObjectStoreGrants()
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        outcome.Retryable.ShouldBeFalse("waiting does not wire a store");
+        outcome.Error!.Target.ShouldBe("/properties/backup/enabled");
+        outcome.Error.Message.ShouldContain("backup.enabled to false");
+        connection.Applied.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void ARestoreBootstrapsFromTheRecoveryPointAndStillArchivesToItsOwnBucket() {
         using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId, recoveryPoint: "observed-20260924-0100"));
         var store = PostgresServers.BackupStore.For(Guid.NewGuid(), "restored", InMemoryObjectStoreGrants.Endpoint);

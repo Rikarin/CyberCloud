@@ -433,8 +433,14 @@ owed:
       platform's hosts and routable from no tenant pod. Nothing enforces that: the CloudNativePG lane
       runs the store on the Docker bridge where k3s pods could reach :8111. Closing it is a
       NetworkPolicy/egress rule in the tenant namespaces the platform renders, or a store version
-      whose IAM API authenticates — re-measured before the pin moves.
+      whose IAM API authenticates — re-measured before the pin moves. ⚠ READ AGAINST THE SOURCE BY
+      #30'S REVIEW, AND IT IS NOT A MOMENT: weed/iamapi/iamapi_server.go builds its own
+      IdentityAccessManagement once, when `weed iam` starts, and subscribes to nothing, so an IAM API
+      that started on an empty store keeps authenticating nobody until the process restarts. A
+      restart after the bootstrap would close it; no installer does one, and none has been measured.
   - id: an-iam-change-can-open-the-store-for-a-moment
+    status: closed
+    closed: 2026-09-24
     says: >
       SUSPECTED, AND RECORDED BECAUSE THE CONSEQUENCE IS A BREACH. In one full Fast-lane run (seventy
       suites and their containers on one host), SeaweedFsGrantsTests saw a freshly issued key WRITE
@@ -450,6 +456,39 @@ owed:
       identities from a static file the platform rewrites, or a newer SeaweedFS whose embedded IAM
       does — re-measured, since 4.41 in the same spike answered a bogus key as an administrator in the
       filer-held mode.
+      ✅ CLOSED BY #30'S REVIEW (2026-09-24), WHICH FOUND THE SETTLE STEP HID THE FAIL-OPEN THE TEST WAS
+      FOR, AND THE READING ABOVE WRONG. weed/s3api/auth_credentials.go at the 3.80 tag assigns
+      `if !iam.isAuthEnabled { iam.isAuthEnabled = len(identities) > 0 }` — "one-directional, no
+      toggling" — so a reload with no identities cannot turn authentication OFF once it is on. What is
+      open is a FRESH store until its first identity reaches the S3 gateway, and the Fast-lane
+      observation fits that: SeaweedFsGrantsTests starts a container per test, and under the lane's
+      load the gateway had not loaded even the administrator when the neighbour write landed. Three
+      changes: SeaweedFsObjectStoreGrants.IssueKeyAsync asks the store to refuse a key nobody issued
+      (RefusesStrangersAsync) before it creates a user or a key, and fails retryably when it does not
+      (SeaweedFsOpenStoreTests); the install step waits for the same refusal after
+      BootstrapAdministratorAsync (SeaweedFsGrantsTests' fixture, the CloudNativePG lane's store); and
+      the neighbour assertion waits for nothing but the own-bucket write, the fail-closed direction.
+      The probe this row asked for is
+      SeaweedFsGrantsTests.NoAnswerDuringABurstOfIamChangesLetsAStrangerOrANeighbourIn: a neighbour
+      write and a stranger's write hammered through 8 issuances and 4 withdrawals — 5941 rounds, every
+      answer a refusal. Not re-run: the full Fast lane's load. The test that saw the breach now has
+      nothing to wait out, so a repeat would fail it rather than pass over it.
+  - id: no-deployment-wires-the-grants
+    says: >
+      FOUND BY #30'S REVIEW. The grants exist only inside the test fixtures: the silo registers
+      SeaweedFsObjectStoreGrants when CyberCloud:ObjectStorage names IamEndpoint and DataPlaneEndpoint,
+      and nothing a deployment runs names them — the AppHost's SeaweedFS reads a static one-identity
+      s3.json (CyberCloudTopology), which the spike measured to ignore IAM-issued identities, and
+      charts/ deploys no platform store at all. Every default-bodied server there used to retry
+      against UnavailableObjectStoreGrants for the operation's full hour; PostgresServerReconciler now
+      fails it once, terminally, at /properties/backup/enabled, naming backups off as the tenant's way
+      out (PostgresReconcilerTests.ADeploymentWithNoStoreFailsTheServerOnceAndNamesTheWayOut). Closing
+      it is a store a deployment starts in the IAM mode — `weed server -s3 -iam`, no -s3.config — an
+      installer step that runs BootstrapAdministratorAsync once and keeps the administrator's key in
+      the vault rather than in configuration (CreateAccessKey generates it, so no static environment
+      variable can carry it), the RefusesStrangersAsync wait, and IamEndpoint and DataPlaneEndpoint in
+      the AppHost and the platform chart. The AppHost cannot be started to measure it here: its ports
+      are fixed and the host is shared.
   - id: the-backups-outlive-the-server-and-nothing-reclaims-them
     says: >
       A server's teardown deletes its Pooler and Cluster and deliberately leaves {name}-backup-s3:

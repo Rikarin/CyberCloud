@@ -114,6 +114,12 @@ assertions:
       SeaweedFS beside it: a server with backups on archives to its own bucket with a key the store's
       IAM API issued and the vault holds; a row is written; a vault protects the server; backupNow
       completes; recover creates a new server resource; and the restored database holds the row.
+      ⚠ The restore is from the point CloudNativePG's ScheduledBackup controller took (`immediate:
+      true`), found by the controller's own cnpg.io/scheduled-backup label and owned by the schedule.
+      #30's review found the first rewrite of this lane restoring only from backupNow's hand-labelled
+      point, which proved nothing about the join listRecoveryPoints, recover and retention make. The
+      same run asserts the point records status.majorVersion, and that a caller's own PUT of a server
+      naming the point is refused at /properties/restore/recoveryPoint.
       RecoveryVaultAgainstCloudNativePg.AProtectedServerIsBackedUpAndRestoredIntoANewServerWithItsRow.
   - id: deleting-the-vault-leaves-restored-clusters-standing
     says: >
@@ -132,8 +138,11 @@ assertions:
       resource grain — armed when a write converges, jittered into the second half of the period by
       the vault's GUID, removed when a delete begins — and each tick starts an OperationKind.Refresh
       that runs the ordinary ReconcileAsync, which is what enforces retention with nobody writing to
-      the vault. docs/plan/08 § The manager-started pass; ManagerStartedPassTests (the mechanism) and
-      the reminder row RecoveryVaultAgainstCloudNativePg reads out of the real Redis table.
+      the vault. A vault that converged before the pass existed, or whose reminder row was lost, is
+      armed by PeriodicPassBackfill at silo start, and a write or delete that begins while a pass runs
+      stops that pass before it applies anything (#30's review). docs/plan/08 § The manager-started
+      pass; ManagerStartedPassTests (the mechanism) and the reminder row
+      RecoveryVaultAgainstCloudNativePg reads out of the real Redis table.
 
 # Meters the type must emit — docs/plan/15 § Metering for the unit.
 #
@@ -207,7 +216,15 @@ owed:
       authorizer for the action's permission — `write` — on the VAULT. ✅ #30 NARROWED IT: the server
       the restore creates is now the caller's own PUT through ActionContext.Creator, so the manager
       also asks for CyberCloud.DBforPostgreSQL/servers' `write` in the group, as that caller
-      (ActionCreatesAsTheCallerTests.ACallerWhoMayActButMayNotWriteIsRefusedTheCreate). WHAT IS STILL
+      (ActionCreatesAsTheCallerTests.ACallerWhoMayActButMayNotWriteIsRefusedTheCreate, and
+      TheCreateIsAuthorisedForTheCreatedTypeAndNotForTheActionsOwn for the type the permission is
+      asked on). ⚠ AND RECOVER IS NOW THE ONLY WAY IN, which it was not: #30's review found
+      /properties/restore/recoveryPoint writable by any caller's own PUT of a server, so `write` on
+      servers alone restored any Backup in the group's namespace — no vault permission, no ownership
+      check, no phase check. The server type declares it SetOnlyByAnAction, and the write path refuses
+      a caller's own PUT or PATCH that sets it to anything but the value the server already holds
+      (ActionCreatesAsTheCallerTests.APropertyOnlyAnActionMaySetIsRefusedOnACallersOwnWrite; against
+      the real hosts, RecoveryVaultAgainstCloudNativePg). WHAT IS STILL
       NOT ASKED is whether the caller may READ the protected server whose bytes come back: a caller
       with `write` on the vault and `write` on servers in the group, and nothing on the one server the
       point was taken of, can materialise its data as a new server of their own — a key export by
@@ -231,6 +248,16 @@ owed:
       (3) clusters the first cut of recover created are objects under the vault's labels and stay
       standing through the vault's teardown (`deleting-the-vault-leaves-restored-clusters-standing`)
       with nothing to adopt them.
+  - id: a-restore-without-its-source-guesses-the-size
+    says: >
+      When the protected server is gone — the case a restore exists for —
+      RecoveryVaults.RestoredServerBody takes the PostgreSQL major from the point's own
+      status.majorVersion (#30's review found it guessing 17, which a 16 point cannot start in; a point
+      that records none is refused), and still takes the volume size from the schema's default, 20Gi,
+      because a Backup records no data size. A database larger than that restores into a volume it
+      does not fit and the Cluster never comes up. Closing it is an optional storageSize on recover's
+      request (an addition the compatibility gate allows), or the size recorded on the vault's
+      schedule while the source is alive.
   - id: deleting-the-vault-deletes-its-recovery-points
     says: >
       backupOwnerReference self makes every Backup the schedule made a dependent of the ScheduledBackup,
@@ -266,7 +293,8 @@ owed:
       count them — but a later operator that did (a "last scheduled backup" computed from its
       children) would take an on-demand point for a scheduled one. The robust form is a label of the
       vault's own beside the controller's, selected on as a union; recorded rather than built because
-      nothing observed misbehaves.
+      nothing observed misbehaves. The controller's side of the join is asserted against the real
+      operator (`the-round-trip-restores-the-row`): its own Backup is listed and restored.
   - id: the-monthly-test-restore
     says: >
       docs/plan/15 § Backup as a service: "The platform runs an automated monthly restore of a sampled

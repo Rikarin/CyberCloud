@@ -1,3 +1,6 @@
+using CyberCloud.ResourceManager.Reconcile;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CyberCloud.ResourceManager.Tests;
@@ -125,6 +128,116 @@ public sealed class ManagerStartedPassTests(ResourceManagerCluster cluster) {
     }
 
     [Fact]
+    public async Task AWriteThatBeginsWhileAPassIsRunningStopsThePassBeforeApplyingAnything() {
+        ResourceManagerCluster.ResetDoubles();
+        var (id, grain) = await CreatedAsync("pass-overtaken");
+
+        // A pass that has read the old body and has not finished — a vault backing off.
+        FakeWorld.StayInProgress[id] = true;
+        var refresh = (await grain.RunPeriodicPassAsync()).GetValueOrThrow();
+        (await cluster.Operation(ResourceManagerCluster.Tenant, refresh).DriveAsync()).GetValueOrThrow()
+            .IsTerminal.ShouldBeFalse();
+        FakeWorld.StayInProgress.TryRemove(id, out _);
+
+        var write = (await cluster.Manager.WriteAsync(
+            new() {
+                Path = Address("pass-overtaken").Path,
+                ApiVersion = TestingProvider.V2026,
+                Verb = WriteVerb.Put,
+                Body = TestingProvider.Body(3, "second"),
+                Caller = ResourceManagerCluster.Caller()
+            },
+            TestContext.Current.CancellationToken
+        )).GetValueOrThrow();
+
+        (await DriveAsync(write.OperationId)).State.ShouldBe(OperationState.Succeeded);
+
+        // ⚠ #30'S REVIEW: nothing consulted the running pass, so a refresh that had read the old body
+        // could apply it after this write converged. The write's pass stops it first.
+        var stopped = (await cluster.Operation(ResourceManagerCluster.Tenant, refresh).GetAsync()).GetValueOrThrow();
+        stopped.State.ShouldBe(OperationState.Canceled, "the periodic pass outlived a write that began after it");
+
+        var passes = FakeWorld.Passes[id];
+        (await DriveAsync(refresh)).State.ShouldBe(OperationState.Canceled);
+        FakeWorld.Passes[id].ShouldBe(passes, "a stopped pass reached the reconciler");
+        FakeWorld.Applied[id].ShouldContain("second", Case.Sensitive, "the older body was applied over the write's");
+
+        (await grain.RunPeriodicPassAsync()).GetValueOrThrow()
+            .ShouldNotBe(Guid.Empty, "the stopped pass is still recorded as running, so no pass ever starts again");
+    }
+
+    [Fact]
+    public async Task ADeleteThatBeginsWhileAPassIsRunningStopsThePassBeforeTheTeardown() {
+        ResourceManagerCluster.ResetDoubles();
+        var (id, grain) = await CreatedAsync("pass-deleted-under");
+
+        FakeWorld.StayInProgress[id] = true;
+        var refresh = (await grain.RunPeriodicPassAsync()).GetValueOrThrow();
+        (await cluster.Operation(ResourceManagerCluster.Tenant, refresh).DriveAsync()).GetValueOrThrow()
+            .IsTerminal.ShouldBeFalse();
+        FakeWorld.StayInProgress.TryRemove(id, out _);
+
+        var deleted = (await cluster.Manager.DeleteAsync(
+            new() {
+                Path = Address("pass-deleted-under").Path,
+                ApiVersion = TestingProvider.V2026,
+                Caller = ResourceManagerCluster.Caller()
+            },
+            TestContext.Current.CancellationToken
+        )).GetValueOrThrow();
+
+        (await DriveAsync(deleted.OperationId)).State.ShouldBe(OperationState.Succeeded);
+
+        var passes = FakeWorld.Passes[id];
+        (await DriveAsync(refresh)).State.ShouldBe(OperationState.Canceled, "the pass outlived the delete");
+        FakeWorld.Passes[id].ShouldBe(passes, "a pass re-applied what the delete tore down");
+    }
+
+    [Fact]
+    public async Task AResourceThatConvergedWithNoReminderIsArmedByTheSiloStartBackfill() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = new ResourceId(
+            ResourceManagerCluster.Tenant,
+            ResourceManagerCluster.IsolatedSubscription,
+            "pass-backfill",
+            TestingProvider.PeriodicTypeName,
+            "pass-backfilled",
+            Guid.Empty
+        );
+
+        var tenant = cluster.For(ResourceManagerCluster.Tenant);
+        _ = await tenant.GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(ResourceManagerCluster.IsolatedSubscription))
+            .CreateResourceGroupAsync(address.ResourceGroup, "eu-west-1");
+
+        var (_, grain) = await CreatedAsync(address);
+
+        // ⚠ The state #30's review found: a vault that converged before manager-started passes
+        // shipped, or whose row went with a restored reminder table, has no reminder, and only a write
+        // would give it one.
+        var row = await Reminders.ReadRow(grain.GetGrainId(), PeriodicPass.ReminderName);
+        await Reminders.RemoveRow(grain.GetGrainId(), PeriodicPass.ReminderName, row!.ETag);
+        (await Reminders.ReadRow(grain.GetGrainId(), PeriodicPass.ReminderName)).ShouldBeNull();
+
+        await RegisterInDirectoryAsync();
+
+        var backfill = new PeriodicPassBackfill(
+            cluster.Grains,
+            cluster.Registry,
+            Options.Create(new PeriodicPassBackfillOptions()),
+            NullLogger<PeriodicPassBackfill>.Instance
+        );
+
+        var covered = await backfill.RunAsync(TestContext.Current.CancellationToken);
+
+        covered.Unreadable.ShouldBe(0);
+        covered.Armed.ShouldBeGreaterThanOrEqualTo(1);
+        (await Reminders.ReadRow(grain.GetGrainId(), PeriodicPass.ReminderName))
+            .ShouldNotBeNull("the backfill walked past a converged gauge with no reminder");
+
+        (await grain.ArmPeriodicPassAsync()).GetValueOrThrow().ShouldBeFalse("a second arm replaced a reminder that was there");
+    }
+
+    [Fact]
     public async Task ATypeWithNoPeriodIsNeverArmed() {
         ResourceManagerCluster.ResetDoubles();
         var address = ResourceManagerCluster.Address("pass-none");
@@ -161,9 +274,33 @@ public sealed class ManagerStartedPassTests(ResourceManagerCluster cluster) {
         }
     }
 
-    async Task<(Guid Id, IResourceGrain Grain)> CreatedAsync(string name) {
-        var address = ResourceManagerCluster.Address(name) with { Type = TestingProvider.PeriodicTypeName };
+    static ResourceId Address(string name) => ResourceManagerCluster.Address(name) with { Type = TestingProvider.PeriodicTypeName };
 
+    Task<(Guid Id, IResourceGrain Grain)> CreatedAsync(string name) => CreatedAsync(Address(name));
+
+    /// <summary>
+    ///     Puts the suite's tenant and <see cref="ResourceManagerCluster.IsolatedSubscription" /> where a
+    ///     backfill's walk finds them — <c>ExpirySweeperTests</c> does the same, and every call is idempotent.
+    /// </summary>
+    async Task RegisterInDirectoryAsync() {
+        var tenant = cluster.For(ResourceManagerCluster.Tenant);
+        var root = tenant.GetGrain<ITenantGrain>(GrainKeys.Tenant(ResourceManagerCluster.Tenant));
+
+        _ = await root.CreateAsync("resource-manager-tests", "Resource manager tests", "eu-west-1");
+        (await root.AddSubscriptionAsync(ResourceManagerCluster.IsolatedSubscription)).IsSuccess.ShouldBeTrue();
+
+        (await cluster.Grains.GetGrain<ITenantDirectoryGrain>(GrainKeys.TenantDirectory())
+            .RegisterAsync(
+                new() {
+                    TenantId = ResourceManagerCluster.Tenant,
+                    Slug = "resource-manager-tests",
+                    HomeRegion = "eu-west-1",
+                    Status = TenantStatus.Active
+                }
+            )).IsSuccess.ShouldBeTrue();
+    }
+
+    async Task<(Guid Id, IResourceGrain Grain)> CreatedAsync(ResourceId address) {
         var accepted = await cluster.Manager.WriteAsync(
             new() {
                 Path = address.Path,

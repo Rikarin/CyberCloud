@@ -1687,7 +1687,7 @@ type PostgreSQLServerPropertiesPooling struct {
 
 // PostgreSQLServerPropertiesRestore is Where the server's data comes from when it is created from a recovery point rather than empty.
 type PostgreSQLServerPropertiesRestore struct {
-	// A completed recovery point of a server in this resource group, as a backup vault's listRecoveryPoints names it. Empty means a new, empty database. Set at creation: a restore always creates a new server and never writes into one.
+	// The recovery point this server was restored from. Set only by a backup vault's recover action, which creates the server: a write may send back the value the server holds and nothing else. Empty means the server started as a new, empty database.
 	RecoveryPoint *string `json:"recoveryPoint,omitempty"`
 }
 
