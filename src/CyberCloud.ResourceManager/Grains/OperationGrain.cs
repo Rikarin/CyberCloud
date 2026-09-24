@@ -406,6 +406,15 @@ public sealed class OperationGrain(
     ///     Whether this operation is a deployment's create or update — the one kind of operation whose
     ///     pass is its children rather than a reconciler.
     /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Every update is a run, and a <c>PATCH</c> is an update — a tags-only merge patch
+    ///     included.</b> It re-runs the whole merged template as the <c>PATCH</c>'s caller and replaces
+    ///     the run record, so each child is checked again as that caller: one who may write the
+    ///     deployment but not its resources turns a tags edit into a failed deployment, though every
+    ///     child the run can write is a no-op. That's the rule because a deployment's body is its
+    ///     desired state and nothing here can tell which edits leave the plan alone; ARM has no
+    ///     <c>PATCH</c> on a deployment at all. docs/plan/08 § Long-running operations says the same.
+    /// </remarks>
     static bool IsDeploymentRun(OperationSpec spec) =>
         spec.Kind is OperationKind.Create or OperationKind.Update && Deployments.IsPath(spec.ResourcePath);
 

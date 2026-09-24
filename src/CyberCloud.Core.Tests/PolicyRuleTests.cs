@@ -240,11 +240,63 @@ public class PolicyRuleTests {
     }
 
     [Fact]
-    public void AuditAndModifyNeverApplyToADeleteOrAnActionEvenWhenTheyNameTheOperation() {
-        var audit = Rule("""{ "if": { "field": "operation", "equals": "delete" }, "then": { "effect": "audit" } }""");
+    public void ADenyRuleThatReadsOnlyTheActionFactReachesTheAction() {
+        // ⚠ Found by the third review of #46: this rule parsed, was stored, and no action ever reached it,
+        // because only a rule reading 'operation' was evaluated past creates and updates.
+        var named = Rule("""{ "if": { "field": "action", "equals": "rotateKeys" }, "then": { "effect": "deny" } }""");
 
-        audit.AppliesTo(PolicyOperations.Delete).ShouldBeFalse();
-        audit.AppliesTo(PolicyOperations.Action).ShouldBeFalse();
+        named.NamesRequest.ShouldBeTrue();
+        foreach (var operation in PolicyOperations.All) {
+            named.AppliesTo(operation).ShouldBeTrue(operation);
+        }
+
+        named.Matches(Facts("{}", PolicyOperations.Action, "rotateKeys")).ShouldBeTrue();
+        named.Matches(Facts("{}", PolicyOperations.Action, "listKeys")).ShouldBeFalse();
+        named.Matches(Facts("{}", PolicyOperations.Delete)).ShouldBeFalse();
+        named.Matches(Facts("{}")).ShouldBeFalse("a create carries no action name");
+    }
+
+    [Theory]
+    [InlineData("audit", """{ "field": "operation", "equals": "delete" }""", "/properties/policyRule/if")]
+    [InlineData("audit", """{ "field": "operation", "in": [ "create", "ACTION" ] }""", "/properties/policyRule/if")]
+    [InlineData("audit", """{ "allOf": [ { "field": "type", "like": "*" }, { "not": { "field": "operation", "like": "*e" } } ] }""", "/properties/policyRule/if/allOf/1/not")]
+    [InlineData("audit", """{ "field": "action", "equals": "restart" }""", "/properties/policyRule/if/field")]
+    [InlineData("audit", """{ "anyOf": [ { "field": "/tags/env", "exists": true }, { "field": "action", "exists": false } ] }""", "/properties/policyRule/if/anyOf/1/field")]
+    [InlineData("deny", """{ "field": "operation", "equals": "write" }""", "/properties/policyRule/if")]
+    [InlineData("deny", """{ "not": { "field": "operation", "in": [ "PUT", "POST" ] } }""", "/properties/policyRule/if/not")]
+    public void ATestThatCantHoldWhereItsEffectRunsIsRefusedRatherThanStored(string effect, string condition, string target) {
+        // ⚠ docs/plan/08 § Policy: a rule that "silently ignored an operator would deny nothing and say
+        // nothing". A test of a request fact that can't hold on any request the effect is evaluated
+        // for is that rule, one level up, and it is refused the same way — by name, at the leaf.
+        var parsed = PolicyRule.Parse($$"""{ "if": {{condition}}, "then": { "effect": "{{effect}}" } }""", Target);
+
+        parsed.IsFailure.ShouldBeTrue(condition);
+        parsed.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        parsed.Error.Target.ShouldBe(target);
+    }
+
+    [Fact]
+    public void AModifyThatNamesDeleteIsRefusedAsAnAuditIs() {
+        var parsed = PolicyRule.Parse(
+            """{ "if": { "field": "operation", "equals": "delete" }, "then": { "effect": "modify", "operations": [ { "operation": "add", "field": "/tags/x", "value": "y" } ] } }""",
+            Target
+        );
+
+        parsed.Error!.Message.ShouldContain("names 'delete'");
+        parsed.Error.Message.ShouldContain("modify rule is evaluated only for a create or an update");
+    }
+
+    [Theory]
+    [InlineData("audit", """{ "field": "operation", "equals": "create" }""")]
+    [InlineData("modify", """{ "field": "operation", "in": [ "Create", "update" ] }""")]
+    [InlineData("audit", """{ "field": "operation", "exists": true }""")]
+    [InlineData("deny", """{ "allOf": [ { "field": "operation", "equals": "action" }, { "field": "action", "like": "rotate*" } ] }""")]
+    [InlineData("deny", """{ "field": "action", "exists": false }""")]
+    public void ATestThatTellsTheEffectsOwnRequestsApartIsAccepted(string effect, string condition) {
+        var operations = effect == "modify" ? """, "operations": [ { "operation": "add", "field": "/tags/x", "value": "y" } ]""" : "";
+        var parsed = PolicyRule.Parse($$"""{ "if": {{condition}}, "then": { "effect": "{{effect}}"{{operations}} } }""", Target);
+
+        parsed.IsSuccess.ShouldBeTrue(parsed.Error?.Message);
     }
 
     // ── Modify ─────────────────────────────────────────────────────────────────────────────────

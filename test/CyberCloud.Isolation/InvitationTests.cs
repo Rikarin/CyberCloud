@@ -220,6 +220,57 @@ public sealed class InvitationTests(IsolationCluster cluster) {
         (await invitee.GetAsync()).GetValueOrThrow().Status.ShouldBe(UserStatus.Deprovisioned, "a link resurrected a deprovisioned invitee");
     }
 
+    /// <summary>
+    ///     Joining with an account in another tenant makes a member with no credential of their own,
+    ///     linked to that account, and only from an invited user — the grains' half of the invited
+    ///     path's <i>"signs in"</i>. The identity host's half is
+    ///     <c>InvitationsOverHttpTests.APersonSignedInElsewhereJoinsWithThatAccountAndSignsInHereThroughIt</c>.
+    /// </summary>
+    [Fact]
+    public async Task JoiningWithAnAccountElsewhereLinksTheMemberAndSetsNoCredential() {
+        await SeedAsync();
+
+        var link = await InviteAsync($"home-{Guid.NewGuid():N}@isolation.test");
+        var invitation = cluster.For(Tenant).GetGrain<IInvitationGrain>(GrainKeys.Invitation(link.Invitation.InvitationId));
+        var user = cluster.For(Tenant).GetGrain<IUserGrain>(GrainKeys.User(link.Invitation.UserId));
+        var home = new HomeAccount { TenantId = IsolationCluster.Victim, UserId = Guid.NewGuid() };
+
+        // This tenant is not another one: refused, and the link is still the person's to use.
+        var own = await invitation.AcceptWithHomeAccountAsync(link.Secret, "Home Person", home with { TenantId = Tenant });
+
+        own.IsSuccess.ShouldBeFalse("a member was linked to an account in their own tenant");
+        own.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        (await DescribeAsync(link)).Status.ShouldBe(InvitationStatus.Pending, "a refused join spent the link");
+
+        // ── Join. ──────────────────────────────────────────────────────────────────────────────
+        var joined = await invitation.AcceptWithHomeAccountAsync(link.Secret, "Home Person", home);
+
+        joined.IsSuccess.ShouldBeTrue(joined.Error?.Message);
+
+        var member = (await user.GetAsync()).GetValueOrThrow();
+
+        member.Status.ShouldBe(UserStatus.Active);
+        member.HomeAccount.ShouldBe(home);
+        member.EnrolledCredentials.ShouldBeEmpty("joining with an account set a credential");
+        (await user.VerifyPasswordAsync(string.Empty)).GetValueOrThrow().ShouldBeFalse();
+
+        // ── A member now: neither kind of accept changes them, even called on the user directly. ──
+        var relinked = await user.JoinWithHomeAccountAsync("Somebody Else", new() { TenantId = Guid.NewGuid(), UserId = Guid.NewGuid() });
+
+        relinked.IsSuccess.ShouldBeFalse("a member was linked to a second account");
+        relinked.Error!.Code.ShouldBe(ErrorCode.PreconditionFailed);
+
+        var passworded = await user.AcceptInvitationAsync("Somebody Else", "a-password-nobody-chose-4");
+
+        passworded.IsSuccess.ShouldBeFalse("a member who joined with an account was given a password");
+        passworded.Error!.Code.ShouldBe(ErrorCode.PreconditionFailed);
+        (await user.GetAsync()).GetValueOrThrow().HomeAccount.ShouldBe(home);
+
+        // Deprovisioned, the link goes with every other credential.
+        (await user.SetStatusAsync(UserStatus.Deprovisioned)).IsSuccess.ShouldBeTrue();
+        (await user.GetAsync()).GetValueOrThrow().HomeAccount.ShouldBeNull("the home account outlived a deprovision");
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Invites <paramref name="email" /> as the owner, and returns the invitation with the secret its mail carried.</summary>

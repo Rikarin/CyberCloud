@@ -1,9 +1,11 @@
 using CyberCloud.Authorization;
 using CyberCloud.Authorization.Contracts;
+using CyberCloud.Gateway.Host;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.ResourceManager;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Globalization;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -1165,6 +1167,96 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
     }
 
     [Fact]
+    public async Task AGetSentBackAsAPutKeepsTheEndItRendered() {
+        // ⚠ The envelope a GET renders carries expiresOn under `properties`, so a manager that read
+        // the top level alone would make the grant permanent, the opposite of docs/plan/10's promise.
+        // The body sent back is the gateway's own rendering of the manager's own read, so a renderer
+        // that moved expiresOn fails this too.
+        var subscription = Guid.Parse("88888888-0000-4000-8000-0000000000a9");
+        var resource = await SeedAsync(subscription);
+        var gwen = await UserAsync("gwen");
+        var group = ScopeId.Group(Grant, subscription, Group);
+        var assignment = RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, gwen));
+        var expiresOn = cluster.Clock.UtcNow.AddHours(1).ToString("O", CultureInfo.InvariantCulture);
+
+        try {
+            (await AssignWithBody(assignment, $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":"{{{expiresOn}}}"}"""))
+                .IsSuccess.ShouldBeTrue();
+
+            var read = await ReadAsync(assignment);
+            read.IsSuccess.ShouldBeTrue(read.Error?.Message);
+            read.GetValueOrThrow().ExpiresOn.ShouldNotBeNull();
+
+            var sentBack = await AssignWithBody(assignment, Rendered(read.GetValueOrThrow()));
+            sentBack.IsSuccess.ShouldBeTrue(sentBack.Error?.Message);
+            sentBack.GetValueOrThrow().Created.ShouldBeFalse();
+            sentBack.GetValueOrThrow()
+                .ExpiresOn.ShouldBe(
+                    read.GetValueOrThrow().ExpiresOn,
+                    "the rendered envelope's expiresOn was not read, and the grant's end changed"
+                );
+
+            cluster.Clock.Advance(TimeSpan.FromHours(1));
+
+            (await AllowedAsync(resource, Permissions.Read, gwen)).ShouldBeFalse(
+                "a GET sent back as a PUT made a just-in-time grant permanent"
+            );
+
+            // The envelope's properties are held to the address like the top level's are.
+            var disagreeing = await AssignWithBody(
+                assignment,
+                $$$"""{"properties":{"{{{RoleAssignmentBodyProperties.RoleDefinitionId}}}":"{{{Relations.Owner}}}"}}"""
+            );
+            disagreeing.IsFailure.ShouldBeTrue("a role under `properties` that disagrees with the address was granted");
+            disagreeing.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+
+            // And a body that says it in both places is refused rather than half read.
+            var twice = await AssignWithBody(
+                assignment,
+                $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":null,"properties":{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":"{{{cluster.Clock.UtcNow.AddHours(1).ToString("O", CultureInfo.InvariantCulture)}}}"}}"""
+            );
+            twice.IsFailure.ShouldBeTrue("a body with expiresOn in both places was accepted");
+            twice.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        } finally {
+            cluster.Clock.Reset();
+        }
+    }
+
+    [Fact]
+    public async Task AGetFromOneScopeSentAsAPutToAnotherIsRefused() {
+        // ⚠ The envelope's role, principal type and principal id match any address with the same
+        // name, so only its `id` and `properties.scope` say where it was read. Unchecked, a GET from
+        // the group sent to the subscription's address would grant on the whole subscription.
+        var subscription = Guid.Parse("88888888-0000-4000-8000-0000000000aa");
+        await SeedAsync(subscription);
+        var hana = await UserAsync("hana");
+        var name = new RoleAssignmentName(Relations.Reader, SubjectTypes.User, hana);
+        var onGroup = RoleAssignmentId.OnScope(ScopeId.Group(Grant, subscription, Group), name);
+        var onSubscription = RoleAssignmentId.OnScope(ScopeId.Subscription(Grant, subscription), name);
+
+        (await Assign(onGroup, Owner)).IsSuccess.ShouldBeTrue();
+        var envelope = Rendered((await ReadAsync(onGroup)).GetValueOrThrow());
+
+        var moved = await AssignWithBody(onSubscription, envelope);
+
+        moved.IsFailure.ShouldBeTrue("a GET from the group, sent to the subscription's address, was granted there");
+        moved.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        moved.Error.Message.ShouldContain("'id'");
+
+        // `properties.scope` is held to the address on its own, for a body that leaves `id` out.
+        var scoped = await AssignWithBody(
+            onSubscription,
+            $$$"""{"properties":{"scope":"{{{onGroup.ScopePath}}}"}}"""
+        );
+
+        scoped.IsFailure.ShouldBeTrue("a body whose scope names the group was granted on the subscription");
+        scoped.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        scoped.Error.Message.ShouldContain("'scope'");
+
+        (await ReadAsync(onSubscription)).IsFailure.ShouldBeTrue("a refused PUT wrote its tuple anyway");
+    }
+
+    [Fact]
     public async Task APutThatShortensAGrantEndsItAtTheEnforcementSeamThoughTheSeamCachedItWhilePermanent() {
         // ⚠ The review of #49's probe, through the seam that serves requests. ReBacResourceAuthorizer
         // asks with MinimizeLatency, and an allow it cached while the grant was permanent used to
@@ -1275,6 +1367,21 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
             new() { Path = assignment.Path, Caller = IsolationCluster.Caller(Grant, Owner) },
             TestContext.Current.CancellationToken
         );
+
+    /// <summary>
+    ///     The body the gateway answers a <c>GET</c> with for <paramref name="snapshot" />, byte for
+    ///     byte, so a test sends back what a client would.
+    /// </summary>
+    /// <remarks>
+    ///     By reflection, because <c>ResponseBodies</c> is internal to the gateway and only its sibling
+    ///     suite sees its internals. <c>HostCompositionTests</c> reaches a gateway type the same way,
+    ///     rather than widen <c>InternalsVisibleTo</c> to a second suite for one call.
+    /// </remarks>
+    static string Rendered(RoleAssignmentSnapshot snapshot) =>
+        (string)typeof(GatewayComposition).Assembly
+            .GetType("CyberCloud.Gateway.Host.Http.ResponseBodies", true)!
+            .GetMethod("RoleAssignment", BindingFlags.Public | BindingFlags.Static)!
+            .Invoke(null, [snapshot])!;
 
     Task<Result<RoleAssignmentSnapshot>> Assign(RoleAssignmentId assignment, string caller) =>
         cluster.Roles.AssignAsync(

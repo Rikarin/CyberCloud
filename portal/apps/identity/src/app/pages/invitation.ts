@@ -4,19 +4,26 @@ import { ActivatedRoute } from '@angular/router';
 import { XuiButton } from '@xui/button';
 import { XuiInput } from '@xui/input';
 import { IdentityApi, InvitationPageResponse } from '../identity-api';
+import { NAVIGATE } from '../navigate';
 
 /**
  * The invitation page — where the link in an invitation mail lands (#43, step 7).
  *
  * The link carries three things in its query: the tenant, the invitation and a one-time secret. The
- * page asks the host what the link is (`/api/invitations/describe`), and for a pending one asks the
- * person for a name and a password for this organisation (`/api/invitations/accept`); the host makes
- * them a member, signs them in, and answers where the portal is.
+ * page asks the host what the link is (`/api/invitations/describe`), and for a pending one offers
+ * the two ways docs/plan/11 § Sign-up and tenant creation names — the invitee "either signs in (if
+ * they already have a user in another tenant) or signs up":
  *
- * ⚠ **The same page for somebody new and for somebody with an account elsewhere.** A user belongs
- * to one organisation (docs/plan/11 § Sign-up and tenant creation), so a colleague who already uses
- * Cyber Cloud gets a separate sign-in here — the page says so rather than offering a "sign in with
- * your existing account" that would sign them into the wrong organisation.
+ * - **Sign up.** A name and a password for this organisation (`/api/invitations/accept`); the host
+ *   makes them a member, signs them in, and answers where the portal is.
+ * - **Sign in.** A full-page trip to the sign-in page with this page as the return URL — the person
+ *   names their own organisation there — and back here the description says the browser is signed
+ *   in with the invited address, so the page offers to join with that account. The member has no
+ *   password of their own; they sign in through that account from then on.
+ *
+ * ⚠ **The return URL is this page, `tenant` and all, and the sign-in page must not read that
+ * `tenant`.** It is the organisation being joined, not the one the person signs into, which is why
+ * the sign-in page takes `tenant` only from an `/authorize` return URL (`tenantOf`).
  *
  * ⚠ **What is rendered comes from the host.** The address and the organisation's name are what the
  * invitation holds, never the query; the query's three values are only posted back.
@@ -56,9 +63,48 @@ import { IdentityApi, InvitationPageResponse } from '../identity-api';
             <strong class="text-foreground">{{ found.email }}</strong
             >.
           </p>
-          <p class="text-foreground-muted mt-2 text-sm" i18n="@@identity.invitation.separate">
-            Choose a name and a password for this organisation. If you already use Cyber Cloud elsewhere, that sign-in
-            is not changed — each organisation has its own.
+
+          @if (found.canJoinWithAccount) {
+            <p class="text-foreground-muted mt-4 text-sm" i18n="@@identity.invitation.signedInAs">
+              You're signed in as <strong class="text-foreground">{{ found.account }}</strong
+              >. Join with that account and sign in to {{ found.tenantName }} with it from now on.
+            </p>
+            <button
+              xuiButton
+              type="button"
+              color="primary"
+              class="mt-4"
+              [disabled]="busy()"
+              (click)="onJoinWithAccount()"
+              i18n="@@identity.invitation.joinWithAccount"
+            >
+              Join with this account
+            </button>
+          } @else {
+            @if (found.account) {
+              <p class="text-foreground-muted mt-4 text-sm" i18n="@@identity.invitation.otherAccount">
+                You're signed in as <strong class="text-foreground">{{ found.account }}</strong
+                >, which isn't the invited address.
+              </p>
+            }
+            <p class="text-foreground-muted mt-4 text-sm" i18n="@@identity.invitation.haveAccount">
+              Already use Cyber Cloud with this address?
+            </p>
+            <button
+              xuiButton
+              type="button"
+              variant="outline"
+              class="mt-2"
+              [disabled]="busy()"
+              (click)="onSignInFirst()"
+              i18n="@@identity.invitation.signInFirst"
+            >
+              Sign in with that account
+            </button>
+          }
+
+          <p class="text-foreground-muted mt-6 text-sm" i18n="@@identity.invitation.separate">
+            Or choose a name and a password for this organisation alone.
           </p>
 
           <form class="mt-5 flex flex-col gap-4" (ngSubmit)="onAccept()">
@@ -108,6 +154,7 @@ import { IdentityApi, InvitationPageResponse } from '../identity-api';
 export class InvitationPage {
   readonly #api = inject(IdentityApi);
   readonly #route = inject(ActivatedRoute);
+  readonly #navigate = inject(NAVIGATE);
 
   /** The link's three parts — posted back, never rendered. */
   readonly #link = computed(() => {
@@ -141,6 +188,28 @@ export class InvitationPage {
     afterNextRender(() => this.#describe());
   }
 
+  /** Where the sign-in page returns to: this page, with the link, so the person resumes here. */
+  readonly returnHere = computed(() => {
+    const link = this.#link();
+    const query = new URLSearchParams({ tenant: link.tenant, invitation: link.invitation, token: link.token });
+
+    return `/invitation?${query.toString()}`;
+  });
+
+  /** Sends the person to sign in with the account they already have, and back here afterwards. */
+  onSignInFirst(): void {
+    this.#navigate(`/signin?returnUrl=${encodeURIComponent(this.returnHere())}`);
+  }
+
+  /** Joins with the account this browser is signed into. */
+  onJoinWithAccount(): void {
+    this.busy.set(true);
+    this.#api.joinInvitationWithAccount(this.#link()).subscribe({
+      next: response => this.#answered(response),
+      error: () => this.#failed()
+    });
+  }
+
   /** Accepts the invitation with the name and password typed. */
   onAccept(): void {
     this.busy.set(true);
@@ -149,17 +218,19 @@ export class InvitationPage {
     this.password.set('');
 
     this.#api.acceptInvitation(this.#link(), this.displayName().trim(), password).subscribe({
-      next: response => {
-        this.busy.set(false);
-        this.message.set(response.message);
-
-        if (response.succeeded) {
-          this.accepted.set(true);
-          this.portalUrl.set(/^https?:\/\//.test(response.portalUrl) ? response.portalUrl : null);
-        }
-      },
+      next: response => this.#answered(response),
       error: () => this.#failed()
     });
+  }
+
+  #answered(response: InvitationPageResponse): void {
+    this.busy.set(false);
+    this.message.set(response.message);
+
+    if (response.succeeded) {
+      this.accepted.set(true);
+      this.portalUrl.set(/^https?:\/\//.test(response.portalUrl) ? response.portalUrl : null);
+    }
   }
 
   #describe(): void {

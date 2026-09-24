@@ -118,8 +118,8 @@ public sealed class StripePaymentServiceProvider : IPaymentServiceProvider {
     /// <param name="email">The email sent.</param>
     /// <remarks>
     ///     ⚠ <b>The parameters are in the key because Stripe compares them.</b> A key reused with
-    ///     different parameters inside Stripe's 24 hours is refused, so the first version's
-    ///     <c>customer-{tenant}</c> turned a corrected email into an error for a day. A retry of the same
+    ///     different parameters inside Stripe's 24 hours is refused, so a key of
+    ///     <c>customer-{tenant}</c> alone would turn a corrected email into an error for a day. A retry of the same
     ///     request still collapses. ⚠ Neither key stops a second customer for one tenant past the
     ///     24 hours: that takes storing the id this returns and never creating again, which is the host
     ///     wiring docs/plan/22 § What is owed lists as <c>psp-host-wiring-and-webhook-endpoint</c>.

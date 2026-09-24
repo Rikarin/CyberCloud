@@ -922,12 +922,13 @@ owed:
       (mint-once makes that the expected outcome; nothing has run it). Its
       KeyVaultClusterBackedConformance is the generic skip, like the feeds type's.
       ⚠ A FOURTH CREDITOR (2026-09-23, #38): CyberCloud.Billing/budgets, a clusterless top-level type
-      converging onto CyberCloud.Billing's durable budget grain through BudgetModule, the same shape as
-      the sending module's four. What IS measured for it that the first two have not had:
+      converging onto CyberCloud.Billing's durable budget grain through GrainBudgetControlPlane in
+      production — BudgetModule is the conformance suite's IConvergedModule over the same plane, the
+      shape the sending module's four have. What IS measured for it that the first two have not had:
       BillingAcrossTheHostsTests in CyberCloud.Hosts.Tests writes a budget, a finalized invoice and a
-      number sequence through the real silo host's PostgreSQL durable tier, deactivates the billing
-      account and reads the invoice back from a new activation — the storage half of the criterion,
-      without the kill.
+      number sequence through the real silo host's PostgreSQL durable tier, stops and disposes both
+      the silo and the gateway host, starts new ones over the same storage and reads each of them
+      back — the storage half of the criterion, with an orderly restart rather than the kill.
   - id: communication-customer-managed-keys
     says: >
       CyberCloud.Communication/services and its children. OWED, AND RECORDED HERE BECAUSE THE FAMILY

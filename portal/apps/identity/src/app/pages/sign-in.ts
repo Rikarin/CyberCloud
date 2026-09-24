@@ -554,16 +554,27 @@ export class SignInPage {
 }
 
 /**
- * The `tenant` a sanitized return URL's query names, or `null`.
+ * The `tenant` a sanitized `/authorize` return URL's query names, or `null`.
  *
  * ⚠ Resolved against a probe origin the way `return-url.ts` does, so the parse is the browser's own
  * and never a string split. `.invalid` is reserved by RFC 2606, so a value that somehow escaped
  * sanitization still resolves nowhere. Empty and whitespace-only values count as absent — the
  * organisation field then appears rather than an empty hint being posted.
+ *
+ * ⚠ **Only an `/authorize` request's `tenant` is the one to sign into.** The invitation page returns
+ * here with its own link, whose `tenant` is the organisation being joined — and the person signing
+ * in on the way is proving the account they already have in a different one (#43). Read from that
+ * URL, the hint would hide the organisation field and try their address against the wrong tenant.
  */
 export function tenantOf(returnUrl: string): string | null {
   try {
-    const tenant = new URL(returnUrl, 'https://return-url-probe.invalid').searchParams.get('tenant')?.trim();
+    const url = new URL(returnUrl, 'https://return-url-probe.invalid');
+
+    if (url.pathname !== '/authorize') {
+      return null;
+    }
+
+    const tenant = url.searchParams.get('tenant')?.trim();
     return tenant ? tenant : null;
   } catch {
     return null;

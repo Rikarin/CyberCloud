@@ -309,4 +309,25 @@ public sealed class RegistryDeclarationTests {
         without.TryGetType(new("CyberCloud.Declaring", "goesForGood"), out var gone).ShouldBeTrue();
         gone.Actions.Select(static x => x.Name).ShouldBe(["restart"]);
     }
+
+    [Fact]
+    public void AnActionDeclaredFullyConsistentKeepsItAndOneThatIsntDoesnt() {
+        // The flag is what makes ResourceManagerService.ActionAsync check a purge or a sign
+        // FullyConsistent without calling its response secret.
+        var registry = Build(static b => b
+                .ResourceType("wipeable")
+                .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
+                .Action("wipe", ActionKind.Post, "write", fullyConsistent: true)
+                .Action("restart", ActionKind.Post, "write")
+        );
+
+        registry.TryGetType(new("CyberCloud.Declaring", "wipeable"), out var type).ShouldBeTrue();
+
+        type.TryGetAction("wipe", out var wipe).ShouldBeTrue();
+        wipe.FullyConsistent.ShouldBeTrue();
+        wipe.Secret.ShouldBeFalse("fullyConsistent must not make the response secret on every generated surface");
+
+        type.TryGetAction("restart", out var restart).ShouldBeTrue();
+        restart.FullyConsistent.ShouldBeFalse();
+    }
 }

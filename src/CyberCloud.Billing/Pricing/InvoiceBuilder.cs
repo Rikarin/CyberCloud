@@ -18,8 +18,13 @@ public static class InvoiceBuilder {
         + "after a shrink the cluster refused (billed low); a difference found later is corrected by credit note.";
 
     /// <summary>The meters rated on a declared size rather than an observed one.</summary>
-    public static ImmutableHashSet<BillingMeter> DeclaredMeters { get; } =
-        [BillingMeter.StorageGbMonths, BillingMeter.BackupGbMonths];
+    /// <remarks>
+    ///     ⚠ Storage only. <see cref="BillingMeter.BackupGbMonths" /> shares the storage quota family and
+    ///     is never derived from a body: the sampler accrues only a family's first meter, and a backup
+    ///     reaches the ledger as a provider's own emission, whatever that provider measured. Flagging it
+    ///     here would print <see cref="DeclaredQuantityNote" /> on a line it isn't true of.
+    /// </remarks>
+    public static ImmutableHashSet<BillingMeter> DeclaredMeters { get; } = [BillingMeter.StorageGbMonths];
 
     /// <summary>One subscription's rated month, grouped into invoice lines.</summary>
     /// <param name="subscriptionId">The subscription.</param>
@@ -153,8 +158,8 @@ public static class InvoiceBuilder {
     ///     <para>
     ///         ⚠
     ///         <b>
-    ///             Rounded on everything credited so far, not on this note alone—the first version did
-    ///             the second, and it moved money.
+    ///             Rounded on everything credited so far, not on this note alone, because the second
+    ///             moves money.
     ///         </b> The invoice's tax is rounded once, on its subtotal. Rounding each note's share again
     ///         gains up to half a cent per note: two credits of 0.03 against a 0.06 subtotal at 21 %
     ///         returned 0.02 of tax on an invoice that charged 0.01. So this note's tax is the tax on

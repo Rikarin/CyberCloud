@@ -167,9 +167,8 @@ public sealed class BillingAccountGrain(
         }
 
         var closesAt = periodStart.AddMonths(1) + IBillingAccountGrain.LateUsageWindow;
-        var now = clock.UtcNow;
 
-        if (now < closesAt) {
+        if (clock.UtcNow < closesAt) {
             return Result<Invoice>.Failure(
                 ErrorCode.Conflict,
                 string.Create(
@@ -200,11 +199,13 @@ public sealed class BillingAccountGrain(
             return Result<Invoice>.Failure(numberError);
         }
 
+        // ⚠ Dated by the allocation, not by this grain's clock — InvoiceNumberingGrain's remarks on why
+        // numbers and dates have to run in the same order.
         var invoice = draft.GetValueOrThrow() with {
             InvoiceId = Guid.NewGuid(),
-            Number = number.GetValueOrThrow(),
+            Number = number.GetValueOrThrow().Number,
             Status = InvoiceStatus.Finalized,
-            FinalizedAt = now
+            FinalizedAt = number.GetValueOrThrow().AllocatedAt
         };
 
         // The one write. Everything before it is recomputable, and the number above is the same number
@@ -327,8 +328,19 @@ public sealed class BillingAccountGrain(
         }
 
         // ⚠ THE RETRY PATH FIRST, for the reason FinalizeAsync answers a finalized month first.
+        // ⚠ And only for the same request. A request id reused for another invoice or other lines is a
+        // bug in the caller's id, and answering it with the earlier note would report a credit that was
+        // never issued — the refusal says which note holds the id.
         if (state.State.CreditNotes.FirstOrDefault(x => string.Equals(x.RequestId, request.RequestId, StringComparison.Ordinal)) is { } issued) {
-            return Result<CreditNote>.Success(issued);
+            return IsRequestOf(issued, request)
+                ? Result<CreditNote>.Success(issued)
+                : Result<CreditNote>.Failure(
+                    ErrorCode.Conflict,
+                    $"Request id '{request.RequestId}' already issued credit note '{issued.Number}' against invoice "
+                    + $"'{issued.InvoiceNumber}', and this request differs from it. One request id is one credit note; "
+                    + "a different credit needs a new id.",
+                    "/requestId"
+                );
         }
 
         if (string.IsNullOrWhiteSpace(request.Reason) || string.IsNullOrWhiteSpace(request.ApprovedBy)) {
@@ -420,7 +432,7 @@ public sealed class BillingAccountGrain(
 
         var note = new CreditNote {
             CreditNoteId = creditNoteId,
-            Number = number.GetValueOrThrow(),
+            Number = number.GetValueOrThrow().Number,
             InvoiceNumber = invoice.Number,
             TenantId = tenantId,
             Currency = invoice.Currency,
@@ -430,7 +442,7 @@ public sealed class BillingAccountGrain(
             Total = subtotal + credited.GetValueOrThrow().Amount,
             Reason = request.Reason,
             ApprovedBy = request.ApprovedBy,
-            IssuedAt = clock.UtcNow,
+            IssuedAt = number.GetValueOrThrow().AllocatedAt,
             RequestId = request.RequestId
         };
 
@@ -459,11 +471,11 @@ public sealed class BillingAccountGrain(
         IReadOnlyList<Guid> subscriptions,
         BillingProfile? customer = null
     ) {
-        // ⚠ A DRAFT NEEDS THE ISSUER TOO, and the first version said it did not. The tax on a line depends
-        // on where the issuer is — reverse charge is "another member state than the issuer's" — so a
-        // draft without one is a number with no tax decision behind it. BillingAcrossTheHostsTests found
-        // it: the real silo, with no issuer configured, answered a draft with EuVatTaxService's refusal
-        // of an issuer in country ''. Cost queries and budgets price usage and never tax it, and keep
+        // ⚠ A DRAFT NEEDS THE ISSUER TOO. The tax on a line depends on where the issuer is — reverse
+        // charge is "another member state than the issuer's" — so a draft without one is a number with
+        // no tax decision behind it. Without this check the real silo, with no issuer configured,
+        // answers a draft with EuVatTaxService's refusal of an issuer in country '' — the failure
+        // BillingAcrossTheHostsTests caught. Cost queries and budgets price usage and never tax it, and keep
         // working without one.
         if (!options.HasIssuer) {
             return Result<Invoice>.Failure(
@@ -606,6 +618,18 @@ public sealed class BillingAccountGrain(
 
     static Result<BillingAccountSnapshot> Refuse(string message, string target) =>
         Result<BillingAccountSnapshot>.Failure(ErrorCode.InvalidRequestBody, message, target);
+
+    /// <summary>Whether a credit note is what a request asks for: its invoice, reason, approver and lines.</summary>
+    static bool IsRequestOf(CreditNote issued, CreditNoteRequest request) {
+        IEnumerable<(int, decimal)> asked = request.Lines.IsDefault
+            ? []
+            : request.Lines.GroupBy(static x => x.LineIndex).Select(static x => (x.Key, -x.Sum(static y => y.Amount))).OrderBy(static x => x.Key);
+
+        return string.Equals(issued.InvoiceNumber, request.InvoiceNumber, StringComparison.Ordinal)
+            && string.Equals(issued.Reason, request.Reason, StringComparison.Ordinal)
+            && string.Equals(issued.ApprovedBy, request.ApprovedBy, StringComparison.Ordinal)
+            && issued.Lines.Select(static x => (x.LineIndex, x.Amount)).OrderBy(static x => x.LineIndex).SequenceEqual(asked);
+    }
 
     static Result<CreditNote> RefuseCredit(string message, string target) =>
         Result<CreditNote>.Failure(ErrorCode.InvalidRequestBody, message, target);

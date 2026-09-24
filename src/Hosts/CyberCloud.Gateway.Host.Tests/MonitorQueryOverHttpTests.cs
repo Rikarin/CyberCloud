@@ -400,6 +400,52 @@ public sealed class MonitorQueryOverHttpTests(MonitorQueryFixture stack) : IClas
         JsonDocument.Parse(quietBody).RootElement.GetProperty("note").GetString().ShouldBe(ClickHouseLogStore.NoTableNote);
     }
 
+    // ── The user a search runs as ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task TheExplorerUserMayReadTheWorkspaceDatabasesAndNotWriteThem() {
+        // Every search above ran as MonitorQueryFixture.ExplorerUser; this is the "nothing else" half.
+        using var http = new HttpClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, stack.ClickHouseUri);
+        request.Headers.Add("X-ClickHouse-User", MonitorQueryFixture.ExplorerUser);
+        request.Headers.Add("X-ClickHouse-Key", MonitorQueryFixture.ExplorerPassword);
+        request.Content = new StringContent(
+            $"INSERT INTO `{stack.DatabaseA}`.`{MonitorLogsTable.Name}` (Body) VALUES ('forged')",
+            System.Text.Encoding.UTF8,
+            "text/plain"
+        );
+
+        using var response = await http.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.IsSuccessStatusCode.ShouldBeFalse();
+        response.Headers.GetValues("X-ClickHouse-Exception-Code").ShouldBe(["497"], "ACCESS_DENIED: the grant is SELECT only");
+    }
+
+    [Fact]
+    public async Task AReadonlyOneUserCanRunNoSearchBecauseTheStoreSetsItsBudgetPerStatement() {
+        // ⚠ The conventional read-only profile is the wrong one. MonitorQueryOptions.LogsUser's remarks.
+        var store = new ClickHouseLogStore(
+            new HttpClient(),
+            new MonitorQueryOptions {
+                LogsEndpoint = stack.ClickHouseUri.ToString(),
+                LogsUser = MonitorQueryFixture.ReadonlyOneUser,
+                LogsPassword = MonitorQueryFixture.ExplorerPassword,
+                AllowInsecureTransport = true
+            },
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ClickHouseLogStore>.Instance
+        );
+
+        using var body = JsonDocument.Parse(
+            JsonSerializer.Serialize(new { from = Stamp(stack.Origin), to = Stamp(stack.Origin.AddMinutes(60)) })
+        );
+        var search = MonitorWorkspaceSearchLogsHandler.ReadSearch(body.RootElement).GetValueOrThrow();
+
+        var answered = await store.SearchAsync(stack.DatabaseA, search, TestContext.Current.CancellationToken);
+
+        answered.TryGetError(out var error).ShouldBeTrue("a readonly = 1 user may not set readonly, max_execution_time or max_rows_to_read");
+        error.Message.ShouldBe(ClickHouseLogStore.FailedSentence);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────
 
     static string Stamp(DateTimeOffset instant) => MonitorQueries.Stamp(instant);

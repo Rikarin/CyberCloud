@@ -106,7 +106,7 @@ public sealed class InvoicingTests(BillingCluster cluster) : IAsyncLifetime {
         // ⚠ The crash between allocation and write, simulated: the numbering grain has already handed
         // the second account its number for August when the finalization runs.
         var preallocated = (await cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, $"{second:N}/2026-08"))
-            .GetValueOrThrow();
+            .GetValueOrThrow().Number;
 
         var a = (await cluster.Account(first).FinalizeAsync(August)).GetValueOrThrow();
         var b = (await cluster.Account(second).FinalizeAsync(August)).GetValueOrThrow();
@@ -148,7 +148,7 @@ public sealed class InvoicingTests(BillingCluster cluster) : IAsyncLifetime {
         cluster.Durable.FailNextWrite(cluster.Numbering.GetGrainId(), StorageFault.BeforeWrite);
 
         await Should.ThrowAsync<OrleansException>(() => cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, key));
-        var retried = (await cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, key)).GetValueOrThrow();
+        var retried = (await cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, key)).GetValueOrThrow().Number;
 
         var stored = (await StoredNumberingAsync()).Series[$"{BillingCluster.Issuer.Code}|{DocumentSeries.Invoice}"];
         stored.ByDocument.ShouldContainKeyAndValue(key, retried, "the number the retry was answered with is the one storage holds");
@@ -169,8 +169,8 @@ public sealed class InvoicingTests(BillingCluster cluster) : IAsyncLifetime {
         await Should.ThrowAsync<OrleansException>(() => cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, key));
         var committed = (await StoredNumberingAsync()).Series[$"{BillingCluster.Issuer.Code}|{DocumentSeries.Invoice}"].ByDocument[key];
 
-        var next = (await cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, $"{Guid.NewGuid():N}/2026-08")).GetValueOrThrow();
-        var retried = (await cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, key)).GetValueOrThrow();
+        var next = (await cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, $"{Guid.NewGuid():N}/2026-08")).GetValueOrThrow().Number;
+        var retried = (await cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, key)).GetValueOrThrow().Number;
 
         retried.ShouldBe(committed);
         Sequence(next).ShouldBe(Sequence(committed) + 1, "the next document gets the next number, not the committed one again");
@@ -191,7 +191,7 @@ public sealed class InvoicingTests(BillingCluster cluster) : IAsyncLifetime {
         var (other, _) = await ConfiguredAsync(Czech);
 
         // Allocated ahead, so the finalization's one write to the numbering grain is its confirmation.
-        var number = (await cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, $"{tenant:N}/2026-08")).GetValueOrThrow();
+        var number = (await cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, $"{tenant:N}/2026-08")).GetValueOrThrow().Number;
         cluster.Durable.FailNextWrite(cluster.Numbering.GetGrainId(), StorageFault.BeforeWrite);
 
         var invoice = (await cluster.Account(tenant).FinalizeAsync(August)).GetValueOrThrow();
@@ -389,6 +389,55 @@ public sealed class InvoicingTests(BillingCluster cluster) : IAsyncLifetime {
 
         retried.Number.ShouldBe(first.Number);
         (await account.ListCreditNotesAsync()).GetValueOrThrow().ShouldHaveSingleItem();
+    }
+
+    /// <summary>
+    ///     ⚠ The review's finding: a request id was matched alone, so the same id against another
+    ///     invoice, or for another amount, was answered with the earlier note as if it had been issued.
+    /// </summary>
+    [Fact]
+    public async Task ARequestIdReusedForADifferentCreditIsRefusedAndIssuesNothing() {
+        var invoice = await InvoicedAsync(4.00m);
+        var other = await InvoicedAsync(4.00m);
+        var account = cluster.Account(invoice.TenantId);
+        var elsewhere = cluster.Account(other.TenantId);
+
+        var first = (await account.IssueCreditNoteAsync(Credit(invoice, 1m, "reused"))).GetValueOrThrow();
+        var moreMoney = await account.IssueCreditNoteAsync(Credit(invoice, 2m, "reused"));
+
+        moreMoney.Error!.Code.ShouldBe(ErrorCode.Conflict);
+        moreMoney.Error.Target.ShouldBe("/requestId");
+        moreMoney.Error.Message.ShouldContain(first.Number);
+        (await account.ListCreditNotesAsync()).GetValueOrThrow().ShouldHaveSingleItem();
+
+        // Another tenant's account has its own request ids, so the same id there is a new request.
+        (await elsewhere.IssueCreditNoteAsync(Credit(other, 1m, "reused"))).IsSuccess.ShouldBeTrue();
+    }
+
+    /// <summary>
+    ///     ⚠ The review's finding: the invoice was dated by the account's clock when it was written, so
+    ///     a finalization retried after a failed write took a later date than the invoice numbered after
+    ///     it. It's dated by the instant its number was taken, which a retry gets back.
+    /// </summary>
+    [Fact]
+    public async Task AnInvoiceRetriedAfterALaterOneKeepsTheDateItsNumberWasTakenAt() {
+        var (first, _) = await ConfiguredAsync(Czech);
+        var (second, _) = await ConfiguredAsync(Czech);
+        var failing = cluster.Account(first);
+
+        cluster.Durable.FailNextWrite(failing.GetGrainId(), StorageFault.BeforeWrite);
+        await Should.ThrowAsync<OrleansException>(() => failing.FinalizeAsync(August));
+
+        TestClock.Instance.Set(TestClock.Start.AddHours(1));
+        var later = (await cluster.Account(second).FinalizeAsync(August)).GetValueOrThrow();
+
+        TestClock.Instance.Set(TestClock.Start.AddHours(2));
+        var retried = (await failing.FinalizeAsync(August)).GetValueOrThrow();
+
+        Sequence(later.Number).ShouldBe(Sequence(retried.Number) + 1);
+        retried.FinalizedAt.ShouldBe(TestClock.Start, "the instant its number was taken, on the first attempt");
+        later.FinalizedAt.ShouldBe(TestClock.Start.AddHours(1));
+        retried.FinalizedAt!.Value.ShouldBeLessThan(later.FinalizedAt!.Value, "a lower number never carries a later date");
     }
 
     [Fact]

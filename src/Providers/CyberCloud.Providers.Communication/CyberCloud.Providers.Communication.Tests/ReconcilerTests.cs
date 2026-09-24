@@ -61,6 +61,23 @@ public sealed class ReconcilerTests(CommunicationTestCluster cluster) {
         refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
         refused.Error.Message.ShouldContain("AccountRef");
 
+        // A handle outside the tenant's own vault prefix is refused, including one that starts inside
+        // it and climbs out: the day a carrier resolves one, it resolves with the platform's token.
+        var mine = $"tenants/{CommunicationTestCluster.Tenant:D}/twilio";
+        foreach (var elsewhere in new[] {
+                     $"tenants/{CommunicationTestCluster.OtherTenant:D}/twilio",
+                     mine + "/../../../platform/CyberCloud.KeyVault/vaults/x/y"
+                 }) {
+            var outside = await cluster.ReconcileAsync(
+                channel,
+                CommunicationChannels.Body("sms", provider: "in-memory", account: "tenant", accountRef: elsewhere + "#sid", authRef: mine + "#token")
+            );
+
+            outside.Kind.ShouldBe(ReconcileOutcomeKind.Failed, elsewhere);
+            outside.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed, elsewhere);
+            outside.Error.Target.ShouldBe("/properties/accountRef");
+        }
+
         // With both handles it converges, and the handles — never values — are what the grain holds.
         var converged = await cluster.ReconcileAsync(
             channel,
@@ -68,8 +85,8 @@ public sealed class ReconcilerTests(CommunicationTestCluster cluster) {
                 "sms",
                 provider: "in-memory",
                 account: "tenant",
-                accountRef: "tenants/x/twilio#sid",
-                authRef: "tenants/x/twilio#token@3"
+                accountRef: mine + "#sid",
+                authRef: mine + "#token@3"
             )
         );
 
@@ -82,9 +99,9 @@ public sealed class ReconcilerTests(CommunicationTestCluster cluster) {
                 CommunicationTestCluster.Ct
             )).GetValueOrThrow();
         held.Credentials.Mode.ShouldBe(CredentialMode.TenantAccount);
-        held.Credentials.AccountRef.ShouldBe(new CarrierSecretRef { Path = "tenants/x/twilio", Field = "sid" });
+        held.Credentials.AccountRef.ShouldBe(new CarrierSecretRef { Path = mine, Field = "sid" });
         held.Credentials.AuthRef.ShouldBe(
-            new CarrierSecretRef { Path = "tenants/x/twilio", Field = "token", Version = "3" }
+            new CarrierSecretRef { Path = mine, Field = "token", Version = "3" }
         );
     }
 

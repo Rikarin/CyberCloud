@@ -156,6 +156,55 @@ public sealed class BudgetTests(BillingCluster cluster) : IAsyncLifetime {
         budget.Sent().ShouldHaveSingleItem();
     }
 
+    /// <summary>
+    ///     ⚠ The review's finding: the alert is written before the send, and an evaluation that ended
+    ///     between the two left an alert that had fired and told nobody — the next evaluation saw it had
+    ///     fired and sent nothing. The write that records it commits and then throws here, which ends the
+    ///     evaluation exactly there.
+    /// </summary>
+    [Fact]
+    public async Task AnAlertRecordedBeforeACrashIsSentOnTheNextEvaluation() {
+        TestClock.Instance.Reset();
+        var budget = await BudgetAsync(10m, [Actual(50m)]);
+        await budget.UseAsync("prod", 200m);
+
+        var grain = cluster.For(budget.Tenant).GetGrain<IBudgetGrain>(GrainKeys.Resource(budget.Id));
+        cluster.Durable.FailNextWrite(grain.GetGrainId(), StorageFault.AfterWrite);
+
+        await Should.ThrowAsync<OrleansException>(() => cluster.Budgets.EvaluateAsync(budget.Tenant, budget.Id));
+
+        var stored = await cluster.Durable.ReadAsync<BudgetState>("budget", grain.GetGrainId());
+        stored.Alerts.ShouldHaveSingleItem().Notification.ShouldBeEmpty("recorded, and the send never ran");
+        budget.Sent().ShouldBeEmpty();
+
+        var next = await budget.EvaluateAsync();
+        var after = await budget.EvaluateAsync();
+
+        next.Fired.ShouldBe(0, "the threshold fired already, and it doesn't fire twice");
+        after.Fired.ShouldBe(0);
+        budget.Sent().ShouldHaveSingleItem().Body.ShouldContain("5.00 EUR");
+        (await budget.HeldAsync()).Alerts.ShouldHaveSingleItem().Notification.ShouldContain("sent");
+    }
+
+    /// <summary>
+    ///     ⚠ The cost query's finding, in the budget: a group budget priced over the subscription's
+    ///     ladder showed its readers how much of the free tier the other groups used first. dev's 80 GiB
+    ///     of egress come first here, and prod's 80 GiB are still inside the free 100 for prod's budget.
+    /// </summary>
+    [Fact]
+    public async Task AResourceGroupBudgetIsPricedWithoutTheOtherGroupsTiers() {
+        TestClock.Instance.Reset();
+        var budget = await BudgetAsync(1m, [Actual(100m)]);
+
+        await cluster.UseAsync(budget.Tenant, budget.Subscription, Guid.NewGuid(), BillingCluster.PathOf(budget.Tenant, budget.Subscription, "dev", "gw"), BillingMeter.EgressGb, September, 80m);
+        await cluster.UseAsync(budget.Tenant, budget.Subscription, Guid.NewGuid(), BillingCluster.PathOf(budget.Tenant, budget.Subscription, "prod", "gw"), BillingMeter.EgressGb, September.AddHours(1), 80m);
+
+        var report = await budget.EvaluateAsync();
+
+        report.Actual.ShouldBe(0m, "priced over the whole subscription it would be 3.00, and that would say dev used 80 GiB");
+        report.Fired.ShouldBe(0);
+    }
+
     [Fact]
     public async Task TheNextPeriodFiresAgain() {
         TestClock.Instance.Reset();
