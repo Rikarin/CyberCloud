@@ -498,6 +498,13 @@ public sealed record RoleAssignmentPage {
 ///         what it does instead.
 ///     </para>
 ///     <para>
+///         ⚠ <b>They're read under <c>properties</c> when the body has one, and at the top level
+///         otherwise.</b> The envelope a <c>GET</c> renders puts them under <c>properties</c>, and a
+///         <c>GET</c> sent back as a <c>PUT</c> must set the same end; read at the top level only,
+///         it made a just-in-time grant permanent. A body carrying them in both places is a
+///         <c>400</c>.
+///     </para>
+///     <para>
 ///         ⚠
 ///         <b>
 ///             <see cref="RoleDefinitionId" /> takes a role <i>name</i> and there are no role

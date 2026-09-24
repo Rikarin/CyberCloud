@@ -1165,6 +1165,61 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
     }
 
     [Fact]
+    public async Task AGetSentBackAsAPutKeepsTheEndItRendered() {
+        // ⚠ The envelope a GET renders carries expiresOn under `properties`. The manager read the
+        // top level only, so sending that envelope back made the grant permanent, and docs/plan/10
+        // promised the opposite.
+        var subscription = Guid.Parse("88888888-0000-4000-8000-0000000000a9");
+        var resource = await SeedAsync(subscription);
+        var gwen = await UserAsync("gwen");
+        var group = ScopeId.Group(Grant, subscription, Group);
+        var assignment = RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, gwen));
+        var expiresOn = cluster.Clock.UtcNow.AddHours(1).ToString("O", CultureInfo.InvariantCulture);
+
+        try {
+            (await AssignWithBody(assignment, $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":"{{{expiresOn}}}"}"""))
+                .IsSuccess.ShouldBeTrue();
+
+            // What ResponseBodies.RoleAssignment renders for it, as a client would send it back.
+            var envelope = $$$"""
+                {"id":"{{{assignment.Path}}}","name":"{{{assignment.Name.Render()}}}","type":"{{{RoleAssignmentId.TypeName}}}",
+                 "properties":{"scope":"{{{group.Path}}}","principalId":"{{{gwen}}}","principalType":"{{{SubjectTypes.User}}}",
+                 "roleDefinitionId":"{{{Relations.Reader}}}","inherited":false,"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":"{{{expiresOn}}}"}}
+                """;
+
+            var sentBack = await AssignWithBody(assignment, envelope);
+            sentBack.IsSuccess.ShouldBeTrue(sentBack.Error?.Message);
+            sentBack.GetValueOrThrow().Created.ShouldBeFalse();
+            sentBack.GetValueOrThrow()
+                .ExpiresOn.ShouldNotBeNull("the envelope's properties.expiresOn was not read, and the grant became permanent");
+
+            cluster.Clock.Advance(TimeSpan.FromHours(1));
+
+            (await AllowedAsync(resource, Permissions.Read, gwen)).ShouldBeFalse(
+                "a GET sent back as a PUT made a just-in-time grant permanent"
+            );
+
+            // The envelope's properties are held to the address like the top level's are.
+            var disagreeing = await AssignWithBody(
+                assignment,
+                $$$"""{"properties":{"{{{RoleAssignmentBodyProperties.RoleDefinitionId}}}":"{{{Relations.Owner}}}"}}"""
+            );
+            disagreeing.IsFailure.ShouldBeTrue("a role under `properties` that disagrees with the address was granted");
+            disagreeing.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+
+            // And a body that says it in both places is refused rather than half read.
+            var twice = await AssignWithBody(
+                assignment,
+                $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":null,"properties":{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":"{{{cluster.Clock.UtcNow.AddHours(1).ToString("O", CultureInfo.InvariantCulture)}}}"}}"""
+            );
+            twice.IsFailure.ShouldBeTrue("a body with expiresOn in both places was accepted");
+            twice.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        } finally {
+            cluster.Clock.Reset();
+        }
+    }
+
+    [Fact]
     public async Task APutThatShortensAGrantEndsItAtTheEnforcementSeamThoughTheSeamCachedItWhilePermanent() {
         // ⚠ The review of #49's probe, through the seam that serves requests. ReBacResourceAuthorizer
         // asks with MinimizeLatency, and an allow it cached while the grant was permanent used to

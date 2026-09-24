@@ -642,18 +642,68 @@ public sealed class RoleAssignmentService(
                 );
             }
 
+            var properties = Properties(document.RootElement);
+
+            if (properties.TryGetError(out var shapeError)) {
+                return Result<AssignmentBody>.Failure(shapeError);
+            }
+
+            var read = properties.GetValueOrThrow();
             var name = assignment.Name;
 
-            var disagreement = Agree(document.RootElement, RoleAssignmentBodyProperties.RoleDefinitionId, name.Role)
-                ?? Agree(document.RootElement, RoleAssignmentBodyProperties.PrincipalType, name.PrincipalType)
-                ?? Agree(document.RootElement, RoleAssignmentBodyProperties.PrincipalId, name.PrincipalId);
+            var disagreement = Agree(read, RoleAssignmentBodyProperties.RoleDefinitionId, name.Role)
+                ?? Agree(read, RoleAssignmentBodyProperties.PrincipalType, name.PrincipalType)
+                ?? Agree(read, RoleAssignmentBodyProperties.PrincipalId, name.PrincipalId);
 
             if (disagreement is { } refused) {
                 return Result<AssignmentBody>.Failure(refused.Error!);
             }
 
-            return ExpiresOn(document.RootElement, now);
+            return ExpiresOn(read, now);
         }
+    }
+
+    /// <summary>
+    ///     Where the body's four properties are: under <c>properties</c> when the body is the
+    ///     envelope a <c>GET</c> renders, at the top level otherwise.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Both shapes, because a <c>GET</c> sent back as a <c>PUT</c> is the envelope.</b>
+    ///     This read the top level only, so the envelope's <c>properties.expiresOn</c> was never seen
+    ///     and the <c>PUT</c> made a just-in-time grant permanent, the opposite of what it sent. A body
+    ///     with the four in both places is refused, because either reading would ignore half of what
+    ///     the caller wrote.
+    /// </remarks>
+    static Result<JsonElement> Properties(JsonElement body) {
+        if (!body.TryGetProperty("properties", out var properties)) {
+            return Result<JsonElement>.Success(body);
+        }
+
+        if (properties.ValueKind != JsonValueKind.Object) {
+            return Result<JsonElement>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"The body's 'properties' is a JSON {properties.ValueKind.ToString().ToLowerInvariant()}. "
+                + "It is the object a GET renders the assignment's properties in; leave it out and put "
+                + "them at the top level, or send it as an object."
+            );
+        }
+
+        string[] four = [
+            RoleAssignmentBodyProperties.RoleDefinitionId,
+            RoleAssignmentBodyProperties.PrincipalType,
+            RoleAssignmentBodyProperties.PrincipalId,
+            RoleAssignmentBodyProperties.ExpiresOn
+        ];
+
+        var twice = four.FirstOrDefault(x => body.TryGetProperty(x, out _));
+
+        return twice is null
+            ? Result<JsonElement>.Success(properties)
+            : Result<JsonElement>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"The body carries '{twice}' at the top level and a 'properties' object as well. Send "
+                + "the assignment's properties in one of the two places."
+            );
     }
 
     /// <summary>

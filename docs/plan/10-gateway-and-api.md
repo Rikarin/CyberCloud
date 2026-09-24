@@ -127,8 +127,12 @@ section — so a `PUT` naming a user this tenant does not have is a `400`, not a
 **A grant can end on its own (issue #49):** a `PUT` body may carry `expiresOn` beside the other three, an
 ISO 8601 instant with an offset and later than now, and every rendered assignment carries
 `properties.expiresOn` — the instant in UTC, or `null` for a permanent grant — so a `GET` sent back as
-a `PUT` sets the same end. A `PUT` without it makes the assignment permanent: the body states the
-whole assignment. From the instant it passes, the assignment is a `404` on `GET`, missing from the
+a `PUT` sets the same end. ⚠ That holds because a `PUT` body's four properties are read under
+`properties` when the body has one, as the rendered envelope does, and at the top level otherwise.
+Read at the top level only, as they first were, the envelope sent back made a just-in-time grant
+permanent. A body with them in both places is a `400`
+(`RoleAssignmentTests.AGetSentBackAsAPutKeepsTheEndItRendered`). A `PUT` without it makes the
+assignment permanent: the body states the whole assignment. From the instant it passes, the assignment is a `404` on `GET`, missing from the
 collection, and denied by every check, before any sweep has run; [07](07-rebac-authorization.md)
 § Time-bounded relations is where the rest lives. That holds for an end a later `PUT` brought closer,
 too, for an answer a check cached while the grant ran longer. ⚠ Such an end has to be at least a
