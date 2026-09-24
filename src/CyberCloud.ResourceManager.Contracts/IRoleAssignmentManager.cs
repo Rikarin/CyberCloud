@@ -539,6 +539,12 @@ public static class RoleAssignmentBodyProperties {
     ///         It must be later than now, and it needs an explicit offset: a local time with none
     ///         would end the grant at an instant that depends on which host parsed it.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>An end that's sooner than the grant's current one must be at least a minute
+    ///         away</b> (<c>TupleExpiry.ShorteningNotice</c>), or the <c>PUT</c> is a <c>400</c>. A
+    ///         check grain trusts the cache fences it last read for that long, and a grant that has
+    ///         to end sooner is revoked instead. docs/plan/07 § Time-bounded relations.
+    ///     </para>
     /// </remarks>
     public const string ExpiresOn = "expiresOn";
 }

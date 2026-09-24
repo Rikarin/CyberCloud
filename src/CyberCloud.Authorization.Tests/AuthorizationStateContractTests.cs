@@ -37,6 +37,7 @@ public sealed class AuthorizationStateContractTests {
         ("TupleStoreState", 1, "Pending"),
         ("TupleStoreState", 2, "NextSequence"),
         ("TupleStoreState", 3, "Expiring"),
+        ("TupleStoreState", 4, "Fences"),
 
         ("CheckCacheEntry", 0, "Allowed"),
         ("CheckCacheEntry", 1, "Version"),

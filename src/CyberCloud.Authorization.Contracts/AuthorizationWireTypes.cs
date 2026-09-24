@@ -353,6 +353,21 @@ public sealed record RelationTuple {
 ///     the grant that proved it.
 /// </remarks>
 public static class TupleExpiry {
+    /// <summary>
+    ///     How far ahead of now a rewrite that brings a live grant's end closer must set the new end —
+    ///     and how long a check grain trusts the <see cref="CacheFence" /> list it last read.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The two are one number, and that's the whole argument.</b> A cached answer that a
+    ///     permanent grant proved carries no end, so when the grant is shortened, only the store's
+    ///     fence can stop the cache serving it. A check grain reads the fences at most once per
+    ///     notice, not on every hit, which keeps <c>MinimizeLatency</c>'s hit free of a call to the
+    ///     tenant's store. That's safe because no fence the store accepts later can take effect
+    ///     sooner than a notice after it was written. A grant that has to end sooner than this is
+    ///     revoked instead. docs/plan/07 § Time-bounded relations.
+    /// </remarks>
+    public static readonly TimeSpan ShorteningNotice = TimeSpan.FromMinutes(1);
+
     /// <summary>Whether a tuple with this expiry still grants at <paramref name="now" />.</summary>
     /// <param name="expiresOn">The tuple's expiry, or <see langword="null" /> for one that never expires.</param>
     /// <param name="now">The instant being asked about.</param>
@@ -718,4 +733,44 @@ public sealed record SweepReport {
     /// </summary>
     [Id(3)]
     public int Superseded { get; init; }
+}
+
+/// <summary>
+///     A point from which the check cache must stop serving older answers: an answer stamped at a
+///     relation version below <see cref="Below" /> isn't served at or after <see cref="At" />.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>What a shortened grant leaves behind.</b> An answer that a permanent grant proved
+///         carries no end (<c>CheckResult.ValidUntil</c> is <see langword="null" />), and
+///         <c>MinimizeLatency</c> never compares versions, so rewriting that grant to end at
+///         <c>T</c> would change nothing the cache looks at. The store writes a fence with
+///         <c>At = T</c> before the rewrite lands, and every check grain honours it on every hit,
+///         in every mode but <c>FullyConsistent</c>, which never reads the cache.
+///         docs/plan/07 § Time-bounded relations.
+///     </para>
+///     <para>
+///         A fence is tenant-wide, because a grant on a resource group proves answers cached on
+///         every resource under it. It's conservative, too: an unrelated answer stamped before the
+///         fence is walked again at <c>T</c>, and early only costs a walk.
+///     </para>
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Authorization.CacheFence")]
+public sealed record CacheFence {
+    /// <summary>
+    ///     The first relation version the fence leaves alone. The store sets it one past its version
+    ///     when the rewrite starts, so every answer computed before the rewrite landed is caught.
+    /// </summary>
+    [Id(0)]
+    public long Below { get; init; }
+
+    /// <summary>The instant the shortened grant ends, and from which the fence retires answers.</summary>
+    [Id(1)]
+    public DateTimeOffset At { get; init; }
+
+    /// <summary>Whether an answer stamped at <paramref name="version" /> is retired at <paramref name="now" />.</summary>
+    /// <param name="version">The relation version the cached answer was computed at.</param>
+    /// <param name="now">The instant of the check.</param>
+    public bool Retires(long version, DateTimeOffset now) => version < Below && !TupleExpiry.IsLive(At, now);
 }

@@ -427,7 +427,8 @@ token, and the *enforcement* path for anything destructive is `FullyConsistent` 
 ⚠ **A tuple that expires changes an answer with no write, so no token can describe it.** Every mode
 applies expiry at the instant a check is evaluated, and every cached entry — `MinimizeLatency`'s
 included — stops being served at the earliest expiry that proved it. § Time-bounded relations says
-why that is the only reading a token without a clock can have.
+why that is the only reading a token without a clock can have, and why an entry cached *before* a
+write set that expiry is retired at it too, although `MinimizeLatency` still reads no version.
 
 ## The Leopard index — and why it is not optional
 
@@ -673,6 +674,30 @@ Early costs a walk; late is a privilege past its grant. `ExpiryPropertyTests` ho
 expiry on about a third of their tuples, with and without the index, at every instant the answer
 could change.
 
+⚠ **A rewrite that brings an end closer leaves answers behind that no instant retires, so the store
+fences them.** An allow cached while its grant was permanent carries no instant, and a
+`MinimizeLatency` hit compares no version, so a `PUT` that set an end on that grant changed nothing a
+hit looks at, and the allow outlived the end. The review of #49 found it with a probe against the
+real silo, in the mode `ReBacResourceAuthorizer` and `ReBacScopeAuthorizer` ask with. So a write that
+shortens a live tuple — permanent before, or ending later — records a `CacheFence` in the durable
+write that journals it: an answer stamped before the write isn't served from the new end on, in any
+mode that reads the cache. A fence is tenant-wide, because a grant on a group proves answers cached on
+every resource under it, and an unrelated answer it catches is walked again, which costs a walk. A
+replay of a journalled expiring write fences again at the version it lands at, because answers
+cached while it was outstanding rested on the grant it replaces. ⚠ **What keeps the fence off the
+hit path is a notice.** A check grain reads the fences at most once a minute
+(`TupleExpiry.ShorteningNotice`), not on every hit, and the store refuses a shortening that ends
+sooner than a minute from now. It checks the notice and adds the fence in one turn, with no await
+between them, so no fence it accepts after a check grain's read can take effect before that read
+goes stale. A grant that has to end sooner is revoked, which is § Consistency's question and
+answers to its three modes. A fresh grant needs no notice, because no cached answer rests on a tuple
+that wasn't there. (`TimeBoundedRelationTests.AnAllowCachedWhileTheGrantWasPermanentEndsWhenARewriteShortensIt`,
+`…TheFenceIsTenantWideSoAnInheritedAllowAndATokenFromBeforeTheRewriteEndToo`,
+`…AShorteningNeedsANoticeAndOneThatGivesExactlyItEndsOnTime`, and, through the enforcement seam,
+`RoleAssignmentTests.APutThatShortensAGrantEndsItAtTheEnforcementSeamThoughTheSeamCachedItWhilePermanent`.)
+The replay's fence can't enforce the notice — the end was checked when the write was first made — so
+a shortening whose first attempt failed can be honoured up to a minute late once its replay lands.
+
 ⚠ **The Leopard index: an expiring tuple is never an edge of the closure.** A closure holds no clock;
 a member recorded through an edge that stops granting on its own would stay a member after the edge
 expired, and the index is read on the check path where its answer is taken without a walk. So the
@@ -736,6 +761,8 @@ explicit offset, later than now — and every rendered assignment carries `prope
 UTC or `null`. A `PUT` without it makes the assignment permanent: a `PUT` states the whole
 assignment. After the instant, `GET` is the canonical `404`, the collection omits the row, and every
 check denies, with no revoke and before any sweep (`RoleAssignmentTests.AJustInTimeGrantReadsBackItsExpiryAndEndsOnItsOwnWithNoRevoke`).
+A `PUT` that brings an end closer must leave at least a minute, or it's a `400`, and its end is kept
+the same way, for answers cached while the grant ran longer too (the fence above).
 The portal's access page takes an optional end as a local date and time, sends the UTC instant it
 names, and shows the served end, or "Permanent", on every row it knows. The resource-graph access column leaves a time-bounded grant out, because the column is recomputed on
 a resource change and on nothing else and would otherwise keep an expired grant's resource in its
@@ -779,6 +806,24 @@ holder's graph query ([08](08-resource-manager.md) § The resource-graph project
   (`LocalTopology`), whose ports are fixed, and the machine this branch was built on shares them
   with other runs. `TenantOverHttpTests`' arrangement — the real gateway in the test process, the
   AppHost's two silos in theirs — is where the case belongs.
+- **The store's register, journal and fences are one row per tenant.** `TupleStoreState.Expiring`
+  lists every tuple the tenant last wrote with an expiry, and the row is rewritten on each tuple
+  write (steps 1 and 7) and walked linearly by the sweep and by the register update. That is
+  affordable while "tuple writes are rare" and a tenant's live just-in-time grants number in the
+  hundreds; a tenant with tens of thousands would pay for them on every write. Splitting the
+  register into its own grain or rows, keyed by expiry, is the fix, and nothing has measured the
+  need yet. The journal replay's latest-entry selection was quadratic in the journal and is linear
+  since the review of #49.
+- **The access page's rows fail axe once one exists.** `aria-required-children` on the `xui-table`
+  rows — the header row's `xui-th`, and the Remove button in a data row. No access-page test gated a
+  page with a row before #49; `pages.spec.ts` gates the form before one exists and says why. The fix
+  belongs in the `xui-table` primitives, not in this page.
+- **The access page doesn't say a closer end needs a minute's notice.** The `400` the platform answers
+  carries the reason, and the page shows it as the call's failure; the hint beside the field doesn't
+  mention it.
+- **The rest of master's `e21006d` "reformat".** It turned `RoleAssignmentService.ListAsync`'s
+  resume filter into a second `OrderBy`, which #49 found through a red test and restored. Nothing
+  else in that commit has been audited for the same kind of change.
 - **Delegation**, the other half of § Effort and sequencing's row, is not touched.
 
 ## The enforcement seam

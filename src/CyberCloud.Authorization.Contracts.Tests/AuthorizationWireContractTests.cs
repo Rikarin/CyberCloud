@@ -112,10 +112,15 @@ public sealed class AuthorizationWireContractTests {
         ("SweepReport", 0, "Pending"),
         ("SweepReport", 1, "Repaired"),
         ("SweepReport", 2, "Remaining"),
-        ("SweepReport", 3, "Superseded")
+        ("SweepReport", 3, "Superseded"),
+
+        // The review of #49 — a shortened grant's end, read by every check grain from the store.
+        ("CacheFence", 0, "Below"),
+        ("CacheFence", 1, "At")
     ];
 
     static readonly (string Type, string Alias)[] Aliases = [
+        ("CacheFence", "CyberCloud.Authorization.CacheFence"),
         ("CheckResult", "CyberCloud.Authorization.CheckResult"),
         ("Consistency", "CyberCloud.Authorization.Consistency"),
         ("ExpirySweepReport", "CyberCloud.Authorization.ExpirySweepReport"),

@@ -324,7 +324,9 @@ key cluster-wide, so one operation grain drives one resource however many silos 
    event for each end; the grain disarms when both are empty. ⚠ Per tenant and not per tuple, and
    armed off "there is something to sweep" rather than off a deadline: a due time equal to an expiry
    would be a second durable copy of it, and the count that scales is tenants using just-in-time
-   roles, not grants.
+   roles, not grants. ⚠ The grants still scale something: the register the tick walks is a list in
+   the tenant's one `TupleStoreState` row, rewritten on every tuple write, so a tenant's live
+   just-in-time grants are a row size and a per-write cost. 07's owed list says when that matters.
 
 ⚠ **Reminder count is a real scaling number and it is easy to get wrong.** One reminder per resource
 at hourly drift detection, with 5 000 000 resources, is ~1 400 reminder firings per second across the

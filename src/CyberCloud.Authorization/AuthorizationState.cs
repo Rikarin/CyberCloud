@@ -114,6 +114,19 @@ public sealed class TupleStoreState {
     /// </remarks>
     [Id(3)]
     public List<RelationTuple> Expiring { get; set; } = [];
+
+    /// <summary>
+    ///     The ends of grants that a rewrite brought closer, which the check cache must honour —
+    ///     <see cref="CacheFence" />'s remarks.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Durable, for <see cref="Version" />'s reason.</b> The cached answers a fence retires
+    ///     live in the hot tier and outlive this activation, so a fence that a deactivation forgot
+    ///     would let them be served past the grant's new end. Every fence that has taken effect is
+    ///     folded into one, so the list holds one fence per shortened grant still running, plus one.
+    /// </remarks>
+    [Id(4)]
+    public List<CacheFence> Fences { get; set; } = [];
 }
 
 /// <summary>One cached check answer.</summary>

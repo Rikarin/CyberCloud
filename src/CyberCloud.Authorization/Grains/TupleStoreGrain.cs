@@ -21,7 +21,10 @@ namespace CyberCloud.Authorization.Grains;
 ///         </b>
 ///     </para>
 ///     <list type="number">
-///         <item>journal the tuple durably, here;</item>
+///         <item>
+///             journal the tuple durably, here, with a <see cref="CacheFence" /> in the same write
+///             when it brings a live grant's end closer;
+///         </item>
 ///         <item>
 ///             <b>for a delete</b>, and <b>for a write that changes an existing edge's expiry</b>,
 ///             update <c>IMembershipIndexGrain</c> — every slice the edge could have reached,
@@ -143,6 +146,10 @@ public sealed class TupleStoreGrain(
     public Task<Result<ConsistencyToken>> GetTokenAsync() => Task.FromResult(Result<ConsistencyToken>.Success(Token()));
 
     /// <inheritdoc />
+    public Task<Result<IReadOnlyList<CacheFence>>> GetCacheFencesAsync() =>
+        Task.FromResult(Result<IReadOnlyList<CacheFence>>.Success([.. state.State.Fences]));
+
+    /// <inheritdoc />
     /// <remarks>
     ///     ⚠ <b>Only the latest entry for a tuple is replayed, and the older ones are dropped.</b>
     ///     The journal holds intents, and a later write or delete of the same tuple is a later
@@ -159,14 +166,34 @@ public sealed class TupleStoreGrain(
             return Result<SweepReport>.Success(new());
         }
 
-        var latest = pending
-            .Where(entry => !pending.Any(later => later.Sequence > entry.Sequence && later.Tuple.IsSameTupleAs(entry.Tuple)))
-            .ToList();
+        // A tuple without its expiry is its identity (RelationTuple.IsSameTupleAs), and the walk is
+        // in sequence order, so the last entry stored under a key is that tuple's latest.
+        var byTuple = new Dictionary<RelationTuple, PendingWrite>();
+        foreach (var entry in pending) {
+            byTuple[entry.Tuple with { ExpiresOn = null }] = entry;
+        }
+
+        var latest = byTuple.Values.OrderBy(static x => x.Sequence).ToList();
 
         var superseded = pending.Count - latest.Count;
         if (superseded > 0) {
             var kept = latest.Select(static x => x.Sequence).ToHashSet();
             state.State.Pending.RemoveAll(x => !kept.Contains(x.Sequence));
+        }
+
+        // ⚠ A replayed expiring write may be a shortening that never landed, and the answers cached
+        // since were proved by the grant it replaces, at versions past the fence its first attempt
+        // wrote. So each one gets a fence at this version too, durably, before its forward half can
+        // land. The notice can't be enforced here: the end was checked when the write was first
+        // made, and a replay that runs later is that much closer to it.
+        var fenced = false;
+        foreach (var entry in latest.Where(static x => !x.IsDelete && x.Tuple.ExpiresOn is not null)) {
+            AddFence(entry.Tuple.ExpiresOn!.Value);
+            fenced = true;
+        }
+
+        if (fenced) {
+            await state.WriteStateAsync();
         }
 
         var repaired = 0;
@@ -285,7 +312,28 @@ public sealed class TupleStoreGrain(
             return Result<ConsistencyToken>.Failure(error);
         }
 
-        if (!isDelete && tuple.ExpiresOn is not null) {
+        if (!isDelete && tuple.ExpiresOn is { } expiresOn) {
+            if (await ShortensAsync(tuple, expiresOn)) {
+                // ⚠ THE NOTICE AND THE FENCE, IN ONE TURN. No await between the clock read and the
+                // fence, so a check grain whose fence read interleaves here either sees this fence
+                // or was answered before `now`, and trusts that answer for less than a notice after
+                // it. That's what lets a MinimizeLatency hit skip the store. See CacheFence.
+                var now = clock.UtcNow;
+
+                if (expiresOn < now + TupleExpiry.ShorteningNotice) {
+                    return Result<ConsistencyToken>.Failure(
+                        ErrorCode.InvalidRequestBody,
+                        $"'{tuple}' would end at {expiresOn:O}, sooner than it does now and less than "
+                        + TupleExpiry.ShorteningNotice.TotalSeconds.ToString(CultureInfo.InvariantCulture)
+                        + " seconds from now. A check grain trusts the fences it last read for that long, "
+                        + "so a grant that has to end sooner is revoked instead — docs/plan/07 "
+                        + "§ Time-bounded relations."
+                    );
+                }
+
+                AddFence(expiresOn);
+            }
+
             // ⚠ BEFORE THE JOURNAL. An expiring grant nothing will ever sweep is one nothing will
             // ever audit the end of, and a silo with no reminder service throws here — so the
             // write is refused while nothing has landed, rather than half-written.
@@ -313,8 +361,8 @@ public sealed class TupleStoreGrain(
         state.State.Version++;
         await state.WriteStateAsync();
 
-        if (!isDelete && tuple.ExpiresOn is { } expiresOn) {
-            AuthorizationLog.ExpiringTupleWritten(logger, tenantId, tuple.ToString(), expiresOn, state.State.Version);
+        if (!isDelete && tuple.ExpiresOn is { } written) {
+            AuthorizationLog.ExpiringTupleWritten(logger, tenantId, tuple.ToString(), written, state.State.Version);
         }
 
         return Result<ConsistencyToken>.Success(Token());
@@ -408,6 +456,54 @@ public sealed class TupleStoreGrain(
         var snapshot = read.GetValueOrThrow();
         return snapshot.Subjects(tuple.Relation).Contains(tuple.Subject)
             && snapshot.ExpiryOf(tuple.Relation, tuple.Subject) != tuple.ExpiresOn;
+    }
+
+    /// <summary>
+    ///     Whether an expiring write brings a live tuple's end closer: the tuple is permanent now, or
+    ///     ends later than <paramref name="expiresOn" />.
+    /// </summary>
+    /// <remarks>
+    ///     A new grant isn't a shortening, because no cached answer can rest on a tuple that wasn't
+    ///     there. Neither is a rewrite of an expired tuple the sweep hasn't reached: the answers it
+    ///     proved already stopped at its end. A read that can't say is taken as a shortening, which
+    ///     is the side that fences.
+    /// </remarks>
+    async Task<bool> ShortensAsync(RelationTuple tuple, DateTimeOffset expiresOn) {
+        var read = await GrainFactory.ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<IObjectRelationsGrain>(GrainKeys.ObjectRelations(tuple.Object.Type, tuple.Object.Id))
+            .ReadAsync();
+
+        if (read.IsFailure) {
+            return true;
+        }
+
+        var snapshot = read.GetValueOrThrow();
+
+        return snapshot.Subjects(tuple.Relation).Contains(tuple.Subject)
+            && (snapshot.ExpiryOf(tuple.Relation, tuple.Subject) is not { } current || current > expiresOn);
+    }
+
+    /// <summary>
+    ///     Adds a fence that retires every answer stamped at or before the current version from
+    ///     <paramref name="at" />, and folds the fences already in effect into one.
+    /// </summary>
+    /// <remarks>
+    ///     Folding is exact: once two fences are both in effect, the one with the higher
+    ///     <see cref="CacheFence.Below" /> retires everything the other does. The folded fence takes
+    ///     the earlier instant, so a check grain whose clock runs a little behind this one still
+    ///     finds it in effect.
+    /// </remarks>
+    void AddFence(DateTimeOffset at) {
+        var now = clock.UtcNow;
+        var fences = state.State.Fences;
+        var passed = fences.Where(x => !TupleExpiry.IsLive(x.At, now)).ToList();
+
+        if (passed.Count > 1) {
+            fences.RemoveAll(x => !TupleExpiry.IsLive(x.At, now));
+            fences.Add(new() { Below = passed.Max(static x => x.Below), At = passed.Min(static x => x.At) });
+        }
+
+        fences.Add(new() { Below = state.State.Version + 1, At = at });
     }
 
     /// <summary>

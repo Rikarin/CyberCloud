@@ -1,4 +1,5 @@
 using CyberCloud.Core;
+using Orleans.Concurrency;
 
 namespace CyberCloud.Authorization.Contracts;
 
@@ -157,7 +158,8 @@ public interface ISubjectRelationsGrain : IGrainWithStringKey {
 ///             No check ever goes
 ///             through it
 ///         </b>
-///         except to read the version, which is a read.
+///         except to read the version on a cache miss and the cache fences at most once per
+///         <see cref="TupleExpiry.ShorteningNotice" /> per check grain, and both are reads.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The write is not transactional and the journal is what makes the sweeper possible.</b>
@@ -176,7 +178,8 @@ public interface ITupleStoreGrain : IGrainWithStringKey {
     /// <param name="tuple">
     ///     The tuple. A <see cref="RelationTuple.ExpiresOn" /> must be later than now; writing a
     ///     tuple that's already present replaces its expiry, so a repeated write is how a grant is
-    ///     extended, shortened, or made permanent.
+    ///     extended, shortened, or made permanent. A shortening must end at least
+    ///     <see cref="TupleExpiry.ShorteningNotice" /> from now, and writes a <see cref="CacheFence" />.
     /// </param>
     /// <returns>The token that covers the write — docs/plan/07 § Consistency.</returns>
     /// <remarks>
@@ -193,6 +196,20 @@ public interface ITupleStoreGrain : IGrainWithStringKey {
 
     /// <summary>The tenant's current relation version, as a token.</summary>
     Task<Result<ConsistencyToken>> GetTokenAsync();
+
+    /// <summary>
+    ///     Returns every fence the check cache must still honour — the ends of grants that a rewrite
+    ///     brought closer. docs/plan/07 § Time-bounded relations.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <see cref="AlwaysInterleaveAttribute" />, because a check grain calls this on a request
+    ///     path and a tuple write is several durable writes long. It reads one list and writes
+    ///     nothing. A rewrite adds its fence in the same turn that checks the notice, with no await
+    ///     between, so a read that interleaves with the write either sees the fence or was served
+    ///     before the notice began.
+    /// </remarks>
+    [AlwaysInterleave]
+    Task<Result<IReadOnlyList<CacheFence>>> GetCacheFencesAsync();
 
     /// <summary>
     ///     Replays every journalled write whose second half did not land — docs/plan/07 § Storage's

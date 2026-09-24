@@ -258,6 +258,11 @@ public sealed class TimeBoundedRelationTests(AuthorizationCluster cluster) {
                 (await cluster.Index(tenant, eng).ReadAsync()).GetValueOrThrow()
                     .MembersOf(Relations.Member).ShouldContain(Alice, "the permanent membership is closed over");
 
+                // An allow the closure proved, cached while the membership was permanent — the
+                // answer the rewrite below has to retire as well as the closure.
+                (await CheckAsync(tenant, scope, Consistency.MinimizeLatency)).ValidUntil.ShouldBeNull();
+                (await CheckAsync(tenant, scope, Consistency.MinimizeLatency)).FromCache.ShouldBeTrue();
+
                 // ⚠ THE REWRITE THAT NEEDS A RECOMPUTE. The same tuple, now ending in an hour. A union
                 // can't take a member out of a closure; without TupleStoreGrain's step 2 on a rewrite,
                 // the index would keep answering "yes" for Alice after the hour — from the fast path,
@@ -283,6 +288,124 @@ public sealed class TimeBoundedRelationTests(AuthorizationCluster cluster) {
                 var restored = (await cluster.Index(tenant, eng).ReadAsync()).GetValueOrThrow();
                 restored.MembersOf(Relations.Member).ShouldContain(Alice);
                 restored.IsUnclosed(Relations.Member).ShouldBeFalse("nothing expiring is left beneath the userset");
+            }
+        );
+    }
+
+    // ── A grant shortened after its answer was cached ──────────────────────────────────────────
+    //
+    // ⚠ The review of #49 found this with a probe against this silo. An allow a permanent grant
+    // proved carries no ValidUntil, and a MinimizeLatency hit compares no version, so a rewrite that
+    // set an end on the grant changed nothing a hit looks at, and the allow outlived the end.
+    // MinimizeLatency is what ReBacResourceAuthorizer and ReBacScopeAuthorizer ask with. The store's
+    // CacheFence is the fix, and TupleExpiry.ShorteningNotice is what keeps it off the hit path.
+
+    [Fact]
+    public async Task AnAllowCachedWhileTheGrantWasPermanentEndsWhenARewriteShortensIt() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4935);
+                var scope = Group("jit-r");
+                const string grant = "resourceGroup:jit-r#reader@user:alice";
+
+                await cluster.WriteAsync(tenant, grant);
+
+                (await CheckAsync(tenant, scope, Consistency.MinimizeLatency)).FromCache.ShouldBeFalse();
+                var cached = await CheckAsync(tenant, scope, Consistency.MinimizeLatency);
+                cached.FromCache.ShouldBeTrue();
+                cached.ValidUntil.ShouldBeNull("a permanent grant proved it, so it carries no end");
+
+                await WriteAsync(tenant, grant, InAnHour);
+
+                (await CheckAsync(tenant, scope, Consistency.MinimizeLatency)).Allowed.ShouldBeTrue(
+                    "the shortened grant still runs until the hour"
+                );
+
+                cluster.Clock.UtcNow = InAnHour;
+
+                var after = await CheckAsync(tenant, scope, Consistency.MinimizeLatency);
+                after.Allowed.ShouldBeFalse(
+                    $"the allow cached while the grant was permanent outlived the end a rewrite set on it; FromCache={after.FromCache}"
+                );
+                after.FromCache.ShouldBeFalse();
+            }
+        );
+    }
+
+    [Fact]
+    public async Task TheFenceIsTenantWideSoAnInheritedAllowAndATokenFromBeforeTheRewriteEndToo() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4936);
+                var scope = Group("jit-s");
+                var resource = ObjectRef.Of(ObjectTypes.Resource, "jit-s-r1");
+                const string grant = "resourceGroup:jit-s#reader@user:alice";
+
+                await cluster.WriteAsync(tenant, "resource:jit-s-r1#parent@resourceGroup:jit-s");
+                var permanent = await cluster.WriteAsync(tenant, grant);
+
+                // Two answers cached while the grant was permanent: one on the resource, a hop below
+                // the tuple, which is the object the enforcement seam checks, and one on the group
+                // under the token the grant's write returned.
+                await CheckAsync(tenant, resource, Consistency.MinimizeLatency);
+                (await CheckAsync(tenant, resource, Consistency.MinimizeLatency)).FromCache.ShouldBeTrue();
+                await CheckAsync(tenant, scope, Consistency.AtLeastAsFresh(permanent));
+                (await CheckAsync(tenant, scope, Consistency.AtLeastAsFresh(permanent))).FromCache.ShouldBeTrue();
+
+                await WriteAsync(tenant, grant, InAnHour);
+
+                cluster.Clock.UtcNow = InAnHour;
+
+                (await CheckAsync(tenant, resource, Consistency.MinimizeLatency)).Allowed.ShouldBeFalse(
+                    "an allow cached on a resource below the shortened grant outlived the grant's end"
+                );
+                (await CheckAsync(tenant, scope, Consistency.AtLeastAsFresh(permanent))).Allowed.ShouldBeFalse(
+                    "a token minted before the rewrite kept a cached allow past the end the rewrite set"
+                );
+            }
+        );
+    }
+
+    [Fact]
+    public async Task AShorteningNeedsANoticeAndOneThatGivesExactlyItEndsOnTime() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4937);
+                var scope = Group("jit-t");
+                const string grant = "resourceGroup:jit-t#reader@user:alice";
+                var notice = TupleExpiry.ShorteningNotice;
+
+                await cluster.WriteAsync(tenant, grant);
+
+                // Cached, and a hit, so the check grain has read the fences at the start: it trusts
+                // that read for exactly one notice.
+                await CheckAsync(tenant, scope, Consistency.MinimizeLatency);
+                (await CheckAsync(tenant, scope, Consistency.MinimizeLatency)).FromCache.ShouldBeTrue();
+
+                var before = (await cluster.Store(tenant).GetTokenAsync()).GetValueOrThrow();
+
+                var refused = await cluster.Store(tenant)
+                    .WriteAsync(Tuple(grant) with { ExpiresOn = Start + notice - TimeSpan.FromTicks(1) });
+                refused.IsFailure.ShouldBeTrue("a shortening that ends inside the notice was accepted");
+                refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+
+                (await cluster.Store(tenant).GetTokenAsync()).GetValueOrThrow().Version.ShouldBe(before.Version);
+                (await cluster.Store(tenant).PendingCountAsync()).GetValueOrThrow().ShouldBe(0);
+                (await cluster.Store(tenant).GetCacheFencesAsync()).GetValueOrThrow().ShouldBeEmpty();
+
+                // A new grant rests no cached answer on anything, so it needs no notice.
+                await WriteAsync(tenant, "resourceGroup:jit-t#reader@user:bob", Start.AddSeconds(10));
+
+                // ⚠ THE EDGE. Written at the start, ending one notice later: the instant the fence
+                // takes effect is the instant the check grain's read of the fences goes stale.
+                await WriteAsync(tenant, grant, Start + notice);
+
+                cluster.Clock.UtcNow = Start + notice - TimeSpan.FromTicks(1);
+                var lastTick = await CheckAsync(tenant, scope, Consistency.MinimizeLatency);
+                lastTick.Allowed.ShouldBeTrue();
+                lastTick.FromCache.ShouldBeTrue("a tick before the end, the cached allow is still true");
+
+                cluster.Clock.UtcNow = Start + notice;
+                var atEnd = await CheckAsync(tenant, scope, Consistency.MinimizeLatency);
+                atEnd.Allowed.ShouldBeFalse("a grant shortened with exactly the notice outlived its end");
+                atEnd.FromCache.ShouldBeFalse();
             }
         );
     }

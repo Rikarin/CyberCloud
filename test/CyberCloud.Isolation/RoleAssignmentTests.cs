@@ -2,6 +2,7 @@ using CyberCloud.Authorization;
 using CyberCloud.Authorization.Contracts;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.ResourceManager;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -1163,6 +1164,53 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         }
     }
 
+    [Fact]
+    public async Task APutThatShortensAGrantEndsItAtTheEnforcementSeamThoughTheSeamCachedItWhilePermanent() {
+        // ⚠ The review of #49's probe, through the seam that serves requests. ReBacResourceAuthorizer
+        // asks with MinimizeLatency, and an allow it cached while the grant was permanent used to
+        // outlive the end a later PUT set — docs/plan/07 § Time-bounded relations.
+        var subscription = Guid.Parse("88888888-0000-4000-8000-0000000000a8");
+        var resource = await SeedAsync(subscription);
+        var sam = await UserAsync("sam");
+        var target = IsolationCatalog.Targets[0];
+
+        // ⚠ With its id, so the seam checks the resource, a hop below the tuple. An address with no
+        // id is checked on its group, and each PUT's own assignRole check walks that group's check
+        // grain and drops every older answer there — which would retire the cached allow for a
+        // reason that has nothing to do with the fence.
+        var address = IsolationCluster.Address(target, ResourceName(subscription), Grant, subscription) with { Id = resource };
+        var assignment = RoleAssignmentId.OnScope(
+            ScopeId.Group(Grant, subscription, Group),
+            new(Relations.Reader, SubjectTypes.User, sam)
+        );
+
+        try {
+            (await Assign(assignment, Owner)).IsSuccess.ShouldBeTrue();
+
+            // Twice: the first fills the resource's check cache, the second is served from it.
+            (await ReadThroughTheSeamAsync(address, target, sam)).IsSuccess.ShouldBeTrue();
+            (await ReadThroughTheSeamAsync(address, target, sam)).IsSuccess.ShouldBeTrue();
+
+            var end = cluster.Clock.UtcNow.AddHours(1).ToString("O", CultureInfo.InvariantCulture);
+            var shortened = await AssignWithBody(assignment, $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":"{{{end}}}"}""");
+            shortened.IsSuccess.ShouldBeTrue(shortened.Error?.Message);
+
+            // Shortened again, to end inside the notice: refused, and the hour stands.
+            var tooSoon = cluster.Clock.UtcNow.AddSeconds(30).ToString("O", CultureInfo.InvariantCulture);
+            var refused = await AssignWithBody(assignment, $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":"{{{tooSoon}}}"}""");
+            refused.IsFailure.ShouldBeTrue("a PUT that ends a grant inside TupleExpiry.ShorteningNotice was accepted");
+            refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+
+            cluster.Clock.Advance(TimeSpan.FromHours(1));
+
+            var after = await ReadThroughTheSeamAsync(address, target, sam);
+            after.IsFailure.ShouldBeTrue("the seam served an allow cached while the grant was permanent past the end a PUT set");
+            after.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+        } finally {
+            cluster.Clock.Reset();
+        }
+    }
+
     [Theory]
     [InlineData("past")]
     [InlineData("now")]
@@ -1206,6 +1254,21 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
             new() { Path = assignment.Path, Body = body, Caller = IsolationCluster.Caller(Grant, Owner) },
             TestContext.Current.CancellationToken
         );
+
+    /// <summary>A read through the production seam, in the mode it asks with for a read.</summary>
+    Task<Result> ReadThroughTheSeamAsync(ResourceId address, IsolationTarget target, string user) {
+        cluster.Registry.TryGetType(target.Type, out var registration).ShouldBeTrue();
+
+        return new ReBacResourceAuthorizer(cluster.Grains, NullLogger<ReBacResourceAuthorizer>.Instance)
+            .AuthorizeAsync(
+                address,
+                registration.ReadPermission,
+                registration.ReadPermission,
+                IsolationCluster.Caller(Grant, user),
+                false,
+                TestContext.Current.CancellationToken
+            );
+    }
 
     Task<Result<RoleAssignmentSnapshot>> ReadAsync(RoleAssignmentId assignment) =>
         cluster.Roles.ReadAsync(

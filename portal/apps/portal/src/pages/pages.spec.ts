@@ -682,7 +682,8 @@ describe('the portal pages, signed in', () => {
       // The gate on the field and its error, run before a row exists. ⚠ Once any row does, axe
       // reports aria-required-children on the xui-tr rows (the header row's xui-th, and the
       // Remove button in a data row), which the table already had before this field and which
-      // no access-page test has gated — so it isn't this test's to fix or to hide.
+      // no access-page test has gated — so it isn't this test's to fix or to hide. It's owed in
+      // docs/plan/07 § Time-bounded relations.
       const results = await axe.run(host(), WCAG_22_AA);
       expect(results.violations.map(v => `${v.id}: ${v.help}`)).toEqual([]);
 

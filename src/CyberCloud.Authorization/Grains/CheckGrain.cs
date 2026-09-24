@@ -27,7 +27,8 @@ namespace CyberCloud.Authorization.Grains;
 ///             </term>
 ///             <description>
 ///                 any stamp, and <b>the tenant version is not even read</b> — which is what makes
-///                 it the fast mode, and what makes the revoke-then-stale-read bug real.
+///                 it the fast mode, and what makes the revoke-then-stale-read bug real. Only the
+///                 store's cache fences are, at most once per <c>TupleExpiry.ShorteningNotice</c>.
 ///             </description>
 ///         </item>
 ///         <item>
@@ -87,6 +88,21 @@ namespace CyberCloud.Authorization.Grains;
 ///         nothing else would ever retire the entry. A memoised allow that outlived its grant would
 ///         be the JIT feature's whole failure mode; docs/plan/07 § Time-bounded relations.
 ///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             A grant that's shortened after an answer was cached leaves that answer with no end,
+///             so the store's fences retire it instead, in every mode that reads the cache.
+///         </b> An allow a permanent grant proved carries no <c>ValidUntil</c>, and a
+///         <c>MinimizeLatency</c> hit compares no version, so without a fence a <c>PUT</c> that set
+///         an end on the grant would change nothing a hit looks at, and the allow would outlive the
+///         new end (the review of #49 found it with a probe). Every hit asks whether a
+///         <see cref="CacheFence" /> retires its stamp. The fences are read from the store at most
+///         once per <see cref="TupleExpiry.ShorteningNotice" /> per activation, not on every hit,
+///         and that's sound because the store refuses a shortening that ends sooner than a notice
+///         from now: no fence it accepts after a read can take effect before the read goes stale.
+///         A fence read that fails counts as retiring, so the hit becomes a walk.
+///     </para>
 /// </remarks>
 public sealed class CheckGrain(
     [PersistentState("check", StorageTiers.Hot)]
@@ -98,6 +114,8 @@ public sealed class CheckGrain(
     : Grain, ICheckGrain {
     Guid tenantId;
     ObjectRef self = new();
+    IReadOnlyList<CacheFence> fences = [];
+    DateTimeOffset? fencesReadAt;
 
     /// <inheritdoc />
     public override Task OnActivateAsync(CancellationToken cancellationToken) {
@@ -147,7 +165,8 @@ public sealed class CheckGrain(
             && cached.SchemaVersion == schema.Version
             && TupleExpiry.IsLive(cached.ValidUntil, clock.UtcNow)
             && (mode.Mode == ConsistencyMode.MinimizeLatency
-                || cached.Version >= mode.Token!.Version)) {
+                || cached.Version >= mode.Token!.Version)
+            && !await IsFencedAsync(cached.Version)) {
             AuthorizationMetrics.RecordCacheHit();
 
             return Result<CheckResult>.Success(
@@ -342,6 +361,32 @@ public sealed class CheckGrain(
     ///     every name, so no (permission, subject) pair can be re-cut into a different one.
     /// </summary>
     static string CacheKey(string permission, SubjectRef subject) => permission + "\u0001" + subject;
+
+    /// <summary>
+    ///     Whether a <see cref="CacheFence" /> retires an answer stamped at
+    ///     <paramref name="version" />. Reads the store's fences again once the last read is a
+    ///     notice old.
+    /// </summary>
+    async Task<bool> IsFencedAsync(long version) {
+        var now = clock.UtcNow;
+
+        // A clock that moved back is read again too, because the notice is measured from the read.
+        if (fencesReadAt is not { } readAt || now >= readAt + TupleExpiry.ShorteningNotice || now < readAt) {
+            var read = await StoreGrain().GetCacheFencesAsync();
+            if (read.IsFailure) {
+                return true;
+            }
+
+            // ⚠ The instant BEFORE the call. The store promises only that a fence it accepts ends
+            // a notice or more after it was written, so a read is good for a notice from the
+            // earliest instant its answer can describe, and that's this one.
+            fences = read.GetValueOrThrow();
+            fencesReadAt = now;
+            now = clock.UtcNow;
+        }
+
+        return fences.Any(x => x.Retires(version, now));
+    }
 
     bool DropEntriesOlderThan(long version) {
         // docs/plan/07 § Caching across requests: "a write invalidates the tenant's whole check
