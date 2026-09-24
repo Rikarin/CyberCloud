@@ -341,6 +341,12 @@ is a billing-dispute prevention measure as much as a correctness one.
 | `PendingDeletion` | 30-day tombstone | Nothing runs, nothing is billed, everything is restorable |
 | `Purged` | Gone | Grain state deleted, shards reclaimed, directory entry tombstoned forever (never reuse an id) |
 
+⚠ **"Control-plane writes rejected" has two doors, and for a while it had one.** A request is refused at
+the gateway's `ResolveTenantStage`. A deployment's children are written from a reminder and never pass
+it, so `IResourceManager.WriteChildAsync` reads the directory entry again before each child and refuses
+anything but `Active` or `Warned` — until the review of #39, a template running when its tenant was
+suspended went on creating resources ([08 § Long-running operations](08-resource-manager.md)).
+
 Tenant creation is itself a long-running operation with a progress model, because it is: allocate
 shards, create the identity realm, create the default subscription, create the default resource group,
 optionally provision an in-house cluster (minutes, per ADR-009), seed ReBAC relations, emit the welcome

@@ -233,6 +233,11 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<IPrincipalDirectory, UnavailablePrincipalDirectory>();
         services.TryAddSingleton<IRoleAssignmentManager, RoleAssignmentService>();
 
+        // Whether a deployment's recorded creator may still act, asked before each child is written.
+        // The real one is identity's, which AddCyberCloudIdentity Replaces this with; a silo without
+        // identity writes no child — UnavailablePrincipalStanding's remarks say why not "yes".
+        services.TryAddSingleton<IPrincipalStanding, UnavailablePrincipalStanding>();
+
         // ── The resource graph query. docs/plan/08 § The resource-graph projection — the read half of #54. ──
         //
         // ⚠ THE FOURTH ENTRY POINT, AND THE ONLY ONE WHOSE REAL IMPLEMENTATION IS NOT IN THIS

@@ -68,7 +68,10 @@ public interface IResourceManager {
     ///     <see cref="WriteAsync" /> would give it to that caller — so a child the caller may not
     ///     write is <see cref="ErrorCode.ResourceNotFound" /> or <see cref="ErrorCode.AuthorizationFailed" />,
     ///     never a success. Refused outright for an empty parent, an empty subject, a verb other
-    ///     than <see cref="WriteVerb.Put" />, and a child that is itself a deployment.
+    ///     than <see cref="WriteVerb.Put" />, and a child that is itself a deployment; and, before
+    ///     step 1, with <see cref="ErrorCode.TenantSuspended" /> for a tenant that no longer takes
+    ///     control-plane writes and <see cref="ErrorCode.AuthorizationFailed" /> for an impersonated
+    ///     caller or a principal that may no longer act.
     /// </returns>
     /// <remarks>
     ///     <para>
@@ -78,10 +81,54 @@ public interface IResourceManager {
     ///         <see cref="CallerContext" /> the gateway built from one when the deployment's own
     ///         <c>PUT</c> passed step 3 at the resource group — persisted in the parent's
     ///         <see cref="OperationSpec.Caller" /> and never re-derived. Replaying that identity is
-    ///         safe for three reasons, and each is a property of this method rather than of its
+    ///         safe for four reasons, and each is a property of this method rather than of its
     ///         caller's care:
     ///     </para>
     ///     <list type="number">
+    ///         <item>
+    ///             <b>What the gateway would have refused before step 3 is asked again, now.</b> A
+    ///             direct request meets the gateway's stages before it reaches this service, and a
+    ///             child meets none of them, so this argument used to cover ReBAC alone. Three gates
+    ///             sat in those stages and nowhere else, and a child now meets each before step 1:
+    ///             <list type="bullet">
+    ///                 <item>
+    ///                     The tenant's status, read from <c>ITenantDirectoryGrain</c> — the record
+    ///                     <c>ResolveTenantStage</c> reads a mirror of — and refused with
+    ///                     <see cref="ErrorCode.TenantSuspended" /> unless <c>Active</c> or
+    ///                     <c>Warned</c> (docs/plan/06 § Tenant lifecycle).
+    ///                 </item>
+    ///                 <item>
+    ///                     The principal's own status, through <c>IPrincipalStanding</c>: a user must be
+    ///                     active, a service principal enabled, and a managed identity bound. A
+    ///                     suspension revokes the user's sessions, so they can't renew a token for the
+    ///                     gateway, but leaves their role tuples, so step 3 alone still allowed them.
+    ///                 </item>
+    ///                 <item>
+    ///                     Impersonation, refused outright. The sixty-minute box
+    ///                     (docs/plan/06 § Platform administration) is the operator's grant, which no
+    ///                     spec records, so a child can't tell a live one from one that has run out.
+    ///                 </item>
+    ///             </list>
+    ///             <para>
+    ///                 ⚠ <b>Before the review of #39 none of these was asked.</b> A tenant suspended
+    ///                 by billing, or a compromised account an administrator suspended, mid-way
+    ///                 through a hundred-resource template had every remaining child created as
+    ///                 them. <c>DeploymentTests.ATenantSuspendedBetweenTwoChildrenStopsTheDeploymentAtTheSecond</c>
+    ///                 and
+    ///                 <c>DeploymentAuthorizationTests.ACreatorSuspendedBetweenTwoChildrenIsRefusedAtTheSecond</c>
+    ///                 hold the line.
+    ///             </para>
+    ///             <para>
+    ///                 ⚠ <b>The rate limiter is the one stage that isn't repeated, deliberately.</b> It
+    ///                 charged the deployment's own <c>PUT</c>, and a child can't multiply that
+    ///                 charge without bound: <c>DeploymentLimits.MaxResources</c> caps a template at a
+    ///                 hundred children, they're written one at a time, and each waits for its
+    ///                 predecessor's operation to end. Quota, the budget that matters for what a
+    ///                 child creates, is step 6 of every child. The counters are
+    ///                 <c>CyberCloud.ServiceDefaults</c>' and this module has no edge to it;
+    ///                 docs/plan/08 § Long-running operations records charging children as owed.
+    ///             </para>
+    ///         </item>
     ///         <item>
     ///             <b>Every child is checked at its own scope, now, against the durable rows.</b> This is
     ///             <see cref="WriteAsync" />'s body: step 3 runs the caller's subject against the child's
@@ -116,9 +163,11 @@ public interface IResourceManager {
     ///         </item>
     ///     </list>
     ///     <para>
-    ///         ⚠ <b>Impersonation travels with it.</b> <see cref="CallerContext.ImpersonatedBy" /> is on
-    ///         the caller and so on every child, and the audit trail of each child names the operator
-    ///         the deployment's own did.
+    ///         ⚠ <b>Impersonation doesn't travel with it any more.</b> This paragraph used to say
+    ///         <see cref="CallerContext.ImpersonatedBy" /> reached every child and its audit line, which
+    ///         was true and was the problem: a deployment made the operator's time-boxed session last
+    ///         as long as the template did. A deployment created under impersonation is accepted, and
+    ///         its first child is refused naming the operator, which fails it.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>It does not ask the parent whether it exists.</b> The parent is the grain calling

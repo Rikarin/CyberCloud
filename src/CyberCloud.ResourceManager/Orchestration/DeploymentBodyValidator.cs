@@ -1,3 +1,4 @@
+using CyberCloud.ResourceManager.Contracts.Registry;
 using System.Text.Json;
 
 namespace CyberCloud.ResourceManager.Orchestration;
@@ -48,23 +49,44 @@ public interface IResourceBodyValidator {
 ///     describe that resource to a caller who has not yet been authorized to see it. So a partial
 ///     patch passes here and the parent operation evaluates the merged body on its first pass, where
 ///     a template that does not deploy fails the operation naming why.
+///     <para>
+///         ⚠ <b>Every template is also read for a secret property, a partial patch's included</b> —
+///         see <see cref="DeploymentSecrets" />. The structural check needs no parameters, so it runs
+///         whenever the body carries a template; the plan is checked too whenever it's evaluated here.
+///     </para>
 /// </remarks>
-public sealed class DeploymentBodyValidator : IResourceBodyValidator {
+/// <param name="registry">Where each template resource's schema is resolved, for its secret properties.</param>
+public sealed class DeploymentBodyValidator(IProviderRegistry registry) : IResourceBodyValidator {
     /// <inheritdoc />
     public ResourceTypeName Type => Deployments.Type;
 
     /// <inheritdoc />
     public Result Validate(ResourceId id, JsonElement body, WriteVerb verb) {
+        var properties = body.TryGetProperty("properties", out var found) && found.ValueKind == JsonValueKind.Object
+            ? found
+            : default;
+
+        var carriesTemplate = properties.ValueKind == JsonValueKind.Object
+            && properties.TryGetProperty("template", out var template)
+            && template.ValueKind == JsonValueKind.String;
+
         if (verb == WriteVerb.Patch
-            && !(body.TryGetProperty("properties", out var properties)
-                && properties.ValueKind == JsonValueKind.Object
-                && properties.TryGetProperty("template", out _)
-                && properties.TryGetProperty("parameters", out _))) {
-            return Result.Success;
+            && !(carriesTemplate && properties.TryGetProperty("parameters", out _))) {
+            return carriesTemplate
+                ? DeploymentSecrets.RefuseInTemplate(registry, properties.GetProperty("template").GetString()!)
+                : Result.Success;
         }
 
         var planned = DeploymentTemplate.EvaluateBody(id, body);
 
-        return planned.TryGetError(out var error) ? Result.Failure(error) : Result.Success;
+        if (planned.TryGetError(out var error)) {
+            return Result.Failure(error);
+        }
+
+        var literal = carriesTemplate
+            ? DeploymentSecrets.RefuseInTemplate(registry, properties.GetProperty("template").GetString()!)
+            : Result.Success;
+
+        return literal.IsFailure ? literal : DeploymentSecrets.RefuseInPlan(registry, planned.GetValueOrThrow());
     }
 }

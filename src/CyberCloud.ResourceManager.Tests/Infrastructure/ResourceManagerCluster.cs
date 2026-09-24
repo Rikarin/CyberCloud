@@ -81,7 +81,6 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
     /// <summary>Every <c>(parentResourceId, candidates)</c> pair the listing asked about, in order.</summary>
     public static ConcurrentQueue<(Guid Parent, int Candidates)> CollectionsAsked { get; } = new();
 
-    /// <summary>Lets everything through again.</summary>
     /// <summary>
     ///     Every check, as the address it was asked at, the caller it was asked for and the permission
     ///     — so a test can see WHO a write was authorized as, which is the whole question for a
@@ -95,6 +94,7 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
     /// </summary>
     public static ConcurrentDictionary<string, bool> DeniedGroups { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Lets everything through again.</summary>
     public static void Reset() {
         Granted.Clear();
         Asked.Clear();
@@ -179,6 +179,45 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
             AnswersCollections
                 ? CollectionVisibility.Of(candidates.Where(static x => !Hidden.ContainsKey(x)))
                 : CollectionVisibility.Unanswered
+        );
+    }
+}
+
+/// <summary>
+///     An <see cref="IPrincipalStanding" /> a test can make refuse one subject — the identity grains'
+///     answer for a suspended user, without the identity module this harness doesn't compose.
+/// </summary>
+/// <remarks>
+///     ⚠ The real one, over real users, is what <c>DeploymentAuthorizationTests</c> in
+///     <c>CyberCloud.Isolation</c> drives; this one exists so the write path's side of the rule —
+///     asked before step 1, for every child, and refused on any failure — is testable here.
+/// </remarks>
+public sealed class SwitchablePrincipalStanding : IPrincipalStanding {
+    /// <summary>Subject ids that may no longer act, against the reason given.</summary>
+    public static ConcurrentDictionary<string, string> Refused { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Every subject asked about, as <c>type:id@tenant</c>, in order.</summary>
+    public static ConcurrentQueue<string> Asked { get; } = new();
+
+    /// <summary>Lets everybody act again and forgets who was asked about.</summary>
+    public static void Reset() {
+        Refused.Clear();
+        Asked.Clear();
+    }
+
+    /// <inheritdoc />
+    public Task<Result> EnsureMayActAsync(
+        Guid tenantId,
+        string principalType,
+        string principalId,
+        CancellationToken cancellationToken = default
+    ) {
+        Asked.Enqueue($"{principalType}:{principalId}@{tenantId:D}");
+
+        return Task.FromResult(
+            Refused.TryGetValue(principalId, out var reason)
+                ? Result.Failure(ErrorCode.AuthorizationFailed, reason)
+                : Result.Success
         );
     }
 }
@@ -690,6 +729,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
     public static void ResetDoubles() {
         FakeWorld.Reset();
         SwitchableAuthorizer.Reset();
+        SwitchablePrincipalStanding.Reset();
         SwitchablePolicyEvaluator.Reset();
         SwitchableLockResolver.Reset();
         RecordingRelationWriter.Reset();
@@ -748,6 +788,24 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
         await LiftQuotaAsync(Tenant, IsolatedSubscription);
         await LiftQuotaAsync(OtherTenant, Subscription);
 
+        // ⚠ The tenant's directory entry, because a deployment's child reads it before step 1 and
+        // refuses a tenant it can't find — the status ResolveTenantStage enforces for a direct write.
+        // Only Tenant: the expiry backfill walks every entry and reads each tenant's grain, and
+        // OtherTenant has none. The slug is ExpirySweeperTests' own, so its re-registration is the
+        // same entry rather than a slug conflict.
+        var registered = await Grains
+            .GetGrain<ITenantDirectoryGrain>(GrainKeys.TenantDirectory())
+            .RegisterAsync(
+                new() {
+                    TenantId = Tenant,
+                    Slug = "resource-manager-tests",
+                    HomeRegion = "eu-west-1",
+                    Status = TenantStatus.Active
+                }
+            );
+
+        registered.IsSuccess.ShouldBeTrue(registered.Error?.Message);
+
         Manager = new ResourceManagerService(
             Registry,
             new SwitchableAuthorizer(),
@@ -768,7 +826,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                 new UnavailableSecretResolver()
             ),
             NullLogger<ResourceManagerService>.Instance,
-            validators: [new DeploymentBodyValidator()]
+            validators: [new DeploymentBodyValidator(Registry)]
         );
     }
 
@@ -852,6 +910,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     services.AddSingleton<ILockResolver, SwitchableLockResolver>();
                     services.AddSingleton<IResourceChangedSink, RecordingChangeSink>();
                     services.AddSingleton<IResourceRelationWriter, RecordingRelationWriter>();
+                    services.AddSingleton<IPrincipalStanding, SwitchablePrincipalStanding>();
 
                     // The connection grain's seam. docs/plan/10 § SignalR — per-subscribe, never
                     // per-connect, and re-checked on relation changes.

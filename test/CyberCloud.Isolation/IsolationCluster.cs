@@ -752,6 +752,17 @@ public sealed class IsolationCluster : IAsyncLifetime {
         // below about the tenant boundary rather than about a missing fixture.
         await CreateAncestorsAsync(Victim, VictimSubscription, VictimUser);
         await CreateAncestorsAsync(Attacker, AttackerSubscription, AttackerUser);
+
+        // ⚠ The victim's directory entry, which a deployment's child reads before step 1 — the status
+        // ResolveTenantStage enforces for a direct write, asked again for a caller replayed from a
+        // reminder. DeploymentAuthorizationTests deploys in this tenant and suspends it.
+        var registered = await Grains
+            .GetGrain<ITenantDirectoryGrain>(GrainKeys.TenantDirectory())
+            .RegisterAsync(
+                new() { TenantId = Victim, Slug = "isolation-victim", HomeRegion = "eu-west-1", Status = TenantStatus.Active }
+            );
+
+        registered.IsSuccess.ShouldBeTrue(registered.Error?.Message);
     }
 
     /// <summary>Creates every ancestor every target in the catalogue nests inside.</summary>

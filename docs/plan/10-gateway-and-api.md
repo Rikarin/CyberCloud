@@ -171,7 +171,11 @@ the generated document (#39).** `CyberCloud.Resources/deployments` is a register
 answers for a deployment that need not exist, and `ActionAsync` refuses an action on an absent
 resource because `POST` never creates; and it reads every resource the template names *as the
 caller*, which an action handler — handed an `ActionContext` with no caller, by design — cannot. It
-answers `200` with `{ "status", "changes": [ … ] }` and no `Azure-AsyncOperation`. Routing is still
+answers `200` with `{ "status", "creates", "modifies", "noChanges", "changes": [ … ] }` and no
+`Azure-AsyncOperation`: the three typed arrays of resource ids are the verdict the document declares
+(`Deployments.WhatIfResponse`), and `changes` is Azure's array of objects beside them, admitted by an
+open schema because `SchemaKind` can't declare it (the review of #39 found this sentence still giving
+only the last). Routing is still
 not a decision: the entry point runs step 1's ownership checks and the action's permission check
 itself, behind the same seam. ⚠ The gateway never names `IResourceManager.WriteChildAsync`, the
 door a deployment's children go through as their recorded caller —

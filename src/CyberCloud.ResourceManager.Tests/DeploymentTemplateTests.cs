@@ -1,4 +1,5 @@
 using CyberCloud.ResourceManager.Orchestration;
+using CyberCloud.ResourceManager.Registry;
 using System.Text.Json.Nodes;
 
 namespace CyberCloud.ResourceManager.Tests;
@@ -209,6 +210,61 @@ public sealed class DeploymentTemplateTests {
         JsonNode.Parse(plan.Resources[0].Body)!["properties"]!["label"]!.GetValue<string>().Length.ShouldBe(16 * 1024);
     }
 
+    /// <summary>The registry step 2 resolves each template resource's schema from.</summary>
+    static ProviderRegistry Registry { get; } = ProviderRegistry.Build([new TestingProvider(), new DeploymentsProvider()]);
+
+    static System.Text.Json.JsonElement DeploymentBody(JsonObject properties) =>
+        System.Text.Json.JsonSerializer.SerializeToElement(new JsonObject { ["properties"] = properties });
+
+    /// <summary>
+    ///     A template that sets a child's secret property is refused at step 2, whether the value is a
+    ///     literal or a parameter, and on a partial patch as well as a <c>PUT</c> — the review of #39
+    ///     read the value back from the deployment's own <c>GET</c>.
+    /// </summary>
+    [Fact]
+    public void ATemplateThatSetsASecretPropertyIsRefusedAtStepTwoWhereverItsValueComesFrom() {
+        var validator = new DeploymentBodyValidator(Registry);
+
+        var literal = Widget("a");
+        literal["properties"]!["adminPassword"] = "hunter2";
+
+        var put = validator.Validate(
+            Scope,
+            DeploymentBody(new() { ["template"] = Template(literal).ToJsonString() }),
+            WriteVerb.Put
+        );
+
+        put.IsFailure.ShouldBeTrue();
+        put.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        put.Error.Message.ShouldContain("'/properties/adminPassword' on CyberCloud.Testing/widgets is a secret property");
+        put.Error.Target.ShouldBe("/properties/template/resources/0");
+
+        // ⚠ The value is a parameter the patch doesn't carry, so the template can't be evaluated here —
+        // and the key alone is enough to refuse it, before the template is stored.
+        var fromParameter = Widget("b");
+        fromParameter["properties"]!["adminPassword"] = "[parameters('password')]";
+        var template = Template(fromParameter);
+        template["parameters"] = new JsonObject { ["password"] = new JsonObject { ["type"] = "string" } };
+
+        validator.Validate(Scope, DeploymentBody(new() { ["template"] = template.ToJsonString() }), WriteVerb.Patch)
+            .Error!.Message.ShouldContain("is a secret property");
+
+        // ⚠ An api-version that is itself an expression hides the type's schema from the structural
+        // read; the evaluated plan resolves it.
+        var hidden = Widget("c");
+        hidden["apiVersion"] = "[variables('version')]";
+        hidden["properties"]!["adminPassword"] = "hunter2";
+        var byExpression = Template(hidden);
+        byExpression["variables"] = new JsonObject { ["version"] = "2026-08-01" };
+
+        validator.Validate(Scope, DeploymentBody(new() { ["template"] = byExpression.ToJsonString() }), WriteVerb.Put)
+            .Error!.Message.ShouldContain("is a secret property");
+
+        // The control: the same widget without the secret deploys.
+        validator.Validate(Scope, DeploymentBody(new() { ["template"] = Template(Widget("d")).ToJsonString() }), WriteVerb.Put)
+            .IsSuccess.ShouldBeTrue();
+    }
+
     [Fact]
     public void APatchIsCheckedAtStepTwoOnlyWhenItDecidesTheWholeTemplateAndItsParameters() {
         var template = Template(Widget("[parameters('name')]"));
@@ -217,7 +273,7 @@ public sealed class DeploymentTemplateTests {
         static System.Text.Json.JsonElement Body(JsonObject properties) =>
             System.Text.Json.JsonSerializer.SerializeToElement(new JsonObject { ["properties"] = properties });
 
-        var validator = new DeploymentBodyValidator();
+        var validator = new DeploymentBodyValidator(Registry);
 
         // A new template whose required parameter is already stored: the merged body deploys, and this
         // patch cannot see the stored value — refusing it was the false 400.

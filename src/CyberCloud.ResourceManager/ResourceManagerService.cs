@@ -83,10 +83,15 @@ public sealed class ResourceManagerService(
     ActionDispatcher actions,
     ILogger<ResourceManagerService> logger,
     ResourceWatchFanout? watches = null,
-    IEnumerable<IResourceBodyValidator>? validators = null
+    IEnumerable<IResourceBodyValidator>? validators = null,
+    IPrincipalStanding? standing = null
 )
     : IResourceManager {
     readonly ImmutableArray<IResourceBodyValidator> bodyValidators = [.. validators ?? []];
+
+    // ⚠ Absent is the refusing default, never "may act" — the harnesses that build this by hand and
+    // never write a child don't need one, and one that does write a child must say who answers.
+    readonly IPrincipalStanding principals = standing ?? new UnavailablePrincipalStanding();
 
     /// <inheritdoc />
     public Task<Result<WriteAccepted>> WriteAsync(
@@ -143,7 +148,90 @@ public sealed class ResourceManagerService(
             );
         }
 
+        // ⚠ A child may not carry a secret property: its value came from the deployment's template or
+        // parameters, which anyone who can read the deployment reads back. Step 2 of the deployment's
+        // own write refuses what it can see; this is the door every child passes, for the one case it
+        // can't — DeploymentSecrets' remarks say which.
+        if (ResourceId.TryParsePath(request.Path, out var target)
+            && registry.Resolve(target.Type, request.ApiVersion).TryGetValue(out var resolution)
+            && DeploymentSecrets.FirstSetIn(resolution.Schema, request.Body) is { } secret) {
+            return Result<WriteAccepted>.Failure(
+                DeploymentSecrets.Refused(target.Type.ToString(), secret, request.Path).Error!
+            );
+        }
+
+        var standing = await EnsureRecordedCallerMayActAsync(parentOperationId, request, cancellationToken);
+        if (standing.TryGetError(out var standingError)) {
+            return Result<WriteAccepted>.Failure(standingError);
+        }
+
         return await WriteCoreAsync(request, parentOperationId, cancellationToken);
+    }
+
+    /// <summary>
+    ///     What the gateway's stages would have refused before a request's step 3, asked again for a
+    ///     caller the platform recorded: that the caller isn't impersonated, that the tenant still takes
+    ///     control-plane writes, and that the principal may still act.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Each is a gate a direct request meets before it reaches this service, and a child
+    ///     meets none of them.</b> <c>ResolveTenantStage</c> refuses a suspended tenant's writes, and
+    ///     a suspended user can't renew a token; a child is written from a reminder
+    ///     with no request, no token and no stage. The argument on
+    ///     <see cref="IResourceManager.WriteChildAsync" /> says why each is here and what's still owed.
+    /// </remarks>
+    async Task<Result> EnsureRecordedCallerMayActAsync(
+        Guid parentOperationId,
+        WriteRequest request,
+        CancellationToken cancellationToken
+    ) {
+        var caller = request.Caller;
+
+        // ⚠ Refused outright, because nothing recorded can tell whether the impersonation is still
+        // live. docs/plan/06 § Platform administration time-boxes it to sixty minutes; the box is the
+        // operator's grant, which no spec carries, and a deployment outlives sixty minutes easily.
+        // Writing on would be the operator acting as the tenant after their time was up.
+        if (caller.ImpersonatedBy.Length > 0) {
+            return Result.Failure(
+                ErrorCode.AuthorizationFailed,
+                $"Operation {parentOperationId:D} was created by {caller.ImpersonatedBy} impersonating "
+                + $"{caller}, and a deployment's resources are not written under impersonation: nothing "
+                + "recorded says whether the time-boxed session (docs/plan/06 § Platform administration) "
+                + "is still live."
+            );
+        }
+
+        // ⚠ THE DIRECTORY GRAIN, NOT TenantDirectoryCache. It's the record ResolveTenantStage reads a
+        // mirror of, so a child is refused for the reason a direct PUT is — and read at the source,
+        // because a child has no latency to save and a cached "active" would let one more poll
+        // interval of children through after a suspension. Active and Warned are the two statuses
+        // docs/plan/06 § Tenant lifecycle lets write, which is ITenantGrain.AreControlPlaneWritesAllowedAsync's
+        // rule. ResolveTenantStage names only Suspended; the stricter set costs nothing here, because
+        // no later state (Disabled, PendingDeletion, Purged) is one a deployment should go on writing in.
+        var tenant = await grains
+            .GetGrain<ITenantDirectoryGrain>(GrainKeys.TenantDirectory())
+            .LookupAsync(caller.TenantId);
+
+        if (tenant.TryGetError(out var tenantError)) {
+            return Result.Failure(tenantError);
+        }
+
+        var status = tenant.GetValueOrThrow().Status;
+        if (status is not (TenantStatus.Active or TenantStatus.Warned)) {
+            return Result.Failure(
+                ErrorCode.TenantSuspended,
+                $"Tenant {caller.TenantId:D} is {status}, so operation {parentOperationId:D} writes nothing "
+                + "more: control-plane writes are rejected until it is reactivated — docs/plan/06 § Tenant "
+                + "lifecycle."
+            );
+        }
+
+        return await principals.EnsureMayActAsync(
+            caller.TenantId,
+            caller.SubjectType,
+            caller.SubjectId,
+            cancellationToken
+        );
     }
 
     async Task<Result<WriteAccepted>> WriteCoreAsync(

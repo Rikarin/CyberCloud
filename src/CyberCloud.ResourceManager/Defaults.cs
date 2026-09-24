@@ -497,6 +497,38 @@ public sealed class UnavailablePrincipalDirectory : IPrincipalDirectory {
 }
 
 /// <summary>
+///     The <see cref="IPrincipalStanding" /> a silo without identity keeps: it refuses, so a
+///     deployment writes no child.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Refuses rather than answering "may act".</b> Its one caller is
+///     <see cref="IResourceManager.WriteChildAsync" />, which writes as a caller recorded minutes or
+///     hours earlier, and a default of "yes" would put back the gap this seam closes: a suspended
+///     user's deployment carrying on as them. The real one reads the identity grains, which this
+///     assembly can't name, so <c>AddCyberCloudIdentity</c> <c>Replace</c>s this descriptor.
+///     <c>HostCompositionTests.TheSiloWiresPrincipalStandingAndTheGatewayKeepsTheRefusal</c> asserts
+///     that the composed silo holds the real one.
+/// </remarks>
+public sealed class UnavailablePrincipalStanding : IPrincipalStanding {
+    /// <inheritdoc />
+    public Task<Result> EnsureMayActAsync(
+        Guid tenantId,
+        string principalType,
+        string principalId,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result.Failure(
+                ErrorCode.InternalError,
+                $"Nothing is wired to say whether '{principalType}:{principalId}' of tenant {tenantId:D} "
+                + "may still act, so nothing is written as them from a reminder. The silo that runs "
+                + "deployments composes identity with AddCyberCloudIdentity(), which replaces this "
+                + "IPrincipalStanding with one that reads the principal's own grain."
+            )
+        );
+}
+
+/// <summary>
 ///     The resource graph query a host with no ClickHouse endpoint keeps: it refuses by name.
 /// </summary>
 /// <remarks>

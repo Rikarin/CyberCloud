@@ -1,4 +1,5 @@
 using CyberCloud.Authorization.Contracts;
+using CyberCloud.Identity.Contracts;
 using CyberCloud.Providers.Sample.Contracts;
 using System.Globalization;
 using System.Text.Json;
@@ -33,12 +34,22 @@ public sealed class DeploymentAuthorizationTests(IsolationCluster cluster) {
 
     static Guid Subscription { get; } = Guid.Parse("99999999-0000-4000-8000-0000000000d1");
 
-    const string Deployer = "dora";
+    // ⚠ Real users, created in the identity grains the silo composes, because a child now asks
+    // whether its recorded creator may still act (IPrincipalStanding) and a subject no user grain
+    // answers for is refused. These were the bare strings "dora" and "rita" until the review of #39.
+    static Guid DoraId { get; } = Guid.Parse("d0000000-0000-4000-8000-0000000000d1");
+    static Guid RitaId { get; } = Guid.Parse("d0000000-0000-4000-8000-0000000000d2");
+    static Guid CarlId { get; } = Guid.Parse("d0000000-0000-4000-8000-0000000000d3");
+
+    static string Deployer => IsolationCluster.SubjectId(DoraId);
+    static string Revoked => IsolationCluster.SubjectId(RitaId);
+    static string Suspended => IsolationCluster.SubjectId(CarlId);
+
     const string Home = "app";
     const string Elsewhere = "restricted";
     const string Open = "open";
-    const string Revoked = "rita";
     const string Revocable = "revoke";
+    const string Suspension = "suspend";
 
     static ResourceId Widget(string name, string group) =>
         new(Tenant, Subscription, group, SampleWidgets.Type, name, Guid.Empty);
@@ -160,6 +171,7 @@ public sealed class DeploymentAuthorizationTests(IsolationCluster cluster) {
         );
 
         _ = await tenant.GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(Subscription, Revocable)).CreateAsync(Tenant, "eu-west-1");
+        _ = await cluster.CreateUserAsync(Tenant, RitaId);
         await cluster.WriteTupleAsync(Tenant, ritaOnGroup.Target, Relations.Contributor, ritaOnGroup.Subject);
 
         var template = new JsonObject {
@@ -203,6 +215,100 @@ public sealed class DeploymentAuthorizationTests(IsolationCluster cluster) {
         // The first was written before the revocation and is left, as a failed deployment leaves it.
         (await tenant.GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(Widget("first", Revocable))).ResolveAsync())
             .IsSuccess.ShouldBeTrue();
+    }
+
+    /// <summary>
+    ///     A creator suspended between a deployment's two children: the first is written as them, and the
+    ///     second is refused before step 1 by the identity grains' own answer, though their role on the
+    ///     group is untouched.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The review of #39 found this written.</b> <c>IUserGrain.SetStatusAsync</c> revokes a
+    ///     suspended user's sessions, so they can't renew a token, and leaves their tuples,
+    ///     so the <c>FullyConsistent</c> check of the previous test still allows them. A child carries no
+    ///     token, so nothing refused it, and an administrator who suspended a compromised account watched
+    ///     its deployment carry on. <c>GrainPrincipalStanding</c> is the real seam here, over the real
+    ///     grain, registered by the <c>AddCyberCloudIdentity</c> this silo calls.
+    /// </remarks>
+    [Fact]
+    public async Task ACreatorSuspendedBetweenTwoChildrenIsRefusedAtTheSecond() {
+        await SeedAsync();
+
+        var tenant = cluster.For(Tenant);
+        var carl = IsolationCluster.Caller(Tenant, Suspended);
+
+        _ = await tenant.GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(Subscription, Suspension)).CreateAsync(Tenant, "eu-west-1");
+        _ = await cluster.CreateUserAsync(Tenant, CarlId);
+        await cluster.WriteTupleAsync(
+            Tenant,
+            Authorization.Contracts.ObjectRef.Of(ObjectTypes.ResourceGroup, GroupObject(Suspension)),
+            Relations.Contributor,
+            SubjectRef.Of(ObjectTypes.User, Suspended)
+        );
+
+        var template = new JsonObject {
+            ["resources"] = new JsonArray(Resource("first", Suspension), Resource("second", Suspension, "first"))
+        }.ToJsonString();
+
+        var written = await cluster.Manager.WriteAsync(
+            new() {
+                Path = new ResourceId(Tenant, Subscription, Suspension, Deployments.Type, "suspended-midway", Guid.Empty).Path,
+                ApiVersion = Deployments.V2026,
+                Verb = WriteVerb.Put,
+                Body = new JsonObject { ["properties"] = new JsonObject { ["template"] = template } }.ToJsonString(),
+                Caller = carl
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        written.IsSuccess.ShouldBeTrue(written.Error?.Message);
+        var parentId = written.GetValueOrThrow().OperationId;
+
+        // One pass: the first child is accepted as Carl, while he is still active.
+        var first = (await tenant.GetGrain<IOperationGrain>(GrainKeys.Operation(parentId)).DriveAsync()).GetValueOrThrow();
+        first.Children.Length.ShouldBe(1, Describe(first));
+
+        (await tenant.GetGrain<IUserGrain>(GrainKeys.User(CarlId)).SetStatusAsync(UserStatus.Suspended))
+            .IsSuccess.ShouldBeTrue();
+
+        var ended = await DriveToEndAsync(parentId);
+
+        ended.State.ShouldBe(OperationState.Failed, Describe(ended));
+        ended.Children.Length.ShouldBe(1, "a child was written as a creator who had been suspended.");
+
+        var second = Widget("second", Suspension);
+        ended.Error!.Message.ShouldContain(second.Path);
+        ended.Error.Message.ShouldContain("AuthorizationFailed");
+        ended.Error.Message.ShouldContain("Suspended", Case.Sensitive, "the identity grain's own reason.");
+
+        (await tenant.GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(second)).ResolveAsync())
+            .IsFailure.ShouldBeTrue("the second child holds its name.");
+
+        // ── The control: reactivate Carl and rerun ────────────────────────────────────────────────
+        //
+        // ⚠ His tuple was never touched, so the rerun deploying is what shows the refusal came from his
+        // status and not from ReBAC — and that a reactivated user's deployment carries on.
+        (await tenant.GetGrain<IUserGrain>(GrainKeys.User(CarlId)).SetStatusAsync(UserStatus.Active))
+            .IsSuccess.ShouldBeTrue();
+
+        var again = await cluster.Manager.WriteAsync(
+            new() {
+                Path = new ResourceId(Tenant, Subscription, Suspension, Deployments.Type, "suspended-midway", Guid.Empty).Path,
+                ApiVersion = Deployments.V2026,
+                Verb = WriteVerb.Put,
+                Body = new JsonObject { ["properties"] = new JsonObject { ["template"] = template } }.ToJsonString(),
+                Caller = carl
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        again.IsSuccess.ShouldBeTrue(again.Error?.Message);
+
+        var rerun = await DriveToEndAsync(again.GetValueOrThrow().OperationId);
+        rerun.State.ShouldBe(OperationState.Succeeded, Describe(rerun));
+
+        (await tenant.GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(second)).ResolveAsync())
+            .IsSuccess.ShouldBeTrue("the reactivated creator's rerun did not write the second child.");
     }
 
     static string GroupObject(string group) =>
@@ -278,6 +384,8 @@ public sealed class DeploymentAuthorizationTests(IsolationCluster cluster) {
     /// </summary>
     async Task SeedAsync() {
         var tenant = cluster.For(Tenant);
+
+        _ = await cluster.CreateUserAsync(Tenant, DoraId);
 
         _ = await tenant.GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(Subscription)).CreateAsync("deployments");
 
