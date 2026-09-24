@@ -17,8 +17,8 @@ namespace CyberCloud.Identity.Contracts;
 ///         <see cref="CreateAsync" /> claims the address in the tenant's email index, creates the
 ///         user in <see cref="UserStatus.Invited" />, records the invitation and mails the link
 ///         through <see cref="IInvitationDeliverySeam" />; <see cref="AcceptAsync" /> spends the
-///         link, names the person, sets their password and makes them
-///         <see cref="UserStatus.Active" />. Every one of those is a grain in the same tenant, so
+///         link and hands the name and password to <see cref="IUserGrain.AcceptInvitationAsync" />,
+///         which makes the user <see cref="UserStatus.Active" />. Every one of those is a grain in the same tenant, so
 ///         none of them crosses the separation the platform keeps between tenants — and the one
 ///         step that is not here is the <b>check</b>: who may invite is the resource manager's
 ///         question (<c>IInvitationManager</c>, <c>assignRole</c> on the tenant), asked before this
@@ -39,6 +39,17 @@ namespace CyberCloud.Identity.Contracts;
 ///         was used. Possession of the link is what makes a password here safe to set without a
 ///         second code: it went to the address and nowhere else, as the enrolment code does at
 ///         sign-up.
+///     </para>
+///     <para>
+///         ⚠ <b>A link opens an invited user and nothing else.</b> Its secret proves the address,
+///         not the account's state: re-inviting reuses a user who is still invited, so two links
+///         can name one user, and a pending link outlives a suspension or a deprovision of the
+///         person it names. Once that user is anything but <see cref="UserStatus.Invited" /> the
+///         invitation reads <see cref="InvitationStatus.Withdrawn" /> and accepting it changes
+///         nothing — <see cref="IUserGrain.AcceptInvitationAsync" /> checks the status in the same
+///         turn as it writes, so this holds against a race between two links too. Until listing and
+///         revoking invitations land, suspending or deprovisioning the invitee is how an owner
+///         withdraws one.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Durable, because an invitation outlives a hot-tier flush.</b> It lives seven days
@@ -75,8 +86,9 @@ public interface IInvitationGrain : IGrainWithStringKey {
     /// <summary>What the invitation page shows — the address, the tenant, and whether it is still good.</summary>
     /// <param name="secret">The secret from the link.</param>
     /// <returns>
-    ///     The invitation, with its status; <see cref="ErrorCode.ResourceNotFound" /> for a secret
-    ///     that does not match — the answer an id somebody guessed gets.
+    ///     The invitation, with its status — <see cref="InvitationStatus.Withdrawn" /> once its user
+    ///     is no longer invited; <see cref="ErrorCode.ResourceNotFound" /> for a secret that does not
+    ///     match — the answer an id somebody guessed gets.
     /// </returns>
     Task<Result<Invitation>> DescribeAsync(string secret);
 
@@ -88,10 +100,11 @@ public interface IInvitationGrain : IGrainWithStringKey {
     /// <param name="displayName">The name the person chose.</param>
     /// <param name="password">
     ///     The password for their user in this tenant. ⚠ A parameter handed straight to
-    ///     <see cref="IUserGrain.SetPasswordAsync" />; nothing here stores or logs it.
+    ///     <see cref="IUserGrain.AcceptInvitationAsync" />; nothing here stores or logs it.
     /// </param>
     /// <returns>
-    ///     The accepted invitation; <see cref="ErrorCode.Conflict" /> when the link was used already;
+    ///     The accepted invitation; <see cref="ErrorCode.Conflict" /> when the link was used already
+    ///     or is <see cref="InvitationStatus.Withdrawn" />, with the user untouched;
     ///     <see cref="ErrorCode.PreconditionFailed" /> when it expired; <see cref="ErrorCode.ResourceNotFound" />
     ///     when the secret does not match; <see cref="ErrorCode.InvalidRequestBody" /> for a password
     ///     the user grain refuses, with the link left unspent so the person can try again.
@@ -124,10 +137,23 @@ public enum InvitationStatus {
     Accepted = 1,
 
     /// <summary>Past its seven days without being used.</summary>
-    Expired = 2
+    Expired = 2,
+
+    /// <summary>
+    ///     Unused, and no longer usable: the user it names is not <see cref="UserStatus.Invited" />
+    ///     any more — a member through another link, suspended, or deprovisioned.
+    /// </summary>
+    Withdrawn = 3
 }
 
 /// <summary>What <see cref="IInvitationGrain.CreateAsync" /> is asked to create.</summary>
+/// <remarks>
+///     ⚠ No expiry. The grain stamps <see cref="InvitationPolicy.Lifetime" /> from its own clock, as
+///     the device authorization does, so the link's life doesn't depend on the skew between the
+///     gateway and the silo, and no caller can ask for a link that never expires. The first cut took
+///     the instant from the gateway's wall clock and accepted any future one. <c>[Id(3)]</c> was that
+///     field, and no release carried it.
+/// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Identity.InvitationRequest")]
 public sealed record InvitationRequest {
@@ -142,10 +168,6 @@ public sealed record InvitationRequest {
     /// <summary>The tenant's name for the mail and the page — its slug.</summary>
     [Id(2)]
     public string TenantName { get; init; } = string.Empty;
-
-    /// <summary>When the link stops working. <see cref="InvitationPolicy.Lifetime" /> from now, unless a caller says otherwise.</summary>
-    [Id(3)]
-    public DateTimeOffset ExpiresAt { get; init; }
 }
 
 /// <summary>

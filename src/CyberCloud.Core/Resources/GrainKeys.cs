@@ -373,7 +373,7 @@ public readonly record struct GrainKey {
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The twenty-nine shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
+///         <b>The thirty-one shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
 ///         two more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
 ///         table is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
 ///         Platform rows; four are docs/plan/07 § Storage's authorization grains; five are
@@ -1457,9 +1457,10 @@ public static class GrainKeys {
     ///     <b>platform</b> tenant.
     /// </summary>
     /// <param name="userCode">
-    ///     The user code in its normalized form — upper-case letters and digits, no separator, which
-    ///     is what the identity host's <c>UserCodes.Normalize</c> produces from anything a person
-    ///     types.
+    ///     The user code in its normalized form, upper-case with no separator. The identity host's
+    ///     <c>DeviceCodes.NormalizeUserCode</c> produces it from anything a person types, and only
+    ///     from RFC 8628 § 6.1's twenty consonants; this method checks the wider shape, letters and
+    ///     digits, so it can't disagree with a later alphabet.
     /// </param>
     /// <remarks>
     ///     <para>
@@ -1485,8 +1486,9 @@ public static class GrainKeys {
     ///         ⚠ <b>The platform tenant, because the tenant is not known yet.</b> The device asks
     ///         before anybody has signed in, and the person names their tenant on the sign-in page
     ///         afterwards — so the authorization cannot live in the tenant it will end up in, exactly
-    ///         as <see cref="SignUp" /> cannot. <b>Cardinality</b> is one activation per device
-    ///         authorization, and the activation is short: it clears itself once the codes expire.
+    ///         as <see cref="SignUp" /> cannot. <b>Cardinality</b> is one record per device
+    ///         authorization, and the record is short-lived: a reminder clears it a minute after the
+    ///         codes expire.
     ///     </para>
     /// </remarks>
     /// <exception cref="ArgumentException">

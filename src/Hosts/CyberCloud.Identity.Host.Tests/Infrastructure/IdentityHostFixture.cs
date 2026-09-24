@@ -46,7 +46,10 @@ namespace CyberCloud.Identity.Host.Tests.Infrastructure;
 ///         <c>OrleansApplication.CreateClient</c>, and it connects the way a deployed one does — over
 ///         TCP to the primary silo's gateway port, which is not <c>Options.BaseGatewayPort</c> but
 ///         the port that silo actually bound. <c>CyberCloud.Registry.Feeds.Host.Tests</c>'
-///         <c>FeedsHostFixture</c> found both.
+///         <c>FeedsHostFixture</c> found both. ⚠ Real sockets, but one process: the silos and this
+///         host share a type manifest, which hides a type Orleans refuses between two processes.
+///         <see cref="IdentityHostProcess" /> runs the host's executable against this cluster for
+///         that.
 ///     </para>
 ///     <para>
 ///         The tenant is registered in the platform directory the way <c>CreateTenantAsync</c>
@@ -253,9 +256,7 @@ public class IdentityHostFixture : IAsyncLifetime {
                 // issuer that minted it — so a restart onto a fresh random port would refuse every
                 // token for the wrong reason. The AppHost pins 5101 for the same reason.
                 "--urls", BaseAddress?.GetLeftPart(UriPartial.Authority) ?? "http://127.0.0.1:0",
-                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={cluster.Primary!.GatewayAddress.Endpoint.Port}",
-                $"--{CyberCloudClusterOptions.SectionName}:ClusterId={cluster.Options.ClusterId}",
-                $"--{CyberCloudClusterOptions.SectionName}:ServiceId={cluster.Options.ServiceId}",
+                .. ClusterClientSettings(),
                 $"--{IdentityHostOptions.SectionName}:DevelopmentKeyDirectory={KeyDirectory}",
                 $"--{IdentityHostOptions.SectionName}:SignInPageBaseUri={SignInPageBaseUri}"
             ],
@@ -282,6 +283,21 @@ public class IdentityHostFixture : IAsyncLifetime {
 
         return started;
     }
+
+    /// <summary>
+    ///     The command-line settings an Orleans client needs to join this fixture's cluster — what
+    ///     the identity host is started with, and what a second host beside it is given.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The gateway port is the one the primary silo bound, not <c>Options.BaseGatewayPort</c>;
+    ///     the type's remarks say why.
+    /// </remarks>
+    public string[] ClusterClientSettings() =>
+        [
+            $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={cluster.Primary!.GatewayAddress.Endpoint.Port}",
+            $"--{CyberCloudClusterOptions.SectionName}:ClusterId={cluster.Options.ClusterId}",
+            $"--{CyberCloudClusterOptions.SectionName}:ServiceId={cluster.Options.ServiceId}"
+        ];
 
     async Task RegisterTenantAsync(Guid tenant, string slug) {
         var registered = await Grains
@@ -329,10 +345,14 @@ public class IdentityHostFixture : IAsyncLifetime {
     ///     a fresh person — <see cref="CreatePersonAsync(string)" /> says why a fresh one.
     /// </summary>
     /// <param name="origin">The origin the tab's pages live on.</param>
+    /// <param name="host">
+    ///     The identity host to sign in at. Leave it out for this fixture's own. An
+    ///     <see cref="IdentityHostProcess" /> passes its address.
+    /// </param>
     /// <returns>The tab, the person and their address.</returns>
-    public async Task<(BrowserClient Browser, Guid UserId, string Email)> SignInFreshPersonAsync(string origin) {
+    public async Task<(BrowserClient Browser, Guid UserId, string Email)> SignInFreshPersonAsync(string origin, Uri? host = null) {
         var ct = TestContext.Current.CancellationToken;
-        var browser = new BrowserClient(BaseAddress, origin);
+        var browser = new BrowserClient(host ?? BaseAddress, origin);
         var email = $"person-{Guid.NewGuid():N}@grants.example";
         var userId = await CreatePersonAsync(email);
 

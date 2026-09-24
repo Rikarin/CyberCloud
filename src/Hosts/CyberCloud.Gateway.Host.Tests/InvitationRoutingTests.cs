@@ -12,7 +12,9 @@ namespace CyberCloud.Gateway.Host.Tests;
 ///     there, stage 8 hands the token's caller and the body's address to the manager and asks
 ///     nothing itself, and the answer is a <c>201</c> without the link. Who may invite is
 ///     <c>InvitationService</c>'s, driven through the real engine in <c>CyberCloud.Isolation</c>'s
-///     <c>InvitationTests</c>; what the mail says is <c>Identity.Host.Tests</c>' <c>InvitationsOverHttpTests</c>.
+///     <c>InvitationTests</c>; what the mail says is <c>Identity.Host.Tests</c>' <c>InvitationsOverHttpTests</c>;
+///     and the route with nothing substituted — a real token, the real manager and grain — is
+///     <c>InvitationThroughTheGatewayTests</c> in the same project.
 /// </remarks>
 public sealed class InvitationRoutingTests {
     static string Address(Guid tenant) => new InvitationAddress(tenant).Path;

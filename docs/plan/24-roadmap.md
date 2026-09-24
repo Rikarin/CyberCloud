@@ -182,13 +182,28 @@ invited user and mails a one-time, seven-day link through the platform's communi
 the link opens the identity app's invitation page, where a new person — or one who already has a
 user in another organisation, since a user is per tenant — chooses a name and a password and lands as
 a member with **no role**; Reader on the group is the existing role-assignment `PUT`, which the
-invited user now answers for. `Identity.Host.Tests § InvitationsOverHttpTests` sends the mail to a
-Mailpit Testcontainer and follows the link out of it (a second use refused); `CyberCloud.Isolation §
-InvitationTests` runs invite → accept → Reader → `Check` through the real manager and engine.
+invited user now answers for. `Identity.Host.Tests § InvitationThroughTheGatewayTests` is the route
+itself: an owner's `cyc login --device-code` token from the real identity host, the `POST` through
+the real gateway (`GatewayComposition`, trusting that host by its issuer) to the real
+`InvitationService` and grain, the mail out of a Mailpit Testcontainer, the accept, and the
+colleague's own token refused the same `POST` with a `404`. ⚠ It was added after review: until then
+the gateway suite substituted the manager, `CyberCloud.Isolation` called the manager in process, and
+the HTTP suite created the invitation at the grain, so every half was tested and the route a dev run
+is told to `curl` was not. `§ InvitationsOverHttpTests` keeps the link's cases (a second use, an
+expired link, a made-up one); `CyberCloud.Isolation § InvitationTests` runs invite → accept → Reader
+→ `Check` through the real manager and engine, and pins that a link cannot reactivate a member who
+was suspended or removed, or who joined through another link.
 *Do all of it again from `cyc`*: `cyc login --device-code` is RFC 8628 against the identity host
 ([21 § Signing in and out](21-cli-and-sdks.md)), and `cyc logout` revokes;
 `Identity.Host.Tests § DeviceFlowOverHttpTests` and `§ DeviceFlowThroughTheSdkTests` run both
-against the real host. What neither test is: a person in a browser — the device page and the
+against the real host, and the first pins that an approval the device hasn't collected dies with the
+sign-in that gave it and with the account (the review found a suspended user still getting tokens).
+`§ IdentityHostInItsOwnProcessTests` runs the device flow and an invitation's accept through the
+host's own executable, a separate process joined to the test cluster, because every other suite
+shares one Orleans type manifest with the silo, and that's how #39's refused type got to master.
+⚠ **Owed:** an audit of the reformat commit `e21006d` for further changes in meaning. #43 found two,
+the access token's `oi_tkn_id` and `RoleAssignmentService`'s paging, and fixed both; the rest of that
+commit was not read. What neither test is: a person in a browser — the device page and the
 invitation page are pinned by their Jest specs and by the HTTP suites against their APIs, and the
 rehearsal on a dev run by hand is what remains; the portal has no page that sends an invitation
 (#22), so on a dev run the invite is `cyc rest` or `curl` against the gateway; and "all of it again"

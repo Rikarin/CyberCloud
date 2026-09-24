@@ -475,6 +475,16 @@ public sealed class TokenApi(
 
         await tenant.GetGrain<IUserGrain>(GrainKeys.User(facts.UserId)).TrackSessionAsync(tokenSessionId);
 
+        if (!await StillMayActAsync(tenant, facts.UserId, tokenSessionId)) {
+            return Refused(
+                facts.TenantId,
+                OpenIddictConstants.GrantTypes.AuthorizationCode,
+                tokenSessionId,
+                "user-cannot-authenticate",
+                SessionRevokedDescription
+            );
+        }
+
         GrantLog.TokenSessionOpened(logger, facts.TenantId, facts.UserId, tokenSessionId, facts.InteractiveSessionId);
 
         var session = new SessionDescriptor {
@@ -631,6 +641,19 @@ public sealed class TokenApi(
     ///         absolute lifetime, or at "sign out everywhere" — the session is tracked on the user
     ///         like every other, which is what reaches it from the portal.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Bound to itself once it exists, but not before.</b> Until the device collects
+    ///         them, an approval stands in for the tokens, and a sign-in that ended must take it
+    ///         down, as it does an unexchanged authorization code (<see cref="MintForCodeAsync" />).
+    ///         So the redemption refuses when the approving session is no longer live, and after
+    ///         the track it refuses and revokes when the user is no longer
+    ///         <see cref="UserStatus.Active" /> (<see cref="StillMayActAsync" /> says why there). The
+    ///         first cut read neither. A code approved and then suspended, or signed out everywhere,
+    ///         still got tokens for the rest of its ten minutes, and the chain it opened was one no
+    ///         revocation had reached. The review of #43 proved it with a probe, and
+    ///         <c>DeviceFlowOverHttpTests.AnApprovalDiesWithTheSignInThatGaveItAndWithTheAccount</c>
+    ///         pins it now.
+    ///     </para>
     /// </remarks>
     public async Task<Result<ClaimsPrincipal>> MintForDeviceCodeAsync(
         string? deviceCode,
@@ -675,6 +698,22 @@ public sealed class TokenApi(
             );
         }
 
+        // ⚠ The approval is only as good as the sign-in that gave it, until the device collects it.
+        // A suspension and "sign out everywhere" both revoke that sign-in, and a code approved
+        // before either must not open a chain after — see the remarks.
+        var approving = await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(approval.InteractiveSessionId))
+            .GetAsync();
+
+        if (approving.TryGetError(out _) || !approving.GetValueOrThrow().IsLive) {
+            return Refused(
+                approval.TenantId,
+                OpenIddictConstants.GrantTypes.DeviceCode,
+                approval.InteractiveSessionId,
+                "interactive-session-not-live",
+                DeviceCodeRejectedDescription
+            );
+        }
+
         var opened = await tenant
             .GetGrain<ISessionGrain>(GrainKeys.Session(tokenSessionId))
             .OpenAsync(
@@ -696,6 +735,16 @@ public sealed class TokenApi(
         }
 
         await tenant.GetGrain<IUserGrain>(GrainKeys.User(approval.UserId)).TrackSessionAsync(tokenSessionId);
+
+        if (!await StillMayActAsync(tenant, approval.UserId, tokenSessionId)) {
+            return Refused(
+                approval.TenantId,
+                OpenIddictConstants.GrantTypes.DeviceCode,
+                tokenSessionId,
+                "user-cannot-authenticate",
+                DeviceCodeRejectedDescription
+            );
+        }
 
         GrantLog.TokenSessionOpened(logger, approval.TenantId, approval.UserId, tokenSessionId, tokenSessionId);
 
@@ -733,6 +782,31 @@ public sealed class TokenApi(
     public const string DeviceCodeRejectedDescription = "That device code is no longer valid. Run the sign-in again.";
 
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Whether the user may still hold the token session just opened and tracked for them. When
+    ///     they may not, the session is revoked here.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>After <see cref="IUserGrain.TrackSessionAsync" />, not before, and that order closes
+    ///     the race.</b> <c>UserGrain.SetStatusAsync</c> revokes every session it tracks before the
+    ///     suspension returns, but a session tracked after that call is not in its list. The user
+    ///     grain runs one call at a time, so a suspension is either earlier than the track, and the
+    ///     status read here is no longer <see cref="UserStatus.Active" />, or later, and it revokes
+    ///     this session with the rest. A check before the open would leave the window between the
+    ///     check and the track open.
+    /// </remarks>
+    async Task<bool> StillMayActAsync(TenantGrainFactory tenant, Guid userId, Guid tokenSessionId) {
+        var user = await tenant.GetGrain<IUserGrain>(GrainKeys.User(userId)).GetAsync();
+
+        if (user.IsSuccess && user.GetValueOrThrow().Status == UserStatus.Active) {
+            return true;
+        }
+
+        await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(tokenSessionId)).RevokeAsync(RevocationReason.AdminAction);
+
+        return false;
+    }
 
     /// <summary>What a code or a refresh token says, read back off its principal.</summary>
     sealed record Facts(

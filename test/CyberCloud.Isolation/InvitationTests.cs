@@ -154,7 +154,97 @@ public sealed class InvitationTests(IsolationCluster cluster) {
         crossTenant.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
     }
 
+    /// <summary>
+    ///     A pending link opens an invited user and nothing else: not a member who joined through
+    ///     another link, not one suspended since, not one deprovisioned.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The review of #43 found all three open, with probes shaped like this one: the grain
+    ///     renamed the user, set the password and made them <c>Active</c> without reading their
+    ///     status, so the second link un-suspended a member and a link to a deprovisioned invitee
+    ///     brought the account back — signed in, past any second factor enrolled since.
+    /// </remarks>
+    [Fact]
+    public async Task ALinkCannotBringBackAMemberWhoWasSuspendedOrRemoved() {
+        await SeedAsync();
+
+        // ── Two links for one user: re-inviting an invited address reuses the user. ─────────────
+        var email = $"twice-{Guid.NewGuid():N}@isolation.test";
+        var first = await InviteAsync(email);
+        var second = await InviteAsync(email);
+
+        second.Invitation.UserId.ShouldBe(first.Invitation.UserId, "re-inviting an invited address reuses its user");
+
+        (await AcceptAsync(first, "Joined Once", "the-first-password-1")).IsSuccess.ShouldBeTrue();
+
+        var user = cluster.For(Tenant).GetGrain<IUserGrain>(GrainKeys.User(first.Invitation.UserId));
+
+        // A member through the first link: the second is withdrawn, and accepting it changes nothing.
+        (await DescribeAsync(second)).Status.ShouldBe(InvitationStatus.Withdrawn);
+
+        var overMember = await AcceptAsync(second, "Somebody Else", "a-second-password-2");
+
+        overMember.Error!.Code.ShouldBe(ErrorCode.Conflict);
+        (await user.GetAsync()).GetValueOrThrow().DisplayName.ShouldBe("Joined Once", "the second link renamed the member");
+        (await user.VerifyPasswordAsync("the-first-password-1")).GetValueOrThrow()
+            .ShouldBeTrue("the second link replaced the member's password");
+
+        // Suspended: the second link still changes nothing.
+        (await user.SetStatusAsync(UserStatus.Suspended)).IsSuccess.ShouldBeTrue();
+
+        var overSuspended = await AcceptAsync(second, "Somebody Else", "a-second-password-2");
+
+        overSuspended.Error!.Code.ShouldBe(ErrorCode.Conflict);
+        (await user.GetAsync()).GetValueOrThrow().Status.ShouldBe(UserStatus.Suspended, "a pending link un-suspended the member");
+        (await DescribeAsync(second)).Status.ShouldBe(InvitationStatus.Withdrawn);
+
+        // ⚠ And the user grain refuses on its own, not only behind the invitation's read of the
+        // status: that check is in the same turn as the writes, and it is what two links accepted
+        // at the same moment meet.
+        var direct = await user.AcceptInvitationAsync("Somebody Else", "a-second-password-2");
+
+        direct.IsSuccess.ShouldBeFalse("the user grain accepted an invitation for a suspended member");
+        direct.Error!.Code.ShouldBe(ErrorCode.PreconditionFailed);
+        (await user.GetAsync()).GetValueOrThrow().Status.ShouldBe(UserStatus.Suspended);
+
+        // ── One link, and the invitee deprovisioned before using it. ───────────────────────────
+        var removed = await InviteAsync($"removed-{Guid.NewGuid():N}@isolation.test");
+        var invitee = cluster.For(Tenant).GetGrain<IUserGrain>(GrainKeys.User(removed.Invitation.UserId));
+
+        (await invitee.SetStatusAsync(UserStatus.Deprovisioned)).IsSuccess.ShouldBeTrue();
+        (await DescribeAsync(removed)).Status.ShouldBe(InvitationStatus.Withdrawn);
+
+        var overRemoved = await AcceptAsync(removed, "Back Again", "a-third-password-3");
+
+        overRemoved.Error!.Code.ShouldBe(ErrorCode.Conflict);
+        (await invitee.GetAsync()).GetValueOrThrow().Status.ShouldBe(UserStatus.Deprovisioned, "a link resurrected a deprovisioned invitee");
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Invites <paramref name="email" /> as the owner, and returns the invitation with the secret its mail carried.</summary>
+    async Task<(InvitationSnapshot Invitation, string Secret)> InviteAsync(string email) {
+        var invited = await cluster.Invitations.InviteAsync(
+            new() { TenantId = Tenant, Email = email, Caller = IsolationCluster.Caller(Tenant, Owner) },
+            Ct
+        );
+
+        invited.IsSuccess.ShouldBeTrue(invited.Error?.Message);
+
+        var invitation = invited.GetValueOrThrow();
+
+        return (invitation, IsolationCluster.InvitationMail.Deliveries.Single(x => x.InvitationId == invitation.InvitationId).Secret);
+    }
+
+    Task<Result<Invitation>> AcceptAsync((InvitationSnapshot Invitation, string Secret) link, string name, string password) =>
+        cluster.For(Tenant)
+            .GetGrain<IInvitationGrain>(GrainKeys.Invitation(link.Invitation.InvitationId))
+            .AcceptAsync(link.Secret, name, password);
+
+    async Task<Invitation> DescribeAsync((InvitationSnapshot Invitation, string Secret) link) =>
+        (await cluster.For(Tenant)
+            .GetGrain<IInvitationGrain>(GrainKeys.Invitation(link.Invitation.InvitationId))
+            .DescribeAsync(link.Secret)).GetValueOrThrow();
 
     async Task<bool> AllowedAsync(string type, string id, string permission, string user) {
         var check = await cluster.For(Tenant)

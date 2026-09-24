@@ -185,9 +185,13 @@ it. The decisions that shape the served half, each argued in the type that makes
   origin) — both in the `code-verify` bucket, and a user code is answered once. An approved code is
   redeemed at `/token` like an authorization code — the token session id recorded before the session
   opens, a second redemption refused and the first session revoked
-  (`RevocationReason.DeviceCodeReuseDetected`) — with one deliberate difference: the device's token
-  session is bound to **itself**, not to the browser session that approved it, because the device
-  and the browser are two machines and a sign-out on the phone must not end a build agent's CLI.
+  (`RevocationReason.DeviceCodeReuseDetected`), and, like a code, refused once the sign-in behind it
+  is gone: the approving session must still be live, and the user still `Active` after the new
+  session is tracked, so a code approved before a suspension or a "sign out everywhere" opens nothing
+  (⚠ the first cut read neither, and the review of #43 got tokens and a live refresh chain for a
+  suspended user). One deliberate difference: once the device has its tokens, its token session is
+  bound to **itself**, not to the browser session that approved it, because the device and the
+  browser are two machines and a sign-out on the phone must not end a build agent's CLI.
   `/revoke` (RFC 7009) takes a refresh token and ends its token session (`RevokedByClient`) — what
   `cyc logout` calls — and answers an access token `unsupported_token_type`, since access tokens stay
   irrevocable. `DeviceFlowOverHttpTests` pins every answer over the wire; `DeviceFlowThroughTheSdkTests`
@@ -374,8 +378,19 @@ now answers for the invited user — so a role is granted, audited and revoked i
 colleague who already has an account elsewhere is still a new user *here*: the same page asks them
 for a name and a password for this organisation and leaves the other account untouched. Re-inviting
 an address whose user is still `Invited` reuses that user, which is how an expired link is replaced;
-inviting a member is a conflict. `InvitationsOverHttpTests` (Mailpit) and `CyberCloud.Isolation §
-InvitationTests` pin both halves. ⚠ **Owed:** a registered Communication template in place of the
+inviting a member is a conflict. ⚠ So two links can name one user, and a link outlives a suspension
+or a deprovision of the person it names: a link opens an `Invited` user and nothing else. Once the
+user is anything else the invitation reads `withdrawn`, and `IUserGrain.AcceptInvitationAsync`
+checks the status in the same turn as it sets the name, the password and `Active`. The first cut did
+three separate writes with no check, and the review proved a second link un-suspending a member and
+a link resurrecting a deprovisioned invitee, signed in as password + code past any second factor
+enrolled since. Until revoking lands, suspending or deprovisioning the invitee is how an owner
+withdraws an invitation. ⚠ (2) stands as a departure rather than a gap: signing in as the account
+elsewhere would need that account found by address across tenants (the global index this section
+rules out) or a credential shared between two users (`IUserGrain` hands out no hash, by design), and
+cross-tenant identity is the M3 question below. `InvitationThroughTheGatewayTests` (the `POST` through
+the real gateway with a device-flow token), `InvitationsOverHttpTests` (Mailpit) and
+`CyberCloud.Isolation § InvitationTests` pin it. ⚠ **Owed:** a registered Communication template in place of the
 code template ([17 § The outbound carrier](17-communication-and-email.md)); a passkey at acceptance
 (the page takes a password, the sign-up page's passkey ceremony is not reused yet); listing and
 revoking pending invitations; the portal page that sends one (#22); and the welcome mail, which is

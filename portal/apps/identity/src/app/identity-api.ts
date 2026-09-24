@@ -214,8 +214,11 @@ export interface InvitationPageResponse {
   /** The organisation, by its short name. */
   tenantName: string;
 
-  /** `pending`, `accepted` or `expired`. */
-  status: 'pending' | 'accepted' | 'expired' | '';
+  /**
+   * `pending`, `accepted`, `expired`, or `withdrawn` — the invited user is no longer waiting to join
+   * (a member through another link, suspended, or removed), so the link opens nothing.
+   */
+  status: 'pending' | 'accepted' | 'expired' | 'withdrawn' | '';
 
   /** Whether an accept made the person a member and signed them in. */
   succeeded: boolean;

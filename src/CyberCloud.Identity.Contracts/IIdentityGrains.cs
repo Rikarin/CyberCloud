@@ -70,9 +70,29 @@ public interface IUserGrain : IGrainWithStringKey {
     /// <param name="email">The new address, normalized.</param>
     Task<Result<UserProfile>> ChangeEmailAsync(string email);
 
-    /// <summary>Renames the user — the name an invited person chose on accepting (#43).</summary>
+    /// <summary>
+    ///     Makes an invited user a member: sets the name and the password they chose and moves them
+    ///     to <see cref="UserStatus.Active" />, in one turn and only from <see cref="UserStatus.Invited" />.
+    ///     Issue #43, step 7.
+    /// </summary>
     /// <param name="displayName">The name, trimmed. Empty is refused: the id_token and the portal show it.</param>
-    Task<Result<UserProfile>> SetDisplayNameAsync(string displayName);
+    /// <param name="password">The password for this user. Hashed here, as <see cref="SetPasswordAsync" /> does.</param>
+    /// <returns>
+    ///     The member's profile; <see cref="ErrorCode.InvalidRequestBody" /> for a name or password
+    ///     that is refused; <see cref="ErrorCode.PreconditionFailed" /> for a user who isn't
+    ///     <see cref="UserStatus.Invited" />, with nothing changed.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>The status check and the writes are one call, and that is the point of it.</b> An
+    ///     invitation link names a user, not a state, and a second link for the same user stays live
+    ///     after the first is accepted. Composed from a rename, a password set and a status change,
+    ///     accepting that second link, or any link after the member was suspended or deprovisioned,
+    ///     reset the password, reactivated the account and signed it in with a session stamped
+    ///     password plus a delivered code — past any second factor the member had enrolled since. The
+    ///     grain is single-threaded, so checking <see cref="UserStatus.Invited" /> here closes the race
+    ///     between two links as well as the replay.
+    /// </remarks>
+    Task<Result<UserProfile>> AcceptInvitationAsync(string displayName, string password);
 
     // ── Credentials ────────────────────────────────────────────────────────────────────────────
 

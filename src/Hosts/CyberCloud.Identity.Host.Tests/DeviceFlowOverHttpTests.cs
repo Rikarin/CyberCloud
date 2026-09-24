@@ -1,3 +1,4 @@
+using CyberCloud.Core.Resources;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Host.Api;
 using CyberCloud.Identity.Host.RateLimiting;
@@ -200,6 +201,73 @@ public sealed class DeviceFlowOverHttpTests(IdentityHostFixture fixture) {
 
             afterRevoke.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
             dead.GetProperty("error").GetString().ShouldBe("invalid_grant");
+        }
+    }
+
+    /// <summary>
+    ///     An approval the device hasn't collected yet dies with the sign-in that gave it, and with
+    ///     the account: a sign-out or a suspension after the allow leaves the code opening nothing.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The review of #43 found this open. A probe approved a code, suspended the person and
+    ///     polled, and got <c>200</c> for the poll and <c>200</c> for the refresh after it: a
+    ///     suspended user with a live chain, which <c>UserGrain.SetStatusAsync</c> promises can't
+    ///     exist. The third case sets the account back to <see cref="UserStatus.Invited" />, the one
+    ///     change that leaves its sessions live, so the check after the track is reached on its own.
+    ///     It stands in for a suspension landing between the two checks, which a test can't time.
+    /// </remarks>
+    [Fact]
+    public async Task AnApprovalDiesWithTheSignInThatGaveItAndWithTheAccount() {
+        using var device = Device();
+
+        // ── Allowed, then the browser signs out: the sign-in behind the approval is gone.
+        var signedOut = await fixture.SignInFreshPersonAsync(IdentityHostFixture.SignInPageBaseUri);
+
+        using (signedOut.Browser) {
+            var started = await ApprovedAsync(device, signedOut.Browser);
+
+            using (await signedOut.Browser.GetAsync(
+                       IdentityHostOpenIddict.EndSessionPath
+                       + "?client_id="
+                       + FirstPartyClients.Portal
+                       + "&post_logout_redirect_uri="
+                       + Uri.EscapeDataString(FirstPartyClients.DevelopmentPortalPostLogoutRedirectUri),
+                       Ct
+                   )) { }
+
+            await ShouldBePollError(device, started.DeviceCode, "invalid_grant", "the approving sign-in ended before the poll");
+            await ShouldHoldNoLiveSessionAsync(signedOut.UserId, "a sign-out left a session the approval opened");
+        }
+
+        // ── Allowed, then suspended: every session revoked, and the approval with them.
+        var suspended = await fixture.SignInFreshPersonAsync(IdentityHostFixture.SignInPageBaseUri);
+
+        using (suspended.Browser) {
+            var started = await ApprovedAsync(device, suspended.Browser);
+
+            (await User(suspended.UserId).SetStatusAsync(UserStatus.Suspended)).IsSuccess.ShouldBeTrue();
+
+            await ShouldBePollError(device, started.DeviceCode, "invalid_grant", "the person was suspended before the poll");
+            await ShouldHoldNoLiveSessionAsync(suspended.UserId, "a suspended user holds a live session");
+        }
+
+        // ── Allowed, then no longer Active with the sign-in still live: the session the redemption
+        //    opened is revoked after the track, before any token is minted from it.
+        var demoted = await fixture.SignInFreshPersonAsync(IdentityHostFixture.SignInPageBaseUri);
+
+        using (demoted.Browser) {
+            var started = await ApprovedAsync(device, demoted.Browser);
+            var before = (await User(demoted.UserId).ListSessionsAsync()).GetValueOrThrow();
+
+            (await User(demoted.UserId).SetStatusAsync(UserStatus.Invited)).IsSuccess.ShouldBeTrue();
+
+            await ShouldBePollError(device, started.DeviceCode, "invalid_grant", "the person was not Active at the poll");
+
+            var opened = (await User(demoted.UserId).ListSessionsAsync()).GetValueOrThrow().Except(before).ShouldHaveSingleItem();
+
+            (await fixture.For(IdentityHostFixture.Tenant).GetGrain<ISessionGrain>(GrainKeys.Session(opened)).IsLiveAsync())
+                .GetValueOrThrow()
+                .ShouldBeFalse("the redemption left the session it opened for a user who isn't Active");
         }
     }
 
@@ -428,11 +496,18 @@ public sealed class DeviceFlowOverHttpTests(IdentityHostFixture fixture) {
             Ct
         );
 
-    /// <summary>A device started, approved by <paramref name="browser" />'s person, and redeemed.</summary>
-    async Task<JsonElement> ApprovedTokensAsync(HttpClient device, BrowserClient browser) {
+    /// <summary>A device started and approved by <paramref name="browser" />'s person, not yet polled.</summary>
+    static async Task<Started> ApprovedAsync(HttpClient device, BrowserClient browser) {
         var started = await StartAsync(device);
 
         (await DecideAsync(browser, started.UserCode, "allow")).GetProperty("status").GetString().ShouldBe("approved");
+
+        return started;
+    }
+
+    /// <summary>A device started, approved by <paramref name="browser" />'s person, and redeemed.</summary>
+    async Task<JsonElement> ApprovedTokensAsync(HttpClient device, BrowserClient browser) {
+        var started = await ApprovedAsync(device, browser);
 
         using var collected = await Poll(device, started.DeviceCode);
         var tokens = await BrowserClient.JsonAsync(collected, Ct);
@@ -440,6 +515,17 @@ public sealed class DeviceFlowOverHttpTests(IdentityHostFixture fixture) {
         collected.StatusCode.ShouldBe(HttpStatusCode.OK, tokens.GetRawText());
 
         return tokens;
+    }
+
+    IUserGrain User(Guid userId) => fixture.For(IdentityHostFixture.Tenant).GetGrain<IUserGrain>(GrainKeys.User(userId));
+
+    /// <summary>Asserts that no session the user grain tracks for <paramref name="userId" /> is live.</summary>
+    async Task ShouldHoldNoLiveSessionAsync(Guid userId, string because) {
+        var tenant = fixture.For(IdentityHostFixture.Tenant);
+
+        foreach (var session in (await User(userId).ListSessionsAsync()).GetValueOrThrow()) {
+            (await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(session)).IsLiveAsync()).GetValueOrThrow().ShouldBeFalse(because);
+        }
     }
 
     // ── The page ───────────────────────────────────────────────────────────────────────────────

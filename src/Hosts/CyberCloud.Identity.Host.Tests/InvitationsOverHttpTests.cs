@@ -22,8 +22,9 @@ namespace CyberCloud.Identity.Host.Tests;
 ///         Who may invite is the resource manager's <c>assignRole</c> check, asked by
 ///         <c>InvitationService</c> before the grain is reached, and <c>CyberCloud.Isolation</c>'s
 ///         <c>InvitationTests</c> drive that half through the real manager and the real engine —
-///         with the Reader grant that follows it. What this suite owns is the half after: the mail
-///         and its link, and what the link does over HTTP.
+///         with the Reader grant that follows it, and <see cref="InvitationThroughTheGatewayTests" />
+///         sends the invite through the real gateway with a real token. What this suite owns is the
+///         half after: the mail and its link, and what the link does over HTTP.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The link is taken from the message Mailpit parsed</b>, not from a value the test

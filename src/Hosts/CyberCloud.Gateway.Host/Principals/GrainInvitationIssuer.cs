@@ -46,8 +46,7 @@ public sealed class GrainInvitationIssuer(IGrainFactory grains) : IInvitationIss
                 new() {
                     Email = issue.Email,
                     InvitedBy = issue.InvitedBy,
-                    TenantName = issue.TenantName,
-                    ExpiresAt = DateTimeOffset.UtcNow + InvitationPolicy.Lifetime
+                    TenantName = issue.TenantName
                 },
                 secret
             );

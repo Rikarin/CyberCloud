@@ -334,7 +334,10 @@ public sealed class RoleAssignmentService(
         // ⚠ Ordered by address and resumed by address, which is the rule every collection of this
         // API pages by (ListRequest.Continuation). The addresses are distinct — one tuple, one
         // address — so "the first row after the token" is well defined, and a grant or a revoke
-        // between two pages moves only its own row.
+        // between two pages moves only its own row. ⚠ The tree-wide reformat (e21006d) replaced the
+        // resume filter with a second OrderBy, so every page was page one and a caller walking the
+        // continuation looped forever; RoleAssignmentTests.TheCollectionIsPagedByAddressAndAPageIsNeverSilentlyShort
+        // is what caught it (#43).
         var rows = listed.GetValueOrThrow()
             .OrderBy(static x => x.Path, StringComparer.Ordinal)
             .Where(x => request.Continuation.Length == 0 || string.CompareOrdinal(x.Path, request.Continuation) > 0)

@@ -68,8 +68,8 @@ public sealed class LoginTests {
 
         await host.RunAsync("login", "--device-code", "--output", "none");
 
-        // ⚠ docs/plan/21 § Decisions: "Never a plaintext file — that is how CI credentials leak into
-        // container images." The refresh token went to the SDK's cache. The two files that may be
+        // ⚠ The refresh token went to the SDK's cache (docs/plan/21 § Decisions, the token-cache row),
+        // never to the CLI's state directory. The two files that may be
         // here are the update-check stamp and `config`, which holds the telemetry answer this run
         // recorded — and no token.
         var files = Directory.GetFiles(host.StateDirectory, "*", SearchOption.AllDirectories);

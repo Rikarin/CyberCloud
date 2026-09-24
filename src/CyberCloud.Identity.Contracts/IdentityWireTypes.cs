@@ -561,9 +561,14 @@ public sealed record SignInOutcome {
 ///     it. An invitation makes a <i>member</i>: a user in the tenant, and no tuple. What they may do
 ///     is a role assignment, the separate request docs/plan/07 § Azure RBAC has and
 ///     <c>IRoleAssignmentManager</c> serves, so there is one way to grant a role and it is checked,
-///     audited and revoked in one place. <c>[Id(3)]</c> stays out of circulation; nothing was ever
-///     written under it — no release exists — which is the argument the top of this file makes for
-///     retiring a shape before the first one.
+///     audited and revoked in one place. ⚠ <c>[Id(3)]</c> is retired, not free: v0.1.0 published this
+///     type with <c>Relation</c> at 3 (<c>build/wire/v0.1.0.txt</c>), so a v0.1.0 peer reads that id
+///     as a string and a new member there would be misread. Dropping it is legal — the Wire
+///     compatibility gate allows a removed member, and a peer skips a field it doesn't know — and it
+///     costs no data, because nothing produced an <see cref="Invitation" /> before
+///     <see cref="IInvitationGrain" /> (#43): no grain state, stream or call ever carried one. That is
+///     a different argument from the free window the top of this file describes, which closed with
+///     the v0.1.0 tag (<c>build/wire/burned.txt</c>).
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Identity.Invitation")]

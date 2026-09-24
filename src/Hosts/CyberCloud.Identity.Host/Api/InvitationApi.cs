@@ -47,7 +47,7 @@ public sealed record InvitationAcceptRequest(
 /// <param name="Found">Whether the link names an invitation. When false, <paramref name="Message" /> says why.</param>
 /// <param name="Email">The address invited — the account being created.</param>
 /// <param name="TenantName">The organisation.</param>
-/// <param name="Status"><c>pending</c>, <c>accepted</c> or <c>expired</c>.</param>
+/// <param name="Status"><c>pending</c>, <c>accepted</c>, <c>expired</c> or <c>withdrawn</c>.</param>
 /// <param name="Succeeded">Whether an accept made the person a member and signed them in.</param>
 /// <param name="PortalUrl">Where to go next — the portal, from its registration; empty when none is configured.</param>
 /// <param name="Message">What to render, verbatim.</param>
@@ -101,6 +101,10 @@ public sealed record InvitationApiResult(InvitationPageResponse Body, ClaimsPrin
 ///         delivered code — the link is the code, as the enrolment code is at sign-up
 ///         (<c>SignUpApi</c>'s principal says why that is two factors and not one). The member has
 ///         no role; the portal they land on shows them nothing until somebody grants them one.
+///         ⚠ That stamp is only honest for a user who was <see cref="UserStatus.Invited" /> until
+///         this request — nobody has enrolled a second factor it could skip — and
+///         <see cref="IUserGrain.AcceptInvitationAsync" /> is what guarantees it: a link naming a
+///         member, a suspended account or a deprovisioned one is refused before any session opens.
 ///     </para>
 /// </remarks>
 /// <param name="tenants">The directory, through the tenant hint.</param>
@@ -139,6 +143,8 @@ public sealed class InvitationApi(
         return Page(invitation, false, invitation.Status switch {
             InvitationStatus.Accepted => "This invitation has already been used. Sign in instead.",
             InvitationStatus.Expired => "This invitation has expired. Ask whoever sent it for a new one.",
+            InvitationStatus.Withdrawn =>
+                "This invitation can no longer be used. If you have joined already, sign in; otherwise ask whoever sent it.",
             _ => string.Empty
         });
     }

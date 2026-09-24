@@ -18,19 +18,42 @@ namespace CyberCloud.Identity.Grains;
 ///         ⚠ <b>Create is re-drivable and in the order docs/plan/06 § Two-phase create fixes.</b>
 ///         The email-index claim first, then the user, then the confirmation, then this grain's own
 ///         record, then the mail — so a crash between two steps leaves a leased address or an
-///         invited user nobody was mailed, and the sender's retry (same id, same secret) resumes:
-///         the claim answers the same entry, <see cref="IUserGrain.CreateAsync" /> is idempotent for
-///         the same address, and the message is idempotent on the invitation id. The one refusal is
+///         invited user nobody was mailed. A call again with the same id and secret resumes it: the
+///         claim answers the same entry, <see cref="IUserGrain.CreateAsync" /> is idempotent for the
+///         same address, and the message is idempotent on the invitation id. The one refusal is
 ///         an address already bound to a member who is not merely invited — they are in the tenant
 ///         already, and a second user for them would be two people with one address.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Accept spends the link before it touches the user, and gives it back only for a
-///         password the user grain refused.</b> The other order — password first, then the burn —
-///         would let two tabs holding the same link both set a password, the second silently
-///         replacing the first. A crash after the burn and before the password leaves an
-///         invited user and a used link, which the sender repairs by inviting again onto the same
-///         user; that is the failure worth having, because it is visible and costs one mail.
+///         ⚠ <b>Only a caller that kept the id and the secret can resume, and the gateway keeps
+///         neither.</b> <c>GrainInvitationIssuer</c> mints both for each <c>POST</c> and returns
+///         neither, so an owner's retry after a failed mail is a second invitation onto the same
+///         invited user (<see cref="UserForAsync" /> reuses it). The first is left pending, a link
+///         nobody received, and it expires in seven days. Two pending links for one user are safe
+///         because accepting either one makes the other <see cref="InvitationStatus.Withdrawn" />. A
+///         retry that resumes needs the id to be an idempotency key the sender supplies, and that's
+///         owed with listing and revoking invitations.
+///     </para>
+///     <para>
+///         ⚠ <b>Accept spends the link before it touches the user, and gives it back whenever the
+///         user grain refused.</b> The other order — password first, then the burn — would let two
+///         tabs holding the same link both set a password, the second silently replacing the first.
+///         A crash after the burn and before the user call leaves an invited user and a used link,
+///         which the sender repairs by inviting again onto the same user; that is the failure worth
+///         having, because it is visible and costs one mail. The give-back is safe for every
+///         refusal because a refused call changed nothing, and a link the user grain refused for
+///         the user's status stays useless: it reads <see cref="InvitationStatus.Withdrawn" />.
+///     </para>
+///     <para>
+///         ⚠ <b>The user's status is read, never assumed.</b> This grain once renamed the user, set
+///         the password and made them <see cref="UserStatus.Active" /> as three calls with no check,
+///         so a second pending link for a user who had joined through the first — or any link after
+///         a suspension or a deprovision — brought the account back, reset its password and signed
+///         it in past any second factor enrolled since. The review of #43 proved both with probes.
+///         Now the page is told <see cref="InvitationStatus.Withdrawn" /> before anything is spent,
+///         and <see cref="IUserGrain.AcceptInvitationAsync" /> checks <see cref="UserStatus.Invited" />
+///         in the turn that writes, which is what holds against two links accepted at once.
+///         <c>InvitationTests.ALinkCannotBringBackAMemberWhoWasSuspendedOrRemoved</c> pins it.
 ///     </para>
 /// </remarks>
 public sealed class InvitationGrain(
@@ -99,7 +122,7 @@ public sealed class InvitationGrain(
             SecretDigest = digest,
             UserId = userId.GetValueOrThrow(),
             Email = email,
-            ExpiresAt = request.ExpiresAt > now ? request.ExpiresAt : now + InvitationPolicy.Lifetime,
+            ExpiresAt = now + InvitationPolicy.Lifetime,
             Status = InvitationStatus.Pending,
             InvitedBy = request.InvitedBy,
             TenantName = request.TenantName,
@@ -112,10 +135,8 @@ public sealed class InvitationGrain(
     }
 
     /// <inheritdoc />
-    public Task<Result<Invitation>> DescribeAsync(string secret) =>
-        Task.FromResult(
-            Matches(secret) ? Result<Invitation>.Success(Snapshot()) : NotFound()
-        );
+    public async Task<Result<Invitation>> DescribeAsync(string secret) =>
+        Matches(secret) ? Result<Invitation>.Success(await ViewAsync()) : NotFound();
 
     /// <inheritdoc />
     public async Task<Result<Invitation>> AcceptAsync(string secret, string displayName, string password) {
@@ -123,7 +144,7 @@ public sealed class InvitationGrain(
             return NotFound();
         }
 
-        switch (Snapshot().Status) {
+        switch ((await ViewAsync()).Status) {
             case InvitationStatus.Accepted:
                 return Result<Invitation>.Failure(
                     ErrorCode.Conflict,
@@ -134,6 +155,8 @@ public sealed class InvitationGrain(
                     ErrorCode.PreconditionFailed,
                     "This invitation has expired. Ask whoever sent it for a new one."
                 );
+            case InvitationStatus.Withdrawn:
+                return Withdrawn();
         }
 
         if (string.IsNullOrWhiteSpace(displayName) || string.IsNullOrEmpty(password)) {
@@ -145,25 +168,23 @@ public sealed class InvitationGrain(
         state.State.AcceptedAt = clock.UtcNow;
         await state.WriteStateAsync();
 
-        var user = Tenant().GetGrain<IUserGrain>(GrainKeys.User(state.State.UserId));
+        var accepted = await Tenant()
+            .GetGrain<IUserGrain>(GrainKeys.User(state.State.UserId))
+            .AcceptInvitationAsync(displayName, password);
 
-        var named = await user.SetDisplayNameAsync(displayName);
-        var credential = named.IsSuccess ? await user.SetPasswordAsync(password) : named.ToResult();
-
-        if (credential.TryGetError(out var refused)) {
-            // ⚠ The one give-back: the person's input was refused, the invitation is still theirs,
-            // and a burned link would make them ask for another mail over a password rule.
+        if (accepted.TryGetError(out var refused)) {
+            // ⚠ The give-back: the user grain changed nothing, so the link is what it was before —
+            // the person's to retry after a refused password, or withdrawn if the user stopped
+            // being invited between the check above and this call.
             state.State.Status = InvitationStatus.Pending;
             state.State.AcceptedAt = null;
             await state.WriteStateAsync();
 
-            return Result<Invitation>.Failure(ErrorCode.InvalidRequestBody, refused.Message);
-        }
+            if (refused.Code == ErrorCode.InvalidRequestBody) {
+                return Result<Invitation>.Failure(ErrorCode.InvalidRequestBody, refused.Message);
+            }
 
-        var activated = await user.SetStatusAsync(UserStatus.Active);
-
-        if (activated.TryGetError(out var inactive)) {
-            return Result<Invitation>.Failure(inactive);
+            return refused.Code == ErrorCode.PreconditionFailed ? Withdrawn() : Result<Invitation>.Failure(refused);
         }
 
         IdentityLog.InvitationAccepted(logger, tenantId, invitationId, state.State.UserId);
@@ -172,8 +193,8 @@ public sealed class InvitationGrain(
     }
 
     /// <inheritdoc />
-    public Task<Result<Invitation>> GetAsync() =>
-        Task.FromResult(Created ? Result<Invitation>.Success(Snapshot()) : NotFound());
+    public async Task<Result<Invitation>> GetAsync() =>
+        Created ? Result<Invitation>.Success(await ViewAsync()) : NotFound();
 
     /// <inheritdoc />
     public Task DeactivateAsync() {
@@ -276,6 +297,36 @@ public sealed class InvitationGrain(
                 ? InvitationStatus.Expired
                 : state.State.Status
         };
+
+    /// <summary>
+    ///     <see cref="Snapshot" />, with a pending invitation whose user is no longer
+    ///     <see cref="UserStatus.Invited" /> read as <see cref="InvitationStatus.Withdrawn" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Read from the user on every call rather than stored here: the status is the user
+    ///     grain's, and a copy would go stale the moment an administrator suspended somebody without
+    ///     knowing an invitation existed.
+    /// </remarks>
+    async Task<Invitation> ViewAsync() {
+        var snapshot = Snapshot();
+
+        if (snapshot.Status != InvitationStatus.Pending) {
+            return snapshot;
+        }
+
+        var user = await Tenant().GetGrain<IUserGrain>(GrainKeys.User(state.State.UserId)).GetAsync();
+
+        return user.IsSuccess && user.GetValueOrThrow().Status == UserStatus.Invited
+            ? snapshot
+            : snapshot with { Status = InvitationStatus.Withdrawn };
+    }
+
+    static Result<Invitation> Withdrawn() =>
+        Result<Invitation>.Failure(
+            ErrorCode.Conflict,
+            "This invitation can no longer be used. If you have joined already, sign in; otherwise ask "
+            + "whoever sent it."
+        );
 
     TenantGrainFactory Tenant() => grains.ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture));
 

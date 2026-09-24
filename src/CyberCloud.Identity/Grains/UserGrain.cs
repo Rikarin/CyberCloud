@@ -130,9 +130,18 @@ public sealed class UserGrain(
     }
 
     /// <inheritdoc />
-    public async Task<Result<UserProfile>> SetDisplayNameAsync(string displayName) {
+    public async Task<Result<UserProfile>> AcceptInvitationAsync(string displayName, string password) {
         if (!Exists()) {
             return NotFound<UserProfile>();
+        }
+
+        // ⚠ First, before the input is even read: a member, a suspended account or a deprovisioned
+        // one is not waiting for an invitation, and whatever the link carries must change nothing.
+        if (state.State.Status != UserStatus.Invited) {
+            return Result<UserProfile>.Failure(
+                ErrorCode.PreconditionFailed,
+                $"User {userId:D} is {state.State.Status}, not Invited; an invitation cannot change it."
+            );
         }
 
         var name = (displayName ?? string.Empty).Trim();
@@ -144,7 +153,15 @@ public sealed class UserGrain(
             );
         }
 
+        if (string.IsNullOrEmpty(password)) {
+            return Result<UserProfile>.Failure(ErrorCode.InvalidRequestBody, "A password is required.");
+        }
+
+        // No session to revoke, unlike SetPasswordAsync: an invited user cannot authenticate
+        // (CanAuthenticate), so none was ever opened.
         state.State.DisplayName = name;
+        state.State.PasswordHash = hasher.Hash(password);
+        state.State.Status = UserStatus.Active;
         await state.WriteStateAsync();
 
         return Result<UserProfile>.Success(Profile());
