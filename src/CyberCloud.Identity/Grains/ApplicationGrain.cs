@@ -1,5 +1,6 @@
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Time;
+using CyberCloud.Identity.Credentials;
 using CyberCloud.Tenancy.Contracts;
 using Orleans.Multitenant;
 using System.Globalization;
@@ -74,6 +75,17 @@ public sealed class ApplicationGrain(
 
         var clientId = validated.GetValueOrThrow().ClientId;
 
+        // ⚠ Listed before anything else is claimed, for IDirectoryIndexGrain's reason: a crash past
+        // this line leaves an id the listing skips as "not found", never a registration nothing
+        // lists. Issue #41.
+        var listed = await Tenant()
+            .GetGrain<IDirectoryIndexGrain>(GrainKeys.DirectoryIndex(GrainKeys.DirectoryApplications))
+            .AddAsync(applicationId);
+
+        if (listed.TryGetError(out var unlisted)) {
+            return Result<ApplicationRegistration>.Failure(unlisted);
+        }
+
         // ⚠ CLAIM THE CLIENT ID BEFORE WRITING STATE — docs/plan/06 § Two-phase create's ordering,
         // applied to a client-id index rather than a path index. A registration written first and a
         // claim that then failed would leave an application no lookup can reach; the claim first means
@@ -90,9 +102,10 @@ public sealed class ApplicationGrain(
         // application would otherwise write one grain's state under another's identity — and the body
         // is caller-supplied on a control-plane endpoint.
         state.State.Registration = validated.GetValueOrThrow() with {
-            ApplicationId = applicationId, TenantId = tenantId, CreatedAt = clock.UtcNow
+            ApplicationId = applicationId, TenantId = tenantId, CreatedAt = clock.UtcNow, ClientSecretIssuedAt = null
         };
         state.State.ClientIdConfirmed = false;
+        state.State.ClientSecretDigest = string.Empty;
 
         await state.WriteStateAsync();
 
@@ -149,11 +162,65 @@ public sealed class ApplicationGrain(
             ApplicationId = applicationId,
             TenantId = tenantId,
             ClientId = existing.ClientId,
-            CreatedAt = existing.CreatedAt
+            CreatedAt = existing.CreatedAt,
+            ClientSecretIssuedAt = existing.ClientSecretIssuedAt
         };
 
         await state.WriteStateAsync();
         return Result<ApplicationRegistration>.Success(state.State.Registration);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<ApplicationRegistration>> IssueClientSecretAsync(string secret) {
+        var settled = await SettleAsync();
+        if (settled.TryGetError(out var unsettled)) {
+            return Result<ApplicationRegistration>.Failure(unsettled);
+        }
+
+        if (state.State.Registration is not { } registration) {
+            return NotFound<ApplicationRegistration>();
+        }
+
+        if (registration.IsPublicClient) {
+            return Result<ApplicationRegistration>.Failure(
+                ErrorCode.InvalidRequestBody,
+                "A public client holds no secret — a secret shipped in a browser or a CLI is public."
+            );
+        }
+
+        // ⚠ A floor, not a policy: the caller mints 256 bits, and anything this short was typed.
+        if (string.IsNullOrEmpty(secret) || secret.Length < 32) {
+            return Result<ApplicationRegistration>.Failure(
+                ErrorCode.InvalidRequestBody,
+                "A client secret is minted by the platform and is at least 32 characters."
+            );
+        }
+
+        state.State.ClientSecretDigest = CredentialDigest.Sha256(secret);
+        state.State.Registration = registration with { ClientSecretIssuedAt = clock.UtcNow };
+
+        await state.WriteStateAsync();
+        return Result<ApplicationRegistration>.Success(state.State.Registration);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<bool>> VerifyClientSecretAsync(string presented) {
+        var settled = await SettleAsync();
+        if (settled.TryGetError(out var unsettled)) {
+            return Result<bool>.Failure(unsettled);
+        }
+
+        if (state.State.Registration is null) {
+            return NotFound<bool>();
+        }
+
+        // ⚠ Digest against digest, in constant time — CredentialDigest.FixedTimeEquals, as the
+        // invitation grain compares a link's secret. No digest stored is false, never a match.
+        return Result<bool>.Success(
+            state.State.ClientSecretDigest.Length > 0
+            && !string.IsNullOrEmpty(presented)
+            && CredentialDigest.FixedTimeEquals(CredentialDigest.Sha256(presented), state.State.ClientSecretDigest)
+        );
     }
 
     /// <inheritdoc />
@@ -219,9 +286,14 @@ public sealed class ApplicationGrain(
 
         state.State.Registration = null;
         state.State.ClientIdConfirmed = false;
+        state.State.ClientSecretDigest = string.Empty;
         await state.WriteStateAsync();
 
-        return Result.Success;
+        // Last, so a failure here leaves a listed id whose grain answers "not found" — which a
+        // listing skips — rather than a live registration nothing lists. Issue #41.
+        return await Tenant()
+            .GetGrain<IDirectoryIndexGrain>(GrainKeys.DirectoryIndex(GrainKeys.DirectoryApplications))
+            .RemoveAsync(applicationId);
     }
 
     /// <inheritdoc />
@@ -306,9 +378,9 @@ public sealed class ApplicationGrain(
     ///     a stored value that may predate that check.
     /// </exception>
     IClientIndexGrain ClientIndex(string clientId) =>
-        grains
-            .ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture))
-            .GetGrain<IClientIndexGrain>(GrainKeys.ClientIndex(tenantId, clientId));
+        Tenant().GetGrain<IClientIndexGrain>(GrainKeys.ClientIndex(tenantId, clientId));
+
+    TenantGrainFactory Tenant() => grains.ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture));
 
     /// <summary>
     ///     <see cref="ClientIndex" /> for a stored client id, or <c>null</c> when no index can carry
@@ -368,6 +440,18 @@ public sealed class ApplicationGrain(
                     $"'{uri}' carries a fragment. A redirect URI must not — the authorization "
                     + "response appends its own, so the registered value and the value the browser "
                     + "is sent to would differ."
+                );
+            }
+        }
+
+        // ⚠ A scope the identity host doesn't know would be registered here and refused at
+        // /authorize, so it is refused here, where the person registering can fix it. Issue #41.
+        foreach (var scope in registration.AllowedScopes) {
+            if (!ApplicationPolicy.RegistrableScopes.Contains(scope, StringComparer.Ordinal)) {
+                return Result<ApplicationRegistration>.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    $"'{scope}' is not a scope a client can be registered for. The scopes are "
+                    + $"{string.Join(", ", ApplicationPolicy.RegistrableScopes)}."
                 );
             }
         }

@@ -548,3 +548,68 @@ public sealed class UnavailableInvitationIssuer : IInvitationIssuer {
             )
         );
 }
+
+/// <summary>
+///     The <see cref="IIdentityDirectory" /> a host with no identity reach registers: every call
+///     is refused with a sentence naming the seam — <see cref="UnavailableInvitationIssuer" />'s
+///     arrangement, for its reason. Issue #41.
+/// </summary>
+public sealed class UnavailableIdentityDirectory : IIdentityDirectory {
+    /// <summary>The sentence every call answers.</summary>
+    public const string Message =
+        "No identity directory is wired, so the request was checked and not served. The host that "
+        + "serves the identity administration API replaces this IIdentityDirectory registration with "
+        + "its own — the gateway's is GrainIdentityDirectory, over the identity grains.";
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<MemberSnapshot>>> ListMembersAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        Refuse<IReadOnlyList<MemberSnapshot>>();
+
+    /// <inheritdoc />
+    public Task<Result<MemberSnapshot>> DeprovisionMemberAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken = default) =>
+        Refuse<MemberSnapshot>();
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<InvitationSnapshot>>> ListInvitationsAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        Refuse<IReadOnlyList<InvitationSnapshot>>();
+
+    /// <inheritdoc />
+    public Task<Result<InvitationSnapshot>> ResendInvitationAsync(Guid tenantId, Guid invitationId, CancellationToken cancellationToken = default) =>
+        Refuse<InvitationSnapshot>();
+
+    /// <inheritdoc />
+    public Task<Result<InvitationSnapshot>> RevokeInvitationAsync(Guid tenantId, Guid invitationId, CancellationToken cancellationToken = default) =>
+        Refuse<InvitationSnapshot>();
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<ApplicationSnapshot>>> ListApplicationsAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        Refuse<IReadOnlyList<ApplicationSnapshot>>();
+
+    /// <inheritdoc />
+    public Task<Result<ApplicationSnapshot>> GetApplicationAsync(Guid tenantId, Guid applicationId, CancellationToken cancellationToken = default) =>
+        Refuse<ApplicationSnapshot>();
+
+    /// <inheritdoc />
+    public Task<Result<ApplicationRegistered>> CreateApplicationAsync(Guid tenantId, ApplicationDraft draft, CancellationToken cancellationToken = default) =>
+        Refuse<ApplicationRegistered>();
+
+    /// <inheritdoc />
+    public Task<Result<ApplicationRegistered>> RotateApplicationSecretAsync(Guid tenantId, Guid applicationId, CancellationToken cancellationToken = default) =>
+        Refuse<ApplicationRegistered>();
+
+    /// <inheritdoc />
+    public Task<Result> DeleteApplicationAsync(Guid tenantId, Guid applicationId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result.Failure(ErrorCode.InternalError, Message));
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<SessionSnapshot>>> ListSessionsAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken = default) =>
+        Refuse<IReadOnlyList<SessionSnapshot>>();
+
+    /// <inheritdoc />
+    public Task<Result> RevokeSessionAsync(Guid tenantId, Guid userId, Guid sessionId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result.Failure(ErrorCode.InternalError, Message));
+
+    static Task<Result<T>> Refuse<T>()
+        where T : notnull =>
+        Task.FromResult(Result<T>.Failure(ErrorCode.InternalError, Message));
+}

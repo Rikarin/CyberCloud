@@ -227,6 +227,13 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<IInvitationIssuer, UnavailableInvitationIssuer>();
         services.TryAddSingleton<IInvitationManager, InvitationService>();
 
+        // ── Identity administration (#41) — members, invitations, applications, own sessions. ─────
+        //
+        // ⚠ The invitation's shape again: the check here (IdentityAdministrationService), the work
+        // identity's, behind a refusing default the gateway Replaces with GrainIdentityDirectory.
+        services.TryAddSingleton<IIdentityDirectory, UnavailableIdentityDirectory>();
+        services.TryAddSingleton<IIdentityAdministration, IdentityAdministrationService>();
+
         // ── The resource graph query. docs/plan/08 § The resource-graph projection — the read half of #54. ──
         //
         // ⚠ THE FOURTH ENTRY POINT, AND THE ONLY ONE WHOSE REAL IMPLEMENTATION IS NOT IN THIS

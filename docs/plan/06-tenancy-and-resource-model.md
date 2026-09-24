@@ -201,6 +201,7 @@ tenant-qualified key. `GrainKeys` is the only type allowed to build the within-t
 | `ISignUpGrain` | `signup/{signupId:N}` — **hot tier, qualified by the platform tenant**, [11 § Sign-up and tenant creation](11-identity.md) |
 | `IDeviceAuthorizationGrain` | `device/{sha256(userCode)[..16]}` — **hot tier, qualified by the platform tenant**, one RFC 8628 device authorization, [11 § Protocol](11-identity.md), #43 |
 | `IInvitationGrain` | `invite/{invitationId:N}` — one invitation of an address into the tenant, [11 § Sign-up and tenant creation](11-identity.md), #43 |
+| `IDirectoryIndexGrain` | `idx/dir/{users\|invitations\|applications}` — the ids of one kind of directory object, the only `idx/` row keyed by a name from a closed set rather than a digest, [11 § The object model](11-identity.md), #41 |
 | `IOperationGrain` | `op/{operationId:N}` |
 | `IQuotaGrain` | `sub/{subscriptionId:N}` — same key string as the subscription, different grain **type** |
 | `ITenantDirectoryGrain` | *(null tenant)* `platform/tenant-directory` |

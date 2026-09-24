@@ -90,12 +90,25 @@ public sealed class CommunicationInvitationDelivery(IMessageSender sender, Invit
         );
     }
 
-    /// <summary>The message's key — one per invitation, so a retry is one mail.</summary>
+    /// <summary>
+    ///     The message's key — one per mail of an invitation, so a retry is one mail and a resend is
+    ///     another.
+    /// </summary>
     /// <param name="delivery">The invitation.</param>
+    /// <remarks>
+    ///     ⚠ The first mail keeps the key it had before resending existed, so a retry of a create that
+    ///     was in flight across the change is still one mail. From the second on, the mail's number
+    ///     is appended — <see cref="InvitationDelivery.Sending" /> says why.
+    /// </remarks>
     public static string IdempotencyKeyFor(InvitationDelivery delivery) {
         ArgumentNullException.ThrowIfNull(delivery);
 
-        return string.Create(CultureInfo.InvariantCulture, $"invite-{delivery.TenantId:N}-{delivery.InvitationId:N}");
+        return delivery.Sending <= 1
+            ? string.Create(CultureInfo.InvariantCulture, $"invite-{delivery.TenantId:N}-{delivery.InvitationId:N}")
+            : string.Create(
+                CultureInfo.InvariantCulture,
+                $"invite-{delivery.TenantId:N}-{delivery.InvitationId:N}-{delivery.Sending}"
+            );
     }
 
     /// <summary>

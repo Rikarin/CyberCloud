@@ -239,7 +239,7 @@ public sealed partial class TokenApiTests {
             Api,
             fixture.Services.GetRequiredService<IClientResolver>(),
             fixture.Services.GetRequiredService<FirstPartyClients>(),
-            fixture.Services.GetRequiredService<IClientSecretSeam>(),
+            fixture.Services.GetRequiredService<ClientSecretVerifier>(),
             NullLogger<DegradedModeHandlers.ValidateTokenRequest>.Instance
         );
         var (code, _) = await CodeAsync();

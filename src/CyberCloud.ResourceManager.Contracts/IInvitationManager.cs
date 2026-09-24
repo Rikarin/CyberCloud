@@ -86,11 +86,20 @@ public sealed record InvitationSnapshot {
     /// <summary>The address, normalized.</summary>
     public required string Email { get; init; }
 
-    /// <summary><c>pending</c>, <c>accepted</c> or <c>expired</c>.</summary>
+    /// <summary><c>pending</c>, <c>accepted</c>, <c>expired</c>, <c>withdrawn</c> or <c>revoked</c>.</summary>
     public required string Status { get; init; }
 
     /// <summary>When the link stops working.</summary>
     public required DateTimeOffset ExpiresAt { get; init; }
+
+    /// <summary>Who sent it. Issue #41's listing; <see cref="Guid.Empty" /> where nobody asked.</summary>
+    public Guid InvitedBy { get; init; }
+
+    /// <summary>When the last mail went. Issue #41.</summary>
+    public DateTimeOffset SentAt { get; init; }
+
+    /// <summary>How many mails have gone, the first included. Issue #41.</summary>
+    public int Sendings { get; init; }
 }
 
 /// <summary>

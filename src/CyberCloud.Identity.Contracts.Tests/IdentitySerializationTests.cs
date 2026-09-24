@@ -247,6 +247,8 @@ public sealed class IdentitySerializationTests : IDisposable {
         ("ApplicationRegistration", 8, "IsPublicClient"),
         ("ApplicationRegistration", 9, "ClientSecretRef"),
         ("ApplicationRegistration", 10, "CreatedAt"),
+        // #41: when the platform issued the client's secret — appended, never renumbered.
+        ("ApplicationRegistration", 11, "ClientSecretIssuedAt"),
 
         ("ServicePrincipalDescriptor", 0, "ServicePrincipalId"),
         ("ServicePrincipalDescriptor", 1, "TenantId"),
@@ -424,6 +426,7 @@ public sealed class IdentitySerializationTests : IDisposable {
         "CyberCloud.Identity.IAuthorizationCodeGrain",
         "CyberCloud.Identity.IConsentGrain",
         "CyberCloud.Identity.IDeviceAuthorizationGrain",
+        "CyberCloud.Identity.IDirectoryIndexGrain",
         "CyberCloud.Identity.IGroupGrain",
         "CyberCloud.Identity.IInvitationGrain",
         "CyberCloud.Identity.IManagedIdentityGrain",

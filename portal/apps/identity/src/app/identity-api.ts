@@ -215,10 +215,11 @@ export interface InvitationPageResponse {
   tenantName: string;
 
   /**
-   * `pending`, `accepted`, `expired`, or `withdrawn` — the invited user is no longer waiting to join
-   * (a member through another link, suspended, or removed), so the link opens nothing.
+   * `pending`, `accepted`, `expired`, `withdrawn` — the invited user is no longer waiting to join
+   * (a member through another link, suspended, or removed), so the link opens nothing — or
+   * `revoked`, an owner withdrew the invitation itself (#41).
    */
-  status: 'pending' | 'accepted' | 'expired' | 'withdrawn' | '';
+  status: 'pending' | 'accepted' | 'expired' | 'withdrawn' | 'revoked' | '';
 
   /** Whether an accept made the person a member and signed them in. */
   succeeded: boolean;

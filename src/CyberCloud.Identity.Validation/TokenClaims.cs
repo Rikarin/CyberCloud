@@ -35,11 +35,19 @@ namespace CyberCloud.Identity.Validation;
 ///     the 60-minute box and the tenant's notification all become decoration.
 /// </param>
 /// <param name="ExpiresAt">When the token expires. docs/plan/10 § Authentication inputs: 10 minutes.</param>
+/// <param name="SessionId">
+///     The token session the token belongs to — its <c>sid</c> claim, the <c>N</c> form of a GUID —
+///     or empty for a token minted without one (a client-credentials grant). ⚠ Identification, never
+///     authorization: the gateway reads it to mark "this session" in the caller's own session list
+///     (#41) and for nothing else, because a revoked session's access token still validates for its
+///     ten minutes and a check on this field would pretend otherwise.
+/// </param>
 public readonly record struct TokenClaims(
     Guid TenantId,
     string SubjectType,
     string SubjectId,
     string Scopes,
     string ImpersonatedBy,
-    DateTimeOffset ExpiresAt
+    DateTimeOffset ExpiresAt,
+    string SessionId = ""
 );

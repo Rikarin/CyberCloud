@@ -226,6 +226,20 @@ public sealed class ApplicationGrainState {
     /// </remarks>
     [Id(1)]
     public bool ClientIdConfirmed { get; set; }
+
+    /// <summary>
+    ///     The SHA-256 of the secret the platform issued this client, as lower-case hexadecimal, or
+    ///     empty. Issue #41.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A digest and not a slow hash, which is a decision about the input rather than a
+    ///     shortcut: the secret is 256 bits from <c>RandomNumberGenerator</c>, so there is no
+    ///     dictionary to slow down, and a slow hash would put an Argon2 cost on every code and
+    ///     refresh exchange a confidential client makes. A password is the opposite case and gets
+    ///     Argon2id.
+    /// </remarks>
+    [Id(2)]
+    public string ClientSecretDigest { get; set; } = string.Empty;
 }
 
 /// <summary><c>ServicePrincipalGrain</c>'s durable state.</summary>
@@ -609,4 +623,21 @@ public sealed class InvitationGrainState {
     /// <summary>When it was accepted, or <see langword="null" />.</summary>
     [Id(8)]
     public DateTimeOffset? AcceptedAt { get; set; }
+
+    /// <summary>How many mails have gone, the first included — the next resend's number less one.</summary>
+    [Id(9)]
+    public int Sendings { get; set; }
+
+    /// <summary>When the last mail went.</summary>
+    [Id(10)]
+    public DateTimeOffset SentAt { get; set; }
+}
+
+/// <summary><c>DirectoryIndexGrain</c>'s durable state — the ids, oldest first. Issue #41.</summary>
+[GenerateSerializer]
+[Alias("CyberCloud.Identity.DirectoryIndexGrainState")]
+public sealed class DirectoryIndexGrainState {
+    /// <summary>The ids, in the order they were added.</summary>
+    [Id(0)]
+    public List<Guid> Ids { get; set; } = [];
 }

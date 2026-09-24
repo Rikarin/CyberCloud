@@ -9,7 +9,8 @@ namespace CyberCloud.Identity.Host.Tests;
 
 /// <summary>
 ///     #43's grain calls, made by the identity host running as its own process: the device flow's
-///     begin, answer, poll and redemption, and an invitation described and accepted.
+///     begin, answer, poll and redemption, and an invitation described and accepted — and #41's:
+///     an issued client secret verified at <c>/token</c>, and a revoked invitation described.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -121,7 +122,108 @@ public sealed class IdentityHostInItsOwnProcessTests(MailpitIdentityHostFixture 
         (await DescribeAsync(colleague, second, secondSecret)).GetProperty("status").GetString().ShouldBe("withdrawn");
     }
 
+    /// <summary>
+    ///     #41's grain calls the identity host makes, across the same boundary: an issued client
+    ///     secret checked by <c>IApplicationGrain.VerifyClientSecretAsync</c> at <c>/token</c>, with
+    ///     <c>ApplicationRegistration.ClientSecretIssuedAt</c> read off a registration that came
+    ///     across; and a revoked invitation's new status, read off an <c>Invitation</c> that did.
+    /// </summary>
+    [Fact]
+    public async Task AnIssuedClientSecretAndARevokedInvitationWorkThroughAHostInItsOwnProcess() {
+        await using var host = await IdentityHostProcess.StartAsync(
+            [.. fixture.ClusterClientSettings(), $"--{IdentityHostOptions.SectionName}:SignInPageBaseUri={IdentityHostFixture.SignInPageBaseUri}"],
+            Ct
+        );
+
+        // ── A confidential client whose secret the platform issued, as the admin API does. ───────
+        var applicationId = Guid.NewGuid();
+        var clientId = Guid.NewGuid().ToString("D");
+        var clientSecret = Secret();
+        const string redirectUri = "https://acme.example/process/cb";
+        var app = fixture.For(Tenant).GetGrain<IApplicationGrain>(GrainKeys.Application(applicationId));
+
+        (await app.CreateAsync(
+            new() {
+                ClientId = clientId,
+                DisplayName = "Across processes",
+                RedirectUris = [redirectUri],
+                AllowedGrants = [GrantType.AuthorizationCode, GrantType.RefreshToken],
+                AllowedScopes = [.. Scope.Split(' ')],
+                IsPublicClient = false
+            }
+        )).IsSuccess.ShouldBeTrue();
+        (await app.IssueClientSecretAsync(clientSecret)).IsSuccess.ShouldBeTrue();
+
+        var person = await fixture.SignInFreshPersonAsync(IdentityHostFixture.SignInPageBaseUri, host.BaseAddress);
+
+        using (person.Browser) {
+            var (verifier, challenge) = BrowserClient.Pkce();
+            var authorize = IdentityHostOpenIddict.AuthorizationPath
+                + "?response_type=code&client_id=" + clientId
+                + "&redirect_uri=" + Uri.EscapeDataString(redirectUri)
+                + "&scope=" + Uri.EscapeDataString(Scope)
+                + "&state=s-process&code_challenge=" + challenge + "&code_challenge_method=S256&nonce=n-process"
+                + "&tenant=" + IdentityHostFixture.Slug;
+
+            using (await person.Browser.GetAsync(authorize, Ct)) { }
+
+            person.Browser.Origin = IdentityHostFixture.SignInPageBaseUri;
+
+            using var allowed = await person.Browser.PostFormAsync(
+                IdentityHostOpenIddict.AuthorizationPath,
+                new Dictionary<string, string>(BrowserClient.Query(new Uri("http://x" + authorize)), StringComparer.Ordinal) {
+                    [AuthorizeApi.ConsentParameter] = "allow"
+                },
+                Ct
+            );
+
+            var code = BrowserClient.Query(BrowserClient.Location(allowed))["code"];
+            using var server = new BrowserClient(host.BaseAddress, "https://acme.example");
+
+            using (var wrong = await ExchangeAsync(server, code, verifier, clientId, redirectUri, "not-the-secret")) {
+                wrong.StatusCode.ShouldBe(HttpStatusCode.Unauthorized, await wrong.Content.ReadAsStringAsync(Ct) + host.Output);
+            }
+
+            using var exchanged = await ExchangeAsync(server, code, verifier, clientId, redirectUri, clientSecret);
+
+            exchanged.StatusCode.ShouldBe(HttpStatusCode.OK, await exchanged.Content.ReadAsStringAsync(Ct) + host.Output);
+        }
+
+        // ── A revoked invitation reads `revoked` on the page the out-of-process host serves. ─────
+        var invitationId = Guid.NewGuid();
+        var secret = Secret();
+
+        await InviteAsync(invitationId, $"revoked-{Guid.NewGuid():N}@grants.example", secret);
+        (await fixture.For(Tenant).GetGrain<IInvitationGrain>(GrainKeys.Invitation(invitationId)).RevokeAsync())
+            .IsSuccess.ShouldBeTrue();
+
+        using var colleague = new BrowserClient(host.BaseAddress, IdentityHostFixture.SignInPageBaseUri);
+
+        (await DescribeAsync(colleague, invitationId, secret)).GetProperty("status").GetString().ShouldBe("revoked", host.Output);
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
+
+    static Task<HttpResponseMessage> ExchangeAsync(
+        BrowserClient client,
+        string code,
+        string verifier,
+        string clientId,
+        string redirectUri,
+        string secret
+    ) =>
+        client.PostFormAsync(
+            IdentityHostOpenIddict.TokenPath,
+            new Dictionary<string, string>(StringComparer.Ordinal) {
+                ["grant_type"] = "authorization_code",
+                ["client_id"] = clientId,
+                ["redirect_uri"] = redirectUri,
+                ["code"] = code,
+                ["code_verifier"] = verifier,
+                ["client_secret"] = secret
+            },
+            Ct
+        );
 
     static async Task<JsonElement> StartDeviceAsync(HttpClient device, IdentityHostProcess host) {
         using var started = await device.PostAsync(

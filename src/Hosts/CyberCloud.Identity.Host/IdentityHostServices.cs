@@ -103,6 +103,8 @@ public static class IdentityHostServices {
         services.TryAddSingleton<TenantHint>();
         services.TryAddSingleton<FirstPartyClients>();
         services.TryAddSingleton<IClientResolver, ClientResolver>();
+        // #41: a confidential tenant client's secret, issued (a digest in the grain) or vaulted.
+        services.TryAddSingleton<ClientSecretVerifier>();
         services.TryAddSingleton<AuthorizeApi>();
         services.TryAddSingleton<ConsentApi>();
         services.TryAddSingleton<DeviceApi>();

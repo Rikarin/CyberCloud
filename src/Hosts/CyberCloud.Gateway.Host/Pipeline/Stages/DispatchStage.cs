@@ -40,11 +40,14 @@ sealed class DispatchStage(
     IRoleAssignmentManager roles,
     IResourceGraphQuery graph,
     IInvitationManager invitations,
+    IIdentityAdministration identityAdministration,
     IOperationReader operations,
     IHubTicketStore tickets,
     GatewayOptions options
 )
     : IGatewayStage {
+    readonly IdentityDispatch identity = new(invitations, identityAdministration);
+
     /// <inheritdoc />
     public GatewayStage Stage => GatewayStage.Dispatch;
 
@@ -65,7 +68,7 @@ sealed class DispatchStage(
             RouteKind.RoleAssignment => await RoleAssignmentAsync(context, path, cancellationToken),
             RouteKind.RoleAssignmentCollection => await RoleAssignmentCollectionAsync(context, path, cancellationToken),
             RouteKind.ResourceGraphQuery => await ResourceGraphQueryAsync(context, path, cancellationToken),
-            RouteKind.Invitation => await InvitationAsync(context, path, cancellationToken),
+            RouteKind.Identity => await identity.DispatchAsync(context, path, cancellationToken),
             RouteKind.Collection => await CollectionAsync(context, path, cancellationToken),
             RouteKind.Action => await ActionAsync(context, path, cancellationToken),
             // A hub request leaves the pipeline here and is served by SignalR's own middleware; the
@@ -485,57 +488,6 @@ sealed class DispatchStage(
     ///         and <c>ResourceGraphAddress</c>'s remarks say why a URL is not where one goes.
     ///     </para>
     /// </remarks>
-    /// <summary>
-    ///     An invitation — straight to <c>IInvitationManager</c>, which owns the <c>assignRole</c>
-    ///     check. Issue #43, step 7.
-    /// </summary>
-    /// <remarks>
-    ///     ⚠ <b>No check here, for the reason this type's remarks give.</b> The body is parsed for its
-    ///     one field and nothing else; the tenant is the token's, rebuilt into the address; the
-    ///     answer is <c>201</c> with the invitation — its id, the user it created and when its link
-    ///     expires — and never the link, which went to the address and nowhere else.
-    /// </remarks>
-    async Task<GatewayOutcome> InvitationAsync(
-        GatewayRequestContext context,
-        string path,
-        CancellationToken cancellationToken
-    ) {
-        if (!HttpMethods.IsPost(context.Http.Request.Method)) {
-            return new GatewayOutcome {
-                StatusCode = StatusCodes.Status405MethodNotAllowed,
-                Error = new(
-                    ErrorCode.InvalidRequestBody,
-                    $"{context.Http.Request.Method} is not supported on the invitations address. An invitation is "
-                    + """a POST with { "email": "…" } as the body — docs/plan/11 § Sign-up and tenant creation."""
-                )
-            }.WithHeader(GatewayHeaders.Allow, "POST");
-        }
-
-        var email = InvitationBody.Email(context.Body);
-
-        if (email.TryGetError(out var bodyError)) {
-            return ResultShaper.Shape(bodyError, path);
-        }
-
-        var invited = await invitations.InviteAsync(
-            new() {
-                TenantId = context.Route.Invitations.TenantId,
-                Email = email.GetValueOrThrow(),
-                // ⚠ The caller as stages 2 and 3 established it, tenant included.
-                Caller = context.Caller
-            },
-            cancellationToken
-        );
-
-        if (invited.TryGetError(out var error)) {
-            return ResultShaper.Shape(error, path);
-        }
-
-        return new() {
-            StatusCode = StatusCodes.Status201Created, Json = ResponseBodies.Invitation(invited.GetValueOrThrow())
-        };
-    }
-
     async Task<GatewayOutcome> ResourceGraphQueryAsync(
         GatewayRequestContext context,
         string path,

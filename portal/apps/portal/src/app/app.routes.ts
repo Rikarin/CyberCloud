@@ -153,6 +153,26 @@ export const appRoutes: Routes = [
     title: 'Access'
   },
   {
+    // The identity administration area (#41): tenant-wide, so beside `subscriptions` rather than
+    // under one. The three share a tab strip, not a route parameter.
+    path: 'identity/members',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/identity/members').then(m => m.IdentityMembers),
+    title: 'Members'
+  },
+  {
+    path: 'identity/applications',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/identity/applications').then(m => m.IdentityApplications),
+    title: 'Applications'
+  },
+  {
+    path: 'identity/sessions',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/identity/sessions').then(m => m.IdentitySessions),
+    title: 'My sessions'
+  },
+  {
     path: 'operations/:operationId',
     canActivate: [authGuard],
     loadComponent: () => import('../pages/operations/operation-view').then(m => m.OperationView),

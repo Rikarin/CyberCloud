@@ -258,6 +258,29 @@ public sealed record ApplicationRegistration {
     /// <summary>When it was registered.</summary>
     [Id(10)]
     public DateTimeOffset CreatedAt { get; init; }
+
+    /// <summary>
+    ///     When the platform last issued this client's secret, or <see langword="null" /> when it
+    ///     never has. Issue #41.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The second of two ways a confidential client holds a secret, and the one the
+    ///         administration API makes.</b> <see cref="ClientSecretRef" /> points into a vault the
+    ///         platform reads the value back from, which is right for a value somebody else chose.
+    ///         A secret the platform mints itself — 256 random bits, shown to its owner once —
+    ///         never has to be read back, only compared, so the application grain keeps its SHA-256
+    ///         and <c>IApplicationGrain.VerifyClientSecretAsync</c> compares. The digest is in the
+    ///         grain's state and never on this record, as a password hash is on
+    ///         <c>UserProfile</c>'s grain and never on the profile.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Set by the grain, never taken from a caller: <c>CreateAsync</c> and
+    ///         <c>UpdateAsync</c> keep the stored value whatever the body says.
+    ///     </para>
+    /// </remarks>
+    [Id(11)]
+    public DateTimeOffset? ClientSecretIssuedAt { get; init; }
 }
 
 /// <summary>
@@ -608,6 +631,14 @@ public sealed record Invitation {
     /// <summary>When it was accepted, or <see langword="null" />.</summary>
     [Id(9)]
     public DateTimeOffset? AcceptedAt { get; init; }
+
+    /// <summary>When the last mail went — the first, or the latest resend. Issue #41.</summary>
+    [Id(10)]
+    public DateTimeOffset SentAt { get; init; }
+
+    /// <summary>How many mails the invitation has sent, the first included. Issue #41.</summary>
+    [Id(11)]
+    public int Sendings { get; init; }
 }
 
 /// <summary>

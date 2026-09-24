@@ -158,21 +158,23 @@ public sealed class ProviderRegistry : IProviderRegistry {
                 );
             }
 
-            // ⚠ THE FOURTH RESERVATION (#43), FOR THE RESOURCE GRAPH'S REASON: the gateway routes
-            // everything under /providers/CyberCloud.Identity/ to the invitation manager before it
-            // looks at the registry (InvitationAddress), so a provider that registered the namespace
-            // would have every type it declared answered as "not the invitations address".
+            // ⚠ THE FOURTH RESERVATION (#43, widened by #41), FOR THE RESOURCE GRAPH'S REASON: the
+            // gateway routes everything under /providers/CyberCloud.Identity/ to the identity
+            // administration API before it looks at the registry (IdentityAddress), so a provider
+            // that registered the namespace would have every type it declared answered as "not an
+            // identity address".
             if (string.Equals(
                     provider.ProviderNamespace,
-                    InvitationAddress.ProviderNamespace,
+                    IdentityAddress.ProviderNamespace,
                     StringComparison.OrdinalIgnoreCase
                 )) {
                 throw new InvalidOperationException(
                     $"Provider '{provider.ProviderNamespace}' declares the reserved namespace "
-                    + $"'{InvitationAddress.ProviderNamespace}'. The one address under it is where a "
-                    + "tenant invites a member — docs/plan/11 § Sign-up and tenant creation — and the "
-                    + "gateway routes it before it looks at the registry, so no type this provider "
-                    + "declared could ever be reached. See InvitationAddress.ProviderNamespace."
+                    + $"'{IdentityAddress.ProviderNamespace}'. The addresses under it are the tenant's "
+                    + "directory — invitations, members, applications and the caller's sessions, "
+                    + "docs/plan/11 § The object model — and the gateway routes them before it looks at "
+                    + "the registry, so no type this provider declared could ever be reached. See "
+                    + "IdentityAddress.ProviderNamespace."
                 );
             }
 

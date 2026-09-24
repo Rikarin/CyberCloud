@@ -417,6 +417,39 @@ public interface IApplicationGrain : IGrainWithStringKey {
     /// </returns>
     Task<Result<bool>> IsRegisteredRedirectUriAsync(string redirectUri);
 
+    /// <summary>
+    ///     Makes <paramref name="secret" /> this confidential client's secret, replacing any the
+    ///     platform issued before. Issue #41.
+    /// </summary>
+    /// <param name="secret">
+    ///     The new secret. ⚠ A parameter, digested here and never stored or returned — the caller
+    ///     minted it and shows it to its owner once, as <c>IInvitationGrain.CreateAsync</c> takes a
+    ///     link's secret.
+    /// </param>
+    /// <returns>
+    ///     The registration with <see cref="ApplicationRegistration.ClientSecretIssuedAt" /> set;
+    ///     <see cref="ErrorCode.ResourceNotFound" /> for one never registered;
+    ///     <see cref="ErrorCode.InvalidRequestBody" /> for a public client, which holds no secret, or
+    ///     for a secret shorter than 32 characters.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ The old secret stops working in the same turn. There is no overlap window: a client
+    ///     rotating in place is refused between the rotation and its redeploy. Two live secrets —
+    ///     Entra's answer — is owed, docs/plan/11 § Protocol.
+    /// </remarks>
+    Task<Result<ApplicationRegistration>> IssueClientSecretAsync(string secret);
+
+    /// <summary>
+    ///     Whether <paramref name="presented" /> is the secret the platform issued this client, compared
+    ///     in constant time. Issue #41.
+    /// </summary>
+    /// <param name="presented">What the client sent as <c>client_secret</c>.</param>
+    /// <returns>
+    ///     <c>true</c> only when a secret was issued and this is it;
+    ///     <see cref="ErrorCode.ResourceNotFound" /> for a registration that doesn't exist.
+    /// </returns>
+    Task<Result<bool>> VerifyClientSecretAsync(string presented);
+
     /// <summary>Deletes the registration.</summary>
     Task<Result> DeleteAsync();
 
