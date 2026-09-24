@@ -69,9 +69,15 @@ assertions:
       A connect against a converged console produces a running pod, and bytes written to the terminal
       hub for the returned sessionId come back as terminal output; a resize reaches the terminal
       (`stty size` reads it back) and a reconnect is replayed the session's output ring. Driven over
-      the real gateway, a real silo and a real kubelet by
-      CyberCloud.Gateway.Host.Cluster.Conformance § TerminalOverTheGatewayTests, and at the stream
-      layer alone by CyberCloud.Kubernetes.Tests § PodAttachTests.
+      the gateway's stages and a resource manager composed as the gateway's is (no cluster
+      connection: connect is relayed to IClusterActionGrain on the silo), a real silo reaching the
+      cluster through the cluster connection grain, and a real kubelet, by
+      CyberCloud.Gateway.Host.Cluster.Conformance § TerminalOverTheGatewayTests; at the stream layer
+      alone by CyberCloud.Kubernetes.Tests § PodAttachTests; and the session's failure branches (a
+      refused attach, a cluster that stops answering, a stream that keeps dropping, an exit) against
+      a scripted pod by CyberCloud.ResourceManager.Tests § TerminalSessionGrainTests. ⚠ The gateway
+      and the silo share one process in that suite — see
+      `the-session-grain-has-not-crossed-a-process-boundary`.
   - id: a-session-belongs-to-the-person-who-opened-it
     says: >
       The caller of connect owns the session. Another person in the same tenant — even one holding
@@ -200,13 +206,31 @@ owed:
       The per-tenant cap has the same shape and is already safe: its slots are leased and lapse.
   - id: the-session-grain-has-not-crossed-a-process-boundary
     says: >
-      Every test of the session grain runs the gateway's Orleans client and the silo in one process
-      (TestCluster), which shares one type manifest and hides a missing [Alias] — the defect #39's
-      shard-map confirmation shipped with. The wire surface was written for the crossing
-      (TerminalSessionSpec, TerminalSessionStatus, ITerminalSessionGrain, ITerminalSessionLimitGrain
-      and ITerminalViewer all carry aliases, none of them generic), and the AppHost suite that WOULD
-      cross it binds fixed ports shared with every agent on the build machine, so it was not run for
-      this row. The first `connect` against a running AppHost is the check still owed.
+      Every test of the session grain and of the action relay runs the gateway's Orleans client and
+      the silo in one process (TestCluster), which shares one type manifest and hides a missing
+      [Alias] — the defect #39's shard-map confirmation shipped with. The wire surface was written for
+      the crossing: TerminalSessionSpec, TerminalSessionStatus, TerminalSessionPhase,
+      ITerminalSessionGrain, ITerminalSessionLimitGrain, ITerminalViewer and IClusterActionGrain all
+      carry aliases, none of them is generic, and
+      ResourceManagerSerializationTests.EveryWireTypeInThisAssemblyCarriesAStableAlias checks the types
+      and enums. ⚠ That check is what caught TerminalSessionPhase shipping without one in the review of
+      #22 — the claim "every new wire type carries an alias" had been made without running it. The
+      AppHost suite that WOULD cross the boundary binds fixed ports shared with every agent on the
+      build machine, so it was not run for this row. The first `connect` against a running AppHost —
+      a relayed action and a session grain reached from the gateway process — is the check still
+      owed.
+  - id: a-relayed-action-reads-the-silos-vault
+    says: >
+      The gateway relays every synchronous action on a RequiresCluster type to IClusterActionGrain on
+      a silo (review of #22: a deployed gateway composes no cluster connection, and the connection
+      grain refuses a client caller, so every such action — connect included — was refused there by
+      name). The handler then runs with the SILO's seams, and the one that differs between the two
+      hosts is ISecretResolver: the gateway registers OpenBao when CyberCloud:Vault is configured and
+      the silo never does. So a `listKeys` on a RequiresCluster type that reads a vault path is now
+      refused by UnavailableSecretResolver's own message on the silo rather than by the dispatcher's
+      "no connection" message in the gateway — refused before and after, but for a new reason.
+      connect reads no secret. Closing it is the vault registered on the silo too, which is a
+      deployment decision about where OpenBao credentials may live.
   - id: keystrokes-are-not-rechecked
     says: >
       Attach asks ReBAC, fully consistent, every time; Send and Resize check only that the caller is

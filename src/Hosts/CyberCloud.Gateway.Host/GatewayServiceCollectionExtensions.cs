@@ -12,6 +12,7 @@ using CyberCloud.Identity.Validation;
 using CyberCloud.Kubernetes.Contracts.Tunnel;
 using CyberCloud.Kubernetes.Tunnel;
 using CyberCloud.ResourceManager;
+using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ServiceDefaults.RateLimiting;
 using CyberCloud.Tenancy;
 using CyberCloud.Tenancy.Directory;
@@ -131,6 +132,15 @@ static class GatewayServiceCollectionExtensions {
         // resolves both here so that a host that forgot this line fails in a test rather than on the
         // first send.
         services.AddCyberCloudCommunicationClient();
+
+        // ⚠ AN ACTION THAT NEEDS A CLUSTER RUNS ON A SILO, AND THIS LINE IS WHAT SENDS IT THERE.
+        // This host's IClusterConnectionFactory is the refusing default, and it has to stay one: the
+        // cluster connection grain refuses a client caller, because its tenancy check can only see a
+        // calling grain's tenant. So ActionDispatcher hands an action on a RequiresCluster type to
+        // IClusterActionGrain, a tenant-qualified worker on a silo, where the connection is. Without
+        // it, `connect` on a cloud console and `start` on a virtual machine are refused here by name
+        // before their handlers run. HostCompositionTests pins the composed result.
+        services.TryAddSingleton<IClusterActionRelay, GrainClusterActionRelay>();
 
         // ── SignalR. docs/plan/10 § SignalR — no backplane product, by design. ──
         //

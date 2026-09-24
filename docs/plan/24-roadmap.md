@@ -175,10 +175,14 @@ seam by design and the credential's path out is `listKeys` reading the operator'
 
 ⚠ **Step 6's terminal half runs under test since 2026-09-23 (#22, for #43); its identity half does not
 exist.** `CyberCloud.Gateway.Host.Cluster.Conformance § TerminalOverTheGatewayTests` creates a
-`Terminal/consoles` on a real k3s, calls `connect` through the real gateway, opens `/hubs/terminal` with
-a ticket, and types into the shell: an `echo` round-trips, `stty size` reads back a resize, a reconnect
-is replayed the ring, an idle shell is reclaimed with its home volume kept, and another person, another
-tenant and a revoked role are refused. What the sentence says that the test does not: "`psql` into it
+`Terminal/consoles` on a real k3s, calls `connect` through the gateway's stages and a resource manager
+composed as the gateway's is — no cluster connection, so the action is relayed to a silo, as it must be
+in a deployment (the review of #22 found a deployed gateway refused every `connect` before the relay) —
+opens `/hubs/terminal` with a ticket, and types into the shell: an `echo` round-trips, `stty size`
+reads back a resize, a reconnect is replayed the ring, an idle shell is reclaimed with its home volume
+kept, and another person, another tenant and a revoked role are refused. ⚠ The gateway and the silo
+share one process in that suite; the real hosts' crossing is owed
+(`the-session-grain-has-not-crossed-a-process-boundary`). What the sentence says that the test does not: "`psql` into it
 **using a managed identity**". The shell the test runs carries `psql` because its stand-in image does
 (no image pipeline exists — [19 § The image](19-cloud-terminal-and-virtual-desktop.md)), and nothing
 lets a command in it act as the console's managed identity: no projected token in the pod, no workload

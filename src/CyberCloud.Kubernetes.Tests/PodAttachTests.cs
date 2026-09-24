@@ -68,9 +68,18 @@ public sealed class PodAttachTests(K3sFixture k3s) {
             // Drain what the shell printed on its way out.
         }
 
-        // The stream ended because the process did — and the pod with it, restartPolicy: Never.
+        // The stream ended because the process did — and the pod with it, restartPolicy: Never. The
+        // kubelet reports the phase a moment after the stream closes, so this waits for it rather than
+        // accepting Running, which would assert nothing.
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(60);
         var phase = await PhaseAsync(pod.Name);
-        phase.ShouldBeOneOf("Succeeded", "Running");
+
+        while (phase != "Succeeded" && DateTimeOffset.UtcNow < deadline) {
+            await Task.Delay(TimeSpan.FromSeconds(1), token);
+            phase = await PhaseAsync(pod.Name);
+        }
+
+        phase.ShouldBe("Succeeded", "`exit` ends the shell's one process, so the pod");
     }
 
     [Fact]

@@ -127,10 +127,13 @@ public sealed class TunnelEndToEndTests {
 
     [Fact]
     public void TheWireHasASpellingForEveryUnaryMemberOfTheClient() {
-        // Every IKubeApiClient member except the one stream (WatchAsync) and Dispose.
+        // Every IKubeApiClient member except the two streams and Dispose. AttachAsync is a socket the
+        // tunnel refuses by name (TunnelKubeApiClient), so it has no operation to spell.
         var unary = typeof(IKubeApiClient)
             .GetMethods()
-            .Where(static x => x.Name != nameof(IKubeApiClient.WatchAsync) && x.Name != nameof(IDisposable.Dispose))
+            .Where(static x => x.Name is not (nameof(IKubeApiClient.WatchAsync)
+                or nameof(IKubeApiClient.AttachAsync)
+                or nameof(IDisposable.Dispose)))
             .Select(static x => x.Name)
             .Order()
             .ToArray();

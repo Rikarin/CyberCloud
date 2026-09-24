@@ -64,12 +64,19 @@ namespace CyberCloud.ResourceManager.Actions;
 ///     Where <c>connect</c> registers the terminal session it starts, or <see langword="null" /> for
 ///     the refusing default. <c>AddCyberCloudResourceManager</c> registers the grain-backed one.
 /// </param>
+/// <param name="relay">
+///     Where an action goes when its type declares <c>RequiresCluster</c> and
+///     <paramref name="clusters" /> has no connection for it: <see cref="GrainClusterActionRelay" /> in
+///     the gateway, <see langword="null" /> everywhere else. ⚠ Only the gateway registers one. It
+///     can't reach a cluster and a silo can; <see cref="IClusterActionGrain" /> says why.
+/// </param>
 public sealed class ActionDispatcher(
     IServiceProvider services,
     IClusterConnectionFactory clusters,
     ISecretResolver secrets,
     IAgentTunnels? agents = null,
-    ITerminalSessions? terminals = null
+    ITerminalSessions? terminals = null,
+    IClusterActionRelay? relay = null
 ) {
     /// <summary>Runs one action and returns its response body.</summary>
     /// <param name="id">The resource, with its GUID resolved.</param>
@@ -84,7 +91,7 @@ public sealed class ActionDispatcher(
     /// </param>
     /// <param name="cancellationToken">Cancels the invocation.</param>
     /// <returns>The response JSON, or a failure.</returns>
-    public async Task<Result<string>> InvokeAsync(
+    public Task<Result<string>> InvokeAsync(
         ResourceId id,
         ResourceTypeRegistration registration,
         ActionRegistration action,
@@ -92,6 +99,41 @@ public sealed class ActionDispatcher(
         JsonElement body,
         CallerContext? caller = null,
         CancellationToken cancellationToken = default
+    ) =>
+        InvokeCoreAsync(id, registration, action, input, body, caller, relay, cancellationToken);
+
+    /// <summary>
+    ///     Runs one action in this process and never relays it, which is what
+    ///     <see cref="ClusterActionGrain" /> does with an action the gateway relayed.
+    /// </summary>
+    /// <param name="id">The resource, with its GUID resolved.</param>
+    /// <param name="registration">The resource type, for the cluster requirement.</param>
+    /// <param name="action">The action, which names the handler and the response shape.</param>
+    /// <param name="input">The resource as stored.</param>
+    /// <param name="body">The validated <c>POST</c> body.</param>
+    /// <param name="caller">Who asked, handed to the handler as <see cref="ActionContext.Caller" />.</param>
+    /// <param name="cancellationToken">Cancels the invocation.</param>
+    /// <returns>The response JSON, or a failure.</returns>
+    public Task<Result<string>> InvokeHereAsync(
+        ResourceId id,
+        ResourceTypeRegistration registration,
+        ActionRegistration action,
+        ReconcileInput input,
+        JsonElement body,
+        CallerContext? caller = null,
+        CancellationToken cancellationToken = default
+    ) =>
+        InvokeCoreAsync(id, registration, action, input, body, caller, null, cancellationToken);
+
+    async Task<Result<string>> InvokeCoreAsync(
+        ResourceId id,
+        ResourceTypeRegistration registration,
+        ActionRegistration action,
+        ReconcileInput input,
+        JsonElement body,
+        CallerContext? caller,
+        IClusterActionRelay? elsewhere,
+        CancellationToken cancellationToken
     ) {
         ArgumentNullException.ThrowIfNull(registration);
         ArgumentNullException.ThrowIfNull(input);
@@ -140,6 +182,13 @@ public sealed class ActionDispatcher(
         }
 
         var connection = clusters.Connect(input.ClusterId);
+
+        if (registration.RequiresCluster && connection is null && elsewhere is not null) {
+            // ⚠ The gateway's case. The handler was still resolved and checked above, so a gateway
+            // composed without it fails by name here; it then runs on a silo, where the connection is,
+            // and the silo's dispatcher checks the response against the declared shape.
+            return await elsewhere.InvokeAsync(id, action.Name, input, body, caller, cancellationToken);
+        }
 
         if (registration.RequiresCluster && connection is null) {
             return Result<string>.Failure(

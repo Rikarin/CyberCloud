@@ -25,16 +25,17 @@ namespace CyberCloud.ResourceManager.Terminals;
 ///         ⚠ <b>Kept alive by its timer while it holds a shell.</b> An idle activation is collected, and
 ///         a collected session grain is an idle timer that never fires — the precise way a million
 ///         abandoned tabs become a million pods. The timer is <c>KeepAlive</c> until the session ends
-///         and is disposed then, so an ended session is collected like any other idle grain.
+///         and its pod is gone, and is disposed then, so an ended session is collected like any other
+///         idle grain.
 ///     </para>
 ///     <para>
-///         ⚠ <b>In the resource manager and not in <c>CyberCloud.Providers.Terminal</c>, and the
-///         Architecture gate decided it.</b> Its first version lived in the provider and rule 8 of
-///         docs/plan/03 § Assembly graph rules refused it on the two constructor parameters below — a
-///         provider may not ask <see cref="IResourceAuthorizer" /> or open a connection through
-///         <see cref="IClusterConnectionFactory" /> outside a pass. <c>ConnectionGrain</c> is here for
-///         the same reason. The provider fills <see cref="TerminalSessionSpec" /> in Kubernetes terms and
-///         registers it through <see cref="ActionContext.Terminals" />; nothing here knows what a console is.
+///         ⚠ <b>In the resource manager and not in <c>CyberCloud.Providers.Terminal</c>, because the
+///         Architecture gate refuses it there.</b> Rule 8 of docs/plan/03 § Assembly graph rules
+///         forbids a provider to ask <see cref="IResourceAuthorizer" /> or open a connection through
+///         <see cref="IClusterConnectionFactory" /> outside a pass, and those are the two constructor
+///         parameters below. <c>ConnectionGrain</c> is here for the same reason. The provider fills
+///         <see cref="TerminalSessionSpec" /> in Kubernetes terms and registers it through
+///         <see cref="ActionContext.Terminals" />; nothing here knows what a console is.
 ///     </para>
 /// </remarks>
 /// <param name="clusters">Turns the resource's cluster id into a connection. The silo's own.</param>
@@ -81,6 +82,9 @@ public sealed class TerminalSessionGrain(
     /// <summary>How many times a dropped stream under a still-running shell is re-opened in a row.</summary>
     const int ReopenAttempts = 3;
 
+    /// <summary>How many idle ticks an ended session spends trying to delete its pod — five minutes.</summary>
+    const int ReclaimAttempts = 20;
+
     readonly OutputRing ring = new(RingBytes);
     readonly List<ITerminalViewer> viewers = [];
     readonly Dictionary<ITerminalViewer, List<byte[]>> joining = [];
@@ -98,6 +102,8 @@ public sealed class TerminalSessionGrain(
     DateTimeOffset lastActivityAt;
     int pendingBytes;
     int reopened;
+    bool reclaimOwed;
+    int reclaimAttempts;
     int columns = 80;
     int rows = 24;
 
@@ -319,7 +325,7 @@ public sealed class TerminalSessionGrain(
         if (terminal is { } open) {
             await ResizeOpenAsync(open);
         } else {
-            opening ??= OpenStreamAsync();
+            EnsureOpening();
         }
 
         return Result.Success;
@@ -359,6 +365,10 @@ public sealed class TerminalSessionGrain(
 
             pendingInput.Add(data);
             pendingBytes += data.Length;
+
+            // A keystroke after the stream gave up is a person asking for it again. While it's still
+            // opening this does nothing.
+            EnsureOpening();
             return Result.Success;
         }
 
@@ -417,85 +427,148 @@ public sealed class TerminalSessionGrain(
 
     // ── The stream ────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>Starts opening the stream, unless it's open or already being opened.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Checked by <see cref="Task.IsCompleted" />, not cleared by the opener.</b> An opener that
+    ///     cleared the field in a <c>finally</c> could finish before the assignment that stored it —
+    ///     every path through it can complete without yielding once no pane is listening — and would
+    ///     leave a finished task in the field, so no attach or keystroke ever opened the stream again.
+    /// </remarks>
+    void EnsureOpening() {
+        if (terminal is null && phase == TerminalSessionPhase.Registered && opening is not { IsCompleted: false }) {
+            opening = OpenStreamAsync();
+        }
+    }
+
     /// <summary>Waits for the pod to run, attaches, and starts the pump.</summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Only the pod decides that a session has ended.</b> A pod that finished, went away or
+    ///         never started ends it. A failure to reach the pod doesn't: an attach refused, a cluster
+    ///         that stopped answering or a silo with no connection leaves the session
+    ///         <see cref="TerminalSessionPhase.Registered" />, tells the panes, and the next attach or
+    ///         keystroke tries again. Ending it there would bind an ended grain to a pod that's still
+    ///         running under the same UID, which is the session id, and every later <c>connect</c>
+    ///         would be refused until somebody called <c>terminate</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><see cref="ErrorCode.OperationInProgress" /> is retried here.</b> It's the
+    ///         connection grain's answer for a cluster it can't reach right now — "a retry, not a
+    ///         refusal" — so the loop keeps asking until the start budget runs out.
+    ///     </para>
+    /// </remarks>
     async Task OpenStreamAsync() {
-        try {
-            var deadline = clock.UtcNow + StartBudget;
-            var started = DateTimeOffset.UtcNow;
+        var deadline = clock.UtcNow + StartBudget;
+        var started = DateTimeOffset.UtcNow;
+        string? unreachable = null;
 
-            while (phase != TerminalSessionPhase.Ended) {
-                var state = await PodStateAsync();
+        while (phase == TerminalSessionPhase.Registered) {
+            if (Cluster() is not { } cluster) {
+                await StreamFailedAsync("this silo has no connection to the shell's cluster");
+                return;
+            }
 
-                if (state.Ended is { } ended) {
-                    await EndAsync(ended, deletePod: state.Completed);
+            var state = await PodStateAsync(cluster);
+
+            if (state.Ended is { } ended) {
+                await EndAsync(ended, deletePod: state.Completed);
+                return;
+            }
+
+            unreachable = state.Unreadable;
+
+            if (state.Running) {
+                var attached = await cluster.AttachAsync(spec!.Pod, spec.Container);
+
+                if (attached.IsSuccess) {
+                    await StartAsync(attached.GetValueOrThrow());
                     return;
                 }
 
-                if (state.Running) {
-                    break;
+                var refusal = attached.Error!;
+
+                logger.LogWarning(
+                    "Terminal session {Session}: attaching to {Pod} failed ({Code}): {Message}",
+                    sessionId,
+                    spec.Pod,
+                    refusal.Code,
+                    refusal.Message
+                );
+
+                if (refusal.Code != ErrorCode.OperationInProgress) {
+                    await StreamFailedAsync("the platform could not attach to the shell: " + refusal.Message);
+                    return;
                 }
 
-                // ⚠ Wall-clock and the injected clock both bound the wait. The injected one is the
-                // platform's; the wall-clock one is here because a test clock that never moves would
-                // otherwise make this loop wait forever.
-                if (clock.UtcNow > deadline || DateTimeOffset.UtcNow - started > StartBudget) {
+                unreachable = refusal.Message;
+            }
+
+            // ⚠ Wall-clock and the injected clock both bound the wait. The injected one is the
+            // platform's; the wall-clock one is here because a test clock that never moves would
+            // otherwise make this loop wait forever.
+            if (clock.UtcNow > deadline || DateTimeOffset.UtcNow - started > StartBudget) {
+                if (unreachable is not null) {
+                    await StreamFailedAsync(
+                        $"the shell's cluster did not answer for {StartBudget.TotalMinutes:0} minutes ({unreachable})"
+                    );
+                } else {
                     await EndAsync(
                         $"the shell did not start within {StartBudget.TotalMinutes:0} minutes (the pod is {state.Phase})",
                         deletePod: true
                     );
-                    return;
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(1));
-            }
-
-            if (phase == TerminalSessionPhase.Ended) {
                 return;
             }
 
-            var cluster = Cluster();
-            if (cluster is null) {
-                await EndAsync("the shell's cluster has no connection from this silo", deletePod: false);
-                return;
-            }
-
-            var attached = await cluster.AttachAsync(spec!.Pod, spec.Container);
-
-            if (attached.TryGetError(out var attachError)) {
-                logger.LogError(
-                    "Terminal session {Session}: attaching to {Pod} failed: {Message}",
-                    sessionId,
-                    spec.Pod,
-                    attachError.Message
-                );
-
-                await EndAsync("the platform could not attach to the shell: " + attachError.Message, deletePod: false);
-                return;
-            }
-
-            var open = attached.GetValueOrThrow();
-
-            if (phase == TerminalSessionPhase.Ended) {
-                await open.DisposeAsync();
-                return;
-            }
-
-            terminal = open;
-            phase = TerminalSessionPhase.Open;
-
-            await ResizeOpenAsync(open);
-
-            foreach (var held in pendingInput) {
-                await open.WriteAsync(held);
-            }
-
-            pendingInput.Clear();
-            pendingBytes = 0;
-
-            _ = PumpAsync(open);
-        } finally {
-            opening = null;
+            await Task.Delay(TimeSpan.FromSeconds(1));
         }
+    }
+
+    /// <summary>Takes an opened stream: sizes it, sends what was typed meanwhile, and starts the pump.</summary>
+    /// <param name="open">The stream the attach returned.</param>
+    async Task StartAsync(IKubeTerminal open) {
+        if (phase != TerminalSessionPhase.Registered) {
+            await open.DisposeAsync();
+            return;
+        }
+
+        terminal = open;
+        phase = TerminalSessionPhase.Open;
+
+        await ResizeOpenAsync(open);
+
+        foreach (var held in pendingInput) {
+            await open.WriteAsync(held);
+        }
+
+        pendingInput.Clear();
+        pendingBytes = 0;
+
+        _ = PumpAsync(open);
+    }
+
+    /// <summary>
+    ///     Gives up on the stream for now without ending the session: the panes are told, and the next
+    ///     attach or keystroke tries again.
+    /// </summary>
+    /// <param name="reason">What went wrong, for the pane and the log.</param>
+    async Task StreamFailedAsync(string reason) {
+        if (phase == TerminalSessionPhase.Ended) {
+            return;
+        }
+
+        phase = TerminalSessionPhase.Registered;
+        reopened = 0;
+
+        // What was typed into a stream that never opened is dropped: sending it minutes later, when
+        // somebody reconnects, would run commands the person has stopped expecting.
+        pendingInput.Clear();
+        pendingBytes = 0;
+
+        logger.LogWarning("Terminal session {Session}: the stream is not open: {Reason}.", sessionId, reason);
+
+        await NoticeAsync($"\r\n[Cyber Cloud: {reason}. The shell is still there; type or reconnect to try again.]\r\n");
     }
 
     /// <summary>Reads the shell's output until the stream ends, then decides what the end meant.</summary>
@@ -541,17 +614,22 @@ public sealed class TerminalSessionGrain(
         // that dropped under a live shell (an API server restart, a network blip) has a pod still
         // Running with the same UID, and ending the session then would throw away a shell somebody
         // is in the middle of.
-        var state = await PodStateAsync();
+        phase = TerminalSessionPhase.Registered;
+
+        if (Cluster() is not { } cluster) {
+            await StreamFailedAsync("this silo has no connection to the shell's cluster");
+            return;
+        }
+
+        var state = await PodStateAsync(cluster);
 
         if (state.Ended is { } ended) {
             await EndAsync(ended, deletePod: state.Completed);
             return;
         }
 
-        phase = TerminalSessionPhase.Registered;
-
         if (++reopened > ReopenAttempts) {
-            await EndAsync("the stream to the shell kept dropping", deletePod: false);
+            await StreamFailedAsync("the stream to the shell kept dropping");
             return;
         }
 
@@ -562,7 +640,29 @@ public sealed class TerminalSessionGrain(
             ReopenAttempts
         );
 
-        opening ??= OpenStreamAsync();
+        // ⚠ Unconditionally, not through EnsureOpening: this pump can still be running inside the
+        // opener that started it, which isn't complete yet, and EnsureOpening would take that for an
+        // open in progress and do nothing. A second opener racing an attach's is harmless — StartAsync
+        // closes the stream that arrives second.
+        opening = OpenStreamAsync();
+    }
+
+    /// <summary>
+    ///     Writes a line from the platform to every live pane, outside the shell's own output — it is
+    ///     not kept in the replay ring.
+    /// </summary>
+    /// <param name="text">The line, with its own carriage returns.</param>
+    async Task NoticeAsync(string text) {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(text);
+
+        foreach (var viewer in viewers.ToArray()) {
+            try {
+                await viewer.OutputAsync(bytes);
+            } catch (Exception ex) when (ex is not OutOfMemoryException) {
+                viewers.Remove(viewer);
+                logger.LogDebug(ex, "Terminal session {Session}: a pane missed a notice.", sessionId);
+            }
+        }
     }
 
     async Task DeliverAsync(byte[] chunk) {
@@ -601,7 +701,15 @@ public sealed class TerminalSessionGrain(
     // ── The idle clock and the end ────────────────────────────────────────────────────────────
 
     async Task TickAsync(CancellationToken cancellationToken) {
-        if (phase == TerminalSessionPhase.Ended || spec is null) {
+        if (phase == TerminalSessionPhase.Ended) {
+            if (reclaimOwed) {
+                await ReclaimAsync();
+            }
+
+            return;
+        }
+
+        if (spec is null) {
             return;
         }
 
@@ -626,8 +734,8 @@ public sealed class TerminalSessionGrain(
     /// <param name="deletePod">
     ///     Whether to delete the pod. ⚠ <see langword="true" /> for an idle reclaim and for a shell that
     ///     exited — a finished pod left in place is one the next <c>connect</c> would apply unchanged and
-    ///     never run again — and <see langword="false" /> when the pod is already gone or this silo
-    ///     cannot reach its cluster.
+    ///     never run again — and <see langword="false" /> when the pod is already gone, going, or
+    ///     another session's.
     /// </param>
     async Task EndAsync(string reason, bool deletePod) {
         if (phase == TerminalSessionPhase.Ended) {
@@ -636,8 +744,6 @@ public sealed class TerminalSessionGrain(
 
         phase = TerminalSessionPhase.Ended;
         endedBecause = reason;
-        idleTimer?.Dispose();
-        idleTimer = null;
         pendingInput.Clear();
         pendingBytes = 0;
 
@@ -671,49 +777,92 @@ public sealed class TerminalSessionGrain(
             await Limit(spec.Resource.TenantId).ReleaseAsync(sessionId);
         }
 
-        if (deletePod && spec is not null && Cluster() is { } cluster) {
-            // ⚠ Through KubeCommand like the action's own apply, so the delete is labelled for the
+        reclaimOwed = deletePod && spec is not null;
+
+        if (reclaimOwed) {
+            await ReclaimAsync();
+        } else {
+            idleTimer?.Dispose();
+            idleTimer = null;
+        }
+    }
+
+    /// <summary>
+    ///     Deletes the ended session's pod, and keeps the timer alive to try again when the cluster
+    ///     doesn't take the delete.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Retried, because the failure it meets is usually a retry.</b> The connection grain
+    ///     answers a delete on a cluster it hasn't heard from within its staleness window with
+    ///     <see cref="ErrorCode.OperationInProgress" />, and a reclaim that gave up there would leave an
+    ///     idle pod running to its hard cap — hours of the cost the reclaim exists to stop. So the idle
+    ///     timer, which would otherwise be disposed with the session, keeps ticking until the delete
+    ///     lands or <see cref="ReclaimAttempts" /> have failed. After that the pod stops at its hard cap,
+    ///     and the next <c>connect</c> replaces it, since its session has ended.
+    /// </remarks>
+    async Task ReclaimAsync() {
+        var cluster = spec is null ? null : Cluster();
+        Result deleted;
+
+        if (cluster is null) {
+            deleted = Result.Failure(ErrorCode.InternalError, "this silo has no connection to the shell's cluster");
+        } else {
+            // ⚠ Through KubeCommand like the action's own apply, so the delete is labeled for the
             // tenant it is made on behalf of — the same spelling the provider's `terminate` uses.
-            var deleted = await KubeCommand.For(cluster)
-                .WithTenantId(spec.Resource.TenantId)
+            deleted = await KubeCommand.For(cluster)
+                .WithTenantId(spec!.Resource.TenantId)
                 .WithResourceId(spec.Resource)
                 .InNamespace(spec.Pod.Namespace)
                 .WithKind(spec.Pod.Kind)
                 .WithApiVersion(spec.ApiVersion)
                 .ObjectJson(new JsonObject { ["metadata"] = new JsonObject { ["name"] = spec.Pod.Name } }.ToJsonString())
                 .DeleteAsync(CascadePolicy.Foreground, CancellationToken.None);
+        }
 
-            if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
-                logger.LogError(
-                    "Terminal session {Session}: the shell's pod could not be deleted after the session "
-                    + "ended ({Reason}): {Message}. It stops at its hard cap.",
+        if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
+            if (++reclaimAttempts < ReclaimAttempts) {
+                logger.LogWarning(
+                    "Terminal session {Session}: the shell's pod could not be deleted yet ({Attempt}/{Max}): {Message}.",
                     sessionId,
-                    reason,
+                    reclaimAttempts,
+                    ReclaimAttempts,
                     deleteError.Message
                 );
+
+                return;
             }
+
+            logger.LogError(
+                "Terminal session {Session}: the shell's pod could not be deleted after the session ended "
+                + "({Reason}): {Message}. It stops at its hard cap, or at the next connect.",
+                sessionId,
+                endedBecause,
+                deleteError.Message
+            );
         }
+
+        reclaimOwed = false;
+        idleTimer?.Dispose();
+        idleTimer = null;
     }
 
     /// <summary>What the pod says about the shell.</summary>
+    /// <param name="cluster">The pod's cluster.</param>
     /// <returns>
-    ///     Whether it is running; the reason it has ended when it has; and whether the pod object is
-    ///     still there to be removed.
+    ///     Whether it's running; the reason it has ended when it has; whether the pod object is still
+    ///     there to be removed; its phase; and, when the pod couldn't be read at all, why.
     /// </returns>
-    async Task<(bool Running, string? Ended, bool Completed, string Phase)> PodStateAsync() {
-        var cluster = Cluster();
-        if (cluster is null) {
-            return (false, "the shell's cluster has no connection from this silo", false, "unknown");
-        }
-
+    async Task<(bool Running, string? Ended, bool Completed, string Phase, string? Unreadable)> PodStateAsync(
+        IKubeClusterConnection cluster
+    ) {
         var read = await cluster.GetAsync(spec!.Pod);
 
         if (read.TryGetError(out var readError)) {
             return readError.Code == ErrorCode.ResourceNotFound
-                ? (false, "the shell was terminated", false, "gone")
+                ? (false, "the shell was terminated", false, "gone", null)
                 // A read that failed says nothing about the shell. Treated as "not yet": the caller's
                 // budget bounds how long that can go on.
-                : (false, null, false, "unreadable: " + readError.Message);
+                : (false, null, false, "unreadable", readError.Message);
         }
 
         var pod = JsonNode.Parse(read.GetValueOrThrow().Json);
@@ -723,18 +872,18 @@ public sealed class TerminalSessionGrain(
         if (!string.Equals(uid, sessionId, StringComparison.Ordinal)) {
             // A pod of the same name with a different UID is a NEW shell — the console was reconnected
             // after this one was reclaimed — and it is not this session's to touch.
-            return (false, "the shell was replaced by a newer one", false, podPhase);
+            return (false, "the shell was replaced by a newer one", false, podPhase, null);
         }
 
         if (pod?["metadata"]?["deletionTimestamp"] is not null) {
-            return (false, "the shell was terminated", false, podPhase);
+            return (false, "the shell was terminated", false, podPhase, null);
         }
 
         return podPhase switch {
-            "Running" => (true, null, false, podPhase),
-            "Succeeded" => (false, "the shell exited", true, podPhase),
-            "Failed" => (false, "the shell stopped: " + (pod?["status"]?["reason"]?.GetValue<string>() ?? "Failed"), true, podPhase),
-            _ => (false, null, false, podPhase)
+            "Running" => (true, null, false, podPhase, null),
+            "Succeeded" => (false, "the shell exited", true, podPhase, null),
+            "Failed" => (false, "the shell stopped: " + (pod?["status"]?["reason"]?.GetValue<string>() ?? "Failed"), true, podPhase, null),
+            _ => (false, null, false, podPhase, null)
         };
     }
 

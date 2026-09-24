@@ -7,8 +7,8 @@ namespace CyberCloud.ResourceManager.Contracts;
 // ⚠ THE PLATFORM'S AND NOT THE PROVIDER'S, AND docs/plan/03 § Assembly graph rules, RULE 8, IS WHY.
 // A session re-asks ReBAC on every attach and holds a cluster stream outside any reconcile pass — so
 // its grain needs IResourceAuthorizer and IClusterConnectionFactory, the two seams rule 8 forbids a
-// Providers.* assembly to name. It was first written inside CyberCloud.Providers.Terminal and the
-// Architecture gate refused it on exactly those two types. So the grain lives beside ConnectionGrain,
+// Providers.* assembly to name, and the Architecture gate refuses the grain in
+// CyberCloud.Providers.Terminal on exactly those two types. So the grain lives beside ConnectionGrain,
 // which is here for the same reason (it needs the enforcement seam), and a provider reaches it the way
 // listInstallCommand reaches the agent tunnel: through a seam on ActionContext —
 // ActionContext.Terminals. Nothing below knows what a console is; the provider fills the spec.
@@ -31,7 +31,7 @@ public sealed record TerminalSessionSpec {
     [Id(0)]
     public ResourceId Resource { get; init; }
 
-    /// <summary>The api-version the resource was reached at — what a reclaim's delete is labelled with.</summary>
+    /// <summary>The api-version the resource was reached at — what a reclaim's delete is labeled with.</summary>
     [Id(1)]
     public string ApiVersion { get; init; } = string.Empty;
 
@@ -105,20 +105,30 @@ public sealed class UnavailableTerminalSessions : ITerminalSessions {
 }
 
 /// <summary>Where a session is in its life.</summary>
+/// <remarks>
+///     ⚠ A field of <see cref="TerminalSessionStatus" />, so it crosses the gateway→silo boundary and
+///     carries a stable alias like every enum in <c>ResourceManagerEnums.cs</c>.
+/// </remarks>
+[Alias("CyberCloud.ResourceManager.TerminalSessionPhase")]
 public enum TerminalSessionPhase {
     /// <summary>Nothing has registered this session — no <c>connect</c> named it.</summary>
     Unknown = 0,
 
-    /// <summary><c>connect</c> named it and nobody has attached yet, or the stream is being opened.</summary>
+    /// <summary>
+    ///     <c>connect</c> named it and the stream isn't open: nobody has attached yet, the stream is
+    ///     being opened, or the last attempt failed and the next attach or keystroke tries again.
+    /// </summary>
     Registered = 1,
 
     /// <summary>The attach stream is open and output is flowing.</summary>
     Open = 2,
 
     /// <summary>
-    ///     The shell is gone — it exited, it was reclaimed after sitting idle, it hit its hard cap, or
-    ///     the pod was terminated. A session never comes back from here; the next <c>connect</c>
-    ///     starts a new pod and so a new session id.
+    ///     The shell is over — it exited, it was reclaimed after sitting idle, it never started, it hit
+    ///     its hard cap, or the pod was terminated. Only the pod decides this; failing to reach the pod
+    ///     leaves a session <see cref="Registered" />. A session never comes back from here, and the
+    ///     next <c>connect</c> starts a new pod, so a new session id, removing this one's pod if it
+    ///     still stands.
     /// </summary>
     Ended = 3
 }
@@ -234,8 +244,9 @@ public interface ITerminalSessionGrain : IGrainWithStringKey {
     /// <returns>
     ///     Success, including for the owner re-registering a live session. <see cref="ErrorCode.Conflict" />
     ///     when another person already holds it, and <see cref="ErrorCode.PreconditionFailed" /> when
-    ///     it has ended — a pod that has gone cannot be re-joined, and the next <c>connect</c> makes a
-    ///     new one.
+    ///     it has ended. ⚠ An ended session can't be re-joined, and its pod may still stand, so the
+    ///     caller of <c>connect</c> answers this by deleting the pod and registering the new one's
+    ///     UID. Otherwise every later <c>connect</c> would name the same ended session.
     /// </returns>
     [Alias("Open")]
     Task<Result> OpenAsync(TerminalSessionSpec spec, CallerContext owner);
@@ -250,9 +261,13 @@ public interface ITerminalSessionGrain : IGrainWithStringKey {
     /// <param name="rows">The pane's height in cells.</param>
     /// <returns>
     ///     Success once the replay has been delivered. <see cref="ErrorCode.ResourceNotFound" /> for a
-    ///     session nobody registered, for one registered to another person and for a caller who has
-    ///     lost the permission on the resource — one answer, so the hub is not an oracle for whose
-    ///     sessions exist — and <see cref="ErrorCode.PreconditionFailed" /> for one that has ended.
+    ///     session nobody registered and for one registered to another person — one answer, so the hub
+    ///     isn't an oracle for whose sessions exist. For the owner after losing
+    ///     <see cref="TerminalSessionSpec.Permission" />, the enforcement seam's own refusal:
+    ///     <see cref="ErrorCode.ResourceNotFound" /> without
+    ///     <see cref="TerminalSessionSpec.ReadPermission" />, <see cref="ErrorCode.AuthorizationFailed" />
+    ///     with it — the resource's rule, since the owner knows the session exists.
+    ///     <see cref="ErrorCode.PreconditionFailed" /> for one that has ended.
     /// </returns>
     [Alias("Attach")]
     Task<Result> AttachAsync(CallerContext caller, ITerminalViewer viewer, int columns, int rows);

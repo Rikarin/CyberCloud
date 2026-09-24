@@ -332,6 +332,66 @@ public sealed class ConsoleSessionTests {
         connection.Applied.Count(static x => x.Target.Kind.Kind == "Pod").ShouldBe(2);
     }
 
+    [Fact]
+    public async Task AnEndedSessionOverAPodThatStillStandsIsReplacedRatherThanLockingTheConsoleOut() {
+        // ⚠ Found by the review of #22. The session id is the pod's UID, so while an ended session's
+        // pod stands every connect names the same ended grain, and the grain refuses an ended session
+        // with PreconditionFailed. Before this, that was the answer to every connect until somebody
+        // called terminate: an idle reclaim whose delete didn't reach the cluster locked the console.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions {
+            First = new([Result.Failure(ErrorCode.PreconditionFailed, "This shell has ended (reclaimed).")])
+        };
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        var connected = await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions);
+        connected.IsSuccess.ShouldBeTrue(connected.Error?.Message);
+
+        sessions.Opened.Count.ShouldBe(2);
+        var (ended, replacement) = (sessions.Opened[0].Spec, sessions.Opened[1].Spec);
+
+        replacement.PodUid.ShouldNotBe(ended.PodUid, "the replacement is a new pod, so a new session");
+        Session(connected).ShouldBe(replacement.PodUid);
+        connection.Deleted.ShouldContain(x => x.Kind.Kind == "Pod");
+        connection.Objects.Keys.Count(static x => x.StartsWith("Pod/", StringComparison.Ordinal)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task OverTheTenantsCapThePodThisConnectStartedIsRemoved() {
+        // A refused connect that left a running shell behind would be the cost the cap exists to stop.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions {
+            Answer = Result.Failure(ErrorCode.QuotaExceeded, "This tenant already has 10 cloud shells running.")
+        };
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        var connected = await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions);
+
+        connected.IsSuccess.ShouldBeFalse();
+        connected.Error!.Code.ShouldBe(ErrorCode.QuotaExceeded);
+        connection.Objects.Keys.ShouldNotContain(x => x.StartsWith("Pod/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AConflictLeavesTheOtherPersonsShellRunning() {
+        // The other half of the cap's rule: a 409 means the pod is somebody's live shell.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions {
+            Answer = Result.Failure(ErrorCode.Conflict, "The shell is open for another person.")
+        };
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+        await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions);
+
+        connection.Deleted.ShouldBeEmpty();
+        connection.Objects.Keys.Count(static x => x.StartsWith("Pod/", StringComparison.Ordinal)).ShouldBe(1);
+    }
+
     static string Session(Result<string> connected) =>
         JsonNode.Parse(connected.GetValueOrThrow())![CloudConsoles.SessionIdField]!.GetValue<string>();
 }

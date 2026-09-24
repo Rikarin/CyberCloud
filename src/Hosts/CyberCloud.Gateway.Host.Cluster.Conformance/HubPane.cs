@@ -66,7 +66,7 @@ public sealed class HubPane : IAsyncDisposable {
 
     /// <summary>Invokes a hub method and waits for its completion.</summary>
     /// <param name="method">The wire name — one of <see cref="TerminalProtocol" />.</param>
-    /// <param name="arguments">The arguments, serialised as the JSON protocol does.</param>
+    /// <param name="arguments">The arguments, serialized as the JSON protocol does.</param>
     /// <returns>The completion's error, or <see langword="null" /> when the method succeeded.</returns>
     public async Task<string?> InvokeAsync(string method, params object[] arguments) {
         var id = Interlocked.Increment(ref nextInvocation).ToString(CultureInfo.InvariantCulture);

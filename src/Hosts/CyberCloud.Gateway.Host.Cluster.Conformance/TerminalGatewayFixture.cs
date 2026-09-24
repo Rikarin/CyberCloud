@@ -9,6 +9,7 @@ using CyberCloud.Gateway.Host.Pipeline.Stages;
 using CyberCloud.Gateway.Host.RateLimiting;
 using CyberCloud.Gateway.Host.Regions;
 using CyberCloud.Identity.Validation;
+using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.Terminal;
 using CyberCloud.Providers.Terminal.Conformance;
 using CyberCloud.Providers.Terminal.Contracts;
@@ -40,36 +41,37 @@ namespace CyberCloud.Gateway.Host.Cluster.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The gateway's resource manager is its own, because in production it is.</b> A
-///         synchronous action runs inside the process that serves the request — the gateway — and
-///         <c>connect</c>'s handler runs there, reaching the silo's session grain through this
-///         process's Orleans client. The harness's own manager would do the same through its own
-///         handler container, which has no shell image configured; this one carries
-///         <see cref="CloudShellImageOptions" /> the way a deployment's configuration would.
+///         ⚠ <b>The gateway's resource manager is composed as <c>AddCyberCloudGateway</c> composes it:
+///         no cluster connection, and a relay.</b> A synchronous action runs inside the process that
+///         serves the request, and this gateway, like the real one, can't reach a cluster —
+///         <see cref="NoClusterConnectionFactory" /> — so <c>connect</c> is relayed to
+///         <see cref="IClusterActionGrain" /> in the silo, which runs the handler there.
+///         <c>HostCompositionTests.TheGatewayRelaysAClusterActionAndTheSiloRunsItItself</c> pins the
+///         same two registrations on the real host. ⚠ Handing this gateway a direct connection instead
+///         would pass every test here and hide the reason a real gateway without the relay refuses
+///         every <c>connect</c>.
+///     </para>
+///     <para>
+///         ⚠ <b>The silo reaches the cluster through the connection grain</b>, as
+///         <see cref="TerminalGatewayCase" /> composes it, and the connection grain is attached here
+///         for <see cref="ConformanceIds.Cluster" /> before the first test. So the attach is the
+///         production one end to end: session grain → dialer → the connection grain's tenancy check →
+///         a client built from the descriptor → <c>pods/attach</c>.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>What is substituted, and why none of it is under test.</b> Stage 2's token validator
 ///         is the gateway's own issued-token resolver rather than a JWKS one — the identity host is
 ///         not part of this story and its tokens are proven elsewhere; the scope, role-assignment and
-///         graph seams of stage 8 are substitutes no route here reaches. The ticket store, the hub,
-///         the grains and the cluster are all real.
+///         graph seams of stage 8 are substitutes no route here reaches. The kubeconfig comes from
+///         <see cref="TerminalGatewayCase.Kubeconfig" /> rather than a vault. The ticket store, the hub,
+///         the grains and the cluster are all real. ⚠ The gateway and the silo still share this
+///         process, as every <c>TestCluster</c> does, so the Orleans wire between them is the
+///         in-process one — <c>charts/managed/cloud-shell/conformance.yaml § owed</c>,
+///         <c>the-session-grain-has-not-crossed-a-process-boundary</c>.
 ///     </para>
 /// </remarks>
-public sealed class TerminalGatewayFixture : ClusterConformanceFixture<CloudConsoleCase>, IAsyncLifetime {
-    /// <summary>
-    ///     The shell image the story runs: PostgreSQL's Alpine image, by digest — <c>bash</c>,
-    ///     BusyBox's <c>stty</c> and <c>psql</c>.
-    /// </summary>
-    /// <remarks>
-    ///     ⚠ A stand-in for docs/plan/19's image, which nothing in this repository builds —
-    ///     <c>charts/managed/cloud-shell/conformance.yaml § owed</c>, <c>no-image-pipeline</c>. It is
-    ///     handed to the platform exactly as the real one will be: as
-    ///     <see cref="CloudShellImageOptions.Default" />, pinned.
-    /// </remarks>
-    public const string ShellImage =
-        "docker.io/library/postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24";
-
-    readonly IssuedTokenCallerContextResolver tokens = new(ClusterConformanceState<CloudConsoleCase>.Clock);
+public sealed class TerminalGatewayFixture : ClusterConformanceFixture<TerminalGatewayCase>, IAsyncLifetime {
+    readonly IssuedTokenCallerContextResolver tokens = new(ClusterConformanceState<TerminalGatewayCase>.Clock);
     WebApplication? app;
 
     /// <summary>Where the gateway listens, or <see langword="null" /> when the cluster did not come up.</summary>
@@ -80,13 +82,35 @@ public sealed class TerminalGatewayFixture : ClusterConformanceFixture<CloudCons
 
     /// <inheritdoc />
     async ValueTask IAsyncLifetime.InitializeAsync() {
+        // ⚠ Before the silo starts, which is what reads it: the containers are started once per
+        // process, so this is the same k3s the harness is about to use.
+        if (await ClusterInfrastructure.TryStartAsync(TestContext.Current.CancellationToken) is { } endpoints) {
+            TerminalGatewayCase.Kubeconfig = endpoints.Kubeconfig;
+        }
+
         await InitializeAsync();
 
         if (Harness is not { } harness) {
             return;
         }
 
-        var clock = ClusterConformanceState<CloudConsoleCase>.Clock;
+        // The connection the platform registers when a cluster resource converges, registered by hand:
+        // this story has no cluster resource. The first attach establishes the owner.
+        var attached = await harness.Grains
+            .GetGrain<IClusterConnectionGrain>(GrainKeys.ClusterConnection(ConformanceIds.Cluster))
+            .AttachAsync(
+                new() {
+                    ClusterId = ConformanceIds.Cluster,
+                    OwningTenantId = ConformanceIds.Tenant,
+                    Kind = ClusterConnectionKind.Kubeconfig,
+                    CredentialRef = "conformance-k3s",
+                    DisplayName = "the conformance k3s"
+                }
+            );
+
+        attached.IsSuccess.ShouldBeTrue(attached.Error?.Message);
+
+        var clock = ClusterConformanceState<TerminalGatewayCase>.Clock;
         var options = new GatewayOptions();
         var tickets = new InMemoryHubTicketStore(clock);
 
@@ -156,7 +180,7 @@ public sealed class TerminalGatewayFixture : ClusterConformanceFixture<CloudCons
                 person,
                 "",
                 "",
-                ClusterConformanceState<CloudConsoleCase>.Clock.UtcNow.AddDays(1)
+                ClusterConformanceState<TerminalGatewayCase>.Clock.UtcNow.AddDays(1)
             )
         );
 
@@ -197,29 +221,33 @@ public sealed class TerminalGatewayFixture : ClusterConformanceFixture<CloudCons
         await DisposeAsync();
     }
 
-    /// <summary>The gateway's own resource manager over the silo's grains and the real cluster.</summary>
-    static ResourceManagerService Manager(ClusterConformanceHarness<CloudConsoleCase> harness) {
+    /// <summary>
+    ///     The gateway's own resource manager over the silo's grains: no cluster connection, and the
+    ///     relay that sends an action needing one to the silo.
+    /// </summary>
+    static ResourceManagerService Manager(ClusterConformanceHarness<TerminalGatewayCase> harness) {
         var handlers = new ServiceCollection();
 
-        handlers.AddSingleton<IClock>(ClusterConformanceState<CloudConsoleCase>.Clock);
-        handlers.AddSingleton<ISecretResolver>(ClusterConformanceState<CloudConsoleCase>.Vault);
-        handlers.AddSingleton<ISecretWriter>(ClusterConformanceState<CloudConsoleCase>.Vault);
-        handlers.AddSingleton(Options.Create(new CloudShellImageOptions { Default = ShellImage }));
+        handlers.AddSingleton<IClock>(ClusterConformanceState<TerminalGatewayCase>.Clock);
+        handlers.AddSingleton<ISecretResolver>(ClusterConformanceState<TerminalGatewayCase>.Vault);
+        handlers.AddSingleton<ISecretWriter>(ClusterConformanceState<TerminalGatewayCase>.Vault);
+        handlers.AddSingleton(Options.Create(new CloudShellImageOptions { Default = TerminalGatewayCase.ShellImage }));
         handlers.AddSingleton<CloudConsoleSessionHandler>();
 
         return new(
             harness.Registry,
-            ClusterConformanceState<CloudConsoleCase>.Authorizer,
-            ClusterConformanceState<CloudConsoleCase>.Relations,
-            ClusterConformanceState<CloudConsoleCase>.Locks,
+            ClusterConformanceState<TerminalGatewayCase>.Authorizer,
+            ClusterConformanceState<TerminalGatewayCase>.Relations,
+            ClusterConformanceState<TerminalGatewayCase>.Locks,
             new NotSupportedPolicyEvaluator(),
-            ClusterConformanceState<CloudConsoleCase>.Changes,
+            ClusterConformanceState<TerminalGatewayCase>.Changes,
             harness.Grains,
             new ActionDispatcher(
                 handlers.BuildServiceProvider(),
-                new RealClusterConnectionFactory(harness.Connection),
-                ClusterConformanceState<CloudConsoleCase>.Vault,
-                terminals: new GrainTerminalSessions(harness.Grains)
+                new NoClusterConnectionFactory(),
+                ClusterConformanceState<TerminalGatewayCase>.Vault,
+                terminals: new GrainTerminalSessions(harness.Grains),
+                relay: new GrainClusterActionRelay(harness.Grains)
             ),
             NullLogger<ResourceManagerService>.Instance
         );

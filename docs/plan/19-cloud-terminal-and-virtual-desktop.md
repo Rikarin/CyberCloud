@@ -14,13 +14,14 @@ them.
 
 ```
 Browser (xterm.js in the portal)
-   │  SignalR /hubs/terminal  — binary protocol frames
+   │  POST …/consoles/{name}/connect, then SignalR /hubs/terminal?ticket=…  — JSON hub protocol, bytes as base64
 Gateway pod
-   │  grain call, streaming
-ITerminalSessionGrain   (hot tier, one per active session)
-   │  Kubernetes exec  (SPDY/WebSocket) via the cluster connection
-Pod  cybercloud-shell   in the tenant's namespace, in the tenant's cluster
-   └─ PVC  home-{userId}   5 GB, retained 90 days after last use
+   │  connect: relayed to IClusterActionGrain on a silo, which applies the pod
+   │  hub: grain calls in (Attach · Send · Resize), a grain observer back (Output · Ended)
+ITerminalSessionGrain   (no storage, one per shell pod, keyed by the pod's UID)
+   │  pods/attach over WebSocket (v4.channel.k8s.io), allowed by the cluster connection grain
+Pod  {name}-shell   in the console's namespace, in the console's cluster
+   └─ PVC  {name}-home   5 GB, retained 90 days after last use
 ```
 
 ⚠ **How the browser gets onto the hub.** A WebSocket carries no `Authorization` header, and the
@@ -45,10 +46,25 @@ not the provider's: it re-asks ReBAC and opens a cluster stream, the two seams
 registers its session through `ActionContext.Terminals` as `listInstallCommand` reaches the agent
 tunnel through `ActionContext.Agents`. It runs under test end to end:
 `CyberCloud.Gateway.Host.Cluster.Conformance § TerminalOverTheGatewayTests` creates a console on a
-real k3s, calls `connect` through the real gateway, opens `/hubs/terminal` with a ticket, and asserts
-an `echo` round-trips, `stty size` reads back a resize, a reconnect is replayed the ring, an idle shell
-is reclaimed with its home volume kept, and another person, another tenant and a revoked role are
-refused. Four corrections to the diagram came with it:
+real k3s, calls `connect` through the gateway's eight stages and a resource manager composed as the
+gateway's is — no cluster connection, the action relayed to the silo — opens `/hubs/terminal` with a
+ticket, and asserts an `echo` round-trips, `stty size` reads back a resize, a reconnect is replayed
+the ring, an idle shell is reclaimed with its home volume kept, and another person, another tenant and
+a revoked role are refused. The silo there reaches k3s through the cluster connection grain, so the
+attach takes the production path: the session grain, the dialer, the connection grain's tenancy check,
+and a client built from the connection's descriptor. ⚠ The gateway and the silo share one process in
+that suite, as every `TestCluster` does; the real crossing is owed
+(`the-session-grain-has-not-crossed-a-process-boundary`). Five choices the diagram records, each
+against the obvious alternative:
+
+- **`connect` runs on a silo, not in the gateway that received it.** A synchronous action normally
+  runs in the process serving the request, and the gateway can't reach a cluster: it composes no
+  cluster connection, and the cluster connection grain refuses a client caller because its tenancy
+  check can only see a calling grain's tenant. So the gateway's `ActionDispatcher` relays an action on
+  a `RequiresCluster` type to `IClusterActionGrain`, a tenant-qualified worker on a silo, which runs
+  the handler there as that tenant — the same caller a reconcile pass is. Before the relay existed,
+  every such action was refused in a deployed gateway, `connect` included, and every harness passed
+  because each handed its dispatcher a direct connection.
 
 - **The arrow back to the gateway is a grain observer, not an Orleans stream.** One producer and one
   consumer, and a terminal needs what a direct call gives: order (each delivery is awaited before the
@@ -70,6 +86,13 @@ refused. Four corrections to the diagram came with it:
   (`ActionContext.Caller`, a fact rather than a decision); every hub call must come from that person,
   and an attach re-asks ReBAC for `connect`, fully consistent. A second person with `connect` on the
   same console gets `409` from `connect` and nothing from the hub.
+
+⚠ **Only the pod ends a session.** A shell that exited, idled out, never started or was terminated
+ends it; failing to *reach* the shell — an attach refused, a cluster that stopped answering, a stream
+that keeps dropping — leaves the session waiting, tells the pane, and retries on the next attach or
+keystroke. The session id is the pod's UID, so a session ended over a pod that still runs would be
+named by every later `connect`; `connect` answers an ended session by deleting its pod and starting a
+new one, which is the backstop for a reclaim whose delete never reached the cluster.
 
 What is still owed is in `charts/managed/cloud-shell/conformance.yaml § owed`: no terminal over the
 agent tunnel, no idle sweep once a session grain's activation is lost, keystrokes not re-checked, the

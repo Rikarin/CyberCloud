@@ -5,6 +5,7 @@ using CyberCloud.Kubernetes.Connections;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Registry.Feeds.Host;
 using CyberCloud.ResourceManager;
+using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using CyberCloud.ResourceManager.Grains;
@@ -447,6 +448,33 @@ public sealed class HostCompositionTests {
         silo.Services
             .GetRequiredService<IClusterConnectionRegistrar>()
             .ShouldBeOfType<GrainClusterConnectionRegistrar>();
+    }
+
+    /// <summary>
+    ///     ⚠ The gateway relays an action that needs a cluster to a silo, and the silo runs it itself.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <b>Found by the review of #22.</b> The gateway runs a synchronous action in its own
+    ///         process and composes <c>NoClusterConnectionFactory</c>, so every action on a type
+    ///         declaring <c>RequiresCluster</c> — the cloud console's <c>connect</c> among them — was
+    ///         refused before its handler ran. The terminal's cluster lane composed its gateway with a
+    ///         direct connection and never saw it. The relay is the fix, and it only works if the two
+    ///         hosts disagree in exactly this way: a silo with a relay would send an action it can
+    ///         serve itself to another worker.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheGatewayRelaysAClusterActionAndTheSiloRunsItItself() {
+        await using var gateway = await BuildGatewayAsync();
+        await using var silo = await BuildSiloAsync();
+
+        gateway.Services
+            .GetRequiredService<IClusterConnectionFactory>()
+            .ShouldBeOfType<NoClusterConnectionFactory>("the gateway can't reach a cluster and must not pretend to");
+
+        gateway.Services.GetRequiredService<IClusterActionRelay>().ShouldBeOfType<GrainClusterActionRelay>();
+        silo.Services.GetService<IClusterActionRelay>().ShouldBeNull();
     }
 
     // ── The principal directory: a grant has to be checkable ─────────────────────────────────────

@@ -19,12 +19,15 @@ namespace CyberCloud.Gateway.Host.Cluster.Conformance;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>Every hop is the production one except where the fixture says otherwise.</b>
-///         <c>connect</c> goes over HTTP through the eight stages and the resource manager; the ticket
-///         is minted by the gateway and spent by the WebSocket upgrade; <c>Attach</c>, <c>Send</c> and
-///         <c>Resize</c> reach <see cref="ITerminalSessionGrain" /> in the silo; the grain attaches to
-///         the pod's <c>pods/attach</c> stream; output returns through the grain observer the hub
-///         registered. See <see cref="TerminalGatewayFixture" /> for the three stage-8 seams that are
-///         substitutes and why none of them is on this path.
+///         <c>connect</c> goes over HTTP through the eight stages and the gateway's resource manager,
+///         which can't reach the cluster and relays the action to <see cref="IClusterActionGrain" />
+///         in the silo; the handler there applies the pod through the cluster connection grain. The
+///         ticket is minted by the gateway and spent by the WebSocket upgrade; <c>Attach</c>,
+///         <c>Send</c> and <c>Resize</c> reach <see cref="ITerminalSessionGrain" /> in the silo; the
+///         grain attaches to the pod's <c>pods/attach</c> stream through the connection grain's
+///         tenancy check and the attach dialer; output returns through the grain observer the hub
+///         registered. See <see cref="TerminalGatewayFixture" /> for the seams that are substitutes and
+///         why none of them is on this path.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>What k3s-in-Docker cannot show, stated so green is not over-read.</b> The console's
@@ -93,7 +96,7 @@ public sealed class TerminalOverTheGatewayTests(TerminalGatewayFixture fixture) 
 
         (await harness.Raw.CoreV1.ReadNamespacedPersistentVolumeClaimAsync(
             CloudConsoles.HomeClaimName(console.Name),
-            ClusterConformanceHarness<CloudConsoleCase>.Namespace,
+            ClusterConformanceHarness<TerminalGatewayCase>.Namespace,
             cancellationToken: TestContext.Current.CancellationToken
         )).Metadata.DeletionTimestamp.ShouldBeNull("the home volume outlives an idle reclaim");
 
@@ -143,7 +146,7 @@ public sealed class TerminalOverTheGatewayTests(TerminalGatewayFixture fixture) 
         }
 
         // ── the owner, after losing `connect` on the console: ReBAC is asked again on attach ───
-        var authorizer = ClusterConformanceState<CloudConsoleCase>.Authorizer;
+        var authorizer = ClusterConformanceState<TerminalGatewayCase>.Authorizer;
 
         try {
             authorizer.Restricted = true;
@@ -196,8 +199,8 @@ public sealed class TerminalOverTheGatewayTests(TerminalGatewayFixture fixture) 
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────
 
-    static async Task<ResourceId> ConvergedConsoleAsync(ClusterConformanceHarness<CloudConsoleCase> harness, string name) {
-        var address = ClusterConformanceHarness<CloudConsoleCase>.Address(name);
+    static async Task<ResourceId> ConvergedConsoleAsync(ClusterConformanceHarness<TerminalGatewayCase> harness, string name) {
+        var address = ClusterConformanceHarness<TerminalGatewayCase>.Address(name);
 
         var accepted = await harness.Manager.WriteAsync(
             new() {
@@ -205,7 +208,7 @@ public sealed class TerminalOverTheGatewayTests(TerminalGatewayFixture fixture) 
                 ApiVersion = CloudConsoles.V2026,
                 Verb = WriteVerb.Put,
                 Body = CloudConsoles.Body(ConformanceIds.Cluster),
-                Caller = ClusterConformanceHarness<CloudConsoleCase>.Caller()
+                Caller = ClusterConformanceHarness<TerminalGatewayCase>.Caller()
             },
             TestContext.Current.CancellationToken
         );
@@ -237,13 +240,13 @@ public sealed class TerminalOverTheGatewayTests(TerminalGatewayFixture fixture) 
         return answer.GetProperty(CloudConsoles.SessionIdField).GetString()!;
     }
 
-    static async Task RunningAsync(ClusterConformanceHarness<CloudConsoleCase> harness, string console, string sessionId) {
+    static async Task RunningAsync(ClusterConformanceHarness<TerminalGatewayCase> harness, string console, string sessionId) {
         var deadline = DateTimeOffset.UtcNow + PodBudget;
 
         while (true) {
             var pod = await harness.Raw.CoreV1.ReadNamespacedPodAsync(
                 CloudConsoles.ShellName(console),
-                ClusterConformanceHarness<CloudConsoleCase>.Namespace,
+                ClusterConformanceHarness<TerminalGatewayCase>.Namespace,
                 cancellationToken: TestContext.Current.CancellationToken
             );
 
@@ -267,14 +270,18 @@ public sealed class TerminalOverTheGatewayTests(TerminalGatewayFixture fixture) 
         }
     }
 
-    static async Task GoneAsync(ClusterConformanceHarness<CloudConsoleCase> harness, string console) {
-        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(1);
+    static async Task GoneAsync(ClusterConformanceHarness<TerminalGatewayCase> harness, string console) {
+        // ⚠ Two minutes, and the reason is the clock jump. Advancing the injected clock 21 minutes puts
+        // the cluster connection grain past its 90-second staleness window, so the reclaim's first
+        // delete is refused as a retry until the grain's next 30-second ping; the session grain tries
+        // again on its next 15-second tick.
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(2);
 
         while (DateTimeOffset.UtcNow < deadline) {
             try {
                 await harness.Raw.CoreV1.ReadNamespacedPodAsync(
                     CloudConsoles.ShellName(console),
-                    ClusterConformanceHarness<CloudConsoleCase>.Namespace,
+                    ClusterConformanceHarness<TerminalGatewayCase>.Namespace,
                     cancellationToken: TestContext.Current.CancellationToken
                 );
             } catch (HttpOperationException ex) when (ex.Response.StatusCode == System.Net.HttpStatusCode.NotFound) {
