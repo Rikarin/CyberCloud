@@ -566,6 +566,13 @@ public static class VirtualMachines {
     ///         here, which no action hands the tenant. <c>charts/managed/mail/conformance.yaml
     ///         § owed</c>, <c>the-credentials-sit-inside-the-tenant-vault-prefix</c>.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Not the only place a tenant spells a vault path any more, only the only one that
+    ///         resolves it.</b> A communication channel's <c>accountRef</c>, <c>authRef</c> and
+    ///         <c>signingRef</c> are tenant-spelled too, and no carrier resolves them yet.
+    ///         <c>CommunicationChannels.ParseSecretRef</c> holds them to the same prefix, canonical
+    ///         first, so the day one does, it can't reach a root or another tenant.
+    ///     </para>
     /// </remarks>
     public static string TenantVaultPrefix(Guid tenantId) =>
         string.Create(CultureInfo.InvariantCulture, $"tenants/{tenantId:D}/");
@@ -615,6 +622,19 @@ public static class VirtualMachines {
 
         var path = spelled[..hash];
         var prefix = TenantVaultPrefix(tenantId);
+
+        // ⚠ Canonical first, or the prefix check below is a check on text rather than on where the
+        // path leads: tenants/{mine}/../../platform/… starts with the prefix and reaches the vault
+        // roots. SecretRef.IsCanonicalPath's remarks. The resolver refuses it too; this says why at
+        // the handle's own property.
+        if (!SecretRef.IsCanonicalPath(path)) {
+            return Result<SecretRef>.Failure(
+                ErrorCode.AuthorizationFailed,
+                $"cloudInit.userData names '{path}', which has an empty, '.' or '..' segment, or a '\\' "
+                + $"or '%'. Name a path under your tenant's vault prefix '{prefix}' directly.",
+                "/properties/cloudInit/userData"
+            );
+        }
 
         if (!path.StartsWith(prefix, StringComparison.Ordinal) || path.Length == prefix.Length) {
             return Result<SecretRef>.Failure(

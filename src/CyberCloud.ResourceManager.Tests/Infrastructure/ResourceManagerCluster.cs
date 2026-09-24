@@ -47,6 +47,9 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
     /// <summary>Every <c>(actionPermission, readPermission)</c> pair the write path asked about.</summary>
     public static ConcurrentQueue<string> Asked { get; } = new();
 
+    /// <summary>The permissions asked about that were asked <c>FullyConsistent</c>, in order.</summary>
+    public static ConcurrentQueue<string> AskedFullyConsistent { get; } = new();
+
     /// <summary>
     ///     Resources this caller cannot read at all — a <c>404</c> whatever permission is asked for.
     /// </summary>
@@ -84,6 +87,7 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
     public static void Reset() {
         Granted.Clear();
         Asked.Clear();
+        AskedFullyConsistent.Clear();
         Hidden.Clear();
         CollectionsAsked.Clear();
         Restricted = false;
@@ -111,6 +115,10 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
         CancellationToken cancellationToken = default
     ) {
         Asked.Enqueue(actionPermission);
+
+        if (fullyConsistent) {
+            AskedFullyConsistent.Enqueue(actionPermission);
+        }
 
         // ⚠ Before the permission set, and it answers the canonical 404 without consulting it. A
         // resource the caller cannot see is not a resource they hold no permission on — it is one

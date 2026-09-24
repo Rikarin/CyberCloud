@@ -215,16 +215,22 @@ public interface IResourceTypeBuilder : IProviderBuilder {
     ///     Refused unless it implements the interface, at declaration time, because a typo caught at
     ///     silo start beats a <c>500</c> on the first call.
     /// </param>
+    /// <param name="fullyConsistent">
+    ///     Whether the permission is checked <c>FullyConsistent</c> though the response carries nothing
+    ///     secret — for an action that destroys or uses a key. See
+    ///     <c>ActionRegistration.FullyConsistent</c>. A <paramref name="secret" /> action is checked
+    ///     that way regardless.
+    /// </param>
     /// <returns>The same builder.</returns>
     /// <remarks>
     ///     ⚠ An action never creates — docs/plan/08 § The write path, end to end. A <c>POST</c> to a
     ///     name that does not exist is a <c>404</c>, and that is checked by the manager rather than by
     ///     each action's handler.
     ///     <para>
-    ///         The last three parameters are optional so that every existing declaration still means
-    ///         what it meant. An action that declares none of them is an action whose shape the
-    ///         registry does not know, and the generated document says exactly that rather than
-    ///         inventing one — see the remarks on <see cref="ActionRegistration" />.
+    ///         The parameters after <paramref name="permission" /> are optional so that every existing
+    ///         declaration still means what it meant. An action that declares none of them is an
+    ///         action whose shape the registry does not know, and the generated document says exactly
+    ///         that rather than inventing one — see the remarks on <see cref="ActionRegistration" />.
     ///     </para>
     /// </remarks>
     IResourceTypeBuilder Action(
@@ -235,7 +241,8 @@ public interface IResourceTypeBuilder : IProviderBuilder {
         ResourceSchema? request = null,
         ResourceSchema? response = null,
         bool longRunning = false,
-        Type? handler = null
+        Type? handler = null,
+        bool fullyConsistent = false
     );
 
     /// <summary>

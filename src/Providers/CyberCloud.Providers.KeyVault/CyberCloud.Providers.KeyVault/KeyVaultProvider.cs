@@ -62,8 +62,8 @@ public sealed class KeyVaultProvider : IResourceProvider {
 
         // ── Secrets ─────────────────────────────────────────────────────────────────────────────
         Data(type, KeyVaults.SetSecretAction, KeyVaults.WriteSecretsPermission, KeyVaults.SetSecretRequest, KeyVaults.SecretResponse);
-        // ⚠ secret: true — the resource manager checks it FullyConsistent (docs/plan/07 § Consistency),
-        // so a revoked Secrets User is refused on the next call rather than after a cache expiry.
+        // ⚠ secret: true marks the three responses that carry a value. Every action here is checked
+        // FullyConsistent whatever this says — see Data's remarks.
         Data(type, KeyVaults.GetSecretAction, KeyVaults.ReadSecretsPermission, KeyVaults.SecretVersionRequest, KeyVaults.SecretValueResponse, true);
         Data(type, KeyVaults.UpdateSecretAction, KeyVaults.WriteSecretsPermission, KeyVaults.UpdateSecretRequest, KeyVaults.SecretResponse);
         Data(type, KeyVaults.ListSecretsAction, KeyVaults.ReadSecretsPermission, null, KeyVaults.ListResponse);
@@ -113,6 +113,18 @@ public sealed class KeyVaultProvider : IResourceProvider {
     ///     ⚠ <b>Synchronous, always.</b> A long-running action's result travels on an operation record
     ///     any <c>read</c> holder can poll (<c>ResourceManagerService.ActionAsync</c> says so at
     ///     length), which is exactly where a secret's value and a plaintext must never be.
+    ///     <para>
+    ///         ⚠ <b>FullyConsistent, always, not only for <paramref name="secret" />.</b> A permission
+    ///         checked <c>MinimizeLatency</c> is served from <c>CheckGrain</c>'s cache, which has no
+    ///         TTL, and a revoke writes no fence into it. So with only the three value-returning
+    ///         actions FullyConsistent, a revoked Secrets Officer kept purging in an unprotected vault
+    ///         and a revoked Crypto User kept signing, until some FullyConsistent walk on the vault
+    ///         replaced the stale allow. docs/plan/07 § Consistency puts deletion there by name, and a
+    ///         key's use is the key vault's reason to exist. A vault's calls are few and each is a
+    ///         key use or a secret, so the walk's cost is paid on all 25.
+    ///         <c>KeyVaultOverTheGatewayTests.ARevokedOfficerIsRefusedEveryActionOnTheNextCall</c>
+    ///         revokes after warming the cache.
+    ///     </para>
     /// </remarks>
     static void Data(
         IResourceTypeBuilder type,
@@ -129,6 +141,7 @@ public sealed class KeyVaultProvider : IResourceProvider {
             secret,
             request,
             response,
-            handler: typeof(KeyVaultActionHandler)
+            handler: typeof(KeyVaultActionHandler),
+            fullyConsistent: true
         );
 }

@@ -152,7 +152,8 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         ResourceSchema? request = null,
         ResourceSchema? response = null,
         bool longRunning = false,
-        Type? handler = null
+        Type? handler = null,
+        bool fullyConsistent = false
     ) {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(permission);
@@ -230,7 +231,11 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         // would make declaring the shape a prerequisite for having the action at all.
         draft.Actions.Add(
             new(name, kind, permission, secret) {
-                Request = request, Response = response, LongRunning = longRunning, HandlerType = handler
+                Request = request,
+                Response = response,
+                LongRunning = longRunning,
+                HandlerType = handler,
+                FullyConsistent = fullyConsistent
             }
         );
 

@@ -63,6 +63,52 @@ public sealed record SecretRef {
     /// </remarks>
     public bool IsEmpty => Path.Length == 0 || Field.Length == 0;
 
+    /// <summary>
+    ///     Reports whether a vault path names the one location its segments spell, so a check on its
+    ///     text is a check on where it leads.
+    /// </summary>
+    /// <param name="path">A vault path, for example <c>tenants/{tenantId}/postgres/main</c>.</param>
+    /// <returns>
+    ///     <c>true</c> if the path is non-empty and none of its <c>/</c>-separated segments is empty,
+    ///     <c>.</c> or <c>..</c>, and it carries no <c>\</c>, <c>%</c> or control character.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A prefix check on a path that isn't canonical is no check.</b>
+    ///         <c>tenants/{a}/../../platform/CyberCloud.KeyVault/vaults/{a}/{id}</c> starts with tenant
+    ///         <c>a</c>'s prefix. <c>Uri.EscapeDataString</c> leaves <c>..</c> alone, and
+    ///         <see cref="System.Uri" /> collapses dot segments before the request leaves, so OpenBao
+    ///         is asked for the vault root under <c>platform/</c> with the platform's broad token. So
+    ///         every place that resolves or mints a path refuses one that fails this, and every place
+    ///         that checks a tenant-supplied path against a prefix calls it first.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <c>%</c> and <c>\</c> are refused as well, although neither reaches a dot segment
+    ///         today: the resolver escapes <c>%</c> to <c>%25</c> and <c>\</c> to <c>%5C</c>. A path
+    ///         the platform writes never needs either, and refusing them means a second decode
+    ///         somewhere between here and OpenBao can't turn <c>%2e%2e</c> back into <c>..</c>.
+    ///     </para>
+    /// </remarks>
+    public static bool IsCanonicalPath(string path) {
+        if (string.IsNullOrEmpty(path)) {
+            return false;
+        }
+
+        foreach (var segment in path.Split('/')) {
+            if (segment is "" or "." or "..") {
+                return false;
+            }
+        }
+
+        foreach (var c in path) {
+            if (c is '\\' or '%' || char.IsControl(c)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <inheritdoc />
     public override string ToString() => Version.Length == 0 ? $"{Path}#{Field}" : $"{Path}#{Field}@{Version}";
 }

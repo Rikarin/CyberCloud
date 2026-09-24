@@ -102,6 +102,31 @@ public readonly record struct ActionRegistration(
     ///     </para>
     /// </remarks>
     public Type? HandlerType { get; init; }
+
+    /// <summary>
+    ///     Whether the manager checks this action's permission <c>FullyConsistent</c>, so a revoked
+    ///     role is refused on the very next call.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         docs/plan/07 § Consistency puts "Deletion, key export, billing changes, anything where a
+    ///         stale allow is a real incident" in the <c>FullyConsistent</c> row. A
+    ///         <see cref="Secret" /> action is checked that way already, as a key export. This flag is
+    ///         for the rest of that row: an action that destroys, or that uses a key, and returns
+    ///         nothing secret.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Everything else is checked <c>MinimizeLatency</c>, and <c>CheckGrain</c>'s cache has
+    ///         no TTL.</b> A revoke writes no fence into it, so an allow cached before the revoke is
+    ///         served until some <c>FullyConsistent</c> walk on that object replaces it. For a key
+    ///         vault's purge or sign, that's a revoked officer purging or signing indefinitely.
+    ///     </para>
+    ///     <para>
+    ///         Separate from <see cref="Secret" /> because that flag also tells every generated
+    ///         surface that the response carries secret material, which a purge's doesn't.
+    ///     </para>
+    /// </remarks>
+    public bool FullyConsistent { get; init; }
 }
 
 /// <summary>

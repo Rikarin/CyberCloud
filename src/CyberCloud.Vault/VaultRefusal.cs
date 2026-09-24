@@ -128,6 +128,34 @@ public static class VaultFailures {
         };
     }
 
+    /// <summary>
+    ///     A handle whose path has an empty, <c>.</c> or <c>..</c> segment, or a <c>\</c> or <c>%</c>,
+    ///     so it may not lead where it reads.
+    /// </summary>
+    /// <param name="reference">The handle.</param>
+    /// <remarks>
+    ///     ⚠ Refused without a network call. The resolver holds the platform's one broad token, and
+    ///     <see cref="System.Uri" /> collapses dot segments before a request leaves, so a
+    ///     <c>tenants/{a}/../../platform/…</c> handle that passed a tenant-prefix check would read the
+    ///     platform's own material. <see cref="SecretRef.IsCanonicalPath" /> says which paths are
+    ///     refused and why. <see cref="ErrorCode.AuthorizationFailed" />, because the only way to
+    ///     spell one is to aim a handle somewhere it may not go.
+    /// </remarks>
+    public static VaultRefusal NotCanonical(SecretRef reference) {
+        ArgumentNullException.ThrowIfNull(reference);
+
+        return new() {
+            Code = ErrorCode.AuthorizationFailed,
+            TenantMessage =
+                "A vault handle this resource names has an empty, '.' or '..' segment, or a '\\' or "
+                + "'%'. A handle names one location, spelled the one way.",
+            OperatorDetail =
+                $"A SecretRef whose path is not canonical reached the resolver: path='{reference.Path}', "
+                + $"field='{reference.Field}'. Nothing was asked of OpenBao. A tenant-prefix check "
+                + "upstream would have passed it, which is why the resolver refuses it itself."
+        };
+    }
+
     /// <summary>The platform could not authenticate to OpenBao at all.</summary>
     /// <param name="detail">What the login attempt actually produced. Never a token.</param>
     /// <remarks>

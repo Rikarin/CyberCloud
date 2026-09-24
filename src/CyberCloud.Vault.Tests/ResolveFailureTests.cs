@@ -212,6 +212,34 @@ public sealed class ResolveFailureTests(OpenBaoFixture vault) {
     }
 
     [Fact]
+    public async Task ADotSegmentHandleIsRefusedBeforeOpenBaoCollapsesItIntoAnotherPath() {
+        // ⚠ The root token stands in for the platform's broad one, and the path starts with tenant
+        // 9f2b's prefix, which is all a tenant-prefix check looks at. Uri.EscapeDataString leaves
+        // '..' alone and System.Uri collapses it, so without the refusal this read platform/…
+        // and handed back the value below.
+        const string Platform = "platform/CyberCloud.KeyVault/vaults/9f2b/root-under-test";
+        await vault.WriteSecretAsync(Platform, new Dictionary<string, string> { ["root"] = "the-platforms-own" });
+
+        var resolver = vault.Resolver(OpenBaoFixture.RootToken);
+
+        // The control: the platform's own path, spelled directly, reads with this token.
+        (await resolver.ResolveAsync(new() { Path = Platform, Field = "root" }, TestContext.Current.CancellationToken))
+            .GetValueOrThrow()
+            .ShouldBe("the-platforms-own");
+
+        foreach (var path in new[] { "tenants/9f2b/../../" + Platform, "tenants/9f2b/./../../" + Platform, "tenants/9f2b//x" }) {
+            var resolved = await resolver.ResolveAsync(
+                new() { Path = path, Field = "root" },
+                TestContext.Current.CancellationToken
+            );
+
+            resolved.IsFailure.ShouldBeTrue($"'{path}' resolved to '{(resolved.IsSuccess ? resolved.GetValueOrThrow() : "")}'");
+            resolved.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
+            resolved.Error.Message.ShouldNotContain("the-platforms-own");
+        }
+    }
+
+    [Fact]
     public async Task ARevokedTokenIsRetriedOnceAndOnlyOnce() {
         await Seed();
 

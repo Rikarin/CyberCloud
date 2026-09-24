@@ -29,6 +29,10 @@ public sealed class KeyVaultDeclarationTests {
             action.LongRunning.ShouldBeFalse($"{action.Name} is long-running, so its result would travel on an operation record any reader can poll");
             action.Response.ShouldNotBeNull($"{action.Name} declares no response shape");
             KeyVaults.DataPlanePermissions.ShouldContain(action.Permission, $"{action.Name} checks '{action.Permission}', a control-plane permission");
+
+            // ⚠ Every one, not only the secret three: a MinimizeLatency allow cached before a revoke
+            // has no TTL, so a purge or a sign checked that way keeps working for a revoked officer.
+            action.FullyConsistent.ShouldBeTrue($"{action.Name} is checked MinimizeLatency, so a revoked role keeps it");
         }
     }
 
@@ -37,8 +41,8 @@ public sealed class KeyVaultDeclarationTests {
     [InlineData(KeyVaults.DecryptAction)]
     [InlineData(KeyVaults.UnwrapKeyAction)]
     public void AnActionThatReturnsAValueOrAPlaintextIsSecret(string name) {
-        // ⚠ secret: true is what makes the resource manager check FullyConsistent — a revoked Secrets
-        // User must not read a value off a stale cache (docs/plan/18 § The resource model).
+        // ⚠ secret: true tells every generated surface the response carries a value, so the SDKs
+        // and cyc warn and mask it. The consistency is the FullyConsistent flag's, checked above.
         Registration.TryGetAction(name, out var action).ShouldBeTrue();
         action.Secret.ShouldBeTrue();
     }
